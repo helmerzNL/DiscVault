@@ -3027,13 +3027,19 @@ nl: {
   'js.restore':'↩ Herstellen','js.download':'⬇ Download',
   'js.downloadFailed':'Download mislukt',
   'js.tarGzOnly':'Alleen .tar.gz bestanden worden geaccepteerd',
-  'js.confirmUploadRestore':'Backup "{0}" uploaden en herstellen? Dit overschrijft de huidige database en posters!',
-  'js.uploadingRestoring':'<span class="spinner"></span> Uploaden & herstellen...',
-  'js.backupRestored':'✓ Backup "{0}" hersteld!',
-  'js.confirmRestore':'Backup "{0}" herstellen? Dit overschrijft de huidige database en posters!',
+  'js.uploading':'<span class="spinner"></span> Uploaden...',
+  'js.uploadDone':'✓ Backup geüpload',
+  'js.confirmRestore':'Backup "{0}" herstellen? Dit overschrijft de huidige films en posters!',
   'js.restoring':'<span class="spinner"></span> Herstellen...',
   'js.restored':'✓ Backup "{0}" hersteld!',
   'js.confirmDeleteBackup':'Backup "{0}" verwijderen?',
+  'js.groupConflictTitle':'Groepen niet gevonden',
+  'js.groupConflictDesc':'De backup bevat {0} films. De volgende groepen bestaan niet in je huidige database. Kies per groep wat je wilt doen:',
+  'js.groupActionCreate':'Groep aanmaken',
+  'js.groupActionSkip':'Overslaan (films niet toewijzen)',
+  'js.groupActionAssign':'Toewijzen aan: {0}',
+  'js.groupConflictApply':'Herstellen',
+  'js.cancel':'Annuleren',
   'js.confirmReset1':'ALLE films, posters en logs verwijderen?',
   'js.confirmReset2':'Weet je het zeker? Dit kan niet ongedaan worden gemaakt!',
   'js.resetComplete':'Database gereset!',
@@ -3268,13 +3274,19 @@ en: {
   'js.restore':'↩ Restore','js.download':'⬇ Download',
   'js.downloadFailed':'Download failed',
   'js.tarGzOnly':'Only .tar.gz files are accepted',
-  'js.confirmUploadRestore':'Upload and restore backup "{0}"? This will overwrite the current database and posters!',
-  'js.uploadingRestoring':'<span class="spinner"></span> Uploading & restoring...',
-  'js.backupRestored':'✓ Backup "{0}" restored!',
-  'js.confirmRestore':'Restore backup "{0}"? This will overwrite the current database and posters!',
+  'js.uploading':'<span class="spinner"></span> Uploading...',
+  'js.uploadDone':'✓ Backup uploaded',
+  'js.confirmRestore':'Restore backup "{0}"? This will overwrite the current movies and posters!',
   'js.restoring':'<span class="spinner"></span> Restoring...',
   'js.restored':'✓ Backup "{0}" restored!',
   'js.confirmDeleteBackup':'Delete backup "{0}"?',
+  'js.groupConflictTitle':'Groups not found',
+  'js.groupConflictDesc':'The backup contains {0} movies. The following groups do not exist in your current database. Choose what to do for each:',
+  'js.groupActionCreate':'Create group',
+  'js.groupActionSkip':'Skip (don\'t assign movies)',
+  'js.groupActionAssign':'Assign to: {0}',
+  'js.groupConflictApply':'Restore',
+  'js.cancel':'Cancel',
   'js.confirmReset1':'Delete ALL movies, posters and logs?',
   'js.confirmReset2':'Are you sure? This cannot be undone!',
   'js.resetComplete':'Database reset!',
@@ -6615,7 +6627,7 @@ async function loadBackups() {
         <div style="flex:1; min-width:180px;">
           <div style="font-weight:500; font-size:0.85rem;">${b.name}</div>
           <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">
-            ${(b.size/1024).toFixed(0)} KB · ${b.poster_count} posters
+            ${(b.size/1024).toFixed(0)} KB · ${b.poster_count} posters${b.movie_count ? ' · ' + b.movie_count + ' films' : ''}${b.format === 'v1' ? ' · legacy' : ''}
           </div>
         </div>
         <div style="display:flex; gap:6px;">
@@ -6651,8 +6663,7 @@ async function uploadBackup(input) {
     showStatus('settingsBackupStatus', t('js.tarGzOnly'), 'error');
     return;
   }
-  if (!confirm(t('js.confirmUploadRestore', file.name))) return;
-  showStatus('settingsBackupStatus', t('js.uploadingRestoring'), 'info');
+  showStatus('settingsBackupStatus', t('js.uploading'), 'info');
   try {
     const fd = new FormData();
     fd.append('file', file);
@@ -6663,27 +6674,87 @@ async function uploadBackup(input) {
     });
     const d = await r.json();
     if (!r.ok || d.error) { showStatus('settingsBackupStatus', d.error || t('js.uploadFailed'), 'error'); return; }
-    showStatus('settingsBackupStatus', t('js.backupRestored', file.name), 'success');
-    loadBackups(); loadDbStats(); loadCollection(); loadStats();
+    showStatus('settingsBackupStatus', t('js.uploadDone'), 'success');
+    loadBackups();
+    // Auto-trigger restore for the uploaded backup
+    restoreBackup(d.name);
   } catch(e) {
     showStatus('settingsBackupStatus', t('js.error', e.message), 'error');
   }
 }
 
-async function restoreBackup(name) {
-  if (!confirm(t('js.confirmRestore', name))) return;
+async function restoreBackup(name, groupMapping) {
+  if (!groupMapping && !confirm(t('js.confirmRestore', name))) return;
   showStatus('settingsBackupStatus', t('js.restoring'), 'info');
   try {
-    const r = await fetch(`${API}/settings/restore/${name}`, { method: 'POST', headers: authHeaders() });
+    const body = groupMapping ? { group_mapping: groupMapping } : {};
+    const r = await fetch(`${API}/settings/restore/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body)
+    });
     const d = await r.json();
+
+    // Group conflict: show resolution dialog
+    if (r.status === 409 && d.status === 'groups_conflict') {
+      showGroupConflictDialog(name, d);
+      return;
+    }
     if (d.error) { showStatus('settingsBackupStatus', d.error, 'error'); return; }
     showStatus('settingsBackupStatus', t('js.restored', name), 'success');
-    loadDbStats();
-    loadCollection();
-    loadStats();
+    loadDbStats(); loadCollection(); loadStats(); loadBackups();
   } catch(e) {
     showStatus('settingsBackupStatus', t('js.error', e.message), 'error');
   }
+}
+
+function showGroupConflictDialog(backupName, conflictData) {
+  const missing = conflictData.missing_groups;
+  const existing = conflictData.existing_groups;
+
+  let html = `<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;" id="groupConflictOverlay">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;">
+      <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;margin-bottom:16px;">${t('js.groupConflictTitle')}</div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">${t('js.groupConflictDesc', conflictData.movie_count)}</div>`;
+
+  missing.forEach((g, i) => {
+    html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="font-weight:500;font-size:0.88rem;margin-bottom:8px;">📁 ${g}</div>
+      <select id="groupAction_${i}" onchange="toggleGroupAssign(${i})" style="width:100%;padding:6px 8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:0.82rem;">
+        <option value="create">${t('js.groupActionCreate')}</option>
+        <option value="skip">${t('js.groupActionSkip')}</option>
+        ${existing.map(eg => `<option value="assign_${eg.id}">${t('js.groupActionAssign', eg.name)}</option>`).join('')}
+      </select>
+    </div>`;
+  });
+
+  html += `<div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn btn-primary" onclick="applyGroupConflict('${backupName}')">${t('js.groupConflictApply')}</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('groupConflictOverlay').remove()">${t('js.cancel')}</button>
+    </div>
+    </div></div>`;
+
+  // Store missing group names for the apply function
+  window._groupConflictMissing = missing;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function applyGroupConflict(backupName) {
+  const missing = window._groupConflictMissing || [];
+  const mapping = {};
+  missing.forEach((g, i) => {
+    const sel = document.getElementById(`groupAction_${i}`);
+    const val = sel ? sel.value : 'skip';
+    if (val === 'create') {
+      mapping[g] = { action: 'create' };
+    } else if (val === 'skip') {
+      mapping[g] = { action: 'skip' };
+    } else if (val.startsWith('assign_')) {
+      mapping[g] = { action: 'assign', group_id: parseInt(val.split('_')[1]) };
+    }
+  });
+  document.getElementById('groupConflictOverlay').remove();
+  restoreBackup(backupName, mapping);
 }
 
 async function deleteBackup(name) {

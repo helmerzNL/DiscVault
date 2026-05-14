@@ -4132,11 +4132,34 @@ def create_backup():
     backup_path = os.path.join(BACKUP_DIR, backup_name)
     os.makedirs(backup_path, exist_ok=True)
     try:
-        shutil.copy2(DB_PATH, os.path.join(backup_path, "discvault.db"))
+        conn = get_db()
+        # Export movies
+        movies = [dict(r) for r in conn.execute("SELECT * FROM movies").fetchall()]
+        # Export movie_groups with group names
+        mg_rows = conn.execute("""
+            SELECT mg.movie_id, g.name AS group_name
+            FROM movie_groups mg JOIN groups g ON mg.group_id = g.id
+        """).fetchall()
+        movie_groups = [dict(r) for r in mg_rows]
+        # Export people
+        people = [dict(r) for r in conn.execute("SELECT * FROM people").fetchall()]
+        # Export movie_people
+        movie_people = [dict(r) for r in conn.execute("SELECT * FROM movie_people").fetchall()]
+        conn.close()
+
+        backup_data = {
+            "version": 2,
+            "created_at": local_now().isoformat(),
+            "movies": movies,
+            "movie_groups": movie_groups,
+            "people": people,
+            "movie_people": movie_people,
+        }
+        with open(os.path.join(backup_path, "backup.json"), "w", encoding="utf-8") as f:
+            json.dump(backup_data, f, ensure_ascii=False, default=str)
+
         if os.path.isdir(POSTER_DIR):
             shutil.copytree(POSTER_DIR, os.path.join(backup_path, "posters"), dirs_exist_ok=True)
-        if os.path.isdir(PROFILE_DIR):
-            shutil.copytree(PROFILE_DIR, os.path.join(backup_path, "profiles"), dirs_exist_ok=True)
         size = sum(
             os.path.getsize(os.path.join(dp, f))
             for dp, _, fn in os.walk(backup_path) for f in fn
@@ -4161,14 +4184,25 @@ def list_backups():
                 os.path.getsize(os.path.join(dp, f))
                 for dp, _, fn in os.walk(path) for f in fn
             )
-            db_exists = os.path.exists(os.path.join(path, "discvault.db"))
+            has_json = os.path.exists(os.path.join(path, "backup.json"))
+            has_db = os.path.exists(os.path.join(path, "discvault.db"))
             poster_count = 0
             poster_dir = os.path.join(path, "posters")
             if os.path.isdir(poster_dir):
                 poster_count = len(os.listdir(poster_dir))
+            movie_count = 0
+            if has_json:
+                try:
+                    with open(os.path.join(path, "backup.json"), "r", encoding="utf-8") as f:
+                        bd = json.load(f)
+                    movie_count = len(bd.get("movies", []))
+                except Exception:
+                    pass
             backups.append({
                 "name": name, "size": size,
-                "has_db": db_exists, "poster_count": poster_count,
+                "has_db": has_db, "has_json": has_json,
+                "poster_count": poster_count, "movie_count": movie_count,
+                "format": "v2" if has_json else "v1",
                 "created": name.replace("discvault_backup_", "").replace("_", " ")
             })
     return jsonify(backups)
@@ -4187,7 +4221,7 @@ def download_backup(name):
 
 @app.route("/api/settings/backup/upload", methods=["POST"])
 def upload_and_restore_backup():
-    """Upload a .tar.gz backup file and restore it."""
+    """Upload a .tar.gz backup file, extract, and store for restore."""
     if "file" not in request.files:
         return jsonify({"error": "Geen bestand ontvangen"}), 400
     f = request.files["file"]
@@ -4201,82 +4235,215 @@ def upload_and_restore_backup():
         tmp.close()
         with tarfile.open(tmp.name, "r:gz") as tf:
             members = tf.getnames()
-            # Security: block absolute paths or path traversal
             for m in members:
                 if m.startswith("/") or ".." in m:
                     return jsonify({"error": "Ongeldig archief (pad-traversal)"}), 400
-            if not any(m.endswith("discvault.db") for m in members):
-                return jsonify({"error": "Geen discvault.db gevonden in archief"}), 400
+            has_json = any(m.endswith("backup.json") for m in members)
+            has_db = any(m.endswith("discvault.db") for m in members)
+            if not has_json and not has_db:
+                return jsonify({"error": "Geen backup.json of discvault.db gevonden in archief"}), 400
             extract_dir = tempfile.mkdtemp()
             tf.extractall(extract_dir)
-        # Find discvault.db (may be in a subdirectory)
-        db_file = None
-        poster_dir = None
+
+        # Find backup root (backup.json or discvault.db may be nested)
+        backup_root = None
         for root, dirs, files in os.walk(extract_dir):
-            if "discvault.db" in files:
-                db_file = os.path.join(root, "discvault.db")
-                p = os.path.join(root, "posters")
-                if os.path.isdir(p):
-                    poster_dir = p
+            if "backup.json" in files or "discvault.db" in files:
+                backup_root = root
                 break
-        if not db_file:
+        if not backup_root:
             shutil.rmtree(extract_dir, ignore_errors=True)
-            return jsonify({"error": "discvault.db niet gevonden in archief"}), 400
-        shutil.copy2(db_file, DB_PATH)
-        if poster_dir:
-            if os.path.isdir(POSTER_DIR):
-                shutil.rmtree(POSTER_DIR)
-            shutil.copytree(poster_dir, POSTER_DIR)
-        # Restore profiles if present
-        profile_dir = None
-        for root, dirs, files in os.walk(extract_dir):
-            p = os.path.join(root, "profiles")
-            if os.path.isdir(p):
-                profile_dir = p
-                break
-        if profile_dir:
-            if os.path.isdir(PROFILE_DIR):
-                shutil.rmtree(PROFILE_DIR)
-            shutil.copytree(profile_dir, PROFILE_DIR)
+            return jsonify({"error": "Backup data niet gevonden in archief"}), 400
+
+        # Store as a named backup for restore
+        ts = local_now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"discvault_upload_{ts}"
+        dest = os.path.join(BACKUP_DIR, backup_name)
+        shutil.copytree(backup_root, dest)
         shutil.rmtree(extract_dir, ignore_errors=True)
-        init_db()
-        add_log("settings", f"Backup hersteld via upload: {f.filename}", level="success")
-        return jsonify({"status": "ok"})
+
+        add_log("settings", f"Backup geüpload: {f.filename} → {backup_name}", level="info")
+        return jsonify({"status": "ok", "name": backup_name})
     except tarfile.TarError:
         return jsonify({"error": "Ongeldig of corrupt .tar.gz bestand"}), 400
     except Exception as e:
-        add_log("settings", f"Upload restore mislukt", str(e), "error")
+        add_log("settings", f"Upload mislukt", str(e), "error")
         return jsonify({"error": str(e)}), 500
     finally:
         if tmp and os.path.exists(tmp.name):
             os.unlink(tmp.name)
 
 
+def _restore_from_json(backup_path, group_mapping=None):
+    """Restore movies, posters, people from a v2 JSON backup.
+
+    group_mapping: dict mapping backup group names to actions:
+      {"GroupName": {"action": "create"}} or
+      {"GroupName": {"action": "assign", "group_id": 5}} or
+      {"GroupName": {"action": "skip"}}
+
+    Returns (success_bool, response_data).
+    """
+    json_path = os.path.join(backup_path, "backup.json")
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    movies = data.get("movies", [])
+    backup_groups = data.get("movie_groups", [])
+    people = data.get("people", [])
+    movie_people = data.get("movie_people", [])
+
+    # Collect unique group names from backup
+    backup_group_names = list({mg["group_name"] for mg in backup_groups})
+
+    conn = get_db()
+    # Check which groups exist
+    existing_groups = {}
+    for row in conn.execute("SELECT id, name FROM groups").fetchall():
+        existing_groups[row["name"]] = row["id"]
+
+    missing_groups = [g for g in backup_group_names if g not in existing_groups]
+
+    # If there are missing groups and no mapping provided, return conflict
+    if missing_groups and not group_mapping:
+        conn.close()
+        return False, {
+            "status": "groups_conflict",
+            "missing_groups": missing_groups,
+            "existing_groups": [{"id": v, "name": k} for k, v in existing_groups.items()],
+            "movie_count": len(movies),
+        }
+
+    # Build group name → target group_id mapping
+    group_name_to_id = dict(existing_groups)
+    uid = _get_current_user_id()
+
+    if group_mapping:
+        for gname, action_data in group_mapping.items():
+            action = action_data.get("action", "skip")
+            if action == "create":
+                now_str = local_now().isoformat()
+                conn.execute(
+                    "INSERT OR IGNORE INTO groups (name, created_by, created_at) VALUES (?, ?, ?)",
+                    (gname, uid, now_str)
+                )
+                row = conn.execute("SELECT id FROM groups WHERE name=?", (gname,)).fetchone()
+                if row:
+                    group_name_to_id[gname] = row["id"]
+            elif action == "assign":
+                target_id = action_data.get("group_id")
+                if target_id:
+                    group_name_to_id[gname] = int(target_id)
+            # action == "skip": don't add to mapping
+
+    # Clear existing movies and people (full restore)
+    conn.execute("DELETE FROM movie_people")
+    conn.execute("DELETE FROM movie_groups")
+    conn.execute("DELETE FROM movies")
+    conn.execute("DELETE FROM people")
+
+    # Build old movie id → new movie id mapping
+    old_to_new_movie = {}
+    old_to_new_person = {}
+
+    # Restore people
+    for p in people:
+        old_id = p.pop("id", None)
+        cols = [k for k in p.keys()]
+        placeholders = ",".join(["?"] * len(cols))
+        col_names = ",".join(cols)
+        conn.execute(f"INSERT INTO people ({col_names}) VALUES ({placeholders})", list(p.values()))
+        new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        if old_id is not None:
+            old_to_new_person[old_id] = new_id
+
+    # Restore movies
+    for m in movies:
+        old_id = m.pop("id", None)
+        # Assign to current user
+        m["owner_id"] = uid
+        cols = [k for k in m.keys()]
+        placeholders = ",".join(["?"] * len(cols))
+        col_names = ",".join(cols)
+        conn.execute(f"INSERT INTO movies ({col_names}) VALUES ({placeholders})", list(m.values()))
+        new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        if old_id is not None:
+            old_to_new_movie[old_id] = new_id
+
+    # Restore movie_groups
+    for mg in backup_groups:
+        new_movie_id = old_to_new_movie.get(mg["movie_id"])
+        target_gid = group_name_to_id.get(mg["group_name"])
+        if new_movie_id and target_gid:
+            conn.execute(
+                "INSERT OR IGNORE INTO movie_groups (movie_id, group_id) VALUES (?, ?)",
+                (new_movie_id, target_gid)
+            )
+
+    # Restore movie_people
+    for mp in movie_people:
+        new_movie_id = old_to_new_movie.get(mp.get("movie_id"))
+        new_person_id = old_to_new_person.get(mp.get("person_id"))
+        if new_movie_id and new_person_id:
+            conn.execute(
+                "INSERT OR IGNORE INTO movie_people (movie_id, person_id, role, character, job, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+                (new_movie_id, new_person_id, mp.get("role"), mp.get("character"), mp.get("job"), mp.get("sort_order", 0))
+            )
+
+    conn.commit()
+
+    # Restore posters
+    poster_backup = os.path.join(backup_path, "posters")
+    if os.path.isdir(poster_backup):
+        if os.path.isdir(POSTER_DIR):
+            shutil.rmtree(POSTER_DIR)
+        shutil.copytree(poster_backup, POSTER_DIR)
+
+    conn.close()
+    return True, {"status": "ok", "movie_count": len(movies)}
+
+
 @app.route("/api/settings/restore/<name>", methods=["POST"])
 def restore_backup(name):
     name = re.sub(r'[^a-zA-Z0-9_\-]', '', name)
     backup_path = os.path.join(BACKUP_DIR, name)
-    db_backup = os.path.join(backup_path, "discvault.db")
-    poster_backup = os.path.join(backup_path, "posters")
-    if not os.path.exists(db_backup):
-        return jsonify({"error": "Backup database not found"}), 404
-    try:
-        shutil.copy2(db_backup, DB_PATH)
-        if os.path.isdir(poster_backup):
-            if os.path.isdir(POSTER_DIR):
-                shutil.rmtree(POSTER_DIR)
-            shutil.copytree(poster_backup, POSTER_DIR)
-        profile_backup = os.path.join(backup_path, "profiles")
-        if os.path.isdir(profile_backup):
-            if os.path.isdir(PROFILE_DIR):
-                shutil.rmtree(PROFILE_DIR)
-            shutil.copytree(profile_backup, PROFILE_DIR)
-        init_db()  # ensure schema migrations are applied
-        add_log("settings", f"Backup hersteld: {name}", level="success")
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        add_log("settings", f"Restore mislukt: {name}", str(e), "error")
-        return jsonify({"error": str(e)}), 500
+    if not os.path.isdir(backup_path):
+        return jsonify({"error": "Backup not found"}), 404
+
+    json_path = os.path.join(backup_path, "backup.json")
+    db_path = os.path.join(backup_path, "discvault.db")
+
+    # V2 format (JSON)
+    if os.path.exists(json_path):
+        try:
+            body = request.get_json(silent=True) or {}
+            group_mapping = body.get("group_mapping")
+            ok, result = _restore_from_json(backup_path, group_mapping)
+            if not ok:
+                return jsonify(result), 409
+            add_log("settings", f"Backup hersteld: {name}", level="success")
+            return jsonify(result)
+        except Exception as e:
+            add_log("settings", f"Restore mislukt: {name}", str(e), "error")
+            return jsonify({"error": str(e)}), 500
+
+    # V1 legacy format (full DB copy) — keep for backward compatibility
+    if os.path.exists(db_path):
+        try:
+            shutil.copy2(db_path, DB_PATH)
+            poster_backup = os.path.join(backup_path, "posters")
+            if os.path.isdir(poster_backup):
+                if os.path.isdir(POSTER_DIR):
+                    shutil.rmtree(POSTER_DIR)
+                shutil.copytree(poster_backup, POSTER_DIR)
+            init_db()
+            add_log("settings", f"Backup hersteld (v1): {name}", level="success")
+            return jsonify({"status": "ok"})
+        except Exception as e:
+            add_log("settings", f"Restore mislukt: {name}", str(e), "error")
+            return jsonify({"error": str(e)}), 500
+
+    return jsonify({"error": "No backup data found"}), 404
 
 
 @app.route("/api/settings/backup/<name>", methods=["DELETE"])
