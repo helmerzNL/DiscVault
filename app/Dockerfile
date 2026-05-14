@@ -45,6 +45,10 @@ RUN mkdir -p /data/posters /data/profiles /data/backups
 
 VOLUME ["/data"]
 
+LABEL net.unraid.docker.icon="https://raw.githubusercontent.com/helmerzNL/DiscVault/main/app/frontend/favicon-192.png" \
+      net.unraid.docker.webui="http://[IP]:[PORT:80]" \
+      net.unraid.docker.managed="dockerman"
+
 EXPOSE 80 6090
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
