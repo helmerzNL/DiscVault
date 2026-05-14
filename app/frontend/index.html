@@ -249,8 +249,8 @@
   }
 
   .settings-sub-btn {
-    flex: 1;
-    min-width: 86px;
+    flex: 1 1 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -260,7 +260,7 @@
     border: 0;
     border-right: 1px solid var(--border);
     color: var(--text-muted);
-    padding: 10px 8px;
+    padding: 10px 4px;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s, background 0.15s;
   }
@@ -2030,70 +2030,6 @@
         <div id="dbStatsContent" style="font-size:0.88rem; color:var(--text-muted);" data-i18n="settings.loading">Laden...</div>
       </div>
 
-      <div class="settings-sub-section active" id="settingsSubBackup">
-        <!-- Backup -->
-        <div class="card">
-          <div class="card-title" data-i18n-html="settings.backup">Backup &amp; Herstel</div>
-          <div class="btn-row" style="margin-bottom:20px;">
-            <button class="btn btn-success" onclick="createBackup()" data-i18n="settings.createBackup">💾 Backup Maken</button>
-            <label class="btn btn-secondary" style="cursor:pointer; margin:0;"><span data-i18n="settings.uploadBackup">📤 Backup Uploaden</span>
-              <input type="file" accept=".tar.gz,.tgz" style="display:none;" onchange="uploadBackup(this)">
-            </label>
-          </div>
-          <div id="settingsBackupStatus" class="status-msg"></div>
-          <div id="backupsList" style="margin-top:14px;"></div>
-        </div>
-      </div>
-
-      <div class="settings-sub-section" id="settingsSubLogs">
-        <div class="card">
-          <div class="card-title" data-i18n="settings.menuLogs">Logs</div>
-          <div class="log-controls">
-            <label class="log-auto-label">
-              <input type="checkbox" id="logAutoRefresh" checked style="accent-color:var(--success); width:14px; height:14px;">
-              <span class="blink"></span> Auto-refresh
-            </label>
-            <select id="logLevelFilter" onchange="loadLogs()" style="width:auto; padding:6px 12px;">
-              <option value="" data-i18n="logs.allLevels">Alle niveaus</option>
-              <option value="error" data-i18n="logs.errors">🔴 Fouten</option>
-              <option value="warn" data-i18n="logs.warnings">🟡 Waarschuwingen</option>
-              <option value="success" data-i18n="logs.success">🟢 Succes</option>
-              <option value="info" data-i18n="logs.info">🔵 Info</option>
-            </select>
-            <select id="logCatFilter" onchange="loadLogs()" style="width:auto; padding:6px 12px;">
-              <option value="" data-i18n="logs.allCategories">Alle categorieën</option>
-              <option value="import" data-i18n="logs.catImport">⬆ Import</option>
-              <option value="refresh" data-i18n="logs.catRefresh">↺ Refresh</option>
-              <option value="lookup" data-i18n="logs.catLookup">🔍 Lookup</option>
-              <option value="add" data-i18n="logs.catAdd">＋ Toevoegen</option>
-              <option value="delete" data-i18n="logs.catDelete">🗑 Verwijderen</option>
-              <option value="general" data-i18n="logs.catGeneral">⚙ Algemeen</option>
-            </select>
-            <button class="btn btn-secondary" onclick="loadLogs()" style="padding:8px 14px;" data-i18n="logs.refresh">↻ Vernieuwen</button>
-            <button class="btn btn-danger" onclick="clearLogs()" style="margin-left:auto; padding:8px 14px;" data-i18n="logs.clear">🗑 Wis logs</button>
-          </div>
-
-          <div id="logCount" style="font-family:'DM Mono',monospace; font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;"></div>
-
-          <div class="log-table-wrap">
-            <table class="log-table">
-              <thead>
-                <tr>
-                  <th style="width:140px;" data-i18n="logs.thTimestamp">Tijdstip</th>
-                  <th style="width:65px;" data-i18n="logs.thLevel">Niveau</th>
-                  <th style="width:80px;" data-i18n="logs.thCategory">Categorie</th>
-                  <th style="width:280px;" data-i18n="logs.thBackends">Backends</th>
-                  <th data-i18n="logs.thMessage">Bericht</th>
-                </tr>
-              </thead>
-              <tbody id="logBody">
-                <tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-muted);" data-i18n="logs.loading">Laden...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
       <!-- Metadata bronnen -->
       <div class="card" style="margin-top:20px;">
         <div class="card-title" data-i18n="settings.metadataSources">Metadata Bronnen</div>
@@ -2143,7 +2079,71 @@
         </select>
       </div>
 
-      </div>
+      </div><!-- /settingsSubGeneral -->
+
+      <div class="settings-sub-section" id="settingsSubBackup">
+        <!-- Backup -->
+        <div class="card">
+          <div class="card-title" data-i18n-html="settings.backup">Backup &amp; Herstel</div>
+          <div class="btn-row" style="margin-bottom:20px;">
+            <button class="btn btn-success" onclick="createBackup()" data-i18n="settings.createBackup">💾 Backup Maken</button>
+            <label class="btn btn-secondary" style="cursor:pointer; margin:0;"><span data-i18n="settings.uploadBackup">📤 Backup Uploaden</span>
+              <input type="file" accept=".tar.gz,.tgz" style="display:none;" onchange="uploadBackup(this)">
+            </label>
+          </div>
+          <div id="settingsBackupStatus" class="status-msg"></div>
+          <div id="backupsList" style="margin-top:14px;"></div>
+        </div>
+      </div><!-- /settingsSubBackup -->
+
+      <div class="settings-sub-section" id="settingsSubLogs">
+        <div class="card">
+          <div class="card-title" data-i18n="settings.menuLogs">Logs</div>
+          <div class="log-controls">
+            <label class="log-auto-label">
+              <input type="checkbox" id="logAutoRefresh" checked style="accent-color:var(--success); width:14px; height:14px;">
+              <span class="blink"></span> Auto-refresh
+            </label>
+            <select id="logLevelFilter" onchange="loadLogs()" style="width:auto; padding:6px 12px;">
+              <option value="" data-i18n="logs.allLevels">Alle niveaus</option>
+              <option value="error" data-i18n="logs.errors">🔴 Fouten</option>
+              <option value="warn" data-i18n="logs.warnings">🟡 Waarschuwingen</option>
+              <option value="success" data-i18n="logs.success">🟢 Succes</option>
+              <option value="info" data-i18n="logs.info">🔵 Info</option>
+            </select>
+            <select id="logCatFilter" onchange="loadLogs()" style="width:auto; padding:6px 12px;">
+              <option value="" data-i18n="logs.allCategories">Alle categorieën</option>
+              <option value="import" data-i18n="logs.catImport">⬆ Import</option>
+              <option value="refresh" data-i18n="logs.catRefresh">↺ Refresh</option>
+              <option value="lookup" data-i18n="logs.catLookup">🔍 Lookup</option>
+              <option value="add" data-i18n="logs.catAdd">＋ Toevoegen</option>
+              <option value="delete" data-i18n="logs.catDelete">🗑 Verwijderen</option>
+              <option value="general" data-i18n="logs.catGeneral">⚙ Algemeen</option>
+            </select>
+            <button class="btn btn-secondary" onclick="loadLogs()" style="padding:8px 14px;" data-i18n="logs.refresh">↻ Vernieuwen</button>
+            <button class="btn btn-danger" onclick="clearLogs()" style="margin-left:auto; padding:8px 14px;" data-i18n="logs.clear">🗑 Wis logs</button>
+          </div>
+
+          <div id="logCount" style="font-family:'DM Mono',monospace; font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;"></div>
+
+          <div class="log-table-wrap">
+            <table class="log-table">
+              <thead>
+                <tr>
+                  <th style="width:140px;" data-i18n="logs.thTimestamp">Tijdstip</th>
+                  <th style="width:65px;" data-i18n="logs.thLevel">Niveau</th>
+                  <th style="width:80px;" data-i18n="logs.thCategory">Categorie</th>
+                  <th style="width:280px;" data-i18n="logs.thBackends">Backends</th>
+                  <th data-i18n="logs.thMessage">Bericht</th>
+                </tr>
+              </thead>
+              <tbody id="logBody">
+                <tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-muted);" data-i18n="logs.loading">Laden...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /settingsSubLogs -->
 
       <div class="settings-sub-section" id="settingsSubAdvanced">
         <!-- Advanced -->
