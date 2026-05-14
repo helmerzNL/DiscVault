@@ -1300,7 +1300,13 @@ def health():
 @app.route("/api/stats")
 def stats():
     conn = get_db()
-    owner_clause, owner_params = _movie_owner_filter()
+    uid = _get_current_user_id()
+    if uid:
+        owner_clause = " AND owner_id = ?"
+        owner_params = [uid]
+    else:
+        owner_clause = ""
+        owner_params = []
     total     = conn.execute(f"SELECT COUNT(*) FROM movies WHERE 1=1{owner_clause}", owner_params).fetchone()[0]
     by_format = conn.execute(
         f"SELECT format, COUNT(*) as count FROM movies WHERE 1=1{owner_clause} GROUP BY format", owner_params
@@ -4528,7 +4534,11 @@ def db_stats():
         for f in os.listdir(POSTER_DIR) if os.path.isfile(os.path.join(POSTER_DIR, f))
     ) if os.path.isdir(POSTER_DIR) else 0
     conn = get_db()
-    movie_count = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
+    uid = _get_current_user_id()
+    if uid:
+        movie_count = conn.execute("SELECT COUNT(*) FROM movies WHERE owner_id = ?", (uid,)).fetchone()[0]
+    else:
+        movie_count = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
     log_count   = conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
     conn.close()
     return jsonify({

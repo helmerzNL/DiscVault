@@ -360,6 +360,10 @@ h1 {
   border-color: rgba(124, 106, 247, 0.35);
 }
 
+.badge-soon {
+  background: var(--accent);
+}
+
 .cards {
   margin-top: 1.25rem;
   display: grid;
