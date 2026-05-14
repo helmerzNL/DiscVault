@@ -7,15 +7,21 @@ It includes:
 - Metadata lookup (OMDb + TMDb fallback)
 - Collection filtering and search
 - Backup and restore tools
+- User management and groups
+- Passkey authentication and recovery
 - MCP endpoint integration for AI workflows
+- PWA — works offline after adding to homescreen
 
 ## Live Website
 
-- https://discvault.nl
+- https://discvault.eu
 
 ## Docker Image
 
-- `ghcr.io/helmerzNL/DiscVault:latest`
+```
+ghcr.io/helmerzNL/DiscVault:latest   # stable
+ghcr.io/helmerzNL/DiscVault:beta     # beta (new features)
+```
 
 ## Unraid
 
@@ -24,25 +30,27 @@ It includes:
 
 ## Screenshots
 
-### Sign-in
+### Desktop
 
-![DiscVault Sign-in](website/images/overview.png)
+| | | |
+|---|---|---|
+| ![Sign in](screenshots/Desktop_signin.png) | ![Collection](screenshots/desktop_collection.png) | ![Import](screenshots/desktop_import.png) |
+| Sign in | Collection | Import |
+| ![Backup & Restore](screenshots/desktop_backup.png) | ![User Management](screenshots/desktop_user_mgmt.png) | ![Logfiles](screenshots/desktop_log.png) |
+| Backup & Restore | User Management | Logfiles |
+| ![Advanced & MCP](screenshots/desktop_advanced-mcp.png) | | |
+| Advanced & MCP | | |
 
-### Collection
+### Mobile
 
-![DiscVault Collection](website/images/collection.png)
-
-### Scanner
-
-![DiscVault Scanner](website/images/scanner.png)
-
-### Settings + MCP Server
-
-![DiscVault Settings and MCP Server](website/images/settings.png)
-
-### Search
-
-![DiscVault Search](website/images/details.png)
+| | | | |
+|---|---|---|---|
+| ![Sign in](screenshots/Mobile_screenshot%20(2).PNG) | ![Search](screenshots/Mobile_screenshot%20(1).PNG) | ![Add movie](screenshots/Mobile_screenshot%20(4).PNG) | ![Profile](screenshots/Mobile_screenshot%20(5).PNG) |
+| Sign in | Search | Add movie | Profile |
+| ![Metadata](screenshots/Mobile_screenshot%20(6).PNG) | ![Authentication](screenshots/Mobile_screenshot%20(7).PNG) | ![User management](screenshots/Mobile_screenshot%20(8).PNG) | ![Backup](screenshots/Mobile_screenshot%20(9).PNG) |
+| Metadata | Authentication | User management | Backup & Restore |
+| ![Logfiles](screenshots/Mobile_screenshot%20(10).PNG) | ![Advanced](screenshots/Mobile_screenshot%20(11).PNG) | | |
+| Logfiles | Advanced | | |
 
 ## Quick Start (Docker)
 
