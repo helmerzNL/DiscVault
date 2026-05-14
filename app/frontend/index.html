@@ -3086,6 +3086,7 @@ nl: {
   'js.queuedMessage':'Actie in wachtrij geplaatst (sync zodra online).',
   'js.unknownMovie':'Onbekende film',
   'js.confirmDeleteCurrent':'"{0}" verwijderen?',
+  'js.confirmEditOther':'Deze film is van {0}. Wil je als admin toch bewerken?',
   'js.queuedSave':'⏳ "{0}" staat in wachtrij.',
   'js.inQueue':'⏳ In wachtrij',
   'js.queuedEdit':'⏳ Wijziging in wachtrij.',
@@ -3335,6 +3336,7 @@ en: {
   'js.queuedMessage':'Action queued (will sync when online).',
   'js.unknownMovie':'Unknown movie',
   'js.confirmDeleteCurrent':'Delete "{0}"?',
+  'js.confirmEditOther':'This movie belongs to {0}. Edit as admin anyway?',
   'js.queuedSave':'⏳ "{0}" is queued.',
   'js.inQueue':'⏳ Queued',
   'js.queuedEdit':'⏳ Change queued.',
@@ -4881,6 +4883,12 @@ async function _populateGroupCheckboxes(currentGroupIds) {
 function startEdit() {
   const movie = allMovies.find(m => m.id === currentMovieId);
   if (!movie) return;
+
+  // Admin editing another user's movie → ask confirmation
+  if (authEnabled && currentUserRole === 'admin' && movie.owner_id && movie.owner_id !== currentUserId) {
+    const ownerName = movie.owner_name || ('user #' + movie.owner_id);
+    if (!confirm(t('js.confirmEditOther', ownerName))) return;
+  }
 
   // Populate all edit fields
   for (const [suffix, key] of Object.entries(EDIT_FIELDS)) {
