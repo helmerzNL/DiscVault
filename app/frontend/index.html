@@ -3120,6 +3120,8 @@ nl: {
   'js.advancedSettingsSaved':'Geavanceerde instelling opgeslagen',
   'js.pageTitle':'DiscVault — Collectie Beheer',
   'js.offlineNoCache':'Offline en geen lokale cache beschikbaar. Open de app een keer online om data lokaal op te slaan.',
+  'js.backendError':'Backend niet bereikbaar — je ziet gecachte gegevens.',
+  'js.offlineCache':'Offline — je ziet gecachte gegevens.',
   'js.confirmDeleteUser':'Weet je zeker dat je gebruiker "{0}" wilt verwijderen? Alle films van deze gebruiker worden ook verwijderd.',
   'js.confirmResetPasskey':'Passkey(s) van "{0}" resetten? De gebruiker moet dan opnieuw een passkey registreren.',
   'js.noGroups':'Geen groepen aangemaakt.',
@@ -3372,6 +3374,8 @@ en: {
   'js.advancedSettingsSaved':'Advanced setting saved',
   'js.pageTitle':'DiscVault — Collection Manager',
   'js.offlineNoCache':'Offline and no local cache available. Open the app online once to store data locally.',
+  'js.backendError':'Backend unreachable — showing cached data.',
+  'js.offlineCache':'Offline — showing cached data.',
   'js.confirmDeleteUser':'Are you sure you want to delete user "{0}"? All movies of this user will also be deleted.',
   'js.confirmResetPasskey':'Reset passkey(s) of "{0}"? The user will need to register a new passkey.',
   'js.noGroups':'No groups created.',
@@ -3676,10 +3680,16 @@ async function init() {
   await loadCollection();
 }
 
-async function loadStats() {
+async function loadStats(retries = 2) {
   try {
     const r = await fetch(`${API}/stats`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) {
+      if (retries > 0 && r.status >= 500) {
+        await new Promise(ok => setTimeout(ok, 1500));
+        return loadStats(retries - 1);
+      }
+      throw new Error(`HTTP ${r.status}`);
+    }
     const d = await r.json();
     setCachedData('dv_stats_cache', d);
     const el = document.getElementById('headerStats');
@@ -3715,12 +3725,19 @@ async function _loadGroupFilter() {
   }
 }
 
-async function loadCollection() {
+async function loadCollection(retries = 2) {
   // Load group filter options
   _loadGroupFilter();
   try {
     const r = await fetch(`${API}/movies`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) {
+      // Retry on server errors (502/503/504 = backend starting up)
+      if (retries > 0 && r.status >= 500) {
+        await new Promise(ok => setTimeout(ok, 1500));
+        return loadCollection(retries - 1);
+      }
+      throw new Error(`HTTP ${r.status}`);
+    }
     allMovies = await r.json();
     setCachedData('dv_movies_cache', allMovies);
     renderGrid(allMovies);
@@ -3730,9 +3747,12 @@ async function loadCollection() {
     if (allMovies.length) {
       renderGrid(allMovies);
       filterSearchMovies();
+      const msg = navigator.onLine
+        ? t('js.backendError')
+        : t('js.offlineCache');
       document.getElementById('moviesGrid').insertAdjacentHTML(
         'afterbegin',
-        '<div style="grid-column:1/-1; margin-bottom:12px; color:#ffd89a; border:1px solid rgba(240,144,64,.4); background:rgba(240,144,64,.08); border-radius:8px; padding:10px 12px; font-size:0.82rem;">Offline: je ziet gecachte collectiegegevens. Wijzigingen opslaan vereist backend-verbinding.</div>'
+        `<div style="grid-column:1/-1; margin-bottom:12px; color:#ffd89a; border:1px solid rgba(240,144,64,.4); background:rgba(240,144,64,.08); border-radius:8px; padding:10px 12px; font-size:0.82rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">${msg} <button class="btn btn-secondary" onclick="loadCollection()" style="padding:4px 12px; font-size:0.78rem;">↻ ${t('collection.refresh')}</button></div>`
       );
     } else {
       document.getElementById('moviesGrid').innerHTML = `<div style="color: var(--danger); padding: 20px;">${t('js.offlineNoCache')}</div>`;

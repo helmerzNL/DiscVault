@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v1";
+const SW_VERSION = "discvault-sw-v2";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -61,8 +61,11 @@ async function handleApi(request) {
 
   try {
     const networkResp = await fetch(request);
-    const cache = await caches.open(API_CACHE);
-    cache.put(request, networkResp.clone());
+    // Only cache successful responses — never cache errors
+    if (networkResp.ok) {
+      const cache = await caches.open(API_CACHE);
+      cache.put(request, networkResp.clone());
+    }
     return networkResp;
   } catch {
     const cached = await caches.match(request);
