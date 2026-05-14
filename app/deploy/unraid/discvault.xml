@@ -1,18 +1,18 @@
-<?xml version="1.0"?>
+﻿<?xml version="1.0"?>
 <Container version="2">
   <Name>DiscVault</Name>
-  <Repository>ghcr.io/YOUR_GH_ORG/discvault:latest</Repository>
+  <Repository>ghcr.io/helmerzNL/DiscVault:latest</Repository>
   <Registry>https://ghcr.io</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
   <Support>https://forums.unraid.net/topic/REPLACE_WITH_YOUR_SUPPORT_THREAD/</Support>
-  <Project>https://github.com/YOUR_GH_ORG/discvault</Project>
+  <Project>https://github.com/helmerzNL/DiscVault</Project>
   <Overview>DiscVault is a physical 4K UHD/Blu-ray/DVD collection manager with barcode lookup, web UI, backup/restore, and MCP endpoint. This all-in-one container runs frontend, backend API, and MCP service together.</Overview>
   <Category>Tools:</Category>
   <WebUI>http://[IP]:[PORT:6080]</WebUI>
-  <Icon>https://raw.githubusercontent.com/YOUR_GH_ORG/discvault/main/app/frontend/favicon-192.png</Icon>
+  <Icon>https://raw.githubusercontent.com/helmerzNL/DiscVault/main/app/frontend/favicon-192.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
