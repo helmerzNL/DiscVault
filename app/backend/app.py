@@ -2217,6 +2217,115 @@ def delete_movie(movie_id):
 
 @app.route("/api/lookup/<barcode>")
 def lookup(barcode):
+    stream = request.args.get("stream", "").lower() == "1"
+
+    if not stream:
+        return _lookup_sync(barcode)
+
+    def stream_lookup():
+        def emit(step, source, status, detail=""):
+            return json.dumps({"type": "step", "step": step, "source": source, "status": status, "detail": detail}) + "\n"
+
+        attempts = []
+        # 1. Local DB
+        yield emit(1, "Local DB", "searching")
+        conn = get_db()
+        existing = conn.execute("SELECT * FROM movies WHERE barcode = ?", (barcode,)).fetchone()
+        conn.close()
+        if existing:
+            _trace_add(attempts, "Local DB", "hit", f"barcode={barcode}")
+            add_log("lookup", f"Barcode {barcode} al in collectie", f"Backends: {_trace_summary(attempts)}", "info")
+            yield emit(1, "Local DB", "hit")
+            yield json.dumps({"type": "done", "status": "exists", "movie": dict(existing)}) + "\n"
+            return
+        yield emit(1, "Local DB", "miss")
+        _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
+
+        # 2. UPCItemDB
+        raw_title = None
+        yield emit(2, "UPCItemDB", "searching")
+        try:
+            raw_title = lookup_by_barcode_upcitemdb(barcode)
+            _trace_add(attempts, "UPCItemDB", "hit" if raw_title else "miss", f"barcode={barcode}")
+            yield emit(2, "UPCItemDB", "hit" if raw_title else "miss", raw_title or "")
+        except Exception:
+            _trace_add(attempts, "UPCItemDB", "error", f"barcode={barcode}")
+            yield emit(2, "UPCItemDB", "error")
+
+        # 3. OMDb / TMDb
+        movie_info = None
+        if raw_title:
+            for candidate in _title_candidates_from_upc(raw_title):
+                if not movie_info:
+                    yield emit(3, "OMDb", "searching", candidate)
+                    try:
+                        movie_info = lookup_movie_omdb(title=candidate)
+                        _trace_add(attempts, "OMDb", "hit" if movie_info else "miss", f"title={candidate}")
+                        yield emit(3, "OMDb", "hit" if movie_info else "miss", candidate)
+                    except Exception as ex:
+                        _trace_add(attempts, "OMDb", "error", f"title={candidate}", str(ex))
+                        yield emit(3, "OMDb", "error", candidate)
+                if not movie_info:
+                    yield emit(4, "TMDb", "searching", candidate)
+                    try:
+                        movie_info = lookup_movie_tmdb(candidate)
+                        _trace_add(attempts, "TMDb", "hit" if movie_info else "miss", f"title={candidate}")
+                        yield emit(4, "TMDb", "hit" if movie_info else "miss", candidate)
+                    except Exception as ex:
+                        _trace_add(attempts, "TMDb", "error", f"title={candidate}", str(ex))
+                        yield emit(4, "TMDb", "error", candidate)
+                if movie_info:
+                    break
+
+        if not movie_info and raw_title:
+            movie_info = {f: "" for f in ALL_FIELDS}
+            movie_info["title"] = raw_title
+            _trace_add(attempts, "UPCItemDB", "partial", "title-only fallback")
+
+        # 4. Blu-ray.com barcode fallback
+        if not movie_info and _is_bluray_scrape_enabled():
+            yield emit(5, "Blu-ray.com", "searching", f"barcode={barcode}")
+            bluray_info = lookup_movie_bluray_by_barcode(barcode)
+            _trace_add(attempts, "Blu-ray.com", "hit" if bluray_info else "miss", f"barcode={barcode}")
+            yield emit(5, "Blu-ray.com", "hit" if bluray_info else "miss")
+            if bluray_info:
+                movie_info = {f: "" for f in ALL_FIELDS}
+                movie_info["title"] = bluray_info.get("title", "") or f"Barcode {barcode}"
+                movie_info["year"] = bluray_info.get("year", "")
+                movie_info["poster"] = bluray_info.get("poster", "")
+                movie_info["hdr"] = bluray_info.get("hdr", "")
+                movie_info["audio_tracks"] = bluray_info.get("audio_tracks", "")
+                movie_info["subtitles"] = bluray_info.get("subtitles", "")
+        elif not movie_info:
+            _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
+
+        # 5. Blu-ray.com spec enrichment
+        if movie_info:
+            if _is_bluray_scrape_enabled():
+                yield emit(6, "Blu-ray.com specs", "searching")
+                specs, bluray_attempts = lookup_movie_bluray_specs_traced(
+                    movie_info.get("title") or raw_title,
+                    movie_info.get("year") or "",
+                    barcode
+                )
+                for a in bluray_attempts:
+                    _trace_add(attempts, "Blu-ray.com", a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
+                movie_info = _merge_disc_specs(movie_info, specs)
+                yield emit(6, "Blu-ray.com specs", "hit" if specs else "miss")
+            else:
+                _trace_add(attempts, "Blu-ray.com", "skipped", "spec enrichment uit")
+
+            add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
+                    f"Backends: {_trace_summary(attempts)}", "success")
+            yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode}) + "\n"
+        else:
+            add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
+            yield json.dumps({"type": "done", "status": "not_found", "barcode": barcode, "raw_title": raw_title}) + "\n"
+
+    return Response(stream_lookup(), mimetype="application/x-ndjson")
+
+
+def _lookup_sync(barcode):
     try:
         attempts = []
         conn     = get_db()

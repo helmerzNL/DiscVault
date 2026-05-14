@@ -3504,33 +3504,55 @@ async function doLookup(barcode) {
   document.getElementById('noResult').style.display = 'none';
 
   try {
-    const r = await fetch(`${API}/lookup/${barcode}`);
-    const contentType = r.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
+    const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let finalData = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        if (msg.type === 'step') {
+          const icon = msg.status === 'searching' ? '<span class="spinner"></span>'
+            : msg.status === 'hit' ? '✓' : msg.status === 'miss' ? '—' : '✕';
+          showStatus('scanStatus', `${icon} ${msg.source}${msg.detail ? ': ' + msg.detail : ''}`, msg.status === 'hit' ? 'success' : 'info');
+        } else if (msg.type === 'done') {
+          finalData = msg;
+        }
+      }
+    }
+
+    if (!finalData) {
       showStatus('scanStatus', t('js.backendError', r.status), 'error');
       document.getElementById('noResult').style.display = 'block';
       return;
     }
-    const d = await r.json();
 
-    if (d.error) {
-      showStatus('scanStatus', t('js.error', d.error), 'error');
+    if (finalData.error) {
+      showStatus('scanStatus', t('js.error', finalData.error), 'error');
       document.getElementById('noResult').style.display = 'block';
       return;
     }
 
-    if (d.status === 'exists') {
-      showStatus('scanStatus', t('js.alreadyInCollection', d.movie.title), 'success');
-      displayMovieResult(d.movie, barcode, true);
-    } else if (d.status === 'found') {
+    if (finalData.status === 'exists') {
+      showStatus('scanStatus', t('js.alreadyInCollection', finalData.movie.title), 'success');
+      displayMovieResult(finalData.movie, barcode, true);
+    } else if (finalData.status === 'found') {
       showStatus('scanStatus', t('js.movieFound'), 'success');
-      displayMovieResult(d.movie, barcode, false);
+      displayMovieResult(finalData.movie, barcode, false);
     } else {
       showStatus('scanStatus', t('js.movieNotFound', barcode), 'error');
       currentBarcode = barcode;
-      currentMovieData = { title: d.raw_title || '', barcode };
+      currentMovieData = { title: finalData.raw_title || '', barcode };
       document.getElementById('movieResult').classList.add('visible');
-      document.getElementById('resultTitle').textContent = d.raw_title || t('js.unknown');
+      document.getElementById('resultTitle').textContent = finalData.raw_title || t('js.unknown');
       document.getElementById('resultPlot').textContent = '';
       document.getElementById('resultTags').innerHTML = '';
       const poster = document.getElementById('resultPoster');
