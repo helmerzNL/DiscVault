@@ -42,7 +42,7 @@ COPY deploy/all-in-one/nginx.conf /etc/nginx/conf.d/default.conf
 COPY deploy/all-in-one/supervisord.conf /etc/supervisor/conf.d/discvault.conf
 
 # Data dirs
-RUN mkdir -p /data/posters /data/profiles /data/backups
+RUN mkdir -p /data/posters /data/profiles /data/backups /data/avatars
 
 VOLUME ["/data"]
 

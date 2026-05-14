@@ -38,6 +38,7 @@ DB_PATH    = os.environ.get("DB_PATH",    "/data/discvault.db")
 POSTER_DIR = os.environ.get("POSTER_DIR", "/data/posters")
 PROFILE_DIR = os.environ.get("PROFILE_DIR", "/data/profiles")
 BACKUP_DIR = os.environ.get("BACKUP_DIR", "/data/backups")
+AVATAR_DIR = os.environ.get("AVATAR_DIR", "/data/avatars")
 OMDB_API_KEY  = os.environ.get("OMDB_API_KEY",  "")
 TMDB_API_KEY  = os.environ.get("TMDB_API_KEY",  "")
 MCP_API_KEY   = os.environ.get("MCP_API_KEY", "")
@@ -173,6 +174,7 @@ def init_db():
     os.makedirs(POSTER_DIR, exist_ok=True)
     os.makedirs(PROFILE_DIR, exist_ok=True)
     os.makedirs(BACKUP_DIR, exist_ok=True)
+    os.makedirs(AVATAR_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
 
     # Build CREATE TABLE with all columns
@@ -210,6 +212,9 @@ def init_db():
             display_name  TEXT,
             role          TEXT NOT NULL DEFAULT 'user',
             recovery_hash TEXT,
+            first_name    TEXT,
+            last_name     TEXT,
+            avatar        TEXT,
             created_at    TEXT NOT NULL
         )
     """)
@@ -347,6 +352,12 @@ def init_db():
         conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
     if "recovery_hash" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN recovery_hash TEXT")
+    if "first_name" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+    if "last_name" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN last_name TEXT")
+    if "avatar" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
 
     # Auto-assign existing movies (no owner) to first admin user
     first_user = conn.execute("SELECT id FROM users ORDER BY created_at ASC LIMIT 1").fetchone()
@@ -3128,7 +3139,7 @@ def auth_required(f):
     return decorated
 
 # Public routes that never need auth
-PUBLIC_PREFIXES = ["/api/auth/", "/api/health", "/api/posters/", "/api/profiles/", "/api/debug/"]
+PUBLIC_PREFIXES = ["/api/auth/", "/api/health", "/api/posters/", "/api/profiles/", "/api/avatars/", "/api/debug/"]
 
 @app.before_request
 def check_auth():
@@ -3464,8 +3475,7 @@ def login_verify():
 def list_credentials():
     uid = _get_current_user_id()
     conn = get_db()
-    if uid and _get_current_user_role() != "admin":
-        # Non-admin: only own credentials
+    if uid:
         rows = conn.execute("""
             SELECT c.id, c.credential_name, c.created_at, c.sign_count, u.username
             FROM credentials c JOIN users u ON c.user_id = u.id
@@ -3625,11 +3635,139 @@ def get_current_user():
     if not uid:
         return jsonify({"authenticated": False})
     conn = get_db()
-    user = conn.execute("SELECT id, username, display_name, role, created_at FROM users WHERE id=?", (uid,)).fetchone()
+    user = conn.execute("SELECT id, username, display_name, role, first_name, last_name, avatar, created_at FROM users WHERE id=?", (uid,)).fetchone()
     conn.close()
     if not user:
         return jsonify({"authenticated": False})
-    return jsonify({"authenticated": True, **dict(user)})
+    data = {**dict(user), "authenticated": True}
+    if data.get("avatar"):
+        data["avatar_url"] = f"/api/avatars/{data['avatar']}"
+    return jsonify(data)
+
+
+# ---------------------------------------------------------------------------
+# Auth: User profile management
+# ---------------------------------------------------------------------------
+
+@app.route("/api/auth/profile", methods=["PUT"])
+def update_profile():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({"error": "User not found"}), 404
+
+    new_username = (data.get("username") or "").strip()
+    first_name = (data.get("first_name") or "").strip() or None
+    last_name = (data.get("last_name") or "").strip() or None
+
+    if not new_username:
+        conn.close()
+        return jsonify({"error": "Username is required"}), 400
+
+    if len(new_username) > 50:
+        conn.close()
+        return jsonify({"error": "Username too long"}), 400
+
+    # Check uniqueness if username changed
+    if new_username != user["username"]:
+        existing = conn.execute("SELECT id FROM users WHERE username=? AND id!=?", (new_username, uid)).fetchone()
+        if existing:
+            conn.close()
+            return jsonify({"error": "Username already taken", "field": "username"}), 409
+
+    conn.execute(
+        "UPDATE users SET username=?, first_name=?, last_name=? WHERE id=?",
+        (new_username, first_name, last_name, uid)
+    )
+    conn.commit()
+
+    # Re-issue token with new username
+    token = _create_token(uid, new_username)
+    updated = conn.execute("SELECT id, username, display_name, role, first_name, last_name, avatar, created_at FROM users WHERE id=?", (uid,)).fetchone()
+    conn.close()
+    udata = {**dict(updated)}
+    if udata.get("avatar"):
+        udata["avatar_url"] = f"/api/avatars/{udata['avatar']}"
+    add_log("auth", f"Profiel bijgewerkt: {new_username}", level="info")
+    return jsonify({"status": "ok", "token": token, **udata})
+
+
+@app.route("/api/auth/profile/avatar", methods=["POST"])
+def upload_avatar():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if "avatar" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    f = request.files["avatar"]
+    if not f.filename:
+        return jsonify({"error": "No file selected"}), 400
+
+    # Validate file type
+    allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in allowed:
+        return jsonify({"error": "File type not allowed"}), 400
+
+    # Limit file size (2MB)
+    f.seek(0, 2)
+    size = f.tell()
+    f.seek(0)
+    if size > 2 * 1024 * 1024:
+        return jsonify({"error": "File too large (max 2MB)"}), 400
+
+    # Delete old avatar if exists
+    conn = get_db()
+    old = conn.execute("SELECT avatar FROM users WHERE id=?", (uid,)).fetchone()
+    if old and old["avatar"]:
+        old_path = os.path.join(AVATAR_DIR, os.path.basename(old["avatar"]))
+        if os.path.isfile(old_path):
+            os.remove(old_path)
+
+    filename = f"{uid}_{uuid.uuid4().hex[:8]}{ext}"
+    f.save(os.path.join(AVATAR_DIR, filename))
+
+    conn.execute("UPDATE users SET avatar=? WHERE id=?", (filename, uid))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "ok", "avatar_url": f"/api/avatars/{filename}"})
+
+
+@app.route("/api/auth/profile/avatar", methods=["DELETE"])
+def delete_avatar():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    old = conn.execute("SELECT avatar FROM users WHERE id=?", (uid,)).fetchone()
+    if old and old["avatar"]:
+        old_path = os.path.join(AVATAR_DIR, os.path.basename(old["avatar"]))
+        if os.path.isfile(old_path):
+            os.remove(old_path)
+    conn.execute("UPDATE users SET avatar=NULL WHERE id=?", (uid,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/avatars/<path:filename>")
+def serve_avatar(filename):
+    safe_name = os.path.basename((filename or "").strip().replace("\\", "/"))
+    if not safe_name:
+        return jsonify({"error": "Not found"}), 404
+    if os.path.isfile(os.path.join(AVATAR_DIR, safe_name)):
+        resp = send_from_directory(AVATAR_DIR, safe_name)
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return resp
+    return jsonify({"error": "Not found"}), 404
 
 
 # ---------------------------------------------------------------------------

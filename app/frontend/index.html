@@ -2131,7 +2131,11 @@
     <div>
 
       <div class="settings-submenu">
-        <button class="settings-sub-btn active" type="button" data-settings-sub="general" onclick="switchSettingsSubmenu('general')">
+        <button class="settings-sub-btn active" type="button" data-settings-sub="profile" onclick="switchSettingsSubmenu('profile')">
+          <span class="settings-sub-icon mdi mdi-account-circle-outline" aria-hidden="true"></span>
+          <span class="settings-sub-label" data-i18n="settings.menuProfile">Profiel</span>
+        </button>
+        <button class="settings-sub-btn" type="button" data-settings-sub="general" onclick="switchSettingsSubmenu('general')">
           <span class="settings-sub-icon mdi mdi-tune-variant" aria-hidden="true"></span>
           <span class="settings-sub-label" data-i18n="settings.menuGeneral">Algemeen</span>
         </button>
@@ -2153,7 +2157,59 @@
         </button>
       </div>
 
-      <div class="settings-sub-section active" id="settingsSubGeneral">
+      <!-- Profile section -->
+      <div class="settings-sub-section active" id="settingsSubProfile">
+        <div class="card" style="margin-top:20px;">
+          <div class="card-title" data-i18n="settings.profileTitle">👤 Gebruikersprofiel</div>
+
+          <!-- Avatar -->
+          <div style="display:flex; align-items:center; gap:20px; margin-bottom:24px;">
+            <div id="profileAvatarPreview" onclick="document.getElementById('profileAvatarInput').click()" style="width:80px; height:80px; border-radius:50%; background:var(--surface2); border:2px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; position:relative; transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+              <span id="profileAvatarPlaceholder" class="mdi mdi-camera-plus-outline" style="font-size:1.6rem; color:var(--text-muted);"></span>
+              <img id="profileAvatarImg" src="" alt="" style="display:none; width:100%; height:100%; object-fit:cover;">
+            </div>
+            <div>
+              <div style="font-size:0.85rem; font-weight:500; margin-bottom:4px;" data-i18n="settings.profilePhoto">Profielfoto</div>
+              <div style="font-size:0.72rem; color:var(--text-muted);" data-i18n="settings.profilePhotoDesc">Klik om een foto te uploaden (max 2MB)</div>
+              <button id="profileAvatarRemoveBtn" class="btn btn-secondary" onclick="removeProfileAvatar()" style="display:none; margin-top:6px; padding:4px 10px; font-size:0.7rem;" data-i18n="settings.profilePhotoRemove">Verwijderen</button>
+            </div>
+            <input type="file" id="profileAvatarInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" onchange="uploadProfileAvatar(this)">
+          </div>
+
+          <!-- Username -->
+          <div class="input-group" style="max-width:340px; margin-bottom:16px;">
+            <label data-i18n="settings.profileUsername">Gebruikersnaam</label>
+            <input type="text" id="profileUsername" placeholder="username" maxlength="50">
+            <div id="profileUsernameError" style="display:none; font-size:0.72rem; color:var(--error); margin-top:4px;"></div>
+          </div>
+
+          <!-- First name -->
+          <div class="input-group" style="max-width:340px; margin-bottom:16px;">
+            <label data-i18n="settings.profileFirstName">Voornaam</label>
+            <input type="text" id="profileFirstName" placeholder="" maxlength="100">
+          </div>
+
+          <!-- Last name -->
+          <div class="input-group" style="max-width:340px; margin-bottom:16px;">
+            <label data-i18n="settings.profileLastName">Achternaam</label>
+            <input type="text" id="profileLastName" placeholder="" maxlength="100">
+          </div>
+
+          <!-- Save -->
+          <button class="btn btn-primary" onclick="saveProfile()" data-i18n="settings.profileSave">💾 Opslaan</button>
+          <div id="profileStatus" class="status-msg" style="margin-top:10px;"></div>
+        </div>
+
+        <!-- Actions -->
+        <div class="card" style="margin-top:20px;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="switchSettingsSubmenu('security')" data-i18n="settings.profilePasskeys">🔑 Passkeys beheren</button>
+            <button class="btn btn-secondary" id="btnLogoutProfile" onclick="logoutApp()" style="display:none;" data-i18n="settings.profileLogout">↩ Uitloggen</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-sub-section" id="settingsSubGeneral">
 
       <!-- DB Stats -->
       <div class="card" id="settingsStats">
@@ -2816,6 +2872,14 @@ nl: {
   'logs.loading':'Laden...',
   // settings
   'settings.menuGeneral':'Algemeen','settings.menuSecurity':'Veiligheid','settings.menuBackup':'Backup','settings.menuLogs':'Logs','settings.menuAdvanced':'Geavanceerd',
+  'settings.menuProfile':'Profiel',
+  'settings.profileTitle':'👤 Gebruikersprofiel',
+  'settings.profilePhoto':'Profielfoto','settings.profilePhotoDesc':'Klik om een foto te uploaden (max 2MB)','settings.profilePhotoRemove':'Verwijderen',
+  'settings.profileUsername':'Gebruikersnaam','settings.profileFirstName':'Voornaam','settings.profileLastName':'Achternaam',
+  'settings.profileSave':'💾 Opslaan','settings.profileSaved':'✓ Profiel opgeslagen',
+  'settings.profileUsernameRequired':'Vul een gebruikersnaam in','settings.profileUsernameTaken':'Deze gebruikersnaam is al in gebruik',
+  'settings.profilePhotoUpdated':'✓ Foto bijgewerkt','settings.profilePhotoRemoved':'✓ Foto verwijderd','settings.profilePhotoTooLarge':'Foto is te groot (max 2MB)',
+  'settings.profilePasskeys':'🔑 Passkeys beheren','settings.profileLogout':'↩ Uitloggen',
   'settings.dbInfo':'Database Informatie','settings.version':'Versie:','settings.versionLoading':'laden...','settings.loading':'Laden...',
   'settings.backup':'Backup & Herstel','settings.createBackup':'💾 Backup Maken','settings.uploadBackup':'📤 Backup Uploaden',
   'settings.metadataSources':'Metadata Bronnen',
@@ -3055,6 +3119,14 @@ en: {
   'logs.thTimestamp':'Timestamp','logs.thLevel':'Level','logs.thCategory':'Category','logs.thBackends':'Backends','logs.thMessage':'Message',
   'logs.loading':'Loading...',
   'settings.menuGeneral':'General','settings.menuSecurity':'Security','settings.menuBackup':'Backup','settings.menuLogs':'Logs','settings.menuAdvanced':'Advanced',
+  'settings.menuProfile':'Profile',
+  'settings.profileTitle':'👤 User Profile',
+  'settings.profilePhoto':'Profile Photo','settings.profilePhotoDesc':'Click to upload a photo (max 2MB)','settings.profilePhotoRemove':'Remove',
+  'settings.profileUsername':'Username','settings.profileFirstName':'First Name','settings.profileLastName':'Last Name',
+  'settings.profileSave':'💾 Save','settings.profileSaved':'✓ Profile saved',
+  'settings.profileUsernameRequired':'Enter a username','settings.profileUsernameTaken':'This username is already taken',
+  'settings.profilePhotoUpdated':'✓ Photo updated','settings.profilePhotoRemoved':'✓ Photo removed','settings.profilePhotoTooLarge':'Photo is too large (max 2MB)',
+  'settings.profilePasskeys':'🔑 Manage Passkeys','settings.profileLogout':'↩ Log out',
   'settings.dbInfo':'Database Information','settings.version':'Version:','settings.versionLoading':'loading...','settings.loading':'Loading...',
   'settings.backup':'Backup & Restore','settings.createBackup':'💾 Create Backup','settings.uploadBackup':'📤 Upload Backup',
   'settings.metadataSources':'Metadata Sources',
@@ -5515,7 +5587,7 @@ function authHeaders() {
 }
 
 function updateLogoutButton() {
-  const buttonIds = ['btnLogoutSettings'];
+  const buttonIds = ['btnLogoutSettings', 'btnLogoutProfile'];
   const visible = !!authToken || authEnabled;
   for (const id of buttonIds) {
     const btn = document.getElementById(id);
@@ -5802,6 +5874,120 @@ async function _doRegisterPasskey(username, credName) {
       showStatus('authStatus', t('js.error', e.message), 'error');
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Profile management
+// ---------------------------------------------------------------------------
+
+async function loadProfile() {
+  try {
+    const r = await fetch(`${API}/auth/me`);
+    const me = await r.json();
+    if (!me.authenticated) return;
+
+    document.getElementById('profileUsername').value = me.username || '';
+    document.getElementById('profileFirstName').value = me.first_name || '';
+    document.getElementById('profileLastName').value = me.last_name || '';
+
+    const img = document.getElementById('profileAvatarImg');
+    const placeholder = document.getElementById('profileAvatarPlaceholder');
+    const removeBtn = document.getElementById('profileAvatarRemoveBtn');
+    if (me.avatar_url) {
+      img.src = me.avatar_url;
+      img.style.display = 'block';
+      placeholder.style.display = 'none';
+      removeBtn.style.display = 'inline-flex';
+    } else {
+      img.style.display = 'none';
+      img.src = '';
+      placeholder.style.display = '';
+      removeBtn.style.display = 'none';
+    }
+    document.getElementById('profileUsernameError').style.display = 'none';
+    document.getElementById('profileStatus').textContent = '';
+  } catch(e) {}
+}
+
+async function saveProfile() {
+  const username = (document.getElementById('profileUsername').value || '').trim();
+  const firstName = (document.getElementById('profileFirstName').value || '').trim();
+  const lastName = (document.getElementById('profileLastName').value || '').trim();
+  const errEl = document.getElementById('profileUsernameError');
+  errEl.style.display = 'none';
+
+  if (!username) {
+    errEl.textContent = t('settings.profileUsernameRequired');
+    errEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const r = await fetch(`${API}/auth/profile`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ username, first_name: firstName, last_name: lastName })
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      if (d.field === 'username') {
+        errEl.textContent = t('settings.profileUsernameTaken');
+        errEl.style.display = 'block';
+      } else {
+        showStatus('profileStatus', d.error || 'Error', 'error');
+      }
+      return;
+    }
+    // Update token if re-issued
+    if (d.token) {
+      authToken = d.token;
+      localStorage.setItem('authToken', d.token);
+    }
+    showStatus('profileStatus', t('settings.profileSaved'), 'success');
+  } catch(e) {
+    showStatus('profileStatus', t('js.error', e.message), 'error');
+  }
+}
+
+async function uploadProfileAvatar(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if (file.size > 2 * 1024 * 1024) {
+    showStatus('profileStatus', t('settings.profilePhotoTooLarge'), 'error');
+    input.value = '';
+    return;
+  }
+  const formData = new FormData();
+  formData.append('avatar', file);
+  try {
+    const r = await fetch(`${API}/auth/profile/avatar`, { method: 'POST', body: formData });
+    const d = await r.json();
+    if (!r.ok) {
+      showStatus('profileStatus', d.error || 'Error', 'error');
+      return;
+    }
+    const img = document.getElementById('profileAvatarImg');
+    img.src = d.avatar_url + '?t=' + Date.now();
+    img.style.display = 'block';
+    document.getElementById('profileAvatarPlaceholder').style.display = 'none';
+    document.getElementById('profileAvatarRemoveBtn').style.display = 'inline-flex';
+    showStatus('profileStatus', t('settings.profilePhotoUpdated'), 'success');
+  } catch(e) {
+    showStatus('profileStatus', t('js.error', e.message), 'error');
+  }
+  input.value = '';
+}
+
+async function removeProfileAvatar() {
+  try {
+    const r = await fetch(`${API}/auth/profile/avatar`, { method: 'DELETE' });
+    if (!r.ok) return;
+    document.getElementById('profileAvatarImg').style.display = 'none';
+    document.getElementById('profileAvatarImg').src = '';
+    document.getElementById('profileAvatarPlaceholder').style.display = '';
+    document.getElementById('profileAvatarRemoveBtn').style.display = 'none';
+    showStatus('profileStatus', t('settings.profilePhotoRemoved'), 'success');
+  } catch(e) {}
 }
 
 async function loadAuthSettings() {
@@ -6235,7 +6421,7 @@ async function loadSettings() {
   switchSettingsSubmenu(currentSettingsSubmenu);
 }
 
-let currentSettingsSubmenu = 'general';
+let currentSettingsSubmenu = 'profile';
 
 function switchSettingsSubmenu(name) {
   currentSettingsSubmenu = name;
@@ -6243,6 +6429,7 @@ function switchSettingsSubmenu(name) {
     btn.classList.toggle('active', btn.getAttribute('data-settings-sub') === name);
   });
   const map = {
+    profile: 'settingsSubProfile',
     general: 'settingsSubGeneral',
     security: 'settingsSubSecurity',
     backup: 'settingsSubBackup',
@@ -6253,8 +6440,9 @@ function switchSettingsSubmenu(name) {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
-  const target = document.getElementById(map[name] || map.backup);
+  const target = document.getElementById(map[name] || map.profile);
   if (target) target.classList.add('active');
+  if (name === 'profile') loadProfile();
   if (name === 'logs') loadLogs();
 }
 
