@@ -3462,19 +3462,36 @@ def login_verify():
 
 @app.route("/api/auth/credentials", methods=["GET"])
 def list_credentials():
+    uid = _get_current_user_id()
     conn = get_db()
-    rows = conn.execute("""
-        SELECT c.id, c.credential_name, c.created_at, c.sign_count, u.username
-        FROM credentials c JOIN users u ON c.user_id = u.id
-        ORDER BY c.created_at DESC
-    """).fetchall()
+    if uid and _get_current_user_role() != "admin":
+        # Non-admin: only own credentials
+        rows = conn.execute("""
+            SELECT c.id, c.credential_name, c.created_at, c.sign_count, u.username
+            FROM credentials c JOIN users u ON c.user_id = u.id
+            WHERE c.user_id = ?
+            ORDER BY c.created_at DESC
+        """, (uid,)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT c.id, c.credential_name, c.created_at, c.sign_count, u.username
+            FROM credentials c JOIN users u ON c.user_id = u.id
+            ORDER BY c.created_at DESC
+        """).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/auth/credentials/<cred_id>", methods=["DELETE"])
 def delete_credential(cred_id):
+    uid = _get_current_user_id()
     conn = get_db()
+    if uid and _get_current_user_role() != "admin":
+        # Non-admin: only delete own credentials
+        cred = conn.execute("SELECT user_id FROM credentials WHERE id = ?", (cred_id,)).fetchone()
+        if not cred or cred["user_id"] != uid:
+            conn.close()
+            return jsonify({"error": "Not authorized"}), 403
     conn.execute("DELETE FROM credentials WHERE id = ?", (cred_id,))
     remaining = conn.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
     if remaining == 0:
@@ -3487,6 +3504,9 @@ def delete_credential(cred_id):
 
 @app.route("/api/auth/toggle", methods=["POST"])
 def toggle_auth():
+    err = _require_admin()
+    if err:
+        return err
     data = request.json or {}
     enabled = data.get("enabled", False)
     if enabled:
@@ -3680,6 +3700,9 @@ def list_groups():
 
 @app.route("/api/groups", methods=["POST"])
 def create_group():
+    err = _require_admin()
+    if err:
+        return err
     data = request.json or {}
     name = data.get("name", "").strip()
     if not name:

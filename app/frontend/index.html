@@ -5551,10 +5551,15 @@ window.fetch = async function(url, opts = {}) {
   const reqUrl = typeof url === 'string' ? url : (url?.url || '');
   const fullUrl = reqUrl ? new URL(reqUrl, window.location.origin) : null;
   const isApiRoute = !!(fullUrl && fullUrl.pathname.startsWith('/api/'));
-  const isAuthRoute = !!(fullUrl && fullUrl.pathname.startsWith('/api/auth/'));
+  const isPublicAuth = !!(fullUrl && (
+    fullUrl.pathname.startsWith('/api/auth/login') ||
+    fullUrl.pathname.startsWith('/api/auth/register') ||
+    fullUrl.pathname === '/api/auth/status' ||
+    fullUrl.pathname === '/api/auth/recovery'
+  ));
   const method = (opts.method || 'GET').toUpperCase();
 
-  if (isApiRoute && !isAuthRoute) {
+  if (isApiRoute && !isPublicAuth) {
     opts.headers = { ...(opts.headers || {}), ...authHeaders() };
   }
 
@@ -5574,7 +5579,7 @@ window.fetch = async function(url, opts = {}) {
   try {
     const r = await _origFetch(url, opts);
 
-    if (r.status === 401 && !isAuthRoute) {
+    if (r.status === 401 && !isPublicAuth) {
       const d = await r.clone().json().catch(() => ({}));
       if (d.auth_required) {
         authToken = '';
@@ -5801,10 +5806,16 @@ async function _doRegisterPasskey(username, credName) {
 
 async function loadAuthSettings() {
   try {
-    const sr = await _origFetch(`${API}/auth/status`);
+    const sr = await fetch(`${API}/auth/status`);
     const status = await sr.json();
     authEnabled = !!status.auth_enabled;
+    const isAdmin = status.role === 'admin';
     updateLogoutButton();
+
+    // Auth toggle: admin only
+    const authToggleRow = document.getElementById('authToggle').closest('div');
+    if (authToggleRow) authToggleRow.style.display = (isAdmin || !status.auth_enabled) ? '' : 'none';
+
     document.getElementById('authToggle').checked = status.auth_enabled;
     document.getElementById('authStatusBadge').textContent = status.auth_enabled ? t('js.authActive') : t('js.authOff');
     document.getElementById('authStatusBadge').style.color = status.auth_enabled ? 'var(--success)' : 'var(--text-muted)';
@@ -5842,7 +5853,7 @@ async function loadAuthSettings() {
     // Show registration toggle for admin only
     const regToggleRow = document.getElementById('registrationToggleRow');
     if (regToggleRow) {
-      if (status.auth_enabled && status.role === 'admin') {
+      if (status.auth_enabled && isAdmin) {
         regToggleRow.style.display = 'block';
         document.getElementById('registrationToggle').checked = !!status.registration_enabled;
       } else {
