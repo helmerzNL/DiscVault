@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DiscVault - Physical Disc Collection Manager</title>
+    <meta
+      name="description"
+      content="DiscVault helps you manage your 4K UHD, Blu-ray, and DVD collection with barcode scanning, metadata lookup, backups, and MCP integration."
+    />
+    <meta property="og:title" content="DiscVault" />
+    <meta
+      property="og:description"
+      content="A self-hosted physical disc collection manager for 4K UHD, Blu-ray, and DVD."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://discvault.eu" />
+    <meta name="theme-color" content="#102018" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+    <header class="site-header wrap">
+      <a class="brand" href="#top" aria-label="DiscVault home">
+        <span class="brand-dot"></span>
+        <span>DiscVault</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="#community">Community</a>
+      </nav>
+      <a class="btn btn-ghost" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
+    </header>
+
+    <main id="top">
+      <section class="hero wrap">
+        <p class="eyebrow">Self-hosted media tooling for collectors</p>
+        <h1>
+          Your shelf is physical.
+          <span class="accent">Your catalog should be fast.</span>
+        </h1>
+        <p class="lead">
+          DiscVault is a modern collection manager for 4K UHD, Blu-ray, and DVD.
+          Scan barcodes, enrich metadata, browse beautifully, and integrate with MCP-enabled workflows.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-solid" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">Get DiscVault</a>
+          <a class="btn btn-ghost" href="#install">How to deploy</a>
+        </div>
+        <ul class="hero-points" aria-label="Highlights">
+          <li>Barcode scanner + manual entry</li>
+          <li>OMDb and TMDb metadata fallback</li>
+          <li>Backup, restore, and logs</li>
+          <li>MCP endpoint for AI workflows</li>
+        </ul>
+      </section>
+
+      <section id="features" class="wrap section">
+        <div class="section-head">
+          <p class="eyebrow">Features</p>
+          <h2>Built for people with real shelves, real stacks, and real editions.</h2>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <h3>Scan and enrich</h3>
+            <p>
+              Use your camera to scan barcodes, then automatically pull movie metadata and cover art.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Filter and search</h3>
+            <p>
+              Search by title, genre, or director and filter by format in a clean collection view.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Safe by design</h3>
+            <p>
+              Run self-hosted, control your own data path, and keep snapshots with built-in backup and restore.
+            </p>
+          </article>
+          <article class="card">
+            <h3>MCP ready</h3>
+            <p>
+              Connect AI assistants to your library through DiscVault's MCP endpoint for automation and search.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="install" class="wrap section install">
+        <div class="section-head">
+          <p class="eyebrow">Deployment</p>
+          <h2>Deploy on Unraid or run it anywhere Docker runs.</h2>
+        </div>
+        <div class="install-grid">
+          <article class="install-card">
+            <h3>Quick install</h3>
+            <p>Use the all-in-one container image:</p>
+            <pre><code>ghcr.io/helmerzNL/DiscVault:latest</code></pre>
+          </article>
+          <article class="install-card">
+            <h3>Unraid template</h3>
+            <p>Community Apps template repository:</p>
+            <pre><code>https://github.com/helmerzNL/unraid-templates</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="community" class="wrap section community">
+        <div class="section-head">
+          <p class="eyebrow">Community</p>
+          <h2>Need help or want to follow updates?</h2>
+        </div>
+        <div class="hero-actions">
+          <a class="btn btn-solid" href="https://forums.unraid.net/topic/198808-support-discvault-physical-disc-collection-manager/" target="_blank" rel="noreferrer">Support Thread</a>
+          <a class="btn btn-ghost" href="https://github.com/helmerzNL/DiscVault/issues" target="_blank" rel="noreferrer">Report an Issue</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer wrap">
+      <p>DiscVault. Built for collectors.</p>
+      <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">Source on GitHub</a>
+    </footer>
+  </body>
+</html>
