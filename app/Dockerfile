@@ -18,7 +18,8 @@ WORKDIR /opt/discvault
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nginx supervisor curl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/nginx/sites-enabled/default
 
 # Python dependencies (backend + mcp)
 COPY backend/requirements.txt /tmp/requirements-backend.txt
