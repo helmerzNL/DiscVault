@@ -220,6 +220,36 @@ h1 {
   max-width: 24ch;
 }
 
+.screenshots .section-head h2 {
+  max-width: 32ch;
+}
+
+.shot-grid {
+  margin-top: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.shot {
+  margin: 0;
+  grid-column: span 6;
+  background: linear-gradient(180deg, rgba(26, 26, 38, 0.85), rgba(18, 18, 26, 0.96));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.shot-large {
+  grid-column: span 12;
+}
+
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .cards {
   margin-top: 1.25rem;
   display: grid;
@@ -314,6 +344,11 @@ code {
   .cards,
   .install-grid {
     grid-template-columns: 1fr;
+  }
+
+  .shot,
+  .shot-large {
+    grid-column: span 12;
   }
 
   .site-footer {
