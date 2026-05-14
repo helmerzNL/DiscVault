@@ -3103,9 +3103,9 @@ def _movie_owner_filter() -> tuple[str, list]:
     group_ids = [r["group_id"] for r in group_rows]
     if group_ids:
         placeholders = ",".join("?" * len(group_ids))
-        return (f" AND (owner_id = ? OR id IN (SELECT movie_id FROM movie_groups WHERE group_id IN ({placeholders})))",
+        return (f" AND (movies.owner_id = ? OR movies.id IN (SELECT movie_id FROM movie_groups WHERE group_id IN ({placeholders})))",
                 [uid] + group_ids)
-    return " AND owner_id = ?", [uid]
+    return " AND movies.owner_id = ?", [uid]
 
 
 def _check_movie_owner(movie_row) -> bool:
