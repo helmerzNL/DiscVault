@@ -249,6 +249,17 @@ def init_db():
         )
     """)
 
+    # Movie-Group membership (many-to-many)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS movie_groups (
+            movie_id INTEGER NOT NULL,
+            group_id INTEGER NOT NULL,
+            PRIMARY KEY (movie_id, group_id),
+            FOREIGN KEY (movie_id) REFERENCES movies(id)  ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES groups(id)  ON DELETE CASCADE
+        )
+    """)
+
     # Auth: settings
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -317,12 +328,18 @@ def init_db():
             bare = defn.split(" NOT NULL")[0].split(" DEFAULT")[0].strip()
             conn.execute(f"ALTER TABLE movies ADD COLUMN {col} {bare}")
 
-    # Migrate movies: add owner_id and group_id if missing
+    # Migrate movies: add owner_id if missing
     if "owner_id" not in existing:
         conn.execute("ALTER TABLE movies ADD COLUMN owner_id TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_movies_owner ON movies(owner_id)")
-    if "group_id" not in existing:
-        conn.execute("ALTER TABLE movies ADD COLUMN group_id INTEGER")
+
+    # Migrate: move old group_id column data to movie_groups table
+    if "group_id" in existing:
+        # Migrate any existing group_id references to movie_groups
+        conn.execute("""
+            INSERT OR IGNORE INTO movie_groups (movie_id, group_id)
+            SELECT id, group_id FROM movies WHERE group_id IS NOT NULL
+        """)
 
     # Migrate users: add role and recovery_hash if missing
     user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
@@ -1348,8 +1365,22 @@ def list_movies():
         params.append(fmt)
     sql += " ORDER BY COALESCE(NULLIF(sort_title,''), title) ASC"
     rows = conn.execute(sql, params).fetchall()
+    # Enrich with group ids
+    movies = [dict(r) for r in rows]
+    if movies:
+        movie_ids = [m["id"] for m in movies]
+        placeholders = ",".join("?" * len(movie_ids))
+        mg_rows = conn.execute(
+            f"SELECT movie_id, group_id FROM movie_groups WHERE movie_id IN ({placeholders})",
+            movie_ids
+        ).fetchall()
+        groups_map = {}
+        for mg in mg_rows:
+            groups_map.setdefault(mg["movie_id"], []).append(mg["group_id"])
+        for m in movies:
+            m["group_ids"] = groups_map.get(m["id"], [])
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify(movies)
 
 
 @app.route("/api/movies/<int:movie_id>", methods=["GET"])
@@ -3027,7 +3058,8 @@ def _movie_owner_filter() -> tuple[str, list]:
     group_ids = [r["group_id"] for r in group_rows]
     if group_ids:
         placeholders = ",".join("?" * len(group_ids))
-        return f" AND (owner_id = ? OR group_id IN ({placeholders}))", [uid] + group_ids
+        return (f" AND (owner_id = ? OR id IN (SELECT movie_id FROM movie_groups WHERE group_id IN ({placeholders})))",
+                [uid] + group_ids)
     return " AND owner_id = ?", [uid]
 
 
@@ -3601,7 +3633,7 @@ def list_groups():
         rows = conn.execute("""
             SELECT g.*, u.username as created_by_username,
                    (SELECT COUNT(*) FROM user_groups WHERE group_id=g.id) as member_count,
-                   (SELECT COUNT(*) FROM movies WHERE group_id=g.id) as movie_count
+                   (SELECT COUNT(*) FROM movie_groups WHERE group_id=g.id) as movie_count
             FROM groups g LEFT JOIN users u ON g.created_by=u.id
             ORDER BY g.name
         """).fetchall()
@@ -3609,7 +3641,7 @@ def list_groups():
         rows = conn.execute("""
             SELECT g.*, u.username as created_by_username,
                    (SELECT COUNT(*) FROM user_groups WHERE group_id=g.id) as member_count,
-                   (SELECT COUNT(*) FROM movies WHERE group_id=g.id) as movie_count
+                   (SELECT COUNT(*) FROM movie_groups WHERE group_id=g.id) as movie_count
             FROM groups g
             JOIN user_groups ug ON ug.group_id=g.id AND ug.user_id=?
             LEFT JOIN users u ON g.created_by=u.id
@@ -3672,8 +3704,8 @@ def delete_group(group_id):
     if not group:
         conn.close()
         return jsonify({"error": "Group not found"}), 404
-    # Unlink movies from this group (back to owner-only)
-    conn.execute("UPDATE movies SET group_id=NULL WHERE group_id=?", (group_id,))
+    # Unlink movies from this group
+    conn.execute("DELETE FROM movie_groups WHERE group_id=?", (group_id,))
     conn.execute("DELETE FROM user_groups WHERE group_id=?", (group_id,))
     conn.execute("DELETE FROM groups WHERE id=?", (group_id,))
     conn.commit()
@@ -3727,10 +3759,24 @@ def remove_group_member(group_id, member_id):
     return jsonify({"status": "ok"})
 
 
-@app.route("/api/movies/<int:movie_id>/group", methods=["PUT"])
-def assign_movie_to_group(movie_id):
+@app.route("/api/movies/<int:movie_id>/groups", methods=["GET"])
+def get_movie_groups(movie_id):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT g.id, g.name FROM groups g
+        JOIN movie_groups mg ON mg.group_id=g.id
+        WHERE mg.movie_id=?
+        ORDER BY g.name
+    """, (movie_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/movies/<int:movie_id>/groups", methods=["PUT"])
+def set_movie_groups(movie_id):
+    """Set the full list of group_ids for a movie (replaces existing)."""
     data = request.json or {}
-    group_id = data.get("group_id")  # None to remove from group
+    group_ids = data.get("group_ids", [])
     conn = get_db()
     movie = conn.execute("SELECT owner_id FROM movies WHERE id=?", (movie_id,)).fetchone()
     if not movie:
@@ -3740,10 +3786,39 @@ def assign_movie_to_group(movie_id):
     if uid and movie["owner_id"] != uid and _get_current_user_role() != "admin":
         conn.close()
         return jsonify({"error": "Not your movie"}), 403
-    conn.execute("UPDATE movies SET group_id=? WHERE id=?", (group_id, movie_id))
+    conn.execute("DELETE FROM movie_groups WHERE movie_id=?", (movie_id,))
+    for gid in group_ids:
+        conn.execute("INSERT OR IGNORE INTO movie_groups (movie_id, group_id) VALUES (?,?)",
+                     (movie_id, int(gid)))
     conn.commit()
     conn.close()
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/movies/bulk/groups", methods=["PUT"])
+def bulk_set_movie_groups():
+    """Add group(s) to multiple movies at once."""
+    data = request.json or {}
+    movie_ids = data.get("movie_ids", [])
+    group_ids = data.get("group_ids", [])
+    if not movie_ids or not group_ids:
+        return jsonify({"error": "movie_ids and group_ids required"}), 400
+    conn = get_db()
+    uid = _get_current_user_id()
+    added = 0
+    for mid in movie_ids:
+        movie = conn.execute("SELECT owner_id FROM movies WHERE id=?", (mid,)).fetchone()
+        if not movie:
+            continue
+        if uid and movie["owner_id"] != uid and _get_current_user_role() != "admin":
+            continue
+        for gid in group_ids:
+            conn.execute("INSERT OR IGNORE INTO movie_groups (movie_id, group_id) VALUES (?,?)",
+                         (int(mid), int(gid)))
+        added += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok", "updated": added})
 
 
 @app.route("/api/settings/sources", methods=["GET"])

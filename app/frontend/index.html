@@ -1879,11 +1879,22 @@
       <span class="bulk-count" id="bulkCount">0 geselecteerd</span>
       <button class="btn btn-secondary" onclick="selectAll()" id="btnSelectAll" data-i18n="bulk.selectAll">Alles selecteren</button>
       <button class="btn btn-secondary" onclick="deselectAll()" data-i18n="bulk.deselect">Deselecteer</button>
+      <button class="btn btn-secondary" style="color:var(--accent); border-color:rgba(232,197,71,.4);" onclick="showBulkGroupAssign()" data-i18n="bulk.assignGroup">📁 Groep toewijzen</button>
       <button class="btn btn-secondary" style="color:var(--accent2); border-color:rgba(124,106,247,.4);" onclick="bulkRefresh()" data-i18n="bulk.refresh">
         ↺ Bijwerken via TMDb/OMDb
       </button>
       <button class="btn btn-danger" onclick="bulkDelete()" data-i18n="bulk.delete">🗑 Verwijderen</button>
       <button class="btn btn-secondary" onclick="toggleSelectMode()" style="margin-left:auto;" data-i18n="bulk.cancel">✕ Annuleren</button>
+    </div>
+    <!-- Bulk group assignment panel -->
+    <div id="bulkGroupPanel" style="display:none; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:12px;">
+      <div style="font-weight:500; font-size:0.9rem; margin-bottom:10px;" data-i18n="bulk.selectGroups">Selecteer groep(en) om toe te wijzen:</div>
+      <div id="bulkGroupCheckboxes" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;"></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" onclick="bulkAssignGroups()" style="padding:8px 16px;" data-i18n="bulk.applyGroup">✓ Toewijzen</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('bulkGroupPanel').style.display='none'" style="padding:8px 16px;" data-i18n="bulk.cancelGroup">Annuleren</button>
+      </div>
+      <div id="bulkGroupStatus" class="status-msg" style="margin-top:8px;"></div>
     </div>
 
     <div id="moviesGrid" class="movies-grid"></div>
@@ -2676,9 +2687,9 @@
           </div>
           <div style="font-size:0.74rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.coverHelp">Afbeelding wordt automatisch geschaald en gecomprimeerd.</div>
         </div>
-        <div class="input-group">
-          <label data-i18n="edit.group">Groep</label>
-          <select id="editGroup"><option value="">— Geen groep —</option></select>
+        <div class="input-group full">
+          <label data-i18n="edit.groups">Groepen</label>
+          <div id="editGroupsContainer" style="display:flex; flex-wrap:wrap; gap:8px; padding:8px 0;"></div>
         </div>
         <div class="input-group">
           <label data-i18n="edit.imdbId">IMDb ID</label>
@@ -2953,7 +2964,11 @@ nl: {
   'js.confirmResetPasskey':'Passkey(s) van "{0}" resetten? De gebruiker moet dan opnieuw een passkey registreren.',
   'js.noGroups':'Geen groepen aangemaakt.',
   'js.confirmDeleteGroup':'Groep "{0}" verwijderen? Films worden ontkoppeld maar niet verwijderd.',
-  'edit.group':'Groep','edit.noGroup':'Geen groep',
+  'edit.groups':'Groepen','edit.noGroup':'Geen groep',
+  'bulk.assignGroup':'📁 Groep toewijzen','bulk.selectGroups':'Selecteer groep(en) om toe te wijzen:',
+  'bulk.applyGroup':'✓ Toewijzen','bulk.cancelGroup':'Annuleren',
+  'bulk.selectAtLeastOne':'Selecteer minstens één groep','bulk.assigning':'Toewijzen...',
+  'bulk.assignDone':'✓ {0} film(s) aan groep(en) gekoppeld',
 },
 en: {
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
@@ -3171,7 +3186,11 @@ en: {
   'js.confirmResetPasskey':'Reset passkey(s) of "{0}"? The user will need to register a new passkey.',
   'js.noGroups':'No groups created.',
   'js.confirmDeleteGroup':'Delete group "{0}"? Movies will be unlinked but not deleted.',
-  'edit.group':'Group','edit.noGroup':'No group',
+  'edit.groups':'Groups','edit.noGroup':'No group',
+  'bulk.assignGroup':'📁 Assign Group','bulk.selectGroups':'Select group(s) to assign:',
+  'bulk.applyGroup':'✓ Assign','bulk.cancelGroup':'Cancel',
+  'bulk.selectAtLeastOne':'Select at least one group','bulk.assigning':'Assigning...',
+  'bulk.assignDone':'✓ {0} movie(s) assigned to group(s)',
 }
 };
 
@@ -3797,7 +3816,7 @@ function getCurrentMovies() {
   return allMovies.filter(m => {
     const matchesFormat = !activeFormat || m.format === activeFormat;
     const matchesGroup  = !activeGroup ||
-      (activeGroup === '_mine' ? !m.group_id : String(m.group_id) === activeGroup);
+      (activeGroup === '_mine' ? !(m.group_ids && m.group_ids.length) : (m.group_ids || []).includes(parseInt(activeGroup)));
     const matchesQuery  = !q ||
       (m.title || '').toLowerCase().includes(q) ||
       (m.original_title || '').toLowerCase().includes(q) ||
@@ -3953,6 +3972,62 @@ function filterSearchMovies() {
 }
 
 // ── Bulk actions ──────────────────────────────────────────────────────────────
+
+async function showBulkGroupAssign() {
+  const panel = document.getElementById('bulkGroupPanel');
+  const container = document.getElementById('bulkGroupCheckboxes');
+  panel.style.display = 'block';
+  container.innerHTML = '<span style="color:var(--text-muted); font-size:0.82rem;">Laden...</span>';
+  try {
+    const r = await fetch(`${API}/groups`);
+    const groups = await r.json();
+    if (!groups.length) {
+      container.innerHTML = '<span style="color:var(--text-muted); font-size:0.82rem;">' + t('js.noGroups') + '</span>';
+      return;
+    }
+    container.innerHTML = groups.map(g => `
+      <label style="display:flex; align-items:center; gap:6px; padding:6px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.84rem; white-space:nowrap;">
+        <input type="checkbox" class="bulk-group-cb" value="${g.id}" style="accent-color:var(--accent); width:15px; height:15px;">
+        ${g.name}
+      </label>
+    `).join('');
+  } catch(e) {
+    container.innerHTML = '<span style="color:var(--danger);">Fout bij laden groepen</span>';
+  }
+}
+
+async function bulkAssignGroups() {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  const groupIds = [...document.querySelectorAll('.bulk-group-cb:checked')].map(cb => parseInt(cb.value));
+  if (!groupIds.length) {
+    showStatus('bulkGroupStatus', t('bulk.selectAtLeastOne'), 'error');
+    return;
+  }
+  try {
+    showStatus('bulkGroupStatus', '<span class="spinner"></span> ' + t('bulk.assigning'), 'info');
+    const r = await fetch(`${API}/movies/bulk/groups`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ movie_ids: ids, group_ids: groupIds })
+    });
+    const d = await r.json();
+    showStatus('bulkGroupStatus', t('bulk.assignDone', d.updated || ids.length), 'success');
+    // Update local cache
+    for (const m of allMovies) {
+      if (selectedIds.has(m.id)) {
+        const existing = m.group_ids || [];
+        m.group_ids = [...new Set([...existing, ...groupIds])];
+      }
+    }
+    setTimeout(() => {
+      document.getElementById('bulkGroupPanel').style.display = 'none';
+      filterMovies();
+    }, 1000);
+  } catch(e) {
+    showStatus('bulkGroupStatus', t('js.error', e.message), 'error');
+  }
+}
 
 async function bulkDelete() {
   const ids = [...selectedIds];
@@ -4578,19 +4653,26 @@ const EDIT_FIELDS = {
   ImdbUrl:            'imdb_url',
 };
 
-async function _populateGroupSelect(currentGroupId) {
-  const sel = document.getElementById('editGroup');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">— ' + t('edit.noGroup') + ' —</option>';
+async function _populateGroupCheckboxes(currentGroupIds) {
+  const container = document.getElementById('editGroupsContainer');
+  if (!container) return;
+  container.innerHTML = '';
   try {
     const r = await fetch(`${API}/groups`);
     const groups = await r.json();
+    if (!groups.length) {
+      container.innerHTML = '<span style="color:var(--text-muted); font-size:0.82rem;">' + t('js.noGroups') + '</span>';
+      return;
+    }
+    const ids = currentGroupIds || [];
     for (const g of groups) {
-      const opt = document.createElement('option');
-      opt.value = g.id;
-      opt.textContent = g.name;
-      if (currentGroupId && g.id === currentGroupId) opt.selected = true;
-      sel.appendChild(opt);
+      const checked = ids.includes(g.id) ? 'checked' : '';
+      container.insertAdjacentHTML('beforeend', `
+        <label style="display:flex; align-items:center; gap:6px; padding:6px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.84rem; white-space:nowrap;">
+          <input type="checkbox" class="edit-group-cb" value="${g.id}" ${checked} style="accent-color:var(--accent); width:15px; height:15px;">
+          ${g.name}
+        </label>
+      `);
     }
   } catch(e) {}
 }
@@ -4611,8 +4693,8 @@ function startEdit() {
     }
   }
 
-  // Populate group dropdown
-  _populateGroupSelect(movie.group_id);
+  // Populate group checkboxes
+  _populateGroupCheckboxes(movie.group_ids || []);
 
   document.getElementById('editStatus').className = 'status-msg';
   document.getElementById('modalViewMode').style.display = 'none';
@@ -4635,9 +4717,8 @@ async function saveEdit() {
     if (el) payload[key] = el.value;
   }
 
-  // Save group assignment separately
-  const groupSelect = document.getElementById('editGroup');
-  const newGroupId = groupSelect ? (groupSelect.value || null) : null;
+  // Collect selected group IDs from checkboxes
+  const selectedGroupIds = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => parseInt(cb.value));
 
   try {
     const r = await fetch(`${API}/movies/${currentMovieId}`, {
@@ -4647,17 +4728,13 @@ async function saveEdit() {
     });
     const d = await r.json();
     if (r.ok) {
-      // Also update group if changed
-      const movie = allMovies.find(m => m.id === currentMovieId);
-      const currentGroupId = movie ? (movie.group_id ? String(movie.group_id) : null) : null;
-      if (newGroupId !== currentGroupId) {
-        await fetch(`${API}/movies/${currentMovieId}/group`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ group_id: newGroupId ? parseInt(newGroupId) : null })
-        });
-        if (d && typeof d === 'object') d.group_id = newGroupId ? parseInt(newGroupId) : null;
-      }
+      // Update group assignments
+      await fetch(`${API}/movies/${currentMovieId}/groups`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_ids: selectedGroupIds })
+      });
+      if (d && typeof d === 'object') d.group_ids = selectedGroupIds;
       if (d.queued) {
         showStatus('editStatus', t('js.queuedEdit'), 'info');
       } else {
@@ -5780,14 +5857,21 @@ async function loadAdminPanel() {
   try {
     const mr = await fetch(`${API}/auth/me`);
     const me = await mr.json();
-    if (!me.authenticated || me.role !== 'admin') {
+    const isAdmin = !me.authenticated || me.role === 'admin';
+    if (!isAdmin) {
       document.getElementById('adminUsersCard').style.display = 'none';
       document.getElementById('adminGroupsCard').style.display = 'none';
       return;
     }
-    document.getElementById('adminUsersCard').style.display = 'block';
+    // Always show groups card; only show users card when auth is enabled
     document.getElementById('adminGroupsCard').style.display = 'block';
-    await Promise.all([loadAdminUsers(), loadAdminGroups()]);
+    if (me.authenticated) {
+      document.getElementById('adminUsersCard').style.display = 'block';
+      await loadAdminUsers();
+    } else {
+      document.getElementById('adminUsersCard').style.display = 'none';
+    }
+    await loadAdminGroups();
   } catch(e) {
     document.getElementById('adminUsersCard').style.display = 'none';
     document.getElementById('adminGroupsCard').style.display = 'none';

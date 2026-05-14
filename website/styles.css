@@ -224,24 +224,60 @@ h1 {
   max-width: 32ch;
 }
 
-.shot-grid {
+.carousel-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 1.5rem 0 0.6rem;
+}
+
+.carousel-label:first-of-type {
   margin-top: 1.25rem;
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 0.85rem;
+}
+
+.carousel {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.75rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.carousel::-webkit-scrollbar {
+  height: 6px;
+}
+
+.carousel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.carousel::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
 }
 
 .shot {
   margin: 0;
-  grid-column: span 6;
+  flex-shrink: 0;
+  scroll-snap-align: start;
   background: linear-gradient(180deg, rgba(26, 26, 38, 0.85), rgba(18, 18, 26, 0.96));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
-.shot-large {
-  grid-column: span 12;
+.shot-desktop {
+  width: min(80%, 720px);
+}
+
+.shot-mobile {
+  width: min(45%, 220px);
 }
 
 .shot img {
@@ -250,12 +286,11 @@ h1 {
   height: auto;
 }
 
-.shot-grid-mobile {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.shot-mobile {
-  grid-column: span 2;
+.shot figcaption {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .badge {
@@ -371,17 +406,12 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .shot,
-  .shot-large {
-    grid-column: span 12;
-  }
-
-  .shot-grid-mobile {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .shot-desktop {
+    width: min(85%, 560px);
   }
 
   .shot-mobile {
-    grid-column: span 2;
+    width: min(50%, 180px);
   }
 
   .site-footer {
