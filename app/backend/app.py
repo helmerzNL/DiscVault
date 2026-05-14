@@ -1586,6 +1586,9 @@ def update_movie(movie_id):
     if not existing_row:
         conn.close()
         return jsonify({"error": "Not found"}), 404
+    if not _check_movie_owner(existing_row):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
 
     existing = dict(existing_row)
     updates = {k: data[k] for k in ALL_FIELDS if k in data}
@@ -1651,6 +1654,9 @@ def upload_movie_poster(movie_id):
     if not movie:
         conn.close()
         return jsonify({"error": "Film niet gevonden"}), 404
+    if not _check_movie_owner(movie):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
 
     new_file, err = save_uploaded_poster(request.files["poster"])
     if err:
@@ -1681,7 +1687,9 @@ def bulk_delete():
     conn = get_db()
     deleted = 0
     for movie_id in ids:
-        row = conn.execute("SELECT poster_file FROM movies WHERE id = ?", (movie_id,)).fetchone()
+        row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+        if not row or not _check_movie_owner(row):
+            continue
         if row and row["poster_file"]:
             try:
                 os.remove(os.path.join(POSTER_DIR, row["poster_file"]))
@@ -1705,6 +1713,9 @@ def refresh_single(movie_id):
     if not row:
         conn.close()
         return jsonify({"status": "skipped", "reason": "not_found"})
+    if not _check_movie_owner(row):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
 
     movie = dict(row)
     title          = movie.get("title", "")
@@ -1840,6 +1851,9 @@ def sync_single_all_backends(movie_id):
     if not row:
         conn.close()
         return jsonify({"status": "skipped", "reason": "not_found"})
+    if not _check_movie_owner(row):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
 
     movie = dict(row)
     title = movie.get("title", "")
@@ -2021,6 +2035,9 @@ def sync_single_source(movie_id):
     if not row:
         conn.close()
         return jsonify({"status": "skipped", "reason": "not_found"})
+    if not _check_movie_owner(row):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
 
     movie = dict(row)
     title = movie.get("title", "")
@@ -2140,7 +2157,7 @@ def bulk_refresh():
 
     for movie_id in ids:
         row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
-        if not row:
+        if not row or not _check_movie_owner(row):
             skipped += 1
             add_log("refresh", f"Film ID {movie_id} niet gevonden — overgeslagen", level="warn")
             continue
@@ -3080,6 +3097,16 @@ def _movie_owner_filter() -> tuple[str, list]:
     return " AND owner_id = ?", [uid]
 
 
+def _check_movie_owner(movie_row) -> bool:
+    """Return True if current user may modify this movie (owner or admin)."""
+    uid = _get_current_user_id()
+    if not uid:
+        return True  # Auth disabled
+    if _get_current_user_role() == "admin":
+        return True
+    return movie_row["owner_id"] == uid
+
+
 def _is_source_enabled(key: str, default: bool) -> bool:
     conn = sqlite3.connect(DB_PATH)
     row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
@@ -3867,6 +3894,9 @@ def create_group():
 
 @app.route("/api/groups/<int:group_id>", methods=["PUT"])
 def update_group(group_id):
+    err = _require_admin()
+    if err:
+        return err
     data = request.json or {}
     name = data.get("name", "").strip()
     if not name:
