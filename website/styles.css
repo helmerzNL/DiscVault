@@ -364,6 +364,10 @@ h1 {
   background: var(--accent);
 }
 
+.badge-new {
+  background: var(--success);
+}
+
 .cards {
   margin-top: 1.25rem;
   display: grid;
