@@ -7,7 +7,7 @@
   <MyIP/>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Support>https://forums.unraid.net/topic/REPLACE_WITH_YOUR_SUPPORT_THREAD/</Support>
+  <Support>https://forums.unraid.net/topic/198808-support-discvault-physical-disc-collection-manager/</Support>
   <Project>https://github.com/helmerzNL/DiscVault</Project>
   <Overview>DiscVault is a physical 4K UHD/Blu-ray/DVD collection manager with barcode lookup, web UI, backup/restore, and MCP endpoint. This all-in-one container runs frontend, backend API, and MCP service together.</Overview>
   <Category>Tools:</Category>
