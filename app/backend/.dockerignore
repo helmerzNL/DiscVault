@@ -1,0 +1,13 @@
+# Zorg dat data nooit in de image beland
+/data
+/backups
+*.db
+*.db-*
+__pycache__
+.pytest_cache
+.venv
+.env
+.env.example
+.git
+.gitignore
+README.md

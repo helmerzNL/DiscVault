@@ -1,0 +1,63 @@
+services:
+  backend:
+    build: ./backend
+    container_name: discvault-backend
+    restart: unless-stopped
+    environment:
+      - DB_PATH=/data/discvault.db
+      - POSTER_DIR=/data/posters
+      - PROFILE_DIR=/data/profiles
+      - BACKUP_DIR=/data/backups
+      - OMDB_API_KEY=${OMDB_API_KEY:-}
+      - TMDB_API_KEY=${TMDB_API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - MCP_API_KEY=${MCP_API_KEY:-}
+      - RP_ID=${RP_ID:-localhost}
+      - RP_NAME=${RP_NAME:-DiscVault}
+      - RP_ORIGIN=${RP_ORIGIN:-http://localhost:6080}
+      - TZ=${TZ:-Europe/Amsterdam}
+    volumes:
+      - /mnt/user/appdata/discvault/data:/data
+    networks:
+      - discvault-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - BUILD_VERSION=${BUILD_VERSION:-dev}
+    container_name: discvault-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-6080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - discvault-net
+
+  mcp:
+    build: ./mcp-server
+    container_name: discvault-mcp
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-6090}:6090"
+    environment:
+      - DISCVAULT_API=http://backend:5000
+      - MCP_API_KEY=${MCP_API_KEY:-}
+      - TZ=${TZ:-Europe/Amsterdam}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - discvault-net
+
+networks:
+  discvault-net:
+    driver: bridge

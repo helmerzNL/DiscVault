@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>DiscVault</Name>
+  <Repository>ghcr.io/YOUR_GH_ORG/discvault:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://forums.unraid.net/topic/REPLACE_WITH_YOUR_SUPPORT_THREAD/</Support>
+  <Project>https://github.com/YOUR_GH_ORG/discvault</Project>
+  <Overview>DiscVault is a physical 4K UHD/Blu-ray/DVD collection manager with barcode lookup, web UI, backup/restore, and MCP endpoint. This all-in-one container runs frontend, backend API, and MCP service together.</Overview>
+  <Category>Tools:</Category>
+  <WebUI>http://[IP]:[PORT:6080]</WebUI>
+  <Icon>https://raw.githubusercontent.com/YOUR_GH_ORG/discvault/main/app/frontend/favicon-192.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+
+  <Config Name="Web UI Port" Target="80" Default="6080" Mode="tcp" Description="DiscVault web interface" Type="Port" Display="always" Required="true" Mask="false">6080</Config>
+  <Config Name="MCP Port (optional direct access)" Target="6090" Default="6090" Mode="tcp" Description="Optional direct MCP service port. MCP is also available via /mcp on the Web UI port." Type="Port" Display="advanced" Required="false" Mask="false">6090</Config>
+
+  <Config Name="Data Path" Target="/data" Default="/mnt/user/appdata/discvault" Mode="rw" Description="Persistent data path (database, posters, profiles, backups)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/discvault</Config>
+
+  <Config Name="Timezone" Target="TZ" Default="Europe/Amsterdam" Mode="" Description="Container timezone." Type="Variable" Display="always" Required="true" Mask="false">Europe/Amsterdam</Config>
+  <Config Name="OMDb API Key" Target="OMDB_API_KEY" Default="" Mode="" Description="Optional OMDb API key for metadata lookup." Type="Variable" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="TMDb API Key" Target="TMDB_API_KEY" Default="" Mode="" Description="Optional TMDb API key for metadata lookup." Type="Variable" Display="always" Required="false" Mask="false"></Config>
+
+  <Config Name="RP_ID" Target="RP_ID" Default="localhost" Mode="" Description="WebAuthn relying party ID (domain only, no protocol/port)." Type="Variable" Display="advanced" Required="false" Mask="false">localhost</Config>
+  <Config Name="RP_ORIGIN" Target="RP_ORIGIN" Default="http://localhost:6080" Mode="" Description="WebAuthn relying party origin (full URL used by clients)." Type="Variable" Display="advanced" Required="false" Mask="false">http://localhost:6080</Config>
+  <Config Name="JWT Secret" Target="JWT_SECRET" Default="" Mode="" Description="JWT signing secret. Leave empty to auto-generate once, or set explicitly." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="MCP API Key" Target="MCP_API_KEY" Default="" Mode="" Description="Optional API key for MCP authentication." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+</Container>

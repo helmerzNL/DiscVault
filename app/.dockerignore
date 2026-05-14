@@ -1,0 +1,25 @@
+# VCS
+.git
+.gitignore
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Python env / caches
+.venv
+__pycache__
+*.pyc
+*.pyo
+
+# Local tooling
+.vscode
+.idea
+.local
+
+# Runtime data
+data
+
+# Optional docs/build noise
+*.log

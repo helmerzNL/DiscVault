@@ -1,0 +1,8 @@
+# Frontend build artefacten
+node_modules
+.git
+.gitignore
+README.md
+.env
+package.json
+package-lock.json
