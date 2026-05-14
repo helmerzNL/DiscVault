@@ -8,13 +8,13 @@ This folder contains a starter Unraid CA template for the all-in-one DiscVault c
 
 ## Before publishing
 
-1. Replace `YOUR_GH_ORG` in:
+1. Replace the GitHub org placeholder in:
    - `<Repository>`
    - `<Project>`
    - `<Icon>`
 2. Create your Unraid support thread and set the `<Support>` URL.
 3. Ensure your image is publicly available (`ghcr.io` or Docker Hub) and tagged.
-4. Keep template XML in a dedicated template repository for CA publishing.
+4. Keep the template XML in a dedicated template repository for CA publishing.
 
 ## Notes
 

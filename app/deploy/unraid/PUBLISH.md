@@ -27,20 +27,20 @@ cd C:\Git\DiscVault
 git init           # skip if already a git repo
 git add .
 git commit -m "Initial commit"
-git remote add origin https://github.com/YOUR_ORG/discvault.git
+git remote add origin https://github.com/helmerzNL/DiscVault.git
 git push -u origin main
 ```
 
 ---
 
-## 3. Fill in your org name (3 files to update)
+## 3. Org name
 
-Replace `YOUR_GH_ORG` and `YOUR_ORG` in:
+Already set to `helmerzNL/DiscVault` in:
 
 | File | Field |
 |------|-------|
 | `app/deploy/unraid/discvault.xml` | `<Repository>`, `<Project>`, `<Icon>` |
-| `.github/workflows/docker-publish.yml` | `IMAGE_NAME` env var (auto-resolved via `github.repository_owner`, nothing to change) |
+| `.github/workflows/docker-publish.yml` | `IMAGE_NAME` env var |
 
 ---
 
@@ -49,7 +49,7 @@ Replace `YOUR_GH_ORG` and `YOUR_ORG` in:
 Unraid CA requires templates in their own repo:
 
 ```bash
-# Create a new repo: github.com/YOUR_ORG/unraid-templates
+# Create a new repo: github.com/helmerzNL/unraid-templates
 mkdir unraid-templates
 cd unraid-templates
 git init
@@ -57,7 +57,7 @@ mkdir DiscVault
 cp C:\Git\DiscVault\app\deploy\unraid\discvault.xml DiscVault/
 git add .
 git commit -m "Add DiscVault template"
-git remote add origin https://github.com/YOUR_ORG/unraid-templates.git
+git remote add origin https://github.com/helmerzNL/unraid-templates.git
 git push -u origin main
 ```
 
@@ -68,13 +68,13 @@ Templates must be in the `main` or `master` branch.
 ## 5. Host the icon
 
 The `<Icon>` URL must be a stable HTTPS URL.
-The easiest option is GitHub raw content from your repo:
+Already set to GitHub raw content in the template:
 
 ```
-https://raw.githubusercontent.com/YOUR_ORG/discvault/main/app/frontend/favicon-192.png
+https://raw.githubusercontent.com/helmerzNL/DiscVault/main/app/frontend/favicon-192.png
 ```
 
-Update `discvault.xml` accordingly.
+Update `discvault.xml` if you change the repo name or path.
 
 ---
 
@@ -88,12 +88,12 @@ git push origin v1.0.0
 
 The GitHub Actions workflow will then:
 - Build multi-arch image (amd64 + arm64)
-- Push to `ghcr.io/YOUR_ORG/discvault:1.0.0`, `:latest`, `:stable`
+- Push to `ghcr.io/helmerzNL/DiscVault:1.0.0`, `:latest`, `:stable`
 
 Wait for the action to complete, then verify:
 ```
-docker pull ghcr.io/YOUR_ORG/discvault:latest
-docker run --rm ghcr.io/YOUR_ORG/discvault:latest curl -s http://localhost/api/health
+docker pull ghcr.io/helmerzNL/DiscVault:latest
+docker run --rm ghcr.io/helmerzNL/DiscVault:latest curl -s http://localhost/api/health
 ```
 
 ---
@@ -132,9 +132,9 @@ Set visibility to **Public** so Unraid users can pull without authentication.
 ## Quick reference: update flow after this
 
 ```bash
-# Make code changes, then:
+# After making code changes:
 git tag v1.0.1
 git push origin v1.0.1
-# → GitHub Actions builds & pushes new image automatically
-# → Unraid users see update via "Check for Updates" button
+# GitHub Actions builds and pushes the new image automatically.
+# Unraid users will see the update via the "Check for Updates" button.
 ```

@@ -1,251 +1,197 @@
-# DiscVault 📀
+﻿# DiscVault 📀
 
-Beheer je fysieke 4K UHD / Blu-ray / DVD collectie met barcode scanning,
-een web frontend en een MCP server voor Claude (OpenClaw).
+Manage your physical 4K UHD / Blu-ray / DVD collection with barcode scanning,
+a web frontend, and an MCP server for Claude / OpenClaw.
 
-## Structuur
+## Structure
 
 ```
-disc-vault/
+app/
 ├── backend/          Flask REST API + SQLite
-├── frontend/         Web UI met barcode scanner (Nginx)
-├── mcp-server/       MCP server voor Claude/OpenClaw
-├── docker-compose.yml
-└── .env.example
+├── frontend/         Web UI with barcode scanner (served by Nginx)
+├── mcp-server/       MCP server for Claude / OpenClaw
+├── deploy/
+│   ├── all-in-one/   Nginx + Supervisor configs for single-container deployment
+│   └── unraid/       Unraid Community Apps XML template
+├── scripts/          Helper scripts (e.g. build-with-version.sh)
+├── Dockerfile        All-in-one production image
+└── docker-compose.yml  Multi-container dev setup
 ```
 
-## Snelstart
+## Quick start
 
-### 1. API keys ophalen (optioneel maar aanbevolen)
+### 1. Get API keys (optional but recommended)
 
-| Service | Gratis tier | URL |
-|---------|------------|-----|
-| OMDb    | 1000 req/dag | https://www.omdbapi.com/apikey.aspx |
-| TMDb    | Onbeperkt  | https://www.themoviedb.org/settings/api |
+| Service | Free tier | URL |
+|---------|-----------|-----|
+| OMDb    | 1,000 req/day | https://www.omdbapi.com/apikey.aspx |
+| TMDb    | Unlimited | https://www.themoviedb.org/settings/api |
 
-Zonder API keys worden barcodes opgezocht maar krijg je geen filmdetails.
-Je kunt films dan handmatig invullen of via de "Auto-fill" knop in het handmatig-tab.
+Without API keys barcodes are scanned but no movie metadata is returned.
+You can fill in details manually or use the "Auto-fill" button in the manual tab.
 
-### 2. Configureren
+### 2. Configure
 
 ```bash
 cp .env.example .env
-# Vul je API keys in .env
+# Fill in your API keys and other settings in .env
 ```
 
-### 3. Opstarten
+### 3. Start
 
 ```bash
 docker compose up -d --build
 ```
 
-Optioneel met automatische versieverhoging (buildnummer):
+Or with automatic build version increment:
 
 ```bash
 ./scripts/build-with-version.sh
 ```
 
-Web UI is beschikbaar op: **http://localhost:6080**
+Web UI available at: **http://localhost:6080**
 
-### 4. Stoppen
+### 4. Stop
 
 ```bash
 docker compose down
 ```
 
-Data blijft bewaard in `${APPDATA_PATH}/data` (standaard: `/mnt/user/appdata/discvault/data`).
+Data is persisted in `/data` (mapped to `/mnt/user/appdata/discvault` on Unraid).
 
 ---
 
-## Unraid Deploy (aanbevolen voor jouw setup)
+## Unraid deployment (all-in-one)
 
-Structuur op Unraid:
+The recommended way to run DiscVault on Unraid is via the all-in-one image — a single container that includes
+the backend, frontend (Nginx), and MCP server, managed by Supervisor.
+
+### Directory layout on Unraid
 
 ```
-/mnt/user/appdata/discvault/
-├── app/           # Code (docker-compose.yml, Dockerfiles, etc)
-│   ├── docker-compose.yml
-│   ├── backend/
-│   ├── frontend/
-│   ├── mcp-server/
-│   ├── .env
-│   └── README.md
-└── data/          # Persistente data (mount target in containers)
-    ├── discvault.db
-    ├── posters/
-    └── backups/
+/mnt/user/appdata/discvault/     ← persistent data volume
+├── discvault.db
+├── posters/
+└── backups/
 ```
 
-### 1. Clone/plaats de code
+### Deploy via Community Applications
 
-Via Unraid Terminal of SSH:
+1. Add the XML template from `app/deploy/unraid/discvault.xml` to your Unraid templates repository.
+2. Install from Community Applications: search for **DiscVault**.
+3. Set at minimum `TZ`, `RP_ID`, and `RP_ORIGIN` to match your Unraid host.
+
+### Manual Docker run
 
 ```bash
-cd /mnt/user/appdata/discvault
-git clone <repo-url> app
-# of: mkdir app && upload DiscVault files naar /mnt/user/appdata/discvault/app
+docker run -d \
+  --name discvault \
+  -p 6080:80 \
+  -p 6090:6090 \
+  -e TZ=Europe/Amsterdam \
+  -e OMDB_API_KEY=<your-key> \
+  -e TMDB_API_KEY=<your-key> \
+  -e RP_ID=<unraid-hostname-or-ip> \
+  -e RP_ORIGIN=http://<unraid-hostname-or-ip>:6080 \
+  -e JWT_SECRET=<random-string> \
+  -e MCP_API_KEY=<random-string> \
+  -v /mnt/user/appdata/discvault:/data \
+  ghcr.io/helmerzNL/DiscVault:latest
 ```
-
-### 2. Configureer .env
-
-```bash
-cd /mnt/user/appdata/discvault/app
-cp .env.example .env
-nano .env
-```
-
-Vul minimaal in:
-
-```env
-FRONTEND_PORT=6080
-MCP_PORT=6090
-RP_ID=<IP-of-hostname-van-unraid>
-RP_ORIGIN=http://<IP-of-hostname-van-unraid>:6080
-OMDB_API_KEY=<jouw-key>
-TMDB_API_KEY=<jouw-key>
-JWT_SECRET=<random-string>
-TZ=Europe/Amsterdam
-```
-
-### 3. Start de stack
-
-```bash
-cd /mnt/user/appdata/discvault/app
-docker compose up -d --build
-```
-
-Of met automatische versieverhoging:
-
-```bash
-cd /mnt/user/appdata/discvault/app
-sh ./scripts/build-with-version.sh
-```
-
-### 4. Controleer
-
-```bash
-docker compose ps
-curl http://localhost:6080/api/health
-curl http://localhost:6090/health
-```
-
-Data wordt automatisch opgeslagen in `/mnt/user/appdata/discvault/data`.
 
 ---
 
-## MCP Koppeling met OpenClaw
+## MCP integration with Claude / OpenClaw
 
-Voor Unraid is de simpelste optie: OpenClaw verbinden met de HTTP MCP endpoint.
+DiscVault exposes an HTTP MCP endpoint:
 
-DiscVault MCP endpoint:
+- MCP: `http://<host>:6090/mcp`
+- Health: `http://<host>:6090/health`
+- Via web port (Nginx proxy): `http://<host>:6080/mcp`
 
-- `http://<unraid-ip>:6090/mcp`
-
-Health endpoint:
-
-- `http://<unraid-ip>:6090/health`
-
-Voorbeeldconfiguratie (Streamable HTTP MCP):
+Example configuration (Streamable HTTP MCP):
 
 ```json
 {
   "mcpServers": {
     "discvault": {
       "transport": "streamable-http",
-      "url": "http://<unraid-ip>:6090/mcp"
+      "url": "http://<host>:6090/mcp"
     }
   }
 }
 ```
 
-Als jouw OpenClaw build nog geen remote/HTTP MCP ondersteunt, gebruik dan stdio via Docker zoals hieronder:
+### Available MCP tools
 
-```json
-{
-  "mcpServers": {
-    "discvault": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "--network", "disc-vault_discvault-net",
-        "-e", "DISCVAULT_API=http://backend:5000",
-        "disc-vault-mcp"
-      ]
-    }
-  }
-}
-```
-
-### Beschikbare MCP tools
-
-| Tool | Wat doet hij |
+| Tool | Description |
 |------|-------------|
-| `search_collection` | Zoek films op titel, regisseur of genre |
-| `get_collection_stats` | Totalen, verdeling per formaat, recent toegevoegd |
-| `get_movie_details` | Volledige details van één film op ID |
-| `list_all_movies` | Alle films in de collectie |
-| `add_movie` | Film toevoegen via Claude |
-| `delete_movie` | Film verwijderen via Claude |
-| `lookup_barcode` | Barcode opzoeken (zonder opslaan) |
+| `search_collection` | Search movies by title, director, or genre |
+| `get_collection_stats` | Totals and breakdown by format, recently added |
+| `get_movie_details` | Full details for a single movie by ID |
+| `list_all_movies` | All movies in the collection |
+| `add_movie` | Add a movie via Claude |
+| `delete_movie` | Remove a movie via Claude |
+| `lookup_barcode` | Look up a barcode without saving |
 
-### Voorbeeldvragen aan Claude
+### Example prompts
 
-- *"Welke 4K UHD films van Christopher Nolan heb ik?"*
-- *"Hoeveel schijfjes heb ik in totaal?"*
-- *"Heb ik Dune al in mijn collectie?"*
-- *"Welke films heb ik recent toegevoegd?"*
-- *"Zoek alle action films in mijn verzameling"*
-
----
-
-## Web UI functies
-
-### 📷 Scannen
-- Open camera en scan een barcode
-- Of typ/plak een barcode handmatig
-- Filminfo wordt automatisch opgezocht (OMDb → TMDb → UPCitemdb)
-- Kies formaat en optionele locatie, dan opslaan
-
-### 📀 Collectie
-- Grid-overzicht van alle films met poster
-- Zoeken op titel, regisseur, genre
-- Filteren op 4K UHD / Blu-ray / DVD
-- Klik op film voor details + verwijderen
-
-### ＋ Handmatig
-- Film toevoegen zonder barcode
-- "Auto-fill" knop zoekt filminfo op basis van titel
+- *"Which 4K UHD movies by Christopher Nolan do I have?"*
+- *"How many discs do I own in total?"*
+- *"Do I have Dune in my collection?"*
+- *"What did I add most recently?"*
+- *"Show me all action movies in my collection."*
 
 ---
 
-## API Endpoints (directe toegang)
+## Web UI features
+
+### 📷 Scan
+- Open the camera and scan a barcode
+- Or type/paste a barcode manually
+- Movie info is fetched automatically (OMDb → TMDb → UPCitemdb)
+- Select format and optional location, then save
+
+### 📀 Collection
+- Grid view of all movies with poster art
+- Search by title, director, or genre
+- Filter by 4K UHD / Blu-ray / DVD
+- Click a movie for details and delete option
+
+### ＋ Manual entry
+- Add a movie without a barcode
+- "Auto-fill" button fetches movie info by title
+
+---
+
+## API endpoints
 
 ```
-GET  /api/health              Status check
-GET  /api/stats               Statistieken
-GET  /api/movies              Alle films (optioneel ?q=zoekterm&format=4K+UHD)
-GET  /api/movies/:id          Één film
-POST /api/movies              Film toevoegen
-PUT  /api/movies/:id          Film bijwerken
-DELETE /api/movies/:id        Film verwijderen
-GET  /api/lookup/:barcode     Barcode opzoeken
-GET  /api/search_title?q=     Filminfo zoeken op titel
+GET    /api/health              Health check
+GET    /api/stats               Collection statistics
+GET    /api/movies              All movies  (optional: ?q=query&format=4K+UHD)
+GET    /api/movies/:id          Single movie
+POST   /api/movies              Add a movie
+PUT    /api/movies/:id          Update a movie
+DELETE /api/movies/:id          Delete a movie
+GET    /api/lookup/:barcode     Look up a barcode
+GET    /api/search_title?q=     Search movie info by title
 ```
 
 ---
 
 ## Data
 
-SQLite database en posters opgeslagen in `/mnt/user/appdata/discvault/data`.
+SQLite database and posters are stored in `/data` inside the container
+(mapped to `/mnt/user/appdata/discvault` on Unraid).
 
-**Backup maken:**
+**Manual backup:**
 ```bash
-cp ${APPDATA_PATH}/data/discvault.db ./discvault-backup.db
+cp /mnt/user/appdata/discvault/discvault.db ./discvault-backup.db
 ```
 
-**CSV exporteren:**
+**Export to CSV:**
 ```bash
-# Via de API — geeft JSON terug, converteren naar CSV:
 curl http://localhost:6080/api/movies | python3 -c "
 import json, csv, sys
 data = json.load(sys.stdin)
@@ -253,5 +199,5 @@ if data:
     w = csv.DictWriter(sys.stdout, fieldnames=data[0].keys())
     w.writeheader()
     w.writerows(data)
-" > collectie.csv
+" > collection.csv
 ```
