@@ -1,13 +1,15 @@
 :root {
-  --bg: #f6f5ef;
-  --panel: #ffffff;
-  --ink: #1a201d;
-  --muted: #4f5a54;
-  --line: #d8ddd7;
-  --brand: #0f7a52;
-  --brand-strong: #0a5d3f;
-  --accent: #d86c33;
-  --radius: 16px;
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a26;
+  --border: #2a2a3e;
+  --accent: #e8c547;
+  --accent2: #7c6af7;
+  --text: #e8e8f0;
+  --text-muted: #7878a0;
+  --danger: #f04060;
+  --success: #40c080;
+  --radius: 12px;
   --maxw: 1080px;
 }
 
@@ -22,9 +24,12 @@ body {
 }
 
 body {
-  font-family: "Space Grotesk", system-ui, -apple-system, Segoe UI, sans-serif;
-  color: var(--ink);
-  background: radial-gradient(circle at 75% -20%, #d8f2e7 0, transparent 45%), var(--bg);
+  font-family: "DM Sans", system-ui, -apple-system, Segoe UI, sans-serif;
+  color: var(--text);
+  font-weight: 300;
+  background: radial-gradient(circle at 76% -14%, rgba(124, 106, 247, 0.2), transparent 38%),
+    radial-gradient(circle at 15% -25%, rgba(232, 197, 71, 0.15), transparent 36%),
+    var(--bg);
   line-height: 1.55;
 }
 
@@ -32,11 +37,21 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.35;
-  background-image: linear-gradient(to right, rgba(15, 122, 82, 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(15, 122, 82, 0.06) 1px, transparent 1px);
-  background-size: 28px 28px;
+  opacity: 0.5;
+  background-image: linear-gradient(to right, rgba(124, 106, 247, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(124, 106, 247, 0.12) 1px, transparent 1px);
+  background-size: 34px 34px;
   z-index: -1;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.3;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
 }
 
 .wrap {
@@ -45,11 +60,18 @@ body {
 }
 
 .site-header {
-  padding: 1rem 0;
+  margin-top: 18px;
+  padding: 0.85rem 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  background: rgba(18, 18, 26, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding-left: 16px;
+  padding-right: 12px;
+  backdrop-filter: blur(10px);
 }
 
 .brand {
@@ -57,7 +79,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  color: var(--ink);
+  color: var(--text);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -67,7 +89,7 @@ body {
   height: 10px;
   border-radius: 999px;
   background: var(--accent);
-  box-shadow: 0 0 0 5px rgba(216, 108, 51, 0.2);
+  box-shadow: 0 0 0 5px rgba(232, 197, 71, 0.15);
 }
 
 .site-nav {
@@ -76,9 +98,13 @@ body {
 }
 
 .site-nav a {
-  color: var(--ink);
+  color: var(--text-muted);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 400;
+}
+
+.site-nav a:hover {
+  color: var(--text);
 }
 
 .hero {
@@ -90,7 +116,7 @@ body {
   font-size: 0.78rem;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--brand-strong);
+  color: var(--accent);
   margin: 0 0 0.75rem;
   font-weight: 700;
 }
@@ -103,19 +129,19 @@ h3 {
 }
 
 h1 {
-  font-family: "Instrument Serif", Georgia, serif;
+  font-family: "DM Serif Display", Georgia, serif;
   font-weight: 400;
   font-size: clamp(2.2rem, 5vw, 4.2rem);
   max-width: 16ch;
 }
 
 .accent {
-  color: var(--brand-strong);
+  color: var(--accent2);
 }
 
 .lead {
   max-width: 62ch;
-  color: var(--muted);
+  color: var(--text-muted);
   margin: 1.1rem 0 1.4rem;
 }
 
@@ -142,18 +168,18 @@ h1 {
 }
 
 .btn-solid {
-  background: var(--brand);
-  color: #fff;
+  background: var(--accent);
+  color: #0a0a0f;
 }
 
 .btn-solid:hover {
-  background: var(--brand-strong);
+  background: #f1d779;
 }
 
 .btn-ghost {
-  border-color: var(--line);
-  color: var(--ink);
-  background: #fff;
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--surface2);
 }
 
 .hero-points {
@@ -166,7 +192,7 @@ h1 {
 }
 
 .hero-points li {
-  color: var(--muted);
+  color: var(--text-muted);
   position: relative;
   padding-left: 1.1rem;
 }
@@ -189,7 +215,7 @@ h1 {
 }
 
 .section-head h2 {
-  font-family: "Instrument Serif", Georgia, serif;
+  font-family: "DM Serif Display", Georgia, serif;
   font-size: clamp(1.7rem, 3vw, 2.4rem);
   max-width: 24ch;
 }
@@ -203,10 +229,15 @@ h1 {
 
 .card,
 .install-card {
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(26, 26, 38, 0.85), rgba(18, 18, 26, 0.96));
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem;
+}
+
+.card:hover,
+.install-card:hover {
+  border-color: rgba(124, 106, 247, 0.55);
 }
 
 .card h3,
@@ -217,7 +248,7 @@ h1 {
 .card p,
 .install-card p {
   margin: 0.45rem 0 0;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .install-grid {
@@ -230,15 +261,16 @@ h1 {
 pre {
   margin: 0.75rem 0 0;
   white-space: pre-wrap;
-  background: #f3f5f4;
-  border: 1px solid var(--line);
+  background: rgba(10, 10, 15, 0.85);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.75rem;
   overflow-x: auto;
+  color: var(--accent);
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.9rem;
 }
 
@@ -247,7 +279,7 @@ code {
 }
 
 .site-footer {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
   padding: 1rem 0 2rem;
   display: flex;
   align-items: center;
@@ -257,11 +289,11 @@ code {
 
 .site-footer p {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .site-footer a {
-  color: var(--brand-strong);
+  color: var(--accent2);
   text-decoration: none;
 }
 
