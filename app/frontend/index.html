@@ -81,13 +81,9 @@
     width: 110px;
     height: 155px;
     border-radius: 6px;
-    background: linear-gradient(
-      135deg,
-      hsl(var(--hue) 30% 14%) 0%,
-      hsl(var(--hue) 40% 10%) 100%
-    );
-    border: 1px solid hsl(var(--hue) 30% 22%);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 hsl(var(--hue) 30% 26%);
+    background: var(--poster) center/cover no-repeat #12121a;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     transform: rotate(var(--r));
     display: flex;
     flex-direction: column;
@@ -101,17 +97,9 @@
   .login-cover::before {
     content: '';
     position: absolute;
-    top: 8px;
-    left: 8px;
-    right: 8px;
-    height: 60%;
-    border-radius: 3px;
-    background: linear-gradient(
-      180deg,
-      hsl(var(--hue) 50% 20%) 0%,
-      hsl(var(--hue) 40% 12%) 100%
-    );
-    opacity: 0.6;
+    inset: 0;
+    border-radius: 6px;
+    background: linear-gradient(0deg, rgba(10,10,15,0.85) 0%, transparent 60%);
   }
 
   .lc-badge {
@@ -175,7 +163,7 @@
       opacity: 0.2;
       border-radius: 4px;
     }
-    .login-cover::before { height: 50%; }
+    .login-cover::before { border-radius: 4px; }
     .lc-title { font-size: 0.48rem; }
     .lc-year { display: none; }
     .lc-badge { font-size: 0.38rem; top: 5px; right: 5px; }
@@ -2497,15 +2485,15 @@
 ">
   <!-- Floating disc covers background -->
   <div class="login-covers" aria-hidden="true">
-    <div class="login-cover" style="--x:5%;--y:8%;--r:-12deg;--hue:45"><span class="lc-badge">4K</span><span class="lc-title">The Dark Knight</span><span class="lc-year">2008</span></div>
-    <div class="login-cover" style="--x:78%;--y:5%;--r:8deg;--hue:210"><span class="lc-badge">4K</span><span class="lc-title">Blade Runner 2049</span><span class="lc-year">2017</span></div>
-    <div class="login-cover" style="--x:88%;--y:35%;--r:-6deg;--hue:0"><span class="lc-badge">4K</span><span class="lc-title">Interstellar</span><span class="lc-year">2014</span></div>
-    <div class="login-cover" style="--x:2%;--y:42%;--r:10deg;--hue:280"><span class="lc-badge">4K</span><span class="lc-title">Inception</span><span class="lc-year">2010</span></div>
-    <div class="login-cover" style="--x:15%;--y:75%;--r:-8deg;--hue:160"><span class="lc-badge">4K</span><span class="lc-title">The Matrix</span><span class="lc-year">1999</span></div>
-    <div class="login-cover" style="--x:72%;--y:72%;--r:14deg;--hue:30"><span class="lc-badge">BD</span><span class="lc-title">Dune</span><span class="lc-year">2021</span></div>
-    <div class="login-cover" style="--x:42%;--y:85%;--r:-5deg;--hue:190"><span class="lc-badge">4K</span><span class="lc-title">Oppenheimer</span><span class="lc-year">2023</span></div>
-    <div class="login-cover" style="--x:92%;--y:70%;--r:6deg;--hue:340"><span class="lc-badge">4K</span><span class="lc-title">Mad Max: Fury Road</span><span class="lc-year">2015</span></div>
-    <div class="login-cover" style="--x:55%;--y:3%;--r:-10deg;--hue:120"><span class="lc-badge">BD</span><span class="lc-title">Alien</span><span class="lc-year">1979</span></div>
+    <div class="login-cover" style="--x:5%;--y:8%;--r:-12deg;--hue:45;--poster:url(https://image.tmdb.org/t/p/w300/qJ2tW6WMUDux911BTUgMe4MBqo.jpg)"><span class="lc-badge">4K</span><span class="lc-title">The Dark Knight</span><span class="lc-year">2008</span></div>
+    <div class="login-cover" style="--x:78%;--y:5%;--r:8deg;--hue:210;--poster:url(https://image.tmdb.org/t/p/w300/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg)"><span class="lc-badge">4K</span><span class="lc-title">Blade Runner 2049</span><span class="lc-year">2017</span></div>
+    <div class="login-cover" style="--x:88%;--y:35%;--r:-6deg;--hue:0;--poster:url(https://image.tmdb.org/t/p/w300/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg)"><span class="lc-badge">4K</span><span class="lc-title">Interstellar</span><span class="lc-year">2014</span></div>
+    <div class="login-cover" style="--x:2%;--y:42%;--r:10deg;--hue:280;--poster:url(https://image.tmdb.org/t/p/w300/ljsZTbVsrQSqZgWeep2B1QiDKuh.jpg)"><span class="lc-badge">4K</span><span class="lc-title">Inception</span><span class="lc-year">2010</span></div>
+    <div class="login-cover" style="--x:15%;--y:75%;--r:-8deg;--hue:160;--poster:url(https://image.tmdb.org/t/p/w300/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg)"><span class="lc-badge">4K</span><span class="lc-title">The Matrix</span><span class="lc-year">1999</span></div>
+    <div class="login-cover" style="--x:72%;--y:72%;--r:14deg;--hue:30;--poster:url(https://image.tmdb.org/t/p/w300/d5NXSklXo0qyIYkgV94XAgMIckC.jpg)"><span class="lc-badge">BD</span><span class="lc-title">Dune</span><span class="lc-year">2021</span></div>
+    <div class="login-cover" style="--x:42%;--y:85%;--r:-5deg;--hue:190;--poster:url(https://image.tmdb.org/t/p/w300/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg)"><span class="lc-badge">4K</span><span class="lc-title">Oppenheimer</span><span class="lc-year">2023</span></div>
+    <div class="login-cover" style="--x:92%;--y:70%;--r:6deg;--hue:340;--poster:url(https://image.tmdb.org/t/p/w300/8tZYtuWezp8JbcsvHYO0O46tFbo.jpg)"><span class="lc-badge">4K</span><span class="lc-title">Mad Max: Fury Road</span><span class="lc-year">2015</span></div>
+    <div class="login-cover" style="--x:55%;--y:3%;--r:-10deg;--hue:120;--poster:url(https://image.tmdb.org/t/p/w300/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg)"><span class="lc-badge">BD</span><span class="lc-title">Alien</span><span class="lc-year">1979</span></div>
     <div class="login-cover" style="--x:30%;--y:15%;--r:7deg;--hue:60"><span class="lc-badge">4K</span><span class="lc-title">No Country for Old Men</span><span class="lc-year">2007</span></div>
     <div class="login-cover" style="--x:60%;--y:55%;--r:-9deg;--hue:250"><span class="lc-badge">4K</span><span class="lc-title">The Shining</span><span class="lc-year">1980</span></div>
     <div class="login-cover" style="--x:20%;--y:55%;--r:12deg;--hue:90"><span class="lc-badge">BD</span><span class="lc-title">Parasite</span><span class="lc-year">2019</span></div>
