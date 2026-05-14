@@ -24,9 +24,9 @@ It includes:
 
 ## Screenshots
 
-### Overview
+### Sign-in
 
-![DiscVault Overview](website/images/overview.png)
+![DiscVault Sign-in](website/images/overview.png)
 
 ### Collection
 
@@ -36,13 +36,13 @@ It includes:
 
 ![DiscVault Scanner](website/images/scanner.png)
 
-### Settings
+### Settings + MCP Server
 
-![DiscVault Settings](website/images/settings.png)
+![DiscVault Settings and MCP Server](website/images/settings.png)
 
-### Details
+### Search
 
-![DiscVault Details](website/images/details.png)
+![DiscVault Search](website/images/details.png)
 
 ## Quick Start (Docker)
 
