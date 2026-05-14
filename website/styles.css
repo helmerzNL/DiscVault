@@ -389,29 +389,35 @@ code {
 
 @media (max-width: 800px) {
   .site-header {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
     border-radius: var(--radius);
     padding: 0.65rem 0.75rem;
-    gap: 0.5rem;
+    gap: 0.4rem 0.5rem;
+  }
+
+  .brand {
+    font-size: 0.95rem;
+  }
+
+  .site-header > .btn-ghost {
+    justify-self: end;
+    font-size: 0.78rem;
+    padding: 0.4rem 0.7rem;
   }
 
   .site-nav {
-    order: 3;
-    width: 100%;
-    justify-content: flex-start;
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.75rem;
     overflow-x: auto;
     padding-bottom: 0.2rem;
-    gap: 0.75rem;
   }
 
   .site-nav a {
-    font-size: 0.85rem;
-    white-space: nowrap;
-  }
-
-  .btn-ghost {
     font-size: 0.82rem;
-    padding: 0.5rem 0.8rem;
+    white-space: nowrap;
   }
 
   .hero {
