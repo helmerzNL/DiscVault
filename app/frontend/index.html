@@ -901,6 +901,8 @@
     font-size: 2rem; color: var(--accent);
     font-weight: bold;
   }
+  .movie-card.not-owned { opacity: 0.45; pointer-events: auto; cursor: default; }
+  .movie-card.not-owned:hover { border-color: var(--border); }
 
   /* Bulk action toolbar */
   #bulkToolbar {
@@ -3984,7 +3986,13 @@ function getCurrentMovies() {
   });
 }
 
+function canEditMovie(m) {
+  return !authEnabled || !currentUserId || currentUserRole === 'admin' || m.owner_id === currentUserId;
+}
+
 function toggleCard(id) {
+  const movie = allMovies.find(m => m.id === id);
+  if (movie && !canEditMovie(movie)) return;
   if (selectedIds.has(id)) {
     selectedIds.delete(id);
   } else {
@@ -3997,8 +4005,11 @@ function toggleCard(id) {
 }
 
 function selectAll() {
-  getCurrentMovies().forEach(m => selectedIds.add(m.id));
-  document.querySelectorAll('.movie-card[data-id]').forEach(c => c.classList.add('selected'));
+  getCurrentMovies().filter(canEditMovie).forEach(m => selectedIds.add(m.id));
+  getCurrentMovies().forEach(m => {
+    const card = document.querySelector(`.movie-card[data-id="${m.id}"]`);
+    if (card) card.classList.toggle('selected', selectedIds.has(m.id));
+  });
   updateBulkCount();
 }
 
@@ -4034,13 +4045,14 @@ function renderGrid(movies) {
       ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
       : '<div class="no-img">🎬</div>';
     const isSelected = selectedIds.has(m.id);
+    const ownable = canEditMovie(m);
     const clickHandler = selectMode
-      ? `toggleCard(${m.id})`
+      ? (ownable ? `toggleCard(${m.id})` : `openMovieDetail(${m.id})`)
       : `openMovieDetail(${m.id})`;
     const safeTitle = (m.title || '').replace(/'/g, "\\'");
-    const showDelete = !selectMode && debugModeEnabled;
+    const showDelete = !selectMode && debugModeEnabled && ownable;
     return `
-    <div class="movie-card${isSelected ? ' selected' : ''}" data-id="${m.id}" onclick="${clickHandler}">
+    <div class="movie-card${isSelected ? ' selected' : ''}${selectMode && !ownable ? ' not-owned' : ''}" data-id="${m.id}" onclick="${clickHandler}">
       ${showDelete ? `<button class="movie-card-delete" onclick="event.stopPropagation(); quickDelete(${m.id}, '${safeTitle}')">✕</button>` : ''}
       <div class="movie-card-poster">
         ${imgHtml}
@@ -4313,7 +4325,7 @@ async function openMovieDetail(id) {
   if (!movie) return;
 
   // Hide edit button if user doesn't own this movie (and isn't admin / auth disabled)
-  const canEdit = !authEnabled || !currentUserId || currentUserRole === 'admin' || movie.owner_id === currentUserId;
+  const canEdit = canEditMovie(movie);
   const editBtn = document.getElementById('btnEditMovie');
   if (editBtn) editBtn.style.display = canEdit ? '' : 'none';
 
