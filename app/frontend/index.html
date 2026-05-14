@@ -3034,6 +3034,7 @@ nl: {
   'js.syncing':'<span class="spinner"></span> Syncen...',
   'js.synced':'✓ Gesynchroniseerd','js.noSourceData':'— Geen brondata',
   'js.saved':'✓ Opgeslagen','js.saveError':'Fout bij opslaan','js.saveBtn':'💾 Opslaan',
+  'js.unsavedChanges':'Je hebt onopgeslagen wijzigingen. Wil je opslaan?',
   'js.chooseCover':'Kies eerst een afbeelding om te uploaden',
   'js.uploadingCover':'<span class="spinner"></span> Cover uploaden...',
   'js.uploadFailed':'Upload mislukt','js.coverUploaded':'✓ Eigen cover geupload',
@@ -3285,6 +3286,7 @@ en: {
   'js.syncing':'<span class="spinner"></span> Syncing...',
   'js.synced':'✓ Synchronized','js.noSourceData':'— No source data',
   'js.saved':'✓ Saved','js.saveError':'Error saving','js.saveBtn':'💾 Save',
+  'js.unsavedChanges':'You have unsaved changes. Do you want to save?',
   'js.chooseCover':'Choose an image to upload first',
   'js.uploadingCover':'<span class="spinner"></span> Uploading cover...',
   'js.uploadFailed':'Upload failed','js.coverUploaded':'✓ Custom cover uploaded',
@@ -4475,6 +4477,12 @@ function closeModal(e) {
 }
 
 function closeModalDirect() {
+  // If in edit mode with unsaved changes, ask to save
+  const editMode = document.getElementById('modalEditMode');
+  if (editMode && editMode.style.display !== 'none' && _isEditDirty()) {
+    if (confirm(t('js.unsavedChanges'))) { saveEdit(); return; }
+  }
+  _editDirty = false;
   movieModalOpen = false;
   syncOverlayScrollLock();
   document.getElementById('modalBackdrop').classList.remove('open');
@@ -4945,9 +4953,36 @@ function startEdit() {
   document.getElementById('editStatus').className = 'status-msg';
   document.getElementById('modalViewMode').style.display = 'none';
   document.getElementById('modalEditMode').style.display = 'block';
+
+  // Snapshot original values for dirty-checking
+  _editSnapshot = {};
+  for (const [suffix] of Object.entries(EDIT_FIELDS)) {
+    const el = document.getElementById('edit' + suffix);
+    if (el) _editSnapshot[suffix] = el.value;
+  }
+  _editSnapshot._groups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
+  _editDirty = false;
+}
+
+let _editSnapshot = {};
+let _editDirty = false;
+
+function _isEditDirty() {
+  if (_editDirty) return true;
+  for (const [suffix] of Object.entries(EDIT_FIELDS)) {
+    const el = document.getElementById('edit' + suffix);
+    if (el && el.value !== (_editSnapshot[suffix] ?? '')) return true;
+  }
+  const curGroups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
+  if (curGroups !== (_editSnapshot._groups ?? '')) return true;
+  return false;
 }
 
 function cancelEdit() {
+  if (_isEditDirty()) {
+    if (confirm(t('js.unsavedChanges'))) { saveEdit(); return; }
+  }
+  _editDirty = false;
   document.getElementById('modalEditMode').style.display = 'none';
   document.getElementById('modalViewMode').style.display = '';
 }
@@ -4989,11 +5024,15 @@ async function saveEdit() {
         if (idx >= 0) allMovies[idx] = { ...allMovies[idx], ...d };
 
         showStatus('editStatus', t('js.saved'), 'success');
-        setTimeout(() => {
-          cancelEdit();
-          openMovieDetail(currentMovieId);  // Re-render view mode
-          filterMovies();                   // Update grid
-        }, 600);
+        // Stay in edit mode — update snapshot so fields are no longer dirty
+        _editSnapshot = {};
+        for (const [suffix] of Object.entries(EDIT_FIELDS)) {
+          const el = document.getElementById('edit' + suffix);
+          if (el) _editSnapshot[suffix] = el.value;
+        }
+        _editSnapshot._groups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
+        _editDirty = false;
+        filterMovies();  // Update grid
       }
     } else {
       showStatus('editStatus', d.error || t('js.saveError'), 'error');
