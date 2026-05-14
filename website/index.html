@@ -31,17 +31,29 @@
         <span class="brand-dot"></span>
         <span>DiscVault</span>
       </a>
-      <button class="hamburger" aria-label="Toggle menu" aria-expanded="false" onclick="this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')==='false');document.querySelector('.site-nav').classList.toggle('open')">
+      <button class="hamburger" aria-label="Toggle menu" aria-expanded="false">
         <span></span><span></span><span></span>
       </button>
       <nav class="site-nav" aria-label="Primary">
         <a href="#features">Features</a>
         <a href="#install">Install</a>
         <a href="#community">Community</a>
-        <a class="btn btn-ghost nav-github" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
       </nav>
-      <a class="btn btn-ghost header-github" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
     </header>
+    <script>
+      document.querySelector('.hamburger').addEventListener('click', function () {
+        var open = this.getAttribute('aria-expanded') === 'true';
+        this.setAttribute('aria-expanded', !open);
+        document.querySelector('.site-nav').classList.toggle('open');
+      });
+      document.querySelectorAll('.site-nav a').forEach(function (a) {
+        a.addEventListener('click', function () {
+          document.querySelector('.hamburger').setAttribute('aria-expanded', 'false');
+          document.querySelector('.site-nav').classList.remove('open');
+        });
+      });
+    </script>
 
     <main id="top">
       <section class="hero wrap">
