@@ -31,12 +31,16 @@
         <span class="brand-dot"></span>
         <span>DiscVault</span>
       </a>
+      <button class="hamburger" aria-label="Toggle menu" aria-expanded="false" onclick="this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')==='false');document.querySelector('.site-nav').classList.toggle('open')">
+        <span></span><span></span><span></span>
+      </button>
       <nav class="site-nav" aria-label="Primary">
         <a href="#features">Features</a>
         <a href="#install">Install</a>
         <a href="#community">Community</a>
+        <a class="btn btn-ghost nav-github" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
       </nav>
-      <a class="btn btn-ghost" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
+      <a class="btn btn-ghost header-github" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
     </header>
 
     <main id="top">
