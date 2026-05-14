@@ -2308,11 +2308,14 @@ def bulk_refresh():
 def delete_movie(movie_id):
     conn = get_db()
     row  = conn.execute(
-        "SELECT poster_file, title FROM movies WHERE id = ?", (movie_id,)
+        "SELECT * FROM movies WHERE id = ?", (movie_id,)
     ).fetchone()
     if not row:
         conn.close()
         return jsonify({"error": "Not found"}), 404
+    if not _check_movie_owner(row):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
     title = row["title"]
     if row["poster_file"]:
         try:

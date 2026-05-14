@@ -2563,7 +2563,7 @@
     <!-- ── VIEW MODE ── -->
     <div id="modalViewMode">
       <div class="btn-row modal-edit-actions" style="flex-wrap:wrap;">
-        <button class="btn btn-secondary" onclick="startEdit()" data-i18n="modal.edit">Bewerken</button>
+        <button class="btn btn-secondary" id="btnEditMovie" onclick="startEdit()" data-i18n="modal.edit">Bewerken</button>
       </div>
 
       <div class="modal-header">
@@ -4290,6 +4290,11 @@ async function openMovieDetail(id) {
   const movie = allMovies.find(m => m.id === id);
   if (!movie) return;
 
+  // Hide edit button if user doesn't own this movie (and isn't admin / auth disabled)
+  const canEdit = !authEnabled || !currentUserId || currentUserRole === 'admin' || movie.owner_id === currentUserId;
+  const editBtn = document.getElementById('btnEditMovie');
+  if (editBtn) editBtn.style.display = canEdit ? '' : 'none';
+
   document.getElementById('modalTitle').textContent = movie.title;
   document.getElementById('modalDirector').textContent = movie.director || '';
   const movieIdLabel = document.getElementById('modalMovieIdLabel');
@@ -5593,6 +5598,8 @@ startLogAutoRefresh();
 // ── Auth & Settings ───────────────────────────────────────────────────────────
 let authToken = localStorage.getItem('dv_token') || '';
 let authEnabled = false;
+let currentUserId = null;
+let currentUserRole = null;
 
 function authHeaders() {
   return authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
@@ -5610,6 +5617,8 @@ function updateLogoutButton() {
 
 async function logoutApp() {
   authToken = '';
+  currentUserId = null;
+  currentUserRole = null;
   localStorage.removeItem('dv_token');
   updateLogoutButton();
 
@@ -5698,6 +5707,8 @@ async function checkAuth() {
     authEnabled = !!d.auth_enabled;
     updateLogoutButton();
     if (d.auth_enabled && !authToken) {
+      currentUserId = null;
+      currentUserRole = null;
       updateLogoutButton();
       showLoginOverlay(d);
       return false;
@@ -5707,11 +5718,26 @@ async function checkAuth() {
       const t = await _origFetch(`${API}/health`, { headers: authHeaders() });
       if (t.status === 401) {
         authToken = '';
+        currentUserId = null;
+        currentUserRole = null;
         localStorage.removeItem('dv_token');
         updateLogoutButton();
         showLoginOverlay(d);
         return false;
       }
+      // Fetch current user info for ownership checks
+      try {
+        const mr = await _origFetch(`${API}/auth/me`, { headers: authHeaders() });
+        const me = await mr.json();
+        if (me.authenticated) {
+          currentUserId = me.id;
+          currentUserRole = me.role;
+        }
+      } catch(e) {}
+    }
+    if (!d.auth_enabled) {
+      currentUserId = null;
+      currentUserRole = null;
     }
     updateLogoutButton();
     return true;
