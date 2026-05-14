@@ -3104,6 +3104,7 @@ nl: {
   'bulk.selectAtLeastOne':'Selecteer minstens één groep','bulk.assigning':'Toewijzen...',
   'bulk.assignDone':'✓ {0} film(s) aan groep(en) gekoppeld',
   'pwa.title':'Installeer DiscVault','pwa.subtitle':'Voeg toe aan je startscherm voor de beste ervaring','pwa.install':'Installeren',
+  'pwa.iosHint':'Tik op <strong style="color:var(--accent)">⬆ Deel</strong> en dan <strong style="color:var(--accent)">Zet op beginscherm</strong>',
 },
 en: {
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
@@ -3352,6 +3353,7 @@ en: {
   'bulk.selectAtLeastOne':'Select at least one group','bulk.assigning':'Assigning...',
   'bulk.assignDone':'✓ {0} movie(s) assigned to group(s)',
   'pwa.title':'Install DiscVault','pwa.subtitle':'Add to your home screen for the best experience','pwa.install':'Install',
+  'pwa.iosHint':'Tap <strong style="color:var(--accent)">⬆ Share</strong> then <strong style="color:var(--accent)">Add to Home Screen</strong>',
 }
 };
 
@@ -6952,13 +6954,26 @@ window.addEventListener('beforeinstallprompt', e => {
   showPwaInstallBanner();
 });
 
+const _isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
 function showPwaInstallBanner() {
   // Don't show if already installed as PWA or dismissed recently
   if (window.matchMedia('(display-mode: standalone)').matches) return;
   if (navigator.standalone) return; // iOS
   if (localStorage.getItem('dv_pwa_dismissed')) return;
   const banner = document.getElementById('pwaInstallBanner');
-  if (banner) setTimeout(() => banner.classList.add('visible'), 600);
+  if (!banner) return;
+  // On iOS: show instructions instead of install button
+  const installBtn = document.getElementById('pwaInstallBtn');
+  const iosHint = document.getElementById('pwaIosHint');
+  if (_isIos && !_deferredInstallPrompt) {
+    if (installBtn) installBtn.style.display = 'none';
+    if (iosHint) iosHint.style.display = '';
+  } else {
+    if (installBtn) installBtn.style.display = '';
+    if (iosHint) iosHint.style.display = 'none';
+  }
+  setTimeout(() => banner.classList.add('visible'), 600);
 }
 
 function pwaInstall() {
@@ -6968,9 +6983,6 @@ function pwaInstall() {
       if (r.outcome === 'accepted') hidePwaInstallBanner();
       _deferredInstallPrompt = null;
     });
-  } else {
-    // iOS / browsers without beforeinstallprompt – just hide banner
-    hidePwaInstallBanner();
   }
 }
 
@@ -6987,9 +6999,8 @@ function hidePwaInstallBanner() {
 // For iOS/Safari (no beforeinstallprompt) – show after a delay
 window.addEventListener('load', () => {
   if (!_deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
-    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isSafari = /safari/i.test(navigator.userAgent) && !/chrome|crios|fxios/i.test(navigator.userAgent);
-    if (isIos || isSafari) {
+    if (_isIos || isSafari) {
       setTimeout(() => showPwaInstallBanner(), 2000);
     }
   }
@@ -7002,8 +7013,9 @@ window.addEventListener('load', () => {
   <div class="pwa-install-banner-text">
     <strong data-i18n="pwa.title">Installeer DiscVault</strong>
     <span data-i18n="pwa.subtitle">Voeg toe aan je startscherm voor de beste ervaring</span>
+    <span id="pwaIosHint" style="display:none; font-size:0.78rem; color:var(--text-muted); margin-top:2px;" data-i18n-html="pwa.iosHint">Tik op <strong style="color:var(--accent)">⬆ Deel</strong> en dan <strong style="color:var(--accent)">Zet op beginscherm</strong></span>
   </div>
-  <button class="btn btn-primary" onclick="pwaInstall()" data-i18n="pwa.install">Installeren</button>
+  <button class="btn btn-primary" id="pwaInstallBtn" onclick="pwaInstall()" data-i18n="pwa.install">Installeren</button>
   <button class="pwa-install-banner-close" onclick="dismissPwaInstall()" aria-label="Sluiten">✕</button>
 </div>
 
