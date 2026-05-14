@@ -6,6 +6,12 @@ on:
       - main              # every push to main  → beta tag
     tags:
       - "v*.*.*"          # e.g. v1.0.0         → stable + versioned tags
+    paths-ignore:
+      - "website/**"
+      - "screenshots/**"
+      - "*.md"
+      - "LICENSE"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:       # allow manual trigger from GitHub UI
 
 concurrency:
