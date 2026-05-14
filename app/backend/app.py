@@ -1371,7 +1371,9 @@ def list_movies():
     q   = request.args.get("q", "")
     fmt = request.args.get("format", "")
     owner_clause, owner_params = _movie_owner_filter()
-    sql = "SELECT * FROM movies WHERE 1=1" + owner_clause
+    sql = ("SELECT movies.*, users.display_name AS owner_name"
+           " FROM movies LEFT JOIN users ON movies.owner_id = users.id"
+           " WHERE 1=1" + owner_clause)
     params = list(owner_params)
     if q:
         sql += (" AND (title LIKE ? OR original_title LIKE ? OR director LIKE ?"
