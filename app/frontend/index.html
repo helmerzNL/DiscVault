@@ -3740,12 +3740,12 @@ async function loadCollection(retries = 2) {
     }
     allMovies = await r.json();
     setCachedData('dv_movies_cache', allMovies);
-    renderGrid(allMovies);
+    filterMovies();
     filterSearchMovies();
   } catch(e) {
     allMovies = getCachedData('dv_movies_cache', []);
     if (allMovies.length) {
-      renderGrid(allMovies);
+      filterMovies();
       filterSearchMovies();
       const msg = navigator.onLine
         ? t('js.backendError')
