@@ -18,7 +18,7 @@ import cbor2
 import xml.etree.ElementTree as ET
 from functools import wraps
 from urllib.parse import quote_plus, quote
-from flask import Flask, request, jsonify, send_from_directory, send_file, Response
+from flask import Flask, request, jsonify, send_from_directory, send_file, Response, g
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -205,10 +205,12 @@ def init_db():
     # Auth: users
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id          TEXT PRIMARY KEY,
-            username    TEXT UNIQUE NOT NULL,
-            display_name TEXT,
-            created_at  TEXT NOT NULL
+            id            TEXT PRIMARY KEY,
+            username      TEXT UNIQUE NOT NULL,
+            display_name  TEXT,
+            role          TEXT NOT NULL DEFAULT 'user',
+            recovery_hash TEXT,
+            created_at    TEXT NOT NULL
         )
     """)
 
@@ -222,6 +224,28 @@ def init_db():
             credential_name TEXT,
             created_at      TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+
+    # Groups: shared collections
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS groups (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT UNIQUE NOT NULL,
+            created_by  TEXT,
+            created_at  TEXT NOT NULL,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+    """)
+
+    # User-Group membership
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_groups (
+            user_id  TEXT NOT NULL,
+            group_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, group_id),
+            FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES groups(id)  ON DELETE CASCADE
         )
     """)
 
@@ -292,6 +316,28 @@ def init_db():
         if col not in existing:
             bare = defn.split(" NOT NULL")[0].split(" DEFAULT")[0].strip()
             conn.execute(f"ALTER TABLE movies ADD COLUMN {col} {bare}")
+
+    # Migrate movies: add owner_id and group_id if missing
+    if "owner_id" not in existing:
+        conn.execute("ALTER TABLE movies ADD COLUMN owner_id TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_movies_owner ON movies(owner_id)")
+    if "group_id" not in existing:
+        conn.execute("ALTER TABLE movies ADD COLUMN group_id INTEGER")
+
+    # Migrate users: add role and recovery_hash if missing
+    user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+    if "role" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+    if "recovery_hash" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN recovery_hash TEXT")
+
+    # Auto-assign existing movies (no owner) to first admin user
+    first_user = conn.execute("SELECT id FROM users ORDER BY created_at ASC LIMIT 1").fetchone()
+    if first_user:
+        conn.execute("UPDATE users SET role='admin' WHERE id=? AND role='user'", (first_user[0],))
+        orphan_count = conn.execute("SELECT COUNT(*) FROM movies WHERE owner_id IS NULL").fetchone()[0]
+        if orphan_count > 0:
+            conn.execute("UPDATE movies SET owner_id=? WHERE owner_id IS NULL", (first_user[0],))
 
     conn.commit()
     conn.close()
@@ -1226,12 +1272,13 @@ def health():
 @app.route("/api/stats")
 def stats():
     conn = get_db()
-    total     = conn.execute("SELECT COUNT(*) FROM movies").fetchone()[0]
+    owner_clause, owner_params = _movie_owner_filter()
+    total     = conn.execute(f"SELECT COUNT(*) FROM movies WHERE 1=1{owner_clause}", owner_params).fetchone()[0]
     by_format = conn.execute(
-        "SELECT format, COUNT(*) as count FROM movies GROUP BY format"
+        f"SELECT format, COUNT(*) as count FROM movies WHERE 1=1{owner_clause} GROUP BY format", owner_params
     ).fetchall()
     recent    = conn.execute(
-        "SELECT * FROM movies ORDER BY added_at DESC LIMIT 5"
+        f"SELECT * FROM movies WHERE 1=1{owner_clause} ORDER BY added_at DESC LIMIT 5", owner_params
     ).fetchall()
     conn.close()
     return jsonify({
@@ -1289,8 +1336,9 @@ def list_movies():
     conn = get_db()
     q   = request.args.get("q", "")
     fmt = request.args.get("format", "")
-    sql = "SELECT * FROM movies WHERE 1=1"
-    params = []
+    owner_clause, owner_params = _movie_owner_filter()
+    sql = "SELECT * FROM movies WHERE 1=1" + owner_clause
+    params = list(owner_params)
     if q:
         sql += (" AND (title LIKE ? OR original_title LIKE ? OR director LIKE ?"
                 " OR actor LIKE ? OR genre LIKE ? OR distributor LIKE ? OR box_set LIKE ?)")
@@ -1449,7 +1497,10 @@ def add_movie():
         row["poster_file"] = poster_file
         row["format"]      = data.get("format", "4K UHD")
         row["added_at"]    = datetime.utcnow().isoformat()
-        cols   = [c for c, _ in SCHEMA_COLUMNS]
+        # Set owner to current user (or None when auth disabled)
+        owner_id = _get_current_user_id()
+        cols   = [c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]
+        row["owner_id"] = owner_id
         places = ", ".join(f":{c}" for c in cols)
         colstr = ", ".join(cols)
         conn.execute(f"INSERT INTO movies ({colstr}) VALUES ({places})", row)
@@ -2623,7 +2674,7 @@ def enrich_from_api(row: dict) -> dict:
     return row
 
 
-def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True) -> str:
+def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id: str = None) -> str:
     title = (row.get("title") or "").strip()
     if not title:
         return "skipped"
@@ -2691,6 +2742,7 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True) -> str:
         "location":             _s("location"),
         "notes":                _s("notes"),
         "added_at":             datetime.utcnow().isoformat(),
+        "owner_id":             owner_id,
     }
 
     if existing:
@@ -2817,6 +2869,9 @@ def import_movies():
 
     _set_import_cancel(import_id, False)
 
+    # Capture owner_id before entering generator (request context won't be available)
+    import_owner_id = _get_current_user_id()
+
     add_log("import", f"Import gestart: {f.filename}", f"Rijen: {len(rows)}, Modus: {mode}, Enrich: {enrich}, Posters: {fetch_posters}")
 
     def stream_import():
@@ -2840,7 +2895,7 @@ def import_movies():
                 try:
                     if enrich:
                         row = enrich_from_api(row)
-                    result = insert_row(conn, row, mode, fetch_posters=fetch_posters)
+                    result = insert_row(conn, row, mode, fetch_posters=fetch_posters, owner_id=import_owner_id)
                     if result == "added":
                         added += 1
                     elif result == "updated":
@@ -2943,6 +2998,39 @@ def _is_auth_enabled() -> bool:
     return row and row[0] == "true"
 
 
+def _get_current_user_id() -> str | None:
+    """Return current user id from g (set by check_auth), or None if auth disabled."""
+    return getattr(g, "current_user_id", None)
+
+
+def _get_current_user_role() -> str:
+    """Return 'admin' or 'user' for the current authenticated user."""
+    uid = _get_current_user_id()
+    if not uid:
+        return "admin"  # Auth disabled → treat as admin
+    conn = get_db()
+    row = conn.execute("SELECT role FROM users WHERE id=?", (uid,)).fetchone()
+    conn.close()
+    return (row["role"] if row else "user")
+
+
+def _movie_owner_filter() -> tuple[str, list]:
+    """Return SQL WHERE clause + params to scope movies to current user + their groups."""
+    uid = _get_current_user_id()
+    if not uid:
+        return "", []  # Auth disabled → show all
+    if _get_current_user_role() == "admin":
+        return "", []  # Admin sees everything
+    conn = get_db()
+    group_rows = conn.execute("SELECT group_id FROM user_groups WHERE user_id=?", (uid,)).fetchall()
+    conn.close()
+    group_ids = [r["group_id"] for r in group_rows]
+    if group_ids:
+        placeholders = ",".join("?" * len(group_ids))
+        return f" AND (owner_id = ? OR group_id IN ({placeholders}))", [uid] + group_ids
+    return " AND owner_id = ?", [uid]
+
+
 def _is_source_enabled(key: str, default: bool) -> bool:
     conn = sqlite3.connect(DB_PATH)
     row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
@@ -3005,25 +3093,40 @@ def check_auth():
     """Global auth check: protect all /api/ routes except public ones."""
     if not request.path.startswith("/api/"):
         return
-    for prefix in PUBLIC_PREFIXES:
-        if request.path.startswith(prefix):
-            return
     if request.method == "OPTIONS":
         return
-    if not _is_auth_enabled():
-        return
+
+    # Always try to extract user info from token (even on public routes)
     token = None
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
-    if token and MCP_API_KEY and token == MCP_API_KEY:
+
+    is_mcp = token and MCP_API_KEY and token == MCP_API_KEY
+
+    if token and not is_mcp:
+        payload = _verify_token(token)
+        if payload:
+            g.current_user_id = payload.get("sub")
+            g.current_username = payload.get("usr")
+
+    # Public routes: allow without auth
+    for prefix in PUBLIC_PREFIXES:
+        if request.path.startswith(prefix):
+            return
+
+    if not _is_auth_enabled():
+        return
+
+    # MCP API key auth
+    if is_mcp:
         if _is_source_enabled("mcp_enabled", True):
             return
         return jsonify({"error": "MCP server is disabled"}), 403
+
     if not token:
         return jsonify({"error": "Unauthorized", "auth_required": True}), 401
-    payload = _verify_token(token)
-    if not payload:
+    if not getattr(g, "current_user_id", None):
         return jsonify({"error": "Token expired or invalid", "auth_required": True}), 401
 
 
@@ -3096,12 +3199,18 @@ def auth_status():
     enabled = _is_auth_enabled()
     user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     cred_count = conn.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
+    group_count = conn.execute("SELECT COUNT(*) FROM groups").fetchone()[0]
     conn.close()
+    uid = _get_current_user_id()
+    role = _get_current_user_role() if uid else None
     return jsonify({
         "auth_enabled": enabled,
         "has_users": user_count > 0,
         "has_credentials": cred_count > 0,
         "rp_id": RP_ID,
+        "user_count": user_count,
+        "group_count": group_count,
+        "role": role,
     })
 
 
@@ -3184,10 +3293,16 @@ def register_verify():
 
     conn = get_db()
     existing_user = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_first_user = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0 and not existing_user
+    recovery_code = None
     if not existing_user:
+        role = "admin" if is_first_user else "user"
+        # Generate recovery code (8 alphanumeric chars)
+        recovery_code = secrets.token_hex(4).upper()  # 8 hex chars
+        recovery_hash = hashlib.sha256(recovery_code.encode()).hexdigest()
         conn.execute(
-            "INSERT INTO users (id, username, display_name, created_at) VALUES (?,?,?,?)",
-            (user_id, username, display_name, datetime.utcnow().isoformat())
+            "INSERT INTO users (id, username, display_name, role, recovery_hash, created_at) VALUES (?,?,?,?,?,?)",
+            (user_id, username, display_name, role, recovery_hash, datetime.utcnow().isoformat())
         )
     conn.execute(
         "INSERT INTO credentials (id, user_id, public_key, sign_count, credential_name, created_at) VALUES (?,?,?,?,?,?)",
@@ -3200,7 +3315,10 @@ def register_verify():
 
     token = _create_token(user_id, username)
     add_log("auth", f"Passkey geregistreerd voor {username}", f"Credential: {credential_name}", "success")
-    return jsonify({"status": "ok", "token": token})
+    result = {"status": "ok", "token": token}
+    if recovery_code:
+        result["recovery_code"] = recovery_code
+    return jsonify(result)
 
 
 @app.route("/api/auth/login/options", methods=["POST"])
@@ -3325,6 +3443,307 @@ def toggle_auth():
     conn.close()
     add_log("auth", f"Authenticatie {'ingeschakeld' if enabled else 'uitgeschakeld'}", level="info")
     return jsonify({"auth_enabled": enabled})
+
+
+# ---------------------------------------------------------------------------
+# Auth: Admin user management
+# ---------------------------------------------------------------------------
+
+def _require_admin():
+    """Check if current user is admin. Returns error response or None."""
+    if not _is_auth_enabled():
+        return None  # Auth disabled → allow
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized", "auth_required": True}), 401
+    if _get_current_user_role() != "admin":
+        return jsonify({"error": "Admin access required"}), 403
+    return None
+
+
+@app.route("/api/auth/users", methods=["GET"])
+def list_users():
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT u.id, u.username, u.display_name, u.role, u.created_at,
+               COUNT(c.id) as credential_count
+        FROM users u LEFT JOIN credentials c ON c.user_id = u.id
+        GROUP BY u.id ORDER BY u.created_at ASC
+    """).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/auth/users/<user_id>", methods=["DELETE"])
+def delete_user(user_id):
+    err = _require_admin()
+    if err:
+        return err
+    admin_id = _get_current_user_id()
+    if user_id == admin_id:
+        return jsonify({"error": "Cannot delete yourself"}), 400
+    conn = get_db()
+    user = conn.execute("SELECT username, role FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({"error": "User not found"}), 404
+    # Delete user's movies or reassign to admin
+    conn.execute("DELETE FROM movies WHERE owner_id=?", (user_id,))
+    conn.execute("DELETE FROM credentials WHERE user_id=?", (user_id,))
+    conn.execute("DELETE FROM user_groups WHERE user_id=?", (user_id,))
+    conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+    remaining_creds = conn.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
+    if remaining_creds == 0:
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('auth_enabled', 'false')")
+    conn.commit()
+    conn.close()
+    add_log("auth", f"Gebruiker {user['username']} verwijderd door admin", level="warn")
+    return jsonify({"status": "deleted"})
+
+
+@app.route("/api/auth/users/<user_id>/role", methods=["PUT"])
+def set_user_role(user_id):
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    new_role = data.get("role", "user")
+    if new_role not in ("admin", "user"):
+        return jsonify({"error": "Invalid role"}), 400
+    conn = get_db()
+    conn.execute("UPDATE users SET role=? WHERE id=?", (new_role, user_id))
+    conn.commit()
+    user = conn.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
+    conn.close()
+    add_log("auth", f"Rol van {user['username']} gewijzigd naar {new_role}", level="info")
+    return jsonify({"status": "ok", "role": new_role})
+
+
+@app.route("/api/auth/users/<user_id>/reset-passkey", methods=["POST"])
+def reset_user_passkey(user_id):
+    """Admin: remove all credentials for a user so they can re-register."""
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    user = conn.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({"error": "User not found"}), 404
+    conn.execute("DELETE FROM credentials WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    add_log("auth", f"Passkey reset voor {user['username']} door admin", level="warn")
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/auth/me", methods=["GET"])
+def get_current_user():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"authenticated": False})
+    conn = get_db()
+    user = conn.execute("SELECT id, username, display_name, role, created_at FROM users WHERE id=?", (uid,)).fetchone()
+    conn.close()
+    if not user:
+        return jsonify({"authenticated": False})
+    return jsonify({"authenticated": True, **dict(user)})
+
+
+# ---------------------------------------------------------------------------
+# Auth: Recovery code login
+# ---------------------------------------------------------------------------
+
+@app.route("/api/auth/recovery", methods=["POST"])
+def recovery_login():
+    data = request.json or {}
+    username = data.get("username", "").strip()
+    code = data.get("recovery_code", "").strip().upper()
+    if not username or not code:
+        return jsonify({"error": "Username and recovery code required"}), 400
+    conn = get_db()
+    user = conn.execute("SELECT id, username, recovery_hash FROM users WHERE username=?", (username,)).fetchone()
+    if not user or not user["recovery_hash"]:
+        conn.close()
+        add_log("auth", f"Mislukte recovery login voor {username}", level="warn")
+        return jsonify({"error": "Invalid username or recovery code"}), 401
+    code_hash = hashlib.sha256(code.encode()).hexdigest()
+    if code_hash != user["recovery_hash"]:
+        conn.close()
+        add_log("auth", f"Mislukte recovery login voor {username}", level="warn")
+        return jsonify({"error": "Invalid username or recovery code"}), 401
+    # Recovery code is one-time use: clear it and generate new one
+    new_code = secrets.token_hex(4).upper()
+    new_hash = hashlib.sha256(new_code.encode()).hexdigest()
+    conn.execute("UPDATE users SET recovery_hash=? WHERE id=?", (new_hash, user["id"]))
+    # Delete existing credentials so user must re-register a passkey
+    conn.execute("DELETE FROM credentials WHERE user_id=?", (user["id"],))
+    conn.commit()
+    conn.close()
+    token = _create_token(user["id"], user["username"])
+    add_log("auth", f"Recovery login voor {username}", level="warn")
+    return jsonify({"status": "ok", "token": token, "new_recovery_code": new_code,
+                    "message": "Passkeys removed. Please register a new passkey."})
+
+
+# ---------------------------------------------------------------------------
+# Groups: shared collections
+# ---------------------------------------------------------------------------
+
+@app.route("/api/groups", methods=["GET"])
+def list_groups():
+    uid = _get_current_user_id()
+    conn = get_db()
+    if not uid or _get_current_user_role() == "admin":
+        rows = conn.execute("""
+            SELECT g.*, u.username as created_by_username,
+                   (SELECT COUNT(*) FROM user_groups WHERE group_id=g.id) as member_count,
+                   (SELECT COUNT(*) FROM movies WHERE group_id=g.id) as movie_count
+            FROM groups g LEFT JOIN users u ON g.created_by=u.id
+            ORDER BY g.name
+        """).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT g.*, u.username as created_by_username,
+                   (SELECT COUNT(*) FROM user_groups WHERE group_id=g.id) as member_count,
+                   (SELECT COUNT(*) FROM movies WHERE group_id=g.id) as movie_count
+            FROM groups g
+            JOIN user_groups ug ON ug.group_id=g.id AND ug.user_id=?
+            LEFT JOIN users u ON g.created_by=u.id
+            ORDER BY g.name
+        """, (uid,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/groups", methods=["POST"])
+def create_group():
+    data = request.json or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Group name required"}), 400
+    uid = _get_current_user_id()
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO groups (name, created_by, created_at) VALUES (?,?,?)",
+            (name, uid, datetime.utcnow().isoformat())
+        )
+        group_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        # Auto-add creator to group
+        if uid:
+            conn.execute("INSERT INTO user_groups (user_id, group_id) VALUES (?,?)", (uid, group_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "Group name already exists"}), 409
+    conn.close()
+    add_log("groups", f"Groep '{name}' aangemaakt", level="info")
+    return jsonify({"status": "ok", "id": group_id}), 201
+
+
+@app.route("/api/groups/<int:group_id>", methods=["PUT"])
+def update_group(group_id):
+    data = request.json or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Group name required"}), 400
+    conn = get_db()
+    try:
+        conn.execute("UPDATE groups SET name=? WHERE id=?", (name, group_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "Group name already exists"}), 409
+    conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/groups/<int:group_id>", methods=["DELETE"])
+def delete_group(group_id):
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    group = conn.execute("SELECT name FROM groups WHERE id=?", (group_id,)).fetchone()
+    if not group:
+        conn.close()
+        return jsonify({"error": "Group not found"}), 404
+    # Unlink movies from this group (back to owner-only)
+    conn.execute("UPDATE movies SET group_id=NULL WHERE group_id=?", (group_id,))
+    conn.execute("DELETE FROM user_groups WHERE group_id=?", (group_id,))
+    conn.execute("DELETE FROM groups WHERE id=?", (group_id,))
+    conn.commit()
+    conn.close()
+    add_log("groups", f"Groep '{group['name']}' verwijderd", level="warn")
+    return jsonify({"status": "deleted"})
+
+
+@app.route("/api/groups/<int:group_id>/members", methods=["GET"])
+def list_group_members(group_id):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT u.id, u.username, u.display_name, u.role
+        FROM users u JOIN user_groups ug ON ug.user_id=u.id
+        WHERE ug.group_id=?
+        ORDER BY u.username
+    """, (group_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/groups/<int:group_id>/members", methods=["POST"])
+def add_group_member(group_id):
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    user_id = data.get("user_id", "")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    conn = get_db()
+    try:
+        conn.execute("INSERT INTO user_groups (user_id, group_id) VALUES (?,?)", (user_id, group_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "Already a member"}), 409
+    conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/groups/<int:group_id>/members/<member_id>", methods=["DELETE"])
+def remove_group_member(group_id, member_id):
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    conn.execute("DELETE FROM user_groups WHERE user_id=? AND group_id=?", (member_id, group_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/movies/<int:movie_id>/group", methods=["PUT"])
+def assign_movie_to_group(movie_id):
+    data = request.json or {}
+    group_id = data.get("group_id")  # None to remove from group
+    conn = get_db()
+    movie = conn.execute("SELECT owner_id FROM movies WHERE id=?", (movie_id,)).fetchone()
+    if not movie:
+        conn.close()
+        return jsonify({"error": "Movie not found"}), 404
+    uid = _get_current_user_id()
+    if uid and movie["owner_id"] != uid and _get_current_user_role() != "admin":
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
+    conn.execute("UPDATE movies SET group_id=? WHERE id=?", (group_id, movie_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/settings/sources", methods=["GET"])

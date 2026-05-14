@@ -1867,6 +1867,9 @@
         <button class="filter-btn" onclick="setFormatFilter('Blu-ray', this)">Blu-ray</button>
         <button class="filter-btn" onclick="setFormatFilter('DVD', this)">DVD</button>
       </div>
+      <select id="groupFilter" onchange="filterMovies()" style="display:none; padding:7px 10px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:0.82rem; cursor:pointer;">
+        <option value="">Alle collecties</option>
+      </select>
       <button class="btn btn-secondary" id="btnSelectMode" onclick="toggleSelectMode()" data-i18n="collection.selectMode">☑ Selecteren</button>
       <button class="btn btn-secondary" onclick="loadCollection()" data-i18n="collection.refresh">↻ Vernieuwen</button>
     </div>
@@ -2345,6 +2348,35 @@
         </div>
       </div>
 
+      <!-- Recovery Code Display -->
+      <div id="recoveryCodeCard" class="card" style="display:none; margin-top:20px;">
+        <div class="card-title" data-i18n="recovery.title">🔑 Herstelcode</div>
+        <div style="font-size:0.88rem; color:var(--text-muted); margin-bottom:12px;" data-i18n="recovery.desc">
+          Bewaar deze code veilig. Je kunt deze gebruiken om in te loggen als je je passkey kwijt bent.
+        </div>
+        <div id="recoveryCodeDisplay" style="font-family:'DM Mono',monospace; font-size:1.4rem; letter-spacing:4px; text-align:center; padding:16px; background:rgba(232,197,71,.08); border:1px solid rgba(232,197,71,.3); border-radius:8px; color:var(--accent); user-select:all;"></div>
+        <button class="btn btn-secondary" onclick="document.getElementById('recoveryCodeCard').style.display='none'" style="margin-top:12px;" data-i18n="recovery.dismiss">Begrepen, ik heb de code opgeslagen</button>
+      </div>
+
+      <!-- Admin: User Management -->
+      <div id="adminUsersCard" class="card" style="display:none; margin-top:20px;">
+        <div class="card-title" data-i18n="settings.usersTitle">👥 Gebruikersbeheer</div>
+        <div id="adminUsersList"></div>
+      </div>
+
+      <!-- Admin: Group Management -->
+      <div id="adminGroupsCard" class="card" style="display:none; margin-top:20px;">
+        <div class="card-title" data-i18n="settings.groupsTitle">📁 Groepen</div>
+        <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+          <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+            <label data-i18n="settings.groupName">Groepsnaam</label>
+            <input type="text" id="newGroupName" placeholder="Bijv. Familie">
+          </div>
+          <button class="btn btn-primary" onclick="createGroup()" style="height:40px;">+ Groep aanmaken</button>
+        </div>
+        <div id="adminGroupsList"></div>
+      </div>
+
       </div>
 
     </div>
@@ -2410,6 +2442,22 @@
     <button class="btn btn-primary" onclick="loginPasskey()" style="width:100%; justify-content:center; padding:14px 24px; font-size:1rem;" id="btnLogin" data-i18n="login.button">
       🔑 Inloggen
     </button>
+    <button class="btn btn-secondary" onclick="toggleRecoveryLogin()" style="width:100%; justify-content:center; padding:10px 24px; font-size:0.85rem; margin-top:10px;" id="btnRecoveryToggle" data-i18n="login.recovery">
+      🔐 Herstelcode gebruiken
+    </button>
+    <div id="recoveryLoginForm" style="display:none; margin-top:16px; text-align:left;">
+      <div class="input-group" style="margin-bottom:10px;">
+        <label data-i18n="login.recoveryUsername">Gebruikersnaam</label>
+        <input type="text" id="recoveryUsername" placeholder="admin">
+      </div>
+      <div class="input-group" style="margin-bottom:10px;">
+        <label data-i18n="login.recoveryCode">Herstelcode</label>
+        <input type="text" id="recoveryCode" placeholder="XXXXXXXX" style="font-family:'DM Mono',monospace; letter-spacing:2px; text-transform:uppercase;">
+      </div>
+      <button class="btn btn-primary" onclick="recoveryLogin()" style="width:100%; justify-content:center; padding:12px 24px;" data-i18n="login.recoveryBtn">
+        🔓 Inloggen met herstelcode
+      </button>
+    </div>
     <div id="loginStatus" class="status-msg" style="margin-top:16px;"></div>
   </div>
 </div>
@@ -2629,6 +2677,10 @@
           <div style="font-size:0.74rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.coverHelp">Afbeelding wordt automatisch geschaald en gecomprimeerd.</div>
         </div>
         <div class="input-group">
+          <label data-i18n="edit.group">Groep</label>
+          <select id="editGroup"><option value="">— Geen groep —</option></select>
+        </div>
+        <div class="input-group">
           <label data-i18n="edit.imdbId">IMDb ID</label>
           <input type="text" id="editImdbId">
         </div>
@@ -2684,6 +2736,7 @@ nl: {
   'scan.save':'💾 Opslaan in Collectie','scan.noResult':'Scan een barcode of voer hem handmatig in',
   // collection
   'collection.searchPlaceholder':'Zoek op titel, regisseur, genre...','collection.filterAll':'Alles',
+  'collection.allCollections':'Alle collecties','collection.myMovies':'Mijn films',
   'collection.selectMode':'☑ Selecteren','collection.refresh':'↻ Vernieuwen',
   // bulk
   'bulk.count':'{0} geselecteerd','bulk.selectAll':'Alles selecteren','bulk.deselect':'Deselecteer',
@@ -2751,8 +2804,15 @@ nl: {
   'settings.username':'Gebruikersnaam','settings.passkeyName':'Passkey naam','settings.myPasskey':'Mijn Passkey',
   'settings.passkeyPlaceholder':'Bijv. MacBook Touch ID','settings.registerPasskey':'🔑 Passkey Registreren',
   'settings.addPasskey':'Extra passkey toevoegen','settings.name':'Naam','settings.addPasskeyPlaceholder':'Bijv. iPhone','settings.addPasskeyBtn':'🔑 Toevoegen',
+  'settings.usersTitle':'👥 Gebruikersbeheer','settings.groupsTitle':'📁 Groepen','settings.groupName':'Groepsnaam',
   // login
-  'login.prompt':'Log in met je passkey','login.button':'🔑 Inloggen',
+  'login.prompt':'Log in met je passkey','login.button':'🔑 Inloggen','login.recovery':'🔐 Herstelcode gebruiken',
+  'login.recoveryUsername':'Gebruikersnaam','login.recoveryCode':'Herstelcode','login.recoveryBtn':'🔓 Inloggen met herstelcode',
+  'login.recoveryFillIn':'Vul gebruikersnaam en herstelcode in',
+  'login.recoveryFailed':'Recovery mislukt',
+  'login.newRecoveryAlert':'Nieuwe herstelcode: {0}\n\nBewaar deze code veilig! Je passkeys zijn verwijderd, registreer een nieuwe passkey in Instellingen > Beveiliging.',
+  'recovery.title':'🔑 Herstelcode','recovery.desc':'Bewaar deze code veilig. Je kunt deze gebruiken om in te loggen als je je passkey kwijt bent.',
+  'recovery.dismiss':'Begrepen, ik heb de code opgeslagen',
   // modal
   'modal.plot':'Verhaal','modal.edit':'Bewerken','modal.refreshMeta':'Refresh metadata',
   'modal.syncAll':'Sync alle bronnen','modal.delete':'Verwijderen',
@@ -2889,6 +2949,11 @@ nl: {
   'js.advancedSettingsSaved':'Geavanceerde instelling opgeslagen',
   'js.pageTitle':'DiscVault — Collectie Beheer',
   'js.offlineNoCache':'Offline en geen lokale cache beschikbaar. Open de app een keer online om data lokaal op te slaan.',
+  'js.confirmDeleteUser':'Weet je zeker dat je gebruiker "{0}" wilt verwijderen? Alle films van deze gebruiker worden ook verwijderd.',
+  'js.confirmResetPasskey':'Passkey(s) van "{0}" resetten? De gebruiker moet dan opnieuw een passkey registreren.',
+  'js.noGroups':'Geen groepen aangemaakt.',
+  'js.confirmDeleteGroup':'Groep "{0}" verwijderen? Films worden ontkoppeld maar niet verwijderd.',
+  'edit.group':'Groep','edit.noGroup':'Geen groep',
 },
 en: {
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
@@ -2901,6 +2966,7 @@ en: {
   'scan.subtitles':'Subtitle Tracks','scan.subtitlesPlaceholder':'E.g. NL, EN, DE',
   'scan.save':'💾 Save to Collection','scan.noResult':'Scan a barcode or enter one manually',
   'collection.searchPlaceholder':'Search by title, director, genre...','collection.filterAll':'All',
+  'collection.allCollections':'All collections','collection.myMovies':'My movies',
   'collection.selectMode':'☑ Select','collection.refresh':'↻ Refresh',
   'bulk.count':'{0} selected','bulk.selectAll':'Select all','bulk.deselect':'Deselect',
   'bulk.refresh':'↺ Refresh via TMDb/OMDb','bulk.delete':'🗑 Delete','bulk.cancel':'✕ Cancel',
@@ -2962,7 +3028,14 @@ en: {
   'settings.username':'Username','settings.passkeyName':'Passkey name','settings.myPasskey':'My Passkey',
   'settings.passkeyPlaceholder':'E.g. MacBook Touch ID','settings.registerPasskey':'🔑 Register Passkey',
   'settings.addPasskey':'Add extra passkey','settings.name':'Name','settings.addPasskeyPlaceholder':'E.g. iPhone','settings.addPasskeyBtn':'🔑 Add',
-  'login.prompt':'Log in with your passkey','login.button':'🔑 Log in',
+  'settings.usersTitle':'👥 User Management','settings.groupsTitle':'📁 Groups','settings.groupName':'Group name',
+  'login.prompt':'Log in with your passkey','login.button':'🔑 Log in','login.recovery':'🔐 Use recovery code',
+  'login.recoveryUsername':'Username','login.recoveryCode':'Recovery code','login.recoveryBtn':'🔓 Log in with recovery code',
+  'login.recoveryFillIn':'Enter username and recovery code',
+  'login.recoveryFailed':'Recovery failed',
+  'login.newRecoveryAlert':'New recovery code: {0}\n\nSave this code securely! Your passkeys have been removed, register a new passkey in Settings > Security.',
+  'recovery.title':'🔑 Recovery Code','recovery.desc':'Save this code securely. You can use it to log in if you lose your passkey.',
+  'recovery.dismiss':'Got it, I saved the code',
   'modal.plot':'Plot','modal.edit':'Edit','modal.refreshMeta':'Refresh metadata',
   'modal.syncAll':'Sync all sources','modal.delete':'Delete',
   'modal.copyId':'Copy ID',
@@ -3094,6 +3167,11 @@ en: {
   'js.advancedSettingsSaved':'Advanced setting saved',
   'js.pageTitle':'DiscVault — Collection Manager',
   'js.offlineNoCache':'Offline and no local cache available. Open the app online once to store data locally.',
+  'js.confirmDeleteUser':'Are you sure you want to delete user "{0}"? All movies of this user will also be deleted.',
+  'js.confirmResetPasskey':'Reset passkey(s) of "{0}"? The user will need to register a new passkey.',
+  'js.noGroups':'No groups created.',
+  'js.confirmDeleteGroup':'Delete group "{0}"? Movies will be unlinked but not deleted.',
+  'edit.group':'Group','edit.noGroup':'No group',
 }
 };
 
@@ -3382,7 +3460,31 @@ async function loadStats() {
   }
 }
 
+async function _loadGroupFilter() {
+  const sel = document.getElementById('groupFilter');
+  if (!sel) return;
+  const prev = sel.value;
+  try {
+    const r = await fetch(`${API}/groups`);
+    const groups = await r.json();
+    if (groups.length > 0) {
+      sel.style.display = '';
+      sel.innerHTML = '<option value="">' + t('collection.allCollections') + '</option>'
+        + '<option value="_mine">' + t('collection.myMovies') + '</option>'
+        + groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      if (prev) sel.value = prev;
+    } else {
+      sel.style.display = 'none';
+      sel.innerHTML = '<option value="">' + t('collection.allCollections') + '</option>';
+    }
+  } catch(e) {
+    sel.style.display = 'none';
+  }
+}
+
 async function loadCollection() {
+  // Load group filter options
+  _loadGroupFilter();
   try {
     const r = await fetch(`${API}/movies`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -3690,8 +3792,12 @@ function toggleSelectMode() {
 function getCurrentMovies() {
   const searchInput = document.getElementById('searchInput');
   const q = searchInput ? searchInput.value.toLowerCase() : '';
+  const groupFilter = document.getElementById('groupFilter');
+  const activeGroup = groupFilter ? groupFilter.value : '';
   return allMovies.filter(m => {
     const matchesFormat = !activeFormat || m.format === activeFormat;
+    const matchesGroup  = !activeGroup ||
+      (activeGroup === '_mine' ? !m.group_id : String(m.group_id) === activeGroup);
     const matchesQuery  = !q ||
       (m.title || '').toLowerCase().includes(q) ||
       (m.original_title || '').toLowerCase().includes(q) ||
@@ -3701,7 +3807,7 @@ function getCurrentMovies() {
       (m.box_set || '').toLowerCase().includes(q) ||
       (m.studios || '').toLowerCase().includes(q) ||
       (m.distributor || '').toLowerCase().includes(q);
-    return matchesFormat && matchesQuery;
+    return matchesFormat && matchesGroup && matchesQuery;
   });
 }
 
@@ -4472,6 +4578,23 @@ const EDIT_FIELDS = {
   ImdbUrl:            'imdb_url',
 };
 
+async function _populateGroupSelect(currentGroupId) {
+  const sel = document.getElementById('editGroup');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— ' + t('edit.noGroup') + ' —</option>';
+  try {
+    const r = await fetch(`${API}/groups`);
+    const groups = await r.json();
+    for (const g of groups) {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.name;
+      if (currentGroupId && g.id === currentGroupId) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  } catch(e) {}
+}
+
 function startEdit() {
   const movie = allMovies.find(m => m.id === currentMovieId);
   if (!movie) return;
@@ -4487,6 +4610,9 @@ function startEdit() {
       }
     }
   }
+
+  // Populate group dropdown
+  _populateGroupSelect(movie.group_id);
 
   document.getElementById('editStatus').className = 'status-msg';
   document.getElementById('modalViewMode').style.display = 'none';
@@ -4509,6 +4635,10 @@ async function saveEdit() {
     if (el) payload[key] = el.value;
   }
 
+  // Save group assignment separately
+  const groupSelect = document.getElementById('editGroup');
+  const newGroupId = groupSelect ? (groupSelect.value || null) : null;
+
   try {
     const r = await fetch(`${API}/movies/${currentMovieId}`, {
       method: 'PUT',
@@ -4517,6 +4647,17 @@ async function saveEdit() {
     });
     const d = await r.json();
     if (r.ok) {
+      // Also update group if changed
+      const movie = allMovies.find(m => m.id === currentMovieId);
+      const currentGroupId = movie ? (movie.group_id ? String(movie.group_id) : null) : null;
+      if (newGroupId !== currentGroupId) {
+        await fetch(`${API}/movies/${currentMovieId}/group`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ group_id: newGroupId ? parseInt(newGroupId) : null })
+        });
+        if (d && typeof d === 'object') d.group_id = newGroupId ? parseInt(newGroupId) : null;
+      }
       if (d.queued) {
         showStatus('editStatus', t('js.queuedEdit'), 'info');
       } else {
@@ -5454,7 +5595,13 @@ async function registerPasskey() {
 
 async function registerAdditionalPasskey() {
   const credName = document.getElementById('addCredName').value.trim() || 'Passkey';
-  await _doRegisterPasskey('admin', credName);
+  // Use the current user's username from the JWT token
+  let username = 'admin';
+  try {
+    const me = await fetch(`${API}/auth/me`).then(r => r.json());
+    if (me.username) username = me.username;
+  } catch(e) {}
+  await _doRegisterPasskey(username, credName);
 }
 
 async function _doRegisterPasskey(username, credName) {
@@ -5500,6 +5647,11 @@ async function _doRegisterPasskey(username, credName) {
       localStorage.setItem('dv_token', authToken);
       updateLogoutButton();
       showStatus('authStatus', t('js.passkeyRegistered', credName), 'success');
+      // Show recovery code if provided
+      if (verData.recovery_code) {
+        document.getElementById('recoveryCodeDisplay').textContent = verData.recovery_code;
+        document.getElementById('recoveryCodeCard').style.display = 'block';
+      }
       loadAuthSettings();
     } else {
       showStatus('authStatus', verData.error || t('js.registrationFailed'), 'error');
@@ -5550,6 +5702,8 @@ async function loadAuthSettings() {
     } else {
       list.innerHTML = '';
     }
+    // Load admin panel if user is admin
+    loadAdminPanel();
   } catch(e) {}
 }
 
@@ -5580,6 +5734,217 @@ async function toggleAuth() {
     updateLogoutButton();
   }
   loadAuthSettings();
+}
+
+// ── Recovery Login ────────────────────────────────────────────────────────────
+
+function toggleRecoveryLogin() {
+  const form = document.getElementById('recoveryLoginForm');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function recoveryLogin() {
+  const username = document.getElementById('recoveryUsername').value.trim();
+  const code = document.getElementById('recoveryCode').value.trim();
+  if (!username || !code) { showStatus('loginStatus', t('login.recoveryFillIn'), 'error'); return; }
+  try {
+    const r = await _origFetch(`${API}/auth/recovery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, recovery_code: code })
+    });
+    const d = await r.json();
+    if (d.token) {
+      authToken = d.token;
+      localStorage.setItem('dv_token', authToken);
+      updateLogoutButton();
+      hideLoginOverlay();
+      init();
+      // Show new recovery code
+      if (d.new_recovery_code) {
+        setTimeout(() => {
+          alert(t('login.newRecoveryAlert', d.new_recovery_code));
+        }, 500);
+      }
+    } else {
+      showStatus('loginStatus', d.error || t('login.recoveryFailed'), 'error');
+    }
+  } catch(e) {
+    showStatus('loginStatus', `Fout: ${e.message}`, 'error');
+  }
+}
+
+// ── Admin: User Management ────────────────────────────────────────────────────
+
+async function loadAdminPanel() {
+  try {
+    const mr = await fetch(`${API}/auth/me`);
+    const me = await mr.json();
+    if (!me.authenticated || me.role !== 'admin') {
+      document.getElementById('adminUsersCard').style.display = 'none';
+      document.getElementById('adminGroupsCard').style.display = 'none';
+      return;
+    }
+    document.getElementById('adminUsersCard').style.display = 'block';
+    document.getElementById('adminGroupsCard').style.display = 'block';
+    await Promise.all([loadAdminUsers(), loadAdminGroups()]);
+  } catch(e) {
+    document.getElementById('adminUsersCard').style.display = 'none';
+    document.getElementById('adminGroupsCard').style.display = 'none';
+  }
+}
+
+async function loadAdminUsers() {
+  try {
+    const r = await fetch(`${API}/auth/users`);
+    const users = await r.json();
+    const list = document.getElementById('adminUsersList');
+    list.innerHTML = users.map(u => `
+      <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
+        <div style="font-size:1.2rem;">${u.role === 'admin' ? '👑' : '👤'}</div>
+        <div style="flex:1;">
+          <div style="font-weight:500; font-size:0.88rem;">${u.display_name || u.username}
+            <span class="tag" style="font-size:0.65rem; margin-left:6px;">${u.role}</span>
+          </div>
+          <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">
+            ${u.username} · ${(u.created_at||'').slice(0,10)} · ${u.credential_count} passkey(s)
+          </div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="resetUserPasskey('${u.id}','${u.username}')" title="Reset passkey">🔑</button>
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="toggleUserRole('${u.id}','${u.role}')" title="Wissel rol">${u.role === 'admin' ? '👤' : '👑'}</button>
+          <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteUser('${u.id}','${u.username}')" title="Verwijder">✕</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(t('js.confirmDeleteUser', name))) return;
+  await fetch(`${API}/auth/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  loadAdminUsers();
+  loadAuthSettings();
+}
+
+async function toggleUserRole(id, currentRole) {
+  const newRole = currentRole === 'admin' ? 'user' : 'admin';
+  await fetch(`${API}/auth/users/${encodeURIComponent(id)}/role`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: newRole })
+  });
+  loadAdminUsers();
+}
+
+async function resetUserPasskey(id, name) {
+  if (!confirm(t('js.confirmResetPasskey', name))) return;
+  await fetch(`${API}/auth/users/${encodeURIComponent(id)}/reset-passkey`, { method: 'POST' });
+  loadAdminUsers();
+  loadAuthSettings();
+}
+
+// ── Admin: Group Management ───────────────────────────────────────────────────
+
+async function loadAdminGroups() {
+  try {
+    const r = await fetch(`${API}/groups`);
+    const groups = await r.json();
+    const list = document.getElementById('adminGroupsList');
+    if (!groups.length) {
+      list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">' + t('js.noGroups') + '</div>';
+      return;
+    }
+    list.innerHTML = groups.map(g => `
+      <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
+        <div style="font-size:1.2rem;">📁</div>
+        <div style="flex:1;">
+          <div style="font-weight:500; font-size:0.88rem;">${g.name}</div>
+          <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">
+            ${g.member_count} leden · ${g.movie_count} films · door ${g.created_by_username || '?'}
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="manageGroupMembers(${g.id},'${g.name}')" title="Leden beheren">👥</button>
+        <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteGroup(${g.id},'${g.name}')" title="Verwijder">✕</button>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+async function createGroup() {
+  const name = document.getElementById('newGroupName').value.trim();
+  if (!name) return;
+  const r = await fetch(`${API}/groups`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  const d = await r.json();
+  if (d.error) { alert(d.error); return; }
+  document.getElementById('newGroupName').value = '';
+  loadAdminGroups();
+}
+
+async function deleteGroup(id, name) {
+  if (!confirm(t('js.confirmDeleteGroup', name))) return;
+  await fetch(`${API}/groups/${id}`, { method: 'DELETE' });
+  loadAdminGroups();
+}
+
+async function manageGroupMembers(groupId, groupName) {
+  const [membersResp, usersResp] = await Promise.all([
+    fetch(`${API}/groups/${groupId}/members`),
+    fetch(`${API}/auth/users`)
+  ]);
+  const members = await membersResp.json();
+  const allUsers = await usersResp.json();
+  const memberIds = new Set(members.map(m => m.id));
+  const nonMembers = allUsers.filter(u => !memberIds.has(u.id));
+
+  let html = `<h3 style="margin:0 0 16px 0; font-size:1rem;">👥 Leden van "${groupName}"</h3>`;
+  if (members.length) {
+    html += members.map(m => `
+      <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px;">
+        <span style="flex:1; font-size:0.85rem;">${m.display_name || m.username}</span>
+        <button class="btn btn-danger" style="padding:4px 8px; font-size:0.7rem;" onclick="removeGroupMember(${groupId},'${m.id}','${groupName}')">✕</button>
+      </div>
+    `).join('');
+  } else {
+    html += '<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">Geen leden.</div>';
+  }
+  if (nonMembers.length) {
+    html += `<div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+      <select id="addMemberSelect" style="flex:1; padding:8px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+        ${nonMembers.map(u => `<option value="${u.id}">${u.display_name || u.username}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary" style="padding:8px 14px; font-size:0.8rem;" onclick="addGroupMember(${groupId},'${groupName}')">+ Toevoegen</button>
+    </div>`;
+  }
+  html += `<button class="btn btn-secondary" style="margin-top:16px; width:100%; justify-content:center;" onclick="loadAdminGroups(); this.closest('.card').querySelector('#groupMemberPanel').remove();">Sluiten</button>`;
+
+  // Replace groups list content with member management
+  const panel = document.createElement('div');
+  panel.id = 'groupMemberPanel';
+  panel.style.cssText = 'padding:16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-top:12px;';
+  panel.innerHTML = html;
+  const existing = document.getElementById('groupMemberPanel');
+  if (existing) existing.remove();
+  document.getElementById('adminGroupsList').appendChild(panel);
+}
+
+async function addGroupMember(groupId, groupName) {
+  const userId = document.getElementById('addMemberSelect').value;
+  await fetch(`${API}/groups/${groupId}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId })
+  });
+  manageGroupMembers(groupId, groupName);
+}
+
+async function removeGroupMember(groupId, userId, groupName) {
+  await fetch(`${API}/groups/${groupId}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  manageGroupMembers(groupId, groupName);
 }
 
 // ── Backup / Restore / Reset ──────────────────────────────────────────────────
