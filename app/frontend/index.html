@@ -2327,6 +2327,16 @@
             <button class="btn btn-secondary" id="btnLogoutSettings" onclick="logoutApp()" style="display:none; margin-left:auto; padding:7px 12px; font-size:0.74rem;" data-i18n="settings.logout">↩ Uitloggen</button>
           </div>
 
+          <div id="registrationToggleRow" style="display:none; margin-bottom:16px;">
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
+              <input type="checkbox" id="registrationToggle" onchange="toggleRegistration()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.registrationEnabled">Nieuwe gebruikers mogen zich registreren</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:4px;" data-i18n="settings.registrationDesc">
+              Als dit uitstaat kunnen nieuwe gebruikers geen account aanmaken via het login-scherm.
+            </div>
+          </div>
+
           <div id="authNoCredentials" style="display:none; padding:16px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.25); border-radius:8px; margin-bottom:16px;">
             <div style="font-size:0.88rem; margin-bottom:12px;" data-i18n="settings.noPasskey">
               Nog geen passkey geregistreerd. Registreer er één om authenticatie in te schakelen.
@@ -2456,6 +2466,9 @@
     <button class="btn btn-secondary" onclick="toggleRecoveryLogin()" style="width:100%; justify-content:center; padding:10px 24px; font-size:0.85rem; margin-top:10px;" id="btnRecoveryToggle" data-i18n="login.recovery">
       🔐 Herstelcode gebruiken
     </button>
+    <button class="btn btn-secondary" onclick="toggleLoginRegister()" style="width:100%; justify-content:center; padding:10px 24px; font-size:0.85rem; margin-top:10px; display:none;" id="btnRegisterToggle" data-i18n="login.register">
+      ✨ Account aanmaken
+    </button>
     <div id="recoveryLoginForm" style="display:none; margin-top:16px; text-align:left;">
       <div class="input-group" style="margin-bottom:10px;">
         <label data-i18n="login.recoveryUsername">Gebruikersnaam</label>
@@ -2467,6 +2480,19 @@
       </div>
       <button class="btn btn-primary" onclick="recoveryLogin()" style="width:100%; justify-content:center; padding:12px 24px;" data-i18n="login.recoveryBtn">
         🔓 Inloggen met herstelcode
+      </button>
+    </div>
+    <div id="loginRegisterForm" style="display:none; margin-top:16px; text-align:left;">
+      <div class="input-group" style="margin-bottom:10px;">
+        <label data-i18n="login.registerUsername">Gebruikersnaam</label>
+        <input type="text" id="loginRegUsername" placeholder="Bijv. jan">
+      </div>
+      <div class="input-group" style="margin-bottom:10px;">
+        <label data-i18n="login.registerPasskeyName">Passkey naam</label>
+        <input type="text" id="loginRegCredName" value="Mijn Passkey" placeholder="Bijv. iPhone" data-i18n-placeholder="settings.addPasskeyPlaceholder">
+      </div>
+      <button class="btn btn-primary" onclick="loginRegisterPasskey()" style="width:100%; justify-content:center; padding:12px 24px;" id="btnLoginRegister" data-i18n="login.registerBtn">
+        🔑 Registreren
       </button>
     </div>
     <div id="loginStatus" class="status-msg" style="margin-top:16px;"></div>
@@ -2816,12 +2842,23 @@ nl: {
   'settings.passkeyPlaceholder':'Bijv. MacBook Touch ID','settings.registerPasskey':'🔑 Passkey Registreren',
   'settings.addPasskey':'Extra passkey toevoegen','settings.name':'Naam','settings.addPasskeyPlaceholder':'Bijv. iPhone','settings.addPasskeyBtn':'🔑 Toevoegen',
   'settings.usersTitle':'👥 Gebruikersbeheer','settings.groupsTitle':'📁 Groepen','settings.groupName':'Groepsnaam',
+  'settings.registrationEnabled':'Nieuwe gebruikers mogen zich registreren',
+  'settings.registrationDesc':'Als dit uitstaat kunnen nieuwe gebruikers geen account aanmaken via het login-scherm.',
+  'js.registrationEnabled':'Registratie ingeschakeld',
+  'js.registrationDisabled':'Registratie uitgeschakeld',
   // login
   'login.prompt':'Log in met je passkey','login.button':'🔑 Inloggen','login.recovery':'🔐 Herstelcode gebruiken',
   'login.recoveryUsername':'Gebruikersnaam','login.recoveryCode':'Herstelcode','login.recoveryBtn':'🔓 Inloggen met herstelcode',
   'login.recoveryFillIn':'Vul gebruikersnaam en herstelcode in',
   'login.recoveryFailed':'Recovery mislukt',
   'login.newRecoveryAlert':'Nieuwe herstelcode: {0}\n\nBewaar deze code veilig! Je passkeys zijn verwijderd, registreer een nieuwe passkey in Instellingen > Beveiliging.',
+  'login.register':'✨ Account aanmaken',
+  'login.registerUsername':'Gebruikersnaam',
+  'login.registerPasskeyName':'Passkey naam',
+  'login.registerBtn':'🔑 Registreren',
+  'login.registerFillIn':'Vul een gebruikersnaam in',
+  'login.registerSuccess':'✓ Account aangemaakt! Je bent nu ingelogd.',
+  'login.registrationDisabled':'Registratie is uitgeschakeld door de beheerder.',
   'recovery.title':'🔑 Herstelcode','recovery.desc':'Bewaar deze code veilig. Je kunt deze gebruiken om in te loggen als je je passkey kwijt bent.',
   'recovery.dismiss':'Begrepen, ik heb de code opgeslagen',
   // modal
@@ -3044,7 +3081,18 @@ en: {
   'settings.passkeyPlaceholder':'E.g. MacBook Touch ID','settings.registerPasskey':'🔑 Register Passkey',
   'settings.addPasskey':'Add extra passkey','settings.name':'Name','settings.addPasskeyPlaceholder':'E.g. iPhone','settings.addPasskeyBtn':'🔑 Add',
   'settings.usersTitle':'👥 User Management','settings.groupsTitle':'📁 Groups','settings.groupName':'Group name',
+  'settings.registrationEnabled':'Allow new users to register',
+  'settings.registrationDesc':'When disabled, new users cannot create an account from the login screen.',
+  'js.registrationEnabled':'Registration enabled',
+  'js.registrationDisabled':'Registration disabled',
   'login.prompt':'Log in with your passkey','login.button':'🔑 Log in','login.recovery':'🔐 Use recovery code',
+  'login.register':'✨ Create account',
+  'login.registerUsername':'Username',
+  'login.registerPasskeyName':'Passkey name',
+  'login.registerBtn':'🔑 Register',
+  'login.registerFillIn':'Enter a username',
+  'login.registerSuccess':'✓ Account created! You are now logged in.',
+  'login.registrationDisabled':'Registration has been disabled by the administrator.',
   'login.recoveryUsername':'Username','login.recoveryCode':'Recovery code','login.recoveryBtn':'🔓 Log in with recovery code',
   'login.recoveryFillIn':'Enter username and recovery code',
   'login.recoveryFailed':'Recovery failed',
@@ -5562,7 +5610,7 @@ async function checkAuth() {
     updateLogoutButton();
     if (d.auth_enabled && !authToken) {
       updateLogoutButton();
-      showLoginOverlay();
+      showLoginOverlay(d);
       return false;
     }
     if (d.auth_enabled && authToken) {
@@ -5572,7 +5620,7 @@ async function checkAuth() {
         authToken = '';
         localStorage.removeItem('dv_token');
         updateLogoutButton();
-        showLoginOverlay();
+        showLoginOverlay(d);
         return false;
       }
     }
@@ -5581,8 +5629,17 @@ async function checkAuth() {
   } catch(e) { return true; }
 }
 
-function showLoginOverlay() {
+function showLoginOverlay(statusData) {
   document.getElementById('loginOverlay').style.display = 'flex';
+  // Show register button only when registration is enabled and auth is enabled
+  const regBtn = document.getElementById('btnRegisterToggle');
+  if (regBtn) {
+    const show = statusData && statusData.registration_enabled && statusData.auth_enabled;
+    regBtn.style.display = show ? '' : 'none';
+  }
+  // Hide the register form when overlay opens
+  const regForm = document.getElementById('loginRegisterForm');
+  if (regForm) regForm.style.display = 'none';
 }
 
 function hideLoginOverlay() {
@@ -5781,6 +5838,17 @@ async function loadAuthSettings() {
     }
     // Load admin panel if user is admin
     loadAdminPanel();
+
+    // Show registration toggle for admin only
+    const regToggleRow = document.getElementById('registrationToggleRow');
+    if (regToggleRow) {
+      if (status.auth_enabled && status.role === 'admin') {
+        regToggleRow.style.display = 'block';
+        document.getElementById('registrationToggle').checked = !!status.registration_enabled;
+      } else {
+        regToggleRow.style.display = 'none';
+      }
+    }
   } catch(e) {}
 }
 
@@ -5848,6 +5916,98 @@ async function recoveryLogin() {
     }
   } catch(e) {
     showStatus('loginStatus', `Fout: ${e.message}`, 'error');
+  }
+}
+
+// ── Login: Registration ───────────────────────────────────────────────────────
+
+function toggleLoginRegister() {
+  const form = document.getElementById('loginRegisterForm');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function loginRegisterPasskey() {
+  const username = document.getElementById('loginRegUsername').value.trim();
+  const credName = document.getElementById('loginRegCredName').value.trim() || 'Passkey';
+  if (!username) { showStatus('loginStatus', t('login.registerFillIn'), 'error'); return; }
+  const btn = document.getElementById('btnLoginRegister');
+  btn.innerHTML = t('js.waitingPasskey');
+  btn.disabled = true;
+  try {
+    const optResp = await _origFetch(`${API}/auth/register/options`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+    const optData = await optResp.json();
+    if (optData.error) { showStatus('loginStatus', optData.error, 'error'); btn.innerHTML = t('login.registerBtn'); btn.disabled = false; return; }
+    const { user_id, options } = optData;
+
+    options.challenge = base64urlToBuffer(options.challenge);
+    options.user.id = base64urlToBuffer(options.user.id);
+    if (options.excludeCredentials) {
+      options.excludeCredentials = options.excludeCredentials.map(c => ({
+        ...c, id: base64urlToBuffer(c.id)
+      }));
+    }
+
+    const attestation = await navigator.credentials.create({ publicKey: options });
+
+    const credential = {
+      id: attestation.id,
+      rawId: bufferToBase64url(attestation.rawId),
+      response: {
+        attestationObject: bufferToBase64url(attestation.response.attestationObject),
+        clientDataJSON: bufferToBase64url(attestation.response.clientDataJSON),
+      },
+      type: attestation.type,
+      authenticatorAttachment: attestation.authenticatorAttachment,
+    };
+
+    const verResp = await _origFetch(`${API}/auth/register/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id, username, credential_name: credName, credential })
+    });
+    const verData = await verResp.json();
+    if (verData.token) {
+      authToken = verData.token;
+      localStorage.setItem('dv_token', authToken);
+      updateLogoutButton();
+      hideLoginOverlay();
+      init();
+      if (verData.recovery_code) {
+        setTimeout(() => {
+          alert(t('login.newRecoveryAlert', verData.recovery_code));
+        }, 500);
+      }
+    } else {
+      showStatus('loginStatus', verData.error || t('js.registrationFailed'), 'error');
+    }
+  } catch(e) {
+    if (e.name === 'NotAllowedError') {
+      showStatus('loginStatus', t('js.passkeyRegCancelled'), 'error');
+    } else {
+      showStatus('loginStatus', t('js.error', e.message), 'error');
+    }
+  }
+  btn.innerHTML = t('login.registerBtn');
+  btn.disabled = false;
+}
+
+async function toggleRegistration() {
+  const enabled = document.getElementById('registrationToggle').checked;
+  const r = await fetch(`${API}/settings/registration`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ registration_enabled: enabled })
+  });
+  const d = await r.json();
+  if (d.error) {
+    showStatus('authStatus', d.error, 'error');
+    document.getElementById('registrationToggle').checked = !enabled;
+  } else {
+    showStatus('authStatus', enabled ? t('js.registrationEnabled') : t('js.registrationDisabled'), 'success');
   }
 }
 
@@ -6039,8 +6199,28 @@ async function loadSettings() {
   loadAuthSettings();
   loadQueueSettings();
   loadSourceSettings();
-  loadDebugSettings();
-  loadMcpSettings();
+
+  // Check admin status and show/hide restricted tabs
+  try {
+    const mr = await fetch(`${API}/auth/me`);
+    const me = await mr.json();
+    const isSettingsAdmin = !me.authenticated || me.role === 'admin';
+    const logsBtn = document.querySelector('[data-settings-sub="logs"]');
+    const advBtn = document.querySelector('[data-settings-sub="advanced"]');
+    if (logsBtn) logsBtn.style.display = isSettingsAdmin ? '' : 'none';
+    if (advBtn) advBtn.style.display = isSettingsAdmin ? '' : 'none';
+    if (isSettingsAdmin) {
+      loadDebugSettings();
+      loadMcpSettings();
+    }
+    // If non-admin is on a restricted tab, redirect to general
+    if (!isSettingsAdmin && (currentSettingsSubmenu === 'logs' || currentSettingsSubmenu === 'advanced')) {
+      currentSettingsSubmenu = 'general';
+    }
+  } catch(e) {
+    loadDebugSettings();
+    loadMcpSettings();
+  }
   switchSettingsSubmenu(currentSettingsSubmenu);
 }
 

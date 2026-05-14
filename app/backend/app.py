@@ -1312,6 +1312,9 @@ def stats():
 @app.route("/api/logs", methods=["GET"])
 def get_logs():
     """Retrieve logs. Supports ?level=error&category=refresh&limit=200&since=<id>"""
+    err = _require_admin()
+    if err:
+        return err
     conn   = get_db()
     level  = request.args.get("level", "")
     cat    = request.args.get("category", "")
@@ -1336,6 +1339,9 @@ def get_logs():
 
 @app.route("/api/logs", methods=["DELETE"])
 def clear_logs():
+    err = _require_admin()
+    if err:
+        return err
     conn = get_db()
     conn.execute("DELETE FROM logs")
     conn.commit()
@@ -3087,6 +3093,10 @@ def _is_bluray_scrape_enabled() -> bool:
 def _is_bluraydiscde_scrape_enabled() -> bool:
     return _is_source_enabled("bluraydiscde_scrape_enabled", BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT)
 
+
+def _is_registration_enabled() -> bool:
+    return _is_source_enabled("registration_enabled", True)
+
 def _create_token(user_id: str, username: str) -> str:
     return jwt.encode(
         {"sub": user_id, "usr": username, "exp": datetime.utcnow() + timedelta(hours=24)},
@@ -3243,6 +3253,7 @@ def auth_status():
         "user_count": user_count,
         "group_count": group_count,
         "role": role,
+        "registration_enabled": _is_registration_enabled(),
     })
 
 
@@ -3254,6 +3265,13 @@ def register_options():
 
     conn = get_db()
     user = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+
+    # Block registration when disabled (allow first user setup + existing authenticated users)
+    has_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0
+    caller_uid = _get_current_user_id()
+    if has_users and not caller_uid and not _is_registration_enabled():
+        conn.close()
+        return jsonify({"error": "Registration is disabled"}), 403
     if user:
         user_id = user["id"]
     else:
@@ -3296,6 +3314,15 @@ def register_verify():
     display_name = data.get("display_name", username)
     credential_name = data.get("credential_name", "Passkey")
     credential = data.get("credential", {})
+
+    # Block registration when disabled (allow first user setup + existing authenticated users)
+    conn_check = get_db()
+    has_users = conn_check.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0
+    existing_user = conn_check.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn_check.close()
+    caller_uid = _get_current_user_id()
+    if has_users and not existing_user and not caller_uid and not _is_registration_enabled():
+        return jsonify({"error": "Registration is disabled"}), 403
 
     challenge = _pop_challenge(user_id)
     if not challenge:
@@ -3857,11 +3884,17 @@ def set_source_settings():
 
 @app.route("/api/settings/mcp", methods=["GET"])
 def get_mcp_settings():
+    err = _require_admin()
+    if err:
+        return err
     return jsonify({"mcp_enabled": _is_source_enabled("mcp_enabled", True)})
 
 
 @app.route("/api/settings/mcp", methods=["POST"])
 def set_mcp_settings():
+    err = _require_admin()
+    if err:
+        return err
     data = request.json or {}
     val = bool(data.get("mcp_enabled", True))
     conn = get_db()
@@ -3877,11 +3910,17 @@ def set_mcp_settings():
 
 @app.route("/api/settings/debug", methods=["GET"])
 def get_debug_settings():
+    err = _require_admin()
+    if err:
+        return err
     return jsonify({"debug_enabled": _is_source_enabled("debug_enabled", False)})
 
 
 @app.route("/api/settings/debug", methods=["POST"])
 def set_debug_settings():
+    err = _require_admin()
+    if err:
+        return err
     data = request.json or {}
     val = bool(data.get("debug_enabled", False))
     conn = get_db()
@@ -3893,6 +3932,32 @@ def set_debug_settings():
     conn.close()
     add_log("settings", f"Debug modus {'ingeschakeld' if val else 'uitgeschakeld'}", level="info")
     return jsonify({"debug_enabled": val})
+
+
+@app.route("/api/settings/registration", methods=["GET"])
+def get_registration_settings():
+    err = _require_admin()
+    if err:
+        return err
+    return jsonify({"registration_enabled": _is_registration_enabled()})
+
+
+@app.route("/api/settings/registration", methods=["POST"])
+def set_registration_settings():
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    val = bool(data.get("registration_enabled", True))
+    conn = get_db()
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        ("registration_enabled", "true" if val else "false")
+    )
+    conn.commit()
+    conn.close()
+    add_log("settings", f"Gebruikersregistratie {'ingeschakeld' if val else 'uitgeschakeld'}", level="info")
+    return jsonify({"registration_enabled": val})
 
 
 # ---------------------------------------------------------------------------
