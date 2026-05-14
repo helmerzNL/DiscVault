@@ -2,9 +2,15 @@ name: Build & Publish Docker Image
 
 on:
   push:
+    branches:
+      - main              # every push to main  → beta tag
     tags:
-      - "v*.*.*"          # e.g. v1.0.0  → publishes stable + versioned tags
+      - "v*.*.*"          # e.g. v1.0.0         → stable + versioned tags
   workflow_dispatch:       # allow manual trigger from GitHub UI
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -22,12 +28,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Extract version from tag (v1.2.3 → 1.2.3) or use "dev" for manual runs
+      # Extract version from tag (v1.2.3 → 1.2.3), beta sha for main, or dev for manual
       - name: Derive build version
         id: version
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
+          elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            VERSION="beta-$(git rev-parse --short HEAD)"
           else
             VERSION="dev-$(git rev-parse --short HEAD)"
           fi
@@ -44,11 +52,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Resolve tags: for a release tag push we publish 3 tags:
-      #   - exact version   (ghcr.io/org/discvault:1.2.3)
-      #   - latest          (ghcr.io/org/discvault:latest)
-      #   - stable          (ghcr.io/org/discvault:stable)
-      # Manual runs only publish a sha-based dev tag.
+      # Resolve tags:
+      #   Tag push (v1.2.3)  → :1.2.3, :latest, :stable
+      #   Push to main       → :beta
+      #   Manual run         → :dev-<sha>
       - name: Docker meta (tags & labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -58,6 +65,7 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=beta,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=dev-${{ github.sha }},enable=${{ github.event_name == 'workflow_dispatch' }}
           labels: |
             org.opencontainers.image.title=DiscVault
