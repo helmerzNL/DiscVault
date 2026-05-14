@@ -1414,7 +1414,7 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    main { padding: 20px; }
+    main { padding: 20px; padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
     .scanner-layout { grid-template-columns: 1fr; }
     .form-grid { grid-template-columns: 1fr; }
     .detail-grid { grid-template-columns: 1fr; }
@@ -1497,7 +1497,7 @@
     }
 
     header {
-      padding: 12px 14px;
+      padding: calc(12px + var(--safe-top)) 14px 12px;
     }
 
     .logo {
@@ -1519,6 +1519,7 @@
 
     main {
       padding: 14px;
+      padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
     }
 
     .card,
