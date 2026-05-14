@@ -64,24 +64,51 @@
 
       <section id="screenshots" class="wrap section screenshots">
         <div class="section-head">
-          <p class="eyebrow">Desktop Preview</p>
-          <h2>Real product screens from the current DiscVault desktop app.</h2>
+          <p class="eyebrow">Desktop</p>
+          <h2>Real product screens from the current DiscVault app.</h2>
         </div>
         <div class="shot-grid">
           <figure class="shot shot-large">
-            <img src="./images/overview.png" alt="DiscVault desktop sign-in screen" loading="lazy" />
+            <img src="./images/desktop_signin.png" alt="DiscVault desktop sign-in screen" loading="lazy" />
           </figure>
           <figure class="shot">
-            <img src="./images/collection.png" alt="DiscVault collection grid on desktop" loading="lazy" />
+            <img src="./images/desktop_collectie.png" alt="DiscVault collection grid on desktop" loading="lazy" />
           </figure>
           <figure class="shot">
-            <img src="./images/scanner.png" alt="DiscVault barcode scanner panel" loading="lazy" />
+            <img src="./images/desktop_scanner.png" alt="DiscVault barcode scanner panel" loading="lazy" />
           </figure>
           <figure class="shot">
-            <img src="./images/settings.png" alt="DiscVault settings and MCP server configuration panel" loading="lazy" />
+            <img src="./images/desktop_settings_mcpserver.png" alt="DiscVault settings and MCP server configuration panel" loading="lazy" />
           </figure>
           <figure class="shot">
-            <img src="./images/details.png" alt="DiscVault search view on desktop" loading="lazy" />
+            <img src="./images/desktop_search.png" alt="DiscVault search view on desktop" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="wrap section screenshots">
+        <div class="section-head">
+          <p class="eyebrow">Mobile</p>
+          <h2>Fully responsive — works great on your phone too.</h2>
+        </div>
+        <div class="shot-grid shot-grid-mobile">
+          <figure class="shot shot-mobile">
+            <img src="./images/mobile_signin.jpeg" alt="DiscVault mobile sign-in screen" loading="lazy" />
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/mobile_collection.jpeg" alt="DiscVault mobile collection view" loading="lazy" />
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/mobile_search.jpeg" alt="DiscVault mobile search" loading="lazy" />
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/mobile_addnew.jpeg" alt="DiscVault mobile add new disc" loading="lazy" />
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/mobile_import.jpeg" alt="DiscVault mobile import screen" loading="lazy" />
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/mobile_mcpserver.jpeg" alt="DiscVault mobile MCP server settings" loading="lazy" />
           </figure>
         </div>
       </section>
@@ -119,6 +146,36 @@
         </div>
       </section>
 
+      <section class="wrap section">
+        <div class="section-head">
+          <p class="eyebrow">Coming soon</p>
+          <h2>New features landing in the next release.</h2>
+        </div>
+        <div class="cards">
+          <article class="card card-upcoming">
+            <span class="badge">Beta</span>
+            <h3>User management</h3>
+            <p>
+              Add multiple users with their own accounts and permissions to share your DiscVault instance.
+            </p>
+          </article>
+          <article class="card card-upcoming">
+            <span class="badge">Beta</span>
+            <h3>Groups</h3>
+            <p>
+              Organize your collection into custom groups and let multiple users collaborate on shared lists.
+            </p>
+          </article>
+          <article class="card card-upcoming">
+            <span class="badge">Beta</span>
+            <h3>Passkey recovery</h3>
+            <p>
+              Securely recover your account using passkeys — no passwords or emails required.
+            </p>
+          </article>
+        </div>
+      </section>
+
       <section id="install" class="wrap section install">
         <div class="section-head">
           <p class="eyebrow">Deployment</p>
@@ -126,9 +183,14 @@
         </div>
         <div class="install-grid">
           <article class="install-card">
-            <h3>Quick install</h3>
+            <h3>Stable</h3>
             <p>Use the all-in-one container image:</p>
             <pre><code>ghcr.io/helmerzNL/DiscVault:latest</code></pre>
+          </article>
+          <article class="install-card">
+            <h3>Beta</h3>
+            <p>Try new features early — user management, groups, passkey recovery:</p>
+            <pre><code>ghcr.io/helmerzNL/DiscVault:beta</code></pre>
           </article>
           <article class="install-card">
             <h3>Unraid template</h3>

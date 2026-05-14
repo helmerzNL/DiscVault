@@ -250,6 +250,31 @@ h1 {
   height: auto;
 }
 
+.shot-grid-mobile {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.shot-mobile {
+  grid-column: span 2;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: var(--accent2);
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.card-upcoming {
+  border-color: rgba(124, 106, 247, 0.35);
+}
+
 .cards {
   margin-top: 1.25rem;
   display: grid;
@@ -349,6 +374,14 @@ code {
   .shot,
   .shot-large {
     grid-column: span 12;
+  }
+
+  .shot-grid-mobile {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .shot-mobile {
+    grid-column: span 2;
   }
 
   .site-footer {
