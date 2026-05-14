@@ -1876,7 +1876,7 @@
       <!-- Step 1: Upload -->
       <div class="card" id="importStep1">
         <div class="card-title" data-i18n="import.title">Collectie Importeren</div>
-        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:20px; line-height:1.6;">
+        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:20px; line-height:1.6;" data-i18n="import.description">
           Importeer films vanuit een CSV of XML export van CLZ Movies, iCollect, Blu-ray.com of een eigen spreadsheet.
           Kolomnamen worden automatisch herkend; bekende aliassen (Nederlands &amp; Engels) worden gemapt.
         </p>
@@ -2663,6 +2663,7 @@ nl: {
   'js.saveFailed':'Opslaan mislukt','js.saveToCollectionBtn':'💾 Opslaan in Collectie',
   'js.moviesSelected':'{0} film(s) geselecteerd',
   'js.noMoviesFound':'Geen films gevonden','js.addFirstDisc':'Voeg je eerste schijfje toe via het Toevoegen tabblad',
+  'search.emptyTitle':'Zoek in je collectie','search.emptyDesc':'Typ een titel, regisseur, acteur of genre.','js.noResultsFor':'Geen resultaten voor "{0}".',
   'js.confirmBulkDelete':'{0} film(s) definitief verwijderen?',
   'js.deleting':'Verwijderen...','js.deleted':'✓ {0} film(s) verwijderd',
   'js.fetchingMetadata':'Metadata ophalen voor {0} films…',
@@ -2867,6 +2868,7 @@ en: {
   'js.saveFailed':'Save failed','js.saveToCollectionBtn':'💾 Save to Collection',
   'js.moviesSelected':'{0} movie(s) selected',
   'js.noMoviesFound':'No movies found','js.addFirstDisc':'Add your first disc via the Add tab',
+  'search.emptyTitle':'Search your collection','search.emptyDesc':'Type a title, director, actor or genre.','js.noResultsFor':'No results for "{0}".',
   'js.confirmBulkDelete':'Permanently delete {0} movie(s)?',
   'js.deleting':'Deleting...','js.deleted':'✓ {0} movie(s) deleted',
   'js.fetchingMetadata':'Fetching metadata for {0} movies…',
@@ -3643,8 +3645,8 @@ function renderSearchGrid(movies) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1">
         <span class="big-icon">🔎</span>
-        <h3>Zoek in je collectie</h3>
-        <p>Typ een titel, regisseur, acteur of genre.</p>
+        <h3>${t('search.emptyTitle')}</h3>
+        <p>${t('search.emptyDesc')}</p>
       </div>`;
     return;
   }
@@ -3654,7 +3656,7 @@ function renderSearchGrid(movies) {
       <div class="empty-state" style="grid-column:1/-1">
         <span class="big-icon">📭</span>
         <h3>${t('js.noMoviesFound')}</h3>
-        <p>Geen resultaten voor "${query}".</p>
+        <p>${t('js.noResultsFor', query)}</p>
       </div>`;
     return;
   }
