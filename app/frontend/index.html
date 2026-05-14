@@ -3127,8 +3127,8 @@ nl: {
   'js.noGroups':'Geen groepen aangemaakt.',
   'js.confirmDeleteGroup':'Groep "{0}" verwijderen? Films worden ontkoppeld maar niet verwijderd.',
   'edit.groups':'Groepen','edit.noGroup':'Geen groep',
-  'bulk.assignGroup':'📁 Groep toewijzen','bulk.selectGroups':'Selecteer groep(en) om toe te wijzen:',
-  'bulk.applyGroup':'✓ Toewijzen','bulk.cancelGroup':'Annuleren',
+  'bulk.assignGroup':'📁 Groepen beheren','bulk.selectGroups':'Groepen voor geselecteerde films:',
+  'bulk.applyGroup':'✓ Opslaan','bulk.cancelGroup':'Annuleren',
   'bulk.selectAtLeastOne':'Selecteer minstens één groep','bulk.assigning':'Toewijzen...',
   'bulk.assignDone':'✓ {0} film(s) aan groep(en) gekoppeld',
   'pwa.title':'Installeer DiscVault','pwa.subtitle':'Voeg toe aan je startscherm voor de beste ervaring','pwa.install':'Installeren',
@@ -3381,8 +3381,8 @@ en: {
   'js.noGroups':'No groups created.',
   'js.confirmDeleteGroup':'Delete group "{0}"? Movies will be unlinked but not deleted.',
   'edit.groups':'Groups','edit.noGroup':'No group',
-  'bulk.assignGroup':'📁 Assign Group','bulk.selectGroups':'Select group(s) to assign:',
-  'bulk.applyGroup':'✓ Assign','bulk.cancelGroup':'Cancel',
+  'bulk.assignGroup':'📁 Manage Groups','bulk.selectGroups':'Groups for selected movies:',
+  'bulk.applyGroup':'✓ Save','bulk.cancelGroup':'Cancel',
   'bulk.selectAtLeastOne':'Select at least one group','bulk.assigning':'Assigning...',
   'bulk.assignDone':'✓ {0} movie(s) assigned to group(s)',
   'pwa.title':'Install DiscVault','pwa.subtitle':'Add to your home screen for the best experience','pwa.install':'Install',
@@ -4050,7 +4050,7 @@ function getCurrentMovies() {
   return allMovies.filter(m => {
     const matchesFormat = !activeFormat || m.format === activeFormat;
     const matchesGroup  = !activeGroup ||
-      (activeGroup === '_mine' ? !(m.group_ids && m.group_ids.length) : (m.group_ids || []).includes(parseInt(activeGroup)));
+      (activeGroup === '_mine' ? (m.owner_id === currentUserId) : (m.group_ids || []).includes(parseInt(activeGroup)));
     const matchesQuery  = !q ||
       (m.title || '').toLowerCase().includes(q) ||
       (m.original_title || '').toLowerCase().includes(q) ||
@@ -4242,12 +4242,19 @@ async function showBulkGroupAssign() {
       container.innerHTML = '<span style="color:var(--text-muted); font-size:0.82rem;">' + t('js.noGroups') + '</span>';
       return;
     }
-    container.innerHTML = groups.map(g => `
-      <label style="display:flex; align-items:center; gap:6px; padding:6px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.84rem; white-space:nowrap;">
-        <input type="checkbox" class="bulk-group-cb" value="${g.id}" style="accent-color:var(--accent); width:15px; height:15px;">
-        ${g.name}
-      </label>
-    `).join('');
+    // Count how many selected movies are already in each group
+    const selMovies = allMovies.filter(m => selectedIds.has(m.id));
+    container.innerHTML = groups.map(g => {
+      const inGroup = selMovies.filter(m => (m.group_ids || []).includes(g.id)).length;
+      const badge = inGroup > 0
+        ? `<span style="font-size:0.7rem; color:var(--accent); opacity:0.8;">(${inGroup}/${selMovies.length})</span>`
+        : '';
+      return `
+      <label style="display:flex; align-items:center; gap:6px; padding:6px 12px; background:var(--surface2); border:1px solid ${inGroup === selMovies.length ? 'var(--accent)' : 'var(--border)'}; border-radius:6px; cursor:pointer; font-size:0.84rem; white-space:nowrap;">
+        <input type="checkbox" class="bulk-group-cb" value="${g.id}" style="accent-color:var(--accent); width:15px; height:15px;"${inGroup === selMovies.length ? ' checked' : ''}>
+        ${g.name} ${badge}
+      </label>`;
+    }).join('');
   } catch(e) {
     container.innerHTML = '<span style="color:var(--danger);">Fout bij laden groepen</span>';
   }
@@ -4256,27 +4263,42 @@ async function showBulkGroupAssign() {
 async function bulkAssignGroups() {
   const ids = [...selectedIds];
   if (!ids.length) return;
-  const groupIds = [...document.querySelectorAll('.bulk-group-cb:checked')].map(cb => parseInt(cb.value));
-  if (!groupIds.length) {
-    showStatus('bulkGroupStatus', t('bulk.selectAtLeastOne'), 'error');
-    return;
-  }
+  const allCbs = [...document.querySelectorAll('.bulk-group-cb')];
+  const checkedIds = allCbs.filter(cb => cb.checked).map(cb => parseInt(cb.value));
+  const uncheckedIds = allCbs.filter(cb => !cb.checked).map(cb => parseInt(cb.value));
+
+  if (!checkedIds.length && !uncheckedIds.length) return;
+
   try {
     showStatus('bulkGroupStatus', '<span class="spinner"></span> ' + t('bulk.assigning'), 'info');
-    const r = await fetch(`${API}/movies/bulk/groups`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movie_ids: ids, group_ids: groupIds })
-    });
-    const d = await r.json();
-    showStatus('bulkGroupStatus', t('bulk.assignDone', d.updated || ids.length), 'success');
+
+    // Add to checked groups
+    if (checkedIds.length) {
+      await fetch(`${API}/movies/bulk/groups`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ movie_ids: ids, group_ids: checkedIds })
+      });
+    }
+    // Remove from unchecked groups
+    if (uncheckedIds.length) {
+      await fetch(`${API}/movies/bulk/groups`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ movie_ids: ids, group_ids: uncheckedIds })
+      });
+    }
+
     // Update local cache
     for (const m of allMovies) {
       if (selectedIds.has(m.id)) {
-        const existing = m.group_ids || [];
-        m.group_ids = [...new Set([...existing, ...groupIds])];
+        let gids = new Set(m.group_ids || []);
+        checkedIds.forEach(g => gids.add(g));
+        uncheckedIds.forEach(g => gids.delete(g));
+        m.group_ids = [...gids];
       }
     }
+    showStatus('bulkGroupStatus', t('bulk.assignDone', ids.length), 'success');
     setTimeout(() => {
       document.getElementById('bulkGroupPanel').style.display = 'none';
       filterMovies();

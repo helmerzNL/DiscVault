@@ -4050,6 +4050,32 @@ def bulk_set_movie_groups():
     return jsonify({"status": "ok", "updated": added})
 
 
+@app.route("/api/movies/bulk/groups", methods=["DELETE"])
+def bulk_remove_movie_groups():
+    """Remove group(s) from multiple movies at once."""
+    data = request.json or {}
+    movie_ids = data.get("movie_ids", [])
+    group_ids = data.get("group_ids", [])
+    if not movie_ids or not group_ids:
+        return jsonify({"error": "movie_ids and group_ids required"}), 400
+    conn = get_db()
+    uid = _get_current_user_id()
+    removed = 0
+    for mid in movie_ids:
+        movie = conn.execute("SELECT owner_id FROM movies WHERE id=?", (mid,)).fetchone()
+        if not movie:
+            continue
+        if uid and movie["owner_id"] != uid and _get_current_user_role() != "admin":
+            continue
+        for gid in group_ids:
+            conn.execute("DELETE FROM movie_groups WHERE movie_id=? AND group_id=?",
+                         (int(mid), int(gid)))
+        removed += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok", "updated": removed})
+
+
 @app.route("/api/settings/sources", methods=["GET"])
 def get_source_settings():
     return jsonify({
