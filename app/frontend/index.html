@@ -1706,6 +1706,31 @@
       padding: 20px;
     }
   }
+  /* PWA install banner */
+  .pwa-install-banner {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 16px 20px; display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 -4px 24px rgba(0,0,0,.5);
+    transform: translateY(100%); transition: transform .35s cubic-bezier(.4,0,.2,1);
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .pwa-install-banner.visible { transform: translateY(0); }
+  .pwa-install-banner-icon {
+    width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+  }
+  .pwa-install-banner-text { flex: 1; min-width: 0; }
+  .pwa-install-banner-text strong { display: block; font-size: 0.92rem; color: var(--text); }
+  .pwa-install-banner-text span { font-size: 0.78rem; color: var(--text-muted); }
+  .pwa-install-banner .btn { flex-shrink: 0; padding: 8px 16px; font-size: 0.82rem; }
+  .pwa-install-banner-close {
+    background: none; border: none; color: var(--text-muted); font-size: 1.2rem;
+    cursor: pointer; padding: 4px; flex-shrink: 0; line-height: 1;
+  }
+  .pwa-install-banner-close:hover { color: var(--text); }
 </style>
 </head>
 <body>
@@ -3078,6 +3103,7 @@ nl: {
   'bulk.applyGroup':'✓ Toewijzen','bulk.cancelGroup':'Annuleren',
   'bulk.selectAtLeastOne':'Selecteer minstens één groep','bulk.assigning':'Toewijzen...',
   'bulk.assignDone':'✓ {0} film(s) aan groep(en) gekoppeld',
+  'pwa.title':'Installeer DiscVault','pwa.subtitle':'Voeg toe aan je startscherm voor de beste ervaring','pwa.install':'Installeren',
 },
 en: {
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
@@ -3325,6 +3351,7 @@ en: {
   'bulk.applyGroup':'✓ Assign','bulk.cancelGroup':'Cancel',
   'bulk.selectAtLeastOne':'Select at least one group','bulk.assigning':'Assigning...',
   'bulk.assignDone':'✓ {0} movie(s) assigned to group(s)',
+  'pwa.title':'Install DiscVault','pwa.subtitle':'Add to your home screen for the best experience','pwa.install':'Install',
 }
 };
 
@@ -6915,6 +6942,70 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js').catch(() => {});
   });
 }
+
+// ── PWA install prompt ────────────────────────────────────────────────────────
+let _deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  showPwaInstallBanner();
+});
+
+function showPwaInstallBanner() {
+  // Don't show if already installed as PWA or dismissed recently
+  if (window.matchMedia('(display-mode: standalone)').matches) return;
+  if (navigator.standalone) return; // iOS
+  if (localStorage.getItem('dv_pwa_dismissed')) return;
+  const banner = document.getElementById('pwaInstallBanner');
+  if (banner) setTimeout(() => banner.classList.add('visible'), 600);
+}
+
+function pwaInstall() {
+  if (_deferredInstallPrompt) {
+    _deferredInstallPrompt.prompt();
+    _deferredInstallPrompt.userChoice.then(r => {
+      if (r.outcome === 'accepted') hidePwaInstallBanner();
+      _deferredInstallPrompt = null;
+    });
+  } else {
+    // iOS / browsers without beforeinstallprompt – just hide banner
+    hidePwaInstallBanner();
+  }
+}
+
+function dismissPwaInstall() {
+  localStorage.setItem('dv_pwa_dismissed', Date.now().toString());
+  hidePwaInstallBanner();
+}
+
+function hidePwaInstallBanner() {
+  const banner = document.getElementById('pwaInstallBanner');
+  if (banner) banner.classList.remove('visible');
+}
+
+// For iOS/Safari (no beforeinstallprompt) – show after a delay
+window.addEventListener('load', () => {
+  if (!_deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isSafari = /safari/i.test(navigator.userAgent) && !/chrome|crios|fxios/i.test(navigator.userAgent);
+    if (isIos || isSafari) {
+      setTimeout(() => showPwaInstallBanner(), 2000);
+    }
+  }
+});
 </script>
+
+<!-- PWA install banner -->
+<div id="pwaInstallBanner" class="pwa-install-banner">
+  <div class="pwa-install-banner-icon">📀</div>
+  <div class="pwa-install-banner-text">
+    <strong data-i18n="pwa.title">Installeer DiscVault</strong>
+    <span data-i18n="pwa.subtitle">Voeg toe aan je startscherm voor de beste ervaring</span>
+  </div>
+  <button class="btn btn-primary" onclick="pwaInstall()" data-i18n="pwa.install">Installeren</button>
+  <button class="pwa-install-banner-close" onclick="dismissPwaInstall()" aria-label="Sluiten">✕</button>
+</div>
+
 </body>
 </html>
