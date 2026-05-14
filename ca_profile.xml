@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Maintainer>
+  <Icon>https://raw.githubusercontent.com/helmerzNL/DiscVault/main/app/frontend/favicon-192.png</Icon>
+  <Profile>
+    DiscVault templates maintained by helmerzNL. DiscVault is a self-hosted physical disc collection manager for 4K UHD, Blu-ray, and DVD, with barcode scanning, backup/restore, and an MCP endpoint.
+  </Profile>
+  <WebPage>https://github.com/helmerzNL/DiscVault</WebPage>
+  <DonateLink></DonateLink>
+</Maintainer>
