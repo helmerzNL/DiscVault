@@ -45,7 +45,7 @@ ghcr.io/helmerzNL/DiscVault:beta     # beta (new features)
 
 | | | | |
 |---|---|---|---|
-| ![Sign in](screenshots/Mobile_screenshot%20%282%29.PNG) | ![Search](screenshots/Mobile_screenshot%20%281%29.PNG) | ![Add movie](screenshots/Mobile_screenshot%20%284%29.PNG) | ![Profile](screenshots/Mobile_screenshot%20%285%29.PNG) |
+| ![Sign in](screenshots/Mobile_screenshot%20%282%29.jpeg) | ![Search](screenshots/Mobile_screenshot%20%281%29.PNG) | ![Add movie](screenshots/Mobile_screenshot%20%284%29.PNG) | ![Profile](screenshots/Mobile_screenshot%20%285%29.PNG) |
 | Sign in | Search | Add movie | Profile |
 | ![Metadata](screenshots/Mobile_screenshot%20%286%29.PNG) | ![Authentication](screenshots/Mobile_screenshot%20%287%29.PNG) | ![User management](screenshots/Mobile_screenshot%20%288%29.PNG) | ![Backup](screenshots/Mobile_screenshot%20%289%29.PNG) |
 | Metadata | Authentication | User management | Backup & Restore |
