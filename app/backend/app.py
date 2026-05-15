@@ -5163,21 +5163,36 @@ def _send_push(endpoint, p256dh, auth, vapid_priv_raw, title, body, url="/"):
     """Send a single Web Push message. Returns None on success, error string on failure."""
     try:
         from pywebpush import webpush, WebPushException
+
+        # Build optional extra headers for Microsoft WNS endpoints.
+        # WNS (used by Edge on Windows) requires X-WNS-Type for raw encrypted payloads.
+        extra_headers = {}
+        if "notify.windows.com" in endpoint or "wns.windows.com" in endpoint:
+            extra_headers["X-WNS-Type"] = "wns/raw"
+            extra_headers["Content-Type"] = "application/octet-stream"
+
         webpush(
             subscription_info={"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}},
             data=json.dumps({"title": title, "body": body, "url": url}),
             vapid_private_key=vapid_priv_raw,  # raw base64url 32-byte d-value
             vapid_claims={"sub": "mailto:no-reply@discvault.app"},
+            ttl=86400,        # 24 h — required to be > 0 by WNS and recommended for all services
+            headers=extra_headers if extra_headers else None,
         )
         return None
     except Exception as ex:
         status = getattr(getattr(ex, "response", None), "status_code", None)
         err_body = ""
+        err_headers = ""
         try:
-            err_body = ex.response.text[:300] if hasattr(ex, "response") and ex.response is not None else ""
+            resp = getattr(ex, "response", None)
+            if resp is not None:
+                err_body    = (resp.text or "")[:400]
+                err_headers = str(dict(resp.headers))[:200]
         except Exception:
             pass
-        err_msg = f"Push failed (HTTP {status}): {ex} {err_body}".strip()
+        ep_hint = endpoint[:60] + "..." if len(endpoint) > 60 else endpoint
+        err_msg = f"Push failed (HTTP {status}) [{ep_hint}]: {ex} | body: {err_body} | resp-headers: {err_headers}".strip()
         add_log("push", "Push delivery error", err_msg, level="error")
         if status == 410:
             # Subscription expired/revoked → purge it
