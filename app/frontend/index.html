@@ -2495,7 +2495,7 @@
   </div>
 
 <!-- INVITE PANEL OVERLAY -->
-<div id="invitePanel" style="display:none; position:fixed; inset:0; z-index:4000; background:rgba(0,0,0,.6); align-items:flex-start; justify-content:center; padding-top:80px;">
+<div id="invitePanel" onclick="if(event.target===this)closeInvitePanel()" style="display:none; position:fixed; inset:0; z-index:4000; background:rgba(0,0,0,.6); align-items:flex-start; justify-content:center; padding-top:80px;">
   <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; width:min(480px,90vw); max-height:70vh; overflow-y:auto;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
       <h2 style="margin:0; font-size:1rem;">🔔 Uitnodigingen</h2>
@@ -3707,6 +3707,7 @@ async function init() {
   flushQueuedMutations();
   await loadStats();
   await loadCollection();
+  loadInviteNotifications();
 }
 
 function _renderHeaderStats() {
@@ -6463,8 +6464,14 @@ async function toggleRegistration() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ registration_enabled: enabled })
   });
-  const d = await r.json();
-  ifconst isMemberGroups = me.authenticated && me.role === 'MemberGroups';
+  await r.json();
+}
+
+async function loadAdminPanel() {
+  try {
+    const me = await fetch(`${API}/auth/me`).then(r => r.json());
+    const isAdmin = !me.authenticated || me.role === 'admin';
+    const isMemberGroups = me.authenticated && me.role === 'MemberGroups';
     if (!isAdmin && !isMemberGroups) {
       document.getElementById('adminUsersCard').style.display = 'none';
       document.getElementById('adminGroupsCard').style.display = 'none';
@@ -6487,25 +6494,12 @@ async function toggleRegistration() {
       document.getElementById('adminUsersCard').style.display = 'none';
       document.getElementById('myGroupsCard').style.display = 'block';
       await loadMyGroups();
-    }();
-    const isAdmin = !me.authenticated || me.role === 'admin';
-    if (!isAdmin) {
-      document.getElementById('adminUsersCard').style.display = 'none';
-      document.getElementById('adminGroupsCard').style.display = 'none';
-      return;
     }
-    // Always show groups card; only show users card when auth is enabled
-    document.getElementById('adminGroupsCard').style.display = 'block';
-    if (me.authenticated) {
-      document.getElementById('adminUsersCard').style.display = 'block';
-      await loadAdminUsers();
-    } else {
-      document.getElementById('adminUsersCard').style.display = 'none';
-    }
-    await loadAdminGroups();
   } catch(e) {
     document.getElementById('adminUsersCard').style.display = 'none';
     document.getElementById('adminGroupsCard').style.display = 'none';
+    const mgc = document.getElementById('myGroupsCard');
+    if (mgc) mgc.style.display = 'none';
   }
 }
 
@@ -6514,9 +6508,13 @@ async function loadAdminUsers() {
     const r = await fetch(`${API}/auth/users`);
     const users = await r.json();
     const list = document.getElementById('adminUsersList');
-    list.innerHTML = users.map(u => `
+    list.innerHTML = users.map(u => {
+      const roleIcon = u.role === 'admin' ? '👑' : u.role === 'MemberGroups' ? '🔑' : '👤';
+      const nextRole = u.role === 'admin' ? 'MemberGroups' : u.role === 'MemberGroups' ? 'user' : 'admin';
+      const nextIcon = nextRole === 'admin' ? '👑' : nextRole === 'MemberGroups' ? '🔑' : '👤';
+      return `
       <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
-        <div style="font-size:1.2rem;">${u.role === 'admin' ? '👑' : '👤'}</div>
+        <div style="font-size:1.2rem;">${roleIcon}</div>
         <div style="flex:1;">
           <div style="font-weight:500; font-size:0.88rem;">${u.display_name || u.username}
             <span class="tag" style="font-size:0.65rem; margin-left:6px;">${u.role}</span>
@@ -6527,11 +6525,11 @@ async function loadAdminUsers() {
         </div>
         <div style="display:flex; gap:6px;">
           <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="resetUserPasskey('${u.id}','${u.username}')" title="Reset passkey">🔑</button>
-          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="toggleUserRole('${u.id}','${u.role}')" title="Wissel rol">${u.role === 'admin' ? '👤' : '👑'}</button>
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="toggleUserRole('${u.id}','${u.role}')" title="Wissel rol (${u.role} \u2192 ${nextRole})">${nextIcon}</button>
           <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteUser('${u.id}','${u.username}')" title="Verwijder">✕</button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   } catch(e) {}
 }
 
@@ -6543,7 +6541,7 @@ async function deleteUser(id, name) {
 }
 
 async function toggleUserRole(id, currentRole) {
-  const newRole = currentRole === 'admin' ? 'user' : 'admin';
+  const newRole = currentRole === 'admin' ? 'MemberGroups' : currentRole === 'MemberGroups' ? 'user' : 'admin';
   await fetch(`${API}/auth/users/${encodeURIComponent(id)}/role`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -6658,6 +6656,223 @@ async function addGroupMember(groupId, groupName) {
 }
 
 async function removeGroupMember(groupId, userId, groupName) {
+}
+
+async function removeGroupMember(groupId, userId, groupName) {
+  await fetch(`${API}/groups/${groupId}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  manageGroupMembers(groupId, groupName);
+}
+
+// ── MemberGroups: Mijn Groepen ────────────────────────────────────────────────
+
+async function loadMyGroups() {
+  const list = document.getElementById('myGroupsList');
+  if (!list) return;
+  try {
+    const r = await fetch(`${API}/groups`);
+    const groups = await r.json();
+    const owned = groups.filter(g => g.my_role === 'owner');
+    const member = groups.filter(g => g.my_role !== 'owner');
+    if (!owned.length && !member.length) {
+      list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Je hebt nog geen groepen.</div>';
+      return;
+    }
+    let html = '';
+    if (owned.length) {
+      html += '<div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Beheerd door jou</div>';
+      html += owned.map(g => `
+        <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
+          <div style="font-size:1.2rem;">👑</div>
+          <div style="flex:1;">
+            <div style="font-weight:500; font-size:0.88rem;">${g.name}</div>
+            <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">${g.member_count} leden · ${g.movie_count} films</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="manageMyGroupMembers(${g.id},'${g.name}')" title="Leden & uitnodigingen">👥</button>
+          <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteMyGroup(${g.id},'${g.name}')" title="Verwijder">✕</button>
+        </div>
+      `).join('');
+    }
+    if (member.length) {
+      html += '<div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; margin-top:16px;">Lid van</div>';
+      html += member.map(g => `
+        <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
+          <div style="font-size:1.2rem;">📁</div>
+          <div style="flex:1;">
+            <div style="font-weight:500; font-size:0.88rem;">${g.name}</div>
+            <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">door ${g.created_by_username || '?'} · ${g.movie_count} films</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="leaveMyGroup(${g.id},'${g.name}')">Verlaten</button>
+        </div>
+      `).join('');
+    }
+    list.innerHTML = html;
+    // Manage panel passthrough
+    const existing = document.getElementById('myGroupMemberPanel');
+    if (existing) existing.remove();
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--danger); font-size:0.85rem;">Fout bij laden groepen.</div>';
+  }
+}
+
+async function createMyGroup() {
+  const nameEl = document.getElementById('myNewGroupName');
+  const name = nameEl.value.trim();
+  if (!name) return;
+  const r = await fetch(`${API}/groups`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  const d = await r.json();
+  if (d.error) { showStatus('myGroupStatus', d.error, 'error'); return; }
+  nameEl.value = '';
+  showStatus('myGroupStatus', `Groep "${name}" aangemaakt!`, 'success');
+  await loadMyGroups();
+  await _loadGroupFilter();
+}
+
+async function deleteMyGroup(id, name) {
+  if (!confirm(`Groep "${name}" verwijderen? Dit verwijdert ook alle groepskoppelingen.`)) return;
+  await fetch(`${API}/groups/${id}`, { method: 'DELETE' });
+  await loadMyGroups();
+  await _loadGroupFilter();
+  filterMovies();
+}
+
+async function leaveMyGroup(groupId, groupName) {
+  if (!confirm(`Groep "${groupName}" verlaten?`)) return;
+  await fetch(`${API}/groups/${groupId}/members/${encodeURIComponent(currentUserId)}`, { method: 'DELETE' });
+  await loadMyGroups();
+  await _loadGroupFilter();
+  filterMovies();
+}
+
+async function manageMyGroupMembers(groupId, groupName) {
+  const members = await fetch(`${API}/groups/${groupId}/members`).then(r => r.json());
+  let html = `<div style="font-weight:500; margin-bottom:12px; font-size:0.9rem;">👥 Leden van "${groupName}"</div>`;
+  if (members.length) {
+    html += members.map(m => {
+      const isSelf = m.id === currentUserId;
+      const isOwner = m.group_role === 'owner';
+      return `
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--surface); border:1px solid var(--border); border-radius:6px; margin-bottom:6px;">
+          <span style="font-size:0.9rem;">${isOwner ? '👑' : '👤'}</span>
+          <span style="flex:1; font-size:0.85rem;">${m.display_name || m.username}${isSelf ? ' (jij)' : ''}</span>
+          ${!isOwner ? `<button class="btn btn-danger" style="padding:4px 8px; font-size:0.7rem;" onclick="removeMyGroupMember(${groupId},'${m.id}','${groupName}')">✕</button>` : ''}
+        </div>`;
+    }).join('');
+  } else {
+    html += '<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">Geen leden.</div>';
+  }
+  html += `
+    <div style="border-top:1px solid var(--border); margin-top:14px; padding-top:14px;">
+      <div style="font-size:0.8rem; font-weight:500; margin-bottom:8px;">Gebruiker uitnodigen</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="text" id="inviteUsernameInput_${groupId}" placeholder="gebruikersnaam"
+               style="flex:1; padding:8px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:0.84rem;">
+        <button class="btn btn-primary" style="padding:8px 14px; font-size:0.8rem;" onclick="sendGroupInvite(${groupId},'${groupName}')">📨 Uitnodigen</button>
+      </div>
+      <div id="inviteStatus_${groupId}" class="status-msg" style="margin-top:6px;"></div>
+    </div>
+    <button class="btn btn-secondary" style="margin-top:14px; width:100%; justify-content:center;" onclick="document.getElementById('myGroupMemberPanel').remove(); loadMyGroups();">Sluiten</button>
+  `;
+  const panel = document.createElement('div');
+  panel.id = 'myGroupMemberPanel';
+  panel.style.cssText = 'padding:16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-top:12px;';
+  panel.innerHTML = html;
+  const existing = document.getElementById('myGroupMemberPanel');
+  if (existing) existing.remove();
+  document.getElementById('myGroupsList').appendChild(panel);
+}
+
+async function removeMyGroupMember(groupId, userId, groupName) {
+  await fetch(`${API}/groups/${groupId}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  manageMyGroupMembers(groupId, groupName);
+}
+
+async function sendGroupInvite(groupId, groupName) {
+  const input = document.getElementById(`inviteUsernameInput_${groupId}`);
+  const statusEl = document.getElementById(`inviteStatus_${groupId}`);
+  const username = input.value.trim();
+  if (!username) return;
+  const r = await fetch(`${API}/groups/${groupId}/invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username })
+  });
+  const d = await r.json();
+  if (d.error) {
+    showStatus(`inviteStatus_${groupId}`, d.error, 'error');
+  } else {
+    showStatus(`inviteStatus_${groupId}`, `✓ Uitnodiging verstuurd naar ${username}`, 'success');
+    input.value = '';
+  }
+}
+
+// ── Invite notifications ──────────────────────────────────────────────────────
+
+async function loadInviteNotifications() {
+  try {
+    const r = await fetch(`${API}/invites`);
+    if (!r.ok) return;
+    const invites = await r.json();
+    const bell = document.getElementById('inviteBell');
+    const badge = document.getElementById('inviteBadge');
+    if (!bell) return;
+    if (invites.length > 0) {
+      bell.style.display = '';
+      badge.style.display = '';
+      badge.textContent = invites.length;
+    } else {
+      bell.style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+async function openInvitePanel() {
+  const panel = document.getElementById('invitePanel');
+  const list = document.getElementById('invitePanelList');
+  panel.style.display = 'flex';
+  list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Laden...</div>';
+  try {
+    const r = await fetch(`${API}/invites`);
+    const invites = await r.json();
+    if (!invites.length) {
+      list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:20px;">Geen openstaande uitnodigingen.</div>';
+      return;
+    }
+    list.innerHTML = invites.map(inv => `
+      <div style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:10px;">
+        <div style="font-weight:500; margin-bottom:4px;">📁 ${inv.group_name}</div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">
+          Uitnodiging van <strong>${inv.inviter_display_name || inv.inviter_username}</strong> · ${(inv.created_at||'').slice(0,10)}
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" style="flex:1; justify-content:center;" onclick="respondInvite(${inv.id},'accept')">✓ Accepteren</button>
+          <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="respondInvite(${inv.id},'decline')">✕ Weigeren</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--danger); font-size:0.85rem;">Fout bij laden.</div>';
+  }
+}
+
+function closeInvitePanel() {
+  document.getElementById('invitePanel').style.display = 'none';
+}
+
+async function respondInvite(inviteId, action) {
+  const r = await fetch(`${API}/invites/${inviteId}/${action}`, { method: 'POST' });
+  const d = await r.json();
+  if (action === 'accept' && d.status === 'accepted') {
+    await loadCollection();
+    await _loadGroupFilter();
+  }
+  await loadInviteNotifications();
+  await openInvitePanel();
+}
+
   await fetch(`${API}/groups/${groupId}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
   manageGroupMembers(groupId, groupName);
 }

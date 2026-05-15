@@ -3892,14 +3892,18 @@ def recovery_login():
 def list_groups():
     uid = _get_current_user_id()
     conn = get_db()
-    if not uid:
+    if not uid or _get_current_user_role() == "admin":
+        # Admin and unauthenticated see all groups
         rows = conn.execute("""
             SELECT g.*, u.username as created_by_username,
                    (SELECT COUNT(*) FROM user_groups WHERE group_id=g.id) as member_count,
-                   (SELECT COUNT(*) FROM movie_groups WHERE group_id=g.id) as movie_count
-            FROM groups g LEFT JOIN users u ON g.created_by=u.id
+                   (SELECT COUNT(*) FROM movie_groups WHERE group_id=g.id) as movie_count,
+                   ug.role as my_role
+            FROM groups g
+            LEFT JOIN users u ON g.created_by=u.id
+            LEFT JOIN user_groups ug ON ug.group_id=g.id AND ug.user_id=?
             ORDER BY g.name
-        """).fetchall()
+        """, (uid or "",)).fetchall()
     else:
         rows = conn.execute("""
             SELECT g.*, u.username as created_by_username,
