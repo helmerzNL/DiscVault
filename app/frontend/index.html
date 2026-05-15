@@ -2528,7 +2528,7 @@
           <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px; line-height:1.6;">
             Recente tool-aanroepen via de MCP-koppeling voor jouw account.
           </p>
-          <div id="mcpLogsList" style="font-family:'DM Mono',monospace; font-size:0.76rem; color:var(--text-muted); max-height:360px; overflow-y:auto;">
+          <div id="mcpLogsList" style="font-family:'DM Mono',monospace; font-size:0.76rem; color:var(--text-muted); max-height:360px; overflow-y:scroll; border:1px solid var(--border); border-radius:6px; -webkit-overflow-scrolling:touch;">
             <div style="text-align:center; padding:20px; color:var(--text-muted);">Laden...</div>
           </div>
         </div>
@@ -8053,7 +8053,7 @@ async function loadMcpLogs() {
       const ts = (l.timestamp || '').replace('T',' ').slice(0,19);
       const tool = (l.message || '').replace(/^Tool:\s*/i, '');
       const color = levelColor[l.level] || 'var(--text-muted)';
-      const detail = l.detail ? `<div style="color:var(--text-muted); margin-top:3px; white-space:pre-wrap; font-size:0.70rem; max-height:60px; overflow:hidden;">${(l.detail||'').slice(0,200)}</div>` : '';
+      const detail = l.detail ? `<div style="color:var(--text-muted); margin-top:3px; font-size:0.70rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${(l.detail||'').slice(0,120)}</div>` : '';
       return `<div style="padding:8px 10px; border-bottom:1px solid var(--border);">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <span style="color:${color}; font-weight:600;">${tool}</span>
