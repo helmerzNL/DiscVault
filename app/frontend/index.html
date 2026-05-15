@@ -2806,7 +2806,7 @@
             <button onclick="markWatchedModal('yesterday')">Gisteren</button>
             <button onclick="markWatchedModal('today')">Vandaag</button>
             <div class="watched-popup-date-row">
-              <input type="date" id="watchedDateInput">
+              <input type="date" id="watchedDateInput" onclick="event.stopPropagation()" onchange="event.stopPropagation()">
               <button onclick="markWatchedModal('custom')" title="Bevestig datum">✓</button>
             </div>
             <div id="watchedHistorySection" style="display:none;">
@@ -7115,7 +7115,7 @@ async function loadWatchlist() {
   if (!grid) return;
   grid.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">Laden...</div>';
   try {
-    const r = await fetch(`${API}/watchlist`);
+    const r = await fetch(`${API}/watchlist`, { headers: authHeaders() });
     if (!r.ok) { grid.innerHTML = ''; return; }
     const movies = await r.json();
     if (!movies.length) {
@@ -7153,7 +7153,7 @@ async function loadWatchHistory() {
   if (!list) return;
   list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">Laden...</div>';
   try {
-    const r = await fetch(`${API}/watch-history`);
+    const r = await fetch(`${API}/watch-history`, { headers: authHeaders() });
     if (!r.ok) { list.innerHTML = ''; return; }
     const entries = await r.json();
     if (!entries.length) {
@@ -7204,10 +7204,10 @@ async function toggleWatchlistModal() {
   if (!currentMovieId) return;
   const btn = document.getElementById('btnWatchlistModal');
   if (_modalMovieOnWatchlist) {
-    await fetch(`${API}/watchlist/${currentMovieId}`, { method: 'DELETE' });
+    await fetch(`${API}/watchlist/${currentMovieId}`, { method: 'DELETE', headers: authHeaders() });
     _modalMovieOnWatchlist = false;
   } else {
-    await fetch(`${API}/watchlist/${currentMovieId}`, { method: 'POST' });
+    await fetch(`${API}/watchlist/${currentMovieId}`, { method: 'POST', headers: authHeaders() });
     _modalMovieOnWatchlist = true;
   }
   _updateWatchlistBtn();
@@ -7263,7 +7263,7 @@ async function _refreshWatchedHistoryPopup(movieId) {
   const section = document.getElementById('watchedHistorySection');
   const container = document.getElementById('watchedHistoryEntries');
   if (!section || !container) return;
-  const r = await fetch(`${API}/watched/${movieId}`);
+  const r = await fetch(`${API}/watched/${movieId}`, { headers: authHeaders() });
   if (!r.ok) { section.style.display = 'none'; return; }
   const entries = await r.json();
   if (!entries.length) { section.style.display = 'none'; return; }
@@ -7279,10 +7279,10 @@ async function _refreshWatchedHistoryPopup(movieId) {
 }
 
 async function _deleteWatchedEntry(entryId, movieId) {
-  await fetch(`${API}/watched/entry/${entryId}`, { method: 'DELETE' });
+  await fetch(`${API}/watched/entry/${entryId}`, { method: 'DELETE', headers: authHeaders() });
   await _refreshWatchedHistoryPopup(movieId);
   // Refresh the movie's last_watched in allMovies
-  const r2 = await fetch(`${API}/watched/${movieId}`);
+  const r2 = await fetch(`${API}/watched/${movieId}`, { headers: authHeaders() });
   const remaining = r2.ok ? await r2.json() : [];
   const newLastWatched = remaining.length ? remaining[0].watched_at.slice(0,10) : null;
   _modalMovieLastWatched = newLastWatched;
@@ -7314,18 +7314,19 @@ async function markWatchedModal(type) {
   }
   const r = await fetch(`${API}/watched/${currentMovieId}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ watched_at: date })
   });
-  // Use returned watched_at or the date we sent
-  const latestDate = date;
   // Update btn if this is newer than current last_watched
-  if (!_modalMovieLastWatched || latestDate > _modalMovieLastWatched) {
-    _modalMovieLastWatched = latestDate;
+  if (!_modalMovieLastWatched || date > _modalMovieLastWatched) {
+    _modalMovieLastWatched = date;
   }
   _updateWatchedBtn();
   const m = allMovies.find(x => x.id === currentMovieId);
   if (m) m.last_watched = _modalMovieLastWatched;
+  // Reset date input to today
+  const inp = document.getElementById('watchedDateInput');
+  if (inp) inp.value = new Date().toISOString().slice(0,10);
   // Re-show popup with updated history
   const popup = document.getElementById('watchedPopup');
   popup.style.display = 'block';
@@ -7350,7 +7351,7 @@ async function bulkAddToWatchlist() {
   const ids = Array.from(selectedIds);
   await fetch(`${API}/watchlist/bulk`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ movie_ids: ids })
   });
   // Update local cache
