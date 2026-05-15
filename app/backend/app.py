@@ -5301,7 +5301,9 @@ def push_test():
     user_id = _get_current_user_id() or "__global__"
     errors = push_to_user(user_id, "DiscVault", "Push-meldingen werken! 🎬", "/")
     if errors:
-        return jsonify({"ok": False, "errors": errors}), 500
+        # If every error is a 410 (subscription expired), signal the frontend to re-subscribe.
+        all_stale = errors and all("410" in str(e) for e in errors)
+        return jsonify({"ok": False, "errors": errors, "stale": all_stale}), 500
     return jsonify({"ok": True})
 
 

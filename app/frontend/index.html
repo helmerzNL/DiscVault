@@ -9518,8 +9518,20 @@ async function testPushNotification() {
     const r    = await fetch(`${API}/push/test`, { method: 'POST' });
     const data = await r.json().catch(() => ({}));
     if (!r.ok || data.ok === false) {
-      const msg = (data.errors || [data.error || r.statusText]).join('; ');
-      if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">✗ ${msg}</span>`;
+      const errors = data.errors || [data.error || r.statusText];
+      const isStale = data.stale || errors.some(e => String(e).includes('410'));
+      if (isStale) {
+        // Subscription was revoked by the push service — clean up browser-side too.
+        if (_pushSubscription) {
+          try { await _pushSubscription.unsubscribe(); } catch(e) {}
+          _pushSubscription = null;
+        }
+        await initPushNotifications();
+        if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent);">⚠ Je push-abonnement is verlopen. Schakel meldingen opnieuw in.</span>`;
+      } else {
+        const msg = errors.join('; ');
+        if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">✗ ${msg}</span>`;
+      }
     } else {
       if (statusEl) statusEl.innerHTML = `<span style="color:var(--success);">✓ Verzonden — controleer je meldingen</span>`;
     }
