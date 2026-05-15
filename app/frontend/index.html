@@ -1071,60 +1071,11 @@
   .empty-state h3 { font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--text); margin-bottom: 8px; }
 
   /* Detail modal */
-  .modal-backdrop {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.7);
-    z-index: 1000;
-    backdrop-filter: blur(6px);
-    padding: calc(40px + var(--safe-top)) 40px 40px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .modal-backdrop.open { display: flex; align-items: flex-start; justify-content: center; }
-
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 36px;
-    max-width: 85vw;
-    max-height: 90vh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    width: 100%;
-    position: relative;
-    animation: modalIn 0.2s ease;
-  }
-
-  @media (min-width: 1200px) {
-    .modal { max-width: 75vw; }
-  }
-  @media (min-width: 1800px) {
-    .modal { max-width: 65vw; }
-  }
-
+  /* Modal animation (reused for other animated entries) */
   @keyframes modalIn {
     from { opacity: 0; transform: translateY(16px); }
     to { opacity: 1; transform: translateY(0); }
   }
-
-  .modal-close {
-    position: absolute;
-    top: 16px; right: 16px;
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 1rem;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.15s;
-  }
-  .modal-close:hover { border-color: var(--danger); color: var(--danger); }
 
   .modal-header {
     display: flex;
@@ -1254,30 +1205,7 @@
     border-bottom: 1px solid var(--border);
   }
 
-  /* Person overlay */
-  .person-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.75);
-    z-index: 1100;
-    backdrop-filter: blur(6px);
-    padding: calc(40px + var(--safe-top)) 40px 40px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-  .person-overlay.open { display: flex; align-items: flex-start; justify-content: center; }
-  .person-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 36px;
-    max-width: 700px;
-    width: 100%;
-    position: relative;
-    animation: modalIn 0.2s ease;
-  }
+  /* Person detail page */
   .person-header {
     display: flex;
     gap: 20px;
@@ -1341,6 +1269,43 @@
   .person-film-year {
     font-size: 0.65rem;
     color: var(--text-muted);
+  }
+
+  /* ── Detail pages (film & persoon) ── */
+  .detail-page {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .detail-page-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .btn-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-family: inherit;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-back:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* On the detail page the person bio shows fully */
+  #panel-person-detail .person-bio {
+    max-height: none;
+    overflow-y: visible;
+  }
+  /* Wider filmography grid on the full page */
+  #panel-person-detail .person-filmography {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   }
 
   /* Loading spinner */
@@ -1796,8 +1761,7 @@
     background: var(--surface); border-top: 1px solid var(--border);
     padding: 16px 20px; display: flex; align-items: center; gap: 14px;
     box-shadow: 0 -4px 24px rgba(0,0,0,.5);
-    transform: translateY(100%); transition: transform .35s cubic-bezier(.4,0,.2,1);
-    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transg-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
   .pwa-install-banner.visible { transform: translateY(0); }
   .pwa-install-banner-icon {
@@ -1852,11 +1816,7 @@
   </div>
   <div class="header-stats" id="headerStats">
     <div data-i18n="header.loading">Laden...</div>
-  </div>
-  <div class="offline-pill" id="offlinePill" data-i18n="header.offline">Offline modus</div>
-  <div class="queue-pill" id="queuePill">Wachtrij: 0</div>
-  <button id="inviteBell" onclick="openInvitePanel()" style="display:none; position:relative; background:none; border:none; cursor:pointer; padding:6px 8px; color:var(--text-muted); font-size:1.1rem;" title="Uitnodigingen">
-    🔔<span id="inviteBadge" style="display:none; position:absolute; top:2px; right:2px; background:var(--accent); color:#000; font-size:0.6rem; font-weight:700; border-radius:50%; width:14px; height:14px; line-height:14px; text-align:center;"></span>
+  </d<span id="inviteBadge" style="display:none; position:absolute; top:2px; right:2px; background:var(--accent); color:#000; font-size:0.6rem; font-weight:700; border-radius:50%; width:14px; height:14px; line-height:14px; text-align:center;"></span>
   </button>
   <button
     class="menu-toggle"
@@ -2824,9 +2784,15 @@
 </div>
 
 <!-- MOVIE DETAIL MODAL -->
-<div class="modal-backdrop" id="modalBackdrop" onclick="closeModal(event)">
-  <div class="modal" id="movieModal">
-    <button class="modal-close" onclick="closeModalDirect()">✕</button>
+<!-- FILM DETAIL PAGE -->
+<div class="panel" id="panel-movie-detail">
+  <div class="detail-page">
+    <div class="detail-page-nav">
+      <button class="btn-back" onclick="closeMovieDetail()">
+        <span class="mdi mdi-arrow-left" aria-hidden="true"></span>
+        <span data-i18n="general.back">Terug</span>
+      </button>
+    </div>
 
     <!-- ── VIEW MODE ── -->
     <div id="modalViewMode">
@@ -3072,10 +3038,15 @@
   </div>
 </div>
 
-<!-- PERSON DETAIL OVERLAY -->
-<div class="person-overlay" id="personOverlay" onclick="if(event.target===this)closePersonOverlay()">
-  <div class="person-card">
-    <button class="modal-close" onclick="closePersonOverlay()">✕</button>
+<!-- PERSOON DETAIL PAGE -->
+<div class="panel" id="panel-person-detail">
+  <div class="detail-page">
+    <div class="detail-page-nav">
+      <button class="btn-back" onclick="closePersonDetail()">
+        <span class="mdi mdi-arrow-left" aria-hidden="true"></span>
+        <span data-i18n="general.back">Terug</span>
+      </button>
+    </div>
     <div class="person-header">
       <div id="personPhoto"></div>
       <div>
@@ -3102,6 +3073,8 @@ const LANGS = {
 nl: {
   // nav
   'nav.collection':'Collectie','nav.import':'Import','nav.search':'Zoeken','nav.add':'Toevoegen','nav.logs':'Logs','nav.settings':'Instellingen',
+  // general
+  'general.back':'Terug',
   // header
   'header.loading':'Laden...','header.offline':'Offline modus','header.queue':'Wachtrij: {0}','header.logout':'↩ Uitloggen','header.menuOpen':'Menu openen',
   // scan
@@ -3455,7 +3428,10 @@ nl: {
   'js.inviteLoadError':'Fout bij laden.',
   'js.groupsLoadError':'Fout bij laden groepen',
   'js.passkeyCount':'{0} passkey(s)',
-},
+},// nav
+  'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
+  // general
+  'general.back':'Back
 en: {
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
   'header.loading':'Loading...','header.offline':'Offline mode','header.queue':'Queue: {0}','header.logout':'↩ Log out','header.menuOpen':'Open menu',
@@ -3797,7 +3773,10 @@ en: {
   'js.groupsLoadError':'Error loading groups',
   'js.passkeyCount':'{0} passkey(s)',
 },
-fr: {
+fr// nav
+  'nav.collection':'Collection','nav.import':'Import','nav.search':'Rechercher','nav.add':'Ajouter','nav.logs':'Logs','nav.settings':'Paramètres',
+  // general
+  'general.back':'Retour
   // nav
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Rechercher','nav.add':'Ajouter','nav.logs':'Logs','nav.settings':'Paramètres',
   'nav.lists':'Listes',
@@ -4150,7 +4129,10 @@ fr: {
   'js.groupsLoadError':'Erreur lors du chargement des groupes',
   'js.passkeyCount':'{0} clé(s) d\'accès',
   'nav.lists':'Listes',
-},
+},// nav
+  'nav.collection':'Sammlung','nav.import':'Import','nav.search':'Suchen','nav.add':'Hinzufügen','nav.logs':'Logs','nav.settings':'Einstellungen','nav.lists':'Listen',
+  // general
+  'general.back':'Zurück
 de: {
   'nav.collection':'Sammlung','nav.import':'Import','nav.search':'Suchen','nav.add':'Hinzufügen','nav.logs':'Logs','nav.settings':'Einstellungen','nav.lists':'Listen',
   'header.loading':'Laden...','header.offline':'Offline-Modus','header.queue':'Warteschlange: {0}','header.logout':'↩ Abmelden','header.menuOpen':'Menü öffnen',
@@ -4476,7 +4458,10 @@ de: {
   'js.inviteLoadError':'Fehler beim Laden.',
   'js.groupsLoadError':'Fehler beim Laden der Gruppen',
   'js.passkeyCount':'{0} Passkey(s)',
-},
+},// nav
+  'nav.collection':'Colección','nav.import':'Importar','nav.search':'Buscar','nav.add':'Añadir','nav.logs':'Registros','nav.settings':'Ajustes','nav.lists':'Listas',
+  // general
+  'general.back':'Volver
 es: {
   'nav.collection':'Colección','nav.import':'Importar','nav.search':'Buscar','nav.add':'Añadir','nav.logs':'Registros','nav.settings':'Ajustes','nav.lists':'Listas',
   'header.loading':'Cargando...','header.offline':'Modo sin conexión','header.queue':'Cola: {0}','header.logout':'↩ Cerrar sesión','header.menuOpen':'Abrir menú',
@@ -4807,6 +4792,8 @@ es: {
 
 
 let currentLang = localStorage.getItem('dv_lang') || 'nl';
+let _detailReturnTab = 'collection';
+let _personReturnPanel = 'movie-detail';
 
 function t(key, ...args) {
   let s = (LANGS[currentLang] && LANGS[currentLang][key]) || (LANGS.nl[key]) || key;
@@ -4846,9 +4833,6 @@ let currentMovieData = {};
 let currentMovieId = null;
 let currentPersonId = null;
 let debugModeEnabled = false;
-let movieModalOpen = false;
-let personOverlayOpen = false;
-let bodyScrollLockY = 0;
 let allMovies = [];
 let activeFormat = '';
 let scannerRunning = false;
@@ -5049,11 +5033,7 @@ function unlockBodyScroll() {
 }
 
 function syncOverlayScrollLock() {
-  if (movieModalOpen || personOverlayOpen) {
-    lockBodyScroll();
-  } else {
-    unlockBodyScroll();
-  }
+  // No-op: detail pages are panels now, no scroll lock needed
 }
 
 function applyDebugVisibility() {
@@ -5117,13 +5097,15 @@ async function loadStats(retries = 2) {
   try {
     const r = await fetch(`${API}/stats`);
     if (!r.ok) {
-      if (retries > 0 && r.status >= 500) {
-        await new Promise(ok => setTimeout(ok, 1500));
-        return loadStats(retries - 1);
-      }
-      throw new Error(`HTTP ${r.status}`);
-    }
-    const d = await r.json();
+  let bodyScrollLockY = window.scrollY || window.pageYOffset || 0;
+  document.body.style.top = `-${bodyScrollLockY}px`;
+  document.body.dataset.scrollLockY = bodyScrollLockY;
+  document.body.classList.add('modal-open');
+}
+
+function unlockBodyScroll() {
+  if (!document.body.classList.contains('modal-open')) return;
+  const bodyScrollLockY = parseInt(document.body.dataset.scrollLockY || '0', 10)
     setCachedData('dv_stats_cache', d);
     _renderHeaderStats();
   } catch(e) {
@@ -5895,6 +5877,20 @@ async function quickDelete(id, title) {
 
 // ── Movie Detail Modal ────────────────────────────────────────────────────────
 async function openMovieDetail(id) {
+  // Remember which panel/tab we're coming from (for back navigation)
+  // Only update if we're NOT already in movie-detail or person-detail
+  const currentActive = document.querySelector('.panel.active');
+  const currentPanelId = currentActive ? currentActive.id : '';
+  if (currentPanelId !== 'panel-movie-detail' && currentPanelId !== 'panel-person-detail') {
+    // Determine return tab from active nav tab
+    const activeTab = document.querySelector('.tab.active');
+    _detailReturnTab = activeTab ? (activeTab.dataset.tab || 'collection') : 'collection';
+  }
+  // When opening from person-detail, set person return panel for the new movie's back btn
+  if (currentPanelId === 'panel-person-detail') {
+    _detailReturnTab = 'person-detail';
+  }
+
   currentMovieId = id;
   const movie = allMovies.find(m => m.id === id);
   if (!movie) return;
@@ -5964,15 +5960,13 @@ async function openMovieDetail(id) {
   document.getElementById('modalPlotGroup').style.display = movie.plot ? 'block' : 'none';
 
   // Reset to info tab
-  switchDetailTab('info');
-  // Mark cast as needing reload
+  switchDetailTab('info'); and scroll to top
+  switchTabDirect('movie-detail');
+  window.scrollTo({ top: 0, behavior: 'smooth' }
   document.getElementById('castContent').style.display = 'none';
   document.getElementById('castLoading').style.display = 'block';
   document.getElementById('castContent').innerHTML = '';
   _castLoaded = false;
-
-  movieModalOpen = true;
-  syncOverlayScrollLock();
 
   // Update watchlist / watched state from allMovies cache
   const cachedMovie = allMovies.find(m => m.id === id);
@@ -5980,32 +5974,30 @@ async function openMovieDetail(id) {
   _modalMovieLastWatched  = cachedMovie ? (cachedMovie.last_watched || null) : null;
   _updateWatchlistBtn();
   _updateWatchedBtn();
-  document.getElementById('modalBackdrop').classList.add('open');
+
+  // Navigate to the movie-detail panel
+  switchTabDirect('movie-detail');
   _pushRoute(`/movie/${id}`);
 }
 
-function closeModal(e) {
-  if (e.target === document.getElementById('modalBackdrop')) closeModalDirect();
-}
-
-function closeModalDirect() {
+function closeMovieDetail() {
   // If in edit mode with unsaved changes, ask to save
   const editMode = document.getElementById('modalEditMode');
   if (editMode && editMode.style.display !== 'none' && _isEditDirty()) {
     if (confirm(t('js.unsavedChanges'))) { saveEdit(); return; }
   }
   _editDirty = false;
-  movieModalOpen = false;
-  syncOverlayScrollLock();
-  document.getElementById('modalBackdrop').classList.remove('open');
   // Reset to view mode when closing
   document.getElementById('modalViewMode').style.display = '';
   document.getElementById('modalEditMode').style.display = 'none';
-  // Restore URL if we're on a movie route
-  if (window.location.pathname.startsWith('/movie/')) {
-    _replaceRoute(_tabPath('collection'));
-  }
+  // Restore URL
+  _replaceRoute(_tabPath(_detailReturnTab));
+  switchTabDirect(_detailReturnTab);
 }
+
+// Alias kept for any legacy inline calls
+function closeModalDirect() { closeMovieDetail(); }
+function closeModal(e) {}
 
 let _castLoaded = false;
 
@@ -6094,11 +6086,14 @@ function escHtml(s) {
 }
 
 async function openPersonDetail(personId) {
+  // Remember which panel we came from for the back button
+  const currentActive = document.querySelector('.panel.active');
+  const currentPanelId = currentActive ? currentActive.id : '';
+  _personReturnPanel = (currentPanelId === 'panel-movie-detail') ? 'movie-detail' : 'collection';
+
   currentPersonId = personId;
-  personOverlayOpen = true;
-  syncOverlayScrollLock();
-  const overlay = document.getElementById('personOverlay');
-  overlay.classList.add('open');
+  // Navigate to person-detail panel
+  switchTabDirect('person-detail');
   document.getElementById('personName').textContent = '';
   document.getElementById('personMeta').innerHTML = '';
   const personIdLabel = document.getElementById('personIdLabel');
@@ -6108,6 +6103,8 @@ async function openPersonDetail(personId) {
   document.getElementById('personBio').textContent = '';
   document.getElementById('personPhoto').innerHTML = '<div class="person-photo-placeholder-large">👤</div>';
   document.getElementById('personFilmography').innerHTML = '<span class="spinner"></span>';
+  // Scroll to top of panel
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   try {
     const r = await fetch(`${API}/people/${personId}`);
     const p = await r.json();
@@ -6142,12 +6139,8 @@ async function openPersonDetail(personId) {
         : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
       const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>`
                  : m.job ? `<div class="person-film-year">${escHtml(m.job)}</div>` : '';
-      filmHtml += `<div class="person-film-card" onclick="closePersonOverlay();openMovieDetail(${m.id})">
-        ${posterImg}
-        <div class="person-film-title">${escHtml(m.title)}</div>
-        <div class="person-film-year">${m.year || ''} · ${m.format || ''}</div>
-        ${role}
-      </div>`;
+      filmHtml += `<div class="person-film-card" onclick="_detailReturnTab='person-detail';openMovieDetail(${m.id})">`;
+      filmHtml += `${posterImg}<div class="person-film-title">${escHtml(m.title)}</div><div class="person-film-year">${m.year || ''} · ${m.format || ''}</div>${role}</div>`;
     });
     document.getElementById('personFilmography').innerHTML = filmHtml;
   } catch(e) {
@@ -6156,12 +6149,16 @@ async function openPersonDetail(personId) {
   }
 }
 
-function closePersonOverlay() {
+function closePersonDetail() {
   currentPersonId = null;
-  personOverlayOpen = false;
-  syncOverlayScrollLock();
-  document.getElementById('personOverlay').classList.remove('open');
+  switchTabDirect(_personReturnPanel);
+  if (_personReturnPanel !== 'movie-detail') {
+    _replaceRoute(_tabPath(_personReturnPanel));
+  }
 }
+
+// Alias kept for legacy inline calls
+function closePersonOverlay() { closePersonDetail(); }
 
 async function copyValueToClipboard(value, statusElId) {
   if (!value) return;
@@ -7180,15 +7177,16 @@ function _handleRoute() {
 
 window.addEventListener('popstate', (e) => {
   const path = (e.state && e.state.path) || window.location.pathname;
-  const movieMatch = path.match(/^\/movie\/(\d+)$/);
+  const movieMatch = path.{
+    closeMobileMenu();
+    // Close detail pages with Escape
+    const active = document.querySelector('.panel.active');
+    if (active && active.id === 'panel-person-detail') { closePersonDetail(); return; }
+    if (active && active.id === 'panel-movie-detail') { closeMovieDetail(); return; }
+  }\d+)$/);
   if (movieMatch) {
     openMovieDetail(parseInt(movieMatch[1], 10));
   } else {
-    if (movieModalOpen) {
-      movieModalOpen = false;
-      syncOverlayScrollLock();
-      document.getElementById('modalBackdrop').classList.remove('open');
-    }
     const tab = _PATH_TABS[path] || 'collection';
     switchTabDirect(tab);
   }
