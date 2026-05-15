@@ -3428,12 +3428,12 @@ nl: {
   'js.inviteLoadError':'Fout bij laden.',
   'js.groupsLoadError':'Fout bij laden groepen',
   'js.passkeyCount':'{0} passkey(s)',
-},// nav
+},
+en: {
+  // nav
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
   // general
-  'general.back':'Back
-en: {
-  'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
+  'general.back':'Back',
   'header.loading':'Loading...','header.offline':'Offline mode','header.queue':'Queue: {0}','header.logout':'↩ Log out','header.menuOpen':'Open menu',
   'scan.title':'Barcode Scanner','scan.placeholder':'Start camera to scan','scan.startCamera':'▶ Start Camera','scan.stop':'⏹ Stop',
   'scan.manualLabel':'Or enter barcode manually','scan.barcodePlaceholder':'E.g. 5051892198103','scan.search':'Search',
@@ -3773,13 +3773,12 @@ en: {
   'js.groupsLoadError':'Error loading groups',
   'js.passkeyCount':'{0} passkey(s)',
 },
-fr// nav
-  'nav.collection':'Collection','nav.import':'Import','nav.search':'Rechercher','nav.add':'Ajouter','nav.logs':'Logs','nav.settings':'Paramètres',
-  // general
-  'general.back':'Retour
+fr: {
   // nav
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Rechercher','nav.add':'Ajouter','nav.logs':'Logs','nav.settings':'Paramètres',
   'nav.lists':'Listes',
+  // general
+  'general.back':'Retour',
   // header
   'header.loading':'Chargement...','header.offline':'Mode hors ligne','header.queue':'File : {0}','header.logout':'↩ Déconnexion','header.menuOpen':'Ouvrir le menu',
   // scan
@@ -4129,12 +4128,12 @@ fr// nav
   'js.groupsLoadError':'Erreur lors du chargement des groupes',
   'js.passkeyCount':'{0} clé(s) d\'accès',
   'nav.lists':'Listes',
-},// nav
+},
+de: {
+  // nav
   'nav.collection':'Sammlung','nav.import':'Import','nav.search':'Suchen','nav.add':'Hinzufügen','nav.logs':'Logs','nav.settings':'Einstellungen','nav.lists':'Listen',
   // general
-  'general.back':'Zurück
-de: {
-  'nav.collection':'Sammlung','nav.import':'Import','nav.search':'Suchen','nav.add':'Hinzufügen','nav.logs':'Logs','nav.settings':'Einstellungen','nav.lists':'Listen',
+  'general.back':'Zurück',
   'header.loading':'Laden...','header.offline':'Offline-Modus','header.queue':'Warteschlange: {0}','header.logout':'↩ Abmelden','header.menuOpen':'Menü öffnen',
   'scan.title':'Barcode scannen','scan.placeholder':'Kamera starten zum Scannen','scan.startCamera':'▶ Kamera starten','scan.stop':'⏹ Stopp',
   'scan.manualLabel':'Oder Barcode manuell eingeben','scan.barcodePlaceholder':'z.B. 5051892198103','scan.search':'Suchen',
@@ -4458,12 +4457,12 @@ de: {
   'js.inviteLoadError':'Fehler beim Laden.',
   'js.groupsLoadError':'Fehler beim Laden der Gruppen',
   'js.passkeyCount':'{0} Passkey(s)',
-},// nav
+},
+es: {
+  // nav
   'nav.collection':'Colección','nav.import':'Importar','nav.search':'Buscar','nav.add':'Añadir','nav.logs':'Registros','nav.settings':'Ajustes','nav.lists':'Listas',
   // general
-  'general.back':'Volver
-es: {
-  'nav.collection':'Colección','nav.import':'Importar','nav.search':'Buscar','nav.add':'Añadir','nav.logs':'Registros','nav.settings':'Ajustes','nav.lists':'Listas',
+  'general.back':'Volver',
   'header.loading':'Cargando...','header.offline':'Modo sin conexión','header.queue':'Cola: {0}','header.logout':'↩ Cerrar sesión','header.menuOpen':'Abrir menú',
   'scan.title':'Escanear código de barras','scan.placeholder':'Iniciar cámara para escanear','scan.startCamera':'▶ Iniciar cámara','scan.stop':'⏹ Detener',
   'scan.manualLabel':'O introducir código de barras manualmente','scan.barcodePlaceholder':'Ej. 5051892198103','scan.search':'Buscar',
@@ -5935,10 +5934,9 @@ async function openMovieDetail(id) {
   document.getElementById('modalPlot').textContent = movie.plot || '';
   document.getElementById('modalPlotGroup').style.display = movie.plot ? 'block' : 'none';
 
-  // Reset to info tab
-  switchDetailTab('info'); and scroll to top
-  switchTabDirect('movie-detail');
-  window.scrollTo({ top: 0, behavior: 'smooth' }
+  // Reset to info tab and scroll to top
+  switchDetailTab('info');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   document.getElementById('castContent').style.display = 'none';
   document.getElementById('castLoading').style.display = 'block';
   document.getElementById('castContent').innerHTML = '';
@@ -7153,13 +7151,7 @@ function _handleRoute() {
 
 window.addEventListener('popstate', (e) => {
   const path = (e.state && e.state.path) || window.location.pathname;
-  const movieMatch = path.{
-    closeMobileMenu();
-    // Close detail pages with Escape
-    const active = document.querySelector('.panel.active');
-    if (active && active.id === 'panel-person-detail') { closePersonDetail(); return; }
-    if (active && active.id === 'panel-movie-detail') { closeMovieDetail(); return; }
-  }\d+)$/);
+  const movieMatch = path.match(/^\/movie\/(\d+)$/);
   if (movieMatch) {
     openMovieDetail(parseInt(movieMatch[1], 10));
   } else {
@@ -7173,7 +7165,12 @@ window.addEventListener('resize', () => {
 });
 
 window.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeMobileMenu();
+  if (e.key === 'Escape') {
+    const active = document.querySelector('.panel.active');
+    if (active && active.id === 'panel-person-detail') { closePersonDetail(); return; }
+    if (active && active.id === 'panel-movie-detail') { closeMovieDetail(); return; }
+    closeMobileMenu();
+  }
 });
 
 window.addEventListener('scroll', updateScrollState, { passive: true });
