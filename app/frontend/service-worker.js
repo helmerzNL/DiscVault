@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v3";
+const SW_VERSION = "discvault-sw-v4";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -148,11 +148,20 @@ self.addEventListener("push", event => {
 self.addEventListener("notificationclick", event => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || "/";
+  const isInvite = url.includes("#invites");
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
-      for (const client of list) {
-        if ("focus" in client) { client.navigate(url); return client.focus(); }
+      // If the app is already open, send a message instead of reloading the page.
+      if (list.length > 0) {
+        const client = list[0];
+        if (isInvite) {
+          client.postMessage({ type: "open-invites" });
+        } else {
+          client.navigate(url);
+        }
+        return client.focus();
       }
+      // App not open — open a new window with the target URL.
       if (clients.openWindow) return clients.openWindow(url);
     })
   );

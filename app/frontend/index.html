@@ -7382,6 +7382,12 @@ function _replaceRoute(path) {
   history.replaceState({ path }, '', path);
 }
 function _handleRoute() {
+  // Handle hash-based deep links (e.g. from push notification clicks).
+  if (window.location.hash === '#invites') {
+    history.replaceState(null, '', window.location.pathname);
+    openInvitePanel();
+    return;
+  }
   const path = window.location.pathname;
   const personMatch = path.match(/^\/person\/(\d+)$/);
   if (personMatch) {
@@ -9547,6 +9553,12 @@ async function saveNotifPref(key, value) {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  });
+  // Handle messages from the service worker (e.g. notification clicks on an open app).
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data && event.data.type === 'open-invites') {
+      openInvitePanel();
+    }
   });
 }
 

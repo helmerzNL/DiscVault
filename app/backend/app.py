@@ -4497,7 +4497,7 @@ def invite_to_group(group_id):
         "group_invite",
         "Uitnodiging voor groep",
         f"{inviter_name} heeft je uitgenodigd voor '{group['name']}'",
-        "/",
+        "/#invites",
     )
     return jsonify({"status": "ok"}), 201
 
