@@ -3680,6 +3680,16 @@ async function init() {
   await loadCollection();
 }
 
+function _renderHeaderStats(movies) {
+  const el = document.getElementById('headerStats');
+  if (!el) return;
+  const total = movies.length;
+  const counts = {};
+  for (const m of movies) { if (m.format) counts[m.format] = (counts[m.format] || 0) + 1; }
+  const formats = Object.entries(counts).map(([f,c]) => `<span>${c}</span> ${f}`).join(' &nbsp;·&nbsp; ');
+  el.innerHTML = t('js.statsTotal', total, formats || '');
+}
+
 async function loadStats(retries = 2) {
   try {
     const r = await fetch(`${API}/stats`);
@@ -3692,14 +3702,9 @@ async function loadStats(retries = 2) {
     }
     const d = await r.json();
     setCachedData('dv_stats_cache', d);
-    const el = document.getElementById('headerStats');
-    const formats = (d.by_format || []).map(f => `<span>${f.count}</span> ${f.format}`).join(' &nbsp;·&nbsp; ');
-    el.innerHTML = t('js.statsTotal', d.total, formats || '');
+    _renderHeaderStats(allMovies.length ? allMovies : []);
   } catch(e) {
-    const cached = getCachedData('dv_stats_cache', { total: 0, by_format: [] });
-    const el = document.getElementById('headerStats');
-    const formats = (cached.by_format || []).map(f => `<span>${f.count}</span> ${f.format}`).join(' &nbsp;·&nbsp; ');
-    el.innerHTML = t('js.statsTotal', cached.total || 0, formats || '');
+    _renderHeaderStats(allMovies.length ? allMovies : []);
   }
 }
 
@@ -4147,6 +4152,7 @@ function renderGrid(movies) {
 function filterMovies() {
   const movies = getCurrentMovies();
   renderGrid(movies);
+  _renderHeaderStats(movies);
   const fc = document.getElementById('filterCount');
   if (fc) {
     const searchInput = document.getElementById('searchInput');
