@@ -5281,6 +5281,7 @@ function handleDrop(e) {
 function handleFileSelect(e) {
   const file = e.target.files[0];
   if (file) processImportFile(file);
+  e.target.value = '';
 }
 
 async function processImportFile(file) {
@@ -5500,6 +5501,10 @@ async function doImport() {
           ${d.error_details.map(e => `<div>${e}</div>`).join('')}
         </div>` : ''}`;
 
+    // Clear stale file reference
+    importFile = null;
+    document.getElementById('fileInput').value = '';
+
     // Reload collection, then start per-movie enrichment
     await loadCollection();
     loadStats();
@@ -5514,6 +5519,8 @@ async function doImport() {
     cancelBtn.disabled = true;
     activeImportId = null;
     importCancelRequested = false;
+    importFile = null;
+    document.getElementById('fileInput').value = '';
     showStatus('importStatus', t('js.error', e.message), 'error');
     btn.innerHTML = t('js.importBtn');
     btn.disabled = false;
