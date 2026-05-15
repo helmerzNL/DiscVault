@@ -7740,11 +7740,11 @@ function toggleWatchedMenu(e) {
 async function _refreshWatchedHistoryPopup(movieId) {
   const section = document.getElementById('watchedHistorySection');
   const container = document.getElementById('watchedHistoryEntries');
-  if (!section || !container) return;
+  if (!section || !container) return [];
   const r = await fetch(`${API}/watched/${movieId}`, { headers: authHeaders() });
-  if (!r.ok) { section.style.display = 'none'; return; }
+  if (!r.ok) { section.style.display = 'none'; return []; }
   const entries = await r.json();
-  if (!entries.length) { section.style.display = 'none'; return; }
+  if (!entries.length) { section.style.display = 'none'; return []; }
   section.style.display = '';
   container.innerHTML = entries.map(e => {
     const d = e.watched_at.slice(0,10);
@@ -7754,6 +7754,7 @@ async function _refreshWatchedHistoryPopup(movieId) {
       <button class="del-btn" onclick="_deleteWatchedEntry(${e.id}, ${movieId})" title="Verwijderen">\u2715</button>
     </div>`;
   }).join('');
+  return entries;
 }
 
 async function _deleteWatchedEntry(entryId, movieId) {
@@ -7797,15 +7798,12 @@ async function markWatchedModal(type) {
     body: JSON.stringify({ watched_at: date })
   });
   if (!r.ok) return;
-  // Update watched button
-  if (!_modalMovieLastWatched || date > _modalMovieLastWatched) {
-    _modalMovieLastWatched = date;
-  }
+  // Re-fetch history to get accurate most-recent date and update history section
+  const entries = await _refreshWatchedHistoryPopup(currentMovieId);
+  _modalMovieLastWatched = entries.length ? entries[0].watched_at.slice(0,10) : date;
   _updateWatchedBtn();
   const m = allMovies.find(x => x.id === currentMovieId);
   if (m) m.last_watched = _modalMovieLastWatched;
-  // Pre-load history for next popup open (don't re-open popup)
-  _refreshWatchedHistoryPopup(currentMovieId);
   // Refresh Watch History page if currently open
   if (document.getElementById('listsSubWatchHistory')?.classList.contains('active')) {
     loadWatchHistory();

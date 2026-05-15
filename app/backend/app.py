@@ -311,7 +311,8 @@ def init_db():
     # Migration: drop UNIQUE(user_id, movie_id) from watch_history if it still exists
     try:
         pragma = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='watch_history'").fetchone()
-        if pragma and 'UNIQUE(user_id, movie_id)' in (pragma['sql'] or ''):
+        sql_norm = (pragma['sql'] or '').replace(' ', '').upper() if pragma else ''
+        if 'UNIQUE(USER_ID,MOVIE_ID)' in sql_norm or 'UNIQUE(MOVIE_ID,USER_ID)' in sql_norm:
             conn.execute("ALTER TABLE watch_history RENAME TO _wh_old")
             conn.execute("""
                 CREATE TABLE watch_history (
