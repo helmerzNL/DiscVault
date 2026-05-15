@@ -286,6 +286,29 @@ def init_db():
         )
     """)
 
+    # Watchlist & Watch History
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS watchlist (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT NOT NULL DEFAULT '__global__',
+            movie_id   INTEGER NOT NULL,
+            added_at   TEXT NOT NULL,
+            FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
+            UNIQUE(user_id, movie_id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS watch_history (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT NOT NULL DEFAULT '__global__',
+            movie_id   INTEGER NOT NULL,
+            watched_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
+            UNIQUE(user_id, movie_id)
+        )
+    """)
+
     # Auth: settings
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -1438,6 +1461,21 @@ def list_movies():
             groups_map.setdefault(mg["movie_id"], []).append(mg["group_id"])
         for m in movies:
             m["group_ids"] = groups_map.get(m["id"], [])
+        # Enrich with watchlist / watch history for current user
+        uid = _get_current_user_id() or "__global__"
+        wl_rows = conn.execute(
+            f"SELECT movie_id FROM watchlist WHERE user_id=? AND movie_id IN ({placeholders})",
+            [uid] + movie_ids
+        ).fetchall()
+        wl_set = {r["movie_id"] for r in wl_rows}
+        wh_rows = conn.execute(
+            f"SELECT movie_id, watched_at FROM watch_history WHERE user_id=? AND movie_id IN ({placeholders})",
+            [uid] + movie_ids
+        ).fetchall()
+        wh_map = {r["movie_id"]: r["watched_at"] for r in wh_rows}
+        for m in movies:
+            m["on_watchlist"] = m["id"] in wl_set
+            m["last_watched"] = wh_map.get(m["id"])
     conn.close()
     return jsonify(movies)
 
@@ -3898,6 +3936,110 @@ def recovery_login():
     add_log("auth", f"Recovery login voor {username}", level="warn")
     return jsonify({"status": "ok", "token": token, "new_recovery_code": new_code,
                     "message": "Passkeys removed. Please register a new passkey."})
+
+
+# ---------------------------------------------------------------------------
+# Watchlist & Watch History
+# ---------------------------------------------------------------------------
+
+@app.route("/api/watchlist", methods=["GET"])
+def get_watchlist():
+    uid = _get_current_user_id() or "__global__"
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT m.*, 1 as on_watchlist, w.added_at as watchlist_added_at,
+               h.watched_at as last_watched
+        FROM watchlist w
+        JOIN movies m ON m.id = w.movie_id
+        LEFT JOIN watch_history h ON h.movie_id = m.id AND h.user_id = w.user_id
+        WHERE w.user_id = ?
+        ORDER BY w.added_at DESC
+    """, (uid,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/watchlist/<int:movie_id>", methods=["POST"])
+def add_to_watchlist(movie_id):
+    uid = _get_current_user_id() or "__global__"
+    if _is_auth_enabled() and not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO watchlist (user_id, movie_id, added_at) VALUES (?,?,?)",
+            (uid, movie_id, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "added"})
+
+
+@app.route("/api/watchlist/<int:movie_id>", methods=["DELETE"])
+def remove_from_watchlist(movie_id):
+    uid = _get_current_user_id() or "__global__"
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM watchlist WHERE user_id=? AND movie_id=?", (uid, movie_id))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "removed"})
+
+
+@app.route("/api/watchlist/bulk", methods=["POST"])
+def bulk_add_watchlist():
+    uid = _get_current_user_id() or "__global__"
+    data = request.get_json() or {}
+    ids = data.get("movie_ids", [])
+    now = datetime.utcnow().isoformat()
+    conn = get_db()
+    try:
+        for mid in ids:
+            conn.execute(
+                "INSERT OR IGNORE INTO watchlist (user_id, movie_id, added_at) VALUES (?,?,?)",
+                (uid, mid, now)
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "added", "count": len(ids)})
+
+
+@app.route("/api/watched/<int:movie_id>", methods=["POST"])
+def mark_watched(movie_id):
+    uid = _get_current_user_id() or "__global__"
+    if _is_auth_enabled() and not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json() or {}
+    watched_at = data.get("watched_at", datetime.utcnow().date().isoformat())
+    now = datetime.utcnow().isoformat()
+    conn = get_db()
+    try:
+        conn.execute("""
+            INSERT INTO watch_history (user_id, movie_id, watched_at, created_at)
+            VALUES (?,?,?,?)
+            ON CONFLICT(user_id, movie_id) DO UPDATE SET
+                watched_at = excluded.watched_at,
+                created_at = excluded.created_at
+        """, (uid, movie_id, watched_at, now))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "watched", "watched_at": watched_at})
+
+
+@app.route("/api/watched/<int:movie_id>", methods=["DELETE"])
+def unmark_watched(movie_id):
+    uid = _get_current_user_id() or "__global__"
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM watch_history WHERE user_id=? AND movie_id=?", (uid, movie_id))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "removed"})
 
 
 # ---------------------------------------------------------------------------

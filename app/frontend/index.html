@@ -398,6 +398,63 @@
     background: rgba(255,255,255,0.03);
   }
 
+  .settings-sub-btn:disabled,
+  .settings-sub-btn.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* Watched date popup */
+  .watched-popup {
+    position: absolute;
+    z-index: 200;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 4px;
+    min-width: 180px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  .watched-popup button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text);
+    padding: 8px 14px;
+    font-size: 0.84rem;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background 0.15s;
+  }
+
+  .watched-popup button:hover { background: rgba(255,255,255,0.06); }
+  .watched-popup hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  .watched-popup input[type="date"] {
+    display: block; width: calc(100% - 28px);
+    margin: 6px 14px; padding: 6px 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 5px; font-size: 0.82rem;
+  }
+
+  /* Watchlist indicator on movie cards */
+  .movie-card .watchlist-dot {
+    position: absolute; top: 6px; left: 6px;
+    width: 8px; height: 8px;
+    background: var(--accent); border-radius: 50%;
+    box-shadow: 0 0 6px var(--accent);
+  }
+  .movie-card .watched-check {
+    position: absolute; top: 6px; right: 6px;
+    font-size: 0.7rem; color: #4caf50;
+    background: rgba(0,0,0,0.6); border-radius: 50%;
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
   .settings-sub-section {
     display: none;
     margin-top: 20px;
@@ -1778,16 +1835,16 @@
     <span class="tab-icon mdi mdi-view-grid-outline" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.collection">Collectie</span>
   </div>
-  <div class="tab" data-tab="import" onclick="switchTab('import')">
-    <span class="tab-icon mdi mdi-database-import-outline" aria-hidden="true"></span>
-    <span class="tab-label" data-i18n="nav.import">Import</span>
+  <div class="tab" data-tab="lists" onclick="switchTab('lists')">
+    <span class="tab-icon mdi mdi-playlist-check" aria-hidden="true"></span>
+    <span class="tab-label">Lists</span>
   </div>
   <div class="tab" data-tab="search" onclick="switchTab('search')">
     <span class="tab-icon mdi mdi-magnify" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.search">Zoeken</span>
   </div>
-  <div class="tab" data-tab="scan" onclick="switchTab('scan')">
-    <span class="tab-icon mdi mdi-barcode-scan" aria-hidden="true"></span>
+  <div class="tab" data-tab="toevoegen" onclick="switchTab('toevoegen')">
+    <span class="tab-icon mdi mdi-plus-circle-outline" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.add">Toevoegen</span>
   </div>
   <div class="tab" data-tab="settings" onclick="switchTab('settings')">
@@ -1876,6 +1933,27 @@
     </div>
   </div>
 
+  <!-- TOEVOEGEN PANEL -->
+  <div class="panel" id="panel-toevoegen">
+    <div class="settings-submenu">
+      <button class="settings-sub-btn active" type="button" data-toevoegen-sub="scan" onclick="switchToevoegen('scan')">
+        <span class="settings-sub-icon mdi mdi-barcode-scan" aria-hidden="true"></span>
+        <span class="settings-sub-label">Barcode scannen</span>
+      </button>
+      <button class="settings-sub-btn" type="button" data-toevoegen-sub="manual" onclick="switchToevoegen('manual')">
+        <span class="settings-sub-icon mdi mdi-pencil-plus-outline" aria-hidden="true"></span>
+        <span class="settings-sub-label">Handmatig</span>
+      </button>
+      <button class="settings-sub-btn" type="button" data-toevoegen-sub="import" onclick="switchToevoegen('import')">
+        <span class="settings-sub-icon mdi mdi-database-import-outline" aria-hidden="true"></span>
+        <span class="settings-sub-label">Importeren</span>
+      </button>
+    </div>
+    <div class="settings-sub-section active" id="addSubScan"></div>
+    <div class="settings-sub-section" id="addSubManual"></div>
+    <div class="settings-sub-section" id="addSubImport"></div>
+  </div>
+
   <!-- COLLECTION PANEL -->
   <div class="panel active" id="panel-collection">
     <div class="collection-controls">
@@ -1897,6 +1975,7 @@
       <span class="bulk-count" id="bulkCount">0 geselecteerd</span>
       <button class="btn btn-secondary" onclick="selectAll()" id="btnSelectAll" data-i18n="bulk.selectAll">Alles selecteren</button>
       <button class="btn btn-secondary" onclick="deselectAll()" data-i18n="bulk.deselect">Deselecteer</button>
+      <button class="btn btn-secondary" style="color:#4caf50; border-color:rgba(76,175,80,.4);" onclick="bulkAddToWatchlist()">🔖 Watchlist</button>
       <button class="btn btn-secondary" style="color:var(--accent); border-color:rgba(232,197,71,.4);" onclick="showBulkGroupAssign()" data-i18n="bulk.assignGroup">📁 Groep toewijzen</button>
       <button class="btn btn-secondary" style="color:var(--accent2); border-color:rgba(124,106,247,.4);" onclick="bulkRefresh()" data-i18n="bulk.refresh">
         ↺ Bijwerken via TMDb/OMDb
@@ -2146,6 +2225,38 @@
 
     </div>
   </div>
+
+  <!-- LISTS PANEL -->
+  <div class="panel" id="panel-lists">
+    <div>
+      <div class="settings-submenu">
+        <button class="settings-sub-btn active" type="button" data-lists-sub="watchlist" onclick="switchListsSubmenu('watchlist')">
+          <span class="settings-sub-icon mdi mdi-bookmark-outline" aria-hidden="true"></span>
+          <span class="settings-sub-label">Watchlist</span>
+        </button>
+        <button class="settings-sub-btn disabled" type="button" disabled title="Binnenkort beschikbaar">
+          <span class="settings-sub-icon mdi mdi-history" aria-hidden="true"></span>
+          <span class="settings-sub-label">Watch History</span>
+        </button>
+        <button class="settings-sub-btn disabled" type="button" disabled title="Binnenkort beschikbaar">
+          <span class="settings-sub-icon mdi mdi-format-list-bulleted" aria-hidden="true"></span>
+          <span class="settings-sub-label">Custom Lists</span>
+        </button>
+        <button class="settings-sub-btn disabled" type="button" disabled title="Binnenkort beschikbaar">
+          <span class="settings-sub-icon mdi mdi-tag-outline" aria-hidden="true"></span>
+          <span class="settings-sub-label">Tags</span>
+        </button>
+      </div>
+      <div class="settings-sub-section active" id="listsSubWatchlist">
+        <div id="watchlistEmpty" style="display:none; text-align:center; padding:60px 20px; color:var(--text-muted);">
+          <div style="font-size:3rem; margin-bottom:12px; opacity:0.3;">🔖</div>
+          <div style="font-size:0.9rem;">Je watchlist is leeg.<br>Voeg films toe via het detailscherm of via Selecteren in de collectie.</div>
+        </div>
+        <div id="watchlistGrid" class="movies-grid" style="margin-top:20px;"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- SETTINGS PANEL -->
   <div class="panel" id="panel-settings">
     <div>
@@ -2642,6 +2753,20 @@
     <!-- ── VIEW MODE ── -->
     <div id="modalViewMode">
       <div class="btn-row modal-edit-actions" style="flex-wrap:wrap;">
+        <button class="btn btn-secondary" id="btnWatchlistModal" onclick="toggleWatchlistModal()" style="min-width:110px;">🔖 Watchlist</button>
+        <div style="position:relative; display:inline-block;">
+          <button class="btn btn-secondary" id="btnWatchedModal" onclick="toggleWatchedMenu(event)" style="min-width:110px;">👁 Bekeken</button>
+          <div id="watchedPopup" class="watched-popup" style="display:none; position:absolute; bottom:calc(100% + 6px); left:0; z-index:300;">
+            <button onclick="markWatchedModal('today')">📅 Eerder vandaag</button>
+            <button onclick="markWatchedModal('yesterday')">↩ Gisteren</button>
+            <button onclick="markWatchedModal('now')">▶ Nu</button>
+            <hr>
+            <input type="date" id="watchedDateInput" style="display:block; width:calc(100% - 28px); margin:6px 14px; padding:6px 8px; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:5px; font-size:0.82rem;">
+            <button onclick="markWatchedModal('custom')">✓ Datum kiezen</button>
+            <hr>
+            <button onclick="unmarkWatchedModal()" style="color:var(--danger);">✕ Verwijder uit bekeken</button>
+          </div>
+        </div>
         <button class="btn btn-secondary" id="btnEditMovie" onclick="startEdit()" data-i18n="modal.edit">Bewerken</button>
       </div>
 
@@ -3695,6 +3820,7 @@ function validateCriticalUiElements() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
+  reorganizeToevoegenPanels();
   validateCriticalUiElements();
   applyDebugVisibility();
   document.getElementById('languageSelect').value = currentLang;
@@ -3797,23 +3923,60 @@ async function loadCollection(retries = 2) {
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
+let currentToevoegenSub = 'scan';
+
+function reorganizeToevoegenPanels() {
+  // Move existing panel-scan content into addSubScan
+  const scanDest = document.getElementById('addSubScan');
+  const scanSrc  = document.getElementById('panel-scan');
+  if (scanDest && scanSrc && scanDest.children.length === 0) {
+    while (scanSrc.firstChild) scanDest.appendChild(scanSrc.firstChild);
+    scanSrc.remove();
+  }
+  // Move existing panel-add content into addSubManual
+  const manualDest = document.getElementById('addSubManual');
+  const manualSrc  = document.getElementById('panel-add');
+  if (manualDest && manualSrc && manualDest.children.length === 0) {
+    while (manualSrc.firstChild) manualDest.appendChild(manualSrc.firstChild);
+    manualSrc.remove();
+  }
+  // Move existing panel-import content into addSubImport
+  const importDest = document.getElementById('addSubImport');
+  const importSrc  = document.getElementById('panel-import');
+  if (importDest && importSrc && importDest.children.length === 0) {
+    while (importSrc.firstChild) importDest.appendChild(importSrc.firstChild);
+    importSrc.remove();
+  }
+}
+
+function switchToevoegen(sub) {
+  currentToevoegenSub = sub;
+  document.querySelectorAll('[data-toevoegen-sub]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-toevoegen-sub') === sub);
+  });
+  const map = { scan: 'addSubScan', manual: 'addSubManual', import: 'addSubImport' };
+  document.querySelectorAll('#panel-toevoegen .settings-sub-section').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(map[sub]);
+  if (el) el.classList.add('active');
+}
+
 function switchTab(name) {
-  const activeTabName = name === 'logs' ? 'settings' : name;
-  const panelName = name;
+  const activeTabName = (name === 'logs') ? 'settings'
+    : (name === 'scan' || name === 'import') ? 'toevoegen'
+    : name;
+  const panelName = (name === 'scan' || name === 'import') ? 'toevoegen' : name;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const selected = document.querySelector(`.tab[data-tab="${activeTabName}"]`);
   if (selected) selected.classList.add('active');
   const panel = document.getElementById(`panel-${panelName}`);
   if (panel) panel.classList.add('active');
-  if (panelName === 'scan') {
-    const manualPanel = document.getElementById('panel-add');
-    if (manualPanel) manualPanel.classList.add('active');
-  }
   if (isMobileNav()) closeMobileMenu();
   if (panelName === 'collection') loadCollection();
+  if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
   if (name === 'settings') loadSettings();
+  if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();
     const input = document.getElementById('searchPageInput');
@@ -4168,6 +4331,8 @@ function renderGrid(movies) {
     return `
     <div class="movie-card${isSelected ? ' selected' : ''}${selectMode && !ownable ? ' not-owned' : ''}" data-id="${m.id}" onclick="${clickHandler}">
       ${showDelete ? `<button class="movie-card-delete" onclick="event.stopPropagation(); quickDelete(${m.id}, '${safeTitle}')">✕</button>` : ''}
+      ${m.on_watchlist ? '<div class="watchlist-dot" title="Op watchlist"></div>' : ''}
+      ${m.last_watched ? `<div class="watched-check" title="Bekeken ${m.last_watched.slice(0,10)}">✓</div>` : ''}
       <div class="movie-card-poster">
         ${imgHtml}
         <div class="movie-card-format">${m.format || '4K'}</div>
@@ -4541,6 +4706,13 @@ async function openMovieDetail(id) {
 
   movieModalOpen = true;
   syncOverlayScrollLock();
+
+  // Update watchlist / watched state from allMovies cache
+  const cachedMovie = allMovies.find(m => m.id === id);
+  _modalMovieOnWatchlist = cachedMovie ? !!cachedMovie.on_watchlist : false;
+  _modalMovieLastWatched  = cachedMovie ? (cachedMovie.last_watched || null) : null;
+  _updateWatchlistBtn();
+  _updateWatchedBtn();
   document.getElementById('modalBackdrop').classList.add('open');
 }
 
@@ -5670,21 +5842,21 @@ function resetImport() {
 }
 
 function switchTabDirect(name) {
-  const activeTabName = name === 'logs' ? 'settings' : name;
-  const panelName = name;
+  const activeTabName = (name === 'logs') ? 'settings'
+    : (name === 'scan' || name === 'import') ? 'toevoegen'
+    : name;
+  const panelName = (name === 'scan' || name === 'import') ? 'toevoegen' : name;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const selected = document.querySelector(`.tab[data-tab="${activeTabName}"]`);
   if (selected) selected.classList.add('active');
   const panel = document.getElementById(`panel-${panelName}`);
   if (panel) panel.classList.add('active');
-  if (panelName === 'scan') {
-    const manualPanel = document.getElementById('panel-add');
-    if (manualPanel) manualPanel.classList.add('active');
-  }
   if (isMobileNav()) closeMobileMenu();
   if (panelName === 'collection') loadCollection();
+  if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
+  if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();
     const input = document.getElementById('searchPageInput');
@@ -6868,6 +7040,170 @@ async function respondInvite(inviteId, action) {
   }
   await loadInviteNotifications();
   await openInvitePanel();
+}
+
+// ── Lists: Watchlist & Watched ────────────────────────────────────────────────
+
+function switchListsSubmenu(sub) {
+  document.querySelectorAll('[data-lists-sub]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-lists-sub') === sub);
+  });
+  document.querySelectorAll('#panel-lists .settings-sub-section').forEach(s => s.classList.remove('active'));
+  if (sub === 'watchlist') {
+    const el = document.getElementById('listsSubWatchlist');
+    if (el) el.classList.add('active');
+  }
+}
+
+async function loadWatchlist() {
+  const grid  = document.getElementById('watchlistGrid');
+  const empty = document.getElementById('watchlistEmpty');
+  if (!grid) return;
+  grid.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">Laden...</div>';
+  try {
+    const r = await fetch(`${API}/watchlist`);
+    if (!r.ok) { grid.innerHTML = ''; return; }
+    const movies = await r.json();
+    if (!movies.length) {
+      grid.innerHTML = '';
+      if (empty) empty.style.display = '';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    grid.innerHTML = movies.map(m => {
+      const src = posterSrc(m);
+      const imgHtml = src
+        ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
+        : '<div class="no-img">🎬</div>';
+      const watched = m.last_watched ? `<div class="watched-check" title="Bekeken op ${m.last_watched}">✓</div>` : '';
+      return `
+      <div class="movie-card" data-id="${m.id}" onclick="openMovieDetail(${m.id})" style="position:relative;">
+        ${watched}
+        <div class="movie-card-poster">${imgHtml}
+          <div class="movie-card-format">${m.format || '4K'}</div>
+        </div>
+        <div class="movie-card-info">
+          <div class="movie-card-title">${m.title}</div>
+          <div class="movie-card-year">${m.year || '—'}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    grid.innerHTML = '';
+  }
+}
+
+// Current movie watchlist/watched state (set when modal opens)
+let _modalMovieOnWatchlist = false;
+let _modalMovieLastWatched = null;
+
+async function toggleWatchlistModal() {
+  if (!currentMovieId) return;
+  const btn = document.getElementById('btnWatchlistModal');
+  if (_modalMovieOnWatchlist) {
+    await fetch(`${API}/watchlist/${currentMovieId}`, { method: 'DELETE' });
+    _modalMovieOnWatchlist = false;
+  } else {
+    await fetch(`${API}/watchlist/${currentMovieId}`, { method: 'POST' });
+    _modalMovieOnWatchlist = true;
+  }
+  _updateWatchlistBtn();
+  // Update allMovies cache
+  const m = allMovies.find(x => x.id === currentMovieId);
+  if (m) m.on_watchlist = _modalMovieOnWatchlist;
+}
+
+function _updateWatchlistBtn() {
+  const btn = document.getElementById('btnWatchlistModal');
+  if (!btn) return;
+  btn.textContent = _modalMovieOnWatchlist ? '🔖 In watchlist' : '🔖 Watchlist';
+  btn.style.color = _modalMovieOnWatchlist ? 'var(--accent)' : '';
+  btn.style.borderColor = _modalMovieOnWatchlist ? 'rgba(232,197,71,.5)' : '';
+}
+
+function _updateWatchedBtn() {
+  const btn = document.getElementById('btnWatchedModal');
+  if (!btn) return;
+  if (_modalMovieLastWatched) {
+    btn.textContent = `👁 Bekeken ${_modalMovieLastWatched.slice(0,10)}`;
+    btn.style.color = '#4caf50';
+    btn.style.borderColor = 'rgba(76,175,80,.4)';
+  } else {
+    btn.textContent = '👁 Bekeken';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }
+}
+
+function toggleWatchedMenu(e) {
+  e.stopPropagation();
+  const popup = document.getElementById('watchedPopup');
+  if (!popup) return;
+  const isVisible = popup.style.display !== 'none';
+  popup.style.display = isVisible ? 'none' : 'block';
+  if (!isVisible) {
+    const today = new Date().toISOString().slice(0,10);
+    document.getElementById('watchedDateInput').value = today;
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', function closePopup() {
+        popup.style.display = 'none';
+        document.removeEventListener('click', closePopup);
+      }, { once: true });
+    }, 0);
+  }
+}
+
+async function markWatchedModal(type) {
+  if (!currentMovieId) return;
+  document.getElementById('watchedPopup').style.display = 'none';
+  let date;
+  const now = new Date();
+  if (type === 'now' || type === 'today') {
+    date = now.toISOString().slice(0,10);
+  } else if (type === 'yesterday') {
+    const y = new Date(now); y.setDate(y.getDate() - 1);
+    date = y.toISOString().slice(0,10);
+  } else {
+    date = document.getElementById('watchedDateInput').value || now.toISOString().slice(0,10);
+  }
+  const r = await fetch(`${API}/watched/${currentMovieId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ watched_at: date })
+  });
+  const d = await r.json();
+  _modalMovieLastWatched = d.watched_at || date;
+  _updateWatchedBtn();
+  const m = allMovies.find(x => x.id === currentMovieId);
+  if (m) m.last_watched = _modalMovieLastWatched;
+}
+
+async function unmarkWatchedModal() {
+  if (!currentMovieId) return;
+  document.getElementById('watchedPopup').style.display = 'none';
+  await fetch(`${API}/watched/${currentMovieId}`, { method: 'DELETE' });
+  _modalMovieLastWatched = null;
+  _updateWatchedBtn();
+  const m = allMovies.find(x => x.id === currentMovieId);
+  if (m) m.last_watched = null;
+}
+
+async function bulkAddToWatchlist() {
+  if (!selectedIds.size) return;
+  const ids = Array.from(selectedIds);
+  await fetch(`${API}/watchlist/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ movie_ids: ids })
+  });
+  // Update local cache
+  ids.forEach(id => {
+    const m = allMovies.find(x => x.id === id);
+    if (m) m.on_watchlist = true;
+  });
+  showStatus('bulkGroupStatus', `✓ ${ids.length} film(s) toegevoegd aan watchlist`, 'success');
+  setTimeout(() => toggleSelectMode(), 1200);
 }
 
 // ── Backup / Restore / Reset ──────────────────────────────────────────────────
