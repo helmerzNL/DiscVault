@@ -450,6 +450,34 @@
     border-radius: 5px; flex-shrink: 0;
   }
   .watched-popup-date-row button:hover { background: rgba(255,255,255,0.1) !important; }
+  .watched-history-entry {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 14px; font-size: 0.82rem; color: var(--text);
+  }
+  .watched-history-entry .del-btn {
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    font-size: 0.8rem; padding: 2px 4px; border-radius: 3px; line-height: 1;
+  }
+  .watched-history-entry .del-btn:hover { color: var(--danger, #e05555); background: rgba(255,255,255,0.06); }
+  /* Watch History list page */
+  .watch-history-day { margin-bottom: 20px; }
+  .watch-history-day-label {
+    font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 0 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 8px;
+  }
+  .watch-history-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer;
+  }
+  .watch-history-row:hover { background: rgba(255,255,255,0.03); border-radius: 6px; padding: 8px 6px; }
+  .watch-history-row img, .watch-history-row .no-img-sm {
+    width: 36px; height: 54px; border-radius: 4px; object-fit: cover; flex-shrink: 0;
+  }
+  .watch-history-row .no-img-sm { background: var(--surface2); display:flex; align-items:center; justify-content:center; font-size:1.2rem; }
+  .watch-history-row .whr-title { font-size: 0.9rem; font-weight: 500; }
+  .watch-history-row .whr-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 
   /* Watchlist indicator on movie cards */
   .movie-card .watchlist-dot {
@@ -2245,7 +2273,7 @@
           <span class="settings-sub-icon mdi mdi-bookmark-outline" aria-hidden="true"></span>
           <span class="settings-sub-label">Watchlist</span>
         </button>
-        <button class="settings-sub-btn disabled" type="button" disabled title="Binnenkort beschikbaar">
+        <button class="settings-sub-btn" type="button" data-lists-sub="watchhistory" onclick="switchListsSubmenu('watchhistory')">
           <span class="settings-sub-icon mdi mdi-history" aria-hidden="true"></span>
           <span class="settings-sub-label">Watch History</span>
         </button>
@@ -2264,6 +2292,13 @@
           <div style="font-size:0.9rem;">Je watchlist is leeg.<br>Voeg films toe via het detailscherm of via Selecteren in de collectie.</div>
         </div>
         <div id="watchlistGrid" class="movies-grid" style="margin-top:20px;"></div>
+      </div>
+      <div class="settings-sub-section" id="listsSubWatchHistory">
+        <div id="watchHistoryEmpty" style="display:none; text-align:center; padding:60px 20px; color:var(--text-muted);">
+          <div style="font-size:3rem; margin-bottom:12px; opacity:0.3;">📅</div>
+          <div style="font-size:0.9rem;">Je hebt nog geen films als bekeken gemarkeerd.</div>
+        </div>
+        <div id="watchHistoryList" style="margin-top:16px;"></div>
       </div>
     </div>
   </div>
@@ -2773,6 +2808,11 @@
             <div class="watched-popup-date-row">
               <input type="date" id="watchedDateInput">
               <button onclick="markWatchedModal('custom')" title="Bevestig datum">✓</button>
+            </div>
+            <div id="watchedHistorySection" style="display:none;">
+              <hr>
+              <div style="padding:5px 14px 3px; font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Historie</div>
+              <div id="watchedHistoryEntries"></div>
             </div>
           </div>
         </div>
@@ -7061,6 +7101,11 @@ function switchListsSubmenu(sub) {
   if (sub === 'watchlist') {
     const el = document.getElementById('listsSubWatchlist');
     if (el) el.classList.add('active');
+    loadWatchlist();
+  } else if (sub === 'watchhistory') {
+    const el = document.getElementById('listsSubWatchHistory');
+    if (el) el.classList.add('active');
+    loadWatchHistory();
   }
 }
 
@@ -7099,6 +7144,55 @@ async function loadWatchlist() {
     }).join('');
   } catch(e) {
     grid.innerHTML = '';
+  }
+}
+
+async function loadWatchHistory() {
+  const list  = document.getElementById('watchHistoryList');
+  const empty = document.getElementById('watchHistoryEmpty');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">Laden...</div>';
+  try {
+    const r = await fetch(`${API}/watch-history`);
+    if (!r.ok) { list.innerHTML = ''; return; }
+    const entries = await r.json();
+    if (!entries.length) {
+      list.innerHTML = '';
+      if (empty) empty.style.display = '';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    // Group by date
+    const byDate = {};
+    entries.forEach(e => {
+      const d = e.watched_at.slice(0,10);
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(e);
+    });
+    list.innerHTML = Object.keys(byDate).map(date => {
+      const label = _formatDateNL(date);
+      const rows = byDate[date].map(e => {
+        const src = e.poster_path
+          ? `https://image.tmdb.org/t/p/w92${e.poster_path}`
+          : (e.poster_url || null);
+        const img = src
+          ? `<img src="${src}" onerror="this.outerHTML='<div class=\\'no-img-sm\\'>🎬</div>'">`
+          : '<div class="no-img-sm">🎬</div>';
+        return `<div class="watch-history-row" onclick="openMovieDetail(${e.movie_id})">
+          ${img}
+          <div>
+            <div class="whr-title">${e.title}</div>
+            <div class="whr-meta">${e.year || '—'} · ${e.format || '—'}</div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="watch-history-day">
+        <div class="watch-history-day-label">${label}</div>
+        ${rows}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '';
   }
 }
 
@@ -7153,6 +7247,8 @@ function toggleWatchedMenu(e) {
   if (!isVisible) {
     const today = new Date().toISOString().slice(0,10);
     document.getElementById('watchedDateInput').value = today;
+    // Load existing watch history entries for this movie
+    if (currentMovieId) _refreshWatchedHistoryPopup(currentMovieId);
     // Close on outside click
     setTimeout(() => {
       document.addEventListener('click', function closePopup() {
@@ -7161,6 +7257,45 @@ function toggleWatchedMenu(e) {
       }, { once: true });
     }, 0);
   }
+}
+
+async function _refreshWatchedHistoryPopup(movieId) {
+  const section = document.getElementById('watchedHistorySection');
+  const container = document.getElementById('watchedHistoryEntries');
+  if (!section || !container) return;
+  const r = await fetch(`${API}/watched/${movieId}`);
+  if (!r.ok) { section.style.display = 'none'; return; }
+  const entries = await r.json();
+  if (!entries.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  container.innerHTML = entries.map(e => {
+    const d = e.watched_at.slice(0,10);
+    const label = _formatDateNL(d);
+    return `<div class="watched-history-entry">
+      <span>${label}</span>
+      <button class="del-btn" onclick="_deleteWatchedEntry(${e.id}, ${movieId})" title="Verwijderen">\u2715</button>
+    </div>`;
+  }).join('');
+}
+
+async function _deleteWatchedEntry(entryId, movieId) {
+  await fetch(`${API}/watched/entry/${entryId}`, { method: 'DELETE' });
+  await _refreshWatchedHistoryPopup(movieId);
+  // Refresh the movie's last_watched in allMovies
+  const r2 = await fetch(`${API}/watched/${movieId}`);
+  const remaining = r2.ok ? await r2.json() : [];
+  const newLastWatched = remaining.length ? remaining[0].watched_at.slice(0,10) : null;
+  _modalMovieLastWatched = newLastWatched;
+  _updateWatchedBtn();
+  const m = allMovies.find(x => x.id === movieId);
+  if (m) m.last_watched = newLastWatched;
+}
+
+function _formatDateNL(dateStr) {
+  if (!dateStr) return '';
+  const months = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  const [y, mo, d] = dateStr.split('-');
+  return `${parseInt(d)} ${months[parseInt(mo)-1]} ${y}`;
 }
 
 async function markWatchedModal(type) {
@@ -7182,21 +7317,32 @@ async function markWatchedModal(type) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ watched_at: date })
   });
-  const d = await r.json();
-  _modalMovieLastWatched = d.watched_at || date;
+  // Use returned watched_at or the date we sent
+  const latestDate = date;
+  // Update btn if this is newer than current last_watched
+  if (!_modalMovieLastWatched || latestDate > _modalMovieLastWatched) {
+    _modalMovieLastWatched = latestDate;
+  }
   _updateWatchedBtn();
   const m = allMovies.find(x => x.id === currentMovieId);
   if (m) m.last_watched = _modalMovieLastWatched;
+  // Re-show popup with updated history
+  const popup = document.getElementById('watchedPopup');
+  popup.style.display = 'block';
+  await _refreshWatchedHistoryPopup(currentMovieId);
+  setTimeout(() => {
+    document.addEventListener('click', function closePopup() {
+      popup.style.display = 'none';
+      document.removeEventListener('click', closePopup);
+    }, { once: true });
+  }, 0);
 }
 
 async function unmarkWatchedModal() {
+  // Kept for backwards compat but no longer called from UI
   if (!currentMovieId) return;
   document.getElementById('watchedPopup').style.display = 'none';
-  await fetch(`${API}/watched/${currentMovieId}`, { method: 'DELETE' });
-  _modalMovieLastWatched = null;
-  _updateWatchedBtn();
-  const m = allMovies.find(x => x.id === currentMovieId);
-  if (m) m.last_watched = null;
+  await fetch(`${API}/watched/entry`, { method: 'DELETE' });
 }
 
 async function bulkAddToWatchlist() {

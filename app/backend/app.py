@@ -304,10 +304,30 @@ def init_db():
             movie_id   INTEGER NOT NULL,
             watched_at TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
-            UNIQUE(user_id, movie_id)
+            FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
         )
     """)
+
+    # Migration: drop UNIQUE(user_id, movie_id) from watch_history if it still exists
+    try:
+        pragma = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='watch_history'").fetchone()
+        if pragma and 'UNIQUE(user_id, movie_id)' in (pragma['sql'] or ''):
+            conn.execute("ALTER TABLE watch_history RENAME TO _wh_old")
+            conn.execute("""
+                CREATE TABLE watch_history (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id    TEXT NOT NULL DEFAULT '__global__',
+                    movie_id   INTEGER NOT NULL,
+                    watched_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("INSERT INTO watch_history (id,user_id,movie_id,watched_at,created_at) SELECT id,user_id,movie_id,watched_at,created_at FROM _wh_old")
+            conn.execute("DROP TABLE _wh_old")
+            conn.commit()
+    except Exception:
+        pass
 
     # Auth: settings
     conn.execute("""
@@ -1469,7 +1489,7 @@ def list_movies():
         ).fetchall()
         wl_set = {r["movie_id"] for r in wl_rows}
         wh_rows = conn.execute(
-            f"SELECT movie_id, watched_at FROM watch_history WHERE user_id=? AND movie_id IN ({placeholders})",
+            f"SELECT movie_id, MAX(watched_at) as watched_at FROM watch_history WHERE user_id=? AND movie_id IN ({placeholders}) GROUP BY movie_id",
             [uid] + movie_ids
         ).fetchall()
         wh_map = {r["movie_id"]: r["watched_at"] for r in wh_rows}
@@ -3948,10 +3968,9 @@ def get_watchlist():
     conn = get_db()
     rows = conn.execute("""
         SELECT m.*, 1 as on_watchlist, w.added_at as watchlist_added_at,
-               h.watched_at as last_watched
+               (SELECT MAX(watched_at) FROM watch_history WHERE movie_id=m.id AND user_id=w.user_id) as last_watched
         FROM watchlist w
         JOIN movies m ON m.id = w.movie_id
-        LEFT JOIN watch_history h ON h.movie_id = m.id AND h.user_id = w.user_id
         WHERE w.user_id = ?
         ORDER BY w.added_at DESC
     """, (uid,)).fetchall()
@@ -4007,6 +4026,19 @@ def bulk_add_watchlist():
     return jsonify({"status": "added", "count": len(ids)})
 
 
+@app.route("/api/watched/<int:movie_id>", methods=["GET"])
+def get_watched_entries(movie_id):
+    """Return all watch history entries for a movie (newest first)."""
+    uid = _get_current_user_id() or "__global__"
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, watched_at FROM watch_history WHERE user_id=? AND movie_id=? ORDER BY watched_at DESC, id DESC",
+        (uid, movie_id)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
 @app.route("/api/watched/<int:movie_id>", methods=["POST"])
 def mark_watched(movie_id):
     uid = _get_current_user_id() or "__global__"
@@ -4017,29 +4049,44 @@ def mark_watched(movie_id):
     now = datetime.utcnow().isoformat()
     conn = get_db()
     try:
-        conn.execute("""
-            INSERT INTO watch_history (user_id, movie_id, watched_at, created_at)
-            VALUES (?,?,?,?)
-            ON CONFLICT(user_id, movie_id) DO UPDATE SET
-                watched_at = excluded.watched_at,
-                created_at = excluded.created_at
-        """, (uid, movie_id, watched_at, now))
+        conn.execute(
+            "INSERT INTO watch_history (user_id, movie_id, watched_at, created_at) VALUES (?,?,?,?)",
+            (uid, movie_id, watched_at, now)
+        )
         conn.commit()
     finally:
         conn.close()
     return jsonify({"status": "watched", "watched_at": watched_at})
 
 
-@app.route("/api/watched/<int:movie_id>", methods=["DELETE"])
-def unmark_watched(movie_id):
+@app.route("/api/watched/entry/<int:entry_id>", methods=["DELETE"])
+def delete_watched_entry(entry_id):
+    """Delete a single watch history entry by its ID."""
     uid = _get_current_user_id() or "__global__"
     conn = get_db()
     try:
-        conn.execute("DELETE FROM watch_history WHERE user_id=? AND movie_id=?", (uid, movie_id))
+        conn.execute("DELETE FROM watch_history WHERE id=? AND user_id=?", (entry_id, uid))
         conn.commit()
     finally:
         conn.close()
     return jsonify({"status": "removed"})
+
+
+@app.route("/api/watch-history", methods=["GET"])
+def get_watch_history_page():
+    """Return full chronological watch history for current user with movie details."""
+    uid = _get_current_user_id() or "__global__"
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT h.id, h.watched_at, h.movie_id,
+               m.title, m.year, m.format, m.poster_url, m.poster_path, m.tmdb_id
+        FROM watch_history h
+        JOIN movies m ON m.id = h.movie_id
+        WHERE h.user_id = ?
+        ORDER BY h.watched_at DESC, h.id DESC
+    """, (uid,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
 
 
 # ---------------------------------------------------------------------------
