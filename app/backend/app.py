@@ -4927,6 +4927,10 @@ def _restore_from_json(backup_path, group_mapping=None):
     conn.execute("DELETE FROM movies")
     conn.execute("DELETE FROM people")
 
+    # Current columns in movies and people tables (to safely ignore old/removed columns)
+    current_movie_cols = {row[1] for row in conn.execute("PRAGMA table_info(movies)").fetchall()}
+    current_people_cols = {row[1] for row in conn.execute("PRAGMA table_info(people)").fetchall()}
+
     # Build old movie id → new movie id mapping
     old_to_new_movie = {}
     old_to_new_person = {}
@@ -4934,6 +4938,8 @@ def _restore_from_json(backup_path, group_mapping=None):
     # Restore people
     for p in people:
         old_id = p.pop("id", None)
+        # Strip columns not in current schema (e.g. removed columns from old backups)
+        p = {k: v for k, v in p.items() if k in current_people_cols}
         cols = [k for k in p.keys()]
         placeholders = ",".join(["?"] * len(cols))
         col_names = ",".join(cols)
@@ -4945,6 +4951,8 @@ def _restore_from_json(backup_path, group_mapping=None):
     # Restore movies
     for m in movies:
         old_id = m.pop("id", None)
+        # Strip columns not in current schema (e.g. old group_id column moved to movie_groups)
+        m = {k: v for k, v in m.items() if k in current_movie_cols}
         # Assign to current user
         m["owner_id"] = uid
         cols = [k for k in m.keys()]
