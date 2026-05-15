@@ -3680,12 +3680,13 @@ async function init() {
   await loadCollection();
 }
 
-function _renderHeaderStats(movies) {
+function _renderHeaderStats() {
   const el = document.getElementById('headerStats');
   if (!el) return;
-  const total = movies.length;
+  const own = allMovies.filter(m => m.owner_id === currentUserId);
+  const total = own.length;
   const counts = {};
-  for (const m of movies) { if (m.format) counts[m.format] = (counts[m.format] || 0) + 1; }
+  for (const m of own) { if (m.format) counts[m.format] = (counts[m.format] || 0) + 1; }
   const formats = Object.entries(counts).map(([f,c]) => `<span>${c}</span> ${f}`).join(' &nbsp;·&nbsp; ');
   el.innerHTML = t('js.statsTotal', total, formats || '');
 }
@@ -3702,9 +3703,9 @@ async function loadStats(retries = 2) {
     }
     const d = await r.json();
     setCachedData('dv_stats_cache', d);
-    _renderHeaderStats(allMovies.length ? allMovies : []);
+    _renderHeaderStats();
   } catch(e) {
-    _renderHeaderStats(allMovies.length ? allMovies : []);
+    _renderHeaderStats();
   }
 }
 
@@ -4152,18 +4153,11 @@ function renderGrid(movies) {
 function filterMovies() {
   const movies = getCurrentMovies();
   renderGrid(movies);
-  _renderHeaderStats(movies);
+  _renderHeaderStats();
   const fc = document.getElementById('filterCount');
   if (fc) {
-    const searchInput = document.getElementById('searchInput');
-    const groupFilter = document.getElementById('groupFilter');
-    const hasFilter = activeFormat || (searchInput && searchInput.value.trim()) || (groupFilter && groupFilter.value);
-    if (hasFilter) {
-      fc.textContent = t('js.filterCount', movies.length);
-      fc.style.display = '';
-    } else {
-      fc.style.display = 'none';
-    }
+    fc.textContent = t('js.filterCount', movies.length);
+    fc.style.display = '';
   }
 }
 
