@@ -3095,8 +3095,6 @@ def _movie_owner_filter() -> tuple[str, list]:
     uid = _get_current_user_id()
     if not uid:
         return "", []  # Auth disabled → show all
-    if _get_current_user_role() == "admin":
-        return "", []  # Admin sees everything
     conn = get_db()
     group_rows = conn.execute("SELECT group_id FROM user_groups WHERE user_id=?", (uid,)).fetchall()
     conn.close()
