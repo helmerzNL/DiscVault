@@ -6089,6 +6089,7 @@ async function openPersonDetail(personId) {
   currentPersonId = personId;
   // Navigate to person-detail panel
   switchTabDirect('person-detail');
+  _pushRoute(`/person/${personId}`);
   document.getElementById('personName').textContent = '';
   document.getElementById('personMeta').innerHTML = '';
   const personIdLabel = document.getElementById('personIdLabel');
@@ -6147,7 +6148,9 @@ async function openPersonDetail(personId) {
 function closePersonDetail() {
   currentPersonId = null;
   switchTabDirect(_personReturnPanel);
-  if (_personReturnPanel !== 'movie-detail') {
+  if (_personReturnPanel === 'movie-detail') {
+    _replaceRoute(`/movie/${currentMovieId}`);
+  } else {
     _replaceRoute(_tabPath(_personReturnPanel));
   }
 }
@@ -7152,6 +7155,11 @@ function _replaceRoute(path) {
 }
 function _handleRoute() {
   const path = window.location.pathname;
+  const personMatch = path.match(/^\/person\/(\d+)$/);
+  if (personMatch) {
+    openPersonDetail(parseInt(personMatch[1], 10));
+    return;
+  }
   const movieMatch = path.match(/^\/movie\/(\d+)$/);
   if (movieMatch) {
     const id = parseInt(movieMatch[1], 10);
@@ -7172,6 +7180,8 @@ function _handleRoute() {
 
 window.addEventListener('popstate', (e) => {
   const path = (e.state && e.state.path) || window.location.pathname;
+  const personMatch = path.match(/^\/person\/(\d+)$/);
+  if (personMatch) { openPersonDetail(parseInt(personMatch[1], 10)); return; }
   const movieMatch = path.match(/^\/movie\/(\d+)$/);
   if (movieMatch) {
     openMovieDetail(parseInt(movieMatch[1], 10));
