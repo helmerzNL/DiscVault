@@ -4079,7 +4079,7 @@ def get_watch_history_page():
     conn = get_db()
     rows = conn.execute("""
         SELECT h.id, h.watched_at, h.movie_id,
-               m.title, m.year, m.format, m.poster_url, m.poster_path, m.tmdb_id
+               m.title, m.year, m.format, m.poster, m.poster_file
         FROM watch_history h
         JOIN movies m ON m.id = h.movie_id
         WHERE h.user_id = ?

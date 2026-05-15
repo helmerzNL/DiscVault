@@ -7646,9 +7646,7 @@ async function loadWatchHistory() {
     list.innerHTML = Object.keys(byDate).map(date => {
       const label = _formatDate(date);
       const rows = byDate[date].map(e => {
-        const src = e.poster_path
-          ? `https://image.tmdb.org/t/p/w92${e.poster_path}`
-          : (e.poster_url || null);
+        const src = posterSrc(e);
         const img = src
           ? `<img src="${src}" onerror="this.outerHTML='<div class=\\'no-img-sm\\'>🎬</div>'">`
           : '<div class="no-img-sm">🎬</div>';
@@ -8224,6 +8222,8 @@ async function resetDatabase() {
 // ── Language & MCP Settings ───────────────────────────────────────────────────
 function changeLanguage(lang) {
   setLanguage(lang);
+  _updateWatchedBtn();
+  _updateWatchlistBtn();
   loadCollection();
   loadStats();
   if (document.getElementById('panel-settings').classList.contains('active')) loadSettings();
