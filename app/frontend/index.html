@@ -2518,6 +2518,20 @@
           <div id="apiKeyStatus" class="status-msg" style="margin-bottom:8px;"></div>
           <div id="apiKeysList"></div>
         </div>
+
+        <!-- MCP activiteit log -->
+        <div class="card" id="mcpLogsCard" style="margin-top:20px; display:none;">
+          <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>🤖 MCP Activiteit</span>
+            <button class="btn btn-secondary" onclick="loadMcpLogs()" style="padding:5px 10px; font-size:0.76rem;">↻ Vernieuwen</button>
+          </div>
+          <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px; line-height:1.6;">
+            Recente tool-aanroepen via de MCP-koppeling voor jouw account.
+          </p>
+          <div id="mcpLogsList" style="font-family:'DM Mono',monospace; font-size:0.76rem; color:var(--text-muted);">
+            <div style="text-align:center; padding:20px; color:var(--text-muted);">Laden...</div>
+          </div>
+        </div>
       </div>
 
       <div class="settings-sub-section" id="settingsSubGeneral">
@@ -8021,6 +8035,35 @@ async function revokeApiKey(id) {
   }
 }
 
+async function loadMcpLogs() {
+  const card = document.getElementById('mcpLogsCard');
+  const list = document.getElementById('mcpLogsList');
+  if (!card || !currentUserId) return;
+  try {
+    const r = await fetch(`${API}/user/mcp-logs?limit=50`);
+    if (!r.ok) { card.style.display = 'none'; return; }
+    const logs = await r.json();
+    card.style.display = '';
+    if (!logs.length) {
+      list.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-family:inherit; font-size:0.84rem;">Nog geen MCP-activiteit geregistreerd.</div>`;
+      return;
+    }
+    const levelColor = { error: 'var(--danger)', warn: 'var(--warning,#e8c547)', success: 'var(--success)', info: 'var(--text-muted)' };
+    list.innerHTML = logs.map(l => {
+      const ts = (l.timestamp || '').replace('T',' ').slice(0,19);
+      const tool = (l.message || '').replace(/^Tool:\s*/i, '');
+      const color = levelColor[l.level] || 'var(--text-muted)';
+      const detail = l.detail ? `<div style="color:var(--text-muted); margin-top:3px; white-space:pre-wrap; font-size:0.70rem; max-height:60px; overflow:hidden;">${(l.detail||'').slice(0,200)}</div>` : '';
+      return `<div style="padding:8px 10px; border-bottom:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="color:${color}; font-weight:600;">${tool}</span>
+          <span style="font-size:0.68rem; color:var(--text-muted); flex-shrink:0; margin-left:12px;">${ts}</span>
+        </div>${detail}
+      </div>`;
+    }).join('');
+  } catch(e) { card.style.display = 'none'; }
+}
+
 async function saveProfile() {
   const username = (document.getElementById('profileUsername').value || '').trim();
   const firstName = (document.getElementById('profileFirstName').value || '').trim();
@@ -9129,7 +9172,7 @@ function switchSettingsSubmenu(name) {
   });
   const target = document.getElementById(map[name] || map.profile);
   if (target) target.classList.add('active');
-  if (name === 'profile') { loadProfile(); loadApiKeys(); }
+  if (name === 'profile') { loadProfile(); loadApiKeys(); loadMcpLogs(); }
   if (name === 'logs') loadLogs();
   if (name === 'notifications') initPushNotifications();
 }

@@ -197,9 +197,15 @@ def init_db():
             level      TEXT NOT NULL DEFAULT 'info',
             category   TEXT NOT NULL DEFAULT 'general',
             message    TEXT NOT NULL,
-            detail     TEXT
+            detail     TEXT,
+            user_id    TEXT
         )
     """)
+    # Migration: add user_id column to existing logs tables that predate this column
+    try:
+        conn.execute("ALTER TABLE logs ADD COLUMN user_id TEXT")
+    except Exception:
+        pass  # Column already exists
 
     # Import control flags (cross-worker safe cancel state)
     conn.execute("""
@@ -538,16 +544,17 @@ def get_db():
 # Logging helper
 # ---------------------------------------------------------------------------
 
-def add_log(category: str, message: str, detail: str = "", level: str = "info"):
+def add_log(category: str, message: str, detail: str = "", level: str = "info",
+            user_id: str = None):
     """Write a structured log entry to the database.
     Levels: info, warn, error, success
-    Categories: import, refresh, lookup, add, delete, scan, api, general
+    Categories: import, refresh, lookup, add, delete, scan, api, general, mcp
     """
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.execute(
-            "INSERT INTO logs (timestamp, level, category, message, detail) VALUES (?,?,?,?,?)",
-            (local_now_iso(), level, category, message, detail or "")
+            "INSERT INTO logs (timestamp, level, category, message, detail, user_id) VALUES (?,?,?,?,?,?)",
+            (local_now_iso(), level, category, message, detail or "", user_id)
         )
         conn.commit()
         conn.close()
@@ -5471,6 +5478,39 @@ def delete_api_key(key_id):
     if result.rowcount == 0:
         return jsonify({"error": "Not found"}), 404
     return jsonify({"ok": True})
+
+
+@app.route("/api/mcp/log", methods=["POST"])
+def mcp_log():
+    """Called by the MCP server after each tool invocation to write a user-scoped log entry."""
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json() or {}
+    tool    = (data.get("tool") or "unknown")[:80]
+    detail  = (data.get("detail") or "")[:500]
+    level   = data.get("level", "info")
+    if level not in ("info", "warn", "error", "success"):
+        level = "info"
+    add_log("mcp", f"Tool: {tool}", detail, level=level, user_id=uid)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/user/mcp-logs", methods=["GET"])
+def user_mcp_logs():
+    """Return the current user's MCP activity log (category='mcp', scoped to user_id)."""
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    limit = min(int(request.args.get("limit", "100")), 500)
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, timestamp, level, message, detail FROM logs"
+        " WHERE category='mcp' AND user_id=? ORDER BY id DESC LIMIT ?",
+        (uid, limit)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
 
 
 if __name__ == "__main__":

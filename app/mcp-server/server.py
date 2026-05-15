@@ -152,7 +152,22 @@ TOOLS = [
 
 # ── Tool execution ───────────────────────────────────────────────────────────
 
-def execute_tool(name: str, args: dict, bearer: str | None = None) -> str:
+def _log_tool_call(tool: str, detail: str, level: str, bearer: str):
+    """Fire-and-forget: write an MCP activity log entry via the backend."""
+    if not bearer:
+        return
+    try:
+        http_requests.post(
+            f"{API_BASE}/api/mcp/log",
+            json={"tool": tool, "detail": detail[:300], "level": level},
+            headers=_headers(bearer),
+            timeout=3,
+        )
+    except Exception:
+        pass  # Never let logging break tool execution
+
+
+def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str:
     try:
         if name == "search_collection":
             data = api_get("/api/movies",
@@ -264,6 +279,14 @@ def execute_tool(name: str, args: dict, bearer: str | None = None) -> str:
         return f"API error: {str(e)}"
     except Exception as e:
         return f"Error: {str(e)}"
+
+
+def execute_tool(name: str, args: dict, bearer: str | None = None) -> str:
+    """Execute a tool, then fire-and-forget a log entry to the backend."""
+    result = _execute_tool_inner(name, args, bearer)
+    level = "error" if result.startswith(("Error:", "Cannot connect", "Authentication failed", "API error")) else "info"
+    _log_tool_call(name, result, level, bearer)
+    return result
 
 
 # ── JSON-RPC handler (shared) ────────────────────────────────────────────────
