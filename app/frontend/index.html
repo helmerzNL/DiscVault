@@ -7911,10 +7911,17 @@ async function toggleRegistration() {
   const enabled = document.getElementById('registrationToggle').checked;
   const r = await fetch(`${API}/settings/registration`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ registration_enabled: enabled })
   });
-  await r.json();
+  const d = await r.json();
+  if (!r.ok) {
+    // Revert checkbox on failure
+    document.getElementById('registrationToggle').checked = !enabled;
+    showStatus('authStatus', d.error || 'Error', 'error');
+  } else {
+    showStatus('authStatus', enabled ? t('js.registrationEnabled') : t('js.registrationDisabled'), 'success');
+  }
 }
 
 // ---------------------------------------------------------------------------
