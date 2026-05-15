@@ -7243,20 +7243,26 @@ function toggleWatchedMenu(e) {
   const popup = document.getElementById('watchedPopup');
   if (!popup) return;
   const isVisible = popup.style.display !== 'none';
-  popup.style.display = isVisible ? 'none' : 'block';
-  if (!isVisible) {
-    const today = new Date().toISOString().slice(0,10);
-    document.getElementById('watchedDateInput').value = today;
-    // Load existing watch history entries for this movie
-    if (currentMovieId) _refreshWatchedHistoryPopup(currentMovieId);
-    // Close on outside click
-    setTimeout(() => {
-      document.addEventListener('click', function closePopup() {
-        popup.style.display = 'none';
-        document.removeEventListener('click', closePopup);
-      }, { once: true });
-    }, 0);
+  if (isVisible) {
+    popup.style.display = 'none';
+    return;
   }
+  popup.style.display = 'block';
+  // Set today as default
+  const inp = document.getElementById('watchedDateInput');
+  if (inp) inp.value = new Date().toISOString().slice(0,10);
+  // Load existing history entries
+  if (currentMovieId) _refreshWatchedHistoryPopup(currentMovieId);
+  // Close on click OUTSIDE the popup
+  setTimeout(() => {
+    const closeHandler = (ev) => {
+      if (!popup.contains(ev.target)) {
+        popup.style.display = 'none';
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    document.addEventListener('click', closeHandler);
+  }, 0);
 }
 
 async function _refreshWatchedHistoryPopup(movieId) {
@@ -7300,7 +7306,6 @@ function _formatDateNL(dateStr) {
 
 async function markWatchedModal(type) {
   if (!currentMovieId) return;
-  document.getElementById('watchedPopup').style.display = 'none';
   let date;
   const now = new Date();
   if (type === 'today') {
@@ -7312,31 +7317,27 @@ async function markWatchedModal(type) {
     date = document.getElementById('watchedDateInput').value;
     if (!date) return;
   }
+  // Close popup immediately
+  document.getElementById('watchedPopup').style.display = 'none';
   const r = await fetch(`${API}/watched/${currentMovieId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ watched_at: date })
   });
-  // Update btn if this is newer than current last_watched
+  if (!r.ok) return;
+  // Update watched button
   if (!_modalMovieLastWatched || date > _modalMovieLastWatched) {
     _modalMovieLastWatched = date;
   }
   _updateWatchedBtn();
   const m = allMovies.find(x => x.id === currentMovieId);
   if (m) m.last_watched = _modalMovieLastWatched;
-  // Reset date input to today
-  const inp = document.getElementById('watchedDateInput');
-  if (inp) inp.value = new Date().toISOString().slice(0,10);
-  // Re-show popup with updated history
-  const popup = document.getElementById('watchedPopup');
-  popup.style.display = 'block';
-  await _refreshWatchedHistoryPopup(currentMovieId);
-  setTimeout(() => {
-    document.addEventListener('click', function closePopup() {
-      popup.style.display = 'none';
-      document.removeEventListener('click', closePopup);
-    }, { once: true });
-  }, 0);
+  // Pre-load history for next popup open (don't re-open popup)
+  _refreshWatchedHistoryPopup(currentMovieId);
+  // Refresh Watch History page if currently open
+  if (document.getElementById('listsSubWatchHistory')?.classList.contains('active')) {
+    loadWatchHistory();
+  }
 }
 
 async function unmarkWatchedModal() {
