@@ -210,6 +210,18 @@ def init_db():
         )
     """)
 
+    # Push notification subscriptions
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT NOT NULL,
+            endpoint   TEXT NOT NULL UNIQUE,
+            p256dh     TEXT NOT NULL,
+            auth       TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+
     # Auth: users
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -3149,6 +3161,13 @@ def import_movies():
         else:
             summary = f"Klaar: {added} toegevoegd, {updated} bijgewerkt, {skipped} overgeslagen, {errors} fouten"
             add_log("import", f"Import voltooid: {f.filename}", summary, "success" if errors == 0 else "warn")
+            if import_owner_id:
+                push_to_user(
+                    import_owner_id,
+                    "Import voltooid 🎬",
+                    f"{added} toegevoegd, {updated} bijgewerkt — {f.filename}",
+                    "/",
+                )
 
         yield json.dumps({
             "type": "done",
@@ -5100,6 +5119,122 @@ def db_stats():
         "poster_size": poster_size, "movie_count": movie_count,
         "log_count": log_count,
     })
+
+
+# ── Push notifications ────────────────────────────────────────────────────────
+
+def _get_or_create_vapid_keys():
+    """Return (public_key_base64url, private_key_pem) from settings, generating on first call."""
+    from cryptography.hazmat.primitives.asymmetric import ec as _ec
+    from cryptography.hazmat.backends import default_backend as _cb
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding as _Enc, PublicFormat as _PubFmt,
+        PrivateFormat as _PrivFmt, NoEncryption as _NoEnc,
+    )
+    conn = get_db()
+    row_pub  = conn.execute("SELECT value FROM settings WHERE key='vapid_public_key'").fetchone()
+    row_priv = conn.execute("SELECT value FROM settings WHERE key='vapid_private_key'").fetchone()
+    if row_pub and row_priv:
+        conn.close()
+        return row_pub["value"], row_priv["value"]
+    # Generate fresh P-256 VAPID key pair
+    priv = _ec.generate_private_key(_ec.SECP256R1(), _cb())
+    pub_bytes = priv.public_key().public_bytes(_Enc.X962, _PubFmt.UncompressedPoint)
+    pub_b64   = base64.urlsafe_b64encode(pub_bytes).rstrip(b"=").decode()
+    priv_pem  = priv.private_bytes(_Enc.PEM, _PrivFmt.TraditionalOpenSSL, _NoEnc()).decode()
+    conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('vapid_public_key',?)",  (pub_b64,))
+    conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('vapid_private_key',?)", (priv_pem,))
+    conn.commit()
+    conn.close()
+    return pub_b64, priv_pem
+
+
+def _send_push(endpoint, p256dh, auth, vapid_priv_pem, title, body, url="/"):
+    """Send a single Web Push message; silently removes expired subscriptions."""
+    try:
+        from pywebpush import webpush, WebPushException
+        webpush(
+            subscription_info={"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}},
+            data=json.dumps({"title": title, "body": body, "url": url}),
+            vapid_private_key=vapid_priv_pem,
+            vapid_claims={"sub": "mailto:no-reply@discvault.app"},
+        )
+    except Exception as ex:
+        # 410 Gone = subscription expired/revoked → purge it
+        status = getattr(getattr(ex, "response", None), "status_code", None)
+        if status == 410:
+            try:
+                c = get_db()
+                c.execute("DELETE FROM push_subscriptions WHERE endpoint=?", (endpoint,))
+                c.commit()
+                c.close()
+            except Exception:
+                pass
+
+
+def push_to_user(user_id, title, body, url="/"):
+    """Deliver a push notification to all subscribed devices for *user_id*."""
+    try:
+        _, priv_pem = _get_or_create_vapid_keys()
+        conn = get_db()
+        subs = conn.execute(
+            "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?", (user_id,)
+        ).fetchall()
+        conn.close()
+        for s in subs:
+            _send_push(s["endpoint"], s["p256dh"], s["auth"], priv_pem, title, body, url)
+    except Exception:
+        pass
+
+
+@app.route("/api/push/vapid-public-key", methods=["GET"])
+def push_vapid_public_key():
+    pub, _ = _get_or_create_vapid_keys()
+    return jsonify({"publicKey": pub})
+
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def push_subscribe():
+    data   = request.get_json() or {}
+    endpoint = data.get("endpoint", "")
+    keys     = data.get("keys", {})
+    p256dh   = keys.get("p256dh", "")
+    auth     = keys.get("auth", "")
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"error": "Missing fields"}), 400
+    user_id = _get_current_user_id() or "__global__"
+    now     = __import__("datetime").datetime.utcnow().isoformat()
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(endpoint) DO UPDATE SET
+            user_id=excluded.user_id, p256dh=excluded.p256dh,
+            auth=excluded.auth, created_at=excluded.created_at
+    """, (user_id, endpoint, p256dh, auth, now))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/push/subscribe", methods=["DELETE"])
+def push_unsubscribe():
+    data     = request.get_json() or {}
+    endpoint = data.get("endpoint", "")
+    if not endpoint:
+        return jsonify({"error": "Missing endpoint"}), 400
+    conn = get_db()
+    conn.execute("DELETE FROM push_subscriptions WHERE endpoint=?", (endpoint,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/push/test", methods=["POST"])
+def push_test():
+    user_id = _get_current_user_id() or "__global__"
+    push_to_user(user_id, "DiscVault", "Push-meldingen werken! 🎬", "/")
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

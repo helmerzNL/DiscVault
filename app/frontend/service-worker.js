@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v2";
+const SW_VERSION = "discvault-sw-v3";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -126,5 +126,34 @@ self.addEventListener("fetch", event => {
 
   event.respondWith(
     cacheFirst(request, APP_CACHE).catch(() => caches.match("/index.html"))
+  );
+});
+
+// ── Push notifications ────────────────────────────────────────────────────────
+
+self.addEventListener("push", event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch(e) {}
+  const title   = data.title || "DiscVault";
+  const options = {
+    body:    data.body  || "",
+    icon:    "/favicon-192.png",
+    badge:   "/favicon-32.png",
+    data:    { url: data.url || "/" },
+    vibrate: [100, 50, 100],
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      for (const client of list) {
+        if ("focus" in client) { client.navigate(url); return client.focus(); }
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
   );
 });

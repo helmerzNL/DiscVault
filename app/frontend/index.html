@@ -2310,6 +2310,10 @@
           <span class="settings-sub-icon mdi mdi-cog-outline" aria-hidden="true"></span>
           <span class="settings-sub-label" data-i18n="settings.menuAdvanced">Geavanceerd</span>
         </button>
+        <button class="settings-sub-btn" type="button" data-settings-sub="notifications" onclick="switchSettingsSubmenu('notifications')">
+          <span class="settings-sub-icon mdi mdi-bell-outline" aria-hidden="true"></span>
+          <span class="settings-sub-label" data-i18n="settings.menuNotifications">Meldingen</span>
+        </button>
       </div>
 
       <!-- Profile section -->
@@ -2524,6 +2528,22 @@
         <button class="btn btn-danger" onclick="resetDatabase()" data-i18n="settings.resetButton">🗑 Database Wissen</button>
       </div>
 
+      </div>
+
+      <!-- Notifications section -->
+      <div class="settings-sub-section" id="settingsSubNotifications">
+        <div class="card" style="margin-top:20px;">
+          <div class="card-title" data-i18n="settings.notifTitle">🔔 Push-meldingen</div>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="settings.notifDesc">
+            Ontvang meldingen op dit apparaat voor voltooide imports en groepsuitnodigingen. Werkt op Windows, Android en iOS (≥16.4, als PWA geïnstalleerd).
+          </p>
+          <div id="pushNotifStatus" style="margin-bottom:16px; font-size:0.85rem;"></div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-primary"   id="pushSubscribeBtn"   onclick="subscribeToPush()"         data-i18n="settings.pushEnable">🔔 Inschakelen</button>
+            <button class="btn btn-secondary" id="pushUnsubscribeBtn" onclick="unsubscribeFromPush()"     data-i18n="settings.pushDisable"  style="display:none;">🔕 Uitschakelen</button>
+            <button class="btn btn-secondary" id="pushTestBtn"        onclick="testPushNotification()"   data-i18n="settings.pushTest"     style="display:none;">📣 Test versturen</button>
+          </div>
+        </div>
       </div>
 
       <div class="settings-sub-section" id="settingsSubSecurity">
@@ -3148,7 +3168,8 @@ nl: {
   'logs.thTimestamp':'Tijdstip','logs.thLevel':'Niveau','logs.thCategory':'Categorie','logs.thBackends':'Backends','logs.thMessage':'Bericht',
   'logs.loading':'Laden...',
   // settings
-  'settings.menuGeneral':'Algemeen','settings.menuSecurity':'Veiligheid','settings.menuBackup':'Backup','settings.menuLogs':'Logs','settings.menuAdvanced':'Geavanceerd',
+  'settings.menuGeneral':'Algemeen','settings.menuSecurity':'Veiligheid','settings.menuBackup':'Backup','settings.menuLogs':'Logs','settings.menuAdvanced':'Geavanceerd','settings.menuNotifications':'Meldingen',
+  'settings.notifTitle':'🔔 Push-meldingen','settings.notifDesc':'Ontvang meldingen op dit apparaat voor voltooide imports en uitnodigingen.','settings.pushEnable':'🔔 Inschakelen','settings.pushDisable':'🔕 Uitschakelen','settings.pushTest':'📣 Test versturen','settings.pushActive':'Meldingen actief op dit apparaat.','settings.pushInactive':'Meldingen uitgeschakeld op dit apparaat.','settings.pushBlocked':'Meldingen geblokkeerd — pas aan in browserinstellingen.','settings.pushUnsupported':'Push-meldingen worden niet ondersteund door deze browser.',
   'settings.menuProfile':'Profiel',
   'settings.profileTitle':'👤 Gebruikersprofiel',
   'settings.profilePhoto':'Profielfoto','settings.profilePhotoDesc':'Klik om een foto te uploaden (max 2MB)','settings.profilePhotoRemove':'Verwijderen',
@@ -3498,7 +3519,8 @@ en: {
   'logs.refresh':'↻ Refresh','logs.clear':'🗑 Clear logs',
   'logs.thTimestamp':'Timestamp','logs.thLevel':'Level','logs.thCategory':'Category','logs.thBackends':'Backends','logs.thMessage':'Message',
   'logs.loading':'Loading...',
-  'settings.menuGeneral':'General','settings.menuSecurity':'Security','settings.menuBackup':'Backup','settings.menuLogs':'Logs','settings.menuAdvanced':'Advanced',
+  'settings.menuGeneral':'General','settings.menuSecurity':'Security','settings.menuBackup':'Backup','settings.menuLogs':'Logs','settings.menuAdvanced':'Advanced','settings.menuNotifications':'Notifications',
+  'settings.notifTitle':'🔔 Push Notifications','settings.notifDesc':'Receive notifications on this device for completed imports and invitations.','settings.pushEnable':'🔔 Enable','settings.pushDisable':'🔕 Disable','settings.pushTest':'📣 Send test','settings.pushActive':'Notifications active on this device.','settings.pushInactive':'Notifications disabled on this device.','settings.pushBlocked':'Notifications blocked — change in browser settings.','settings.pushUnsupported':'Push notifications are not supported by this browser.',
   'settings.menuProfile':'Profile',
   'settings.profileTitle':'👤 User Profile',
   'settings.profilePhoto':'Profile Photo','settings.profilePhotoDesc':'Click to upload a photo (max 2MB)','settings.profilePhotoRemove':'Remove',
@@ -3858,7 +3880,8 @@ fr: {
   'logs.loading':'Chargement...',
   'logs.autoRefresh':'Actualisation auto',
   // settings
-  'settings.menuGeneral':'Général','settings.menuSecurity':'Sécurité','settings.menuBackup':'Sauvegarde','settings.menuLogs':'Logs','settings.menuAdvanced':'Avancé',
+  'settings.menuGeneral':'Général','settings.menuSecurity':'Sécurité','settings.menuBackup':'Sauvegarde','settings.menuLogs':'Logs','settings.menuAdvanced':'Avancé','settings.menuNotifications':'Notifications',
+  'settings.notifTitle':'🔔 Notifications push','settings.notifDesc':'Recevez des notifications sur cet appareil pour les imports terminés et les invitations.','settings.pushEnable':'🔔 Activer','settings.pushDisable':'🔕 Désactiver','settings.pushTest':'📣 Envoyer test','settings.pushActive':'Notifications actives sur cet appareil.','settings.pushInactive':'Notifications désactivées sur cet appareil.','settings.pushBlocked':'Notifications bloquées — modifiez dans les paramètres du navigateur.','settings.pushUnsupported':'Les notifications push ne sont pas prises en charge par ce navigateur.',
   'settings.menuProfile':'Profil',
   'settings.profileTitle':'👤 Profil utilisateur',
   'settings.profilePhoto':'Photo de profil','settings.profilePhotoDesc':'Cliquez pour télécharger une photo (max 2 Mo)','settings.profilePhotoRemove':'Supprimer',
@@ -4203,7 +4226,8 @@ de: {
   'logs.refresh':'↻ Aktualisieren','logs.clear':'🗑 Logs löschen',
   'logs.thTimestamp':'Zeitstempel','logs.thLevel':'Ebene','logs.thCategory':'Kategorie','logs.thBackends':'Backends','logs.thMessage':'Nachricht',
   'logs.loading':'Laden...','logs.autoRefresh':'Auto-Aktualisierung',
-  'settings.menuGeneral':'Allgemein','settings.menuSecurity':'Sicherheit','settings.menuBackup':'Backup','settings.menuLogs':'Logs','settings.menuAdvanced':'Erweitert',
+  'settings.menuGeneral':'Allgemein','settings.menuSecurity':'Sicherheit','settings.menuBackup':'Backup','settings.menuLogs':'Logs','settings.menuAdvanced':'Erweitert','settings.menuNotifications':'Benachrichtigungen',
+  'settings.notifTitle':'🔔 Push-Benachrichtigungen','settings.notifDesc':'Erhalte Benachrichtigungen auf diesem Gerät für abgeschlossene Importe und Einladungen.','settings.pushEnable':'🔔 Aktivieren','settings.pushDisable':'🔕 Deaktivieren','settings.pushTest':'📣 Test senden','settings.pushActive':'Benachrichtigungen aktiv auf diesem Gerät.','settings.pushInactive':'Benachrichtigungen auf diesem Gerät deaktiviert.','settings.pushBlocked':'Benachrichtigungen blockiert — in den Browsereinstellungen ändern.','settings.pushUnsupported':'Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.',
   'settings.menuProfile':'Profil',
   'settings.profileTitle':'👤 Benutzerprofil',
   'settings.profilePhoto':'Profilfoto','settings.profilePhotoDesc':'Klicken zum Hochladen (max. 2 MB)','settings.profilePhotoRemove':'Entfernen',
@@ -4532,7 +4556,8 @@ es: {
   'logs.refresh':'↻ Actualizar','logs.clear':'🗑 Borrar registros',
   'logs.thTimestamp':'Marca de tiempo','logs.thLevel':'Nivel','logs.thCategory':'Categoría','logs.thBackends':'Backends','logs.thMessage':'Mensaje',
   'logs.loading':'Cargando...','logs.autoRefresh':'Actualización automática',
-  'settings.menuGeneral':'General','settings.menuSecurity':'Seguridad','settings.menuBackup':'Copia de seguridad','settings.menuLogs':'Registros','settings.menuAdvanced':'Avanzado',
+  'settings.menuGeneral':'General','settings.menuSecurity':'Seguridad','settings.menuBackup':'Copia de seguridad','settings.menuLogs':'Registros','settings.menuAdvanced':'Avanzado','settings.menuNotifications':'Notificaciones',
+  'settings.notifTitle':'🔔 Notificaciones push','settings.notifDesc':'Recibe notificaciones en este dispositivo para importaciones completadas e invitaciones.','settings.pushEnable':'🔔 Activar','settings.pushDisable':'🔕 Desactivar','settings.pushTest':'📣 Enviar prueba','settings.pushActive':'Notificaciones activas en este dispositivo.','settings.pushInactive':'Notificaciones desactivadas en este dispositivo.','settings.pushBlocked':'Notificaciones bloqueadas — cámbialo en la configuración del navegador.','settings.pushUnsupported':'Las notificaciones push no son compatibles con este navegador.',
   'settings.menuProfile':'Perfil',
   'settings.profileTitle':'👤 Perfil de usuario',
   'settings.profilePhoto':'Foto de perfil','settings.profilePhotoDesc':'Haz clic para subir una foto (máx. 2 MB)','settings.profilePhotoRemove':'Eliminar',
@@ -8812,7 +8837,8 @@ function switchSettingsSubmenu(name) {
     security: 'settingsSubSecurity',
     backup: 'settingsSubBackup',
     logs: 'settingsSubLogs',
-    advanced: 'settingsSubAdvanced'
+    advanced: 'settingsSubAdvanced',
+    notifications: 'settingsSubNotifications',
   };
   Object.values(map).forEach(id => {
     const el = document.getElementById(id);
@@ -8822,6 +8848,7 @@ function switchSettingsSubmenu(name) {
   if (target) target.classList.add('active');
   if (name === 'profile') loadProfile();
   if (name === 'logs') loadLogs();
+  if (name === 'notifications') initPushNotifications();
 }
 
 async function loadSourceSettings() {
@@ -9221,6 +9248,94 @@ async function loadMcpSettings() {
 }
 
 init();
+
+// ── Push notifications ────────────────────────────────────────────────────────
+let _pushSubscription = null;
+
+function _urlB64ToUint8Array(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function initPushNotifications() {
+  const statusEl  = document.getElementById('pushNotifStatus');
+  const subBtn    = document.getElementById('pushSubscribeBtn');
+  const unsubBtn  = document.getElementById('pushUnsubscribeBtn');
+  const testBtn   = document.getElementById('pushTestBtn');
+  if (!statusEl) return;
+
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    statusEl.innerHTML = `<span style="color:var(--text-muted);">${t('settings.pushUnsupported')}</span>`;
+    if (subBtn) subBtn.disabled = true;
+    return;
+  }
+  const perm = Notification.permission;
+  const reg  = await navigator.serviceWorker.ready;
+  _pushSubscription = await reg.pushManager.getSubscription();
+
+  if (_pushSubscription) {
+    statusEl.innerHTML = `<span style="color:var(--success);">✓ ${t('settings.pushActive')}</span>`;
+    if (subBtn)   subBtn.style.display   = 'none';
+    if (unsubBtn) unsubBtn.style.display = '';
+    if (testBtn)  testBtn.style.display  = '';
+  } else if (perm === 'denied') {
+    statusEl.innerHTML = `<span style="color:var(--danger);">${t('settings.pushBlocked')}</span>`;
+    if (subBtn) subBtn.disabled = true;
+  } else {
+    statusEl.innerHTML = `<span style="color:var(--text-muted);">${t('settings.pushInactive')}</span>`;
+    if (subBtn)   { subBtn.style.display = ''; subBtn.disabled = false; }
+    if (unsubBtn) unsubBtn.style.display = 'none';
+    if (testBtn)  testBtn.style.display  = 'none';
+  }
+}
+
+async function subscribeToPush() {
+  const statusEl = document.getElementById('pushNotifStatus');
+  try {
+    const r = await fetch(`${API}/push/vapid-public-key`);
+    const { publicKey } = await r.json();
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _urlB64ToUint8Array(publicKey),
+    });
+    await fetch(`${API}/push/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub.toJSON()),
+    });
+    _pushSubscription = sub;
+    await initPushNotifications();
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">${t('js.error', e.message)}</span>`;
+  }
+}
+
+async function unsubscribeFromPush() {
+  if (!_pushSubscription) return;
+  const statusEl = document.getElementById('pushNotifStatus');
+  try {
+    const endpoint = _pushSubscription.endpoint;
+    await _pushSubscription.unsubscribe();
+    await fetch(`${API}/push/subscribe`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint }),
+    });
+    _pushSubscription = null;
+    await initPushNotifications();
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">${t('js.error', e.message)}</span>`;
+  }
+}
+
+async function testPushNotification() {
+  const btn = document.getElementById('pushTestBtn');
+  if (btn) btn.disabled = true;
+  try { await fetch(`${API}/push/test`, { method: 'POST' }); }
+  finally { if (btn) btn.disabled = false; }
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
