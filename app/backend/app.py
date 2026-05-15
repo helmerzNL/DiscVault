@@ -4765,6 +4765,8 @@ def set_registration_settings():
 
 @app.route("/api/settings/backup", methods=["POST"])
 def create_backup():
+    if _is_auth_enabled() and _get_current_user_role() != "admin":
+        return jsonify({"error": "Alleen admins kunnen backups maken"}), 403
     ts = local_now().strftime("%Y%m%d_%H%M%S")
     backup_name = f"discvault_backup_{ts}"
     backup_path = os.path.join(BACKUP_DIR, backup_name)
@@ -4812,6 +4814,8 @@ def create_backup():
 
 @app.route("/api/settings/backups", methods=["GET"])
 def list_backups():
+    if _is_auth_enabled() and _get_current_user_role() != "admin":
+        return jsonify({"error": "Alleen admins kunnen backups bekijken"}), 403
     if not os.path.isdir(BACKUP_DIR):
         return jsonify([])
     backups = []
@@ -4848,6 +4852,8 @@ def list_backups():
 
 @app.route("/api/settings/backup/<name>/download")
 def download_backup(name):
+    if _is_auth_enabled() and _get_current_user_role() != "admin":
+        return jsonify({"error": "Alleen admins kunnen backups downloaden"}), 403
     safe = re.sub(r'[^a-zA-Z0-9_\-]', '', name)
     path = os.path.join(BACKUP_DIR, safe)
     if not os.path.isdir(path):
@@ -4860,6 +4866,8 @@ def download_backup(name):
 @app.route("/api/settings/backup/upload", methods=["POST"])
 def upload_and_restore_backup():
     """Upload a .tar.gz backup file, extract, and store for restore."""
+    if _is_auth_enabled() and _get_current_user_role() != "admin":
+        return jsonify({"error": "Alleen admins kunnen backups uploaden"}), 403
     if "file" not in request.files:
         return jsonify({"error": "Geen bestand ontvangen"}), 400
     f = request.files["file"]
@@ -5051,6 +5059,8 @@ def _restore_from_json(backup_path, group_mapping=None):
 
 @app.route("/api/settings/restore/<name>", methods=["POST"])
 def restore_backup(name):
+    if _is_auth_enabled() and _get_current_user_role() != "admin":
+        return jsonify({"error": "Alleen admins kunnen backups terugzetten"}), 403
     name = re.sub(r'[^a-zA-Z0-9_\-]', '', name)
     backup_path = os.path.join(BACKUP_DIR, name)
     if not os.path.isdir(backup_path):
@@ -5094,6 +5104,8 @@ def restore_backup(name):
 
 @app.route("/api/settings/backup/<name>", methods=["DELETE"])
 def delete_backup(name):
+    if _is_auth_enabled() and _get_current_user_role() != "admin":
+        return jsonify({"error": "Alleen admins kunnen backups verwijderen"}), 403
     name = re.sub(r'[^a-zA-Z0-9_\-]', '', name)
     path = os.path.join(BACKUP_DIR, name)
     if os.path.isdir(path):

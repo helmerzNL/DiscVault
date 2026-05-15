@@ -8981,16 +8981,18 @@ async function loadSettings() {
     const mr = await fetch(`${API}/auth/me`);
     const me = await mr.json();
     const isSettingsAdmin = !me.authenticated || me.role === 'admin';
-    const logsBtn = document.querySelector('[data-settings-sub="logs"]');
-    const advBtn = document.querySelector('[data-settings-sub="advanced"]');
-    if (logsBtn) logsBtn.style.display = isSettingsAdmin ? '' : 'none';
-    if (advBtn) advBtn.style.display = isSettingsAdmin ? '' : 'none';
+    const logsBtn   = document.querySelector('[data-settings-sub="logs"]');
+    const advBtn    = document.querySelector('[data-settings-sub="advanced"]');
+    const backupBtn = document.querySelector('[data-settings-sub="backup"]');
+    if (logsBtn)   logsBtn.style.display   = isSettingsAdmin ? '' : 'none';
+    if (advBtn)    advBtn.style.display    = isSettingsAdmin ? '' : 'none';
+    if (backupBtn) backupBtn.style.display = isSettingsAdmin ? '' : 'none';
     if (isSettingsAdmin) {
       loadDebugSettings();
       loadMcpSettings();
     }
     // If non-admin is on a restricted tab, redirect to general
-    if (!isSettingsAdmin && (currentSettingsSubmenu === 'logs' || currentSettingsSubmenu === 'advanced')) {
+    if (!isSettingsAdmin && (currentSettingsSubmenu === 'logs' || currentSettingsSubmenu === 'advanced' || currentSettingsSubmenu === 'backup')) {
       currentSettingsSubmenu = 'general';
     }
   } catch(e) {
