@@ -16,6 +16,7 @@ It includes:
 - URL routing and deep links — share direct links to movies or views
 - MCP endpoint integration for AI workflows
 - PWA — works offline after adding to homescreen
+- Push notifications — group members are notified when a new disc is added to a shared group
 
 ## Live Website
 
