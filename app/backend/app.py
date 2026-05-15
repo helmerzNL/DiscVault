@@ -221,6 +221,15 @@ def init_db():
             created_at TEXT NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notification_prefs (
+            user_id  TEXT NOT NULL,
+            pref_key TEXT NOT NULL,
+            enabled  INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (user_id, pref_key),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
 
     # Auth: users
     conn.execute("""
@@ -4474,6 +4483,22 @@ def invite_to_group(group_id):
         conn.close()
         return jsonify({"error": "Invite already sent"}), 409
     conn.close()
+    # Push notification to the invitee
+    inviter_name = ""
+    try:
+        c2 = get_db()
+        u = c2.execute("SELECT display_name, username FROM users WHERE id=?", (uid,)).fetchone()
+        c2.close()
+        inviter_name = (u["display_name"] or u["username"]) if u else ""
+    except Exception:
+        pass
+    push_to_user_if_pref(
+        invitee["id"],
+        "group_invite",
+        "Uitnodiging voor groep",
+        f"{inviter_name} heeft je uitgenodigd voor '{group['name']}'",
+        "/",
+    )
     return jsonify({"status": "ok"}), 201
 
 
@@ -5277,6 +5302,78 @@ def push_test():
     errors = push_to_user(user_id, "DiscVault", "Push-meldingen werken! 🎬", "/")
     if errors:
         return jsonify({"ok": False, "errors": errors}), 500
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Notification preferences
+# ---------------------------------------------------------------------------
+
+# All recognised preference keys with their default value (True = on by default).
+_NOTIF_PREF_DEFAULTS = {
+    "group_invite": True,
+}
+
+
+def _user_notif_pref_enabled(user_id, pref_key):
+    """Return True if the user has the given notification pref enabled (defaults to True)."""
+    if pref_key not in _NOTIF_PREF_DEFAULTS:
+        return False
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT enabled FROM notification_prefs WHERE user_id=? AND pref_key=?",
+            (user_id, pref_key)
+        ).fetchone()
+        conn.close()
+        if row is None:
+            return _NOTIF_PREF_DEFAULTS[pref_key]
+        return bool(row["enabled"])
+    except Exception:
+        return _NOTIF_PREF_DEFAULTS.get(pref_key, True)
+
+
+def push_to_user_if_pref(user_id, pref_key, title, body, url="/"):
+    """Send push only if user has the pref enabled (default on). Returns list of errors."""
+    if not _user_notif_pref_enabled(user_id, pref_key):
+        return []
+    return push_to_user(user_id, title, body, url)
+
+
+@app.route("/api/push/prefs", methods=["GET"])
+def push_prefs_get():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({k: v for k, v in _NOTIF_PREF_DEFAULTS.items()})
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT pref_key, enabled FROM notification_prefs WHERE user_id=?", (uid,)
+    ).fetchall()
+    conn.close()
+    prefs = dict(_NOTIF_PREF_DEFAULTS)  # start with defaults
+    for r in rows:
+        if r["pref_key"] in prefs:
+            prefs[r["pref_key"]] = bool(r["enabled"])
+    return jsonify(prefs)
+
+
+@app.route("/api/push/prefs", methods=["PUT"])
+def push_prefs_put():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json() or {}
+    conn = get_db()
+    for key, default in _NOTIF_PREF_DEFAULTS.items():
+        if key in data:
+            enabled = 1 if data[key] else 0
+            conn.execute(
+                "INSERT INTO notification_prefs (user_id, pref_key, enabled) VALUES (?,?,?)"
+                " ON CONFLICT(user_id, pref_key) DO UPDATE SET enabled=excluded.enabled",
+                (uid, key, enabled)
+            )
+    conn.commit()
+    conn.close()
     return jsonify({"ok": True})
 
 

@@ -2658,6 +2658,23 @@
             <button class="btn btn-secondary" id="pushTestBtn"        onclick="testPushNotification()"   data-i18n="settings.pushTest"     style="display:none;">📣 Test versturen</button>
           </div>
         </div>
+
+        <!-- Notification preferences — only visible while subscribed -->
+        <div class="card" id="notifPrefsCard" style="margin-top:16px; display:none;">
+          <div class="card-title" style="font-size:0.95rem; margin-bottom:14px;">Waarvoor wil je meldingen ontvangen?</div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer;">
+              <input type="checkbox" id="prefGroupInvite" onchange="saveNotifPref('group_invite', this.checked)"
+                     style="accent-color:var(--accent); width:16px; height:16px; margin-top:2px; flex-shrink:0;">
+              <span>
+                <span style="font-size:0.9rem; color:var(--text); display:block;">Uitnodiging voor een MemberGroup</span>
+                <span style="font-size:0.78rem; color:var(--text-muted); line-height:1.4; display:block; margin-top:2px;">
+                  Ontvang een melding wanneer iemand je uitnodigt om lid te worden van een groep.
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <div class="settings-sub-section" id="settingsSubSecurity">
@@ -9416,6 +9433,7 @@ async function initPushNotifications() {
   const subBtn    = document.getElementById('pushSubscribeBtn');
   const unsubBtn  = document.getElementById('pushUnsubscribeBtn');
   const testBtn   = document.getElementById('pushTestBtn');
+  const prefsCard = document.getElementById('notifPrefsCard');
   if (!statusEl) return;
 
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -9429,17 +9447,20 @@ async function initPushNotifications() {
 
   if (_pushSubscription) {
     statusEl.innerHTML = `<span style="color:var(--success);">✓ ${t('settings.pushActive')}</span>`;
-    if (subBtn)   subBtn.style.display   = 'none';
-    if (unsubBtn) unsubBtn.style.display = '';
-    if (testBtn)  testBtn.style.display  = '';
+    if (subBtn)    subBtn.style.display    = 'none';
+    if (unsubBtn)  unsubBtn.style.display  = '';
+    if (testBtn)   testBtn.style.display   = '';
+    if (prefsCard) { prefsCard.style.display = ''; loadNotifPrefs(); }
   } else if (perm === 'denied') {
     statusEl.innerHTML = `<span style="color:var(--danger);">${t('settings.pushBlocked')}</span>`;
-    if (subBtn) subBtn.disabled = true;
+    if (subBtn)    subBtn.disabled = true;
+    if (prefsCard) prefsCard.style.display = 'none';
   } else {
     statusEl.innerHTML = `<span style="color:var(--text-muted);">${t('settings.pushInactive')}</span>`;
-    if (subBtn)   { subBtn.style.display = ''; subBtn.disabled = false; }
-    if (unsubBtn) unsubBtn.style.display = 'none';
-    if (testBtn)  testBtn.style.display  = 'none';
+    if (subBtn)    { subBtn.style.display = ''; subBtn.disabled = false; }
+    if (unsubBtn)  unsubBtn.style.display = 'none';
+    if (testBtn)   testBtn.style.display  = 'none';
+    if (prefsCard) prefsCard.style.display = 'none';
   }
 }
 
@@ -9501,6 +9522,26 @@ async function testPushNotification() {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+async function loadNotifPrefs() {
+  try {
+    const r = await fetch(`${API}/push/prefs`);
+    if (!r.ok) return;
+    const prefs = await r.json();
+    const el = document.getElementById('prefGroupInvite');
+    if (el && prefs.group_invite !== undefined) el.checked = prefs.group_invite;
+  } catch(e) { /* silently ignore */ }
+}
+
+async function saveNotifPref(key, value) {
+  try {
+    await fetch(`${API}/push/prefs`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: value }),
+    });
+  } catch(e) { /* silently ignore */ }
 }
 
 if ('serviceWorker' in navigator) {
