@@ -5483,9 +5483,9 @@ def delete_api_key(key_id):
 @app.route("/api/mcp/log", methods=["POST"])
 def mcp_log():
     """Called by the MCP server after each tool invocation to write a user-scoped log entry."""
+    # uid may be None when using the legacy MCP_API_KEY or when auth is disabled.
+    # check_auth() has already validated the token, so just log with whatever uid we have.
     uid = _get_current_user_id()
-    if not uid:
-        return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json() or {}
     tool    = (data.get("tool") or "unknown")[:80]
     detail  = (data.get("detail") or "")[:500]
