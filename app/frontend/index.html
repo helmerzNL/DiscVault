@@ -2621,6 +2621,31 @@
         <div id="adminUsersList"></div>
       </div>
 
+      <!-- Admin: Invite Codes -->
+      <div id="adminInviteCard" class="card" style="display:none; margin-top:20px;">
+        <div class="card-title" data-i18n="settings.inviteTitle">✉️ Uitnodigingscodes</div>
+        <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:16px;" data-i18n="settings.inviteDesc">
+          Maak tijdelijke codes aan waarmee nieuwe gebruikers een account kunnen registreren.
+        </div>
+        <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+          <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+            <label data-i18n="settings.inviteUsername">Gebruikersnaam nieuwe gebruiker</label>
+            <input type="text" id="newInviteUsername" placeholder="bijv. jan">
+          </div>
+          <button class="btn btn-primary" onclick="createInviteCode()" style="height:40px;" data-i18n="settings.inviteCreate">+ Code aanmaken</button>
+        </div>
+        <div id="inviteCodeResult" style="display:none; padding:12px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.25); border-radius:8px; margin-bottom:16px;">
+          <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:6px;"><span data-i18n="settings.inviteCodeLabel">Code</span>: <strong id="inviteCodeForUser"></strong></div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div id="inviteCodeDisplay" style="font-family:'DM Mono',monospace; font-size:1.2rem; letter-spacing:2px; flex:1; color:var(--accent);"></div>
+            <button class="btn btn-secondary" onclick="copyInviteCode()" style="padding:6px 12px; font-size:0.78rem;" data-i18n="settings.inviteCopy">📋 Kopiëren</button>
+          </div>
+          <div id="inviteCodeExpiry" style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;"></div>
+        </div>
+        <div id="adminInviteStatus" class="status-msg" style="margin-bottom:8px;"></div>
+        <div id="adminInviteList"></div>
+      </div>
+
       <!-- Admin: Group Management -->
       <div id="adminGroupsCard" class="card" style="display:none; margin-top:20px;">
         <div class="card-title" data-i18n="settings.groupsTitle">📁 Groepen</div>
@@ -2781,6 +2806,10 @@
       <div class="input-group" style="margin-bottom:10px;">
         <label data-i18n="login.registerUsername">Gebruikersnaam</label>
         <input type="text" id="loginRegUsername" placeholder="Bijv. jan">
+      </div>
+      <div class="input-group" id="loginInviteCodeRow" style="display:none; margin-bottom:10px;">
+        <label data-i18n="login.inviteCode">Uitnodigingscode</label>
+        <input type="text" id="loginInviteCode" placeholder="XXXX-XXXX-XXXX" style="font-family:'DM Mono',monospace; letter-spacing:2px; text-transform:uppercase;" data-i18n-placeholder="login.inviteCodePlaceholder">
       </div>
       <div class="input-group" style="margin-bottom:10px;">
         <label data-i18n="login.registerPasskeyName">Passkey naam</label>
@@ -3164,8 +3193,24 @@ nl: {
   'settings.usersTitle':'👥 Gebruikersbeheer','settings.groupsTitle':'📁 Groepen','settings.groupName':'Groepsnaam',
   'settings.registrationEnabled':'Nieuwe gebruikers mogen zich registreren',
   'settings.registrationDesc':'Als dit uitstaat kunnen nieuwe gebruikers geen account aanmaken via het login-scherm.',
+  'settings.inviteTitle':'✉️ Uitnodigingscodes',
+  'settings.inviteDesc':'Maak tijdelijke codes aan waarmee nieuwe gebruikers een account kunnen registreren.',
+  'settings.inviteUsername':'Gebruikersnaam nieuwe gebruiker',
+  'settings.inviteCreate':'+ Code aanmaken',
+  'settings.inviteCodeLabel':'Code',
+  'settings.inviteCopy':'📋 Kopiëren',
+  'settings.inviteExpires':'Vervalt',
+  'settings.inviteRevoke':'Intrekken',
+  'settings.inviteUsed':'Gebruikt',
+  'settings.inviteActive':'Actief',
+  'settings.inviteExpired':'Verlopen',
   'js.registrationEnabled':'Registratie ingeschakeld',
   'js.registrationDisabled':'Registratie uitgeschakeld',
+  'js.inviteCreated':'Uitnodigingscode aangemaakt!',
+  'js.inviteCreateError':'Kon geen uitnodigingscode aanmaken.',
+  'js.inviteCopied':'Code gekopieerd!',
+  'js.inviteRevoked':'Uitnodigingscode ingetrokken.',
+  'js.noInviteCodes':'Geen actieve uitnodigingscodes.',
   // login
   'login.prompt':'Log in met je passkey','login.button':'🔑 Inloggen','login.recovery':'🔐 Herstelcode gebruiken',
   'login.recoveryUsername':'Gebruikersnaam','login.recoveryCode':'Herstelcode','login.recoveryBtn':'🔓 Inloggen met herstelcode',
@@ -3173,7 +3218,10 @@ nl: {
   'login.recoveryFailed':'Recovery mislukt',
   'login.newRecoveryAlert':'Nieuwe herstelcode: {0}\n\nBewaar deze code veilig! Je passkeys zijn verwijderd, registreer een nieuwe passkey in Instellingen > Beveiliging.',
   'login.register':'✨ Account aanmaken',
+  'login.registerWithInvite':'✉️ Registreren met uitnodigingscode',
   'login.registerUsername':'Gebruikersnaam',
+  'login.inviteCode':'Uitnodigingscode',
+  'login.inviteCodePlaceholder':'XXXX-XXXX-XXXX',
   'login.registerPasskeyName':'Passkey naam',
   'login.registerBtn':'🔑 Registreren',
   'login.registerFillIn':'Vul een gebruikersnaam in',
@@ -3492,11 +3540,30 @@ en: {
   'settings.usersTitle':'👥 User Management','settings.groupsTitle':'📁 Groups','settings.groupName':'Group name',
   'settings.registrationEnabled':'Allow new users to register',
   'settings.registrationDesc':'When disabled, new users cannot create an account from the login screen.',
+  'settings.inviteTitle':'✉️ Invite Codes',
+  'settings.inviteDesc':'Create temporary codes so new users can register an account.',
+  'settings.inviteUsername':'New user\'s username',
+  'settings.inviteCreate':'+ Create code',
+  'settings.inviteCodeLabel':'Code',
+  'settings.inviteCopy':'📋 Copy',
+  'settings.inviteExpires':'Expires',
+  'settings.inviteRevoke':'Revoke',
+  'settings.inviteUsed':'Used',
+  'settings.inviteActive':'Active',
+  'settings.inviteExpired':'Expired',
   'js.registrationEnabled':'Registration enabled',
   'js.registrationDisabled':'Registration disabled',
+  'js.inviteCreated':'Invite code created!',
+  'js.inviteCreateError':'Failed to create invite code.',
+  'js.inviteCopied':'Code copied!',
+  'js.inviteRevoked':'Invite code revoked.',
+  'js.noInviteCodes':'No active invite codes.',
   'login.prompt':'Log in with your passkey','login.button':'🔑 Log in','login.recovery':'🔐 Use recovery code',
   'login.register':'✨ Create account',
+  'login.registerWithInvite':'✉️ Register with invite code',
   'login.registerUsername':'Username',
+  'login.inviteCode':'Invite code',
+  'login.inviteCodePlaceholder':'XXXX-XXXX-XXXX',
   'login.registerPasskeyName':'Passkey name',
   'login.registerBtn':'🔑 Register',
   'login.registerFillIn':'Enter a username',
@@ -3831,6 +3898,17 @@ fr: {
   'settings.usersTitle':'👥 Gestion des utilisateurs','settings.groupsTitle':'📁 Groupes','settings.groupName':'Nom du groupe',
   'settings.registrationEnabled':'Autoriser les nouveaux utilisateurs à s\'inscrire',
   'settings.registrationDesc':'Si désactivé, les nouveaux utilisateurs ne peuvent pas créer de compte.',
+  'settings.inviteTitle':'✉️ Codes d\'invitation',
+  'settings.inviteDesc':'Créez des codes temporaires pour permettre à de nouveaux utilisateurs de s\'inscrire.',
+  'settings.inviteUsername':'Nom d\'utilisateur du nouvel utilisateur',
+  'settings.inviteCreate':'+ Créer un code',
+  'settings.inviteCodeLabel':'Code',
+  'settings.inviteCopy':'📋 Copier',
+  'settings.inviteExpires':'Expire le',
+  'settings.inviteRevoke':'Révoquer',
+  'settings.inviteUsed':'Utilisé',
+  'settings.inviteActive':'Actif',
+  'settings.inviteExpired':'Expiré',
   'settings.myGroupsTitle':'📁 Mes Groupes',
   'settings.myGroupsDesc':'Créez votre propre groupe et invitez d\'autres à partager une collection.',
   'settings.myGroupName':'Nom du groupe',
@@ -3838,10 +3916,18 @@ fr: {
   'settings.groupCreateBtn':'+ Créer un groupe',
   'js.registrationEnabled':'Inscription activée',
   'js.registrationDisabled':'Inscription désactivée',
+  'js.inviteCreated':'Code d\'invitation créé !',
+  'js.inviteCreateError':'Impossible de créer un code d\'invitation.',
+  'js.inviteCopied':'Code copié !',
+  'js.inviteRevoked':'Code d\'invitation révoqué.',
+  'js.noInviteCodes':'Aucun code d\'invitation actif.',
   // login
   'login.prompt':'Connectez-vous avec votre clé d\'accès','login.button':'🔑 Se connecter','login.recovery':'🔐 Utiliser le code de récupération',
   'login.register':'✨ Créer un compte',
+  'login.registerWithInvite':'✉️ S\'inscrire avec un code d\'invitation',
   'login.registerUsername':'Nom d\'utilisateur',
+  'login.inviteCode':'Code d\'invitation',
+  'login.inviteCodePlaceholder':'XXXX-XXXX-XXXX',
   'login.registerPasskeyName':'Nom de la clé d\'accès',
   'login.registerBtn':'🔑 S\'inscrire',
   'login.registerFillIn':'Saisissez un nom d\'utilisateur',
@@ -4154,6 +4240,17 @@ de: {
   'settings.usersTitle':'👥 Benutzerverwaltung','settings.groupsTitle':'📁 Gruppen','settings.groupName':'Gruppenname',
   'settings.registrationEnabled':'Neue Benutzer dürfen sich registrieren',
   'settings.registrationDesc':'Wenn deaktiviert, können neue Benutzer kein Konto erstellen.',
+  'settings.inviteTitle':'✉️ Einladungscodes',
+  'settings.inviteDesc':'Erstelle temporäre Codes, mit denen neue Benutzer ein Konto registrieren können.',
+  'settings.inviteUsername':'Benutzername des neuen Benutzers',
+  'settings.inviteCreate':'+ Code erstellen',
+  'settings.inviteCodeLabel':'Code',
+  'settings.inviteCopy':'📋 Kopieren',
+  'settings.inviteExpires':'Läuft ab',
+  'settings.inviteRevoke':'Widerrufen',
+  'settings.inviteUsed':'Verwendet',
+  'settings.inviteActive':'Aktiv',
+  'settings.inviteExpired':'Abgelaufen',
   'settings.myGroupsTitle':'📁 Meine Gruppen',
   'settings.myGroupsDesc':'Erstelle deine eigene Gruppe und lade andere ein, eine Sammlung zu teilen.',
   'settings.myGroupName':'Gruppenname',
@@ -4161,9 +4258,17 @@ de: {
   'settings.groupCreateBtn':'+ Gruppe erstellen',
   'js.registrationEnabled':'Registrierung aktiviert',
   'js.registrationDisabled':'Registrierung deaktiviert',
+  'js.inviteCreated':'Einladungscode erstellt!',
+  'js.inviteCreateError':'Einladungscode konnte nicht erstellt werden.',
+  'js.inviteCopied':'Code kopiert!',
+  'js.inviteRevoked':'Einladungscode widerrufen.',
+  'js.noInviteCodes':'Keine aktiven Einladungscodes.',
   'login.prompt':'Mit Passkey anmelden','login.button':'🔑 Anmelden','login.recovery':'🔐 Wiederherstellungscode verwenden',
   'login.register':'✨ Konto erstellen',
+  'login.registerWithInvite':'✉️ Mit Einladungscode registrieren',
   'login.registerUsername':'Benutzername',
+  'login.inviteCode':'Einladungscode',
+  'login.inviteCodePlaceholder':'XXXX-XXXX-XXXX',
   'login.registerPasskeyName':'Passkey-Name',
   'login.registerBtn':'🔑 Registrieren',
   'login.registerFillIn':'Benutzernamen eingeben',
@@ -4461,6 +4566,17 @@ es: {
   'settings.usersTitle':'👥 Gestión de usuarios','settings.groupsTitle':'📁 Grupos','settings.groupName':'Nombre del grupo',
   'settings.registrationEnabled':'Permitir el registro de nuevos usuarios',
   'settings.registrationDesc':'Si está desactivado, los nuevos usuarios no pueden crear una cuenta.',
+  'settings.inviteTitle':'✉️ Códigos de invitación',
+  'settings.inviteDesc':'Crea códigos temporales para que nuevos usuarios puedan registrar una cuenta.',
+  'settings.inviteUsername':'Nombre de usuario del nuevo usuario',
+  'settings.inviteCreate':'+ Crear código',
+  'settings.inviteCodeLabel':'Código',
+  'settings.inviteCopy':'📋 Copiar',
+  'settings.inviteExpires':'Expira',
+  'settings.inviteRevoke':'Revocar',
+  'settings.inviteUsed':'Usado',
+  'settings.inviteActive':'Activo',
+  'settings.inviteExpired':'Expirado',
   'settings.myGroupsTitle':'📁 Mis grupos',
   'settings.myGroupsDesc':'Crea tu propio grupo e invita a otros a compartir una colección.',
   'settings.myGroupName':'Nombre del grupo',
@@ -4468,9 +4584,17 @@ es: {
   'settings.groupCreateBtn':'+ Crear grupo',
   'js.registrationEnabled':'Registro activado',
   'js.registrationDisabled':'Registro desactivado',
+  'js.inviteCreated':'¡Código de invitación creado!',
+  'js.inviteCreateError':'No se pudo crear el código de invitación.',
+  'js.inviteCopied':'¡Código copiado!',
+  'js.inviteRevoked':'Código de invitación revocado.',
+  'js.noInviteCodes':'No hay códigos de invitación activos.',
   'login.prompt':'Inicia sesión con tu passkey','login.button':'🔑 Iniciar sesión','login.recovery':'🔐 Usar código de recuperación',
   'login.register':'✨ Crear cuenta',
+  'login.registerWithInvite':'✉️ Registrarse con código de invitación',
   'login.registerUsername':'Nombre de usuario',
+  'login.inviteCode':'Código de invitación',
+  'login.inviteCodePlaceholder':'XXXX-XXXX-XXXX',
   'login.registerPasskeyName':'Nombre del passkey',
   'login.registerBtn':'🔑 Registrarse',
   'login.registerFillIn':'Introduce un nombre de usuario',
@@ -7286,11 +7410,23 @@ async function checkAuth() {
 
 function showLoginOverlay(statusData) {
   document.getElementById('loginOverlay').style.display = 'flex';
-  // Show register button only when registration is enabled and auth is enabled
   const regBtn = document.getElementById('btnRegisterToggle');
   if (regBtn) {
-    const show = statusData && statusData.registration_enabled && statusData.auth_enabled;
-    regBtn.style.display = show ? '' : 'none';
+    const hasAuth = !!(statusData && statusData.auth_enabled);
+    const regEnabled = !!(statusData && statusData.registration_enabled);
+    const hasUsers = !!(statusData && statusData.has_users);
+    const inviteMode = hasAuth && hasUsers && !regEnabled;
+    // Show button when auth is not yet set up, registration is open, or invite codes are available
+    regBtn.style.display = (!hasAuth || !hasUsers || regEnabled || inviteMode) ? '' : 'none';
+    const i18nKey = inviteMode ? 'login.registerWithInvite' : 'login.register';
+    regBtn.setAttribute('data-i18n', i18nKey);
+    regBtn.innerHTML = t(i18nKey);
+  }
+  // Show invite code field only when registration is disabled (invite required)
+  const inviteRow = document.getElementById('loginInviteCodeRow');
+  if (inviteRow) {
+    const inviteMode = !!(statusData && statusData.auth_enabled && statusData.has_users && !statusData.registration_enabled);
+    inviteRow.style.display = inviteMode ? 'block' : 'none';
   }
   // Hide the register form when overlay opens
   const regForm = document.getElementById('loginRegisterForm');
@@ -7704,6 +7840,7 @@ function toggleLoginRegister() {
 async function loginRegisterPasskey() {
   const username = document.getElementById('loginRegUsername').value.trim();
   const credName = document.getElementById('loginRegCredName').value.trim() || 'Passkey';
+  const inviteCode = (document.getElementById('loginInviteCode') ? document.getElementById('loginInviteCode').value.trim() : '') || undefined;
   if (!username) { showStatus('loginStatus', t('login.registerFillIn'), 'error'); return; }
   const btn = document.getElementById('btnLoginRegister');
   btn.innerHTML = t('js.waitingPasskey');
@@ -7712,7 +7849,7 @@ async function loginRegisterPasskey() {
     const optResp = await _origFetch(`${API}/auth/register/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username })
+      body: JSON.stringify({ username, invite_code: inviteCode })
     });
     const optData = await optResp.json();
     if (optData.error) { showStatus('loginStatus', optData.error, 'error'); btn.innerHTML = t('login.registerBtn'); btn.disabled = false; return; }
@@ -7742,7 +7879,7 @@ async function loginRegisterPasskey() {
     const verResp = await _origFetch(`${API}/auth/register/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id, username, credential_name: credName, credential })
+      body: JSON.stringify({ user_id, username, credential_name: credName, invite_code: inviteCode, credential })
     });
     const verData = await verResp.json();
     if (verData.token) {
@@ -7780,6 +7917,81 @@ async function toggleRegistration() {
   await r.json();
 }
 
+// ---------------------------------------------------------------------------
+// Admin: Invite Codes
+// ---------------------------------------------------------------------------
+
+async function createInviteCode() {
+  const username = (document.getElementById('newInviteUsername').value || '').trim();
+  if (!username) { showStatus('adminInviteStatus', t('login.registerFillIn'), 'error'); return; }
+  try {
+    const r = await fetch(`${API}/auth/invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ username })
+    });
+    const d = await r.json();
+    if (!r.ok) { showStatus('adminInviteStatus', d.error || t('js.inviteCreateError'), 'error'); return; }
+    document.getElementById('inviteCodeForUser').textContent = d.username;
+    document.getElementById('inviteCodeDisplay').textContent = d.code;
+    document.getElementById('inviteCodeExpiry').textContent = `${t('settings.inviteExpires')}: ${(d.expires_at||'').slice(0,16).replace('T',' ')} UTC`;
+    document.getElementById('inviteCodeResult').style.display = 'block';
+    document.getElementById('newInviteUsername').value = '';
+    showStatus('adminInviteStatus', t('js.inviteCreated'), 'success');
+    await loadInviteCodes();
+  } catch(e) {
+    showStatus('adminInviteStatus', t('js.error', e.message), 'error');
+  }
+}
+
+function copyInviteCode() {
+  const code = document.getElementById('inviteCodeDisplay').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    showStatus('adminInviteStatus', t('js.inviteCopied'), 'success');
+  }).catch(() => {});
+}
+
+async function loadInviteCodes() {
+  try {
+    const r = await fetch(`${API}/auth/invite`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const codes = await r.json();
+    const list = document.getElementById('adminInviteList');
+    if (!list) return;
+    if (!codes.length) {
+      list.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted);">${t('js.noInviteCodes')}</div>`;
+      return;
+    }
+    const now = new Date();
+    list.innerHTML = codes.map(c => {
+      const isUsed = !!c.used_at;
+      const isExpired = !isUsed && new Date(c.expires_at) < now;
+      const statusLabel = isUsed ? `<span style="color:var(--text-muted)">${t('settings.inviteUsed')}</span>`
+                        : isExpired ? `<span style="color:var(--danger)">${t('settings.inviteExpired')}</span>`
+                        : `<span style="color:var(--success)">${t('settings.inviteActive')}</span>`;
+      return `
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px; font-size:0.82rem;">
+          <div style="flex:1;">
+            <strong>${c.username}</strong>
+            <span style="color:var(--text-muted); margin-left:8px;">${(c.expires_at||'').slice(0,16).replace('T',' ')} UTC</span>
+            <span style="margin-left:8px;">${statusLabel}</span>
+          </div>
+          ${!isUsed ? `<button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="revokeInviteCode(${c.id})">${t('settings.inviteRevoke')}</button>` : ''}
+        </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function revokeInviteCode(id) {
+  try {
+    const r = await fetch(`${API}/auth/invite/${id}`, { method: 'DELETE', headers: authHeaders() });
+    if (r.ok) {
+      showStatus('adminInviteStatus', t('js.inviteRevoked'), 'success');
+      await loadInviteCodes();
+    }
+  } catch(e) {}
+}
+
 async function loadAdminPanel() {
   try {
     const me = await fetch(`${API}/auth/me`).then(r => r.json());
@@ -7797,20 +8009,25 @@ async function loadAdminPanel() {
       if (me.authenticated) {
         document.getElementById('adminUsersCard').style.display = 'block';
         await loadAdminUsers();
+        document.getElementById('adminInviteCard').style.display = 'block';
+        await loadInviteCodes();
       } else {
         document.getElementById('adminUsersCard').style.display = 'none';
+        document.getElementById('adminInviteCard').style.display = 'none';
       }
       await loadAdminGroups();
     } else {
       // MemberGroups
       document.getElementById('adminGroupsCard').style.display = 'none';
       document.getElementById('adminUsersCard').style.display = 'none';
+      document.getElementById('adminInviteCard').style.display = 'none';
       document.getElementById('myGroupsCard').style.display = 'block';
       await loadMyGroups();
     }
   } catch(e) {
     document.getElementById('adminUsersCard').style.display = 'none';
     document.getElementById('adminGroupsCard').style.display = 'none';
+    document.getElementById('adminInviteCard').style.display = 'none';
     const mgc = document.getElementById('myGroupsCard');
     if (mgc) mgc.style.display = 'none';
   }

@@ -362,6 +362,20 @@ def init_db():
         )
     """)
 
+    # Auth: invite codes for admin-controlled registration
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS invite_codes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            code_hash   TEXT NOT NULL UNIQUE,
+            username    TEXT NOT NULL,
+            created_by  TEXT NOT NULL,
+            created_at  TEXT NOT NULL,
+            expires_at  TEXT NOT NULL,
+            used_at     TEXT,
+            used_by     TEXT
+        )
+    """)
+
     # People: actors, directors, crew
     conn.execute("""
         CREATE TABLE IF NOT EXISTS people (
@@ -3443,8 +3457,19 @@ def register_options():
     has_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0
     caller_uid = _get_current_user_id()
     if has_users and not caller_uid and not _is_registration_enabled():
-        conn.close()
-        return jsonify({"error": "Registration is disabled"}), 403
+        invite_code = (data.get("invite_code") or "").replace("-", "").strip().upper()
+        if not invite_code:
+            conn.close()
+            return jsonify({"error": "Registration is disabled"}), 403
+        code_hash = hashlib.sha256(invite_code.encode()).hexdigest()
+        now = datetime.utcnow().isoformat()
+        invite = conn.execute(
+            "SELECT id FROM invite_codes WHERE code_hash=? AND username=? AND used_at IS NULL AND expires_at > ?",
+            (code_hash, username, now)
+        ).fetchone()
+        if not invite:
+            conn.close()
+            return jsonify({"error": "Invalid or expired invite code"}), 403
     if user:
         user_id = user["id"]
     else:
@@ -3492,10 +3517,22 @@ def register_verify():
     conn_check = get_db()
     has_users = conn_check.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0
     existing_user = conn_check.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
-    conn_check.close()
     caller_uid = _get_current_user_id()
     if has_users and not existing_user and not caller_uid and not _is_registration_enabled():
-        return jsonify({"error": "Registration is disabled"}), 403
+        invite_code = (data.get("invite_code") or "").replace("-", "").strip().upper()
+        if not invite_code:
+            conn_check.close()
+            return jsonify({"error": "Registration is disabled"}), 403
+        code_hash = hashlib.sha256(invite_code.encode()).hexdigest()
+        now = datetime.utcnow().isoformat()
+        invite = conn_check.execute(
+            "SELECT id FROM invite_codes WHERE code_hash=? AND username=? AND used_at IS NULL AND expires_at > ?",
+            (code_hash, username, now)
+        ).fetchone()
+        if not invite:
+            conn_check.close()
+            return jsonify({"error": "Invalid or expired invite code"}), 403
+    conn_check.close()
 
     challenge = _pop_challenge(user_id)
     if not challenge:
@@ -3537,6 +3574,14 @@ def register_verify():
             "INSERT INTO users (id, username, display_name, role, recovery_hash, created_at) VALUES (?,?,?,?,?,?)",
             (user_id, username, display_name, role, recovery_hash, datetime.utcnow().isoformat())
         )
+        # Consume invite code if one was used
+        invite_code_raw = (data.get("invite_code") or "").replace("-", "").strip().upper()
+        if invite_code_raw:
+            ic_hash = hashlib.sha256(invite_code_raw.encode()).hexdigest()
+            conn.execute(
+                "UPDATE invite_codes SET used_at=?, used_by=? WHERE code_hash=? AND username=? AND used_at IS NULL",
+                (datetime.utcnow().isoformat(), user_id, ic_hash, username)
+            )
     conn.execute(
         "INSERT INTO credentials (id, user_id, public_key, sign_count, credential_name, created_at) VALUES (?,?,?,?,?,?)",
         (cred_id_b64, user_id, cose_key_bytes, sign_count, credential_name,
@@ -3804,6 +3849,68 @@ def reset_user_passkey(user_id):
     conn.close()
     add_log("auth", f"Passkey reset voor {user['username']} door admin", level="warn")
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/auth/invite", methods=["POST"])
+def create_auth_invite():
+    """Admin: create a temporary invite code for a new user."""
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    username = (data.get("username") or "").strip()
+    if not username:
+        return jsonify({"error": "Username required"}), 400
+    conn = get_db()
+    existing = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({"error": "User already exists"}), 409
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    raw_code = "".join(secrets.choice(alphabet) for _ in range(12))
+    code_display = f"{raw_code[:4]}-{raw_code[4:8]}-{raw_code[8:12]}"
+    code_hash = hashlib.sha256(raw_code.encode()).hexdigest()
+    now = datetime.utcnow()
+    expires_at = (now + timedelta(hours=48)).isoformat()
+    admin_id = _get_current_user_id() or "system"
+    conn.execute(
+        "INSERT INTO invite_codes (code_hash, username, created_by, created_at, expires_at) VALUES (?,?,?,?,?)",
+        (code_hash, username, admin_id, now.isoformat(), expires_at)
+    )
+    conn.commit()
+    invite_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.close()
+    return jsonify({"id": invite_id, "code": code_display, "username": username, "expires_at": expires_at})
+
+
+@app.route("/api/auth/invite", methods=["GET"])
+def list_auth_invites():
+    """Admin: list all invite codes."""
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, username, created_at, expires_at, used_at FROM invite_codes ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([
+        {"id": r[0], "username": r[1], "created_at": r[2], "expires_at": r[3], "used_at": r[4]}
+        for r in rows
+    ])
+
+
+@app.route("/api/auth/invite/<int:invite_id>", methods=["DELETE"])
+def delete_auth_invite(invite_id):
+    """Admin: revoke an invite code."""
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    conn.execute("DELETE FROM invite_codes WHERE id=?", (invite_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "deleted"})
 
 
 @app.route("/api/auth/me", methods=["GET"])
