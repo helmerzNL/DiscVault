@@ -6656,9 +6656,6 @@ async function addGroupMember(groupId, groupName) {
 }
 
 async function removeGroupMember(groupId, userId, groupName) {
-}
-
-async function removeGroupMember(groupId, userId, groupName) {
   await fetch(`${API}/groups/${groupId}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
   manageGroupMembers(groupId, groupName);
 }
@@ -6871,10 +6868,6 @@ async function respondInvite(inviteId, action) {
   }
   await loadInviteNotifications();
   await openInvitePanel();
-}
-
-  await fetch(`${API}/groups/${groupId}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
-  manageGroupMembers(groupId, groupName);
 }
 
 // ── Backup / Restore / Reset ──────────────────────────────────────────────────
