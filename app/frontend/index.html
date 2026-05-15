@@ -39,6 +39,11 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  html {
+    overscroll-behavior: none;
+    overflow-x: hidden;
+  }
+
   body {
     background: var(--bg);
     color: var(--text);
@@ -46,6 +51,8 @@
     font-weight: 300;
     min-height: 100vh;
     line-height: 1.6;
+    overscroll-behavior: none;
+    overflow-x: hidden;
   }
 
   body.modal-open {
