@@ -18,7 +18,7 @@ import cbor2
 import xml.etree.ElementTree as ET
 from functools import wraps
 from urllib.parse import quote_plus, quote
-from flask import Flask, request, jsonify, send_from_directory, send_file, Response, g
+from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -45,7 +45,12 @@ MCP_API_KEY   = os.environ.get("MCP_API_KEY", "")
 JWT_SECRET    = os.environ.get("JWT_SECRET", secrets.token_hex(32))
 RP_ID         = os.environ.get("RP_ID", "localhost")
 RP_NAME       = os.environ.get("RP_NAME", "DiscVault")
-RP_ORIGIN     = os.environ.get("RP_ORIGIN", "http://localhost:6080")
+# RP_ORIGINS accepts a comma-separated list of allowed origins, e.g.:
+#   RP_ORIGINS=https://discvault.eu,https://discvault.nl
+# Legacy single-value RP_ORIGIN is also supported.
+_rp_origins_raw = os.environ.get("RP_ORIGINS") or os.environ.get("RP_ORIGIN", "http://localhost:6080")
+RP_ORIGINS    = [o.strip().rstrip("/") for o in _rp_origins_raw.split(",") if o.strip()]
+RP_ORIGIN     = RP_ORIGINS[0]  # primary origin (used in registration)
 OMDB_ENABLED_DEFAULT = os.environ.get("OMDB_ENABLED", "true").strip().lower() == "true"
 TMDB_ENABLED_DEFAULT = os.environ.get("TMDB_ENABLED", "true").strip().lower() == "true"
 BLURAY_SCRAPE_ENABLED_DEFAULT = os.environ.get("BLURAY_SCRAPE_ENABLED", "false").strip().lower() == "true"
@@ -3311,6 +3316,15 @@ def _verify_signature(public_key_bytes: bytes, auth_data: bytes, client_data_has
 # Auth: Passkey (WebAuthn) endpoints
 # ---------------------------------------------------------------------------
 
+@app.route("/.well-known/webauthn")
+def webauthn_well_known():
+    """Related Origins file (WebAuthn Level 3) — allows passkeys to be shared across all configured origins."""
+    response = make_response(json.dumps({"origins": RP_ORIGINS}))
+    response.headers["Content-Type"] = "application/json"
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
+
 @app.route("/api/auth/status")
 def auth_status():
     conn = get_db()
@@ -3413,8 +3427,9 @@ def register_verify():
         received_challenge = _b64url_decode(client_data["challenge"])
         if received_challenge != challenge:
             raise ValueError("Challenge mismatch")
-        if client_data.get("origin") != RP_ORIGIN:
-            raise ValueError(f"Origin mismatch: {client_data.get('origin')} != {RP_ORIGIN}")
+        incoming_origin = client_data.get("origin", "").rstrip("/")
+        if incoming_origin not in RP_ORIGINS:
+            raise ValueError(f"Origin not allowed: {incoming_origin}")
 
         # Parse attestationObject
         cred_id, cose_key_bytes, cose_key, sign_count = _parse_attestation_object(
@@ -3502,8 +3517,9 @@ def login_verify():
         received_challenge = _b64url_decode(client_data["challenge"])
         if received_challenge != challenge:
             raise ValueError("Challenge mismatch")
-        if client_data.get("origin") != RP_ORIGIN:
-            raise ValueError(f"Origin mismatch: {client_data.get('origin')} != {RP_ORIGIN}")
+        incoming_origin = client_data.get("origin", "").rstrip("/")
+        if incoming_origin not in RP_ORIGINS:
+            raise ValueError(f"Origin not allowed: {incoming_origin}")
 
         auth_data = _b64url_decode(credential["response"]["authenticatorData"])
         client_data_hash = hashlib.sha256(client_data_raw).digest()
