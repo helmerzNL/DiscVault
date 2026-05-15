@@ -5110,6 +5110,27 @@ async function loadStats(retries = 2) {
   }
 }
 
+async function _loadGroupFilter() {
+  const sel = document.getElementById('groupFilter');
+  if (!sel) return;
+  try {
+    const groups = await fetch(`${API}/groups`).then(r => r.json());
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">${t('collection.allCollections')}</option>`;
+    if (authEnabled && currentUserId) {
+      sel.insertAdjacentHTML('beforeend', `<option value="_mine">${t('collection.myMovies')}</option>`);
+    }
+    for (const g of groups) {
+      sel.insertAdjacentHTML('beforeend', `<option value="${g.id}">${g.name}</option>`);
+    }
+    // Restore previous selection if still valid
+    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    sel.style.display = groups.length || (authEnabled && currentUserId) ? '' : 'none';
+  } catch(e) {
+    sel.style.display = 'none';
+  }
+}
+
 async function loadCollection(retries = 2) {
   // Load group filter options
   _loadGroupFilter();
