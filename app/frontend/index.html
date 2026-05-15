@@ -9331,10 +9331,23 @@ async function unsubscribeFromPush() {
 }
 
 async function testPushNotification() {
-  const btn = document.getElementById('pushTestBtn');
+  const btn      = document.getElementById('pushTestBtn');
+  const statusEl = document.getElementById('pushNotifStatus');
   if (btn) btn.disabled = true;
-  try { await fetch(`${API}/push/test`, { method: 'POST' }); }
-  finally { if (btn) btn.disabled = false; }
+  try {
+    const r    = await fetch(`${API}/push/test`, { method: 'POST' });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || data.ok === false) {
+      const msg = (data.errors || [data.error || r.statusText]).join('; ');
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">✗ ${msg}</span>`;
+    } else {
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--success);">✓ Verzonden — controleer je meldingen</span>`;
+    }
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">✗ ${e.message}</span>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 if ('serviceWorker' in navigator) {

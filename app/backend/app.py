@@ -496,6 +496,13 @@ def init_db():
         if orphan_count > 0:
             conn.execute("UPDATE movies SET owner_id=? WHERE owner_id IS NULL", (first_user[0],))
 
+    # Migrate: re-generate VAPID keys if stored in old TraditionalOpenSSL format
+    # (old keys have "EC PARAMETERS" header; new keys are PKCS8 "BEGIN PRIVATE KEY")
+    old_priv = conn.execute("SELECT value FROM settings WHERE key='vapid_private_key'").fetchone()
+    if old_priv and "EC PARAMETERS" in (old_priv[0] or ""):
+        conn.execute("DELETE FROM settings WHERE key IN ('vapid_private_key', 'vapid_public_key')")
+        conn.execute("DELETE FROM push_subscriptions")  # old subs used old public key, must re-subscribe
+
     conn.commit()
     conn.close()
 
@@ -5141,7 +5148,7 @@ def _get_or_create_vapid_keys():
     priv = _ec.generate_private_key(_ec.SECP256R1(), _cb())
     pub_bytes = priv.public_key().public_bytes(_Enc.X962, _PubFmt.UncompressedPoint)
     pub_b64   = base64.urlsafe_b64encode(pub_bytes).rstrip(b"=").decode()
-    priv_pem  = priv.private_bytes(_Enc.PEM, _PrivFmt.TraditionalOpenSSL, _NoEnc()).decode()
+    priv_pem  = priv.private_bytes(_Enc.PEM, _PrivFmt.PKCS8, _NoEnc()).decode()
     conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('vapid_public_key',?)",  (pub_b64,))
     conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('vapid_private_key',?)", (priv_pem,))
     conn.commit()
@@ -5150,7 +5157,7 @@ def _get_or_create_vapid_keys():
 
 
 def _send_push(endpoint, p256dh, auth, vapid_priv_pem, title, body, url="/"):
-    """Send a single Web Push message; silently removes expired subscriptions."""
+    """Send a single Web Push message. Returns None on success, error string on failure."""
     try:
         from pywebpush import webpush, WebPushException
         webpush(
@@ -5159,10 +5166,18 @@ def _send_push(endpoint, p256dh, auth, vapid_priv_pem, title, body, url="/"):
             vapid_private_key=vapid_priv_pem,
             vapid_claims={"sub": "mailto:no-reply@discvault.app"},
         )
+        return None
     except Exception as ex:
-        # 410 Gone = subscription expired/revoked → purge it
         status = getattr(getattr(ex, "response", None), "status_code", None)
+        err_body = ""
+        try:
+            err_body = ex.response.text[:300] if hasattr(ex, "response") and ex.response is not None else ""
+        except Exception:
+            pass
+        err_msg = f"Push failed (HTTP {status}): {ex} {err_body}".strip()
+        add_log("push", "Push delivery error", err_msg, level="error")
         if status == 410:
+            # Subscription expired/revoked → purge it
             try:
                 c = get_db()
                 c.execute("DELETE FROM push_subscriptions WHERE endpoint=?", (endpoint,))
@@ -5170,10 +5185,12 @@ def _send_push(endpoint, p256dh, auth, vapid_priv_pem, title, body, url="/"):
                 c.close()
             except Exception:
                 pass
+        return err_msg
 
 
 def push_to_user(user_id, title, body, url="/"):
-    """Deliver a push notification to all subscribed devices for *user_id*."""
+    """Deliver a push notification to all subscribed devices for *user_id*. Returns list of errors."""
+    errors = []
     try:
         _, priv_pem = _get_or_create_vapid_keys()
         conn = get_db()
@@ -5181,10 +5198,16 @@ def push_to_user(user_id, title, body, url="/"):
             "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?", (user_id,)
         ).fetchall()
         conn.close()
+        if not subs:
+            errors.append("No subscriptions found for this user")
         for s in subs:
-            _send_push(s["endpoint"], s["p256dh"], s["auth"], priv_pem, title, body, url)
-    except Exception:
-        pass
+            err = _send_push(s["endpoint"], s["p256dh"], s["auth"], priv_pem, title, body, url)
+            if err:
+                errors.append(err)
+    except Exception as ex:
+        errors.append(str(ex))
+        add_log("push", "push_to_user error", str(ex), level="error")
+    return errors
 
 
 @app.route("/api/push/vapid-public-key", methods=["GET"])
@@ -5233,7 +5256,9 @@ def push_unsubscribe():
 @app.route("/api/push/test", methods=["POST"])
 def push_test():
     user_id = _get_current_user_id() or "__global__"
-    push_to_user(user_id, "DiscVault", "Push-meldingen werken! 🎬", "/")
+    errors = push_to_user(user_id, "DiscVault", "Push-meldingen werken! 🎬", "/")
+    if errors:
+        return jsonify({"ok": False, "errors": errors}), 500
     return jsonify({"ok": True})
 
 
