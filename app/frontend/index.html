@@ -7311,7 +7311,6 @@ window.fetch = async function(url, opts = {}) {
   const isPublicAuth = !!(fullUrl && (
     fullUrl.pathname.startsWith('/api/auth/login') ||
     fullUrl.pathname.startsWith('/api/auth/register') ||
-    fullUrl.pathname === '/api/auth/status' ||
     fullUrl.pathname === '/api/auth/recovery'
   ));
   const method = (opts.method || 'GET').toUpperCase();
