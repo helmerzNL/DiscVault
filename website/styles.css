@@ -110,7 +110,7 @@ body::before {
   color: var(--text);
 }
 
-.site-nav a:last-child {
+.nav-github {
   color: var(--text);
   font-weight: 600;
   background: var(--surface2);
@@ -120,9 +120,44 @@ body::before {
   font-size: 0.82rem;
 }
 
-.site-nav a:last-child:hover {
+.nav-github:hover {
   border-color: rgba(124, 106, 247, 0.55);
   transform: translateY(-1px);
+}
+
+.lang-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-left: 1px solid var(--border);
+  padding-left: 0.9rem;
+  margin-left: 0.15rem;
+}
+
+.lang-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-family: "DM Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  padding: 0.22rem 0.44rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 150ms, border-color 150ms, background 150ms;
+  line-height: 1;
+}
+
+.lang-btn:hover {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+.lang-btn[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: rgba(232, 197, 71, 0.4);
+  background: rgba(232, 197, 71, 0.08);
 }
 
 .hamburger {
@@ -487,10 +522,8 @@ code {
     color: var(--text);
   }
 
-  .site-nav a:last-child {
-    margin-top: 0.25rem;
-    border-top: 1px solid var(--border);
-    padding-top: 0.6rem;
+  .nav-github {
+    margin-top: 0;
     border-radius: 8px;
     background: none;
     border: none;
@@ -498,6 +531,23 @@ code {
     padding: 0.55rem 0.7rem;
     font-weight: 400;
     color: var(--text-muted);
+  }
+
+  .lang-switcher {
+    border-left: none;
+    padding-left: 0.7rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.5rem;
+    margin-top: 0.2rem;
+    margin-left: 0;
+    justify-content: flex-start;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .lang-btn {
+    font-size: 0.82rem;
+    padding: 0.35rem 0.6rem;
   }
 
   .hero {
