@@ -3429,7 +3429,7 @@ def register_verify():
             raise ValueError("Challenge mismatch")
         incoming_origin = client_data.get("origin", "").rstrip("/")
         if incoming_origin not in RP_ORIGINS:
-            raise ValueError(f"Origin not allowed: {incoming_origin}")
+            raise ValueError(f"Origin not allowed: '{incoming_origin}' not in {RP_ORIGINS}")
 
         # Parse attestationObject
         cred_id, cose_key_bytes, cose_key, sign_count = _parse_attestation_object(
@@ -3519,7 +3519,7 @@ def login_verify():
             raise ValueError("Challenge mismatch")
         incoming_origin = client_data.get("origin", "").rstrip("/")
         if incoming_origin not in RP_ORIGINS:
-            raise ValueError(f"Origin not allowed: {incoming_origin}")
+            raise ValueError(f"Origin not allowed: '{incoming_origin}' not in {RP_ORIGINS}")
 
         auth_data = _b64url_decode(credential["response"]["authenticatorData"])
         client_data_hash = hashlib.sha256(client_data_raw).digest()

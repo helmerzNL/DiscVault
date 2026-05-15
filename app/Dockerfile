@@ -11,7 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     BACKUP_DIR=/data/backups \
     RP_NAME=DiscVault \
     RP_ID=localhost \
-    RP_ORIGINS=http://localhost:6080 \
+    RP_ORIGIN=http://localhost:6080 \
     TZ=Europe/Amsterdam
 
 WORKDIR /opt/discvault
