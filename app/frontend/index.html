@@ -5099,6 +5099,7 @@ async function init() {
   await loadStats();
   await loadCollection();
   loadInviteNotifications();
+  _handleRoute();
 }
 
 function _renderHeaderStats() {
@@ -5249,6 +5250,7 @@ function switchTab(name) {
       setTimeout(() => input.focus(), 0);
     }
   }
+  _pushRoute(_tabPath(name));
 }
 
 // ── Barcode Scanner ───────────────────────────────────────────────────────────
@@ -5979,6 +5981,7 @@ async function openMovieDetail(id) {
   _updateWatchlistBtn();
   _updateWatchedBtn();
   document.getElementById('modalBackdrop').classList.add('open');
+  _pushRoute(`/movie/${id}`);
 }
 
 function closeModal(e) {
@@ -5998,6 +6001,10 @@ function closeModalDirect() {
   // Reset to view mode when closing
   document.getElementById('modalViewMode').style.display = '';
   document.getElementById('modalEditMode').style.display = 'none';
+  // Restore URL if we're on a movie route
+  if (window.location.pathname.startsWith('/movie/')) {
+    _replaceRoute(_tabPath('collection'));
+  }
 }
 
 let _castLoaded = false;
@@ -7121,6 +7128,7 @@ function switchTabDirect(name) {
   if (panelName === 'collection') loadCollection();
   if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
+  if (name === 'settings') loadSettings();
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();
@@ -7135,6 +7143,56 @@ function openLogsFromSettings() {
   switchTab('settings');
   switchSettingsSubmenu('logs');
 }
+
+// ── Client-side Routing ───────────────────────────────────────────────────────
+const _TAB_PATHS = { collection:'/', settings:'/settings', search:'/search', lists:'/lists', toevoegen:'/add' };
+const _PATH_TABS = { '/':'collection', '/settings':'settings', '/search':'search', '/lists':'lists', '/add':'toevoegen' };
+
+function _tabPath(tab) {
+  const base = (tab === 'logs') ? 'settings' : (tab === 'scan' || tab === 'import') ? 'toevoegen' : tab;
+  return _TAB_PATHS[base] || '/';
+}
+function _pushRoute(path) {
+  if (window.location.pathname !== path) history.pushState({ path }, '', path);
+}
+function _replaceRoute(path) {
+  history.replaceState({ path }, '', path);
+}
+function _handleRoute() {
+  const path = window.location.pathname;
+  const movieMatch = path.match(/^\/movie\/(\d+)$/);
+  if (movieMatch) {
+    const id = parseInt(movieMatch[1], 10);
+    switchTabDirect('collection');
+    const tryOpen = (tries) => {
+      const found = allMovies.find(m => m.id === id);
+      if (found) { openMovieDetail(id); }
+      else if (tries > 0) { setTimeout(() => tryOpen(tries - 1), 300); }
+      else { _replaceRoute('/'); }
+    };
+    tryOpen(15);
+    return;
+  }
+  const tab = _PATH_TABS[path];
+  if (tab) switchTabDirect(tab);
+  else _replaceRoute('/');
+}
+
+window.addEventListener('popstate', (e) => {
+  const path = (e.state && e.state.path) || window.location.pathname;
+  const movieMatch = path.match(/^\/movie\/(\d+)$/);
+  if (movieMatch) {
+    openMovieDetail(parseInt(movieMatch[1], 10));
+  } else {
+    if (movieModalOpen) {
+      movieModalOpen = false;
+      syncOverlayScrollLock();
+      document.getElementById('modalBackdrop').classList.remove('open');
+    }
+    const tab = _PATH_TABS[path] || 'collection';
+    switchTabDirect(tab);
+  }
+});
 
 window.addEventListener('resize', () => {
   if (!isMobileNav()) closeMobileMenu();
