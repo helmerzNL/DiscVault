@@ -157,6 +157,7 @@ SCHEMA_COLUMNS = [
     # Media
     ("poster",               "TEXT"),
     ("poster_file",          "TEXT"),
+    ("backdrop",             "TEXT"),
     # Distribution
     ("distributor",          "TEXT"),
     # Purchase
@@ -856,6 +857,7 @@ def lookup_movie_tmdb(title, year=""):
             "genre":        ", ".join(genres),
             "plot":         d.get("overview", ""),
             "poster":       poster_url,
+            "backdrop":     f"https://image.tmdb.org/t/p/w1280{d['backdrop_path']}" if d.get("backdrop_path") else "",
             "runtime":      str(d.get("runtime", "")),
             "rating":       str(round(d.get("vote_average", 0), 1)),
             "imdb_id":      d.get("imdb_id", "") or "",

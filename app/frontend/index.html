@@ -1272,9 +1272,25 @@
   }
 
   /* ── Detail pages (film & persoon) ── */
+  .detail-backdrop-bg {
+    position: fixed;
+    inset: 0;
+    background-size: cover;
+    background-position: center top;
+    filter: blur(28px) brightness(0.22);
+    transform: scale(1.08);
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  .detail-backdrop-bg.loaded { opacity: 1; }
+  #panel-movie-detail { position: relative; }
   .detail-page {
     max-width: 900px;
     margin: 0 auto;
+    position: relative;
+    z-index: 1;
   }
   .detail-page-nav {
     display: flex;
@@ -2786,6 +2802,7 @@
 <!-- MOVIE DETAIL MODAL -->
 <!-- FILM DETAIL PAGE -->
 <div class="panel" id="panel-movie-detail">
+  <div id="movieDetailBg" class="detail-backdrop-bg"></div>
   <div class="detail-page">
     <div class="detail-page-nav">
       <button class="btn-back" onclick="closeMovieDetail()">
@@ -5915,6 +5932,20 @@ async function openMovieDetail(id) {
   poster.innerHTML = src
     ? `<img src="${src}" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
     : '<div class="no-img">🎬</div>';
+
+  const bg = document.getElementById('movieDetailBg');
+  if (bg) {
+    bg.classList.remove('loaded');
+    const backdropUrl = movie.backdrop || '';
+    if (backdropUrl) {
+      bg.style.backgroundImage = `url('${backdropUrl}')`;
+      const img = new Image();
+      img.onload = () => bg.classList.add('loaded');
+      img.src = backdropUrl;
+    } else {
+      bg.style.backgroundImage = '';
+    }
+  }
 
   const d = document.getElementById('modalDetails');
   const row = (label, val, full=false) =>
