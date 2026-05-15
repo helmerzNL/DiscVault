@@ -1,5 +1,4 @@
-﻿the backend, frontend (Nginx), and MCP server, managed by Supervisor.
-# DiscVault App (Developer README)
+﻿# DiscVault App (Developer README)
 
 This README is focused on developing and operating DiscVault from source.
 

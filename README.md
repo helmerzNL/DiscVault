@@ -8,7 +8,12 @@ It includes:
 - Collection filtering and search
 - Backup and restore tools
 - User management and groups
+- MemberGroups — user-created collaboration groups with invite system
+- Watchlist & watch history
 - Passkey authentication and recovery
+- Invite-only registration — admin issues one-time passwords, open sign-up can be disabled
+- Multilingual UI (English, Dutch, French, German, Spanish)
+- URL routing and deep links — share direct links to movies or views
 - MCP endpoint integration for AI workflows
 - PWA — works offline after adding to homescreen
 
