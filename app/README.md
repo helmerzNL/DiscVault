@@ -120,26 +120,47 @@ For domain setup, configure DNS and custom domain in repository Pages settings.
 
 ## MCP endpoint usage
 
-Default endpoint:
+Default endpoint: `http://<host>:6090/mcp`  
+Proxied via web port: `http://<host>:6080/mcp`
 
-- `http://<host>:6090/mcp`
+### MCP authentication
 
-Proxied via web port:
+Each user can generate a **personal API key** in their profile settings:
+**Settings → Profiel → API-sleutels → Sleutel aanmaken**
 
-- `http://<host>:6080/mcp`
-
-Example client config:
+Use it as a Bearer token in your MCP client config:
 
 ```json
 {
   "mcpServers": {
     "discvault": {
       "transport": "streamable-http",
-      "url": "http://localhost:6090/mcp"
+      "url": "http://your-server:6080/mcp",
+      "headers": {
+        "Authorization": "Bearer your-personal-api-key"
+      }
     }
   }
 }
 ```
+
+The MCP server automatically scopes all responses to your account.
+You will only ever see your own watchlist, watch history, collection and groups.
+
+**Available MCP tools:**
+
+| Tool | Description |
+|------|-------------|
+| `search_collection` | Search discs by title, director or genre |
+| `list_all_movies` | List your entire collection |
+| `get_movie_details` | Full details for a movie by ID |
+| `get_collection_stats` | Count + format breakdown |
+| `add_movie` | Add a disc to your collection |
+| `delete_movie` | Remove a disc |
+| `lookup_barcode` | Look up a barcode without saving |
+| `get_watchlist` | Your personal watchlist |
+| `get_watch_history` | Recently watched titles |
+| `get_groups` | Groups you are a member of |
 
 ## API surface (summary)
 

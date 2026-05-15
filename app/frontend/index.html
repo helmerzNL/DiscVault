@@ -2485,6 +2485,39 @@
             <button class="btn btn-secondary" id="btnLogoutProfile" onclick="logoutApp()" style="display:none;" data-i18n="settings.profileLogout">↩ Uitloggen</button>
           </div>
         </div>
+
+        <!-- API keys -->
+        <div class="card" id="apiKeysCard" style="margin-top:20px; display:none;">
+          <div class="card-title">🔗 API-sleutels</div>
+          <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
+            Gebruik een persoonlijke API-sleutel om DiscVault te verbinden met AI-clients zoals Claude of Cursor via MCP.
+            Elke sleutel is gekoppeld aan jouw account — je ziet alleen jouw eigen collectie, watchlist en geschiedenis.
+          </p>
+
+          <!-- Generate new key -->
+          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+            <div class="input-group" style="margin:0; flex:1; min-width:160px;">
+              <label style="font-size:0.78rem;">Label (optioneel)</label>
+              <input type="text" id="apiKeyLabel" placeholder="bijv. Claude Desktop" maxlength="80" style="padding:8px 10px; font-size:0.84rem;">
+            </div>
+            <button class="btn btn-primary" onclick="generateApiKey()" style="white-space:nowrap;">+ Sleutel aanmaken</button>
+          </div>
+
+          <!-- One-time reveal -->
+          <div id="apiKeyReveal" style="display:none; padding:14px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.3); border-radius:8px; margin-bottom:16px;">
+            <div style="font-size:0.78rem; color:var(--accent); font-weight:600; margin-bottom:8px;">⚠ Kopieer deze sleutel nu — hij wordt nooit meer getoond</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <code id="apiKeyRevealValue" style="flex:1; font-family:'DM Mono',monospace; font-size:0.78rem; word-break:break-all; color:var(--text); background:var(--surface2); padding:8px 10px; border-radius:6px; border:1px solid var(--border);"></code>
+              <button class="btn btn-secondary" onclick="copyApiKey()" style="padding:7px 12px; font-size:0.76rem; flex-shrink:0;">📋</button>
+            </div>
+            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:8px;">
+              Gebruik in je MCP-client config: <code style="color:var(--accent);">"Authorization": "Bearer &lt;sleutel&gt;"</code>
+            </div>
+          </div>
+
+          <div id="apiKeyStatus" class="status-msg" style="margin-bottom:8px;"></div>
+          <div id="apiKeysList"></div>
+        </div>
       </div>
 
       <div class="settings-sub-section" id="settingsSubGeneral">
@@ -7921,6 +7954,73 @@ async function loadProfile() {
   } catch(e) {}
 }
 
+// ── API key management ────────────────────────────────────────────────────────
+
+async function loadApiKeys() {
+  const card = document.getElementById('apiKeysCard');
+  const list = document.getElementById('apiKeysList');
+  if (!card || !currentUserId) return;
+  card.style.display = '';
+  try {
+    const r = await fetch(`${API}/user/api-keys`);
+    if (!r.ok) { card.style.display = 'none'; return; }
+    const keys = await r.json();
+    if (!keys.length) {
+      list.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted);">Nog geen API-sleutels aangemaakt.</div>`;
+      return;
+    }
+    list.innerHTML = keys.map(k => `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
+        <div>
+          <div style="font-size:0.85rem; font-weight:500;">${k.label || '<span style="color:var(--text-muted);">Naamloos</span>'}</div>
+          <div style="font-size:0.72rem; color:var(--text-muted);">Aangemaakt: ${(k.created_at||'').slice(0,10)}</div>
+        </div>
+        <button class="btn btn-danger" onclick="revokeApiKey(${k.id})" style="padding:5px 10px; font-size:0.74rem;">🗑 Intrekken</button>
+      </div>
+    `).join('');
+  } catch(e) { card.style.display = 'none'; }
+}
+
+async function generateApiKey() {
+  const label = (document.getElementById('apiKeyLabel').value || '').trim();
+  const statusEl = document.getElementById('apiKeyStatus');
+  const revealEl = document.getElementById('apiKeyReveal');
+  const revealVal = document.getElementById('apiKeyRevealValue');
+  try {
+    const r = await fetch(`${API}/user/api-keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    const data = await r.json();
+    document.getElementById('apiKeyLabel').value = '';
+    revealVal.textContent = data.key;
+    revealEl.style.display = '';
+    revealEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    await loadApiKeys();
+    if (statusEl) statusEl.innerHTML = '';
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">✗ ${e.message}</span>`;
+  }
+}
+
+function copyApiKey() {
+  const val = document.getElementById('apiKeyRevealValue').textContent;
+  navigator.clipboard.writeText(val).catch(() => {});
+}
+
+async function revokeApiKey(id) {
+  const statusEl = document.getElementById('apiKeyStatus');
+  try {
+    const r = await fetch(`${API}/user/api-keys/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    await loadApiKeys();
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">✗ ${e.message}</span>`;
+  }
+}
+
 async function saveProfile() {
   const username = (document.getElementById('profileUsername').value || '').trim();
   const firstName = (document.getElementById('profileFirstName').value || '').trim();
@@ -9029,7 +9129,7 @@ function switchSettingsSubmenu(name) {
   });
   const target = document.getElementById(map[name] || map.profile);
   if (target) target.classList.add('active');
-  if (name === 'profile') loadProfile();
+  if (name === 'profile') { loadProfile(); loadApiKeys(); }
   if (name === 'logs') loadLogs();
   if (name === 'notifications') initPushNotifications();
 }

@@ -230,6 +230,16 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT NOT NULL,
+            key_hash   TEXT NOT NULL UNIQUE,
+            label      TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
 
     # Auth: users
     conn.execute("""
@@ -3362,10 +3372,25 @@ def check_auth():
     is_mcp = token and MCP_API_KEY and token == MCP_API_KEY
 
     if token and not is_mcp:
+        # Try JWT auth first
         payload = _verify_token(token)
         if payload:
             g.current_user_id = payload.get("sub")
             g.current_username = payload.get("usr")
+        else:
+            # Try personal API key auth (SHA-256 lookup)
+            key_hash = hashlib.sha256(token.encode()).hexdigest()
+            try:
+                conn = get_db()
+                row = conn.execute(
+                    "SELECT user_id FROM api_keys WHERE key_hash=?", (key_hash,)
+                ).fetchone()
+                conn.close()
+                if row:
+                    g.current_user_id = row["user_id"]
+                    g.api_key_auth = True
+            except Exception:
+                pass
 
     # Public routes: allow without auth
     for prefix in PUBLIC_PREFIXES:
@@ -3375,7 +3400,7 @@ def check_auth():
     if not _is_auth_enabled():
         return
 
-    # MCP API key auth
+    # MCP API key auth (legacy server-wide key)
     if is_mcp:
         if _is_source_enabled("mcp_enabled", True):
             return
@@ -5388,6 +5413,63 @@ def push_prefs_put():
             )
     conn.commit()
     conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Personal API keys (for MCP / external integrations)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/user/api-keys", methods=["GET"])
+def list_api_keys():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, label, created_at FROM api_keys WHERE user_id=? ORDER BY created_at DESC",
+        (uid,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/user/api-keys", methods=["POST"])
+def create_api_key():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json() or {}
+    label = (data.get("label") or "").strip()[:80] or None
+    plaintext = secrets.token_urlsafe(32)
+    key_hash = hashlib.sha256(plaintext.encode()).hexdigest()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO api_keys (user_id, key_hash, label, created_at) VALUES (?,?,?,?)",
+        (uid, key_hash, label, datetime.utcnow().isoformat())
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id, label, created_at FROM api_keys WHERE key_hash=?", (key_hash,)
+    ).fetchone()
+    conn.close()
+    return jsonify({"id": row["id"], "label": row["label"],
+                    "created_at": row["created_at"], "key": plaintext}), 201
+
+
+@app.route("/api/user/api-keys/<int:key_id>", methods=["DELETE"])
+def delete_api_key(key_id):
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    result = conn.execute(
+        "DELETE FROM api_keys WHERE id=? AND user_id=?", (key_id, uid)
+    )
+    conn.commit()
+    conn.close()
+    if result.rowcount == 0:
+        return jsonify({"error": "Not found"}), 404
     return jsonify({"ok": True})
 
 
