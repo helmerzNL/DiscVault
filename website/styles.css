@@ -410,6 +410,27 @@ h1 {
   gap: 0.85rem;
 }
 
+.feature-category {
+  margin-top: 2rem;
+}
+
+.category-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.coming-soon-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
 .card,
 .install-card {
   background: linear-gradient(180deg, rgba(26, 26, 38, 0.85), rgba(18, 18, 26, 0.96));
@@ -590,6 +611,7 @@ code {
   }
 
   .cards,
+  .coming-soon-grid,
   .install-grid {
     grid-template-columns: 1fr;
   }

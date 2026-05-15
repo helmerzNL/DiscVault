@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <link rel="stylesheet" href="./styles.css?v=7" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -282,49 +282,153 @@
           <p class="eyebrow" data-i18n="soon.eyebrow">Coming soon</p>
           <h2 data-i18n="soon.h2">New features landing in the next release.</h2>
         </div>
-        <div class="cards">
-          <article class="card card-upcoming">
-            <span class="badge badge-soon" data-i18n="s1.badge">Coming soon</span>
-            <h3 data-i18n="s1.title">Import your existing collection</h3>
-            <p data-i18n="s1.body">
-              Already tracking your discs in a spreadsheet or Letterboxd? Import a CSV or Letterboxd export and have your full collection in DiscVault without scanning everything from scratch.
-            </p>
-          </article>
-          <article class="card card-upcoming">
-            <span class="badge badge-soon" data-i18n="s2.badge">Coming soon</span>
-            <h3 data-i18n="s2.title">Collection statistics</h3>
-            <p data-i18n="s2.body">
-              Get a dashboard overview of your collection — disc count by format, genre breakdown, total runtime, and growth over time.
-            </p>
-          </article>
-          <article class="card card-upcoming">
-            <span class="badge badge-soon" data-i18n="s3.badge">Coming soon</span>
-            <h3 data-i18n="s3.title">Custom tags &amp; lists</h3>
-            <p data-i18n="s3.body">
-              Add freeform tags to any title — &ldquo;lent out&rdquo;, &ldquo;wishlist&rdquo;, &ldquo;gift&rdquo; — and build personal lists that go beyond automatic groups.
-            </p>
-          </article>
-          <article class="card card-upcoming">
-            <span class="badge badge-soon" data-i18n="s4.badge">Coming soon</span>
-            <h3 data-i18n="s4.title">Loan tracker</h3>
-            <p data-i18n="s4.body">
-              Track which discs you've lent out and to whom. See all outstanding loans at a glance and add a return reminder so nothing goes missing.
-            </p>
-          </article>
-          <article class="card card-upcoming">
-            <span class="badge badge-soon" data-i18n="s5.badge">Coming soon</span>
-            <h3 data-i18n="s5.title">Webhooks &amp; notifications</h3>
-            <p data-i18n="s5.body">
-              Send a webhook event when a disc is added, a backup completes, or a loan is overdue — ready to connect with Home Assistant, ntfy, or any automation tool.
-            </p>
-          </article>
-          <article class="card card-upcoming">
-            <span class="badge badge-soon" data-i18n="s6.badge">Coming soon</span>
-            <h3 data-i18n="s6.title">Wishlist</h3>
-            <p data-i18n="s6.body">
-              Keep track of discs you want to add to your collection — special editions you're hunting for, or titles you've ordered but haven't received yet. Move them to your collection with one tap once they arrive.
-            </p>
-          </article>
+
+        <div class="feature-category">
+          <h4 class="category-label" data-i18n="cat1">Collection &amp; metadata</h4>
+          <div class="coming-soon-grid">
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s1.badge">Coming soon</span>
+              <h3 data-i18n="s1.title">Import your existing collection</h3>
+              <p data-i18n="s1.body">
+                Already tracking your discs in a spreadsheet or Letterboxd? Import a CSV or Letterboxd export and have your full collection in DiscVault without scanning everything from scratch.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s2.badge">Coming soon</span>
+              <h3 data-i18n="s2.title">Collection statistics</h3>
+              <p data-i18n="s2.body">
+                Get a dashboard overview of your collection — disc count by format, genre breakdown, total runtime, and growth over time.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s3.badge">Coming soon</span>
+              <h3 data-i18n="s3.title">Custom tags &amp; lists</h3>
+              <p data-i18n="s3.body">
+                Add freeform tags to any title — &ldquo;lent out&rdquo;, &ldquo;wishlist&rdquo;, &ldquo;gift&rdquo; — and build personal lists that go beyond automatic groups.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s6.badge">Coming soon</span>
+              <h3 data-i18n="s6.title">Wishlist</h3>
+              <p data-i18n="s6.body">
+                Keep track of discs you want to add to your collection — special editions you're hunting for, or titles you've ordered but haven't received yet. Move them to your collection with one tap once they arrive.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_edition.badge">Coming soon</span>
+              <h3 data-i18n="s_edition.title">Edition &amp; version tracking</h3>
+              <p data-i18n="s_edition.body">
+                Record which edition of a disc you own — Steelbook, Director's Cut, Limited Edition, or standard release. Essential for collectors who own multiple versions of the same title.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_region.badge">Coming soon</span>
+              <h3 data-i18n="s_region.title">Region indicator</h3>
+              <p data-i18n="s_region.body">
+                Log the region of any disc — A/B/C for Blu-ray, regions 1–6 for DVD. Useful for import collectors and anyone with multiple players.
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div class="feature-category">
+          <h4 class="category-label" data-i18n="cat2">Discovery &amp; recommendations</h4>
+          <div class="coming-soon-grid">
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_picker.badge">Coming soon</span>
+              <h3 data-i18n="s_picker.title">&ldquo;What to watch tonight&rdquo; picker</h3>
+              <p data-i18n="s_picker.body">
+                Set a few filters — genre, runtime, mood — and DiscVault picks a random title from your own shelf. Stop scrolling streaming services when the answer is already on your wall.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_rating.badge">Coming soon</span>
+              <h3 data-i18n="s_rating.title">Personal rating</h3>
+              <p data-i18n="s_rating.body">
+                Give any title your own star rating or score, separate from the IMDb score. Filter and sort by what you think is great — not just what the crowd says.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_sort.badge">Coming soon</span>
+              <h3 data-i18n="s_sort.title">Sort by IMDb / TMDb score</h3>
+              <p data-i18n="s_sort.body">
+                The metadata is already there — use it. Sort your collection by rating to instantly surface the best titles on your shelf.
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div class="feature-category">
+          <h4 class="category-label" data-i18n="cat3">Loan &amp; wishlist management</h4>
+          <div class="coming-soon-grid">
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s4.badge">Coming soon</span>
+              <h3 data-i18n="s4.title">Loan tracker</h3>
+              <p data-i18n="s4.body">
+                Track which discs you've lent out and to whom. See all outstanding loans at a glance and add a return reminder so nothing goes missing.
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div class="feature-category">
+          <h4 class="category-label" data-i18n="cat4">Social</h4>
+          <div class="coming-soon-grid">
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_public.badge">Coming soon</span>
+              <h3 data-i18n="s_public.title">Public profile page</h3>
+              <p data-i18n="s_public.body">
+                Optionally share a read-only view of your collection with anyone via a link — no account required on their end.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_watchreq.badge">Coming soon</span>
+              <h3 data-i18n="s_watchreq.title">Watchlist requests</h3>
+              <p data-i18n="s_watchreq.body">
+                Friends in a shared group can flag a title they want to watch. The owner gets a notification and can make the disc available.
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div class="feature-category">
+          <h4 class="category-label" data-i18n="cat5">Integrations</h4>
+          <div class="coming-soon-grid">
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s5.badge">Coming soon</span>
+              <h3 data-i18n="s5.title">Webhooks &amp; notifications</h3>
+              <p data-i18n="s5.body">
+                Send a webhook event when a disc is added, a backup completes, or a loan is overdue — ready to connect with Home Assistant, ntfy, or any automation tool.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_plex.badge">Coming soon</span>
+              <h3 data-i18n="s_plex.title">Compare with Plex / Jellyfin</h3>
+              <p data-i18n="s_plex.body">
+                See which physical discs you also have digitally in Plex or Jellyfin — and which titles you only own physically but haven't ripped yet.
+              </p>
+            </article>
+            <article class="card card-upcoming">
+              <span class="badge badge-soon" data-i18n="s_letterboxd.badge">Coming soon</span>
+              <h3 data-i18n="s_letterboxd.title">Letterboxd sync</h3>
+              <p data-i18n="s_letterboxd.body">
+                Automatically sync your watch history and ratings with Letterboxd, so your collection manager and film diary always stay in step.
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div class="feature-category">
+          <h4 class="category-label" data-i18n="cat6">Platform &amp; notifications</h4>
+          <div class="coming-soon-grid">
+            <article class="card card-upcoming">
+              <span class="badge" data-i18n="f14.badge">Beta</span>
+              <h3 data-i18n="f14.title">Push notifications</h3>
+              <p data-i18n="f14.body">
+                Group members receive a push notification on their device whenever a new disc is added to a shared group — works on any device with DiscVault installed as a PWA.
+              </p>
+            </article>
+          </div>
         </div>
       </section>
 
@@ -409,6 +513,16 @@
         's4.badge':'Coming soon','s4.title':'Loan tracker','s4.body':'Track which discs you\u2019ve lent out and to whom. See all outstanding loans at a glance and add a return reminder so nothing goes missing.',
         's5.badge':'Coming soon','s5.title':'Webhooks &amp; notifications','s5.body':'Send a webhook event when a disc is added, a backup completes, or a loan is overdue \u2014 ready to connect with Home Assistant, ntfy, or any automation tool.',
         's6.badge':'Coming soon','s6.title':'Wishlist','s6.body':'Keep track of discs you want to add to your collection \u2014 special editions you\u2019re hunting for, or titles you\u2019ve ordered but haven\u2019t received yet. Move them to your collection with one tap once they arrive.',
+        'cat1':'Collection &amp; metadata','cat2':'Discovery &amp; recommendations','cat3':'Loan &amp; wishlist management','cat4':'Social','cat5':'Integrations','cat6':'Platform &amp; notifications',
+        's_edition.badge':'Coming soon','s_edition.title':'Edition &amp; version tracking','s_edition.body':'Record which edition of a disc you own — Steelbook, Director’s Cut, Limited Edition, or standard release. Essential for collectors who own multiple versions of the same title.',
+        's_region.badge':'Coming soon','s_region.title':'Region indicator','s_region.body':'Log the region of any disc — A/B/C for Blu-ray, regions 1–6 for DVD. Useful for import collectors and anyone with multiple players.',
+        's_picker.badge':'Coming soon','s_picker.title':'&ldquo;What to watch tonight&rdquo; picker','s_picker.body':'Set a few filters — genre, runtime, mood — and DiscVault picks a random title from your own shelf. Stop scrolling streaming services when the answer is already on your wall.',
+        's_rating.badge':'Coming soon','s_rating.title':'Personal rating','s_rating.body':'Give any title your own star rating or score, separate from the IMDb score. Filter and sort by what you think is great — not just what the crowd says.',
+        's_sort.badge':'Coming soon','s_sort.title':'Sort by IMDb / TMDb score','s_sort.body':'The metadata is already there — use it. Sort your collection by rating to instantly surface the best titles on your shelf.',
+        's_public.badge':'Coming soon','s_public.title':'Public profile page','s_public.body':'Optionally share a read-only view of your collection with anyone via a link — no account required on their end.',
+        's_watchreq.badge':'Coming soon','s_watchreq.title':'Watchlist requests','s_watchreq.body':'Friends in a shared group can flag a title they want to watch. The owner gets a notification and can make the disc available.',
+        's_plex.badge':'Coming soon','s_plex.title':'Compare with Plex / Jellyfin','s_plex.body':'See which physical discs you also have digitally in Plex or Jellyfin — and which titles you only own physically but haven’t ripped yet.',
+        's_letterboxd.badge':'Coming soon','s_letterboxd.title':'Letterboxd sync','s_letterboxd.body':'Automatically sync your watch history and ratings with Letterboxd, so your collection manager and film diary always stay in step.',
         'install.eyebrow':'Deployment','install.h2':'Deploy on Unraid or run it anywhere Docker runs.',
         'install.stable.title':'Stable','install.stable.body':'Use the all-in-one container image:',
         'install.beta.title':'Beta','install.beta.body':'Try new features early \u2014 new features and more languages coming:',
@@ -455,6 +569,7 @@
         's4.badge':'Binnenkort','s4.title':'Uitleentracker','s4.body':'Houd bij welke discs je hebt uitgeleend en aan wie. Bekijk alle openstaande uitleningen in \u00e9\u00e9n oogopslag en stel een terugbrengherinnering in zodat niets kwijtraakt.',
         's5.badge':'Binnenkort','s5.title':'Webhooks &amp; meldingen','s5.body':'Stuur een webhook-event wanneer een disc wordt toegevoegd, een back-up klaar is of een uitlening te laat is \u2014 klaar voor koppeling met Home Assistant, ntfy of elk automatiseringstool.',
         's6.badge':'Binnenkort','s6.title':'Verlanglijst','s6.body':'Houd bij welke discs je aan je collectie wilt toevoegen \u2014 speciale edities die je zoekt of titels die je hebt besteld maar nog niet hebt ontvangen. Verplaats ze naar je collectie met \u00e9\u00e9n tik zodra ze aankomen.',
+        'cat1':'Collectie &amp; metadata','cat2':'Ontdekken &amp; aanbevelingen','cat3':'Lenen &amp; verlanglijstbeheer','cat4':'Sociaal','cat5':'Integraties','cat6':'Platform &amp; meldingen',
         'install.eyebrow':'Installatie','install.h2':'Installeer op Unraid of draai het overal waar Docker op draait.',
         'install.stable.title':'Stabiel','install.stable.body':'Gebruik de all-in-one containerimage:',
         'install.beta.title':'Beta','install.beta.body':'Probeer nieuwe functies vroeg \u2014 nieuwe functies en meer talen komen eraan:',
@@ -501,6 +616,7 @@
         's4.badge':'Bient\u00f4t disponible','s4.title':'Suivi des pr\u00eats','s4.body':'Suivez quels disques vous avez pr\u00eat\u00e9s et \u00e0 qui. Visualisez tous les pr\u00eats en cours d\u2019un coup d\u2019\u0153il et ajoutez un rappel de retour pour ne rien perdre.',
         's5.badge':'Bient\u00f4t disponible','s5.title':'Webhooks &amp; notifications','s5.body':'Envoyez un \u00e9v\u00e9nement webhook quand un disque est ajout\u00e9, une sauvegarde termin\u00e9e ou un pr\u00eat en retard \u2014 pr\u00eat \u00e0 se connecter avec Home Assistant, ntfy ou tout outil d\u2019automatisation.',
         's6.badge':'Bient\u00f4t disponible','s6.title':'Liste de souhaits','s6.body':'Suivez les disques que vous souhaitez ajouter \u00e0 votre collection \u2014 \u00e9ditions sp\u00e9ciales que vous recherchez ou titres command\u00e9s mais pas encore re\u00e7us. D\u00e9placez-les dans votre collection d\u2019un simple tap \u00e0 leur arriv\u00e9e.',
+        'cat1':'Collection &amp; m\u00e9tadonn\u00e9es','cat2':'D\u00e9couverte &amp; recommandations','cat3':'Gestion des pr\u00eats &amp; listes de souhaits','cat4':'Social','cat5':'Int\u00e9grations','cat6':'Plateforme &amp; notifications',
         'install.eyebrow':'D\u00e9ploiement','install.h2':'D\u00e9ployez sur Unraid ou ex\u00e9cutez-le partout o\u00f9 Docker tourne.',
         'install.stable.title':'Stable','install.stable.body':'Utilisez l\u2019image conteneur tout-en-un\u00a0:',
         'install.beta.title':'B\u00eata','install.beta.body':'Essayez les nouvelles fonctionnalit\u00e9s en avant-premi\u00e8re \u2014 nouvelles fonctions et plus de langues \u00e0 venir\u00a0:',
@@ -546,6 +662,7 @@
         's4.badge':'Demnächst','s4.title':'Verleih-Tracker','s4.body':'Verfolge, welche Discs du verliehen hast und an wen. Sieh alle ausstehenden Verleihungen auf einen Blick und stelle eine Rückgabeerinnerung ein, damit nichts verloren geht.',
         's5.badge':'Demnächst','s5.title':'Webhooks &amp; Benachrichtigungen','s5.body':'Sende ein Webhook-Event, wenn eine Disc hinzugefügt wird, ein Backup abgeschlossen ist oder ein Verleih überfällig ist — bereit zur Verbindung mit Home Assistant, ntfy oder jedem Automatisierungstool.',
         's6.badge':'Demnächst','s6.title':'Wunschliste','s6.body':'Behalte den Überblick über Discs, die du deiner Sammlung hinzufügen möchtest — Sondereditionen, nach denen du suchst, oder Titel, die du bestellt hast, aber noch nicht erhalten. Verschiebe sie mit einem Tipp in deine Sammlung, sobald sie ankommen.',
+        'cat1':'Sammlung &amp; Metadaten','cat2':'Entdeckung &amp; Empfehlungen','cat3':'Leihe &amp; Wunschlistenverwaltung','cat4':'Social','cat5':'Integrationen','cat6':'Plattform &amp; Benachrichtigungen',
         'install.eyebrow':'Installation','install.h2':'Auf Unraid deployen oder überall dort ausführen, wo Docker läuft.',
         'install.stable.title':'Stabil','install.stable.body':'Verwende das All-in-One-Container-Image:',
         'install.beta.title':'Beta','install.beta.body':'Probiere neue Funktionen frühzeitig — neue Funktionen und mehr Sprachen kommen:',
@@ -592,6 +709,7 @@
         's4.badge':'Próximamente','s4.title':'Rastreador de préstamos','s4.body':'Controla qué discos has prestado y a quién. Ve todos los préstamos pendientes de un vistazo y añade un recordatorio de devolución para que nada se pierda.',
         's5.badge':'Próximamente','s5.title':'Webhooks &amp; notificaciones','s5.body':'Envía un evento webhook cuando se añade un disco, se completa una copia de seguridad o un préstamo está vencido — listo para conectar con Home Assistant, ntfy o cualquier herramienta de automatización.',
         's6.badge':'Próximamente','s6.title':'Lista de deseos','s6.body':'Controla los discos que quieres añadir a tu colección — ediciones especiales que buscas o títulos que has pedido pero aún no has recibido. Muévelos a tu colección con un toque cuando lleguen.',
+        'cat1':'Colección y metadatos','cat2':'Descubrimiento y recomendaciones','cat3':'Gestión de préstamos y listas de deseos','cat4':'Social','cat5':'Integraciones','cat6':'Plataforma y notificaciones',
         'install.eyebrow':'Despliegue','install.h2':'Despliega en Unraid o ejécutalo en cualquier lugar donde corra Docker.',
         'install.stable.title':'Estable','install.stable.body':'Usa la imagen contenedor todo en uno:',
         'install.beta.title':'Beta','install.beta.body':'Prueba nuevas funciones antes — nuevas funciones y más idiomas por venir:',
