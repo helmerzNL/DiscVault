@@ -1759,6 +1759,9 @@
   </div>
   <div class="offline-pill" id="offlinePill" data-i18n="header.offline">Offline modus</div>
   <div class="queue-pill" id="queuePill">Wachtrij: 0</div>
+  <button id="inviteBell" onclick="openInvitePanel()" style="display:none; position:relative; background:none; border:none; cursor:pointer; padding:6px 8px; color:var(--text-muted); font-size:1.1rem;" title="Uitnodigingen">
+    🔔<span id="inviteBadge" style="display:none; position:absolute; top:2px; right:2px; background:var(--accent); color:#000; font-size:0.6rem; font-weight:700; border-radius:50%; width:14px; height:14px; line-height:14px; text-align:center;"></span>
+  </button>
   <button
     class="menu-toggle"
     id="menuToggle"
@@ -2471,10 +2474,36 @@
         <div id="adminGroupsList"></div>
       </div>
 
+      <!-- MemberGroups: Mijn Groepen -->
+      <div id="myGroupsCard" class="card" style="display:none; margin-top:20px;">
+        <div class="card-title">📁 Mijn Groepen</div>
+        <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;">Maak je eigen groep aan en nodig anderen uit om samen een collectie te delen.</p>
+        <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+          <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+            <label>Groepsnaam</label>
+            <input type="text" id="myNewGroupName" placeholder="Bijv. Familie">
+          </div>
+          <button class="btn btn-primary" onclick="createMyGroup()" style="height:40px;">+ Aanmaken</button>
+        </div>
+        <div id="myGroupStatus" class="status-msg"></div>
+        <div id="myGroupsList"></div>
+      </div>
+
       </div>
 
     </div>
   </div>
+
+<!-- INVITE PANEL OVERLAY -->
+<div id="invitePanel" style="display:none; position:fixed; inset:0; z-index:4000; background:rgba(0,0,0,.6); align-items:flex-start; justify-content:center; padding-top:80px;">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; width:min(480px,90vw); max-height:70vh; overflow-y:auto;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+      <h2 style="margin:0; font-size:1rem;">🔔 Uitnodigingen</h2>
+      <button onclick="closeInvitePanel()" style="background:none; border:none; color:var(--text-muted); font-size:1.3rem; cursor:pointer;">✕</button>
+    </div>
+    <div id="invitePanelList"><div style="color:var(--text-muted); font-size:0.85rem;">Laden...</div></div>
+  </div>
+</div>
 
 <!-- LOGIN OVERLAY -->
 <div id="loginOverlay" style="
@@ -6435,20 +6464,30 @@ async function toggleRegistration() {
     body: JSON.stringify({ registration_enabled: enabled })
   });
   const d = await r.json();
-  if (d.error) {
-    showStatus('authStatus', d.error, 'error');
-    document.getElementById('registrationToggle').checked = !enabled;
-  } else {
-    showStatus('authStatus', enabled ? t('js.registrationEnabled') : t('js.registrationDisabled'), 'success');
-  }
-}
-
-// ── Admin: User Management ────────────────────────────────────────────────────
-
-async function loadAdminPanel() {
-  try {
-    const mr = await fetch(`${API}/auth/me`);
-    const me = await mr.json();
+  ifconst isMemberGroups = me.authenticated && me.role === 'MemberGroups';
+    if (!isAdmin && !isMemberGroups) {
+      document.getElementById('adminUsersCard').style.display = 'none';
+      document.getElementById('adminGroupsCard').style.display = 'none';
+      document.getElementById('myGroupsCard').style.display = 'none';
+      return;
+    }
+    if (isAdmin) {
+      document.getElementById('adminGroupsCard').style.display = 'block';
+      document.getElementById('myGroupsCard').style.display = 'none';
+      if (me.authenticated) {
+        document.getElementById('adminUsersCard').style.display = 'block';
+        await loadAdminUsers();
+      } else {
+        document.getElementById('adminUsersCard').style.display = 'none';
+      }
+      await loadAdminGroups();
+    } else {
+      // MemberGroups
+      document.getElementById('adminGroupsCard').style.display = 'none';
+      document.getElementById('adminUsersCard').style.display = 'none';
+      document.getElementById('myGroupsCard').style.display = 'block';
+      await loadMyGroups();
+    }();
     const isAdmin = !me.authenticated || me.role === 'admin';
     if (!isAdmin) {
       document.getElementById('adminUsersCard').style.display = 'none';

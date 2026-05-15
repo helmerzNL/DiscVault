@@ -265,6 +265,22 @@ def init_db():
         )
     """)
 
+    # Group invitations (user-driven collaboration)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS group_invites (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id    INTEGER NOT NULL,
+            inviter_id  TEXT NOT NULL,
+            invitee_id  TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'pending',
+            created_at  TEXT NOT NULL,
+            FOREIGN KEY (group_id)   REFERENCES groups(id) ON DELETE CASCADE,
+            FOREIGN KEY (inviter_id) REFERENCES users(id)  ON DELETE CASCADE,
+            FOREIGN KEY (invitee_id) REFERENCES users(id)  ON DELETE CASCADE,
+            UNIQUE(group_id, invitee_id)
+        )
+    """)
+
     # Auth: settings
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -358,6 +374,19 @@ def init_db():
         conn.execute("ALTER TABLE users ADD COLUMN last_name TEXT")
     if "avatar" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+
+    # Migrate user_groups: add role column for group ownership
+    ug_cols = {row[1] for row in conn.execute("PRAGMA table_info(user_groups)")}
+    if "role" not in ug_cols:
+        conn.execute("ALTER TABLE user_groups ADD COLUMN role TEXT NOT NULL DEFAULT 'member'")
+    # Set existing group creators as owner in user_groups
+    conn.execute("""
+        UPDATE user_groups SET role='owner'
+        WHERE rowid IN (
+            SELECT ug.rowid FROM user_groups ug
+            JOIN groups g ON g.id=ug.group_id AND g.created_by=ug.user_id
+        )
+    """)
 
     # Auto-assign existing movies (no owner) to first admin user
     first_user = conn.execute("SELECT id FROM users ORDER BY created_at ASC LIMIT 1").fetchone()
@@ -3586,6 +3615,19 @@ def _require_admin():
     return None
 
 
+def _require_group_manager():
+    """Check if current user can manage groups (admin or MemberGroups role). Returns error or None."""
+    if not _is_auth_enabled():
+        return None
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized", "auth_required": True}), 401
+    role = _get_current_user_role()
+    if role not in ("admin", "MemberGroups"):
+        return jsonify({"error": "Group management permission required"}), 403
+    return None
+
+
 @app.route("/api/auth/users", methods=["GET"])
 def list_users():
     err = _require_admin()
@@ -3636,7 +3678,7 @@ def set_user_role(user_id):
         return err
     data = request.json or {}
     new_role = data.get("role", "user")
-    if new_role not in ("admin", "user"):
+    if new_role not in ("admin", "user", "MemberGroups"):
         return jsonify({"error": "Invalid role"}), 400
     conn = get_db()
     conn.execute("UPDATE users SET role=? WHERE id=?", (new_role, user_id))
@@ -3850,7 +3892,7 @@ def recovery_login():
 def list_groups():
     uid = _get_current_user_id()
     conn = get_db()
-    if not uid or _get_current_user_role() == "admin":
+    if not uid:
         rows = conn.execute("""
             SELECT g.*, u.username as created_by_username,
                    (SELECT COUNT(*) FROM user_groups WHERE group_id=g.id) as member_count,
@@ -3862,7 +3904,8 @@ def list_groups():
         rows = conn.execute("""
             SELECT g.*, u.username as created_by_username,
                    (SELECT COUNT(*) FROM user_groups WHERE group_id=g.id) as member_count,
-                   (SELECT COUNT(*) FROM movie_groups WHERE group_id=g.id) as movie_count
+                   (SELECT COUNT(*) FROM movie_groups WHERE group_id=g.id) as movie_count,
+                   ug.role as my_role
             FROM groups g
             JOIN user_groups ug ON ug.group_id=g.id AND ug.user_id=?
             LEFT JOIN users u ON g.created_by=u.id
@@ -3874,7 +3917,7 @@ def list_groups():
 
 @app.route("/api/groups", methods=["POST"])
 def create_group():
-    err = _require_admin()
+    err = _require_group_manager()
     if err:
         return err
     data = request.json or {}
@@ -3889,9 +3932,9 @@ def create_group():
             (name, uid, datetime.utcnow().isoformat())
         )
         group_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        # Auto-add creator to group
+        # Auto-add creator to group as owner
         if uid:
-            conn.execute("INSERT INTO user_groups (user_id, group_id) VALUES (?,?)", (uid, group_id))
+            conn.execute("INSERT INTO user_groups (user_id, group_id, role) VALUES (?,?,'owner')", (uid, group_id))
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
@@ -3903,9 +3946,18 @@ def create_group():
 
 @app.route("/api/groups/<int:group_id>", methods=["PUT"])
 def update_group(group_id):
-    err = _require_admin()
-    if err:
-        return err
+    uid = _get_current_user_id()
+    if _is_auth_enabled():
+        if not uid:
+            return jsonify({"error": "Unauthorized"}), 401
+        role = _get_current_user_role()
+        if role != "admin":
+            # Check if user is owner of this group
+            conn = get_db()
+            ug = conn.execute("SELECT role FROM user_groups WHERE user_id=? AND group_id=?", (uid, group_id)).fetchone()
+            conn.close()
+            if not ug or ug["role"] != "owner":
+                return jsonify({"error": "Not the group owner"}), 403
     data = request.json or {}
     name = data.get("name", "").strip()
     if not name:
@@ -3923,9 +3975,17 @@ def update_group(group_id):
 
 @app.route("/api/groups/<int:group_id>", methods=["DELETE"])
 def delete_group(group_id):
-    err = _require_admin()
-    if err:
-        return err
+    uid = _get_current_user_id()
+    if _is_auth_enabled():
+        if not uid:
+            return jsonify({"error": "Unauthorized"}), 401
+        role = _get_current_user_role()
+        if role != "admin":
+            conn = get_db()
+            ug = conn.execute("SELECT role FROM user_groups WHERE user_id=? AND group_id=?", (uid, group_id)).fetchone()
+            conn.close()
+            if not ug or ug["role"] != "owner":
+                return jsonify({"error": "Not the group owner"}), 403
     conn = get_db()
     group = conn.execute("SELECT name FROM groups WHERE id=?", (group_id,)).fetchone()
     if not group:
@@ -3934,6 +3994,7 @@ def delete_group(group_id):
     # Unlink movies from this group
     conn.execute("DELETE FROM movie_groups WHERE group_id=?", (group_id,))
     conn.execute("DELETE FROM user_groups WHERE group_id=?", (group_id,))
+    conn.execute("DELETE FROM group_invites WHERE group_id=?", (group_id,))
     conn.execute("DELETE FROM groups WHERE id=?", (group_id,))
     conn.commit()
     conn.close()
@@ -3945,10 +4006,10 @@ def delete_group(group_id):
 def list_group_members(group_id):
     conn = get_db()
     rows = conn.execute("""
-        SELECT u.id, u.username, u.display_name, u.role
+        SELECT u.id, u.username, u.display_name, u.role, ug.role as group_role
         FROM users u JOIN user_groups ug ON ug.user_id=u.id
         WHERE ug.group_id=?
-        ORDER BY u.username
+        ORDER BY ug.role DESC, u.username
     """, (group_id,)).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
@@ -3965,7 +4026,7 @@ def add_group_member(group_id):
         return jsonify({"error": "user_id required"}), 400
     conn = get_db()
     try:
-        conn.execute("INSERT INTO user_groups (user_id, group_id) VALUES (?,?)", (user_id, group_id))
+        conn.execute("INSERT INTO user_groups (user_id, group_id, role) VALUES (?,?,'member')", (user_id, group_id))
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
@@ -3976,14 +4037,132 @@ def add_group_member(group_id):
 
 @app.route("/api/groups/<int:group_id>/members/<member_id>", methods=["DELETE"])
 def remove_group_member(group_id, member_id):
-    err = _require_admin()
-    if err:
-        return err
+    uid = _get_current_user_id()
+    if _is_auth_enabled():
+        if not uid:
+            return jsonify({"error": "Unauthorized"}), 401
+        role = _get_current_user_role()
+        if role != "admin":
+            # Only group owner can remove others; anyone can remove themselves
+            if member_id != uid:
+                conn = get_db()
+                ug = conn.execute("SELECT role FROM user_groups WHERE user_id=? AND group_id=?", (uid, group_id)).fetchone()
+                conn.close()
+                if not ug or ug["role"] != "owner":
+                    return jsonify({"error": "Not the group owner"}), 403
     conn = get_db()
     conn.execute("DELETE FROM user_groups WHERE user_id=? AND group_id=?", (member_id, group_id))
     conn.commit()
     conn.close()
     return jsonify({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# Group invites (user-driven collaboration)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/groups/<int:group_id>/invite", methods=["POST"])
+def invite_to_group(group_id):
+    """Invite a user by username to join a group. Requires group owner or admin."""
+    uid = _get_current_user_id()
+    if _is_auth_enabled() and not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    # Check caller is owner or admin
+    if _is_auth_enabled() and _get_current_user_role() != "admin":
+        conn = get_db()
+        ug = conn.execute("SELECT role FROM user_groups WHERE user_id=? AND group_id=?", (uid, group_id)).fetchone()
+        conn.close()
+        if not ug or ug["role"] != "owner":
+            return jsonify({"error": "Not the group owner"}), 403
+    data = request.json or {}
+    username = data.get("username", "").strip()
+    if not username:
+        return jsonify({"error": "username required"}), 400
+    conn = get_db()
+    group = conn.execute("SELECT name FROM groups WHERE id=?", (group_id,)).fetchone()
+    if not group:
+        conn.close()
+        return jsonify({"error": "Group not found"}), 404
+    invitee = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    if not invitee:
+        conn.close()
+        return jsonify({"error": "User not found"}), 404
+    if invitee["id"] == uid:
+        conn.close()
+        return jsonify({"error": "Cannot invite yourself"}), 400
+    # Check if already member
+    already = conn.execute("SELECT 1 FROM user_groups WHERE user_id=? AND group_id=?", (invitee["id"], group_id)).fetchone()
+    if already:
+        conn.close()
+        return jsonify({"error": "User is already a member"}), 409
+    try:
+        conn.execute(
+            "INSERT INTO group_invites (group_id, inviter_id, invitee_id, status, created_at) VALUES (?,?,?,'pending',?)",
+            (group_id, uid, invitee["id"], datetime.utcnow().isoformat())
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "Invite already sent"}), 409
+    conn.close()
+    return jsonify({"status": "ok"}), 201
+
+
+@app.route("/api/invites", methods=["GET"])
+def list_invites():
+    """Get pending invites for the current user."""
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify([])
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT gi.id, gi.group_id, gi.status, gi.created_at,
+               g.name as group_name,
+               u.username as inviter_username, u.display_name as inviter_display_name
+        FROM group_invites gi
+        JOIN groups g ON g.id=gi.group_id
+        JOIN users u ON u.id=gi.inviter_id
+        WHERE gi.invitee_id=? AND gi.status='pending'
+        ORDER BY gi.created_at DESC
+    """, (uid,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/invites/<int:invite_id>/accept", methods=["POST"])
+def accept_invite(invite_id):
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    invite = conn.execute("SELECT * FROM group_invites WHERE id=? AND invitee_id=? AND status='pending'", (invite_id, uid)).fetchone()
+    if not invite:
+        conn.close()
+        return jsonify({"error": "Invite not found"}), 404
+    try:
+        conn.execute("INSERT INTO user_groups (user_id, group_id, role) VALUES (?,?,'member')", (uid, invite["group_id"]))
+    except sqlite3.IntegrityError:
+        pass  # Already a member
+    conn.execute("UPDATE group_invites SET status='accepted' WHERE id=?", (invite_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "accepted"})
+
+
+@app.route("/api/invites/<int:invite_id>/decline", methods=["POST"])
+def decline_invite(invite_id):
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    invite = conn.execute("SELECT id FROM group_invites WHERE id=? AND invitee_id=? AND status='pending'", (invite_id, uid)).fetchone()
+    if not invite:
+        conn.close()
+        return jsonify({"error": "Invite not found"}), 404
+    conn.execute("UPDATE group_invites SET status='declined' WHERE id=?", (invite_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "declined"})
 
 
 @app.route("/api/movies/<int:movie_id>/groups", methods=["GET"])
