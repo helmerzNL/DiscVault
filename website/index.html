@@ -267,6 +267,13 @@
               Disable open registration and require admin-issued invites. New users receive a one-time password to register their passkey — no sign-up form needed.
             </p>
           </article>
+          <article class="card">
+            <span class="badge" data-i18n="f14.badge">Beta</span>
+            <h3 data-i18n="f14.title">Push notifications</h3>
+            <p data-i18n="f14.body">
+              Group members receive a push notification on their device whenever a new disc is added to a shared group — works on any device with DiscVault installed as a PWA.
+            </p>
+          </article>
         </div>
       </section>
 
@@ -316,13 +323,6 @@
             <h3 data-i18n="s6.title">Wishlist</h3>
             <p data-i18n="s6.body">
               Keep track of discs you want to add to your collection — special editions you're hunting for, or titles you've ordered but haven't received yet. Move them to your collection with one tap once they arrive.
-            </p>
-          </article>
-          <article class="card card-upcoming">
-            <span class="badge badge-soon" data-i18n="s7.badge">Coming soon</span>
-            <h3 data-i18n="s7.title">Push notifications</h3>
-            <p data-i18n="s7.body">
-              Group members receive a push notification on their device whenever a new disc is added to a shared group — works on any device with DiscVault installed as a PWA.
             </p>
           </article>
         </div>
@@ -401,6 +401,7 @@
         'f11.badge':'New in 2.5','f11.title':'Watchlist &amp; watch history','f11.body':'Mark titles as watched, track when you last viewed them, and keep a personal watchlist for discs you want to get to next.',
         'f12.badge':'New in 2.5','f12.title':'Multiple languages','f12.body':'DiscVault is now available in French, German, and Spanish — with more languages on the way.',
         'f13.badge':'New in 2.5.1','f13.title':'Invite-only registration','f13.body':'Disable open registration and require admin-issued invites. New users receive a one-time password to register their passkey — no sign-up form needed.',
+        'f14.badge':'Beta','f14.title':'Push notifications','f14.body':'Group members receive a push notification on their device whenever a new disc is added to a shared group — works on any device with DiscVault installed as a PWA.',
         'soon.eyebrow':'Coming soon','soon.h2':'New features landing in the next release.',
         's1.badge':'Coming soon','s1.title':'Import your existing collection','s1.body':'Already tracking your discs in a spreadsheet or Letterboxd? Import a CSV or Letterboxd export and have your full collection in DiscVault without scanning everything from scratch.',
         's2.badge':'Coming soon','s2.title':'Collection statistics','s2.body':'Get a dashboard overview of your collection \u2014 disc count by format, genre breakdown, total runtime, and growth over time.',
@@ -408,7 +409,6 @@
         's4.badge':'Coming soon','s4.title':'Loan tracker','s4.body':'Track which discs you\u2019ve lent out and to whom. See all outstanding loans at a glance and add a return reminder so nothing goes missing.',
         's5.badge':'Coming soon','s5.title':'Webhooks &amp; notifications','s5.body':'Send a webhook event when a disc is added, a backup completes, or a loan is overdue \u2014 ready to connect with Home Assistant, ntfy, or any automation tool.',
         's6.badge':'Coming soon','s6.title':'Wishlist','s6.body':'Keep track of discs you want to add to your collection \u2014 special editions you\u2019re hunting for, or titles you\u2019ve ordered but haven\u2019t received yet. Move them to your collection with one tap once they arrive.',
-        's7.badge':'Coming soon','s7.title':'Push notifications','s7.body':'Group members receive a push notification on their device whenever a new disc is added to a shared group \u2014 works on any device with DiscVault installed as a PWA.',
         'install.eyebrow':'Deployment','install.h2':'Deploy on Unraid or run it anywhere Docker runs.',
         'install.stable.title':'Stable','install.stable.body':'Use the all-in-one container image:',
         'install.beta.title':'Beta','install.beta.body':'Try new features early \u2014 new features and more languages coming:',
@@ -447,6 +447,7 @@
         'f11.badge':'Nieuw in 2.5','f11.title':'Kijklijst &amp; kijkgeschiedenis','f11.body':'Markeer titels als bekeken, houd bij wanneer je ze voor het laatste hebt gezien en houd een persoonlijke kijklijst bij voor discs die je nog wilt bekijken.',
         'f12.badge':'Nieuw in 2.5','f12.title':'Meerdere talen','f12.body':'DiscVault is nu beschikbaar in het Frans, Duits en Spaans — met meer talen in aantocht.',
         'f13.badge':'Nieuw in 2.5.1','f13.title':'Registratie op uitnodiging','f13.body':'Schakel open registratie uit en vereist een admin-uitnodiging voor nieuwe gebruikers. Ze ontvangen een eenmalig wachtwoord om hun passkey te registreren — geen aanmeldformulier nodig.',
+        'f14.badge':'Beta','f14.title':'Pushmeldingen','f14.body':'Groepsleden ontvangen een pushmelding op hun apparaat telkens wanneer een nieuwe disc aan een gedeelde groep wordt toegevoegd — werkt op elk apparaat waarop DiscVault als PWA is geïnstalleerd.',
         'soon.eyebrow':'Binnenkort','soon.h2':'Nieuwe functies in de volgende versie.',
         's1.badge':'Binnenkort','s1.title':'Importeer je bestaande collectie','s1.body':'Houd je al discs bij in een spreadsheet of Letterboxd? Importeer een CSV of Letterboxd-export en heb je volledige collectie in DiscVault zonder alles opnieuw te scannen.',
         's2.badge':'Binnenkort','s2.title':'Collectiestatistieken','s2.body':'Bekijk een dashboardoverzicht van je collectie \u2014 aantal discs per formaat, genre-uitsplitsing, totale speelduur en groei over tijd.',
@@ -454,7 +455,6 @@
         's4.badge':'Binnenkort','s4.title':'Uitleentracker','s4.body':'Houd bij welke discs je hebt uitgeleend en aan wie. Bekijk alle openstaande uitleningen in \u00e9\u00e9n oogopslag en stel een terugbrengherinnering in zodat niets kwijtraakt.',
         's5.badge':'Binnenkort','s5.title':'Webhooks &amp; meldingen','s5.body':'Stuur een webhook-event wanneer een disc wordt toegevoegd, een back-up klaar is of een uitlening te laat is \u2014 klaar voor koppeling met Home Assistant, ntfy of elk automatiseringstool.',
         's6.badge':'Binnenkort','s6.title':'Verlanglijst','s6.body':'Houd bij welke discs je aan je collectie wilt toevoegen \u2014 speciale edities die je zoekt of titels die je hebt besteld maar nog niet hebt ontvangen. Verplaats ze naar je collectie met \u00e9\u00e9n tik zodra ze aankomen.',
-        's7.badge':'Binnenkort','s7.title':'Pushmeldingen','s7.body':'Groepsleden ontvangen een pushmelding op hun apparaat telkens wanneer een nieuwe disc aan een gedeelde groep wordt toegevoegd \u2014 werkt op elk apparaat waarop DiscVault als PWA is ge\u00efnstalleerd.',
         'install.eyebrow':'Installatie','install.h2':'Installeer op Unraid of draai het overal waar Docker op draait.',
         'install.stable.title':'Stabiel','install.stable.body':'Gebruik de all-in-one containerimage:',
         'install.beta.title':'Beta','install.beta.body':'Probeer nieuwe functies vroeg \u2014 nieuwe functies en meer talen komen eraan:',
@@ -493,6 +493,7 @@
         'f11.badge':'Nouveau dans 2.5','f11.title':'Liste de visionnage &amp; historique','f11.body':'Marquez les titres comme regard\u00e9s, suivez la date de votre dernier visionnage et gardez une liste de visionnage personnelle pour les disques que vous souhaitez voir prochainement.',
         'f12.badge':'Nouveau dans 2.5','f12.title':'Plusieurs langues','f12.body':'DiscVault est maintenant disponible en fran\u00e7ais, en allemand et en espagnol \u2014 avec d\u2019autres langues \u00e0 venir.',
         'f13.badge':'Nouveau dans 2.5.1','f13.title':'Inscription sur invitation','f13.body':'D\u00e9sactivez l\u2019inscription ouverte et obligez les nouveaux utilisateurs \u00e0 \u00eatre invit\u00e9s par un administrateur. Ils re\u00e7oivent un mot de passe \u00e0 usage unique pour enregistrer leur cl\u00e9 d\u2019acc\u00e8s \u2014 aucun formulaire d\u2019inscription requis.',
+        'f14.badge':'B\u00eata','f14.title':'Notifications push','f14.body':'Les membres du groupe re\u00e7oivent une notification push sur leur appareil chaque fois qu\u2019un nouveau disque est ajout\u00e9 \u00e0 un groupe partag\u00e9 \u2014 fonctionne sur tout appareil sur lequel DiscVault est install\u00e9 en PWA.',
         'soon.eyebrow':'Bient\u00f4t disponible','soon.h2':'Nouvelles fonctionnalit\u00e9s pr\u00e9vues pour la prochaine version.',
         's1.badge':'Bient\u00f4t disponible','s1.title':'Importer votre collection existante','s1.body':'Vous suivez d\u00e9j\u00e0 vos disques dans un tableur ou sur Letterboxd\u00a0? Importez un CSV ou un export Letterboxd et retrouvez toute votre collection dans DiscVault sans tout rescanner.',
         's2.badge':'Bient\u00f4t disponible','s2.title':'Statistiques de collection','s2.body':'Obtenez un aper\u00e7u tableau de bord de votre collection \u2014 nombre de disques par format, r\u00e9partition par genre, dur\u00e9e totale et \u00e9volution dans le temps.',
@@ -500,7 +501,6 @@
         's4.badge':'Bient\u00f4t disponible','s4.title':'Suivi des pr\u00eats','s4.body':'Suivez quels disques vous avez pr\u00eat\u00e9s et \u00e0 qui. Visualisez tous les pr\u00eats en cours d\u2019un coup d\u2019\u0153il et ajoutez un rappel de retour pour ne rien perdre.',
         's5.badge':'Bient\u00f4t disponible','s5.title':'Webhooks &amp; notifications','s5.body':'Envoyez un \u00e9v\u00e9nement webhook quand un disque est ajout\u00e9, une sauvegarde termin\u00e9e ou un pr\u00eat en retard \u2014 pr\u00eat \u00e0 se connecter avec Home Assistant, ntfy ou tout outil d\u2019automatisation.',
         's6.badge':'Bient\u00f4t disponible','s6.title':'Liste de souhaits','s6.body':'Suivez les disques que vous souhaitez ajouter \u00e0 votre collection \u2014 \u00e9ditions sp\u00e9ciales que vous recherchez ou titres command\u00e9s mais pas encore re\u00e7us. D\u00e9placez-les dans votre collection d\u2019un simple tap \u00e0 leur arriv\u00e9e.',
-        's7.badge':'Bient\u00f4t disponible','s7.title':'Notifications push','s7.body':'Les membres du groupe re\u00e7oivent une notification push sur leur appareil chaque fois qu\u2019un nouveau disque est ajout\u00e9 \u00e0 un groupe partag\u00e9 \u2014 fonctionne sur tout appareil sur lequel DiscVault est install\u00e9 en PWA.',
         'install.eyebrow':'D\u00e9ploiement','install.h2':'D\u00e9ployez sur Unraid ou ex\u00e9cutez-le partout o\u00f9 Docker tourne.',
         'install.stable.title':'Stable','install.stable.body':'Utilisez l\u2019image conteneur tout-en-un\u00a0:',
         'install.beta.title':'B\u00eata','install.beta.body':'Essayez les nouvelles fonctionnalit\u00e9s en avant-premi\u00e8re \u2014 nouvelles fonctions et plus de langues \u00e0 venir\u00a0:',
@@ -538,6 +538,7 @@
         'f11.badge':'Neu in 2.5','f11.title':'Watchlist &amp; Sehverlauf','f11.body':'Markiere Titel als gesehen, verfolge wann du sie zuletzt angeschaut hast und führe eine persönliche Watchlist für Discs, die du noch sehen möchtest.',
         'f12.badge':'Neu in 2.5','f12.title':'Mehrere Sprachen','f12.body':'DiscVault ist jetzt auf Französisch, Deutsch und Spanisch verfügbar — mit weiteren Sprachen in Kürze.',
         'f13.badge':'Neu in 2.5.1','f13.title':'Registrierung per Einladung','f13.body':'Deaktiviere die offene Registrierung und verlange, dass neue Benutzer vom Admin eingeladen werden. Sie erhalten ein Einmalpasswort zur Registrierung ihres Passkeys — kein Anmeldeformular erforderlich.',
+        'f14.badge':'Beta','f14.title':'Push-Benachrichtigungen','f14.body':'Gruppenmitglieder erhalten eine Push-Benachrichtigung auf ihrem Gerät, wenn eine neue Disc zu einer geteilten Gruppe hinzugefügt wird — funktioniert auf jedem Gerät, auf dem DiscVault als PWA installiert ist.',
         'soon.eyebrow':'Demnächst','soon.h2':'Neue Funktionen in der nächsten Version.',
         's1.badge':'Demnächst','s1.title':'Bestehende Sammlung importieren','s1.body':'Verfolgst du deine Discs bereits in einer Tabelle oder auf Letterboxd? Importiere einen CSV- oder Letterboxd-Export und habe deine vollständige Sammlung in DiscVault, ohne alles neu zu scannen.',
         's2.badge':'Demnächst','s2.title':'Sammlungsstatistiken','s2.body':'Erhalte eine Dashboard-Übersicht deiner Sammlung — Disc-Anzahl nach Format, Genre-Aufschlüsselung, Gesamtlaufzeit und Wachstum über die Zeit.',
@@ -545,7 +546,6 @@
         's4.badge':'Demnächst','s4.title':'Verleih-Tracker','s4.body':'Verfolge, welche Discs du verliehen hast und an wen. Sieh alle ausstehenden Verleihungen auf einen Blick und stelle eine Rückgabeerinnerung ein, damit nichts verloren geht.',
         's5.badge':'Demnächst','s5.title':'Webhooks &amp; Benachrichtigungen','s5.body':'Sende ein Webhook-Event, wenn eine Disc hinzugefügt wird, ein Backup abgeschlossen ist oder ein Verleih überfällig ist — bereit zur Verbindung mit Home Assistant, ntfy oder jedem Automatisierungstool.',
         's6.badge':'Demnächst','s6.title':'Wunschliste','s6.body':'Behalte den Überblick über Discs, die du deiner Sammlung hinzufügen möchtest — Sondereditionen, nach denen du suchst, oder Titel, die du bestellt hast, aber noch nicht erhalten. Verschiebe sie mit einem Tipp in deine Sammlung, sobald sie ankommen.',
-        's7.badge':'Demnächst','s7.title':'Push-Benachrichtigungen','s7.body':'Gruppenmitglieder erhalten eine Push-Benachrichtigung auf ihrem Gerät, wenn eine neue Disc zu einer geteilten Gruppe hinzugefügt wird — funktioniert auf jedem Gerät, auf dem DiscVault als PWA installiert ist.',
         'install.eyebrow':'Installation','install.h2':'Auf Unraid deployen oder überall dort ausführen, wo Docker läuft.',
         'install.stable.title':'Stabil','install.stable.body':'Verwende das All-in-One-Container-Image:',
         'install.beta.title':'Beta','install.beta.body':'Probiere neue Funktionen frühzeitig — neue Funktionen und mehr Sprachen kommen:',
@@ -584,6 +584,7 @@
         'f11.badge':'Nuevo en 2.5','f11.title':'Lista de seguimiento &amp; historial','f11.body':'Marca títulos como vistos, sigue cuándo los viste por última vez y mantén una lista de seguimiento personal para los discos que quieres ver próximamente.',
         'f12.badge':'Nuevo en 2.5','f12.title':'Múltiples idiomas','f12.body':'DiscVault ahora está disponible en francés, alemán y español — con más idiomas por venir.',
         'f13.badge':'Nuevo en 2.5.1','f13.title':'Registro solo por invitación','f13.body':'Desactiva el registro abierto y requiere que los nuevos usuarios sean invitados por un administrador. Reciben una contraseña de un solo uso para registrar su clave de acceso — no se necesita formulario de registro.',
+        'f14.badge':'Beta','f14.title':'Notificaciones push','f14.body':'Los miembros del grupo reciben una notificación push en su dispositivo cada vez que se añade un nuevo disco a un grupo compartido — funciona en cualquier dispositivo con DiscVault instalado como PWA.',
         'soon.eyebrow':'Próximamente','soon.h2':'Nuevas funciones en la próxima versión.',
         's1.badge':'Próximamente','s1.title':'Importar tu colección existente','s1.body':'¿Ya registras tus discos en una hoja de cálculo o en Letterboxd? Importa un CSV o una exportación de Letterboxd y ten toda tu colección en DiscVault sin escanear todo desde cero.',
         's2.badge':'Próximamente','s2.title':'Estadísticas de la colección','s2.body':'Obtén una vista general del panel de tu colección — recuento de discos por formato, desglose por género, duración total y crecimiento a lo largo del tiempo.',
@@ -591,7 +592,6 @@
         's4.badge':'Próximamente','s4.title':'Rastreador de préstamos','s4.body':'Controla qué discos has prestado y a quién. Ve todos los préstamos pendientes de un vistazo y añade un recordatorio de devolución para que nada se pierda.',
         's5.badge':'Próximamente','s5.title':'Webhooks &amp; notificaciones','s5.body':'Envía un evento webhook cuando se añade un disco, se completa una copia de seguridad o un préstamo está vencido — listo para conectar con Home Assistant, ntfy o cualquier herramienta de automatización.',
         's6.badge':'Próximamente','s6.title':'Lista de deseos','s6.body':'Controla los discos que quieres añadir a tu colección — ediciones especiales que buscas o títulos que has pedido pero aún no has recibido. Muévelos a tu colección con un toque cuando lleguen.',
-        's7.badge':'Próximamente','s7.title':'Notificaciones push','s7.body':'Los miembros del grupo reciben una notificación push en su dispositivo cada vez que se añade un nuevo disco a un grupo compartido — funciona en cualquier dispositivo con DiscVault instalado como PWA.',
         'install.eyebrow':'Despliegue','install.h2':'Despliega en Unraid o ejécutalo en cualquier lugar donde corra Docker.',
         'install.stable.title':'Estable','install.stable.body':'Usa la imagen contenedor todo en uno:',
         'install.beta.title':'Beta','install.beta.body':'Prueba nuevas funciones antes — nuevas funciones y más idiomas por venir:',
