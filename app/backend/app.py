@@ -496,10 +496,10 @@ def init_db():
         if orphan_count > 0:
             conn.execute("UPDATE movies SET owner_id=? WHERE owner_id IS NULL", (first_user[0],))
 
-    # Migrate: re-generate VAPID keys if stored in old TraditionalOpenSSL format
-    # (old keys have "EC PARAMETERS" header; new keys are PKCS8 "BEGIN PRIVATE KEY")
+    # Migrate: re-generate VAPID keys if stored in old PEM format (any format starting with -----BEGIN)
+    # New format: raw base64url 32-byte EC scalar, as expected by pywebpush/py_vapid from_string()
     old_priv = conn.execute("SELECT value FROM settings WHERE key='vapid_private_key'").fetchone()
-    if old_priv and "EC PARAMETERS" in (old_priv[0] or ""):
+    if old_priv and ("BEGIN" in (old_priv[0] or "") or len(old_priv[0] or "") > 100):
         conn.execute("DELETE FROM settings WHERE key IN ('vapid_private_key', 'vapid_public_key')")
         conn.execute("DELETE FROM push_subscriptions")  # old subs used old public key, must re-subscribe
 
@@ -5131,13 +5131,14 @@ def db_stats():
 # ── Push notifications ────────────────────────────────────────────────────────
 
 def _get_or_create_vapid_keys():
-    """Return (public_key_base64url, private_key_pem) from settings, generating on first call."""
+    """Return (public_key_base64url, private_key_raw_b64url) from settings, generating on first call.
+
+    The private key is stored as a base64url-encoded raw 32-byte EC scalar (the 'd' value).
+    This is the format py_vapid / pywebpush expect when vapid_private_key is passed as a string.
+    """
     from cryptography.hazmat.primitives.asymmetric import ec as _ec
     from cryptography.hazmat.backends import default_backend as _cb
-    from cryptography.hazmat.primitives.serialization import (
-        Encoding as _Enc, PublicFormat as _PubFmt,
-        PrivateFormat as _PrivFmt, NoEncryption as _NoEnc,
-    )
+    from cryptography.hazmat.primitives.serialization import Encoding as _Enc, PublicFormat as _PubFmt
     conn = get_db()
     row_pub  = conn.execute("SELECT value FROM settings WHERE key='vapid_public_key'").fetchone()
     row_priv = conn.execute("SELECT value FROM settings WHERE key='vapid_private_key'").fetchone()
@@ -5145,25 +5146,27 @@ def _get_or_create_vapid_keys():
         conn.close()
         return row_pub["value"], row_priv["value"]
     # Generate fresh P-256 VAPID key pair
-    priv = _ec.generate_private_key(_ec.SECP256R1(), _cb())
+    priv     = _ec.generate_private_key(_ec.SECP256R1(), _cb())
     pub_bytes = priv.public_key().public_bytes(_Enc.X962, _PubFmt.UncompressedPoint)
     pub_b64   = base64.urlsafe_b64encode(pub_bytes).rstrip(b"=").decode()
-    priv_pem  = priv.private_bytes(_Enc.PEM, _PrivFmt.PKCS8, _NoEnc()).decode()
+    # Store private key as raw 32-byte d-value, base64url-encoded (no PEM/DER headers)
+    d_bytes  = priv.private_numbers().private_value.to_bytes(32, 'big')
+    priv_raw = base64.urlsafe_b64encode(d_bytes).rstrip(b"=").decode()
     conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('vapid_public_key',?)",  (pub_b64,))
-    conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('vapid_private_key',?)", (priv_pem,))
+    conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('vapid_private_key',?)", (priv_raw,))
     conn.commit()
     conn.close()
-    return pub_b64, priv_pem
+    return pub_b64, priv_raw
 
 
-def _send_push(endpoint, p256dh, auth, vapid_priv_pem, title, body, url="/"):
+def _send_push(endpoint, p256dh, auth, vapid_priv_raw, title, body, url="/"):
     """Send a single Web Push message. Returns None on success, error string on failure."""
     try:
         from pywebpush import webpush, WebPushException
         webpush(
             subscription_info={"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}},
             data=json.dumps({"title": title, "body": body, "url": url}),
-            vapid_private_key=vapid_priv_pem,
+            vapid_private_key=vapid_priv_raw,  # raw base64url 32-byte d-value
             vapid_claims={"sub": "mailto:no-reply@discvault.app"},
         )
         return None
@@ -5192,7 +5195,7 @@ def push_to_user(user_id, title, body, url="/"):
     """Deliver a push notification to all subscribed devices for *user_id*. Returns list of errors."""
     errors = []
     try:
-        _, priv_pem = _get_or_create_vapid_keys()
+        _, priv_raw = _get_or_create_vapid_keys()
         conn = get_db()
         subs = conn.execute(
             "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?", (user_id,)
@@ -5201,7 +5204,7 @@ def push_to_user(user_id, title, body, url="/"):
         if not subs:
             errors.append("No subscriptions found for this user")
         for s in subs:
-            err = _send_push(s["endpoint"], s["p256dh"], s["auth"], priv_pem, title, body, url)
+            err = _send_push(s["endpoint"], s["p256dh"], s["auth"], priv_raw, title, body, url)
             if err:
                 errors.append(err)
     except Exception as ex:
