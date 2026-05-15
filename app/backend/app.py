@@ -310,9 +310,33 @@ def init_db():
 
     # Migration: drop UNIQUE(user_id, movie_id) from watch_history if it still exists
     try:
+        # Clean up _wh_old left by a previously interrupted migration
+        wh_old = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='_wh_old'").fetchone()
+        if wh_old:
+            wh = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='watch_history'").fetchone()
+            if not wh:
+                conn.execute("ALTER TABLE _wh_old RENAME TO watch_history")
+            else:
+                conn.execute("DROP TABLE _wh_old")
+            conn.commit()
+
+        # Use index [0] because init_db conn has no row_factory set (plain tuples)
         pragma = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='watch_history'").fetchone()
-        sql_norm = (pragma['sql'] or '').replace(' ', '').upper() if pragma else ''
-        if 'UNIQUE(USER_ID,MOVIE_ID)' in sql_norm or 'UNIQUE(MOVIE_ID,USER_ID)' in sql_norm:
+        sql_norm = (pragma[0] or '').replace(' ', '').upper() if pragma else ''
+        has_inline_unique = 'UNIQUE(USER_ID,MOVIE_ID)' in sql_norm or 'UNIQUE(MOVIE_ID,USER_ID)' in sql_norm
+
+        # Also check via PRAGMA index_list in case SQLite stored it differently
+        if not has_inline_unique:
+            idx_rows = conn.execute("PRAGMA index_list(watch_history)").fetchall()
+            for idx in idx_rows:
+                if idx[2] == 1 and idx[3] == 'u':  # unique=1, origin='u' (table constraint)
+                    idx_info = conn.execute(f"PRAGMA index_info({idx[1]})").fetchall()
+                    col_names = {row[2].lower() for row in idx_info}
+                    if 'user_id' in col_names and 'movie_id' in col_names:
+                        has_inline_unique = True
+                        break
+
+        if has_inline_unique:
             conn.execute("ALTER TABLE watch_history RENAME TO _wh_old")
             conn.execute("""
                 CREATE TABLE watch_history (
