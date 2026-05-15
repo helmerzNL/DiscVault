@@ -17,6 +17,7 @@ It includes:
 - MCP endpoint integration for AI workflows
 - PWA — works offline after adding to homescreen
 - Push notifications — group members are notified when a new disc is added to a shared group
+- User-scoped MCP access — personal API keys connect your AI assistant to your own collection only
 
 ## Live Website
 
