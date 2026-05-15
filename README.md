@@ -45,12 +45,12 @@ ghcr.io/helmerzNL/DiscVault:beta     # beta (new features)
 
 | | | | |
 |---|---|---|---|
-| ![Sign in](screenshots/Mobile_screenshot%20%282%29.jpeg) | ![Search](screenshots/Mobile_screenshot%20%281%29.PNG) | ![Add movie](screenshots/Mobile_screenshot%20%284%29.PNG) | ![Profile](screenshots/Mobile_screenshot%20%285%29.PNG) |
+| <img src="screenshots/Mobile_screenshot%20%282%29.jpeg" width="150"> | <img src="screenshots/Mobile_screenshot%20%281%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%284%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%285%29.PNG" width="150"> |
 | Sign in | Search | Add movie | Profile |
-| ![Metadata](screenshots/Mobile_screenshot%20%286%29.PNG) | ![Authentication](screenshots/Mobile_screenshot%20%287%29.PNG) | ![User management](screenshots/Mobile_screenshot%20%288%29.PNG) | ![Backup](screenshots/Mobile_screenshot%20%289%29.PNG) |
+| <img src="screenshots/Mobile_screenshot%20%286%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%287%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%288%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%289%29.PNG" width="150"> |
 | Metadata | Authentication | User management | Backup & Restore |
-| ![Logfiles](screenshots/Mobile_screenshot%20%2810%29.PNG) | ![Advanced](screenshots/Mobile_screenshot%20%2811%29.PNG) | | |
-| Logfiles | Advanced | | |
+| <img src="screenshots/Mobile_screenshot%20%2810%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%2811%29.PNG" width="150"> | <img src="screenshots/mobile_collection.jpeg" width="150"> | |
+| Logfiles | Advanced | Collection | |
 
 ## Quick Start (Docker)
 
