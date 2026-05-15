@@ -1876,7 +1876,7 @@
   </div>
   <div class="tab" data-tab="lists" onclick="switchTab('lists')">
     <span class="tab-icon mdi mdi-playlist-check" aria-hidden="true"></span>
-    <span class="tab-label">Lists</span>
+    <span class="tab-label" data-i18n="nav.lists">Lists</span>
   </div>
   <div class="tab" data-tab="search" onclick="switchTab('search')">
     <span class="tab-icon mdi mdi-magnify" aria-hidden="true"></span>
@@ -1977,15 +1977,15 @@
     <div class="settings-submenu">
       <button class="settings-sub-btn active" type="button" data-toevoegen-sub="scan" onclick="switchToevoegen('scan')">
         <span class="settings-sub-icon mdi mdi-barcode-scan" aria-hidden="true"></span>
-        <span class="settings-sub-label">Barcode scannen</span>
+        <span class="settings-sub-label" data-i18n="toevoegen.scan">Barcode scannen</span>
       </button>
       <button class="settings-sub-btn" type="button" data-toevoegen-sub="manual" onclick="switchToevoegen('manual')">
         <span class="settings-sub-icon mdi mdi-pencil-plus-outline" aria-hidden="true"></span>
-        <span class="settings-sub-label">Handmatig</span>
+        <span class="settings-sub-label" data-i18n="toevoegen.manual">Handmatig</span>
       </button>
       <button class="settings-sub-btn" type="button" data-toevoegen-sub="import" onclick="switchToevoegen('import')">
         <span class="settings-sub-icon mdi mdi-database-import-outline" aria-hidden="true"></span>
-        <span class="settings-sub-label">Importeren</span>
+        <span class="settings-sub-label" data-i18n="toevoegen.import">Importeren</span>
       </button>
     </div>
     <div class="settings-sub-section active" id="addSubScan"></div>
@@ -2014,7 +2014,7 @@
       <span class="bulk-count" id="bulkCount">0 geselecteerd</span>
       <button class="btn btn-secondary" onclick="selectAll()" id="btnSelectAll" data-i18n="bulk.selectAll">Alles selecteren</button>
       <button class="btn btn-secondary" onclick="deselectAll()" data-i18n="bulk.deselect">Deselecteer</button>
-      <button class="btn btn-secondary" style="color:#4caf50; border-color:rgba(76,175,80,.4);" onclick="bulkAddToWatchlist()">🔖 Watchlist</button>
+      <button class="btn btn-secondary" style="color:#4caf50; border-color:rgba(76,175,80,.4);" onclick="bulkAddToWatchlist()" data-i18n="bulk.watchlist">🔖 Watchlist</button>
       <button class="btn btn-secondary" style="color:var(--accent); border-color:rgba(232,197,71,.4);" onclick="showBulkGroupAssign()" data-i18n="bulk.assignGroup">📁 Groep toewijzen</button>
       <button class="btn btn-secondary" style="color:var(--accent2); border-color:rgba(124,106,247,.4);" onclick="bulkRefresh()" data-i18n="bulk.refresh">
         ↺ Bijwerken via TMDb/OMDb
@@ -2271,32 +2271,32 @@
       <div class="settings-submenu">
         <button class="settings-sub-btn active" type="button" data-lists-sub="watchlist" onclick="switchListsSubmenu('watchlist')">
           <span class="settings-sub-icon mdi mdi-bookmark-outline" aria-hidden="true"></span>
-          <span class="settings-sub-label">Watchlist</span>
+          <span class="settings-sub-label" data-i18n="lists.menuWatchlist">Watchlist</span>
         </button>
         <button class="settings-sub-btn" type="button" data-lists-sub="watchhistory" onclick="switchListsSubmenu('watchhistory')">
           <span class="settings-sub-icon mdi mdi-history" aria-hidden="true"></span>
-          <span class="settings-sub-label">Watch History</span>
+          <span class="settings-sub-label" data-i18n="lists.menuWatchHistory">Watch History</span>
         </button>
-        <button class="settings-sub-btn disabled" type="button" disabled title="Binnenkort beschikbaar">
+        <button class="settings-sub-btn disabled" type="button" disabled data-i18n-title="general.comingSoon" title="Binnenkort beschikbaar">
           <span class="settings-sub-icon mdi mdi-format-list-bulleted" aria-hidden="true"></span>
-          <span class="settings-sub-label">Custom Lists</span>
+          <span class="settings-sub-label" data-i18n="lists.menuCustomLists">Custom Lists</span>
         </button>
-        <button class="settings-sub-btn disabled" type="button" disabled title="Binnenkort beschikbaar">
+        <button class="settings-sub-btn disabled" type="button" disabled data-i18n-title="general.comingSoon" title="Binnenkort beschikbaar">
           <span class="settings-sub-icon mdi mdi-tag-outline" aria-hidden="true"></span>
-          <span class="settings-sub-label">Tags</span>
+          <span class="settings-sub-label" data-i18n="lists.menuTags">Tags</span>
         </button>
       </div>
       <div class="settings-sub-section active" id="listsSubWatchlist">
         <div id="watchlistEmpty" style="display:none; text-align:center; padding:60px 20px; color:var(--text-muted);">
           <div style="font-size:3rem; margin-bottom:12px; opacity:0.3;">🔖</div>
-          <div style="font-size:0.9rem;">Je watchlist is leeg.<br>Voeg films toe via het detailscherm of via Selecteren in de collectie.</div>
+          <div style="font-size:0.9rem;" data-i18n-html="lists.watchlistEmpty">Je watchlist is leeg.<br>Voeg films toe via het detailscherm of via Selecteren in de collectie.</div>
         </div>
         <div id="watchlistGrid" class="movies-grid" style="margin-top:20px;"></div>
       </div>
       <div class="settings-sub-section" id="listsSubWatchHistory">
         <div id="watchHistoryEmpty" style="display:none; text-align:center; padding:60px 20px; color:var(--text-muted);">
           <div style="font-size:3rem; margin-bottom:12px; opacity:0.3;">📅</div>
-          <div style="font-size:0.9rem;">Je hebt nog geen films als bekeken gemarkeerd.</div>
+          <div style="font-size:0.9rem;" data-i18n="lists.watchHistoryEmpty">Je hebt nog geen films als bekeken gemarkeerd.</div>
         </div>
         <div id="watchHistoryList" style="margin-top:16px;"></div>
       </div>
@@ -2441,8 +2441,9 @@
         <div class="card-title" data-i18n="settings.language">Taal</div>
         <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px;" data-i18n="settings.languageDesc">Kies de taal voor de interface.</p>
         <select id="languageSelect" onchange="changeLanguage(this.value)" style="width:auto; padding:8px 14px;">
-          <option value="nl">Nederlands</option>
-          <option value="en">English</option>
+          <option value="nl">🇳🇱 Nederlands</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="fr">🇫🇷 Français</option>
         </select>
       </div>
 
@@ -2469,7 +2470,7 @@
           <div class="log-controls">
             <label class="log-auto-label">
               <input type="checkbox" id="logAutoRefresh" checked style="accent-color:var(--success); width:14px; height:14px;">
-              <span class="blink"></span> Auto-refresh
+              <span class="blink"></span> <span data-i18n="logs.autoRefresh">Auto-refresh</span>
             </label>
             <select id="logLevelFilter" onchange="loadLogs()" style="width:auto; padding:6px 12px;">
               <option value="" data-i18n="logs.allLevels">Alle niveaus</option>
@@ -2626,21 +2627,21 @@
             <label data-i18n="settings.groupName">Groepsnaam</label>
             <input type="text" id="newGroupName" placeholder="Bijv. Familie">
           </div>
-          <button class="btn btn-primary" onclick="createGroup()" style="height:40px;">+ Groep aanmaken</button>
+          <button class="btn btn-primary" onclick="createGroup()" style="height:40px;" data-i18n="settings.groupCreateBtn">+ Groep aanmaken</button>
         </div>
         <div id="adminGroupsList"></div>
       </div>
 
       <!-- MemberGroups: Mijn Groepen -->
       <div id="myGroupsCard" class="card" style="display:none; margin-top:20px;">
-        <div class="card-title">📁 Mijn Groepen</div>
-        <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;">Maak je eigen groep aan en nodig anderen uit om samen een collectie te delen.</p>
+        <div class="card-title" data-i18n="settings.myGroupsTitle">📁 Mijn Groepen</div>
+        <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;" data-i18n="settings.myGroupsDesc">Maak je eigen groep aan en nodig anderen uit om samen een collectie te delen.</p>
         <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
           <div class="input-group" style="margin:0; flex:1; min-width:180px;">
-            <label>Groepsnaam</label>
+            <label data-i18n="settings.myGroupName">Groepsnaam</label>
             <input type="text" id="myNewGroupName" placeholder="Bijv. Familie">
           </div>
-          <button class="btn btn-primary" onclick="createMyGroup()" style="height:40px;">+ Aanmaken</button>
+          <button class="btn btn-primary" onclick="createMyGroup()" style="height:40px;" data-i18n="settings.myGroupCreate">+ Aanmaken</button>
         </div>
         <div id="myGroupStatus" class="status-msg"></div>
         <div id="myGroupsList"></div>
@@ -2655,10 +2656,10 @@
 <div id="invitePanel" onclick="if(event.target===this)closeInvitePanel()" style="display:none; position:fixed; inset:0; z-index:4000; background:rgba(0,0,0,.6); align-items:flex-start; justify-content:center; padding-top:80px;">
   <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; width:min(480px,90vw); max-height:70vh; overflow-y:auto;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-      <h2 style="margin:0; font-size:1rem;">🔔 Uitnodigingen</h2>
+      <h2 style="margin:0; font-size:1rem;" data-i18n="invite.title">🔔 Uitnodigingen</h2>
       <button onclick="closeInvitePanel()" style="background:none; border:none; color:var(--text-muted); font-size:1.3rem; cursor:pointer;">✕</button>
     </div>
-    <div id="invitePanelList"><div style="color:var(--text-muted); font-size:0.85rem;">Laden...</div></div>
+    <div id="invitePanelList"><div style="color:var(--text-muted); font-size:0.85rem;"><span data-i18n="general.loading">Laden...</span></div></div>
   </div>
 </div>
 
@@ -2799,19 +2800,19 @@
     <!-- ── VIEW MODE ── -->
     <div id="modalViewMode">
       <div class="btn-row modal-edit-actions" style="flex-wrap:wrap;">
-        <button class="btn btn-secondary" id="btnWatchlistModal" onclick="toggleWatchlistModal()" style="min-width:110px;">🔖 Watchlist</button>
+        <button class="btn btn-secondary" id="btnWatchlistModal" onclick="toggleWatchlistModal()" style="min-width:110px;" data-i18n="modal.watchlist">🔖 Watchlist</button>
         <div style="position:relative; display:inline-block;">
-          <button class="btn btn-secondary" id="btnWatchedModal" onclick="toggleWatchedMenu(event)" style="min-width:110px;">👁 Bekeken</button>
+          <button class="btn btn-secondary" id="btnWatchedModal" onclick="toggleWatchedMenu(event)" style="min-width:110px;" data-i18n="modal.watched">👁 Bekeken</button>
           <div id="watchedPopup" class="watched-popup" style="display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:300;">
-            <button onclick="markWatchedModal('yesterday')">Gisteren</button>
-            <button onclick="markWatchedModal('today')">Vandaag</button>
+            <button onclick="markWatchedModal('yesterday')" data-i18n="watched.yesterday">Gisteren</button>
+            <button onclick="markWatchedModal('today')" data-i18n="watched.today">Vandaag</button>
             <div class="watched-popup-date-row">
               <input type="date" id="watchedDateInput" onclick="event.stopPropagation()" onchange="event.stopPropagation()">
-              <button onclick="markWatchedModal('custom')" title="Bevestig datum">✓</button>
+              <button onclick="markWatchedModal('custom')" data-i18n-title="watched.confirmDate" title="Bevestig datum">✓</button>
             </div>
             <div id="watchedHistorySection" style="display:none;">
               <hr>
-              <div style="padding:5px 14px 3px; font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Historie</div>
+              <div style="padding:5px 14px 3px; font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;" data-i18n="watched.historyLabel">Historie</div>
               <div id="watchedHistoryEntries"></div>
             </div>
           </div>
@@ -3336,6 +3337,74 @@ nl: {
   'bulk.assignDone':'✓ {0} film(s) aan groep(en) gekoppeld',
   'pwa.title':'Installeer DiscVault','pwa.subtitle':'Voeg toe aan je startscherm voor de beste ervaring','pwa.install':'Installeren',
   'pwa.iosHint':'Tik op <strong style="color:var(--accent)">⬆ Deel</strong> en dan <strong style="color:var(--accent)">Zet op beginscherm</strong>',
+  'pwa.close':'Sluiten',
+  // nav nieuw
+  'nav.lists':'Lijsten',
+  // toevoegen submenu
+  'toevoegen.scan':'Barcode scannen','toevoegen.manual':'Handmatig','toevoegen.import':'Importeren',
+  // lists panel
+  'lists.menuWatchlist':'Watchlist','lists.menuWatchHistory':'Kijkgeschiedenis',
+  'lists.menuCustomLists':'Eigen lijsten','lists.menuTags':'Labels',
+  'lists.watchlistEmpty':'Je watchlist is leeg.<br>Voeg films toe via het detailscherm of via Selecteren in de collectie.',
+  'lists.watchHistoryEmpty':'Je hebt nog geen films als bekeken gemarkeerd.',
+  // general
+  'general.comingSoon':'Binnenkort beschikbaar','general.loading':'Laden...','general.close':'Sluiten',
+  // watched popup
+  'watched.yesterday':'Gisteren','watched.today':'Vandaag',
+  'watched.confirmDate':'Bevestig datum','watched.historyLabel':'Historie',
+  // modal watchlist/watched knoppen
+  'modal.watchlist':'🔖 Watchlist','modal.inWatchlist':'🔖 In watchlist',
+  'modal.watched':'👁 Bekeken','modal.watchedOn':'👁 Bekeken {0}',
+  // bulk watchlist
+  'bulk.watchlist':'🔖 Watchlist',
+  // JS watchlist / datums
+  'js.bulkWatchlistAdded':'✓ {0} film(s) toegevoegd aan watchlist',
+  'js.onWatchlist':'Op watchlist',
+  'js.watchedOn':'Bekeken {0}',
+  'js.watchedOnDate':'Bekeken op {0}',
+  'js.deleteTitle':'Verwijderen',
+  // maanden (voor datumopmaak)
+  'months.short':'jan,feb,mrt,apr,mei,jun,jul,aug,sep,okt,nov,dec',
+  // groepen (mijn groepen)
+  'settings.myGroupsTitle':'📁 Mijn Groepen',
+  'settings.myGroupsDesc':'Maak je eigen groep aan en nodig anderen uit om samen een collectie te delen.',
+  'settings.myGroupName':'Groepsnaam',
+  'settings.myGroupCreate':'+ Aanmaken',
+  'settings.groupCreateBtn':'+ Groep aanmaken',
+  // uitnodigingen
+  'invite.title':'🔔 Uitnodigingen',
+  // logs
+  'logs.autoRefresh':'Auto-refresh',
+  // JS groepen
+  'js.noMyGroups':'Je hebt nog geen groepen.',
+  'js.myGroupsLoadError':'Fout bij laden groepen.',
+  'js.myGroupsOwned':'Beheerd door jou',
+  'js.myGroupsMember':'Lid van',
+  'js.groupStats':'{0} leden · {1} films',
+  'js.groupStatsByOwner':'door {0} · {1} films',
+  'js.manageMembersTitle':'Leden & uitnodigingen',
+  'js.leaveGroup':'Verlaten',
+  'js.myGroupCreated':'Groep "{0}" aangemaakt!',
+  'js.confirmDeleteMyGroup':'Groep "{0}" verwijderen? Dit verwijdert ook alle groepskoppelingen.',
+  'js.confirmLeaveGroup':'Groep "{0}" verlaten?',
+  'js.membersOf':'👥 Leden van "{0}"',
+  'js.noMembers':'Geen leden.',
+  'js.selfIndicator':' (jij)',
+  'js.inviteUser':'Gebruiker uitnodigen',
+  'js.usernamePlaceholder':'gebruikersnaam',
+  'js.inviteBtn':'📨 Uitnodigen',
+  'js.close':'Sluiten',
+  'js.groupStatsFull':'{0} leden · {1} films · door {2}',
+  'js.manageMembersBtn':'Leden beheren',
+  'js.addMemberBtn':'+ Toevoegen',
+  'js.inviteSent':'✓ Uitnodiging verstuurd naar {0}',
+  'js.noInvites':'Geen openstaande uitnodigingen.',
+  'js.inviteFrom':'Uitnodiging van {0}',
+  'js.inviteAccept':'✓ Accepteren',
+  'js.inviteDecline':'✕ Weigeren',
+  'js.inviteLoadError':'Fout bij laden.',
+  'js.groupsLoadError':'Fout bij laden groepen',
+  'js.passkeyCount':'{0} passkey(s)',
 },
 en: {
   'nav.collection':'Collection','nav.import':'Import','nav.search':'Search','nav.add':'Add','nav.logs':'Logs','nav.settings':'Settings',
@@ -3590,8 +3659,412 @@ en: {
   'bulk.assignDone':'✓ {0} movie(s) assigned to group(s)',
   'pwa.title':'Install DiscVault','pwa.subtitle':'Add to your home screen for the best experience','pwa.install':'Install',
   'pwa.iosHint':'Tap <strong style="color:var(--accent)">⬆ Share</strong> then <strong style="color:var(--accent)">Add to Home Screen</strong>',
+  'pwa.close':'Close',
+  // nav new
+  'nav.lists':'Lists',
+  // add submenu
+  'toevoegen.scan':'Scan Barcode','toevoegen.manual':'Manual','toevoegen.import':'Import',
+  // lists panel
+  'lists.menuWatchlist':'Watchlist','lists.menuWatchHistory':'Watch History',
+  'lists.menuCustomLists':'Custom Lists','lists.menuTags':'Tags',
+  'lists.watchlistEmpty':'Your watchlist is empty.<br>Add movies via the detail screen or via Select in the collection.',
+  'lists.watchHistoryEmpty':'You haven\'t marked any movies as watched yet.',
+  // general
+  'general.comingSoon':'Coming soon','general.loading':'Loading...','general.close':'Close',
+  // watched popup
+  'watched.yesterday':'Yesterday','watched.today':'Today',
+  'watched.confirmDate':'Confirm date','watched.historyLabel':'History',
+  // modal watchlist/watched buttons
+  'modal.watchlist':'🔖 Watchlist','modal.inWatchlist':'🔖 In watchlist',
+  'modal.watched':'👁 Watched','modal.watchedOn':'👁 Watched {0}',
+  // bulk watchlist
+  'bulk.watchlist':'🔖 Watchlist',
+  // JS watchlist / dates
+  'js.bulkWatchlistAdded':'✓ {0} movie(s) added to watchlist',
+  'js.onWatchlist':'On watchlist',
+  'js.watchedOn':'Watched {0}',
+  'js.watchedOnDate':'Watched on {0}',
+  'js.deleteTitle':'Delete',
+  // months for date formatting
+  'months.short':'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec',
+  // groups (my groups)
+  'settings.myGroupsTitle':'📁 My Groups',
+  'settings.myGroupsDesc':'Create your own group and invite others to share a collection.',
+  'settings.myGroupName':'Group name',
+  'settings.myGroupCreate':'+ Create',
+  'settings.groupCreateBtn':'+ Create group',
+  // invitations
+  'invite.title':'🔔 Invitations',
+  // logs
+  'logs.autoRefresh':'Auto-refresh',
+  // JS groups
+  'js.noMyGroups':'You have no groups yet.',
+  'js.myGroupsLoadError':'Error loading groups.',
+  'js.myGroupsOwned':'Managed by you',
+  'js.myGroupsMember':'Member of',
+  'js.groupStats':'{0} members · {1} movies',
+  'js.groupStatsByOwner':'by {0} · {1} movies',
+  'js.manageMembersTitle':'Members & invitations',
+  'js.leaveGroup':'Leave',
+  'js.myGroupCreated':'Group "{0}" created!',
+  'js.confirmDeleteMyGroup':'Delete group "{0}"? This also removes all group links.',
+  'js.confirmLeaveGroup':'Leave group "{0}"?',
+  'js.membersOf':'👥 Members of "{0}"',
+  'js.noMembers':'No members.',
+  'js.selfIndicator':' (you)',
+  'js.inviteUser':'Invite user',
+  'js.usernamePlaceholder':'username',
+  'js.inviteBtn':'📨 Invite',
+  'js.close':'Close',
+  'js.groupStatsFull':'{0} members · {1} movies · by {2}',
+  'js.manageMembersBtn':'Manage members',
+  'js.addMemberBtn':'+ Add',
+  'js.inviteSent':'✓ Invitation sent to {0}',
+  'js.noInvites':'No pending invitations.',
+  'js.inviteFrom':'Invitation from {0}',
+  'js.inviteAccept':'✓ Accept',
+  'js.inviteDecline':'✕ Decline',
+  'js.inviteLoadError':'Error loading.',
+  'js.groupsLoadError':'Error loading groups',
+  'js.passkeyCount':'{0} passkey(s)',
+},
+fr: {
+  // nav
+  'nav.collection':'Collection','nav.import':'Import','nav.search':'Rechercher','nav.add':'Ajouter','nav.logs':'Logs','nav.settings':'Paramètres',
+  'nav.lists':'Listes',
+  // header
+  'header.loading':'Chargement...','header.offline':'Mode hors ligne','header.queue':'File : {0}','header.logout':'↩ Déconnexion','header.menuOpen':'Ouvrir le menu',
+  // scan
+  'scan.title':'Scanner un code-barres','scan.placeholder':'Démarrer la caméra pour scanner','scan.startCamera':'▶ Démarrer la caméra','scan.stop':'⏹ Arrêter',
+  'scan.manualLabel':'Ou saisir le code-barres manuellement','scan.barcodePlaceholder':'Ex. 5051892198103','scan.search':'Rechercher',
+  'scan.movieInfo':'Informations du film','scan.format':'Format','scan.location':'Emplacement (optionnel)','scan.locationPlaceholder':'Ex. Étagère B rangée 3',
+  'scan.hdr':'Dolby Vision / HDR','scan.hdrPlaceholder':'Ex. Dolby Vision, HDR10+, HDR10',
+  'scan.audioTracks':'Pistes audio','scan.audioPlaceholder':'Ex. Dolby Atmos, DTS-HD MA 5.1',
+  'scan.subtitles':'Sous-titres','scan.subtitlesPlaceholder':'Ex. NL, EN, DE',
+  'scan.save':'💾 Enregistrer dans la collection','scan.noResult':'Scannez un code-barres ou saisissez-le manuellement',
+  // collection
+  'collection.searchPlaceholder':'Rechercher par titre, réalisateur, genre...','collection.filterAll':'Tout',
+  'collection.allCollections':'Toutes les collections','collection.myMovies':'Mes films',
+  'collection.selectMode':'☑ Sélectionner','collection.refresh':'↻ Actualiser',
+  // bulk
+  'bulk.count':'{0} sélectionné(s)','bulk.selectAll':'Tout sélectionner','bulk.deselect':'Désélectionner',
+  'bulk.refresh':'↺ Mettre à jour via TMDb/OMDb','bulk.delete':'🗑 Supprimer','bulk.cancel':'✕ Annuler',
+  'bulk.noSelection':'Pas de sélection',
+  'bulk.watchlist':'🔖 Watchlist',
+  'bulk.assignGroup':'📁 Gérer les groupes','bulk.selectGroups':'Groupes pour les films sélectionnés :',
+  'bulk.applyGroup':'✓ Enregistrer','bulk.cancelGroup':'Annuler',
+  'bulk.selectAtLeastOne':'Sélectionnez au moins un groupe','bulk.assigning':'Attribution...',
+  'bulk.assignDone':'✓ {0} film(s) attribué(s) au(x) groupe(s)',
+  // progress
+  'progress.busy':'En cours...','progress.close':'Fermer',
+  // add
+  'add.title':'Ajout manuel rapide',
+  'add.description':'Utilisez ceci si le scan ne fonctionne pas : saisissez le code-barres et le titre, ou utilisez le remplissage automatique.',
+  'add.barcodeLabel':'Code-barres / ID personnalisé *','add.barcodePlaceholder':'Code-barres ou ID unique',
+  'add.titleLabel':'Titre *','add.titlePlaceholder':'Ex. The Dark Knight','add.autofill':'🔍 Remplissage auto',
+  'add.year':'Année','add.format':'Format','add.director':'Réalisateur','add.directorPlaceholder':'Ex. Christopher Nolan',
+  'add.genre':'Genre','add.genrePlaceholder':'Ex. Action, Drame',
+  'add.runtime':'Durée','add.runtimePlaceholder':'Ex. 152 min',
+  'add.rating':'Note IMDb','add.ratingPlaceholder':'Ex. 9.0',
+  'add.hdr':'Dolby Vision / HDR','add.hdrPlaceholder':'Ex. Dolby Vision, HDR10+',
+  'add.audioTracks':'Pistes audio','add.audioPlaceholder':'Ex. Dolby Atmos, DTS:X, TrueHD 7.1',
+  'add.subtitles':'Sous-titres','add.subtitlesPlaceholder':'Ex. Néerlandais, Anglais, Allemand',
+  'add.location':'Emplacement','add.locationPlaceholder':'Ex. Étagère A rangée 2',
+  'add.notes':'Notes','add.notesPlaceholder':'Steelbook, édition limitée, ...',
+  'add.posterUrl':'URL de l\'affiche','add.submit':'💾 Ajouter à la collection','add.clear':'✕ Effacer',
+  // import
+  'import.title':'Importer la collection',
+  'import.description':'Importez des films depuis une exportation CSV ou XML de CLZ Movies, iCollect, Blu-ray.com ou une feuille de calcul personnalisée. Les noms de colonnes sont reconnus automatiquement.',
+  'import.dropHere':'Déposez un fichier ici','import.clickBrowse':'ou cliquez pour parcourir · CSV, TSV ou XML',
+  'import.preview':'Aperçu','import.duplicates':'En cas de doublons :','import.skip':'Ignorer','import.overwrite':'Écraser',
+  'import.enrich':'Remplissage automatique via TMDb','import.downloadCovers':'Télécharger les couvertures',
+  'import.import':'⬆ Importer','import.cancel':'⏹ Annuler l\'import','import.otherFile':'← Autre fichier',
+  'import.result':'Résultat de l\'import','import.viewCollection':'📀 Voir la collection','import.importAnother':'Importer un autre fichier',
+  'import.supportedColumns':'📋 Colonnes prises en charge',
+  'import.csvHelp':'virgule, point-virgule, tabulation ou barre verticale — détecté automatiquement.',
+  'import.xmlHelp':'chaque élément répété est traité comme une ligne de film ; les balises imbriquées sont fusionnées.',
+  // logs
+  'logs.allLevels':'Tous les niveaux','logs.errors':'🔴 Erreurs','logs.warnings':'🟡 Avertissements','logs.success':'🟢 Succès','logs.info':'🔵 Info',
+  'logs.allCategories':'Toutes les catégories','logs.catImport':'⬆ Import','logs.catRefresh':'↺ Actualiser','logs.catLookup':'🔍 Recherche',
+  'logs.catAdd':'＋ Ajouter','logs.catDelete':'🗑 Supprimer','logs.catGeneral':'⚙ Général',
+  'logs.refresh':'↻ Actualiser','logs.clear':'🗑 Effacer les logs',
+  'logs.thTimestamp':'Horodatage','logs.thLevel':'Niveau','logs.thCategory':'Catégorie','logs.thBackends':'Backends','logs.thMessage':'Message',
+  'logs.loading':'Chargement...',
+  'logs.autoRefresh':'Actualisation auto',
+  // settings
+  'settings.menuGeneral':'Général','settings.menuSecurity':'Sécurité','settings.menuBackup':'Sauvegarde','settings.menuLogs':'Logs','settings.menuAdvanced':'Avancé',
+  'settings.menuProfile':'Profil',
+  'settings.profileTitle':'👤 Profil utilisateur',
+  'settings.profilePhoto':'Photo de profil','settings.profilePhotoDesc':'Cliquez pour télécharger une photo (max 2 Mo)','settings.profilePhotoRemove':'Supprimer',
+  'settings.profileUsername':'Nom d\'utilisateur','settings.profileFirstName':'Prénom','settings.profileLastName':'Nom de famille',
+  'settings.profileSave':'💾 Enregistrer','settings.profileSaved':'✓ Profil enregistré',
+  'settings.profileUsernameRequired':'Saisissez un nom d\'utilisateur','settings.profileUsernameTaken':'Ce nom d\'utilisateur est déjà utilisé',
+  'settings.profilePhotoUpdated':'✓ Photo mise à jour','settings.profilePhotoRemoved':'✓ Photo supprimée','settings.profilePhotoTooLarge':'Photo trop grande (max 2 Mo)',
+  'settings.profilePasskeys':'🔑 Gérer les clés d\'accès','settings.profileLogout':'↩ Déconnexion',
+  'settings.dbInfo':'Informations base de données','settings.version':'Version :','settings.versionLoading':'chargement...','settings.loading':'Chargement...',
+  'settings.backup':'Sauvegarde & Restauration','settings.createBackup':'💾 Créer une sauvegarde','settings.uploadBackup':'📤 Téléverser',
+  'settings.metadataSources':'Sources de métadonnées',
+  'settings.omdbDesc':'OMDb — informations sur les films via IMDb ID ou titre',
+  'settings.tmdbDesc':'TMDb — informations sur les films via titre + année',
+  'settings.blurayDesc':'Scraper Blu-ray.com (expérimental)',
+  'settings.blurayDeDesc':'Scraper bluray-disc.de (expérimental)',
+  'settings.sourceHelp':'OMDb et TMDb nécessitent une clé API (voir .env). Les scrapers tentent de récupérer HDR/Audio/Sous-titres sans API officielle.',
+  'settings.offlineQueue':'📶 File d\'attente hors ligne',
+  'settings.offlineQueueDesc':'Les actions effectuées hors ligne sont temporairement stockées ici et synchronisées plus tard.',
+  'settings.syncNow':'↻ Synchroniser maintenant','settings.clearQueue':'🗑 Vider la file',
+  'settings.language':'Langue','settings.languageDesc':'Choisissez la langue de l\'interface.',
+  'settings.advanced':'Avancé','settings.openLogs':'Ouvrir les logs',
+  'settings.debugEnabled':'Mode débogage (afficher les ID)',
+  'settings.debugDesc':'Afficher l\'ID du film et de la personne dans les fenêtres de détail pour le débogage.',
+  'settings.mcpEnabled':'Serveur MCP activé',
+  'settings.mcpDesc':'Désactivez le serveur MCP si vous ne l\'utilisez pas. Cela bloque l\'accès API pour les clients MCP.',
+  'settings.resetTitle':'⚠ Réinitialiser la base de données',
+  'settings.resetDesc':'Supprime tous les films, affiches et logs. Faites d\'abord une sauvegarde ! Les paramètres d\'authentification et les clés d\'accès sont conservés.',
+  'settings.resetButton':'🗑 Effacer la base de données',
+  'settings.authTitle':'🔐 Authentification (Clé d\'accès)','settings.authActive':'Authentification active','settings.logout':'↩ Déconnexion',
+  'settings.noPasskey':'Aucune clé d\'accès enregistrée. Enregistrez-en une pour activer l\'authentification.',
+  'settings.username':'Nom d\'utilisateur','settings.passkeyName':'Nom de la clé d\'accès','settings.myPasskey':'Ma clé d\'accès',
+  'settings.passkeyPlaceholder':'Ex. MacBook Touch ID','settings.registerPasskey':'🔑 Enregistrer une clé d\'accès',
+  'settings.addPasskey':'Ajouter une clé d\'accès supplémentaire','settings.name':'Nom','settings.addPasskeyPlaceholder':'Ex. iPhone','settings.addPasskeyBtn':'🔑 Ajouter',
+  'settings.usersTitle':'👥 Gestion des utilisateurs','settings.groupsTitle':'📁 Groupes','settings.groupName':'Nom du groupe',
+  'settings.registrationEnabled':'Autoriser les nouveaux utilisateurs à s\'inscrire',
+  'settings.registrationDesc':'Si désactivé, les nouveaux utilisateurs ne peuvent pas créer de compte.',
+  'settings.myGroupsTitle':'📁 Mes Groupes',
+  'settings.myGroupsDesc':'Créez votre propre groupe et invitez d\'autres à partager une collection.',
+  'settings.myGroupName':'Nom du groupe',
+  'settings.myGroupCreate':'+ Créer',
+  'settings.groupCreateBtn':'+ Créer un groupe',
+  'js.registrationEnabled':'Inscription activée',
+  'js.registrationDisabled':'Inscription désactivée',
+  // login
+  'login.prompt':'Connectez-vous avec votre clé d\'accès','login.button':'🔑 Se connecter','login.recovery':'🔐 Utiliser le code de récupération',
+  'login.register':'✨ Créer un compte',
+  'login.registerUsername':'Nom d\'utilisateur',
+  'login.registerPasskeyName':'Nom de la clé d\'accès',
+  'login.registerBtn':'🔑 S\'inscrire',
+  'login.registerFillIn':'Saisissez un nom d\'utilisateur',
+  'login.registerSuccess':'✓ Compte créé ! Vous êtes maintenant connecté.',
+  'login.registrationDisabled':'L\'inscription a été désactivée par l\'administrateur.',
+  'login.recoveryUsername':'Nom d\'utilisateur','login.recoveryCode':'Code de récupération','login.recoveryBtn':'🔓 Code de récupération',
+  'login.recoveryFillIn':'Saisissez le nom d\'utilisateur et le code de récupération',
+  'login.recoveryFailed':'Récupération échouée',
+  'login.newRecoveryAlert':'Nouveau code de récupération : {0}\n\nConservez ce code en lieu sûr ! Vos clés d\'accès ont été supprimées, enregistrez-en une nouvelle dans Paramètres > Sécurité.',
+  'recovery.title':'🔑 Code de récupération','recovery.desc':'Conservez ce code en lieu sûr. Vous pouvez l\'utiliser si vous perdez votre clé d\'accès.',
+  'recovery.dismiss':'Compris, j\'ai sauvegardé le code',
+  // modal
+  'modal.plot':'Synopsis','modal.edit':'Modifier','modal.refreshMeta':'Actualiser les métadonnées',
+  'modal.syncAll':'Synchroniser toutes les sources','modal.delete':'Supprimer',
+  'modal.copyId':'Copier l\'ID',
+  'modal.tabInfo':'Informations','modal.tabCast':'Distribution',
+  'modal.noCast':'Aucune distribution trouvée. Actualisez les métadonnées pour les récupérer.',
+  'modal.watchlist':'🔖 Watchlist','modal.inWatchlist':'🔖 Dans la watchlist',
+  'modal.watched':'👁 Vu','modal.watchedOn':'👁 Vu le {0}',
+  'js.idCopied':'ID copié','js.copyFailed':'Échec de la copie',
+  // person
+  'person.inCollection':'Dans votre collection','person.born':'Né(e)','person.died':'Décédé(e)',
+  'person.birthPlace':'Lieu de naissance','person.knownFor':'Connu pour',
+  'person.noBio':'Aucune biographie disponible.','person.as':'en tant que',
+  // edit
+  'edit.title':'Modifier le film','edit.titleLabel':'Titre *','edit.originalTitle':'Titre original','edit.sortTitle':'Titre de tri',
+  'edit.year':'Année','edit.releaseDate':'Date de sortie','edit.director':'Réalisateur','edit.actors':'Acteurs',
+  'edit.producer':'Producteur','edit.studios':'Studios','edit.genre':'Genre','edit.format':'Format',
+  'edit.runtime':'Durée (min)','edit.hdr':'HDR','edit.screenRatio':'Format d\'image','edit.packaging':'Emballage',
+  'edit.regions':'Régions','edit.audienceRating':'Classification','edit.imdbRating':'Note IMDb',
+  'edit.audioTracks':'Pistes audio','edit.subtitles':'Sous-titres','edit.distributor':'Distributeur',
+  'edit.country':'Pays','edit.language':'Langue','edit.boxSet':'Coffret','edit.edition':'Édition',
+  'edit.editionYear':'Année d\'édition','edit.editionDate':'Date d\'édition',
+  'edit.purchasePrice':'Prix d\'achat','edit.purchaseDate':'Date d\'achat','edit.location':'Emplacement',
+  'edit.extras':'Bonus','edit.plot':'Synopsis','edit.notes':'Notes','edit.posterUrl':'URL de l\'affiche',
+  'edit.coverUpload':'Couverture personnalisée','edit.uploadCover':'🖼 Téléverser la couverture',
+  'edit.coverHelp':'L\'image sera automatiquement mise à l\'échelle et compressée.',
+  'edit.imdbId':'ID IMDb','edit.imdbUrl':'URL IMDb','edit.save':'Enregistrer','edit.cancel':'Annuler',
+  'edit.groups':'Groupes','edit.noGroup':'Aucun groupe',
+  // detail labels
+  'd.genre':'Genre','d.origTitle':'Titre original','d.country':'Pays','d.language':'Langue',
+  'd.releaseDate':'Date de sortie','d.runtime':'Durée','d.min':' min','d.aspectRatio':'Format d\'image',
+  'd.packaging':'Emballage','d.region':'Région','d.imdbRating':'Note IMDb','d.contentRating':'Classification',
+  'd.distributor':'Distributeur','d.studio':'Studio','d.boxSet':'Coffret','d.edition':'Édition',
+  'd.editionYear':'Année d\'édition','d.editionDate':'Date d\'édition','d.actors':'Acteurs','d.producers':'Producteurs',
+  'd.audio':'Audio','d.subtitles':'Sous-titres','d.extras':'Bonus','d.purchasePrice':'Prix d\'achat',
+  'd.purchaseDate':'Date d\'achat','d.location':'Emplacement','d.barcode':'Code-barres','d.added':'Ajouté','d.notes':'Notes',
+  // JS messages
+  'js.lookingUp':'<span class="spinner"></span> Recherche...',
+  'js.backendError':'Erreur backend (HTTP {0}). Vérifiez les logs.',
+  'js.error':'Erreur : {0}',
+  'js.alreadyInCollection':'✓ Déjà dans la collection : "{0}"',
+  'js.movieFound':'✓ Film trouvé dans la base de données',
+  'js.movieNotFound':'Film introuvable pour le code-barres {0}. Ajoutez-le manuellement.',
+  'js.unknown':'(inconnu)','js.connectionError':'Erreur de connexion : {0}',
+  'js.alreadyInCollectionBtn':'✓ Déjà dans la collection',
+  'js.saving':'<span class="spinner"></span> Enregistrement...',
+  'js.savedToCollection':'✓ "{0}" enregistré dans la collection !',
+  'js.saveFailed':'Échec de l\'enregistrement','js.saveToCollectionBtn':'💾 Enregistrer dans la collection',
+  'js.moviesSelected':'{0} film(s) sélectionné(s)',
+  'js.noMoviesFound':'Aucun film trouvé','js.addFirstDisc':'Ajoutez votre premier disque via l\'onglet Ajouter',
+  'search.emptyTitle':'Rechercher dans votre collection','search.emptyDesc':'Tapez un titre, réalisateur, acteur ou genre.','js.noResultsFor':'Aucun résultat pour "{0}".',
+  'js.confirmBulkDelete':'Supprimer définitivement {0} film(s) ?',
+  'js.deleting':'Suppression...','js.deleted':'✓ {0} film(s) supprimé(s)',
+  'js.fetchingMetadata':'Récupération des métadonnées pour {0} films…',
+  'js.refreshErrors':'⚠ {0} erreur(s)',
+  'js.refreshResult':'✓ {0} mis à jour · {1} ignoré(s)',
+  'js.confirmDelete':'Supprimer "{0}" de la collection ?',
+  'js.fetching':'<span class="spinner"></span> Récupération...',
+  'js.updated':'✓ Mis à jour','js.noNewData':'— Aucune nouvelle donnée','js.errorShort':'✕ Erreur',
+  'js.syncing':'<span class="spinner"></span> Synchronisation...',
+  'js.synced':'✓ Synchronisé','js.noSourceData':'— Aucune donnée source',
+  'js.saved':'✓ Enregistré','js.saveError':'Erreur lors de l\'enregistrement','js.saveBtn':'💾 Enregistrer',
+  'js.unsavedChanges':'Vous avez des modifications non enregistrées. Voulez-vous enregistrer ?',
+  'js.chooseCover':'Choisissez d\'abord une image à téléverser',
+  'js.uploadingCover':'<span class="spinner"></span> Téléversement de la couverture...',
+  'js.uploadFailed':'Échec du téléversement','js.coverUploaded':'✓ Couverture personnalisée téléversée',
+  'js.searchingMovie':'<span class="spinner"></span> Recherche d\'informations sur le film...',
+  'js.infoFound':'✓ Informations trouvées pour "{0}"',
+  'js.noInfoFound':'Aucune information sur le film. Remplissez manuellement.',
+  'js.barcodeRequired':'Le code-barres et le titre sont obligatoires',
+  'js.added':'✓ "{0}" ajouté !',
+  'js.processingFile':'<span class="spinner"></span> Traitement de "{0}"...',
+  'js.previewTitle':'Aperçu — {0} ({1} lignes)',
+  'js.columnsRecognized':'{0} colonne(s) reconnue(s)',
+  'js.columnsUnknown':'{0} inconnue(s) (seront ignorées)',
+  'js.showingRows':'Affichage de {0} sur {1} lignes',
+  'js.importing':'<span class="spinner"></span> Import en cours...',
+  'js.importProgress':'Import : {0}/{1} (✓{2} ◆{3} ○{4} ✕{5})',
+  'js.importCancelled':'⚠ Import annulé manuellement.',
+  'js.importBtn':'⬆ Importer',
+  'js.importAdded':'Ajouté','js.importUpdated':'Mis à jour','js.importSkipped':'Ignoré','js.importErrors':'Erreurs',
+  'js.cancellingImport':'⏳ Annulation de l\'import...',
+  'js.cancelFailed':'Échec de la demande d\'annulation','js.cancelSent':'⏳ Demande d\'annulation envoyée. En attente...',
+  'js.enrichTitle':'Récupération des métadonnées via TMDb/OMDb... (0/{0})',
+  'js.enrichProgress':'Récupération des métadonnées... ({0}/{1})',
+  'js.enrichDone':'Récupération des métadonnées terminée !',
+  'js.enrichUpdated':'mis à jour','js.enrichNotFound':'introuvable','js.enrichErrors':'erreurs',
+  'js.logCount':'{0} message(s) de log',
+  'js.noLogs':'Aucun log trouvé','js.logsLoadError':'Impossible de charger les logs : {0}',
+  'js.confirmClearLogs':'Effacer définitivement tous les messages de log ?',
+  'js.waitingPasskey':'<span class="spinner"></span> En attente de la clé d\'accès...',
+  'js.noChallenge':'Aucun défi reçu du serveur',
+  'js.loginFailed':'Échec de connexion','js.passkeyCancelled':'Clé d\'accès annulée','js.loginBtn':'🔑 Se connecter',
+  'js.loggedOut':'Vous avez été déconnecté.',
+  'js.passkeyRegistered':'✓ Clé d\'accès "{0}" enregistrée !',
+  'js.registrationFailed':'Échec de l\'inscription','js.passkeyRegCancelled':'Inscription de la clé d\'accès annulée',
+  'js.authActive':'ACTIF','js.authOff':'DÉSACTIVÉ','js.logins':'connexions',
+  'js.confirmDeletePasskey':'Supprimer cette clé d\'accès ?',
+  'js.authEnabled':'Authentification activée','js.authDisabled':'Authentification désactivée',
+  'js.movies':'Films','js.posters':'Affiches','js.database':'Base de données','js.postersSize':'Taille des affiches',
+  'js.creatingBackup':'<span class="spinner"></span> Création de la sauvegarde...',
+  'js.backupCreated':'✓ Sauvegarde "{0}" créée ({1} Ko)',
+  'js.noBackups':'Aucune sauvegarde disponible',
+  'js.restore':'↩ Restaurer','js.download':'⬇ Télécharger',
+  'js.downloadFailed':'Échec du téléchargement',
+  'js.tarGzOnly':'Seuls les fichiers .tar.gz sont acceptés',
+  'js.uploading':'<span class="spinner"></span> Téléversement...',
+  'js.uploadDone':'✓ Sauvegarde téléversée',
+  'js.confirmRestore':'Restaurer la sauvegarde "{0}" ? Cela écrasera les films et affiches actuels !',
+  'js.restoring':'<span class="spinner"></span> Restauration...',
+  'js.restored':'✓ Sauvegarde "{0}" restaurée !',
+  'js.confirmDeleteBackup':'Supprimer la sauvegarde "{0}" ?',
+  'js.groupConflictTitle':'Groupes introuvables',
+  'js.groupConflictDesc':'La sauvegarde contient {0} films. Les groupes suivants n\'existent pas dans votre base de données. Choisissez ce que vous souhaitez faire :',
+  'js.groupActionCreate':'Créer le groupe',
+  'js.groupActionSkip':'Ignorer (ne pas attribuer les films)',
+  'js.groupActionAssign':'Attribuer à : {0}',
+  'js.groupConflictApply':'Restaurer',
+  'js.cancel':'Annuler',
+  'js.confirmReset1':'Supprimer TOUS les films, affiches et logs ?',
+  'js.confirmReset2':'Êtes-vous sûr ? Cette action est irréversible !',
+  'js.resetComplete':'Base de données réinitialisée !',
+  'js.unknownAction':'Action inconnue','js.actionAdd':'Ajouter un film','js.actionUpdate':'Mettre à jour le film',
+  'js.actionDelete':'Supprimer le film','js.actionBulkDelete':'Suppression en masse',
+  'js.noQueuedActions':'Aucune action en file d\'attente.',
+  'js.confirmClearQueue':'Vider toute la file d\'attente hors ligne ?','js.queueCleared':'File d\'attente vidée',
+  'js.offlineSyncError':'Hors ligne : la synchronisation n\'est possible qu\'en ligne.',
+  'js.synchronizing':'<span class="spinner"></span> Synchronisation...',
+  'js.syncComplete':'✓ Synchronisation terminée ({0} actions traitées)',
+  'js.syncPartial':'⚠ Partiellement réussi : {0} traité(s), {1} restant(s)',
+  'js.syncFailed':'Aucune action traitée (le backend n\'est peut-être pas encore accessible)',
+  'js.sourceSettingsSaved':'Paramètres sources enregistrés',
+  'js.cameraError':'Erreur caméra : {0}',
+  'js.statsTotal':'Total : <span>{0}</span> disques | {1}',
+  'js.filterCount':'{0} film(s) trouvé(s)',
+  'js.queuedMessage':'Action mise en file d\'attente (sera synchronisée en ligne).',
+  'js.unknownMovie':'Film inconnu',
+  'js.confirmDeleteCurrent':'Supprimer "{0}" ?',
+  'js.confirmEditOther':'Ce film appartient à {0}. Modifier en tant qu\'administrateur quand même ?',
+  'js.queuedSave':'⏳ "{0}" est en file d\'attente.',
+  'js.inQueue':'⏳ En file d\'attente',
+  'js.queuedEdit':'⏳ Modification en file d\'attente.',
+  'js.queuedAdd':'⏳ "{0}" en file d\'attente.',
+  'js.queuedDelete':'⏳ {0} film(s) en file d\'attente pour suppression',
+  'js.mcpSettingsSaved':'Paramètre MCP enregistré',
+  'js.advancedSettingsSaved':'Paramètre avancé enregistré',
+  'js.pageTitle':'DiscVault — Gestionnaire de collection',
+  'js.offlineNoCache':'Hors ligne et aucun cache local disponible. Ouvrez l\'application en ligne une fois pour stocker les données localement.',
+  'js.backendError':'Backend inaccessible — affichage des données en cache.',
+  'js.offlineCache':'Hors ligne — affichage des données en cache.',
+  'js.confirmDeleteUser':'Êtes-vous sûr de vouloir supprimer l\'utilisateur "{0}" ? Tous ses films seront également supprimés.',
+  'js.confirmResetPasskey':'Réinitialiser la ou les clé(s) d\'accès de "{0}" ? L\'utilisateur devra en enregistrer une nouvelle.',
+  'js.noGroups':'Aucun groupe créé.',
+  'js.confirmDeleteGroup':'Supprimer le groupe "{0}" ? Les films seront dissociés mais non supprimés.',
+  // pwa
+  'pwa.title':'Installer DiscVault','pwa.subtitle':'Ajoutez à votre écran d\'accueil pour la meilleure expérience','pwa.install':'Installer',
+  'pwa.iosHint':'Appuyez sur <strong style="color:var(--accent)">⬆ Partager</strong> puis <strong style="color:var(--accent)">Sur l\'écran d\'accueil</strong>',
+  'pwa.close':'Fermer',
+  // general
+  'general.comingSoon':'Bientôt disponible','general.loading':'Chargement...','general.close':'Fermer',
+  // add/toevoegen submenu
+  'toevoegen.scan':'Scanner un code-barres','toevoegen.manual':'Manuel','toevoegen.import':'Importer',
+  // lists
+  'lists.menuWatchlist':'Watchlist','lists.menuWatchHistory':'Historique de visionnage',
+  'lists.menuCustomLists':'Listes personnalisées','lists.menuTags':'Étiquettes',
+  'lists.watchlistEmpty':'Votre watchlist est vide.<br>Ajoutez des films via l\'écran de détail ou via Sélectionner dans la collection.',
+  'lists.watchHistoryEmpty':'Vous n\'avez pas encore marqué de films comme vus.',
+  // watched popup
+  'watched.yesterday':'Hier','watched.today':'Aujourd\'hui',
+  'watched.confirmDate':'Confirmer la date','watched.historyLabel':'Historique',
+  // invitations
+  'invite.title':'🔔 Invitations',
+  // JS watchlist / dates
+  'js.bulkWatchlistAdded':'✓ {0} film(s) ajouté(s) à la watchlist',
+  'js.onWatchlist':'Dans la watchlist',
+  'js.watchedOn':'Vu le {0}',
+  'js.watchedOnDate':'Vu le {0}',
+  'js.deleteTitle':'Supprimer',
+  // months for date formatting
+  'months.short':'jan,fév,mar,avr,mai,jun,jul,aoû,sep,oct,nov,déc',
+  // JS groups
+  'js.noMyGroups':'Vous n\'avez encore aucun groupe.',
+  'js.myGroupsLoadError':'Erreur lors du chargement des groupes.',
+  'js.myGroupsOwned':'Géré par vous',
+  'js.myGroupsMember':'Membre de',
+  'js.groupStats':'{0} membre(s) · {1} film(s)',
+  'js.groupStatsByOwner':'par {0} · {1} film(s)',
+  'js.manageMembersTitle':'Membres & invitations',
+  'js.leaveGroup':'Quitter',
+  'js.myGroupCreated':'Groupe "{0}" créé !',
+  'js.confirmDeleteMyGroup':'Supprimer le groupe "{0}" ? Cela supprimera également tous les liens de groupe.',
+  'js.confirmLeaveGroup':'Quitter le groupe "{0}" ?',
+  'js.membersOf':'👥 Membres de "{0}"',
+  'js.noMembers':'Aucun membre.',
+  'js.selfIndicator':' (vous)',
+  'js.inviteUser':'Inviter un utilisateur',
+  'js.usernamePlaceholder':'nom d\'utilisateur',
+  'js.inviteBtn':'📨 Inviter',
+  'js.close':'Fermer',
+  'js.groupStatsFull':'{0} membre(s) · {1} film(s) · par {2}',
+  'js.manageMembersBtn':'Gérer les membres',
+  'js.addMemberBtn':'+ Ajouter',
+  'js.inviteSent':'✓ Invitation envoyée à {0}',
+  'js.noInvites':'Aucune invitation en attente.',
+  'js.inviteFrom':'Invitation de {0}',
+  'js.inviteAccept':'✓ Accepter',
+  'js.inviteDecline':'✕ Refuser',
+  'js.inviteLoadError':'Erreur lors du chargement.',
+  'js.groupsLoadError':'Erreur lors du chargement des groupes',
+  'js.passkeyCount':'{0} clé(s) d\'accès',
+  'nav.lists':'Listes',
 }
 };
+
 
 let currentLang = localStorage.getItem('dv_lang') || 'nl';
 
@@ -3615,6 +4088,9 @@ function applyLanguage() {
   });
   document.querySelectorAll('[data-i18n-html]').forEach(el => {
     el.innerHTML = t(el.dataset.i18nHtml);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
   });
 }
 
@@ -4380,8 +4856,8 @@ function renderGrid(movies) {
     return `
     <div class="movie-card${isSelected ? ' selected' : ''}${selectMode && !ownable ? ' not-owned' : ''}" data-id="${m.id}" onclick="${clickHandler}">
       ${showDelete ? `<button class="movie-card-delete" onclick="event.stopPropagation(); quickDelete(${m.id}, '${safeTitle}')">✕</button>` : ''}
-      ${m.on_watchlist ? '<div class="watchlist-dot" title="Op watchlist"></div>' : ''}
-      ${m.last_watched ? `<div class="watched-check" title="Bekeken ${m.last_watched.slice(0,10)}">✓</div>` : ''}
+      ${m.on_watchlist ? `<div class="watchlist-dot" title="${t('js.onWatchlist')}"></div>` : ''}
+      ${m.last_watched ? `<div class="watched-check" title="${t('js.watchedOn', m.last_watched.slice(0,10))}">✓</div>` : ''}
       <div class="movie-card-poster">
         ${imgHtml}
         <div class="movie-card-format">${m.format || '4K'}</div>
@@ -4478,7 +4954,7 @@ async function showBulkGroupAssign() {
   const panel = document.getElementById('bulkGroupPanel');
   const container = document.getElementById('bulkGroupCheckboxes');
   panel.style.display = 'block';
-  container.innerHTML = '<span style="color:var(--text-muted); font-size:0.82rem;">Laden...</span>';
+  container.innerHTML = `<span style="color:var(--text-muted); font-size:0.82rem;">${t('general.loading')}</span>`;
   try {
     const r = await fetch(`${API}/groups`);
     const groups = await r.json();
@@ -4500,7 +4976,7 @@ async function showBulkGroupAssign() {
       </label>`;
     }).join('');
   } catch(e) {
-    container.innerHTML = '<span style="color:var(--danger);">Fout bij laden groepen</span>';
+    container.innerHTML = `<span style="color:var(--danger);">${t('js.groupsLoadError')}</span>`;
   }
 }
 
@@ -6006,11 +6482,11 @@ function renderLogs(logs) {
       : '';
 
     return `<tr>
-      <td class="ts" data-label="Tijdstip">${ts}</td>
-      <td data-label="Niveau"><span class="log-level ${l.level}">${l.level}</span></td>
-      <td class="log-cat" data-label="Categorie">${l.category}</td>
-      <td data-label="Backends">${backendHtml}</td>
-      <td data-label="Bericht">
+      <td class="ts" data-label="${t('logs.thTimestamp')}">${ts}</td>
+      <td data-label="${t('logs.thLevel')}"><span class="log-level ${l.level}">${l.level}</span></td>
+      <td class="log-cat" data-label="${t('logs.thCategory')}">${l.category}</td>
+      <td data-label="${t('logs.thBackends')}">${backendHtml}</td>
+      <td data-label="${t('logs.thMessage')}">
         <div class="log-msg">${esc(l.message)}</div>
         ${detailHtml}
       </td>
@@ -6741,7 +7217,7 @@ async function loadAdminUsers() {
             <span class="tag" style="font-size:0.65rem; margin-left:6px;">${u.role}</span>
           </div>
           <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">
-            ${u.username} · ${(u.created_at||'').slice(0,10)} · ${u.credential_count} passkey(s)
+            ${u.username} · ${(u.created_at||'').slice(0,10)} · ${t('js.passkeyCount', u.credential_count)}
           </div>
         </div>
         <div style="display:flex; gap:6px;">
@@ -6795,11 +7271,11 @@ async function loadAdminGroups() {
         <div style="flex:1;">
           <div style="font-weight:500; font-size:0.88rem;">${g.name}</div>
           <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">
-            ${g.member_count} leden · ${g.movie_count} films · door ${g.created_by_username || '?'}
+            ${t('js.groupStatsFull', g.member_count, g.movie_count, g.created_by_username || '?')}
           </div>
         </div>
-        <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="manageGroupMembers(${g.id},'${g.name}')" title="Leden beheren">👥</button>
-        <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteGroup(${g.id},'${g.name}')" title="Verwijder">✕</button>
+        <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="manageGroupMembers(${g.id},'${g.name}')" title="${t('js.manageMembersBtn')}">👥</button>
+        <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteGroup(${g.id},'${g.name}')" title="${t('js.deleteTitle')}">✕</button>
       </div>
     `).join('');
   } catch(e) {}
@@ -6835,7 +7311,7 @@ async function manageGroupMembers(groupId, groupName) {
   const memberIds = new Set(members.map(m => m.id));
   const nonMembers = allUsers.filter(u => !memberIds.has(u.id));
 
-  let html = `<h3 style="margin:0 0 16px 0; font-size:1rem;">👥 Leden van "${groupName}"</h3>`;
+  let html = `<h3 style="margin:0 0 16px 0; font-size:1rem;">${t('js.membersOf', groupName)}</h3>`;
   if (members.length) {
     html += members.map(m => `
       <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px;">
@@ -6844,17 +7320,15 @@ async function manageGroupMembers(groupId, groupName) {
       </div>
     `).join('');
   } else {
-    html += '<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">Geen leden.</div>';
-  }
-  if (nonMembers.length) {
+    html += `<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">${t('js.noMembers')}</div>`;
     html += `<div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
       <select id="addMemberSelect" style="flex:1; padding:8px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px;">
         ${nonMembers.map(u => `<option value="${u.id}">${u.display_name || u.username}</option>`).join('')}
       </select>
-      <button class="btn btn-primary" style="padding:8px 14px; font-size:0.8rem;" onclick="addGroupMember(${groupId},'${groupName}')">+ Toevoegen</button>
+      <button class="btn btn-primary" style="padding:8px 14px; font-size:0.8rem;" onclick="addGroupMember(${groupId},'${groupName}')">${t('js.addMemberBtn')}</button>
     </div>`;
   }
-  html += `<button class="btn btn-secondary" style="margin-top:16px; width:100%; justify-content:center;" onclick="loadAdminGroups(); this.closest('.card').querySelector('#groupMemberPanel').remove();">Sluiten</button>`;
+  html += `<button class="btn btn-secondary" style="margin-top:16px; width:100%; justify-content:center;" onclick="loadAdminGroups(); this.closest('.card').querySelector('#groupMemberPanel').remove();">${t('js.close')}</button>`;
 
   // Replace groups list content with member management
   const panel = document.createElement('div');
@@ -6892,34 +7366,34 @@ async function loadMyGroups() {
     const owned = groups.filter(g => g.my_role === 'owner');
     const member = groups.filter(g => g.my_role !== 'owner');
     if (!owned.length && !member.length) {
-      list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Je hebt nog geen groepen.</div>';
+      list.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">${t('js.noMyGroups')}</div>`;
       return;
     }
     let html = '';
     if (owned.length) {
-      html += '<div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Beheerd door jou</div>';
+      html += `<div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">${t('js.myGroupsOwned')}</div>`;
       html += owned.map(g => `
         <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
           <div style="font-size:1.2rem;">👑</div>
           <div style="flex:1;">
             <div style="font-weight:500; font-size:0.88rem;">${g.name}</div>
-            <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">${g.member_count} leden · ${g.movie_count} films</div>
+            <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">${t('js.groupStats', g.member_count, g.movie_count)}</div>
           </div>
-          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="manageMyGroupMembers(${g.id},'${g.name}')" title="Leden & uitnodigingen">👥</button>
-          <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteMyGroup(${g.id},'${g.name}')" title="Verwijder">✕</button>
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="manageMyGroupMembers(${g.id},'${g.name}')" title="${t('js.manageMembersTitle')}">👥</button>
+          <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteMyGroup(${g.id},'${g.name}')" title="${t('js.deleteTitle')}">✕</button>
         </div>
       `).join('');
     }
     if (member.length) {
-      html += '<div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; margin-top:16px;">Lid van</div>';
+      html += `<div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; margin-top:16px;">${t('js.myGroupsMember')}</div>`;
       html += member.map(g => `
         <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
           <div style="font-size:1.2rem;">📁</div>
           <div style="flex:1;">
             <div style="font-weight:500; font-size:0.88rem;">${g.name}</div>
-            <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">door ${g.created_by_username || '?'} · ${g.movie_count} films</div>
+            <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">${t('js.groupStatsByOwner', g.created_by_username || '?', g.movie_count)}</div>
           </div>
-          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="leaveMyGroup(${g.id},'${g.name}')">Verlaten</button>
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="leaveMyGroup(${g.id},'${g.name}')">${t('js.leaveGroup')}</button>
         </div>
       `).join('');
     }
@@ -6928,7 +7402,7 @@ async function loadMyGroups() {
     const existing = document.getElementById('myGroupMemberPanel');
     if (existing) existing.remove();
   } catch(e) {
-    list.innerHTML = '<div style="color:var(--danger); font-size:0.85rem;">Fout bij laden groepen.</div>';
+    list.innerHTML = `<div style="color:var(--danger); font-size:0.85rem;">${t('js.myGroupsLoadError')}</div>`;
   }
 }
 
@@ -6944,13 +7418,13 @@ async function createMyGroup() {
   const d = await r.json();
   if (d.error) { showStatus('myGroupStatus', d.error, 'error'); return; }
   nameEl.value = '';
-  showStatus('myGroupStatus', `Groep "${name}" aangemaakt!`, 'success');
+  showStatus('myGroupStatus', t('js.myGroupCreated', name), 'success');
   await loadMyGroups();
   await _loadGroupFilter();
 }
 
 async function deleteMyGroup(id, name) {
-  if (!confirm(`Groep "${name}" verwijderen? Dit verwijdert ook alle groepskoppelingen.`)) return;
+  if (!confirm(t('js.confirmDeleteMyGroup', name))) return;
   await fetch(`${API}/groups/${id}`, { method: 'DELETE' });
   await loadMyGroups();
   await _loadGroupFilter();
@@ -6958,7 +7432,7 @@ async function deleteMyGroup(id, name) {
 }
 
 async function leaveMyGroup(groupId, groupName) {
-  if (!confirm(`Groep "${groupName}" verlaten?`)) return;
+  if (!confirm(t('js.confirmLeaveGroup', groupName))) return;
   await fetch(`${API}/groups/${groupId}/members/${encodeURIComponent(currentUserId)}`, { method: 'DELETE' });
   await loadMyGroups();
   await _loadGroupFilter();
@@ -6967,7 +7441,7 @@ async function leaveMyGroup(groupId, groupName) {
 
 async function manageMyGroupMembers(groupId, groupName) {
   const members = await fetch(`${API}/groups/${groupId}/members`).then(r => r.json());
-  let html = `<div style="font-weight:500; margin-bottom:12px; font-size:0.9rem;">👥 Leden van "${groupName}"</div>`;
+  let html = `<div style="font-weight:500; margin-bottom:12px; font-size:0.9rem;">${t('js.membersOf', groupName)}</div>`;
   if (members.length) {
     html += members.map(m => {
       const isSelf = m.id === currentUserId;
@@ -6975,24 +7449,21 @@ async function manageMyGroupMembers(groupId, groupName) {
       return `
         <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--surface); border:1px solid var(--border); border-radius:6px; margin-bottom:6px;">
           <span style="font-size:0.9rem;">${isOwner ? '👑' : '👤'}</span>
-          <span style="flex:1; font-size:0.85rem;">${m.display_name || m.username}${isSelf ? ' (jij)' : ''}</span>
+          <span style="flex:1; font-size:0.85rem;">${m.display_name || m.username}${isSelf ? t('js.selfIndicator') : ''}</span>
           ${!isOwner ? `<button class="btn btn-danger" style="padding:4px 8px; font-size:0.7rem;" onclick="removeMyGroupMember(${groupId},'${m.id}','${groupName}')">✕</button>` : ''}
         </div>`;
     }).join('');
   } else {
-    html += '<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">Geen leden.</div>';
-  }
-  html += `
-    <div style="border-top:1px solid var(--border); margin-top:14px; padding-top:14px;">
-      <div style="font-size:0.8rem; font-weight:500; margin-bottom:8px;">Gebruiker uitnodigen</div>
+    html += `<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">${t('js.noMembers')}</div>`;
+      <div style="font-size:0.8rem; font-weight:500; margin-bottom:8px;">${t('js.inviteUser')}</div>
       <div style="display:flex; gap:8px; align-items:center;">
-        <input type="text" id="inviteUsernameInput_${groupId}" placeholder="gebruikersnaam"
+        <input type="text" id="inviteUsernameInput_${groupId}" placeholder="${t('js.usernamePlaceholder')}"
                style="flex:1; padding:8px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:0.84rem;">
-        <button class="btn btn-primary" style="padding:8px 14px; font-size:0.8rem;" onclick="sendGroupInvite(${groupId},'${groupName}')">📨 Uitnodigen</button>
+        <button class="btn btn-primary" style="padding:8px 14px; font-size:0.8rem;" onclick="sendGroupInvite(${groupId},'${groupName}')">${t('js.inviteBtn')}</button>
       </div>
       <div id="inviteStatus_${groupId}" class="status-msg" style="margin-top:6px;"></div>
     </div>
-    <button class="btn btn-secondary" style="margin-top:14px; width:100%; justify-content:center;" onclick="document.getElementById('myGroupMemberPanel').remove(); loadMyGroups();">Sluiten</button>
+    <button class="btn btn-secondary" style="margin-top:14px; width:100%; justify-content:center;" onclick="document.getElementById('myGroupMemberPanel').remove(); loadMyGroups();">${t('js.close')}</button>
   `;
   const panel = document.createElement('div');
   panel.id = 'myGroupMemberPanel';
@@ -7022,7 +7493,7 @@ async function sendGroupInvite(groupId, groupName) {
   if (d.error) {
     showStatus(`inviteStatus_${groupId}`, d.error, 'error');
   } else {
-    showStatus(`inviteStatus_${groupId}`, `✓ Uitnodiging verstuurd naar ${username}`, 'success');
+    showStatus(`inviteStatus_${groupId}`, t('js.inviteSent', username), 'success');
     input.value = '';
   }
 }
@@ -7051,28 +7522,28 @@ async function openInvitePanel() {
   const panel = document.getElementById('invitePanel');
   const list = document.getElementById('invitePanelList');
   panel.style.display = 'flex';
-  list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Laden...</div>';
+  list.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">${t('general.loading')}</div>`;
   try {
     const r = await fetch(`${API}/invites`);
     const invites = await r.json();
     if (!invites.length) {
-      list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:20px;">Geen openstaande uitnodigingen.</div>';
+      list.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:20px;">${t('js.noInvites')}</div>`;
       return;
     }
     list.innerHTML = invites.map(inv => `
       <div style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:10px;">
         <div style="font-weight:500; margin-bottom:4px;">📁 ${inv.group_name}</div>
         <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">
-          Uitnodiging van <strong>${inv.inviter_display_name || inv.inviter_username}</strong> · ${(inv.created_at||'').slice(0,10)}
+          ${t('js.inviteFrom', `<strong>${inv.inviter_display_name || inv.inviter_username}</strong>`)} · ${(inv.created_at||'').slice(0,10)}
         </div>
         <div style="display:flex; gap:8px;">
-          <button class="btn btn-primary" style="flex:1; justify-content:center;" onclick="respondInvite(${inv.id},'accept')">✓ Accepteren</button>
-          <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="respondInvite(${inv.id},'decline')">✕ Weigeren</button>
+          <button class="btn btn-primary" style="flex:1; justify-content:center;" onclick="respondInvite(${inv.id},'accept')">${t('js.inviteAccept')}</button>
+          <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="respondInvite(${inv.id},'decline')">${t('js.inviteDecline')}</button>
         </div>
       </div>
     `).join('');
   } catch(e) {
-    list.innerHTML = '<div style="color:var(--danger); font-size:0.85rem;">Fout bij laden.</div>';
+    list.innerHTML = `<div style="color:var(--danger); font-size:0.85rem;">${t('js.inviteLoadError')}</div>`;
   }
 }
 
@@ -7113,7 +7584,7 @@ async function loadWatchlist() {
   const grid  = document.getElementById('watchlistGrid');
   const empty = document.getElementById('watchlistEmpty');
   if (!grid) return;
-  grid.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">Laden...</div>';
+  grid.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">${t('general.loading')}</div>`;
   try {
     const r = await fetch(`${API}/watchlist`, { headers: authHeaders() });
     if (!r.ok) { grid.innerHTML = ''; return; }
@@ -7129,7 +7600,7 @@ async function loadWatchlist() {
       const imgHtml = src
         ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
         : '<div class="no-img">🎬</div>';
-      const watched = m.last_watched ? `<div class="watched-check" title="Bekeken op ${m.last_watched}">✓</div>` : '';
+      const watched = m.last_watched ? `<div class="watched-check" title="${t('js.watchedOnDate', m.last_watched)}">✓</div>` : '';
       return `
       <div class="movie-card" data-id="${m.id}" onclick="openMovieDetail(${m.id})" style="position:relative;">
         ${watched}
@@ -7151,7 +7622,7 @@ async function loadWatchHistory() {
   const list  = document.getElementById('watchHistoryList');
   const empty = document.getElementById('watchHistoryEmpty');
   if (!list) return;
-  list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">Laden...</div>';
+  list.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem; padding:20px;">${t('general.loading')}</div>`;
   try {
     const r = await fetch(`${API}/watch-history`, { headers: authHeaders() });
     if (!r.ok) { list.innerHTML = ''; return; }
@@ -7170,7 +7641,7 @@ async function loadWatchHistory() {
       byDate[d].push(e);
     });
     list.innerHTML = Object.keys(byDate).map(date => {
-      const label = _formatDateNL(date);
+      const label = _formatDate(date);
       const rows = byDate[date].map(e => {
         const src = e.poster_path
           ? `https://image.tmdb.org/t/p/w92${e.poster_path}`
@@ -7219,7 +7690,7 @@ async function toggleWatchlistModal() {
 function _updateWatchlistBtn() {
   const btn = document.getElementById('btnWatchlistModal');
   if (!btn) return;
-  btn.textContent = _modalMovieOnWatchlist ? '🔖 In watchlist' : '🔖 Watchlist';
+  btn.textContent = _modalMovieOnWatchlist ? t('modal.inWatchlist') : t('modal.watchlist');
   btn.style.color = _modalMovieOnWatchlist ? 'var(--accent)' : '';
   btn.style.borderColor = _modalMovieOnWatchlist ? 'rgba(232,197,71,.5)' : '';
 }
@@ -7228,11 +7699,11 @@ function _updateWatchedBtn() {
   const btn = document.getElementById('btnWatchedModal');
   if (!btn) return;
   if (_modalMovieLastWatched) {
-    btn.textContent = `👁 Bekeken ${_modalMovieLastWatched.slice(0,10)}`;
+    btn.textContent = t('modal.watchedOn', _modalMovieLastWatched.slice(0,10));
     btn.style.color = '#4caf50';
     btn.style.borderColor = 'rgba(76,175,80,.4)';
   } else {
-    btn.textContent = '👁 Bekeken';
+    btn.textContent = t('modal.watched');
     btn.style.color = '';
     btn.style.borderColor = '';
   }
@@ -7276,7 +7747,7 @@ async function _refreshWatchedHistoryPopup(movieId) {
   section.style.display = '';
   container.innerHTML = entries.map(e => {
     const d = e.watched_at.slice(0,10);
-    const label = _formatDateNL(d);
+    const label = _formatDate(d);
     return `<div class="watched-history-entry">
       <span>${label}</span>
       <button class="del-btn" onclick="_deleteWatchedEntry(${e.id}, ${movieId})" title="Verwijderen">\u2715</button>
@@ -7297,9 +7768,9 @@ async function _deleteWatchedEntry(entryId, movieId) {
   if (m) m.last_watched = newLastWatched;
 }
 
-function _formatDateNL(dateStr) {
+function _formatDate(dateStr) {
   if (!dateStr) return '';
-  const months = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  const months = t('months.short').split(',');
   const [y, mo, d] = dateStr.split('-');
   return `${parseInt(d)} ${months[parseInt(mo)-1]} ${y}`;
 }
@@ -7360,7 +7831,7 @@ async function bulkAddToWatchlist() {
     const m = allMovies.find(x => x.id === id);
     if (m) m.on_watchlist = true;
   });
-  showStatus('bulkGroupStatus', `✓ ${ids.length} film(s) toegevoegd aan watchlist`, 'success');
+  showStatus('bulkGroupStatus', t('js.bulkWatchlistAdded', ids.length), 'success');
   setTimeout(() => toggleSelectMode(), 1200);
 }
 
@@ -7753,6 +8224,10 @@ function changeLanguage(lang) {
   loadCollection();
   loadStats();
   if (document.getElementById('panel-settings').classList.contains('active')) loadSettings();
+  if (document.getElementById('panel-lists').classList.contains('active')) {
+    const activeListsSub = document.querySelector('[data-lists-sub].active');
+    if (activeListsSub) switchListsSubmenu(activeListsSub.getAttribute('data-lists-sub'));
+  }
 }
 
 async function saveMcpSettings() {
@@ -7891,7 +8366,7 @@ window.addEventListener('load', () => {
     <span id="pwaIosHint" style="display:none; font-size:0.78rem; color:var(--text-muted); margin-top:2px;" data-i18n-html="pwa.iosHint">Tik op <strong style="color:var(--accent)">⬆ Deel</strong> en dan <strong style="color:var(--accent)">Zet op beginscherm</strong></span>
   </div>
   <button class="btn btn-primary" id="pwaInstallBtn" onclick="pwaInstall()" data-i18n="pwa.install">Installeren</button>
-  <button class="pwa-install-banner-close" onclick="dismissPwaInstall()" aria-label="Sluiten">✕</button>
+  <button class="pwa-install-banner-close" onclick="dismissPwaInstall()" aria-label="Sluiten" data-i18n-aria="pwa.close">✕</button>
 </div>
 
 </body>
