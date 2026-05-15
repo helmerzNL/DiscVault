@@ -432,13 +432,24 @@
   }
 
   .watched-popup button:hover { background: rgba(255,255,255,0.06); }
+  .watched-popup button.watched-popup-remove { color: var(--danger, #e05555); }
   .watched-popup hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
-  .watched-popup input[type="date"] {
-    display: block; width: calc(100% - 28px);
-    margin: 6px 14px; padding: 6px 8px;
+  .watched-popup-date-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px 4px 14px;
+  }
+  .watched-popup-date-row input[type="date"] {
+    flex: 1; padding: 5px 7px;
     background: var(--surface); border: 1px solid var(--border);
     color: var(--text); border-radius: 5px; font-size: 0.82rem;
+    min-width: 0;
   }
+  .watched-popup-date-row button {
+    width: auto; padding: 5px 9px; font-size: 0.82rem;
+    background: var(--surface); border: 1px solid var(--border) !important;
+    border-radius: 5px; flex-shrink: 0;
+  }
+  .watched-popup-date-row button:hover { background: rgba(255,255,255,0.1) !important; }
 
   /* Watchlist indicator on movie cards */
   .movie-card .watchlist-dot {
@@ -2757,14 +2768,14 @@
         <div style="position:relative; display:inline-block;">
           <button class="btn btn-secondary" id="btnWatchedModal" onclick="toggleWatchedMenu(event)" style="min-width:110px;">👁 Bekeken</button>
           <div id="watchedPopup" class="watched-popup" style="display:none; position:absolute; bottom:calc(100% + 6px); left:0; z-index:300;">
-            <button onclick="markWatchedModal('today')">📅 Eerder vandaag</button>
-            <button onclick="markWatchedModal('yesterday')">↩ Gisteren</button>
-            <button onclick="markWatchedModal('now')">▶ Nu</button>
+            <button onclick="markWatchedModal('yesterday')">Gisteren</button>
+            <button onclick="markWatchedModal('today')">Vandaag</button>
+            <div class="watched-popup-date-row">
+              <input type="date" id="watchedDateInput">
+              <button onclick="markWatchedModal('custom')" title="Bevestig datum">✓</button>
+            </div>
             <hr>
-            <input type="date" id="watchedDateInput" style="display:block; width:calc(100% - 28px); margin:6px 14px; padding:6px 8px; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:5px; font-size:0.82rem;">
-            <button onclick="markWatchedModal('custom')">✓ Datum kiezen</button>
-            <hr>
-            <button onclick="unmarkWatchedModal()" style="color:var(--danger);">✕ Verwijder uit bekeken</button>
+            <button onclick="unmarkWatchedModal()" class="watched-popup-remove">Verwijder uit bekeken</button>
           </div>
         </div>
         <button class="btn btn-secondary" id="btnEditMovie" onclick="startEdit()" data-i18n="modal.edit">Bewerken</button>
@@ -7159,13 +7170,14 @@ async function markWatchedModal(type) {
   document.getElementById('watchedPopup').style.display = 'none';
   let date;
   const now = new Date();
-  if (type === 'now' || type === 'today') {
+  if (type === 'today') {
     date = now.toISOString().slice(0,10);
   } else if (type === 'yesterday') {
     const y = new Date(now); y.setDate(y.getDate() - 1);
     date = y.toISOString().slice(0,10);
   } else {
-    date = document.getElementById('watchedDateInput').value || now.toISOString().slice(0,10);
+    date = document.getElementById('watchedDateInput').value;
+    if (!date) return;
   }
   const r = await fetch(`${API}/watched/${currentMovieId}`, {
     method: 'POST',
