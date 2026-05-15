@@ -5047,15 +5047,15 @@ function applyDebugVisibility() {
 
 function validateCriticalUiElements() {
   const requiredIds = [
-    'modalBackdrop',
     'modalTitle',
     'modalDirector',
     'modalMovieIdLabel',
     'modalMovieIdStatus',
-    'personOverlay',
     'personName',
     'personIdLabel',
-    'personIdStatus'
+    'personIdStatus',
+    'panel-movie-detail',
+    'panel-person-detail'
   ];
   const missing = requiredIds.filter(id => !document.getElementById(id));
   if (missing.length) {
@@ -5097,41 +5097,17 @@ async function loadStats(retries = 2) {
   try {
     const r = await fetch(`${API}/stats`);
     if (!r.ok) {
-  let bodyScrollLockY = window.scrollY || window.pageYOffset || 0;
-  document.body.style.top = `-${bodyScrollLockY}px`;
-  document.body.dataset.scrollLockY = bodyScrollLockY;
-  document.body.classList.add('modal-open');
-}
-
-function unlockBodyScroll() {
-  if (!document.body.classList.contains('modal-open')) return;
-  const bodyScrollLockY = parseInt(document.body.dataset.scrollLockY || '0', 10)
+      if (retries > 0 && r.status >= 500) {
+        await new Promise(ok => setTimeout(ok, 1500));
+        return loadStats(retries - 1);
+      }
+      throw new Error(`HTTP ${r.status}`);
+    }
+    const d = await r.json();
     setCachedData('dv_stats_cache', d);
     _renderHeaderStats();
   } catch(e) {
     _renderHeaderStats();
-  }
-}
-
-async function _loadGroupFilter() {
-  const sel = document.getElementById('groupFilter');
-  if (!sel) return;
-  const prev = sel.value;
-  try {
-    const r = await fetch(`${API}/groups`);
-    const groups = await r.json();
-    if (groups.length > 0) {
-      sel.style.display = '';
-      sel.innerHTML = '<option value="">' + t('collection.allCollections') + '</option>'
-        + '<option value="_mine">' + t('collection.myMovies') + '</option>'
-        + groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-      if (prev) sel.value = prev;
-    } else {
-      sel.style.display = 'none';
-      sel.innerHTML = '<option value="">' + t('collection.allCollections') + '</option>';
-    }
-  } catch(e) {
-    sel.style.display = 'none';
   }
 }
 
