@@ -1274,28 +1274,32 @@
     inset: 0;
     background-size: cover;
     background-position: center;
-    filter: blur(32px) brightness(0.15) saturate(1.3);
-    transform: scale(1.12);
+    filter: blur(40px) brightness(0.12) saturate(1.4);
+    transform: scale(1.15);
     z-index: 0;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.6s ease;
+    transition: opacity 0.8s ease;
   }
   .detail-bg-blur.loaded { opacity: 1; }
 
   /* Hero banner at top of detail page */
-  #panel-movie-detail {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-  }
+  /* IMPORTANT: only override display when .active — never add display here or it
+     overrides .panel { display:none } and the panel shows on every page */
+  #panel-movie-detail { position: relative; }
+  #panel-movie-detail.active { display: flex; flex-direction: column; }
+
   .detail-hero-wrap {
     position: relative;
     width: 100%;
-    height: 300px;
+    height: 340px;
     overflow: hidden;
     flex-shrink: 0;
+    background: transparent;
   }
+  /* When no backdrop is available, collapse hero height */
+  .detail-hero-wrap.no-backdrop { height: 80px; }
+
   .detail-hero-img {
     position: absolute;
     inset: 0;
@@ -1305,14 +1309,27 @@
     transition: opacity 0.7s ease;
   }
   .detail-hero-img.loaded { opacity: 1; }
+
   .detail-hero-gradient {
     position: absolute;
     inset: 0;
     background: linear-gradient(
       to bottom,
-      rgba(10,10,15,0.10) 0%,
-      rgba(10,10,15,0.55) 60%,
+      rgba(10,10,15,0.08) 0%,
+      rgba(10,10,15,0.45) 55%,
+      rgba(10,10,15,0.82) 80%,
       #0a0a0f 100%
+    );
+  }
+  /* Side gradient so title text stays readable */
+  .detail-hero-gradient::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to right,
+      rgba(10,10,15,0.60) 0%,
+      transparent 60%
     );
   }
   .detail-hero-nav {
@@ -1327,12 +1344,15 @@
     max-width: 1300px;
     width: 100%;
     margin: 0 auto;
-    padding: 20px 28px 40px;
+    padding: 0 28px 48px;
     position: relative;
     z-index: 1;
     box-sizing: border-box;
   }
-  /* Person detail: back nav row (movie detail uses .detail-hero-nav inside hero) */
+  /* Person detail needs top padding (no hero above it) */
+  #panel-person-detail .detail-page { padding-top: 20px; }
+
+  /* Person detail: back nav row */
   .detail-page-nav {
     display: flex;
     align-items: center;
@@ -1340,21 +1360,24 @@
     margin-bottom: 24px;
   }
 
-  /* Poster + title side-by-side row */
+  /* Poster + title side-by-side row, overlapping hero bottom */
   .detail-info-row {
     display: flex;
     gap: 32px;
     align-items: flex-start;
-    margin-top: -100px;
+    margin-top: -130px;
     margin-bottom: 32px;
     position: relative;
     z-index: 2;
   }
+  /* When hero is collapsed (no backdrop), no overlap */
+  .no-backdrop ~ .detail-page .detail-info-row { margin-top: 0; }
+
   .detail-poster-col { flex-shrink: 0; }
   .detail-title-col {
     flex: 1;
     min-width: 0;
-    padding-top: 104px;
+    padding-top: 140px;
   }
 
   .btn-back {
@@ -1668,11 +1691,12 @@
     .detail-grid { grid-template-columns: repeat(2, 1fr); }
 
     /* Detail page hero + info row */
-    .detail-hero-wrap { height: 220px; }
+    .detail-hero-wrap { height: 240px; }
+    .detail-hero-wrap.no-backdrop { height: 60px; }
     .detail-page { padding: 0 16px 32px; }
-    .detail-info-row { gap: 18px; margin-top: -80px; }
-    .detail-poster-col .modal-poster { width: 120px; min-width: 120px; }
-    .detail-title-col { padding-top: 90px; }
+    .detail-info-row { gap: 18px; margin-top: -100px; }
+    .detail-title-col { padding-top: 110px; }
+    .detail-poster-col .modal-poster { width: 130px; min-width: 130px; }
     .detail-title-col .modal-title { font-size: 1.45rem; }
 
     .log-controls {
@@ -1787,15 +1811,16 @@
     .modal-title { font-size: 1.5rem; }
 
     /* Detail page on small phones: stack poster above title */
-    .detail-hero-wrap { height: 180px; }
+    .detail-hero-wrap { height: 190px; }
+    .detail-hero-wrap.no-backdrop { height: 50px; }
     .detail-page { padding: 0 12px 28px; }
     .detail-info-row {
       flex-direction: column;
       align-items: center;
       gap: 14px;
-      margin-top: -65px;
+      margin-top: -80px;
     }
-    .detail-poster-col .modal-poster { width: 110px; min-width: 110px; }
+    .detail-poster-col .modal-poster { width: 120px; min-width: 120px; }
     .detail-title-col {
       padding-top: 0;
       text-align: center;
@@ -6061,10 +6086,11 @@ async function openMovieDetail(id) {
 
   const bg   = document.getElementById('movieDetailBg');
   const hero = document.getElementById('detailHeroImg');
+  const heroWrap = document.querySelector('.detail-hero-wrap');
   const backdropUrl = movie.backdrop || '';
   const blurSrc = backdropUrl || src || '';  // fallback: poster as blurred bg
 
-  // Page background blur — use backdrop if available, else poster
+  // Page background blur — use backdrop if available, else poster as ambience
   if (bg) {
     bg.classList.remove('loaded');
     if (blurSrc) {
@@ -6077,13 +6103,19 @@ async function openMovieDetail(id) {
     }
   }
 
-  // Hero banner — only show when backdrop is available
+  // Hero banner — show backdrop image; collapse hero if no backdrop
+  if (heroWrap) heroWrap.classList.toggle('no-backdrop', !backdropUrl);
   if (hero) {
     hero.classList.remove('loaded');
     if (backdropUrl) {
       hero.style.backgroundImage = `url('${backdropUrl}')`;
       const heroImg = new Image();
       heroImg.onload = () => hero.classList.add('loaded');
+      heroImg.onerror = () => {
+        // Backdrop failed to load — collapse hero
+        hero.style.backgroundImage = '';
+        if (heroWrap) heroWrap.classList.add('no-backdrop');
+      };
       heroImg.src = backdropUrl;
     } else {
       hero.style.backgroundImage = '';
@@ -6156,6 +6188,11 @@ function closeMovieDetail() {
     if (confirm(t('js.unsavedChanges'))) { saveEdit(); return; }
   }
   _editDirty = false;
+  // Clear backdrop/blur so they don't flash when re-opening
+  const bg = document.getElementById('movieDetailBg');
+  if (bg) { bg.classList.remove('loaded'); bg.style.backgroundImage = ''; }
+  const hero = document.getElementById('detailHeroImg');
+  if (hero) { hero.classList.remove('loaded'); hero.style.backgroundImage = ''; }
   // Reset to view mode when closing
   document.getElementById('modalViewMode').style.display = '';
   document.getElementById('modalEditMode').style.display = 'none';
