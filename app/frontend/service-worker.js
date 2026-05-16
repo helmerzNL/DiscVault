@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v30";
+const SW_VERSION = "discvault-sw-v31";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -120,9 +120,11 @@ async function cacheFirst(request, cacheName) {
 
 // Network-first: always try network, fall back to cache when offline.
 // Used for JS/CSS/JSON so deploys are immediately visible after a reload.
+// cache:'reload' bypasses the browser HTTP cache so stale files are never served.
 async function networkFirst(request, cacheName) {
   try {
-    const resp = await fetch(request);
+    const networkRequest = new Request(request, { cache: 'reload' });
+    const resp = await fetch(networkRequest);
     if (resp && resp.ok) {
       const cache = await caches.open(cacheName);
       cache.put(request, resp.clone());
