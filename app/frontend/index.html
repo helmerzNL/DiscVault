@@ -574,19 +574,19 @@
           <span class="mdi mdi-shield-lock-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>Beveiliging</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-profile-sub="preferences" onclick="switchProfileSubmenu('preferences')">
+        <button class="profile-sidebar-btn" type="button" data-profile-sub="preferences" onclick="switchProfileSubmenu('preferences')" disabled>
           <span class="mdi mdi-tune profile-sidebar-icon" aria-hidden="true"></span>
           <span>Voorkeuren</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-profile-sub="notifications" onclick="switchProfileSubmenu('notifications')">
+        <button class="profile-sidebar-btn" type="button" data-profile-sub="notifications" onclick="switchProfileSubmenu('notifications')" disabled>
           <span class="mdi mdi-bell-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>Notificatie Instellingen</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-profile-sub="apikeys" onclick="switchProfileSubmenu('apikeys')">
+        <button class="profile-sidebar-btn" type="button" data-profile-sub="apikeys" onclick="switchProfileSubmenu('apikeys')" disabled>
           <span class="mdi mdi-key-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>API Sleutels</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-profile-sub="mcp" onclick="switchProfileSubmenu('mcp')">
+        <button class="profile-sidebar-btn" type="button" data-profile-sub="mcp" onclick="switchProfileSubmenu('mcp')" disabled>
           <span class="mdi mdi-robot-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>MCP Activiteit</span>
         </button>
@@ -644,13 +644,72 @@
 
         <!-- ── BEVEILIGING ── -->
         <div class="profile-sub-section" id="profileSubSecurity">
+
+          <!-- Passkey Auth -->
           <div class="card">
-            <div class="card-title">🔑 Beveiliging</div>
-            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
-              Beheer je passkeys voor wachtwoordloze authenticatie. Passkeys zijn gekoppeld aan je apparaat en bieden een veilige manier om in te loggen.
-            </p>
-            <button class="btn btn-secondary" onclick="switchTab('settings'); switchSettingsSubmenu('security')">🔑 Passkeys beheren →</button>
+            <div class="card-title" data-i18n="settings.authTitle">🔐 Authenticatie (Passkey)</div>
+            <div id="authSection">
+              <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
+                  <input type="checkbox" id="authToggle" onchange="toggleAuth()" style="accent-color:var(--accent); width:16px; height:16px;">
+                  <span data-i18n="settings.authActive">Authenticatie actief</span>
+                </label>
+                <span id="authStatusBadge" class="tag" style="font-size:0.7rem;"></span>
+                <button class="btn btn-secondary" id="btnLogoutSettings" onclick="logoutApp()" style="display:none; margin-left:auto; padding:7px 12px; font-size:0.74rem;" data-i18n="settings.logout">↩ Uitloggen</button>
+              </div>
+
+              <div id="registrationToggleRow" style="display:none; margin-bottom:16px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
+                  <input type="checkbox" id="registrationToggle" onchange="toggleRegistration()" style="accent-color:var(--accent); width:16px; height:16px;">
+                  <span data-i18n="settings.registrationEnabled">Nieuwe gebruikers mogen zich registreren</span>
+                </label>
+                <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:4px;" data-i18n="settings.registrationDesc">
+                  Als dit uitstaat kunnen nieuwe gebruikers geen account aanmaken via het login-scherm.
+                </div>
+              </div>
+
+              <div id="authNoCredentials" style="display:none; padding:16px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.25); border-radius:8px; margin-bottom:16px;">
+                <div style="font-size:0.88rem; margin-bottom:12px;" data-i18n="settings.noPasskey">
+                  Nog geen passkey geregistreerd. Registreer er één om authenticatie in te schakelen.
+                </div>
+                <div class="input-group" style="max-width:300px;">
+                  <label data-i18n="settings.username">Gebruikersnaam</label>
+                  <input type="text" id="registerUsername" value="admin" placeholder="admin">
+                </div>
+                <div class="input-group" style="max-width:300px;">
+                  <label data-i18n="settings.passkeyName">Passkey naam</label>
+                  <input type="text" id="registerCredName" value="Mijn Passkey" placeholder="Bijv. MacBook Touch ID" data-i18n-placeholder="settings.passkeyPlaceholder">
+                </div>
+                <button class="btn btn-primary" onclick="registerPasskey()" data-i18n="settings.registerPasskey">🔑 Passkey Registreren</button>
+              </div>
+
+              <div id="credentialsList" style="margin-top:14px;"></div>
+
+              <div id="addPasskeySection" style="display:none; margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+                <div style="font-size:0.88rem; font-weight:500; margin-bottom:12px;" data-i18n="settings.addPasskey">Extra passkey toevoegen</div>
+                <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
+                  <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+                    <label data-i18n="settings.name">Naam</label>
+                    <input type="text" id="addCredName" value="" placeholder="Bijv. iPhone" data-i18n-placeholder="settings.addPasskeyPlaceholder">
+                  </div>
+                  <button class="btn btn-secondary" onclick="registerAdditionalPasskey()" style="height:40px;" data-i18n="settings.addPasskeyBtn">🔑 Toevoegen</button>
+                </div>
+              </div>
+
+              <div id="authStatus" class="status-msg" style="margin-top:12px;"></div>
+            </div>
           </div>
+
+          <!-- Recovery Code Display -->
+          <div id="recoveryCodeCard" class="card" style="display:none; margin-top:20px;">
+            <div class="card-title" data-i18n="recovery.title">🔑 Herstelcode</div>
+            <div style="font-size:0.88rem; color:var(--text-muted); margin-bottom:12px;" data-i18n="recovery.desc">
+              Bewaar deze code veilig. Je kunt deze gebruiken om in te loggen als je je passkey kwijt bent.
+            </div>
+            <div id="recoveryCodeDisplay" style="font-family:'DM Mono',monospace; font-size:1.4rem; letter-spacing:4px; text-align:center; padding:16px; background:rgba(232,197,71,.08); border:1px solid rgba(232,197,71,.3); border-radius:8px; color:var(--accent); user-select:all;"></div>
+            <button class="btn btn-secondary" onclick="document.getElementById('recoveryCodeCard').style.display='none'" style="margin-top:12px;" data-i18n="recovery.dismiss">Begrepen, ik heb de code opgeslagen</button>
+          </div>
+
         </div>
 
         <!-- ── VOORKEUREN ── -->
@@ -964,71 +1023,6 @@
       </div>
 
       <div class="settings-sub-section" id="settingsSubSecurity">
-
-      <!-- Passkey Auth -->
-      <div class="card" style="margin-top:20px;">
-        <div class="card-title" data-i18n="settings.authTitle">🔐 Authenticatie (Passkey)</div>
-        <div id="authSection">
-          <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
-              <input type="checkbox" id="authToggle" onchange="toggleAuth()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.authActive">Authenticatie actief</span>
-            </label>
-            <span id="authStatusBadge" class="tag" style="font-size:0.7rem;"></span>
-            <button class="btn btn-secondary" id="btnLogoutSettings" onclick="logoutApp()" style="display:none; margin-left:auto; padding:7px 12px; font-size:0.74rem;" data-i18n="settings.logout">↩ Uitloggen</button>
-          </div>
-
-          <div id="registrationToggleRow" style="display:none; margin-bottom:16px;">
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
-              <input type="checkbox" id="registrationToggle" onchange="toggleRegistration()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.registrationEnabled">Nieuwe gebruikers mogen zich registreren</span>
-            </label>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:4px;" data-i18n="settings.registrationDesc">
-              Als dit uitstaat kunnen nieuwe gebruikers geen account aanmaken via het login-scherm.
-            </div>
-          </div>
-
-          <div id="authNoCredentials" style="display:none; padding:16px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.25); border-radius:8px; margin-bottom:16px;">
-            <div style="font-size:0.88rem; margin-bottom:12px;" data-i18n="settings.noPasskey">
-              Nog geen passkey geregistreerd. Registreer er één om authenticatie in te schakelen.
-            </div>
-            <div class="input-group" style="max-width:300px;">
-              <label data-i18n="settings.username">Gebruikersnaam</label>
-              <input type="text" id="registerUsername" value="admin" placeholder="admin">
-            </div>
-            <div class="input-group" style="max-width:300px;">
-              <label data-i18n="settings.passkeyName">Passkey naam</label>
-              <input type="text" id="registerCredName" value="Mijn Passkey" placeholder="Bijv. MacBook Touch ID" data-i18n-placeholder="settings.passkeyPlaceholder">
-            </div>
-            <button class="btn btn-primary" onclick="registerPasskey()" data-i18n="settings.registerPasskey">🔑 Passkey Registreren</button>
-          </div>
-
-          <div id="credentialsList" style="margin-top:14px;"></div>
-
-          <div id="addPasskeySection" style="display:none; margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
-            <div style="font-size:0.88rem; font-weight:500; margin-bottom:12px;" data-i18n="settings.addPasskey">Extra passkey toevoegen</div>
-            <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
-              <div class="input-group" style="margin:0; flex:1; min-width:180px;">
-                <label data-i18n="settings.name">Naam</label>
-                <input type="text" id="addCredName" value="" placeholder="Bijv. iPhone" data-i18n-placeholder="settings.addPasskeyPlaceholder">
-              </div>
-              <button class="btn btn-secondary" onclick="registerAdditionalPasskey()" style="height:40px;" data-i18n="settings.addPasskeyBtn">🔑 Toevoegen</button>
-            </div>
-          </div>
-
-          <div id="authStatus" class="status-msg" style="margin-top:12px;"></div>
-        </div>
-      </div>
-
-      <!-- Recovery Code Display -->
-      <div id="recoveryCodeCard" class="card" style="display:none; margin-top:20px;">
-        <div class="card-title" data-i18n="recovery.title">🔑 Herstelcode</div>
-        <div style="font-size:0.88rem; color:var(--text-muted); margin-bottom:12px;" data-i18n="recovery.desc">
-          Bewaar deze code veilig. Je kunt deze gebruiken om in te loggen als je je passkey kwijt bent.
-        </div>
-        <div id="recoveryCodeDisplay" style="font-family:'DM Mono',monospace; font-size:1.4rem; letter-spacing:4px; text-align:center; padding:16px; background:rgba(232,197,71,.08); border:1px solid rgba(232,197,71,.3); border-radius:8px; color:var(--accent); user-select:all;"></div>
-        <button class="btn btn-secondary" onclick="document.getElementById('recoveryCodeCard').style.display='none'" style="margin-top:12px;" data-i18n="recovery.dismiss">Begrepen, ik heb de code opgeslagen</button>
-      </div>
 
       <!-- Admin: User Management -->
       <div id="adminUsersCard" class="card" style="display:none; margin-top:20px;">

@@ -1758,6 +1758,8 @@
 
   .profile-sidebar-btn:last-child { border-bottom: none; }
   .profile-sidebar-btn:hover { color: var(--text); background: rgba(255,255,255,0.02); }
+  .profile-sidebar-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .profile-sidebar-btn:disabled:hover { color: var(--text-muted); background: transparent; }
   .profile-sidebar-btn.active {
     color: var(--text);
     background: rgba(255,255,255,0.04);

@@ -394,6 +394,7 @@ function switchProfileSubmenu(name) {
   const el = document.getElementById(map[name] || map.general);
   if (el) el.classList.add('active');
   if (name === 'general')     loadProfile();
+  if (name === 'security')    loadAuthSettings();
   if (name === 'apikeys')     loadApiKeys();
   if (name === 'mcp')         loadMcpLogs();
   if (name === 'preferences') {
