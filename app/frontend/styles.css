@@ -1672,6 +1672,50 @@
   }
   @keyframes blink { 0%,100%{opacity:.3} 50%{opacity:1} }
 
+  /* ── Meer Menu ──────────────────────────────────────────────────────────── */
+  .meer-menu {
+    position: fixed;
+    top: calc(var(--header-height) + var(--nav-height));
+    right: 0;
+    min-width: 220px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    z-index: 1000;
+    overflow: hidden;
+  }
+  .meer-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 15px 18px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+  }
+  .meer-menu-item:not(:last-child) { border-bottom: 1px solid var(--border); }
+  .meer-menu-item:hover:not(:disabled) { background: rgba(255,255,255,0.04); }
+  .meer-menu-item--disabled,
+  .meer-menu-item:disabled {
+    color: var(--text-muted);
+    cursor: default;
+    opacity: 0.45;
+  }
+  .meer-menu-icon {
+    font-size: 1.1rem;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
   @media (max-width: 900px) {
     :root {
       --header-height: 74px;
@@ -1726,6 +1770,19 @@
 
     body.nav-open nav.main-nav {
       display: flex;
+    }
+
+    .meer-menu {
+      top: auto;
+      bottom: calc(53px + env(safe-area-inset-bottom, 0px));
+      left: 0;
+      right: 0;
+      border-radius: 0;
+      border-top: 1px solid var(--border);
+      border-left: none;
+      border-right: none;
+      border-bottom: none;
+      box-shadow: 0 -8px 32px rgba(0,0,0,.5);
     }
 
     .tab {

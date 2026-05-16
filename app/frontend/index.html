@@ -74,21 +74,35 @@
   </div>
   <div class="tab" data-tab="lists" onclick="switchTab('lists')">
     <span class="tab-icon mdi mdi-playlist-check" aria-hidden="true"></span>
-    <span class="tab-label" data-i18n="nav.lists">Lists</span>
+    <span class="tab-label" data-i18n="nav.lists">Lijsten</span>
   </div>
   <div class="tab" data-tab="search" onclick="switchTab('search')">
     <span class="tab-icon mdi mdi-magnify" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.search">Zoeken</span>
   </div>
-  <div class="tab" data-tab="toevoegen" onclick="switchTab('toevoegen')">
-    <span class="tab-icon mdi mdi-plus-circle-outline" aria-hidden="true"></span>
-    <span class="tab-label" data-i18n="nav.add">Toevoegen</span>
+  <div class="tab" data-tab="profile" onclick="switchTab('profile')">
+    <span class="tab-icon mdi mdi-account-circle-outline" aria-hidden="true"></span>
+    <span class="tab-label" data-i18n="nav.profile">Profiel</span>
   </div>
-  <div class="tab" data-tab="settings" onclick="switchTab('settings')">
-    <span class="tab-icon mdi mdi-cog-outline" aria-hidden="true"></span>
-    <span class="tab-label" data-i18n="nav.settings">Instellingen</span>
+  <div class="tab" data-tab="meer" id="tabMeer" onclick="toggleMeerMenu(event)">
+    <span class="tab-icon mdi mdi-dots-horizontal" aria-hidden="true"></span>
+    <span class="tab-label" data-i18n="nav.more">Meer</span>
   </div>
 </nav>
+<div id="meerMenu" class="meer-menu" style="display:none;">
+  <button class="meer-menu-item" onclick="closeMeerMenu(); switchTab('toevoegen')">
+    <span class="mdi mdi-plus-circle-outline meer-menu-icon" aria-hidden="true"></span>
+    <span data-i18n="nav.add">Toevoegen</span>
+  </button>
+  <button class="meer-menu-item meer-menu-item--disabled" disabled>
+    <span class="mdi mdi-bell-outline meer-menu-icon" aria-hidden="true"></span>
+    <span data-i18n="nav.notifications">Notificaties</span>
+  </button>
+  <button class="meer-menu-item" onclick="closeMeerMenu(); switchTab('settings')">
+    <span class="mdi mdi-cog-outline meer-menu-icon" aria-hidden="true"></span>
+    <span data-i18n="nav.settings">Instellingen</span>
+  </button>
+</div>
 
 <main>
 

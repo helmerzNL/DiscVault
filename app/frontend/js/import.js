@@ -390,10 +390,12 @@ function resetImport() {
 }
 
 function switchTabDirect(name) {
-  const activeTabName = (name === 'logs') ? 'settings'
-    : (name === 'scan' || name === 'import') ? 'toevoegen'
+  const activeTabName = (name === 'logs' || name === 'settings' || name === 'toevoegen'
+    || name === 'scan' || name === 'import') ? 'meer'
     : name;
-  const panelName = (name === 'scan' || name === 'import') ? 'toevoegen' : name;
+  const panelName = (name === 'scan' || name === 'import') ? 'toevoegen'
+    : (name === 'profile') ? 'settings'
+    : name;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const selected = document.querySelector(`.tab[data-tab="${activeTabName}"]`);
@@ -404,7 +406,8 @@ function switchTabDirect(name) {
   if (panelName === 'collection') loadCollection();
   if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
-  if (name === 'settings') loadSettings();
+  if (name === 'settings' || name === 'profile') loadSettings();
+  if (name === 'profile') switchSettingsSubmenu('profile');
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();
@@ -421,8 +424,8 @@ function openLogsFromSettings() {
 }
 
 // ── Client-side Routing ───────────────────────────────────────────────────────
-const _TAB_PATHS = { collection:'/', settings:'/settings', search:'/search', lists:'/lists', toevoegen:'/add' };
-const _PATH_TABS = { '/':'collection', '/settings':'settings', '/search':'search', '/lists':'lists', '/add':'toevoegen' };
+const _TAB_PATHS = { collection:'/', settings:'/settings', search:'/search', lists:'/lists', toevoegen:'/add', profile:'/profile' };
+const _PATH_TABS = { '/':'collection', '/settings':'settings', '/search':'search', '/lists':'lists', '/add':'toevoegen', '/profile':'profile' };
 
 function _tabPath(tab) {
   const base = (tab === 'logs') ? 'settings' : (tab === 'scan' || tab === 'import') ? 'toevoegen' : tab;

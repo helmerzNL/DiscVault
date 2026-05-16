@@ -141,10 +141,13 @@ function switchToevoegen(sub) {
 }
 
 function switchTab(name) {
-  const activeTabName = (name === 'logs') ? 'settings'
-    : (name === 'scan' || name === 'import') ? 'toevoegen'
+  closeMeerMenu();
+  const activeTabName = (name === 'logs' || name === 'settings' || name === 'toevoegen'
+    || name === 'scan' || name === 'import') ? 'meer'
     : name;
-  const panelName = (name === 'scan' || name === 'import') ? 'toevoegen' : name;
+  const panelName = (name === 'scan' || name === 'import') ? 'toevoegen'
+    : (name === 'profile') ? 'settings'
+    : name;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const selected = document.querySelector(`.tab[data-tab="${activeTabName}"]`);
@@ -155,7 +158,8 @@ function switchTab(name) {
   if (panelName === 'collection') loadCollection();
   if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
-  if (name === 'settings') loadSettings();
+  if (name === 'settings' || name === 'profile') loadSettings();
+  if (name === 'profile') switchSettingsSubmenu('profile');
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();
@@ -171,6 +175,31 @@ function switchTab(name) {
   await loadTranslations();
   init();
 })();
+
+// ── Meer menu ────────────────────────────────────────────────────────────────
+function toggleMeerMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('meerMenu');
+  if (!menu) return;
+  if (menu.style.display !== 'none') {
+    closeMeerMenu();
+  } else {
+    menu.style.display = 'block';
+    setTimeout(() => document.addEventListener('click', _closeMeerMenuOutside), 0);
+  }
+}
+
+function _closeMeerMenuOutside(e) {
+  if (!e.target.closest('#meerMenu') && !e.target.closest('#tabMeer')) {
+    closeMeerMenu();
+  }
+}
+
+function closeMeerMenu() {
+  const menu = document.getElementById('meerMenu');
+  if (menu) menu.style.display = 'none';
+  document.removeEventListener('click', _closeMeerMenuOutside);
+}
 
 // ── Push notifications ────────────────────────────────────────────────────────
 let _pushSubscription = null;
