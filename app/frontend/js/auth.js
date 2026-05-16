@@ -336,7 +336,19 @@ async function loadProfile() {
   try {
     const r = await fetch(`${API}/auth/me`);
     const me = await r.json();
-    if (!me.authenticated) return;
+    if (!me.authenticated) {
+      // Auth disabled or not logged in — clear fields
+      document.getElementById('profileUsername').value = '';
+      document.getElementById('profileFirstName').value = '';
+      document.getElementById('profileLastName').value = '';
+      const img = document.getElementById('profileAvatarImg');
+      const placeholder = document.getElementById('profileAvatarPlaceholder');
+      const removeBtn = document.getElementById('profileAvatarRemoveBtn');
+      if (img) { img.style.display = 'none'; img.src = ''; }
+      if (placeholder) placeholder.style.display = '';
+      if (removeBtn) removeBtn.style.display = 'none';
+      return;
+    }
 
     document.getElementById('profileUsername').value = me.username || '';
     document.getElementById('profileFirstName').value = me.first_name || '';

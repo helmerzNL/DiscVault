@@ -180,11 +180,11 @@ function toggleMeerMenu(e) {
   e.stopPropagation();
   const menu = document.getElementById('meerMenu');
   if (!menu) return;
-  if (menu.style.display !== 'none') {
+  if (menu.classList.contains('open')) {
     closeMeerMenu();
   } else {
-    menu.style.display = 'block';
-    setTimeout(() => document.addEventListener('click', _closeMeerMenuOutside), 0);
+    menu.classList.add('open');
+    requestAnimationFrame(() => document.addEventListener('click', _closeMeerMenuOutside));
   }
 }
 
@@ -196,7 +196,7 @@ function _closeMeerMenuOutside(e) {
 
 function closeMeerMenu() {
   const menu = document.getElementById('meerMenu');
-  if (menu) menu.style.display = 'none';
+  if (menu) menu.classList.remove('open');
   document.removeEventListener('click', _closeMeerMenuOutside);
 }
 
