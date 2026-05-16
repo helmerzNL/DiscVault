@@ -157,7 +157,19 @@ function loadQueueSettings() {
     return;
   }
 
-  list.innerHTML = queue.map(item => {
+  // Hide groups-update items that are paired with a movie update for the same ID
+  // (they're an implementation detail of saveEdit and clutter the display)
+  const pairedMovieIds = new Set(
+    queue
+      .filter(item => item.method === 'PUT' && /\/api\/movies\/\d+$/.test(item.url))
+      .map(item => item.url.match(/\/api\/movies\/(\d+)$/)[1])
+  );
+  const displayQueue = queue.filter(item => {
+    const gm = item.url.match(/\/api\/movies\/(\d+)\/groups$/);
+    return !(gm && item.method === 'PUT' && pairedMovieIds.has(gm[1]));
+  });
+
+  list.innerHTML = displayQueue.map(item => {
     const ts = new Date(item.created_at || Date.now()).toLocaleString();
     const label = queueActionLabel(item);
     return `
