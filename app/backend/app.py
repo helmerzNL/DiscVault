@@ -790,14 +790,35 @@ def _title_candidates_from_upc(raw_title: str) -> list[str]:
         _add(f"{art.title()} {rest}")
 
     # Also try each dash-separated segment as a standalone candidate.
-    # e.g. "Studio Canal - Honey" also yields "Studio Canal" and "Honey"
+    # Sort longer segments first: movie titles tend to be longer than distributor names.
+    # e.g. "Studio Canal - Honey" → tries "Honey" before "Studio Canal"
     if ' - ' in cleaned:
-        for seg in cleaned.split(' - '):
-            seg = seg.strip()
-            if len(seg) > 2:
-                _add(seg)
+        segs = sorted(
+            [s.strip() for s in cleaned.split(' - ') if len(s.strip()) > 3],
+            key=len, reverse=True
+        )
+        for seg in segs:
+            _add(seg)
 
     return out
+
+
+def _titles_overlap(candidate: str, tmdb_title: str, min_ratio: float = 0.30) -> bool:
+    """Return True if the TMDb title shares enough significant words with the search candidate.
+    Prevents a distributor name like 'Studio Canal' from matching an unrelated TMDb film.
+    Short candidates (≤2 meaningful words) require a full word-for-word match to avoid
+    false positives like "Studio Canal" → "The Canal"."""
+    stop = {'the', 'a', 'an', 'of', 'in', 'on', 'at', 'for', 'and', 'or', 'but', 'with', 'by', 'to', 'de', 'le', 'la', 'les'}
+    def words(s):
+        return {w.lower() for w in re.findall(r'\w+', s) if w.lower() not in stop and len(w) > 2}
+    wa, wb = words(candidate), words(tmdb_title)
+    if not wa or not wb:
+        return True  # can't compare — don't filter
+    # For short candidates (≤2 meaningful words), ALL candidate words must appear in
+    # the TMDb title to avoid distributor names matching unrelated films.
+    effective_min = 1.0 if len(wa) <= 2 else min_ratio
+    ratio = len(wa & wb) / max(len(wa), len(wb))
+    return ratio >= effective_min
 
 
 # ---------------------------------------------------------------------------
@@ -2783,9 +2804,13 @@ def lookup(barcode):
                     try:
                         _cands = _tmdb_search_top5(candidate)
                         if _cands:
-                            movie_info = lookup_movie_tmdb_by_id(_cands[0]['tmdb_id'])
-                            if movie_info and len(_cands) > 1:
-                                tmdb_candidates = _cands
+                            # Only accept result if TMDb title has real word overlap with
+                            # the candidate to avoid distributor names matching wrong films.
+                            valid_cands = [c for c in _cands if _titles_overlap(candidate, c['title'])]
+                            if valid_cands:
+                                movie_info = lookup_movie_tmdb_by_id(valid_cands[0]['tmdb_id'])
+                                if movie_info and len(valid_cands) > 1:
+                                    tmdb_candidates = valid_cands
                         _trace_add(attempts, "TMDb", "hit" if movie_info else "miss", f"title={candidate}")
                         yield emit(3, "TMDb", "hit" if movie_info else "miss", candidate)
                     except Exception as ex:
@@ -2875,7 +2900,11 @@ def _lookup_sync(barcode):
             for candidate in _title_candidates_from_upc(raw_title):
                 if not movie_info:
                     try:
-                        movie_info = lookup_movie_tmdb(candidate)
+                        _cands = _tmdb_search_top5(candidate)
+                        if _cands:
+                            valid_cands = [c for c in _cands if _titles_overlap(candidate, c['title'])]
+                            if valid_cands:
+                                movie_info = lookup_movie_tmdb_by_id(valid_cands[0]['tmdb_id'])
                         _trace_add(attempts, "TMDb", "hit" if movie_info else "miss", f"title={candidate}")
                     except Exception as ex:
                         _trace_add(attempts, "TMDb", "error", f"title={candidate}", str(ex))
