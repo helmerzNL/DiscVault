@@ -373,6 +373,35 @@ async function loadProfile() {
   } catch(e) {}
 }
 
+// ── Profile submenu ───────────────────────────────────────────────────────────
+
+let currentProfileSubmenu = 'general';
+
+function switchProfileSubmenu(name) {
+  currentProfileSubmenu = name;
+  document.querySelectorAll('[data-profile-sub]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-profile-sub') === name);
+  });
+  document.querySelectorAll('#panel-profile .profile-sub-section').forEach(s => s.classList.remove('active'));
+  const map = {
+    general:       'profileSubGeneral',
+    security:      'profileSubSecurity',
+    preferences:   'profileSubPreferences',
+    notifications: 'profileSubNotifications',
+    apikeys:       'profileSubApiKeys',
+    mcp:           'profileSubMcp',
+  };
+  const el = document.getElementById(map[name] || map.general);
+  if (el) el.classList.add('active');
+  if (name === 'general')     loadProfile();
+  if (name === 'apikeys')     loadApiKeys();
+  if (name === 'mcp')         loadMcpLogs();
+  if (name === 'preferences') {
+    const sel = document.getElementById('profileLangSelect');
+    if (sel) sel.value = currentLang;
+  }
+}
+
 // ── API key management ────────────────────────────────────────────────────────
 
 async function loadApiKeys() {

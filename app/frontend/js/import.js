@@ -406,7 +406,7 @@ function switchTabDirect(name) {
   if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
   if (name === 'settings') loadSettings();
-  if (name === 'profile') { loadProfile(); loadApiKeys(); loadMcpLogs(); }
+  if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();

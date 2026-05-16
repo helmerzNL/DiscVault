@@ -158,7 +158,7 @@ function switchTab(name) {
   if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
   if (name === 'settings') loadSettings();
-  if (name === 'profile') { loadProfile(); loadApiKeys(); loadMcpLogs(); }
+  if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();
@@ -183,6 +183,21 @@ function toggleMeerMenu(e) {
   if (menu.classList.contains('open')) {
     closeMeerMenu();
   } else {
+    if (!isMobileNav()) {
+      const btn = document.getElementById('tabMeer');
+      if (btn) {
+        const r = btn.getBoundingClientRect();
+        menu.style.right = (window.innerWidth - r.right) + 'px';
+        menu.style.top = r.bottom + 'px';
+        menu.style.left = 'auto';
+        menu.style.bottom = 'auto';
+      }
+    } else {
+      menu.style.left = '';
+      menu.style.top = '';
+      menu.style.right = '';
+      menu.style.bottom = '';
+    }
     menu.classList.add('open');
     requestAnimationFrame(() => document.addEventListener('click', _closeMeerMenuOutside));
   }
