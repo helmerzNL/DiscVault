@@ -995,12 +995,13 @@ def _tmdb_search_top5(title, year=""):
         candidates = []
         for res in r.json().get("results", [])[:5]:
             candidates.append({
-                "tmdb_id":  str(res.get("id", "")),
-                "title":    res.get("title", ""),
-                "year":     (res.get("release_date", "") or "")[:4],
-                "overview": (res.get("overview", "") or "")[:150],
-                "poster":   f"https://image.tmdb.org/t/p/w185{res['poster_path']}"
-                            if res.get("poster_path") else "",
+                "tmdb_id":      str(res.get("id", "")),
+                "title":        res.get("title", ""),
+                "year":         (res.get("release_date", "") or "")[:4],
+                "overview":     (res.get("overview", "") or "")[:150],
+                "vote_average": round(res.get("vote_average") or 0, 1),
+                "poster":       f"https://image.tmdb.org/t/p/w185{res['poster_path']}"
+                                if res.get("poster_path") else "",
             })
         return candidates
     except Exception:

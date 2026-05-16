@@ -1167,6 +1167,7 @@ function _showAddCandidates(candidates) {
       </div>
       <div class="tmdb-candidate-info">
         <strong>${esc(c.title)}${c.year ? ` <span class="tag">${esc(c.year)}</span>` : ''}</strong>
+        ${c.vote_average ? `<div class="tmdb-candidate-vote">⭐ ${Number(c.vote_average).toFixed(1)}</div>` : ''}
         <p>${esc(c.overview)}</p>
       </div>
     </div>
@@ -1215,17 +1216,32 @@ async function _fillAddFormFromTmdbId(tmdbId) {
 }
 
 function _fillAddFields(movie) {
-  document.getElementById('addTitle').value = movie.title || '';
-  document.getElementById('addYear').value = movie.year || '';
-  document.getElementById('addDirector').value = movie.director || '';
-  document.getElementById('addGenre').value = movie.genre || '';
-  document.getElementById('addRuntime').value = movie.runtime || '';
-  document.getElementById('addRating').value = movie.rating || '';
-  document.getElementById('addHdr').value = movie.hdr || '';
-  document.getElementById('addAudioTracks').value = movie.audio_tracks || '';
-  document.getElementById('addSubtitles').value = movie.subtitles || '';
-  document.getElementById('addPoster').value = movie.poster || '';
-  if (movie.tmdb_id) document.getElementById('addTmdbIdHidden').value = String(movie.tmdb_id);
+  document.getElementById('addTitle').value          = movie.title          || '';
+  document.getElementById('addOriginalTitle').value  = movie.original_title || '';
+  document.getElementById('addYear').value           = movie.year           || '';
+  document.getElementById('addReleaseDate').value    = movie.release_date   || '';
+  document.getElementById('addDirector').value       = movie.director       || '';
+  document.getElementById('addActor').value          = movie.actor          || '';
+  document.getElementById('addProducer').value       = movie.producer       || '';
+  document.getElementById('addStudios').value        = movie.studios        || '';
+  document.getElementById('addGenre').value          = movie.genre          || '';
+  document.getElementById('addRuntime').value        = movie.runtime        || '';
+  document.getElementById('addRating').value         = movie.rating         || '';
+  document.getElementById('addHdr').value            = movie.hdr            || '';
+  document.getElementById('addLanguage').value       = movie.language       || '';
+  document.getElementById('addAudioTracks').value    = movie.audio_tracks   || '';
+  document.getElementById('addSubtitles').value      = movie.subtitles      || '';
+  document.getElementById('addCountry').value        = movie.country        || '';
+  document.getElementById('addPlot').value           = movie.plot           || '';
+  document.getElementById('addImdbId').value         = movie.imdb_id        || '';
+  document.getElementById('addImdbUrl').value        = movie.imdb_url || (movie.imdb_id ? 'https://www.imdb.com/title/' + movie.imdb_id : '');
+  document.getElementById('addPosterHidden').value   = movie.poster         || '';
+  if (movie.tmdb_id) {
+    const tid = String(movie.tmdb_id);
+    document.getElementById('addTmdbIdHidden').value  = tid;
+    document.getElementById('addTmdbIdVisible').value = tid;
+    document.getElementById('addTmdbUrl').value       = 'https://www.themoviedb.org/movie/' + tid;
+  }
 }
 
 async function _lookupBarcodeForAdd(barcode) {
@@ -1298,19 +1314,29 @@ async function submitManual() {
 async function _doSaveManual(barcode, title) {
   const payload = {
     barcode, title,
-    year:         document.getElementById('addYear').value,
-    director:     document.getElementById('addDirector').value,
-    genre:        document.getElementById('addGenre').value,
-    format:       document.getElementById('addFormat').value,
-    runtime:      document.getElementById('addRuntime').value,
-    rating:       document.getElementById('addRating').value,
-    hdr:          document.getElementById('addHdr').value,
-    audio_tracks: document.getElementById('addAudioTracks').value,
-    subtitles:    document.getElementById('addSubtitles').value,
-    location:     document.getElementById('addLocation').value,
-    notes:        document.getElementById('addNotes').value,
-    poster:       document.getElementById('addPoster').value,
-    tmdb_id:      document.getElementById('addTmdbIdHidden').value,
+    original_title: document.getElementById('addOriginalTitle').value,
+    year:           document.getElementById('addYear').value,
+    release_date:   document.getElementById('addReleaseDate').value,
+    director:       document.getElementById('addDirector').value,
+    actor:          document.getElementById('addActor').value,
+    producer:       document.getElementById('addProducer').value,
+    studios:        document.getElementById('addStudios').value,
+    genre:          document.getElementById('addGenre').value,
+    format:         document.getElementById('addFormat').value,
+    runtime:        document.getElementById('addRuntime').value,
+    rating:         document.getElementById('addRating').value,
+    hdr:            document.getElementById('addHdr').value,
+    language:       document.getElementById('addLanguage').value,
+    audio_tracks:   document.getElementById('addAudioTracks').value,
+    subtitles:      document.getElementById('addSubtitles').value,
+    country:        document.getElementById('addCountry').value,
+    plot:           document.getElementById('addPlot').value,
+    imdb_id:        document.getElementById('addImdbId').value,
+    imdb_url:       document.getElementById('addImdbUrl').value,
+    tmdb_id:        document.getElementById('addTmdbIdVisible').value || document.getElementById('addTmdbIdHidden').value,
+    location:       document.getElementById('addLocation').value,
+    notes:          document.getElementById('addNotes').value,
+    poster:         document.getElementById('addPosterHidden').value,
   };
   try {
     const r = await fetch(`${API}/movies`, {
@@ -1332,10 +1358,12 @@ async function _doSaveManual(barcode, title) {
 }
 
 function clearManualForm() {
-  ['addBarcode','addTitle','addYear','addDirector','addGenre','addRuntime',
-   'addRating','addHdr','addAudioTracks','addSubtitles','addLocation','addNotes',
-   'addPoster','addTmdbIdHidden'].forEach(id => {
-    document.getElementById(id).value = '';
+  ['addBarcode','addTitle','addOriginalTitle','addYear','addReleaseDate',
+   'addDirector','addActor','addProducer','addStudios','addGenre',
+   'addRuntime','addRating','addHdr','addLanguage','addAudioTracks','addSubtitles',
+   'addCountry','addPlot','addImdbId','addImdbUrl','addTmdbIdVisible','addTmdbUrl',
+   'addLocation','addNotes','addTmdbIdHidden','addPosterHidden'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('addTmdbCandidates').style.display = 'none';
 }

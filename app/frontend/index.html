@@ -265,89 +265,147 @@
 
   <!-- ADD MANUALLY PANEL -->
   <div class="panel" id="panel-add">
-    <div class="card" style="max-width: 640px;">
+    <div class="card" style="max-width: 1100px;">
       <div class="card-title" data-i18n="add.title">Snel Handmatig Toevoegen</div>
-      <p style="color:var(--text-muted); font-size:0.84rem; margin-bottom:14px; line-height:1.5;">
-        <span data-i18n="add.description">Vul een barcode in om automatisch op te zoeken, of typ een titel en klik op 🔍 Auto-fill.</span>
-      </p>
       <div id="addStatus" class="status-msg"></div>
 
-      <div class="form-grid">
-        <div class="input-group full">
+      <!-- Search bar: barcode + title + zoeken -->
+      <div class="add-search-bar">
+        <div class="input-group">
           <label data-i18n="add.barcodeLabel">Barcode / Eigen ID</label>
           <input type="text" id="addBarcode" placeholder="Barcode of uniek ID" data-i18n-placeholder="add.barcodePlaceholder">
         </div>
-        <div class="input-group full">
+        <div class="input-group">
           <label data-i18n="add.titleLabel">Titel</label>
-          <div style="display:flex; gap: 8px;">
+          <div style="display:flex; gap:8px;">
             <input type="text" id="addTitle" placeholder="Bijv. The Dark Knight" data-i18n-placeholder="add.titlePlaceholder">
-            <button class="btn btn-secondary" onclick="autoFillFromTitle()" style="white-space:nowrap; padding: 10px 14px;" data-i18n="add.autofill">🔍 Auto-fill</button>
+            <button class="btn btn-secondary" onclick="submitManual()" style="white-space:nowrap; padding:10px 14px;" data-i18n="add.autofill">🔍 Zoeken</button>
           </div>
         </div>
-        <div class="input-group">
-          <label data-i18n="add.year">Jaar</label>
-          <input type="text" id="addYear" placeholder="2008">
-        </div>
-        <div class="input-group">
-          <label data-i18n="add.format">Formaat</label>
-          <select id="addFormat">
-            <option value="4K UHD">4K UHD</option>
-            <option value="Blu-ray">Blu-ray</option>
-            <option value="DVD">DVD</option>
-          </select>
-        </div>
-        <div class="input-group">
-          <label data-i18n="add.director">Regisseur</label>
-          <input type="text" id="addDirector" placeholder="Bijv. Christopher Nolan" data-i18n-placeholder="add.directorPlaceholder">
-        </div>
-        <div class="input-group">
-          <label data-i18n="add.genre">Genre</label>
-          <input type="text" id="addGenre" placeholder="Bijv. Action, Drama" data-i18n-placeholder="add.genrePlaceholder">
-        </div>
-        <div class="input-group">
-          <label data-i18n="add.runtime">Speelduur</label>
-          <input type="text" id="addRuntime" placeholder="Bijv. 152 min" data-i18n-placeholder="add.runtimePlaceholder">
-        </div>
-        <div class="input-group">
-          <label data-i18n="add.rating">IMDb Rating</label>
-          <input type="text" id="addRating" placeholder="Bijv. 9.0" data-i18n-placeholder="add.ratingPlaceholder">
-        </div>
-        <div class="input-group">
-          <label data-i18n="add.hdr">Dolby Vision / HDR</label>
-          <input type="text" id="addHdr" placeholder="Bijv. Dolby Vision, HDR10+" data-i18n-placeholder="add.hdrPlaceholder">
-        </div>
-        <div class="input-group full">
-          <label data-i18n="add.audioTracks">Audiosporen</label>
-          <input type="text" id="addAudioTracks" placeholder="Bijv. Dolby Atmos, DTS:X, TrueHD 7.1" data-i18n-placeholder="add.audioPlaceholder">
-        </div>
-        <div class="input-group full">
-          <label data-i18n="add.subtitles">Ondertiteltracks</label>
-          <input type="text" id="addSubtitles" placeholder="Bijv. Nederlands, Engels, Duits" data-i18n-placeholder="add.subtitlesPlaceholder">
-        </div>
-        <div class="input-group full">
-          <label data-i18n="add.location">Locatie</label>
-          <input type="text" id="addLocation" placeholder="Bijv. Rek A plank 2" data-i18n-placeholder="add.locationPlaceholder">
-        </div>
-        <div class="input-group full">
-          <label data-i18n="add.notes">Notities</label>
-          <textarea id="addNotes" rows="2" placeholder="Steelbook, limited edition, ..." data-i18n-placeholder="add.notesPlaceholder"></textarea>
-        </div>
-        <div class="input-group full">
-          <label data-i18n="add.posterUrl">Poster URL</label>
-          <input type="text" id="addPoster" placeholder="https://image.tmdb.org/..." data-i18n-placeholder="add.posterPlaceholder">
-        </div>
-        <input type="hidden" id="addTmdbIdHidden" value="">
       </div>
 
-      <div id="addTmdbCandidates" style="display:none; margin-top:16px;">
-        <div class="tmdb-candidates-header" data-i18n="scan.otherMatches">Andere overeenkomsten — kies de juiste film:</div>
-        <div id="addCandidateList" class="tmdb-candidate-list"></div>
-      </div>
+      <!-- Two-column layout: form (left) + candidates (right on desktop, above on mobile) -->
+      <div class="add-main-layout">
 
-      <div class="btn-row">
-        <button class="btn btn-success" onclick="submitManual()" data-i18n="add.submit">💾 Toevoegen aan Collectie</button>
-        <button class="btn btn-secondary" onclick="clearManualForm()" data-i18n="add.clear">✕ Wissen</button>
+        <!-- Candidates panel — comes first in DOM so it appears above form on mobile -->
+        <div id="addTmdbCandidates" style="display:none;" class="add-candidates-panel">
+          <div class="tmdb-candidates-header" data-i18n="scan.otherMatches">Andere overeenkomsten — kies de juiste film:</div>
+          <div id="addCandidateList" class="tmdb-candidate-list"></div>
+        </div>
+
+        <!-- Film details form -->
+        <div class="add-form-section">
+          <div class="form-grid">
+            <div class="input-group full">
+              <label data-i18n="edit.originalTitle">Originele titel</label>
+              <input type="text" id="addOriginalTitle" placeholder="Bijv. The Dark Knight">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.year">Jaar</label>
+              <input type="text" id="addYear" placeholder="2008">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.releaseDate">Releasedatum</label>
+              <input type="text" id="addReleaseDate" placeholder="2008-07-18">
+            </div>
+            <div class="input-group">
+              <label data-i18n="add.format">Formaat</label>
+              <select id="addFormat">
+                <option value="4K UHD">4K UHD</option>
+                <option value="Blu-ray">Blu-ray</option>
+                <option value="DVD">DVD</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.director">Regisseur</label>
+              <input type="text" id="addDirector" placeholder="Bijv. Christopher Nolan">
+            </div>
+            <div class="input-group full">
+              <label data-i18n="edit.actors">Acteurs</label>
+              <input type="text" id="addActor" placeholder="Bijv. Christian Bale, Heath Ledger">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.producer">Producer</label>
+              <input type="text" id="addProducer">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.studios">Studio's</label>
+              <input type="text" id="addStudios">
+            </div>
+            <div class="input-group full">
+              <label data-i18n="edit.genre">Genre</label>
+              <input type="text" id="addGenre" placeholder="Bijv. Action, Drama">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.runtime">Speelduur (min)</label>
+              <input type="text" id="addRuntime" placeholder="152">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.imdbRating">IMDb Rating</label>
+              <input type="text" id="addRating" placeholder="9.0">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.hdr">HDR</label>
+              <input type="text" id="addHdr" placeholder="Dolby Vision, HDR10+">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.language">Taal</label>
+              <input type="text" id="addLanguage" placeholder="Engels, Nederlands">
+            </div>
+            <div class="input-group full">
+              <label data-i18n="edit.audioTracks">Audio tracks</label>
+              <input type="text" id="addAudioTracks" placeholder="Dolby Atmos, DTS:X, TrueHD 7.1">
+            </div>
+            <div class="input-group full">
+              <label data-i18n="edit.subtitles">Ondertitels</label>
+              <input type="text" id="addSubtitles" placeholder="Nederlands, Engels, Duits">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.country">Land</label>
+              <input type="text" id="addCountry" placeholder="USA, UK">
+            </div>
+            <div class="input-group full">
+              <label data-i18n="edit.plot">Verhaal</label>
+              <textarea id="addPlot" rows="3" placeholder="Korte samenvatting van de film..."></textarea>
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.imdbId">IMDb ID</label>
+              <input type="text" id="addImdbId" placeholder="tt0468569"
+                oninput="const u=document.getElementById('addImdbUrl');if(!u.value||u.value.startsWith('https://www.imdb.com'))u.value=this.value?'https://www.imdb.com/title/'+this.value:''">
+            </div>
+            <div class="input-group">
+              <label data-i18n="edit.imdbUrl">IMDb URL</label>
+              <input type="text" id="addImdbUrl" placeholder="https://www.imdb.com/title/tt0468569"
+                onblur="const m=this.value.match(/\/title\/(tt\d+)/);if(m)document.getElementById('addImdbId').value=m[1]">
+            </div>
+            <div class="input-group">
+              <label data-i18n="add.tmdbId">TMDb ID</label>
+              <input type="text" id="addTmdbIdVisible" placeholder="155"
+                oninput="document.getElementById('addTmdbUrl').value=this.value?'https://www.themoviedb.org/movie/'+this.value:'';document.getElementById('addTmdbIdHidden').value=this.value">
+            </div>
+            <div class="input-group">
+              <label data-i18n="add.tmdbUrl">TMDb URL</label>
+              <input type="text" id="addTmdbUrl" placeholder="https://www.themoviedb.org/movie/155"
+                onblur="const m=this.value.match(/\/movie\/(\d+)/);if(m){document.getElementById('addTmdbIdVisible').value=m[1];document.getElementById('addTmdbIdHidden').value=m[1]}">
+            </div>
+            <div class="input-group full">
+              <label data-i18n="edit.location">Locatie</label>
+              <input type="text" id="addLocation" placeholder="Bijv. Rek A plank 2">
+            </div>
+            <div class="input-group full">
+              <label data-i18n="edit.notes">Notities</label>
+              <textarea id="addNotes" rows="2" placeholder="Steelbook, limited edition..."></textarea>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-success" onclick="submitManual()" data-i18n="add.submit">💾 Toevoegen aan Collectie</button>
+            <button class="btn btn-secondary" onclick="clearManualForm()" data-i18n="add.clear">✕ Wissen</button>
+          </div>
+        </div>
+
       </div>
+      <input type="hidden" id="addTmdbIdHidden" value="">
+      <input type="hidden" id="addPosterHidden" value="">
     </div>
   </div>
   <!-- IMPORT PANEL -->

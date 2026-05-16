@@ -793,6 +793,43 @@
     -webkit-box-orient: vertical;
   }
 
+  .tmdb-candidate-vote {
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  /* ── Add panel two-column layout ── */
+  .add-search-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .add-main-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .add-form-section { flex: 1; min-width: 0; }
+  .add-candidates-panel {
+    padding: 14px;
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  @media (min-width: 900px) {
+    .add-main-layout { flex-direction: row; align-items: flex-start; }
+    .add-candidates-panel { width: 360px; flex-shrink: 0; order: 2; position: sticky; top: 80px; }
+    .add-form-section { order: 1; }
+  }
+  @media (max-width: 600px) {
+    .add-search-bar { grid-template-columns: 1fr; }
+  }
+
   .movie-poster {
     width: 90px;
     min-width: 90px;
