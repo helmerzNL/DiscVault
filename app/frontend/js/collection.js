@@ -326,6 +326,7 @@ async function bulkRefresh() {
   let errors = 0;
   const errorDetails = [];
 
+  _bulkCancelled = false;
   _bulkAbortController = new AbortController();
   try {
     const r = await fetch(`${API}/movies/bulk-refresh?stream=1`, {
@@ -337,39 +338,50 @@ async function bulkRefresh() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
 
     const reader = r.body.getReader();
+    _bulkReader = reader;
     const decoder = new TextDecoder();
     let buf = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        let d;
-        try { d = JSON.parse(line); } catch { continue; }
-        if (d.type === 'progress') {
-          setProgress(d.current, d.total, d.title);
-        } else if (d.type === 'done') {
-          updated = d.updated || 0;
-          skipped = d.skipped || 0;
-          errors  = d.errors  || 0;
-          if (Array.isArray(d.error_details)) errorDetails.push(...d.error_details);
+    try {
+      while (!_bulkCancelled) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let d;
+          try { d = JSON.parse(line); } catch { continue; }
+          if (d.type === 'progress') {
+            setProgress(d.current, d.total, d.title);
+          } else if (d.type === 'done') {
+            updated = d.updated || 0;
+            skipped = d.skipped || 0;
+            errors  = d.errors  || 0;
+            if (Array.isArray(d.error_details)) errorDetails.push(...d.error_details);
+          }
         }
       }
+    } finally {
+      _bulkReader = null;
+      try { reader.releaseLock(); } catch(_) {}
     }
 
-    const errStr = errorDetails.length
-      ? '\n' + t('js.refreshErrors', errors) + ':\n' + errorDetails.join('\n')
-      : '';
-    finishProgress(t('js.refreshResult', updated, skipped) + errStr);
+    if (_bulkCancelled) {
+      finishProgress(t('js.refreshCancelled', updated, skipped), false);
+    } else {
+      const errStr = errorDetails.length
+        ? '\n' + t('js.refreshErrors', errors) + ':\n' + errorDetails.join('\n')
+        : '';
+      finishProgress(t('js.refreshResult', updated, skipped) + errStr);
+    }
     await loadCollection();
     filterMovies();
     loadStats();
   } catch(e) {
-    if (e.name === 'AbortError') {
+    _bulkReader = null;
+    if (_bulkCancelled || e.name === 'AbortError') {
       finishProgress(t('js.refreshCancelled', updated, skipped), false);
       await loadCollection(); filterMovies(); loadStats();
     } else {
@@ -381,6 +393,8 @@ async function bulkRefresh() {
 // ── Progress overlay helpers ──────────────────────────────────────────────────
 
 let _bulkAbortController = null;
+let _bulkReader = null;
+let _bulkCancelled = false;
 
 function showProgress(title, total) {
   document.getElementById('progressTitle').textContent = title;
@@ -419,7 +433,9 @@ function closeProgress() {
 }
 
 function cancelBulkRefresh() {
-  if (_bulkAbortController) _bulkAbortController.abort();
+  _bulkCancelled = true;
+  if (_bulkReader)          { try { _bulkReader.cancel(); } catch(_) {} }
+  if (_bulkAbortController) { _bulkAbortController.abort(); }
 }
 
 function setFormatFilter(format, btn) {
