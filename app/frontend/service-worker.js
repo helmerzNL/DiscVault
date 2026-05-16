@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v5";
+const SW_VERSION = "discvault-sw-v6";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -109,6 +109,22 @@ async function cacheFirst(request, cacheName) {
   return resp;
 }
 
+// Network-first: always try network, fall back to cache when offline.
+// Used for JS/CSS/JSON so deploys are immediately visible after a reload.
+async function networkFirst(request, cacheName) {
+  try {
+    const resp = await fetch(request);
+    if (resp && resp.ok) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, resp.clone());
+    }
+    return resp;
+  } catch {
+    const cached = await caches.match(request);
+    return cached || new Response('Offline', { status: 503 });
+  }
+}
+
 self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
@@ -124,6 +140,12 @@ self.addEventListener("fetch", event => {
     event.respondWith(
       fetch(request).catch(() => caches.match("/index.html"))
     );
+    return;
+  }
+
+  // JS, CSS, JSON → network-first so updated files are served immediately after a deploy+reload
+  if (url.origin === self.location.origin && /\.(js|css|json)$/.test(url.pathname)) {
+    event.respondWith(networkFirst(request, APP_CACHE));
     return;
   }
 
