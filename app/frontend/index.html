@@ -244,7 +244,8 @@
       <div class="add-search-bar">
         <div class="input-group">
           <label data-i18n="add.barcodeLabel">Barcode / Eigen ID</label>
-          <input type="text" id="addBarcode" placeholder="Barcode of uniek ID" data-i18n-placeholder="add.barcodePlaceholder">
+          <input type="text" id="addBarcode" placeholder="Barcode of uniek ID" data-i18n-placeholder="add.barcodePlaceholder"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();submitManual();}">
         </div>
         <div class="input-group">
           <label data-i18n="add.titleLabel">Titel</label>

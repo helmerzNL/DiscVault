@@ -221,19 +221,33 @@ async function startScanner() {
   let lastTime = 0;
   let _quaggaConfirmCode = '';
   let _quaggaConfirmCount = 0;
+  let _quaggaResetTimer = null;
   Quagga.onDetected(result => {
     const code = result.codeResult.code;
     if (!_validateBarcode(code)) return; // reject invalid checksums
+
+    // Confidence filter: average bar-decode error must be below threshold
+    const bars = (result.codeResult.decodedCodes || []).filter(b => b.error !== undefined);
+    if (bars.length > 0) {
+      const avgErr = bars.reduce((s, b) => s + b.error, 0) / bars.length;
+      if (avgErr > 0.08) return; // too uncertain — skip this frame
+    }
+
     const now = Date.now();
     if (code === lastCode && now - lastTime < 3000) return;
-    // Require 3 consecutive consistent reads before accepting
+
+    // Require 4 consecutive consistent reads; reset counter if no match within 600ms
+    if (_quaggaResetTimer) clearTimeout(_quaggaResetTimer);
+    _quaggaResetTimer = setTimeout(() => { _quaggaConfirmCode = ''; _quaggaConfirmCount = 0; }, 600);
+
     if (code === _quaggaConfirmCode) {
       _quaggaConfirmCount++;
     } else {
       _quaggaConfirmCode = code;
       _quaggaConfirmCount = 1;
     }
-    if (_quaggaConfirmCount < 3) return;
+    if (_quaggaConfirmCount < 4) return;
+    clearTimeout(_quaggaResetTimer);
     _quaggaConfirmCode = '';
     _quaggaConfirmCount = 0;
     lastCode = code;
