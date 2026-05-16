@@ -53,12 +53,21 @@ async function _tryNativeScanner(container) {
   _nativeStream = stream;
 
   const video = document.createElement('video');
-  video.setAttribute('playsinline', '');
+  video.setAttribute('playsinline', ''); // required for iOS
+  video.setAttribute('autoplay', '');    // required for iOS PWA autoplay
+  video.setAttribute('muted', '');       // attribute form required for iOS autoplay policy
   video.muted = true;
   video.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:8px;';
   video.srcObject = stream;
   container.appendChild(video);
-  video.play().catch(() => {});
+
+  try {
+    await video.play();
+  } catch(playErr) {
+    // play() failed (e.g. iOS autoplay restriction) — fall back to Quagga2
+    _stopNativeScanner();
+    return 'fallback';
+  }
 
   const overlay = document.createElement('div');
   overlay.className = 'scanner-overlay';
@@ -175,6 +184,7 @@ async function doLookup(barcode) {
   showStatus('scanStatus', t('js.lookingUp'), 'info');
   document.getElementById('movieResult').classList.remove('visible');
   document.getElementById('noResult').style.display = 'none';
+  document.getElementById('tmdbCandidates').style.display = 'none';
 
   try {
     const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
@@ -220,6 +230,9 @@ async function doLookup(barcode) {
     } else if (finalData.status === 'found') {
       showStatus('scanStatus', t('js.movieFound'), 'success');
       displayMovieResult(finalData.movie, barcode, false);
+      if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
+        displayTmdbCandidates(finalData.tmdb_candidates, barcode);
+      }
     } else {
       showStatus('scanStatus', t('js.movieNotFound', barcode), 'error');
       currentBarcode = barcode;
@@ -234,6 +247,40 @@ async function doLookup(barcode) {
   } catch(e) {
     showStatus('scanStatus', t('js.connectionError', e.message), 'error');
     document.getElementById('noResult').style.display = 'block';
+  }
+}
+
+function displayTmdbCandidates(candidates, barcode) {
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const safeBarcode = String(barcode).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  document.getElementById('tmdbCandidateList').innerHTML = candidates.map(c => `
+    <div class="tmdb-candidate-card" onclick="selectTmdbCandidate('${c.tmdb_id}','${safeBarcode}')">
+      <div class="tmdb-candidate-poster">
+        ${c.poster ? `<img src="${esc(c.poster)}" loading="lazy" alt="">` : '<div class="no-poster">🎬</div>'}
+      </div>
+      <div class="tmdb-candidate-info">
+        <strong>${esc(c.title)}${c.year ? ` <span class="tag">${esc(c.year)}</span>` : ''}</strong>
+        <p>${esc(c.overview)}</p>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('tmdbCandidates').style.display = 'block';
+}
+
+async function selectTmdbCandidate(tmdbId, barcode) {
+  document.getElementById('tmdbCandidates').style.display = 'none';
+  showStatus('scanStatus', t('js.lookingUp'), 'info');
+  try {
+    const r = await fetch(`${API}/tmdb_movie/${tmdbId}`);
+    const d = await r.json();
+    if (r.ok && d.movie) {
+      displayMovieResult(d.movie, barcode, false);
+      showStatus('scanStatus', t('js.movieFound'), 'success');
+    } else {
+      showStatus('scanStatus', d.error || t('js.backendError', r.status), 'error');
+    }
+  } catch(e) {
+    showStatus('scanStatus', t('js.connectionError', e.message), 'error');
   }
 }
 

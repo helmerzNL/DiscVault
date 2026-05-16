@@ -785,6 +785,14 @@ def _title_candidates_from_upc(raw_title: str) -> list[str]:
         art = comma_article_match.group(2)
         _add(f"{art.title()} {rest}")
 
+    # Also try each dash-separated segment as a standalone candidate.
+    # e.g. "Studio Canal - Honey" also yields "Studio Canal" and "Honey"
+    if ' - ' in cleaned:
+        for seg in cleaned.split(' - '):
+            seg = seg.strip()
+            if len(seg) > 2:
+                _add(seg)
+
     return out
 
 
@@ -965,6 +973,137 @@ def lookup_movie_tmdb(title, year=""):
             except Exception:
                 pass
 
+        return result
+    except Exception:
+        pass
+    return None
+
+
+def _tmdb_search_top5(title, year=""):
+    """Search TMDb and return up to 5 candidates for disambiguation."""
+    if not TMDB_API_KEY or not _is_tmdb_enabled():
+        return []
+    try:
+        params = f"query={requests.utils.quote(title)}&api_key={TMDB_API_KEY}"
+        if year:
+            params += f"&year={year}"
+        r = requests.get(
+            f"https://api.themoviedb.org/3/search/movie?{params}", timeout=6
+        )
+        if r.status_code != 200:
+            return []
+        candidates = []
+        for res in r.json().get("results", [])[:5]:
+            candidates.append({
+                "tmdb_id":  str(res.get("id", "")),
+                "title":    res.get("title", ""),
+                "year":     (res.get("release_date", "") or "")[:4],
+                "overview": (res.get("overview", "") or "")[:150],
+                "poster":   f"https://image.tmdb.org/t/p/w185{res['poster_path']}"
+                            if res.get("poster_path") else "",
+            })
+        return candidates
+    except Exception:
+        return []
+
+
+def lookup_movie_tmdb_by_id(tmdb_id):
+    """Fetch full movie data by TMDb ID, bypassing the title-search step."""
+    if not TMDB_API_KEY or not _is_tmdb_enabled():
+        return None
+    try:
+        rd = requests.get(
+            f"https://api.themoviedb.org/3/movie/{tmdb_id}"
+            f"?api_key={TMDB_API_KEY}&language=en-US"
+            f"&append_to_response=credits,videos,images"
+            f"&include_image_language=null%2Cen",
+            timeout=8
+        )
+        if rd.status_code != 200:
+            return None
+        d = rd.json()
+        crew      = d.get("credits", {}).get("crew", [])
+        cast      = d.get("credits", {}).get("cast", [])
+        directors = [c["name"] for c in crew if c["job"] == "Director"]
+        producers = [c["name"] for c in crew if c["job"] == "Producer"]
+        actors    = [c["name"] for c in cast[:5]]
+        genres    = [g["name"] for g in d.get("genres", [])]
+        studios   = [p["name"] for p in d.get("production_companies", [])]
+        release   = d.get("release_date", "") or ""
+        poster_url = ""
+        if d.get("poster_path"):
+            poster_url = f"https://image.tmdb.org/t/p/original{d['poster_path']}"
+        backdrop_list = d.get("images", {}).get("backdrops", [])
+        backdrop_list.sort(key=lambda x: x.get("vote_average", 0), reverse=True)
+        backdrops = [
+            f"https://image.tmdb.org/t/p/original{b['file_path']}"
+            for b in backdrop_list[:10] if b.get("file_path")
+        ]
+        if not backdrops and d.get("backdrop_path"):
+            backdrops = [f"https://image.tmdb.org/t/p/original{d['backdrop_path']}"]
+        trailer_url = ""
+        for v in d.get("videos", {}).get("results", []):
+            if v.get("site") == "YouTube" and v.get("type") == "Trailer":
+                trailer_url = f"https://www.youtube.com/watch?v={v['key']}"
+                break
+        cast_crew = []
+        for i, c in enumerate(cast[:20]):
+            cast_crew.append({
+                "tmdb_id": c.get("id"),
+                "name": c.get("name", ""),
+                "role": "actor",
+                "character": c.get("character", ""),
+                "job": None,
+                "sort_order": i,
+                "profile_path": c.get("profile_path"),
+            })
+        for c in crew:
+            if c.get("job") in ("Director", "Producer", "Screenplay", "Writer",
+                                "Director of Photography", "Original Music Composer", "Editor"):
+                cast_crew.append({
+                    "tmdb_id": c.get("id"),
+                    "name": c.get("name", ""),
+                    "role": "crew",
+                    "character": None,
+                    "job": c.get("job", ""),
+                    "sort_order": 0,
+                    "profile_path": c.get("profile_path"),
+                })
+        result = {
+            "title":          d.get("title", ""),
+            "original_title": d.get("original_title", ""),
+            "year":           release[:4],
+            "release_date":   release,
+            "director":       ", ".join(directors),
+            "actor":          ", ".join(actors),
+            "producer":       ", ".join(producers[:3]),
+            "studios":        ", ".join(studios),
+            "genre":          ", ".join(genres),
+            "plot":           d.get("overview", ""),
+            "poster":         poster_url,
+            "backdrop":       backdrops[0] if backdrops else "",
+            "backdrops":      json.dumps(backdrops),
+            "trailer_url":    trailer_url,
+            "runtime":        str(d.get("runtime", "")),
+            "rating":         str(round(d.get("vote_average", 0), 1)),
+            "imdb_id":        d.get("imdb_id", "") or "",
+            "tmdb_id":        str(tmdb_id),
+            "language":       d.get("original_language", ""),
+            "_cast_crew":     cast_crew,
+        }
+        for lang_code, tmdb_lang in TMDB_LANGUAGES:
+            try:
+                rt = requests.get(
+                    f"https://api.themoviedb.org/3/movie/{tmdb_id}"
+                    f"?api_key={TMDB_API_KEY}&language={tmdb_lang}",
+                    timeout=5
+                )
+                if rt.status_code == 200:
+                    td = rt.json()
+                    result[f"title_{lang_code}"] = td.get("title", "") or ""
+                    result[f"plot_{lang_code}"]  = td.get("overview", "") or ""
+            except Exception:
+                pass
         return result
     except Exception:
         pass
@@ -1968,48 +2107,52 @@ def refresh_single(movie_id):
 
     try:
         info = None
-        source = ""
+        omdb_info = None
+        source_parts = []
         attempts = []
-        if imdb_id and OMDB_API_KEY:
-            try:
-                info = lookup_movie_omdb(imdb_id=imdb_id)
-                _trace_add(attempts, "OMDb", "hit" if info else "miss", f"imdb_id={imdb_id}")
-            except Exception as ex:
-                _trace_add(attempts, "OMDb", "error", f"imdb_id={imdb_id}", str(ex))
-            if info:
-                source = f"OMDb (imdb_id)"
-        elif imdb_id and not OMDB_API_KEY:
-            _trace_add(attempts, "OMDb", "skipped", f"imdb_id={imdb_id}", "OMDB_API_KEY ontbreekt")
-        if not info:
-            try:
+        tmdb_id_known = movie.get("tmdb_id", "")
+
+        # 1. TMDb — primary source (multilingual titles/plots, backdrops, trailer)
+        try:
+            if tmdb_id_known:
+                info = lookup_movie_tmdb_by_id(tmdb_id_known)
+                _trace_add(attempts, "TMDb", "hit" if info else "miss", f"tmdb_id={tmdb_id_known}")
+            if not info:
                 info = lookup_movie_tmdb(search_title, year)
                 _trace_add(attempts, "TMDb", "hit" if info else "miss", f"title={search_title}, year={year}")
-            except Exception as ex:
-                _trace_add(attempts, "TMDb", "error", f"title={search_title}, year={year}", str(ex))
-            if info:
-                source = f"TMDb"
-        if not info:
-            try:
-                info = lookup_movie_omdb(title=search_title)
-                _trace_add(attempts, "OMDb", "hit" if info else "miss", f"title={search_title}")
-            except Exception as ex:
-                _trace_add(attempts, "OMDb", "error", f"title={search_title}", str(ex))
-            if info:
-                source = f"OMDb"
-        if not info and original_title and original_title != title:
-            try:
+            if not info and original_title and original_title != title:
                 info = lookup_movie_tmdb(title, year)
                 _trace_add(attempts, "TMDb", "hit" if info else "miss", f"fallback title={title}, year={year}")
-            except Exception as ex:
-                _trace_add(attempts, "TMDb", "error", f"fallback title={title}, year={year}", str(ex))
-            if not info:
-                try:
-                    info = lookup_movie_omdb(title=title)
-                    _trace_add(attempts, "OMDb", "hit" if info else "miss", f"fallback title={title}")
-                except Exception as ex:
-                    _trace_add(attempts, "OMDb", "error", f"fallback title={title}", str(ex))
             if info:
-                source = "fallback"
+                source_parts.append("TMDb")
+        except Exception as ex:
+            _trace_add(attempts, "TMDb", "error", f"title={search_title}", str(ex))
+
+        # 2. OMDb — supplementary: fills imdb_id, rating, and any fields TMDb missed
+        if OMDB_API_KEY:
+            try:
+                if imdb_id:
+                    omdb_info = lookup_movie_omdb(imdb_id=imdb_id)
+                    _trace_add(attempts, "OMDb", "hit" if omdb_info else "miss", f"imdb_id={imdb_id}")
+                if not omdb_info:
+                    omdb_info = lookup_movie_omdb(title=search_title)
+                    _trace_add(attempts, "OMDb", "hit" if omdb_info else "miss", f"title={search_title}")
+                if omdb_info:
+                    source_parts.append("OMDb")
+            except Exception as ex:
+                _trace_add(attempts, "OMDb", "error", f"title={search_title}", str(ex))
+        elif imdb_id:
+            _trace_add(attempts, "OMDb", "skipped", f"imdb_id={imdb_id}", "OMDB_API_KEY ontbreekt")
+
+        # Merge: fill any missing fields from OMDb into TMDb result
+        if info and omdb_info:
+            for k, v in omdb_info.items():
+                if v and not info.get(k):
+                    info[k] = v
+        elif not info:
+            info = omdb_info
+
+        source = " + ".join(source_parts) if source_parts else ""
         if info and _is_bluray_scrape_enabled():
             specs, bluray_attempts = lookup_movie_bluray_specs_traced(
                 info.get("title") or search_title,
@@ -2034,6 +2177,9 @@ def refresh_single(movie_id):
             "actor", "producer", "studios", "original_title",
             "language", "country", "runtime", "genre",
             "hdr", "audio_tracks", "subtitles",
+            "title_nl", "title_fr", "title_de", "title_es",
+            "plot_nl",  "plot_fr",  "plot_de",  "plot_es",
+            "backdrop", "backdrops", "trailer_url",
         ]
         updates = {f: info[f] for f in refresh_fields if info.get(f)}
 
@@ -2120,8 +2266,11 @@ def sync_single_all_backends(movie_id):
             _trace_add(attempts, "OMDb", "skipped", f"imdb_id={imdb_id}", "OMDB_API_KEY ontbreekt")
 
         try:
-            tmdb = lookup_movie_tmdb(search_title, year)
-            _trace_add(attempts, "TMDb", "hit" if tmdb else "miss", f"title={search_title}, year={year}")
+            tmdb_id_known = movie.get("tmdb_id", "")
+            tmdb = (lookup_movie_tmdb_by_id(tmdb_id_known) if tmdb_id_known else None) \
+                   or lookup_movie_tmdb(search_title, year)
+            _trace_add(attempts, "TMDb", "hit" if tmdb else "miss",
+                       f"tmdb_id={tmdb_id_known}" if tmdb_id_known else f"title={search_title}, year={year}")
             if tmdb:
                 collected.append(("TMDb", tmdb))
         except Exception as ex:
@@ -2206,6 +2355,9 @@ def sync_single_all_backends(movie_id):
             "actor", "producer", "studios", "original_title",
             "language", "country", "runtime", "genre",
             "hdr", "audio_tracks", "subtitles",
+            "title_nl", "title_fr", "title_de", "title_es",
+            "plot_nl",  "plot_fr",  "plot_de",  "plot_es",
+            "backdrop", "backdrops", "trailer_url",
         ]
         updates = {f: info[f] for f in refresh_fields if info.get(f)}
 
@@ -2588,6 +2740,7 @@ def lookup(barcode):
             return json.dumps({"type": "step", "step": step, "source": source, "status": status, "detail": detail}) + "\n"
 
         attempts = []
+        tmdb_candidates = []
         # 1. Local DB
         yield emit(1, "Local DB", "searching")
         conn = get_db()
@@ -2620,7 +2773,11 @@ def lookup(barcode):
                 if not movie_info:
                     yield emit(3, "TMDb", "searching", candidate)
                     try:
-                        movie_info = lookup_movie_tmdb(candidate)
+                        _cands = _tmdb_search_top5(candidate)
+                        if _cands:
+                            movie_info = lookup_movie_tmdb_by_id(_cands[0]['tmdb_id'])
+                            if movie_info and len(_cands) > 1:
+                                tmdb_candidates = _cands
                         _trace_add(attempts, "TMDb", "hit" if movie_info else "miss", f"title={candidate}")
                         yield emit(3, "TMDb", "hit" if movie_info else "miss", candidate)
                     except Exception as ex:
@@ -2678,7 +2835,7 @@ def lookup(barcode):
 
             add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
                     f"Backends: {_trace_summary(attempts)}", "success")
-            yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode}) + "\n"
+            yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode, "tmdb_candidates": tmdb_candidates}) + "\n"
         else:
             add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
             yield json.dumps({"type": "done", "status": "not_found", "barcode": barcode, "raw_title": raw_title}) + "\n"
@@ -2794,6 +2951,26 @@ def search_title():
             return jsonify({"status": "found", "movie": movie_info})
         add_log("lookup", f"Titel-zoekactie geen resultaat: \"{title}\"", f"Backends: {_trace_summary(attempts)}", "warn")
         return jsonify({"status": "not_found"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/tmdb_candidates")
+def api_tmdb_candidates():
+    title = request.args.get("title", "").strip()
+    year  = request.args.get("year", "").strip()
+    if not title:
+        return jsonify({"error": "title required"}), 400
+    return jsonify({"candidates": _tmdb_search_top5(title, year)})
+
+
+@app.route("/api/tmdb_movie/<int:tmdb_id>")
+def api_tmdb_movie(tmdb_id):
+    try:
+        movie_info = lookup_movie_tmdb_by_id(tmdb_id)
+        if not movie_info:
+            return jsonify({"error": "not found"}), 404
+        return jsonify({"movie": movie_info})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
