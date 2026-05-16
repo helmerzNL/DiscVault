@@ -430,6 +430,8 @@ async function loadAdminTab() {
       return;
     }
     await loadAuthSettings();
+    loadDebugSettings();
+    loadMcpSettings();
     switchAdminSubmenu(currentAdminSubmenu || 'security');
   } catch(e) {
     switchTab('collection');

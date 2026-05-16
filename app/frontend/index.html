@@ -886,10 +886,37 @@
 
         <!-- ── GEAVANCEERD ── -->
         <div class="profile-sub-section" id="adminSubAdvanced">
+
+          <!-- Debug & MCP -->
           <div class="card">
-            <div class="card-title">⚙️ Geavanceerd</div>
-            <p style="font-size:0.84rem; color:var(--text-muted); line-height:1.6;">Geavanceerde beheeropties komen hier.</p>
+            <div class="card-title" data-i18n="settings.advanced">⚙️ Geavanceerd</div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="debugEnabledToggle" onchange="saveDebugSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.debugEnabled">Debug modus (toon IDs)</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:12px;" data-i18n="settings.debugDesc">
+              Toon Film ID en Persoon ID in detailvensters voor troubleshooting en debug.
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="mcpEnabledToggle" onchange="saveMcpSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.mcpEnabled">MCP Server ingeschakeld</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.mcpDesc">
+              Schakel de MCP server uit als je deze niet gebruikt. Hiermee wordt de API-toegang voor MCP-clients geblokkeerd.
+            </div>
+            <div id="mcpSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
+
+          <!-- Database resetten -->
+          <div class="card" style="margin-top:20px; border-color: rgba(240,64,96,.3);">
+            <div class="card-title" style="color:var(--danger);" data-i18n="settings.resetTitle">⚠ Database Resetten</div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n-html="settings.resetDesc">
+              Verwijdert <strong>alle films, posters en logs</strong>. Maak eerst een backup!
+              Authenticatie-instellingen en passkeys blijven bewaard.
+            </p>
+            <button class="btn btn-danger" onclick="resetDatabase()" data-i18n="settings.resetButton">🗑 Database Wissen</button>
+          </div>
+
         </div>
 
       </div><!-- /.profile-content -->
@@ -1066,36 +1093,10 @@
             <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
             <span data-i18n="settings.showLocalTitle">Lokale taal voor titel weergeven</span>
           </label>
-          <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:16px;" data-i18n="settings.showLocalTitleDesc">
+          <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.showLocalTitleDesc">
             Toon de filmtitel in de taal van de app (als beschikbaar). Uitgeschakeld toont altijd de Engelse titel.
           </div>
-          <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-            <input type="checkbox" id="debugEnabledToggle" onchange="saveDebugSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-            <span data-i18n="settings.debugEnabled">Debug modus (toon IDs)</span>
-          </label>
-          <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:12px;" data-i18n="settings.debugDesc">
-            Toon Film ID en Persoon ID in detailvensters voor troubleshooting en debug.
-          </div>
-          <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-            <input type="checkbox" id="mcpEnabledToggle" onchange="saveMcpSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-            <span data-i18n="settings.mcpEnabled">MCP Server ingeschakeld</span>
-          </label>
-          <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.mcpDesc">
-            Schakel de MCP server uit als je deze niet gebruikt. Hiermee wordt de API-toegang voor MCP-clients geblokkeerd.
-          </div>
-          <div id="mcpSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
         </div>
-
-      <!-- Reset -->
-      <div class="card" style="margin-top:20px; border-color: rgba(240,64,96,.3);">
-        <div class="card-title" style="color:var(--danger);" data-i18n="settings.resetTitle">⚠ Database Resetten</div>
-        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n-html="settings.resetDesc">
-          Verwijdert <strong>alle films, posters en logs</strong>. Maak eerst een backup!
-          Authenticatie-instellingen en passkeys blijven bewaard.
-        </p>
-        <button class="btn btn-danger" onclick="resetDatabase()" data-i18n="settings.resetButton">🗑 Database Wissen</button>
-      </div>
-
       </div>
 
       <!-- Notifications section -->
