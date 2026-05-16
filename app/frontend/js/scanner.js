@@ -2,6 +2,7 @@
 let _usingNative = false;
 let _nativeStream = null;
 let _nativeTimer = null;
+let _detectedFormat = '';   // format detected from UPC/EAN title, persists across candidate selection
 
 function _supportsNativeDetector() {
   return typeof BarcodeDetector !== 'undefined';
@@ -319,23 +320,28 @@ async function doLookup(barcode) {
 
     if (finalData.status === 'exists') {
       showStatus('scanStatus', t('js.alreadyInCollection', finalData.movie.title), 'success');
-      displayMovieResult(finalData.movie, barcode, true, finalData.detected_format);
+      _detectedFormat = finalData.detected_format || '';
+      displayMovieResult(finalData.movie, barcode, true, _detectedFormat);
     } else if (finalData.status === 'found') {
-      showStatus('scanStatus', t('js.movieFound'), 'success');
-      displayMovieResult(finalData.movie, barcode, false, finalData.detected_format);
+      _detectedFormat = finalData.detected_format || '';
+      const fmtLabel = _detectedFormat ? ` · ${_detectedFormat}` : '';
+      showStatus('scanStatus', t('js.movieFound') + fmtLabel, 'success');
+      displayMovieResult(finalData.movie, barcode, false, _detectedFormat);
       if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
         displayTmdbCandidates(finalData.tmdb_candidates, barcode);
       }
     } else {
       // Barcode not found: show empty placeholder so user can still supplement
-      showStatus('scanStatus', t('js.movieNotFound', barcode), 'error');
+      _detectedFormat = finalData.detected_format || '';
+      const fmtLabel = _detectedFormat ? ` · ${_detectedFormat}` : '';
+      showStatus('scanStatus', t('js.movieNotFound', barcode) + fmtLabel, 'error');
       currentBarcode = barcode;
       currentMovieData = { title: finalData.raw_title || '', barcode };
-      if (finalData.detected_format) currentMovieData.format = finalData.detected_format;
+      if (_detectedFormat) currentMovieData.format = _detectedFormat;
       document.getElementById('resultTitle').textContent = finalData.raw_title || barcode;
       const tags = document.getElementById('resultTags');
       tags.innerHTML = '';
-      if (finalData.detected_format) tags.innerHTML += `<span class="tag format">${finalData.detected_format}</span>`;
+      if (_detectedFormat) tags.innerHTML += `<span class="tag format">${_detectedFormat}</span>`;
       document.getElementById('resultPoster').innerHTML = '<div class="no-poster">🎬</div>';
       document.getElementById('movieResult').style.display = 'flex';
       document.getElementById('noResult').style.display = 'none';
@@ -372,8 +378,9 @@ async function selectTmdbCandidate(tmdbId, barcode) {
     const r = await fetch(`${API}/tmdb_movie/${tmdbId}`);
     const d = await r.json();
     if (r.ok && d.movie) {
-      displayMovieResult(d.movie, barcode, false);
-      showStatus('scanStatus', t('js.movieFound'), 'success');
+      displayMovieResult(d.movie, barcode, false, _detectedFormat);
+      const fmtLabel = _detectedFormat ? ` · ${_detectedFormat}` : '';
+      showStatus('scanStatus', t('js.movieFound') + fmtLabel, 'success');
     } else {
       showStatus('scanStatus', d.error || t('js.backendError', r.status), 'error');
     }
