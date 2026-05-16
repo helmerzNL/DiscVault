@@ -20,7 +20,6 @@ function switchSettingsSubmenu(name) {
     general: 'settingsSubGeneral',
     security: 'settingsSubSecurity',
     advanced: 'settingsSubAdvanced',
-    notifications: 'settingsSubNotifications',
   };
   Object.values(map).forEach(id => {
     const el = document.getElementById(id);
@@ -28,7 +27,6 @@ function switchSettingsSubmenu(name) {
   });
   const target = document.getElementById(map[name] || map.general);
   if (target) target.classList.add('active');
-  if (name === 'notifications') initPushNotifications();
 }
 
 async function loadSourceSettings() {

@@ -582,7 +582,7 @@
           <span class="mdi mdi-tune profile-sidebar-icon" aria-hidden="true"></span>
           <span>Voorkeuren</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-profile-sub="notifications" onclick="switchProfileSubmenu('notifications')" disabled>
+        <button class="profile-sidebar-btn" type="button" data-profile-sub="notifications" onclick="switchProfileSubmenu('notifications')">
           <span class="mdi mdi-bell-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>Notificaties</span>
         </button>
@@ -711,14 +711,36 @@
           </div>
         </div>
 
-        <!-- ── NOTIFICATIE INSTELLINGEN ── -->
+        <!-- ── NOTIFICATIES ── -->
         <div class="profile-sub-section" id="profileSubNotifications">
           <div class="card">
-            <div class="card-title">🔔 Notificatie Instellingen</div>
-            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
-              Beheer je push-meldingen en persoonlijke notificatievoorkeuren.
+            <div class="card-title" data-i18n="settings.notifTitle">🔔 Push-meldingen</div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="settings.notifDesc">
+              Ontvang meldingen op dit apparaat voor voltooide imports en groepsuitnodigingen. Werkt op Windows, Android en iOS (≥16.4, als PWA geïnstalleerd).
             </p>
-            <button class="btn btn-secondary" onclick="switchTab('settings'); switchSettingsSubmenu('notifications')">🔔 Notificaties beheren →</button>
+            <div id="pushNotifStatus" style="margin-bottom:16px; font-size:0.85rem;"></div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn btn-primary"   id="pushSubscribeBtn"   onclick="subscribeToPush()"       data-i18n="settings.pushEnable">🔔 Inschakelen</button>
+              <button class="btn btn-secondary" id="pushUnsubscribeBtn" onclick="unsubscribeFromPush()"   data-i18n="settings.pushDisable"  style="display:none;">🔕 Uitschakelen</button>
+              <button class="btn btn-secondary" id="pushTestBtn"        onclick="testPushNotification()" data-i18n="settings.pushTest"     style="display:none;">📣 Test versturen</button>
+            </div>
+          </div>
+
+          <!-- Notification preferences — only visible while subscribed -->
+          <div class="card" id="notifPrefsCard" style="margin-top:16px; display:none;">
+            <div class="card-title" style="font-size:0.95rem; margin-bottom:14px;">Waarvoor wil je meldingen ontvangen?</div>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer;">
+                <input type="checkbox" id="prefGroupInvite" onchange="saveNotifPref('group_invite', this.checked)"
+                       style="accent-color:var(--accent); width:16px; height:16px; margin-top:2px; flex-shrink:0;">
+                <span>
+                  <span style="font-size:0.9rem; color:var(--text); display:block;">Uitnodiging voor een MemberGroup</span>
+                  <span style="font-size:0.78rem; color:var(--text-muted); line-height:1.4; display:block; margin-top:2px;">
+                    Ontvang een melding wanneer iemand je uitnodigt om lid te worden van een groep.
+                  </span>
+                </span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -1011,10 +1033,6 @@
           <span class="settings-sub-icon mdi mdi-cog-outline" aria-hidden="true"></span>
           <span class="settings-sub-label" data-i18n="settings.menuAdvanced">Geavanceerd</span>
         </button>
-        <button class="settings-sub-btn" type="button" data-settings-sub="notifications" onclick="switchSettingsSubmenu('notifications')">
-          <span class="settings-sub-icon mdi mdi-bell-outline" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="settings.menuNotifications">Meldingen</span>
-        </button>
       </div>
 
       <div class="settings-sub-section active" id="settingsSubGeneral">
@@ -1096,39 +1114,6 @@
           </label>
           <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.showLocalTitleDesc">
             Toon de filmtitel in de taal van de app (als beschikbaar). Uitgeschakeld toont altijd de Engelse titel.
-          </div>
-        </div>
-      </div>
-
-      <!-- Notifications section -->
-      <div class="settings-sub-section" id="settingsSubNotifications">
-        <div class="card" style="margin-top:20px;">
-          <div class="card-title" data-i18n="settings.notifTitle">🔔 Push-meldingen</div>
-          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="settings.notifDesc">
-            Ontvang meldingen op dit apparaat voor voltooide imports en groepsuitnodigingen. Werkt op Windows, Android en iOS (≥16.4, als PWA geïnstalleerd).
-          </p>
-          <div id="pushNotifStatus" style="margin-bottom:16px; font-size:0.85rem;"></div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="btn btn-primary"   id="pushSubscribeBtn"   onclick="subscribeToPush()"         data-i18n="settings.pushEnable">🔔 Inschakelen</button>
-            <button class="btn btn-secondary" id="pushUnsubscribeBtn" onclick="unsubscribeFromPush()"     data-i18n="settings.pushDisable"  style="display:none;">🔕 Uitschakelen</button>
-            <button class="btn btn-secondary" id="pushTestBtn"        onclick="testPushNotification()"   data-i18n="settings.pushTest"     style="display:none;">📣 Test versturen</button>
-          </div>
-        </div>
-
-        <!-- Notification preferences — only visible while subscribed -->
-        <div class="card" id="notifPrefsCard" style="margin-top:16px; display:none;">
-          <div class="card-title" style="font-size:0.95rem; margin-bottom:14px;">Waarvoor wil je meldingen ontvangen?</div>
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer;">
-              <input type="checkbox" id="prefGroupInvite" onchange="saveNotifPref('group_invite', this.checked)"
-                     style="accent-color:var(--accent); width:16px; height:16px; margin-top:2px; flex-shrink:0;">
-              <span>
-                <span style="font-size:0.9rem; color:var(--text); display:block;">Uitnodiging voor een MemberGroup</span>
-                <span style="font-size:0.78rem; color:var(--text-muted); line-height:1.4; display:block; margin-top:2px;">
-                  Ontvang een melding wanneer iemand je uitnodigt om lid te worden van een groep.
-                </span>
-              </span>
-            </label>
           </div>
         </div>
       </div>
