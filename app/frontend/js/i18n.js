@@ -56,6 +56,7 @@ let debugModeEnabled = false;
 let showLocalTitle = true;
 let allMovies = [];
 let activeFormat = '';
+let _detailNavList = [];   // ordered list of movie IDs for swipe navigation
 let scannerRunning = false;
 const WRITE_QUEUE_KEY = 'dv_write_queue';
 let appVersionLabel = 'dev';

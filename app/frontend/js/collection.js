@@ -321,39 +321,48 @@ async function bulkRefresh() {
 
   showProgress(t('js.fetchingMetadata', ids.length), ids.length);
 
-  // Process in chunks to avoid timeouts on very large collections.
+  let updated = 0;
+  let skipped = 0;
+  let errors = 0;
+  const errorDetails = [];
+
   try {
-    const chunkSize = 40;
-    let updated = 0;
-    let skipped = 0;
-    let errors = 0;
-    const errorDetails = [];
+    const r = await fetch(`${API}/movies/bulk-refresh?stream=1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, fetch_posters: true })
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
 
-    for (let i = 0; i < ids.length; i += chunkSize) {
-      const chunk = ids.slice(i, i + chunkSize);
-      const r = await fetch(`${API}/movies/bulk-refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: chunk, fetch_posters: true })
-      });
-      const d = await parseApiJson(r);
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
 
-      updated += Number(d.updated || 0);
-      skipped += Number(d.skipped || 0);
-      errors += Number(d.errors || 0);
-      if (Array.isArray(d.error_details) && d.error_details.length) {
-        errorDetails.push(...d.error_details);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let d;
+        try { d = JSON.parse(line); } catch { continue; }
+        if (d.type === 'progress') {
+          setProgress(d.current, d.total, d.title);
+        } else if (d.type === 'done') {
+          updated = d.updated || 0;
+          skipped = d.skipped || 0;
+          errors  = d.errors  || 0;
+          if (Array.isArray(d.error_details)) errorDetails.push(...d.error_details);
+        }
       }
-      setProgress(Math.min(i + chunk.length, ids.length), ids.length);
     }
 
     const errStr = errorDetails.length
       ? '\n' + t('js.refreshErrors', errors) + ':\n' + errorDetails.join('\n')
       : '';
-    finishProgress(
-      t('js.refreshResult', updated, skipped) + errStr
-    );
-    // Reload so new posters/data are reflected
+    finishProgress(t('js.refreshResult', updated, skipped) + errStr);
     await loadCollection();
     filterMovies();
     loadStats();
@@ -368,15 +377,17 @@ function showProgress(title, total) {
   document.getElementById('progressTitle').textContent = title;
   document.getElementById('progressBar').style.width = '0%';
   document.getElementById('progressLabel').textContent = `0 / ${total}`;
+  document.getElementById('progressSubtitle').textContent = '';
   document.getElementById('progressResult').style.display = 'none';
   document.getElementById('progressCloseBtn').style.display = 'none';
   document.getElementById('bulkProgressOverlay').classList.add('visible');
 }
 
-function setProgress(done, total) {
+function setProgress(done, total, subtitle) {
   const pct = total ? Math.round((done / total) * 100) : 100;
   document.getElementById('progressBar').style.width = pct + '%';
   document.getElementById('progressLabel').textContent = `${done} / ${total}`;
+  if (subtitle !== undefined) document.getElementById('progressSubtitle').textContent = subtitle;
 }
 
 function finishProgress(message, isError = false) {
@@ -419,6 +430,12 @@ async function openMovieDetail(id) {
     // Determine return tab from active nav tab
     const activeTab = document.querySelector('.tab.active');
     _detailReturnTab = activeTab ? (activeTab.dataset.tab || 'collection') : 'collection';
+    // Capture the navigation list for swipe-between-movies
+    if (currentPanelId === 'panel-search') {
+      _detailNavList = getSearchMovies().map(m => m.id);
+    } else {
+      _detailNavList = getCurrentMovies().map(m => m.id);
+    }
   }
   // When opening from person-detail, set person return panel for the new movie's back btn
   if (currentPanelId === 'panel-person-detail') {
@@ -592,6 +609,9 @@ async function openMovieDetail(id) {
   _modalMovieLastWatched  = cachedMovie ? (cachedMovie.last_watched || null) : null;
   _updateWatchlistBtn();
   _updateWatchedBtn();
+
+  // Update nav arrows visibility and position counter
+  _updateDetailNavUI();
 
   // Navigate to the movie-detail panel
   switchTabDirect('movie-detail');
@@ -1469,4 +1489,61 @@ async function parseApiJson(response) {
   return data;
 }
 
+// ── Movie detail swipe / keyboard navigation ──────────────────────────────────
 
+function _updateDetailNavUI() {
+  const arrows = document.getElementById('detailNavArrows');
+  const idxEl  = document.getElementById('detailNavIndex');
+  const prevBtn = document.getElementById('btnNavPrev');
+  const nextBtn = document.getElementById('btnNavNext');
+  if (!arrows) return;
+  if (!_detailNavList.length) { arrows.style.display = 'none'; return; }
+  const idx = _detailNavList.indexOf(currentMovieId);
+  if (idx === -1) { arrows.style.display = 'none'; return; }
+  arrows.style.display = 'flex';
+  if (idxEl) idxEl.textContent = `${idx + 1} / ${_detailNavList.length}`;
+  if (prevBtn) prevBtn.disabled = idx === 0;
+  if (nextBtn) nextBtn.disabled = idx === _detailNavList.length - 1;
+}
+
+function navigateDetailMovie(direction) {
+  if (!_detailNavList.length) return;
+  const idx = _detailNavList.indexOf(currentMovieId);
+  if (idx === -1) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= _detailNavList.length) return;
+  openMovieDetail(_detailNavList[newIdx]);
+}
+
+function initDetailSwipe() {
+  const panel = document.getElementById('panel-movie-detail');
+  if (!panel) return;
+
+  let _touchStartX = 0;
+  let _touchStartY = 0;
+
+  panel.addEventListener('touchstart', e => {
+    _touchStartX = e.touches[0].clientX;
+    _touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  panel.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - _touchStartX;
+    const dy = e.changedTouches[0].clientY - _touchStartY;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
+    navigateDetailMovie(dx < 0 ? 1 : -1);
+  }, { passive: true });
+
+  // Keyboard navigation (arrow keys) when detail panel is active
+  document.addEventListener('keydown', e => {
+    const panel = document.getElementById('panel-movie-detail');
+    if (!panel || !panel.classList.contains('active')) return;
+    // Don't interfere with input fields
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.key === 'ArrowLeft')  navigateDetailMovie(-1);
+    if (e.key === 'ArrowRight') navigateDetailMovie(1);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initDetailSwipe);

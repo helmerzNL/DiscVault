@@ -18,7 +18,7 @@ import cbor2
 import xml.etree.ElementTree as ET
 from functools import wraps
 from urllib.parse import quote_plus, quote
-from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g
+from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g, stream_with_context
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -2607,26 +2607,23 @@ def sync_single_source(movie_id):
 
 @app.route("/api/movies/bulk-refresh", methods=["POST"])
 def bulk_refresh():
-    """Re-fetch metadata (poster, plot, rating, etc.) from TMDb/OMDb for a list of movie IDs."""
-    ids            = (request.json or {}).get("ids", [])
-    fetch_posters  = (request.json or {}).get("fetch_posters", True)
+    """Re-fetch metadata from TMDb/OMDb for a list of movie IDs.
+    With ?stream=1 streams NDJSON progress events (one per movie)."""
+    ids           = (request.json or {}).get("ids", [])
+    fetch_posters = (request.json or {}).get("fetch_posters", True)
     if not ids:
         return jsonify({"error": "No ids provided"}), 400
 
-    conn = get_db()
-    updated = skipped = errors = 0
-    error_details = []
-
-    for movie_id in ids:
+    def _process_movie(conn, movie_id, fetch_posters):
+        """Process a single movie and return (status, title, error_detail)."""
         row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
         if not row or not _check_movie_owner(row):
-            skipped += 1
             add_log("refresh", f"Film ID {movie_id} niet gevonden — overgeslagen", level="warn")
-            continue
+            return "skipped", f"ID {movie_id}", None
         movie = dict(row)
         title          = movie.get("title", "")
         original_title = movie.get("original_title", "")
-        search_title   = original_title or title  # prefer original_title
+        search_title   = original_title or title
         year           = movie.get("year", "")
         imdb_id        = movie.get("imdb_id", "")
         try:
@@ -2659,7 +2656,6 @@ def bulk_refresh():
                     _trace_add(attempts, "OMDb", "error", f"title={search_title}", str(ex))
                 if info:
                     source = f"OMDb (titel=\"{search_title}\")"
-            # Fallback: try regular title if original_title didn't match
             if not info and original_title and original_title != title:
                 try:
                     info = lookup_movie_tmdb(title, year)
@@ -2689,10 +2685,9 @@ def bulk_refresh():
             elif info:
                 _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
             if not info:
-                skipped += 1
                 add_log("refresh", f"Geen resultaat voor \"{search_title}\" ({year})",
                         f"Backends: {_trace_summary(attempts)}", "warn")
-                continue
+                return "skipped", title, None
 
             refresh_fields = [
                 "plot", "rating", "imdb_id", "tmdb_id", "release_date",
@@ -2732,7 +2727,6 @@ def bulk_refresh():
                     list(updates.values()) + [movie_id]
                 )
 
-            # Sync cast/crew — use tmdb_id directly for reliable credits fetch
             cast_crew = info.get("_cast_crew")
             if not cast_crew and TMDB_API_KEY:
                 tid = info.get("tmdb_id") or movie.get("tmdb_id") or ""
@@ -2741,16 +2735,57 @@ def bulk_refresh():
             if cast_crew:
                 _sync_movie_cast_crew(conn, movie_id, cast_crew, download_photos=fetch_posters)
 
-            updated += 1
             fields_str = ", ".join(updates.keys()) if updates else "(geen wijzigingen)"
             add_log("refresh", f"Bijgewerkt: \"{title}\"",
                     f"Bron: {source}. Velden: {fields_str}. Backends: {_trace_summary(attempts)}", "success")
+            return "updated", title, None
         except Exception as e:
-            errors += 1
-            error_details.append(f"[{movie_id}] {title}: {str(e)}")
-            add_log("refresh", f"Fout bij \"{title}\"",
-                    f"Exception: {str(e)}", "error")
+            add_log("refresh", f"Fout bij \"{title}\"", f"Exception: {str(e)}", "error")
+            return "error", title, f"[{movie_id}] {title}: {str(e)}"
 
+    # ── Streaming mode ────────────────────────────────────────────────────────
+    if request.args.get("stream") == "1":
+        def generate():
+            conn = get_db()
+            updated = skipped = errors = 0
+            error_details = []
+            total = len(ids)
+            for i, movie_id in enumerate(ids):
+                status, title, err = _process_movie(conn, movie_id, fetch_posters)
+                if status == "updated":  updated += 1
+                elif status == "skipped": skipped += 1
+                else:
+                    errors += 1
+                    if err: error_details.append(err)
+                yield json.dumps({
+                    "type":    "progress",
+                    "current": i + 1,
+                    "total":   total,
+                    "title":   title,
+                    "status":  status,
+                }) + "\n"
+            conn.commit()
+            conn.close()
+            yield json.dumps({
+                "type":         "done",
+                "updated":      updated,
+                "skipped":      skipped,
+                "errors":       errors,
+                "error_details": error_details[:20],
+            }) + "\n"
+        return Response(stream_with_context(generate()), mimetype="application/x-ndjson")
+
+    # ── Batch mode (legacy) ───────────────────────────────────────────────────
+    conn = get_db()
+    updated = skipped = errors = 0
+    error_details = []
+    for movie_id in ids:
+        status, title, err = _process_movie(conn, movie_id, fetch_posters)
+        if status == "updated":  updated += 1
+        elif status == "skipped": skipped += 1
+        else:
+            errors += 1
+            if err: error_details.append(err)
     conn.commit()
     conn.close()
     return jsonify({
@@ -2760,7 +2795,6 @@ def bulk_refresh():
         "errors":        errors,
         "error_details": error_details[:20],
     })
-
 
 # ---------------------------------------------------------------------------
 # Routes: delete movie

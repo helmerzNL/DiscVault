@@ -1422,7 +1422,45 @@
     position: absolute;
     top: 16px;
     left: 20px;
+    right: 20px;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .detail-nav-arrows {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .btn-nav-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    background: rgba(10,10,15,0.55);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.85);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.4rem;
+    line-height: 1;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .btn-nav-arrow:hover:not(:disabled) {
+    background: rgba(232,197,71,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn-nav-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
   }
 
   /* Main content wrapper */

@@ -229,6 +229,7 @@
         <div class="progress-bar-fill" id="progressBar" style="width:0%"></div>
       </div>
       <div class="progress-label" id="progressLabel">0 / 0</div>
+      <div id="progressSubtitle" style="font-size:0.78rem; color:var(--text-muted); margin-top:6px; min-height:1.2em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
       <div id="progressResult" style="margin-top:16px; font-size:0.85rem; color:var(--text-muted); display:none;"></div>
       <button class="btn btn-secondary" id="progressCloseBtn" onclick="closeProgress()" style="margin-top:20px; display:none;" data-i18n="progress.close">Sluiten</button>
     </div>
@@ -1169,6 +1170,11 @@
         <span class="mdi mdi-arrow-left" aria-hidden="true"></span>
         <span data-i18n="general.back">Terug</span>
       </button>
+      <div class="detail-nav-arrows" id="detailNavArrows" style="display:none;">
+        <button class="btn-nav-arrow" id="btnNavPrev" onclick="navigateDetailMovie(-1)" aria-label="Vorige film">&#8249;</button>
+        <span id="detailNavIndex" style="font-size:0.78rem; color:var(--text-muted); min-width:40px; text-align:center;"></span>
+        <button class="btn-nav-arrow" id="btnNavNext" onclick="navigateDetailMovie(1)" aria-label="Volgende film">&#8250;</button>
+      </div>
     </div>
   </div>
 
