@@ -9,6 +9,7 @@ async function init() {
   await loadDebugSettings();
   const ok = await checkAuth();
   if (!ok) return;
+  loadAdminPanel();
   updateQueueIndicator();
   flushQueuedMutations();
   await loadStats();
