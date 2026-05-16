@@ -817,6 +817,24 @@ def _title_candidates_from_upc(raw_title: str) -> list[str]:
     return out
 
 
+def _detect_format_from_upc(raw_title: str) -> str:
+    """Detect disc format from a UPC/EAN title string.
+    Returns '4K UHD', 'Blu-ray', 'DVD', or '' (unknown)."""
+    t = (raw_title or "").lower()
+    # 4K UHD takes priority — explicit labels or 4K+Blu-ray combo
+    if re.search(r'4k\s*uhd|ultra[\s-]*hd|uhd', t):
+        return "4K UHD"
+    if re.search(r'\b4k\b', t) and re.search(r'blu[- ]?ray', t):
+        return "4K UHD"
+    if re.search(r'\b4k\b', t):
+        return "4K UHD"
+    if re.search(r'blu[- ]?ray', t):
+        return "Blu-ray"
+    if re.search(r'\bdvd\b', t):
+        return "DVD"
+    return ""
+
+
 def _titles_overlap(candidate: str, tmdb_title: str, min_ratio: float = 0.30) -> bool:
     """Return True if the TMDb title shares enough significant words with the search candidate.
     Prevents a distributor name like 'Studio Canal' from matching an unrelated TMDb film.
@@ -2941,10 +2959,13 @@ def lookup(barcode):
 
             add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
                     f"Backends: {_trace_summary(attempts)}", "success")
-            yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode, "tmdb_candidates": tmdb_candidates}) + "\n"
+            yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
+                              "tmdb_candidates": tmdb_candidates,
+                              "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
         else:
             add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
-            yield json.dumps({"type": "done", "status": "not_found", "barcode": barcode, "raw_title": raw_title}) + "\n"
+            yield json.dumps({"type": "done", "status": "not_found", "barcode": barcode, "raw_title": raw_title,
+                              "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
 
     return Response(stream_lookup(), mimetype="application/x-ndjson")
 
@@ -3024,9 +3045,11 @@ def _lookup_sync(barcode):
                 f"Backends: {_trace_summary(attempts)}",
                 "success"
             )
-            return jsonify({"status": "found", "movie": movie_info, "barcode": barcode})
+            return jsonify({"status": "found", "movie": movie_info, "barcode": barcode,
+                            "detected_format": _detect_format_from_upc(raw_title or "")})
         add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
-        return jsonify({"status": "not_found", "barcode": barcode, "raw_title": raw_title})
+        return jsonify({"status": "not_found", "barcode": barcode, "raw_title": raw_title,
+                        "detected_format": _detect_format_from_upc(raw_title or "")})
     except Exception as e:
         add_log("lookup", f"Fout bij opzoeken barcode {barcode}", str(e), "error")
         return jsonify({"error": str(e)}), 500

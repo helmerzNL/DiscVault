@@ -231,7 +231,10 @@
       <div class="progress-label" id="progressLabel">0 / 0</div>
       <div id="progressSubtitle" style="font-size:0.78rem; color:var(--text-muted); margin-top:6px; min-height:1.2em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
       <div id="progressResult" style="margin-top:16px; font-size:0.85rem; color:var(--text-muted); display:none;"></div>
-      <button class="btn btn-secondary" id="progressCloseBtn" onclick="closeProgress()" style="margin-top:20px; display:none;" data-i18n="progress.close">Sluiten</button>
+      <div style="margin-top:20px; display:flex; gap:10px; justify-content:center;">
+        <button class="btn btn-secondary" id="progressCancelBtn" onclick="cancelBulkRefresh()" data-i18n="progress.cancel">Annuleren</button>
+        <button class="btn btn-secondary" id="progressCloseBtn" onclick="closeProgress()" style="display:none;" data-i18n="progress.close">Sluiten</button>
+      </div>
     </div>
   </div>
 

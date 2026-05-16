@@ -319,10 +319,10 @@ async function doLookup(barcode) {
 
     if (finalData.status === 'exists') {
       showStatus('scanStatus', t('js.alreadyInCollection', finalData.movie.title), 'success');
-      displayMovieResult(finalData.movie, barcode, true);
+      displayMovieResult(finalData.movie, barcode, true, finalData.detected_format);
     } else if (finalData.status === 'found') {
       showStatus('scanStatus', t('js.movieFound'), 'success');
-      displayMovieResult(finalData.movie, barcode, false);
+      displayMovieResult(finalData.movie, barcode, false, finalData.detected_format);
       if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
         displayTmdbCandidates(finalData.tmdb_candidates, barcode);
       }
@@ -331,8 +331,11 @@ async function doLookup(barcode) {
       showStatus('scanStatus', t('js.movieNotFound', barcode), 'error');
       currentBarcode = barcode;
       currentMovieData = { title: finalData.raw_title || '', barcode };
+      if (finalData.detected_format) currentMovieData.format = finalData.detected_format;
       document.getElementById('resultTitle').textContent = finalData.raw_title || barcode;
-      document.getElementById('resultTags').innerHTML = '';
+      const tags = document.getElementById('resultTags');
+      tags.innerHTML = '';
+      if (finalData.detected_format) tags.innerHTML += `<span class="tag format">${finalData.detected_format}</span>`;
       document.getElementById('resultPoster').innerHTML = '<div class="no-poster">🎬</div>';
       document.getElementById('movieResult').style.display = 'flex';
       document.getElementById('noResult').style.display = 'none';
@@ -393,14 +396,17 @@ function posterSrc(m) {
   return null;
 }
 
-function displayMovieResult(movie, barcode, alreadyInCollection) {
+function displayMovieResult(movie, barcode, alreadyInCollection, detectedFormat) {
   currentBarcode = barcode;
   currentMovieData = { ...movie, barcode };
+  if (detectedFormat && !currentMovieData.format) currentMovieData.format = detectedFormat;
 
   document.getElementById('resultTitle').textContent = movie.title || '—';
 
   const tags = document.getElementById('resultTags');
   tags.innerHTML = '';
+  const fmt = currentMovieData.format || detectedFormat;
+  if (fmt)        tags.innerHTML += `<span class="tag format">${fmt}</span>`;
   if (movie.year)     tags.innerHTML += `<span class="tag">${movie.year}</span>`;
   if (movie.director) tags.innerHTML += `<span class="tag">${movie.director}</span>`;
   if (movie.genre)    movie.genre.split(',').slice(0, 2).forEach(g => { tags.innerHTML += `<span class="tag">${g.trim()}</span>`; });

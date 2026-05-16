@@ -326,11 +326,13 @@ async function bulkRefresh() {
   let errors = 0;
   const errorDetails = [];
 
+  _bulkAbortController = new AbortController();
   try {
     const r = await fetch(`${API}/movies/bulk-refresh?stream=1`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids, fetch_posters: true })
+      body: JSON.stringify({ ids, fetch_posters: true }),
+      signal: _bulkAbortController.signal
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
 
@@ -367,11 +369,18 @@ async function bulkRefresh() {
     filterMovies();
     loadStats();
   } catch(e) {
-    finishProgress(t('js.error', e.message), true);
+    if (e.name === 'AbortError') {
+      finishProgress(t('js.refreshCancelled', updated, skipped), false);
+      await loadCollection(); filterMovies(); loadStats();
+    } else {
+      finishProgress(t('js.error', e.message), true);
+    }
   }
 }
 
 // ── Progress overlay helpers ──────────────────────────────────────────────────
+
+let _bulkAbortController = null;
 
 function showProgress(title, total) {
   document.getElementById('progressTitle').textContent = title;
@@ -380,6 +389,8 @@ function showProgress(title, total) {
   document.getElementById('progressSubtitle').textContent = '';
   document.getElementById('progressResult').style.display = 'none';
   document.getElementById('progressCloseBtn').style.display = 'none';
+  const cancelBtn = document.getElementById('progressCancelBtn');
+  if (cancelBtn) cancelBtn.style.display = '';
   document.getElementById('bulkProgressOverlay').classList.add('visible');
 }
 
@@ -398,10 +409,17 @@ function finishProgress(message, isError = false) {
   result.textContent = message;
   document.getElementById('progressCloseBtn').style.display = 'inline-flex';
   document.getElementById('progressBar').style.width = '100%';
+  const cancelBtn = document.getElementById('progressCancelBtn');
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  _bulkAbortController = null;
 }
 
 function closeProgress() {
   document.getElementById('bulkProgressOverlay').classList.remove('visible');
+}
+
+function cancelBulkRefresh() {
+  if (_bulkAbortController) _bulkAbortController.abort();
 }
 
 function setFormatFilter(format, btn) {
@@ -1306,6 +1324,7 @@ async function _fillAddFormFromTmdbId(tmdbId) {
 function _fillAddFields(movie) {
   document.getElementById('addTitle').value          = movie.title          || '';
   document.getElementById('addOriginalTitle').value  = movie.original_title || '';
+  if (movie.format) { const s = document.getElementById('addFormat'); if (s) s.value = movie.format; }
   document.getElementById('addYear').value           = movie.year           || '';
   document.getElementById('addReleaseDate').value    = movie.release_date   || '';
   document.getElementById('addDirector').value       = movie.director       || '';
@@ -1364,6 +1383,7 @@ async function _lookupBarcodeForAdd(barcode) {
       showStatus('addStatus', t('js.movieNotFound', barcode), 'error'); return;
     }
     const movie = finalData.movie;
+    if (finalData.detected_format && !movie.format) movie.format = finalData.detected_format;
     _fillAddFields(movie);
     if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
       _showAddCandidates(finalData.tmdb_candidates);
