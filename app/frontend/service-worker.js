@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v4";
+const SW_VERSION = "discvault-sw-v5";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -6,13 +6,23 @@ const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
 const APP_SHELL = [
   "/",
   "/index.html",
+  "/styles.css",
   "/manifest.json",
   "/version.json",
   "/apple-touch-icon.png",
   "/favicon-32.png",
   "/favicon-192.png",
   "/icon.svg",
-  "/logo.svg"
+  "/logo.svg",
+  "/js/i18n.js",
+  "/js/scanner.js",
+  "/js/collection.js",
+  "/js/import.js",
+  "/js/auth.js",
+  "/js/social.js",
+  "/js/settings.js",
+  "/js/app.js",
+  "/i18n/translations.json"
 ];
 
 self.addEventListener("install", event => {
