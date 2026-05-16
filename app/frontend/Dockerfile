@@ -3,6 +3,8 @@ FROM nginx:alpine
 ARG BUILD_VERSION=dev
 
 COPY index.html /usr/share/nginx/html/index.html
+COPY styles.css /usr/share/nginx/html/styles.css
+COPY app.js /usr/share/nginx/html/app.js
 COPY logo.svg /usr/share/nginx/html/logo.svg
 COPY icon.svg /usr/share/nginx/html/icon.svg
 COPY apple-touch-icon.png /usr/share/nginx/html/apple-touch-icon.png
