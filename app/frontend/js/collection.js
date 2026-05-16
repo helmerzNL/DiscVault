@@ -1053,6 +1053,10 @@ async function saveEdit() {
       if (d && typeof d === 'object') d.group_ids = selectedGroupIds;
       if (d.queued) {
         showStatus('editStatus', t('js.queuedEdit'), 'info');
+        // Update local cache so re-opening edit shows the queued values
+        const idx = allMovies.findIndex(m => m.id === currentMovieId);
+        if (idx >= 0) allMovies[idx] = { ...allMovies[idx], ...payload, group_ids: selectedGroupIds };
+        filterMovies();
         // Reset dirty state so cancel/back doesn't prompt about unsaved changes
         _editSnapshot = {};
         for (const [suffix] of Object.entries(EDIT_FIELDS)) {
