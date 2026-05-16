@@ -2,34 +2,10 @@
 
 async function loadSettings() {
   loadDbStats();
-  loadBackups();
   loadAuthSettings();
   loadQueueSettings();
   loadSourceSettings();
-
-  // Check admin status and show/hide restricted tabs
-  try {
-    const mr = await fetch(`${API}/auth/me`);
-    const me = await mr.json();
-    const isSettingsAdmin = !me.authenticated || me.role === 'admin';
-    const logsBtn   = document.querySelector('[data-settings-sub="logs"]');
-    const advBtn    = document.querySelector('[data-settings-sub="advanced"]');
-    const backupBtn = document.querySelector('[data-settings-sub="backup"]');
-    if (logsBtn)   logsBtn.style.display   = isSettingsAdmin ? '' : 'none';
-    if (advBtn)    advBtn.style.display    = isSettingsAdmin ? '' : 'none';
-    if (backupBtn) backupBtn.style.display = isSettingsAdmin ? '' : 'none';
-    if (isSettingsAdmin) {
-      loadDebugSettings();
-      loadMcpSettings();
-    }
-    // If non-admin is on a restricted tab, redirect to general
-    if (!isSettingsAdmin && (currentSettingsSubmenu === 'logs' || currentSettingsSubmenu === 'advanced' || currentSettingsSubmenu === 'backup')) {
-      currentSettingsSubmenu = 'general';
-    }
-  } catch(e) {
-    loadDebugSettings();
-    loadMcpSettings();
-  }
+  loadDebugSettings(); // also initialises showLocalTitleToggle
   switchSettingsSubmenu(currentSettingsSubmenu);
 }
 
@@ -43,8 +19,6 @@ function switchSettingsSubmenu(name) {
   const map = {
     general: 'settingsSubGeneral',
     security: 'settingsSubSecurity',
-    backup: 'settingsSubBackup',
-    logs: 'settingsSubLogs',
     advanced: 'settingsSubAdvanced',
     notifications: 'settingsSubNotifications',
   };
@@ -54,7 +28,6 @@ function switchSettingsSubmenu(name) {
   });
   const target = document.getElementById(map[name] || map.general);
   if (target) target.classList.add('active');
-  if (name === 'logs') loadLogs();
   if (name === 'notifications') initPushNotifications();
 }
 

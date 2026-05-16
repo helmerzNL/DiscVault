@@ -415,10 +415,14 @@ function switchAdminSubmenu(name) {
     security: 'adminSubSecurity',
     users:    'adminSubUsers',
     groups:   'adminSubGroups',
+    backup:   'adminSubBackup',
+    logs:     'adminSubLogs',
     advanced: 'adminSubAdvanced',
   };
   const el = document.getElementById(map[name] || map.security);
   if (el) el.classList.add('active');
+  if (name === 'logs')   loadLogs();
+  if (name === 'backup') loadBackups();
 }
 
 async function loadAdminTab() {

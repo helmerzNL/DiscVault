@@ -593,10 +593,10 @@ async function clearLogs() {
 function startLogAutoRefresh() {
   stopLogAutoRefresh();
   logAutoTimer = setInterval(() => {
-    const panel = document.getElementById('panel-settings');
-    const logsSection = document.getElementById('settingsSubLogs');
+    const panel = document.getElementById('panel-admin');
+    const logsSection = document.getElementById('adminSubLogs');
     const cb    = document.getElementById('logAutoRefresh');
-    if (panel.classList.contains('active') && logsSection && logsSection.classList.contains('active') && cb && cb.checked) {
+    if (panel && panel.classList.contains('active') && logsSection && logsSection.classList.contains('active') && cb && cb.checked) {
       loadLogs();
     }
   }, 4000);
