@@ -395,6 +395,7 @@ function switchProfileSubmenu(name) {
   if (el) el.classList.add('active');
   if (name === 'general')       loadProfile();
   if (name === 'security')      loadAuthSettings();
+  if (name === 'preferences')   loadDebugSettings(); // also loads showLocalTitleToggle
   if (name === 'notifications') initPushNotifications();
   if (name === 'apikeys')       loadApiKeys();
   if (name === 'mcp')           loadMcpLogs();

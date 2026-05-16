@@ -19,7 +19,6 @@ function switchSettingsSubmenu(name) {
   const map = {
     general: 'settingsSubGeneral',
     security: 'settingsSubSecurity',
-    advanced: 'settingsSubAdvanced',
   };
   Object.values(map).forEach(id => {
     const el = document.getElementById(id);
@@ -485,9 +484,9 @@ async function saveDisplaySettings() {
     });
     await r.json();
     showLocalTitle = val;
-    showStatus('mcpSettingsStatus', t('js.advancedSettingsSaved'), 'success');
+    showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
   } catch(e) {
-    showStatus('mcpSettingsStatus', t('js.error', e.message), 'error');
+    showStatus('preferencesStatus', t('js.error', e.message), 'error');
   }
 }
 

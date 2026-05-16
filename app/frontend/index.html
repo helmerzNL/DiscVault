@@ -578,7 +578,7 @@
           <span class="mdi mdi-shield-lock-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>Beveiliging</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-profile-sub="preferences" onclick="switchProfileSubmenu('preferences')" disabled>
+        <button class="profile-sidebar-btn" type="button" data-profile-sub="preferences" onclick="switchProfileSubmenu('preferences')">
           <span class="mdi mdi-tune profile-sidebar-icon" aria-hidden="true"></span>
           <span>Voorkeuren</span>
         </button>
@@ -701,13 +701,21 @@
         <div class="profile-sub-section" id="profileSubPreferences">
           <div class="card">
             <div class="card-title">⚙️ Voorkeuren</div>
-            <div class="input-group" style="max-width:240px;">
+            <div class="input-group" style="max-width:240px; margin-bottom:20px;">
               <label>Taal / Language</label>
               <select id="profileLangSelect" onchange="changeLanguage(this.value)" style="padding:9px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.84rem; width:100%;">
                 <option value="nl">🇳🇱 Nederlands</option>
                 <option value="en">🇬🇧 English</option>
               </select>
             </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.showLocalTitle">Lokale taal voor titel weergeven</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.showLocalTitleDesc">
+              Toon de filmtitel in de taal van de app (als beschikbaar). Uitgeschakeld toont altijd de Engelse titel.
+            </div>
+            <div id="preferencesStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
         </div>
 
@@ -1029,10 +1037,6 @@
           <span class="settings-sub-icon mdi mdi-shield-lock-outline" aria-hidden="true"></span>
           <span class="settings-sub-label" data-i18n="settings.menuSecurity">Veiligheid</span>
         </button>
-        <button class="settings-sub-btn" type="button" data-settings-sub="advanced" onclick="switchSettingsSubmenu('advanced')">
-          <span class="settings-sub-icon mdi mdi-cog-outline" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="settings.menuAdvanced">Geavanceerd</span>
-        </button>
       </div>
 
       <div class="settings-sub-section active" id="settingsSubGeneral">
@@ -1103,20 +1107,6 @@
       </div><!-- /settingsSubGeneral -->
 
 
-
-      <div class="settings-sub-section" id="settingsSubAdvanced">
-        <!-- Advanced -->
-        <div class="card">
-          <div class="card-title" data-i18n="settings.advanced">Geavanceerd</div>
-          <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-            <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-            <span data-i18n="settings.showLocalTitle">Lokale taal voor titel weergeven</span>
-          </label>
-          <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.showLocalTitleDesc">
-            Toon de filmtitel in de taal van de app (als beschikbaar). Uitgeschakeld toont altijd de Engelse titel.
-          </div>
-        </div>
-      </div>
 
       <div class="settings-sub-section" id="settingsSubSecurity">
       </div>
