@@ -313,8 +313,12 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js').catch(() => {});
   });
-  // Handle messages from the service worker (e.g. notification clicks on an open app).
+  // Handle messages from the service worker.
   navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data && event.data.type === 'sw-updated') {
+      // New SW took over — reload once to pick up fresh JS/CSS files
+      window.location.reload();
+    }
     if (event.data && event.data.type === 'open-invites') {
       openInvitePanel();
     }

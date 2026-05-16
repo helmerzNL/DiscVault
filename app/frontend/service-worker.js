@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v6";
+const SW_VERSION = "discvault-sw-v7";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -35,11 +35,20 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys
-        .filter(k => !k.startsWith(SW_VERSION))
-        .map(k => caches.delete(k))
-    )).then(() => self.clients.claim())
+    caches.keys().then(keys => {
+      const oldKeys = keys.filter(k => !k.startsWith(SW_VERSION));
+      const didUpdate = oldKeys.length > 0;
+      return Promise.all(oldKeys.map(k => caches.delete(k)))
+        .then(() => self.clients.claim())
+        .then(() => {
+          if (didUpdate) {
+            // Notify all open tabs to reload so they pick up fresh JS/CSS files
+            return self.clients.matchAll({ type: 'window' }).then(clients =>
+              clients.forEach(c => c.postMessage({ type: 'sw-updated' }))
+            );
+          }
+        });
+    })
   );
 });
 
