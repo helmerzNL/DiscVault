@@ -491,6 +491,35 @@ async function loadDebugSettings() {
     if (el) el.checked = false;
     applyDebugVisibility();
   }
+  // Load display settings together with debug settings
+  try {
+    const r2 = await fetch(`${API}/settings/display`, { headers: authHeaders() });
+    const d2 = await r2.json();
+    showLocalTitle = d2.show_local_title !== false;
+    const el2 = document.getElementById('showLocalTitleToggle');
+    if (el2) el2.checked = showLocalTitle;
+  } catch(e) {
+    showLocalTitle = true;
+    const el2 = document.getElementById('showLocalTitleToggle');
+    if (el2) el2.checked = true;
+  }
+}
+
+async function saveDisplaySettings() {
+  const el = document.getElementById('showLocalTitleToggle');
+  const val = !!(el && el.checked);
+  try {
+    const r = await fetch(`${API}/settings/display`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ show_local_title: val })
+    });
+    await r.json();
+    showLocalTitle = val;
+    showStatus('mcpSettingsStatus', t('js.advancedSettingsSaved'), 'success');
+  } catch(e) {
+    showStatus('mcpSettingsStatus', t('js.error', e.message), 'error');
+  }
 }
 
 async function loadMcpSettings() {

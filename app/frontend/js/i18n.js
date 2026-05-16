@@ -53,6 +53,7 @@ let currentMovieData = {};
 let currentMovieId = null;
 let currentPersonId = null;
 let debugModeEnabled = false;
+let showLocalTitle = true;
 let allMovies = [];
 let activeFormat = '';
 let scannerRunning = false;

@@ -812,6 +812,13 @@
         <div class="card">
           <div class="card-title" data-i18n="settings.advanced">Geavanceerd</div>
           <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+            <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+            <span data-i18n="settings.showLocalTitle">Lokale taal voor titel weergeven</span>
+          </label>
+          <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:16px;" data-i18n="settings.showLocalTitleDesc">
+            Toon de filmtitel in de taal van de app (als beschikbaar). Uitgeschakeld toont altijd de Engelse titel.
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
             <input type="checkbox" id="debugEnabledToggle" onchange="saveDebugSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
             <span data-i18n="settings.debugEnabled">Debug modus (toon IDs)</span>
           </label>
@@ -1220,6 +1227,13 @@
         <div class="input-group" id="modalPlotGroup">
           <label data-i18n="modal.plot">Verhaal</label>
           <p id="modalPlot" style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;"></p>
+        </div>
+
+        <!-- English original block (shown when local title/plot is displayed) -->
+        <div id="modalEnOriginalBlock" style="display:none; margin-top:20px; padding:14px 16px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:10px;">
+          <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px;" data-i18n="modal.enOriginal">Engels origineel</div>
+          <div id="modalEnTitle" style="font-weight:600; font-size:0.9rem; margin-bottom:6px;"></div>
+          <div id="modalEnPlot" style="font-size:0.83rem; color:var(--text-muted); line-height:1.55;"></div>
         </div>
 
         <!-- Debug: multilingual title + plot per language -->

@@ -436,7 +436,12 @@ async function openMovieDetail(id) {
   const refreshBtn = document.getElementById('btnRefreshSingle');
   if (refreshBtn) refreshBtn.style.display = canEdit ? '' : 'none';
 
-  document.getElementById('modalTitle').textContent = movie.title;
+  // Determine local language code (non-English only)
+  const _localLang = (currentLang && currentLang !== 'en') ? currentLang : null;
+  const _localTitle = _localLang && showLocalTitle ? (movie[`title_${_localLang}`] || '') : '';
+  const _localPlot  = _localLang ? (movie[`plot_${_localLang}`] || '') : '';
+
+  document.getElementById('modalTitle').textContent = _localTitle || movie.title || '';
   document.getElementById('modalDirector').textContent = movie.director || '';
   const movieIdLabel = document.getElementById('modalMovieIdLabel');
   const movieIdStatus = document.getElementById('modalMovieIdStatus');
@@ -530,8 +535,25 @@ async function openMovieDetail(id) {
     row(t('d.notes'),       movie.notes, true),
   ].join('');
 
-  document.getElementById('modalPlot').textContent = movie.plot || '';
-  document.getElementById('modalPlotGroup').style.display = movie.plot ? 'block' : 'none';
+  const _displayPlot = _localPlot || movie.plot || '';
+  document.getElementById('modalPlot').textContent = _displayPlot;
+  document.getElementById('modalPlotGroup').style.display = _displayPlot ? 'block' : 'none';
+
+  // English original block: show when displaying a localised title or plot
+  const _showingLocalTitle = !!(_localTitle && _localTitle !== movie.title);
+  const _showingLocalPlot  = !!(_localPlot  && _localPlot  !== movie.plot);
+  const enBlock  = document.getElementById('modalEnOriginalBlock');
+  const enTitle  = document.getElementById('modalEnTitle');
+  const enPlot   = document.getElementById('modalEnPlot');
+  if (enBlock) {
+    const _showEn = _showingLocalTitle || _showingLocalPlot;
+    enBlock.style.display = _showEn ? 'block' : 'none';
+    if (enTitle) enTitle.textContent = _showingLocalTitle ? (movie.title || '') : '';
+    if (enPlot)  enPlot.textContent  = _showingLocalPlot  ? (movie.plot  || '') : '';
+    // hide title line if not different
+    if (enTitle) enTitle.style.display = _showingLocalTitle ? '' : 'none';
+    if (enPlot)  enPlot.style.display  = _showingLocalPlot  ? '' : 'none';
+  }
 
   // Debug: populate multilingual title + plot block (visibility controlled by applyDebugVisibility)
   const _debugI18nContent = document.getElementById('modalDebugI18nContent');

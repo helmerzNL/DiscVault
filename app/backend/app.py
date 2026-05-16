@@ -481,6 +481,7 @@ def init_db():
         ("bluraydiscde_scrape_enabled", BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT),
         ("mcp_enabled", True),
         ("debug_enabled", False),
+        ("show_local_title", True),
     ]:
         existing = conn.execute("SELECT value FROM settings WHERE key=?", (skey,)).fetchone()
         if not existing:
@@ -5071,6 +5072,31 @@ def set_debug_settings():
     conn.close()
     add_log("settings", f"Debug modus {'ingeschakeld' if val else 'uitgeschakeld'}", level="info")
     return jsonify({"debug_enabled": val})
+
+
+@app.route("/api/settings/display", methods=["GET"])
+def get_display_settings():
+    err = _require_admin()
+    if err:
+        return err
+    return jsonify({"show_local_title": _is_source_enabled("show_local_title", True)})
+
+
+@app.route("/api/settings/display", methods=["POST"])
+def set_display_settings():
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    val = bool(data.get("show_local_title", True))
+    conn = get_db()
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        ("show_local_title", "true" if val else "false")
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"show_local_title": val})
 
 
 @app.route("/api/settings/registration", methods=["GET"])
