@@ -79,17 +79,28 @@ async function _tryNativeScanner(container) {
 
   let lastCode = '';
   let lastTime = 0;
+  let _confirmCode = '';
+  let _confirmCount = 0;
 
   async function runDetect() {
     if (!scannerRunning || !_usingNative) return;
     try {
       const results = await detector.detect(video);
+      if (results.length === 0) { _confirmCode = ''; _confirmCount = 0; }
       for (const barcode of results) {
         const code = barcode.rawValue;
         const now = Date.now();
         if (code === lastCode && now - lastTime < 3000) continue;
-        lastCode = code;
-        lastTime = now;
+        // Require 2 consecutive detections of the same code to filter false positives
+        if (code === _confirmCode) {
+          _confirmCount++;
+        } else {
+          _confirmCode = code;
+          _confirmCount = 1;
+        }
+        if (_confirmCount < 2) break;
+        lastCode = code; lastTime = now;
+        _confirmCode = ''; _confirmCount = 0;
         stopScanner();
         document.getElementById('manualBarcode').value = code;
         doLookup(code);
@@ -98,7 +109,7 @@ async function _tryNativeScanner(container) {
     } catch(e) { /* video not ready yet */ }
     if (scannerRunning && _usingNative) _nativeTimer = setTimeout(runDetect, 150);
   }
-  _nativeTimer = setTimeout(runDetect, 200);
+  _nativeTimer = setTimeout(runDetect, 1000); // 1s initial delay: time for camera autofocus
   return 'success';
 }
 

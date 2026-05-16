@@ -268,17 +268,17 @@
     <div class="card" style="max-width: 640px;">
       <div class="card-title" data-i18n="add.title">Snel Handmatig Toevoegen</div>
       <p style="color:var(--text-muted); font-size:0.84rem; margin-bottom:14px; line-height:1.5;">
-        <span data-i18n="add.description">Gebruik dit onderdeel als scannen niet lukt: vul barcode en titel in, of gebruik Auto-fill op basis van titel.</span>
+        <span data-i18n="add.description">Vul een barcode in om automatisch op te zoeken, of typ een titel en klik op 🔍 Auto-fill.</span>
       </p>
       <div id="addStatus" class="status-msg"></div>
 
       <div class="form-grid">
         <div class="input-group full">
-          <label data-i18n="add.barcodeLabel">Barcode / Eigen ID *</label>
+          <label data-i18n="add.barcodeLabel">Barcode / Eigen ID</label>
           <input type="text" id="addBarcode" placeholder="Barcode of uniek ID" data-i18n-placeholder="add.barcodePlaceholder">
         </div>
         <div class="input-group full">
-          <label data-i18n="add.titleLabel">Titel *</label>
+          <label data-i18n="add.titleLabel">Titel</label>
           <div style="display:flex; gap: 8px;">
             <input type="text" id="addTitle" placeholder="Bijv. The Dark Knight" data-i18n-placeholder="add.titlePlaceholder">
             <button class="btn btn-secondary" onclick="autoFillFromTitle()" style="white-space:nowrap; padding: 10px 14px;" data-i18n="add.autofill">🔍 Auto-fill</button>
@@ -336,6 +336,12 @@
           <label data-i18n="add.posterUrl">Poster URL</label>
           <input type="text" id="addPoster" placeholder="https://image.tmdb.org/..." data-i18n-placeholder="add.posterPlaceholder">
         </div>
+        <input type="hidden" id="addTmdbIdHidden" value="">
+      </div>
+
+      <div id="addTmdbCandidates" style="display:none; margin-top:16px;">
+        <div class="tmdb-candidates-header" data-i18n="scan.otherMatches">Andere overeenkomsten — kies de juiste film:</div>
+        <div id="addCandidateList" class="tmdb-candidate-list"></div>
       </div>
 
       <div class="btn-row">

@@ -1140,55 +1140,178 @@ async function autoFillFromTitle() {
   const title = document.getElementById('addTitle').value.trim();
   if (!title) return;
   showStatus('addStatus', t('js.searchingMovie'), 'info');
-
+  document.getElementById('addTmdbCandidates').style.display = 'none';
   try {
-    const r = await fetch(`${API}/search_title?q=${encodeURIComponent(title)}`);
+    const r = await fetch(`${API}/tmdb_candidates?title=${encodeURIComponent(title)}`);
     const d = await r.json();
-    if (d.status === 'found') {
-      const m = d.movie;
-      document.getElementById('addTitle').value = m.title || title;
-      document.getElementById('addYear').value = m.year || '';
-      document.getElementById('addDirector').value = m.director || '';
-      document.getElementById('addGenre').value = m.genre || '';
-      document.getElementById('addRuntime').value = m.runtime || '';
-      document.getElementById('addRating').value = m.rating || '';
-      document.getElementById('addHdr').value = m.hdr || '';
-      document.getElementById('addAudioTracks').value = m.audio_tracks || '';
-      document.getElementById('addSubtitles').value = m.subtitles || '';
-      document.getElementById('addPoster').value = m.poster || '';
-      showStatus('addStatus', t('js.infoFound', m.title), 'success');
-    } else {
+    const cands = d.candidates || [];
+    if (cands.length === 0) {
       showStatus('addStatus', t('js.noInfoFound'), 'error');
+    } else if (cands.length === 1) {
+      await _fillAddFormFromTmdbId(cands[0].tmdb_id);
+    } else {
+      _showAddCandidates(cands);
+      showStatus('addStatus', '', '');
     }
   } catch(e) {
     showStatus('addStatus', t('js.error', e.message), 'error');
   }
 }
 
+function _showAddCandidates(candidates) {
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  document.getElementById('addCandidateList').innerHTML = candidates.map(c => `
+    <div class="tmdb-candidate-card" onclick="_selectAddCandidate('${c.tmdb_id}')">
+      <div class="tmdb-candidate-poster">
+        ${c.poster ? `<img src="${esc(c.poster)}" loading="lazy" alt="">` : '<div class="no-poster">🎬</div>'}
+      </div>
+      <div class="tmdb-candidate-info">
+        <strong>${esc(c.title)}${c.year ? ` <span class="tag">${esc(c.year)}</span>` : ''}</strong>
+        <p>${esc(c.overview)}</p>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('addTmdbCandidates').style.display = 'block';
+}
+
+async function _selectAddCandidate(tmdbId) {
+  document.getElementById('addTmdbCandidates').style.display = 'none';
+  const existingBarcode = document.getElementById('addBarcode').value.trim();
+  showStatus('addStatus', t('js.lookingUp'), 'info');
+  try {
+    const r = await fetch(`${API}/tmdb_movie/${tmdbId}`);
+    const d = await r.json();
+    if (!r.ok || !d.movie) {
+      showStatus('addStatus', d.error || t('js.backendError', r.status), 'error');
+      return;
+    }
+    _fillAddFields(d.movie);
+    if (existingBarcode) {
+      // Barcode was already entered: auto-save directly
+      await _doSaveManual(existingBarcode, d.movie.title);
+    } else {
+      // Title-only flow: fill form, let user review and click submit
+      showStatus('addStatus', t('js.infoFound', d.movie.title), 'success');
+    }
+  } catch(e) {
+    showStatus('addStatus', t('js.error', e.message), 'error');
+  }
+}
+
+async function _fillAddFormFromTmdbId(tmdbId) {
+  showStatus('addStatus', t('js.lookingUp'), 'info');
+  try {
+    const r = await fetch(`${API}/tmdb_movie/${tmdbId}`);
+    const d = await r.json();
+    if (r.ok && d.movie) {
+      _fillAddFields(d.movie);
+      showStatus('addStatus', t('js.infoFound', d.movie.title), 'success');
+    } else {
+      showStatus('addStatus', d.error || t('js.backendError', r.status), 'error');
+    }
+  } catch(e) {
+    showStatus('addStatus', t('js.error', e.message), 'error');
+  }
+}
+
+function _fillAddFields(movie) {
+  document.getElementById('addTitle').value = movie.title || '';
+  document.getElementById('addYear').value = movie.year || '';
+  document.getElementById('addDirector').value = movie.director || '';
+  document.getElementById('addGenre').value = movie.genre || '';
+  document.getElementById('addRuntime').value = movie.runtime || '';
+  document.getElementById('addRating').value = movie.rating || '';
+  document.getElementById('addHdr').value = movie.hdr || '';
+  document.getElementById('addAudioTracks').value = movie.audio_tracks || '';
+  document.getElementById('addSubtitles').value = movie.subtitles || '';
+  document.getElementById('addPoster').value = movie.poster || '';
+  if (movie.tmdb_id) document.getElementById('addTmdbIdHidden').value = String(movie.tmdb_id);
+}
+
+async function _lookupBarcodeForAdd(barcode) {
+  showStatus('addStatus', t('js.lookingUp'), 'info');
+  document.getElementById('addTmdbCandidates').style.display = 'none';
+  try {
+    const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', finalData = null;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        if (msg.type === 'step') {
+          const icon = msg.status === 'searching' ? '<span class="spinner"></span>' : msg.status === 'hit' ? '✓' : '—';
+          showStatus('addStatus', `${icon} ${msg.source}${msg.detail ? ': ' + msg.detail : ''}`, 'info');
+        } else if (msg.type === 'done') { finalData = msg; }
+      }
+    }
+    if (!finalData || finalData.error) {
+      showStatus('addStatus', finalData?.error || t('js.backendError', ''), 'error'); return;
+    }
+    if (finalData.status === 'exists') {
+      showStatus('addStatus', t('js.alreadyInCollection', finalData.movie.title), 'success'); return;
+    }
+    if (finalData.status === 'not_found') {
+      showStatus('addStatus', t('js.movieNotFound', barcode), 'error'); return;
+    }
+    const movie = finalData.movie;
+    _fillAddFields(movie);
+    if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
+      _showAddCandidates(finalData.tmdb_candidates);
+      showStatus('addStatus', '', '');
+    } else {
+      await _doSaveManual(barcode, movie.title);
+    }
+  } catch(e) {
+    showStatus('addStatus', t('js.connectionError', e.message), 'error');
+  }
+}
+
 async function submitManual() {
   const barcode = document.getElementById('addBarcode').value.trim();
   const title = document.getElementById('addTitle').value.trim();
-  if (!barcode || !title) {
-    showStatus('addStatus', t('js.barcodeRequired'), 'error');
+  if (!barcode && !title) {
+    showStatus('addStatus', t('js.barcodeOrTitleRequired'), 'error');
     return;
   }
+  // Barcode-only: look up barcode, fill form, then save
+  if (barcode && !title) {
+    await _lookupBarcodeForAdd(barcode);
+    return;
+  }
+  // Title-only without prior TMDb resolution: show candidates first
+  if (title && !barcode && !document.getElementById('addTmdbIdHidden').value.trim()) {
+    await autoFillFromTitle();
+    return;
+  }
+  // Both filled, or title + resolved tmdb_id: save
+  const effectiveBarcode = barcode ||
+    'TITLE-' + title.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 30) + '-' + Date.now().toString().slice(-6);
+  await _doSaveManual(effectiveBarcode, title);
+}
 
+async function _doSaveManual(barcode, title) {
   const payload = {
     barcode, title,
-    year: document.getElementById('addYear').value,
-    director: document.getElementById('addDirector').value,
-    genre: document.getElementById('addGenre').value,
-    format: document.getElementById('addFormat').value,
-    runtime: document.getElementById('addRuntime').value,
-    rating: document.getElementById('addRating').value,
-    hdr: document.getElementById('addHdr').value,
+    year:         document.getElementById('addYear').value,
+    director:     document.getElementById('addDirector').value,
+    genre:        document.getElementById('addGenre').value,
+    format:       document.getElementById('addFormat').value,
+    runtime:      document.getElementById('addRuntime').value,
+    rating:       document.getElementById('addRating').value,
+    hdr:          document.getElementById('addHdr').value,
     audio_tracks: document.getElementById('addAudioTracks').value,
-    subtitles: document.getElementById('addSubtitles').value,
-    location: document.getElementById('addLocation').value,
-    notes: document.getElementById('addNotes').value,
-    poster: document.getElementById('addPoster').value,
+    subtitles:    document.getElementById('addSubtitles').value,
+    location:     document.getElementById('addLocation').value,
+    notes:        document.getElementById('addNotes').value,
+    poster:       document.getElementById('addPoster').value,
+    tmdb_id:      document.getElementById('addTmdbIdHidden').value,
   };
-
   try {
     const r = await fetch(`${API}/movies`, {
       method: 'POST',
@@ -1197,11 +1320,7 @@ async function submitManual() {
     });
     const d = await r.json();
     if (r.ok) {
-      if (d.queued) {
-        showStatus('addStatus', t('js.queuedAdd', title), 'info');
-      } else {
-        showStatus('addStatus', t('js.added', title), 'success');
-      }
+      showStatus('addStatus', d.queued ? t('js.queuedAdd', title) : t('js.added', title), d.queued ? 'info' : 'success');
       clearManualForm();
       loadStats();
     } else {
@@ -1214,9 +1333,11 @@ async function submitManual() {
 
 function clearManualForm() {
   ['addBarcode','addTitle','addYear','addDirector','addGenre','addRuntime',
-   'addRating','addHdr','addAudioTracks','addSubtitles','addLocation','addNotes','addPoster'].forEach(id => {
+   'addRating','addHdr','addAudioTracks','addSubtitles','addLocation','addNotes',
+   'addPoster','addTmdbIdHidden'].forEach(id => {
     document.getElementById(id).value = '';
   });
+  document.getElementById('addTmdbCandidates').style.display = 'none';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

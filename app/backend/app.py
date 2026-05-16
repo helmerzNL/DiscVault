@@ -1913,8 +1913,11 @@ def debug_person_photo(person_id):
 @app.route("/api/movies", methods=["POST"])
 def add_movie():
     data = request.json or {}
-    if not data.get("barcode") or not data.get("title"):
-        return jsonify({"error": "barcode and title are required"}), 400
+    if not data.get("title"):
+        return jsonify({"error": "title is required"}), 400
+    if not data.get("barcode"):
+        safe = re.sub(r'[^A-Za-z0-9]', '_', data["title"])[:30].upper()
+        data = {**data, "barcode": f"MANUAL-{safe}-{int(datetime.utcnow().timestamp() * 1000) % 1000000}"}
     poster_file = data.get("poster_file") or ""
     if not poster_file and data.get("poster"):
         poster_file = download_poster(data["poster"]) or ""
