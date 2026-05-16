@@ -107,10 +107,43 @@ function queueActionLabel(item) {
   if (!item || !item.method || !item.url) return t('js.unknownAction');
   const u = item.url;
   const m = item.method;
-  if (m === 'POST' && u === '/api/movies') return t('js.actionAdd');
-  if (m === 'PUT' && u.startsWith('/api/movies/')) return t('js.actionUpdate');
-  if (m === 'DELETE' && u.startsWith('/api/movies/')) return t('js.actionDelete');
-  if (m === 'POST' && u === '/api/movies/bulk-delete') return t('js.actionBulkDelete');
+
+  // Escape HTML to prevent XSS from stored titles
+  const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // Extract movie ID from URL and look up title in local cache
+  const idMatch = u.match(/\/api\/(?:movies|watchlist|watched)\/(\d+)/);
+  const movieId = idMatch ? parseInt(idMatch[1]) : null;
+  const cachedMovie = movieId ? allMovies.find(x => x.id === movieId) : null;
+
+  // Also try to extract title from stored body (e.g. for edits or adds)
+  let bodyTitle = null;
+  try { const p = item.body ? JSON.parse(item.body) : {}; bodyTitle = p.title || null; } catch(e) {}
+
+  const title = esc(cachedMovie?.title || bodyTitle || null);
+  const titleTag = title ? ` <span style="color:var(--accent)">"${title}"</span>` : '';
+
+  // Watched date
+  let watchDate = '';
+  try { watchDate = item.body ? (JSON.parse(item.body).watched_at || '') : ''; } catch(e) {}
+
+  // Movies
+  if (m === 'POST' && u === '/api/movies') return t('js.actionAdd') + titleTag;
+  if (m === 'PUT'  && /\/api\/movies\/\d+$/.test(u))        return t('js.actionUpdate') + titleTag;
+  if (m === 'PUT'  && /\/api\/movies\/\d+\/groups$/.test(u)) return t('js.actionUpdateGroups') + titleTag;
+  if (m === 'DELETE' && /\/api\/movies\/\d+$/.test(u))      return t('js.actionDelete') + titleTag;
+  if (m === 'POST' && u === '/api/movies/bulk-delete')       return t('js.actionBulkDelete');
+
+  // Watchlist
+  if (m === 'POST'   && /\/api\/watchlist\/\d+$/.test(u)) return t('js.actionWatchlistAdd') + titleTag;
+  if (m === 'DELETE' && /\/api\/watchlist\/\d+$/.test(u)) return t('js.actionWatchlistRemove') + titleTag;
+  if (m === 'POST'   && u.startsWith('/api/watchlist/bulk')) return t('js.actionWatchlistBulk');
+
+  // Watched / watch history
+  if (m === 'POST' && /\/api\/watched\/\d+$/.test(u))
+    return t('js.actionWatched') + titleTag + (watchDate ? ` (${watchDate})` : '');
+  if (m === 'DELETE' && /\/api\/watched\/entry\/\d+$/.test(u)) return t('js.actionWatchedRemove');
+
   return `${m} ${u}`;
 }
 

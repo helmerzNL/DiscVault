@@ -542,13 +542,32 @@ async function markWatchedModal(type) {
     body: JSON.stringify({ watched_at: date })
   });
   if (!r.ok) return;
-  // Re-fetch history to get accurate most-recent date and update history section
-  let entries = [];
-  try { entries = await _refreshWatchedHistoryPopup(currentMovieId); } catch(e) {}
-  _modalMovieLastWatched = entries.length ? entries[0].watched_at.slice(0,10) : date;
-  _updateWatchedBtn();
-  const m = allMovies.find(x => x.id === currentMovieId);
-  if (m) m.last_watched = _modalMovieLastWatched;
+  const rd = await r.json().catch(() => ({}));
+
+  if (rd && rd.queued) {
+    // Offline: update UI optimistically without server round-trip
+    _modalMovieLastWatched = date;
+    _updateWatchedBtn();
+    const m = allMovies.find(x => x.id === currentMovieId);
+    if (m) m.last_watched = date;
+    // Show the new entry in the history popup with a pending indicator
+    const section = document.getElementById('watchedHistorySection');
+    const container = document.getElementById('watchedHistoryEntries');
+    if (section && container) {
+      section.style.display = '';
+      const label = _formatDate(date);
+      const row = `<div class="watched-history-entry"><span>${label}</span><span style="font-size:0.7rem;color:var(--text-muted)"> ⏳</span></div>`;
+      container.innerHTML = row + container.innerHTML;
+    }
+  } else {
+    // Online: re-fetch from server for accurate history
+    let entries = [];
+    try { entries = await _refreshWatchedHistoryPopup(currentMovieId); } catch(e) {}
+    _modalMovieLastWatched = entries.length ? entries[0].watched_at.slice(0, 10) : date;
+    _updateWatchedBtn();
+    const m = allMovies.find(x => x.id === currentMovieId);
+    if (m) m.last_watched = _modalMovieLastWatched;
+  }
   // Refresh Watch History page if currently open
   if (document.getElementById('listsSubWatchHistory')?.classList.contains('active')) {
     loadWatchHistory();
