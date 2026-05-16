@@ -277,6 +277,17 @@ function lookupBarcode() {
   doLookup(val);
 }
 
+// Detect disc format from a title string (mirrors backend _detect_format_from_upc logic)
+function _detectFormatFromTitle(title) {
+  const t = (title || '').toLowerCase();
+  if (/4k[\s-]?uhd|ultra[\s-]*hd|\buhd\b/.test(t)) return '4K UHD';
+  if (/\b4k\b/.test(t) && /blu[- ]?ray/.test(t)) return '4K UHD';
+  if (/\b4k\b/.test(t)) return '4K UHD';
+  if (/blu[- ]?ray/.test(t)) return 'Blu-ray';
+  if (/\bdvd\b/.test(t)) return 'DVD';
+  return '';
+}
+
 async function doLookup(barcode) {
   showStatus('scanStatus', t('js.lookingUp'), 'info');
   document.getElementById('movieResult').style.display = 'none';
@@ -323,7 +334,9 @@ async function doLookup(barcode) {
       _detectedFormat = finalData.detected_format || '';
       displayMovieResult(finalData.movie, barcode, true, _detectedFormat);
     } else if (finalData.status === 'found') {
-      _detectedFormat = finalData.detected_format || '';
+      _detectedFormat = finalData.detected_format
+        || _detectFormatFromTitle(finalData.raw_title || stepRawTitle)
+        || '';
       const fmtLabel = _detectedFormat ? ` · ${_detectedFormat}` : '';
       showStatus('scanStatus', t('js.movieFound') + fmtLabel, 'success');
       displayMovieResult(finalData.movie, barcode, false, _detectedFormat);
@@ -332,7 +345,9 @@ async function doLookup(barcode) {
       }
     } else {
       // Barcode not found: show empty placeholder so user can still supplement
-      _detectedFormat = finalData.detected_format || '';
+      _detectedFormat = finalData.detected_format
+        || _detectFormatFromTitle(finalData.raw_title || stepRawTitle)
+        || '';
       const fmtLabel = _detectedFormat ? ` · ${_detectedFormat}` : '';
       showStatus('scanStatus', t('js.movieNotFound', barcode) + fmtLabel, 'error');
       currentBarcode = barcode;

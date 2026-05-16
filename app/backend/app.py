@@ -2961,6 +2961,7 @@ def lookup(barcode):
                     f"Backends: {_trace_summary(attempts)}", "success")
             yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
                               "tmdb_candidates": tmdb_candidates,
+                              "raw_title": raw_title or "",
                               "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
         else:
             add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
