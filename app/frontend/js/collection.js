@@ -609,23 +609,60 @@ async function openMovieDetail(id) {
   // Debug: populate multilingual title + plot block (visibility controlled by applyDebugVisibility)
   const _debugI18nContent = document.getElementById('modalDebugI18nContent');
   if (_debugI18nContent) {
+    // Parse per-country content ratings
+    let _ratings = {};
+    try { _ratings = movie.content_ratings ? JSON.parse(movie.content_ratings) : {}; } catch(e) {}
+
     const _i18nLangs = [
-      { code: 'nl', flag: '🇳🇱', name: 'Nederlands' },
-      { code: 'fr', flag: '🇫🇷', name: 'Français' },
-      { code: 'de', flag: '🇩🇪', name: 'Deutsch' },
-      { code: 'es', flag: '🇪🇸', name: 'Español' },
-      { code: 'pt', flag: '🇵🇹', name: 'Português' },
-      { code: 'it', flag: '🇮🇹', name: 'Italiano' },
+      { code: 'nl', flag: '🇳🇱', name: 'Nederlands', country: 'NL' },
+      { code: 'fr', flag: '🇫🇷', name: 'Français',   country: 'FR' },
+      { code: 'de', flag: '🇩🇪', name: 'Deutsch',    country: 'DE' },
+      { code: 'es', flag: '🇪🇸', name: 'Español',    country: 'ES' },
+      { code: 'pt', flag: '🇵🇹', name: 'Português',  country: 'PT' },
+      { code: 'it', flag: '🇮🇹', name: 'Italiano',   country: 'IT' },
     ];
+    const _ratingBadge = c => c
+      ? `<span style="display:inline-block;font-size:0.68rem;font-weight:700;padding:1px 6px;border:1px solid rgba(255,165,0,0.5);border-radius:4px;color:#f90;margin-left:8px;vertical-align:middle;">${c}</span>`
+      : '';
+
+    // Langs with title or plot
     const _i18nItems = _i18nLangs.filter(l => movie[`title_${l.code}`] || movie[`plot_${l.code}`]);
-    if (_i18nItems.length) {
-      _debugI18nContent.innerHTML = _i18nItems.map((l, i) => `
-        <div style="margin-bottom:${i < _i18nItems.length - 1 ? '14px' : '0'}; padding-bottom:${i < _i18nItems.length - 1 ? '14px' : '0'}; ${i < _i18nItems.length - 1 ? 'border-bottom:1px solid rgba(255,165,0,0.18);' : ''}">
-          <div style="font-weight:600; font-size:0.92rem; margin-bottom:4px;">${l.flag} ${movie[`title_${l.code}`] || '<em style="opacity:.5">—</em>'}</div>
-          ${movie[`plot_${l.code}`] ? `<div style="font-size:0.83rem; color:var(--text-muted); line-height:1.55;">${movie[`plot_${l.code}`]}</div>` : ''}
-        </div>`).join('');
+
+    // Countries shown at the bottom: EN variants + langs with rating but no title/plot
+    const _enCountries = [
+      { country: 'US', flag: '🇺🇸' },
+      { country: 'GB', flag: '🇬🇧' },
+      { country: 'CA', flag: '🇨🇦' },
+    ];
+    const _bottomCountries = [
+      ..._i18nLangs.filter(l => _ratings[l.country] && !_i18nItems.find(x => x.country === l.country))
+                   .map(l => ({ country: l.country, flag: l.flag })),
+      ..._enCountries.filter(e => _ratings[e.country]),
+    ];
+
+    const hasContent = _i18nItems.length || _bottomCountries.length;
+    if (hasContent) {
+      let html = _i18nItems.map((l, i) => {
+        const divider = (i < _i18nItems.length - 1 || _bottomCountries.length)
+          ? 'margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,165,0,0.18);'
+          : '';
+        return `<div style="${divider}">
+          <div style="font-weight:600;font-size:0.92rem;margin-bottom:4px;">
+            ${l.flag} ${movie[`title_${l.code}`] || '<em style="opacity:.5">—</em>'}
+            ${_ratingBadge(_ratings[l.country])}
+          </div>
+          ${movie[`plot_${l.code}`] ? `<div style="font-size:0.83rem;color:var(--text-muted);line-height:1.55;">${movie[`plot_${l.code}`]}</div>` : ''}
+        </div>`;
+      }).join('');
+
+      if (_bottomCountries.length) {
+        html += `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;${_i18nItems.length ? 'margin-top:4px;' : ''}">
+          ${_bottomCountries.map(e => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.82rem;color:var(--text-muted);">${e.flag} ${e.country} ${_ratingBadge(_ratings[e.country])}</span>`).join('')}
+        </div>`;
+      }
+      _debugI18nContent.innerHTML = html;
     } else {
-      _debugI18nContent.innerHTML = '<span style="font-size:0.83rem; color:var(--text-muted);">Geen vertalingen beschikbaar voor deze film.</span>';
+      _debugI18nContent.innerHTML = '<span style="font-size:0.83rem;color:var(--text-muted);">Geen vertalingen beschikbaar voor deze film.</span>';
     }
   }
 

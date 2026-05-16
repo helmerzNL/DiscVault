@@ -43,6 +43,7 @@ OMDB_API_KEY  = os.environ.get("OMDB_API_KEY",  "")
 TMDB_API_KEY  = os.environ.get("TMDB_API_KEY",  "")
 # DiscVault supported languages — used for multilingual TMDb title/plot lookups
 TMDB_LANGUAGES = [("nl", "nl-NL"), ("fr", "fr-FR"), ("de", "de-DE"), ("es", "es-ES"), ("pt", "pt-PT"), ("it", "it-IT")]
+RATING_COUNTRIES = {"US", "GB", "CA", "NL", "FR", "DE", "ES", "PT", "IT"}
 MCP_API_KEY   = os.environ.get("MCP_API_KEY", "")
 JWT_SECRET    = os.environ.get("JWT_SECRET", secrets.token_hex(32))
 RP_ID         = os.environ.get("RP_ID", "localhost")
@@ -139,6 +140,7 @@ SCHEMA_COLUMNS = [
     # Classification
     ("genre",                "TEXT"),
     ("audience_rating",      "TEXT"),
+    ("content_ratings",      "TEXT"),
     # Technical
     ("format",               "TEXT DEFAULT '4K UHD'"),
     ("runtime",              "TEXT"),
@@ -857,6 +859,36 @@ def _titles_overlap(candidate: str, tmdb_title: str, min_ratio: float = 0.30) ->
 # External API lookups
 # ---------------------------------------------------------------------------
 
+def _fetch_tmdb_ratings(tmdb_id):
+    """Fetch content certifications for supported countries via TMDb release_dates."""
+    if not TMDB_API_KEY or not tmdb_id:
+        return {}
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/movie/{tmdb_id}/release_dates"
+            f"?api_key={TMDB_API_KEY}",
+            timeout=6
+        )
+        if r.status_code != 200:
+            return {}
+        ratings = {}
+        for entry in r.json().get("results", []):
+            country = entry.get("iso_3166_1", "")
+            if country not in RATING_COUNTRIES:
+                continue
+            cert = ""
+            for rd in sorted(entry.get("release_dates", []), key=lambda x: 0 if x.get("type") == 3 else 1):
+                c = (rd.get("certification") or "").strip()
+                if c:
+                    cert = c
+                    break
+            if cert:
+                ratings[country] = cert
+        return ratings
+    except Exception:
+        return {}
+
+
 def lookup_by_barcode_upcitemdb(barcode: str):
     try:
         r = requests.get(
@@ -897,9 +929,11 @@ def lookup_movie_omdb(title=None, imdb_id=None):
                     "runtime":      re.sub(r'[^\d]', '', d.get("Runtime", "")),
                     "rating":       d.get("imdbRating", ""),
                     "imdb_id":      d.get("imdbID", ""),
-                    "country":      d.get("Country", ""),
-                    "language":     d.get("Language", ""),
-                    "tmdb_id":      "",
+                    "country":        d.get("Country", ""),
+                    "language":       d.get("Language", ""),
+                    "tmdb_id":        "",
+                    "audience_rating": d.get("Rated", "") if d.get("Rated", "") not in ("", "N/A", "Not Rated") else "",
+                    "_content_ratings": {"US": d["Rated"]} if d.get("Rated") and d.get("Rated") not in ("N/A", "Not Rated", "") else {},
                 }
     except Exception:
         pass
@@ -1029,6 +1063,13 @@ def lookup_movie_tmdb(title, year=""):
                     result[f"plot_{lang_code}"]  = td.get("overview", "") or ""
             except Exception:
                 pass
+
+        # 4. Fetch content ratings per country
+        _cr = _fetch_tmdb_ratings(movie_id)
+        if _cr:
+            result["_content_ratings"] = _cr
+            if not result.get("audience_rating") and _cr.get("US"):
+                result["audience_rating"] = _cr["US"]
 
         return result
     except Exception:
@@ -1162,6 +1203,14 @@ def lookup_movie_tmdb_by_id(tmdb_id):
                     result[f"plot_{lang_code}"]  = td.get("overview", "") or ""
             except Exception:
                 pass
+
+        # Fetch content ratings per country
+        _cr = _fetch_tmdb_ratings(tmdb_id)
+        if _cr:
+            result["_content_ratings"] = _cr
+            if not result.get("audience_rating") and _cr.get("US"):
+                result["audience_rating"] = _cr["US"]
+
         return result
     except Exception:
         pass
@@ -2404,6 +2453,18 @@ def sync_single_all_backends(movie_id):
             if used:
                 used_sources.append(src)
 
+        # Special merge for content ratings — union of all sources (first wins per country)
+        merged_ratings = {}
+        for _, data in collected:
+            if data and isinstance(data.get("_content_ratings"), dict):
+                for country, cert in data["_content_ratings"].items():
+                    if country not in merged_ratings:
+                        merged_ratings[country] = cert
+        if merged_ratings:
+            info["content_ratings"] = json.dumps(merged_ratings, ensure_ascii=False)
+            if not info.get("audience_rating") and merged_ratings.get("US"):
+                info["audience_rating"] = merged_ratings["US"]
+
         if _is_bluray_scrape_enabled():
             specs, bluray_attempts = lookup_movie_bluray_specs_traced(
                 info.get("title") or search_title,
@@ -2444,6 +2505,7 @@ def sync_single_all_backends(movie_id):
             "title_nl", "title_fr", "title_de", "title_es",
             "plot_nl",  "plot_fr",  "plot_de",  "plot_es",
             "backdrop", "backdrops", "trailer_url",
+            "audience_rating", "content_ratings",
         ]
         updates = {f: info[f] for f in refresh_fields if info.get(f)}
 
@@ -2712,7 +2774,14 @@ def bulk_refresh():
                 "actor", "producer", "studios", "original_title",
                 "language", "country", "runtime", "genre",
                 "hdr", "audio_tracks", "subtitles",
+                "audience_rating", "content_ratings",
             ]
+            # Convert _content_ratings dict to JSON string for storage
+            if isinstance(info.get("_content_ratings"), dict) and info["_content_ratings"]:
+                cr = info["_content_ratings"]
+                info["content_ratings"] = json.dumps(cr, ensure_ascii=False)
+                if not info.get("audience_rating") and cr.get("US"):
+                    info["audience_rating"] = cr["US"]
             updates = {f: info[f] for f in refresh_fields if info.get(f)}
 
             new_poster_url = info.get("poster", "")
@@ -3040,6 +3109,13 @@ def _lookup_sync(barcode):
                 movie_info = _merge_disc_specs(movie_info, specs)
             else:
                 _trace_add(attempts, "Blu-ray.com", "skipped", "spec enrichment uit")
+            # Finalise content ratings
+            if isinstance(movie_info.get("_content_ratings"), dict):
+                cr = movie_info.pop("_content_ratings")
+                if cr:
+                    movie_info["content_ratings"] = json.dumps(cr, ensure_ascii=False)
+                    if not movie_info.get("audience_rating") and cr.get("US"):
+                        movie_info["audience_rating"] = cr["US"]
             add_log(
                 "lookup",
                 f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
@@ -3082,6 +3158,13 @@ def search_title():
             _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
         if movie_info:
             add_log("lookup", f"Titel-zoekactie gevonden: \"{movie_info.get('title') or title}\"", f"Backends: {_trace_summary(attempts)}", "success")
+            # Finalise content ratings
+            if isinstance(movie_info.get("_content_ratings"), dict):
+                cr = movie_info.pop("_content_ratings")
+                if cr:
+                    movie_info["content_ratings"] = json.dumps(cr, ensure_ascii=False)
+                    if not movie_info.get("audience_rating") and cr.get("US"):
+                        movie_info["audience_rating"] = cr["US"]
             return jsonify({"status": "found", "movie": movie_info})
         add_log("lookup", f"Titel-zoekactie geen resultaat: \"{title}\"", f"Backends: {_trace_summary(attempts)}", "warn")
         return jsonify({"status": "not_found"})
@@ -3104,6 +3187,12 @@ def api_tmdb_movie(tmdb_id):
         movie_info = lookup_movie_tmdb_by_id(tmdb_id)
         if not movie_info:
             return jsonify({"error": "not found"}), 404
+        if isinstance(movie_info.get("_content_ratings"), dict):
+            cr = movie_info.pop("_content_ratings")
+            if cr:
+                movie_info["content_ratings"] = json.dumps(cr, ensure_ascii=False)
+                if not movie_info.get("audience_rating") and cr.get("US"):
+                    movie_info["audience_rating"] = cr["US"]
         return jsonify({"movie": movie_info})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
