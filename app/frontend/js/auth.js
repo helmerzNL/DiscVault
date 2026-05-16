@@ -407,12 +407,13 @@ function switchProfileSubmenu(name) {
 
 let currentAdminSubmenu = 'security';
 
+const ADMIN_SECTIONS = ['adminSubSecurity','adminSubUsers','adminSubGroups','adminSubBackup','adminSubLogs','adminSubAdvanced'];
+
 function switchAdminSubmenu(name) {
   currentAdminSubmenu = name;
   document.querySelectorAll('[data-admin-sub]').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-admin-sub') === name);
   });
-  document.querySelectorAll('#panel-admin .profile-sub-section').forEach(s => s.classList.remove('active'));
   const map = {
     security: 'adminSubSecurity',
     users:    'adminSubUsers',
@@ -421,8 +422,13 @@ function switchAdminSubmenu(name) {
     logs:     'adminSubLogs',
     advanced: 'adminSubAdvanced',
   };
-  const el = document.getElementById(map[name] || map.security);
-  if (el) el.classList.add('active');
+  const targetId = map[name] || map.security;
+  ADMIN_SECTIONS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('active'); el.style.display = 'none'; }
+  });
+  const target = document.getElementById(targetId);
+  if (target) { target.classList.add('active'); target.style.display = 'block'; }
   if (name === 'logs')   loadLogs();
   if (name === 'backup') loadBackups();
 }
