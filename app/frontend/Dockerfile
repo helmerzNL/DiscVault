@@ -4,14 +4,7 @@ ARG BUILD_VERSION=dev
 
 COPY index.html /usr/share/nginx/html/index.html
 COPY styles.css /usr/share/nginx/html/styles.css
-COPY i18n.js /usr/share/nginx/html/i18n.js
-COPY scanner.js /usr/share/nginx/html/scanner.js
-COPY collection.js /usr/share/nginx/html/collection.js
-COPY import.js /usr/share/nginx/html/import.js
-COPY auth.js /usr/share/nginx/html/auth.js
-COPY social.js /usr/share/nginx/html/social.js
-COPY settings.js /usr/share/nginx/html/settings.js
-COPY app.js /usr/share/nginx/html/app.js
+COPY js/ /usr/share/nginx/html/js/
 COPY logo.svg /usr/share/nginx/html/logo.svg
 COPY icon.svg /usr/share/nginx/html/icon.svg
 COPY apple-touch-icon.png /usr/share/nginx/html/apple-touch-icon.png
