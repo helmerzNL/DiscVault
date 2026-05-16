@@ -3160,7 +3160,7 @@ FIELD_ALIASES = {
     # packaging
     "verpakking": "packaging",
     # screen_ratios
-    "screen ratio": "screen_ratios", "aspect ratio": "screen_ratios",
+    "screen ratio": "screen_ratios", "screen ratios": "screen_ratios", "aspect ratio": "screen_ratios",
     "beeldverhouding": "screen_ratios",
     # audio_tracks
     "audio": "audio_tracks", "audio track": "audio_tracks",
