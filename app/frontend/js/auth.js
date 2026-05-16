@@ -403,6 +403,39 @@ function switchProfileSubmenu(name) {
   }
 }
 
+let currentAdminSubmenu = 'security';
+
+function switchAdminSubmenu(name) {
+  currentAdminSubmenu = name;
+  document.querySelectorAll('[data-admin-sub]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-admin-sub') === name);
+  });
+  document.querySelectorAll('#panel-admin .profile-sub-section').forEach(s => s.classList.remove('active'));
+  const map = {
+    security: 'adminSubSecurity',
+    users:    'adminSubUsers',
+    groups:   'adminSubGroups',
+    advanced: 'adminSubAdvanced',
+  };
+  const el = document.getElementById(map[name] || map.security);
+  if (el) el.classList.add('active');
+}
+
+async function loadAdminTab() {
+  try {
+    const me = await fetch(`${API}/auth/me`).then(r => r.json());
+    const isAdmin = !me.authenticated || me.role === 'admin';
+    if (!isAdmin) {
+      switchTab('collection');
+      return;
+    }
+    await loadAuthSettings();
+    switchAdminSubmenu(currentAdminSubmenu || 'security');
+  } catch(e) {
+    switchTab('collection');
+  }
+}
+
 // ── API key management ────────────────────────────────────────────────────────
 
 async function loadApiKeys() {
@@ -880,6 +913,11 @@ async function loadAdminPanel() {
     const me = await fetch(`${API}/auth/me`).then(r => r.json());
     const isAdmin = !me.authenticated || me.role === 'admin';
     const isMemberGroups = me.authenticated && me.role === 'MemberGroups';
+
+    // Show/hide Admin button in meer menu
+    const adminMenuBtn = document.getElementById('meerMenuAdmin');
+    if (adminMenuBtn) adminMenuBtn.style.display = isAdmin ? '' : 'none';
+
     if (!isAdmin && !isMemberGroups) {
       document.getElementById('adminUsersCard').style.display = 'none';
       document.getElementById('adminGroupsCard').style.display = 'none';

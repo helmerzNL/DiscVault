@@ -102,6 +102,10 @@
     <span class="mdi mdi-cog-outline meer-menu-icon" aria-hidden="true"></span>
     <span data-i18n="nav.settings">Instellingen</span>
   </button>
+  <button class="meer-menu-item" id="meerMenuAdmin" style="display:none" onclick="closeMeerMenu(); switchTab('admin')">
+    <span class="mdi mdi-shield-crown-outline meer-menu-icon" aria-hidden="true"></span>
+    <span>Admin</span>
+  </button>
 </div>
 
 <main>
@@ -649,25 +653,6 @@
           <div class="card">
             <div class="card-title" data-i18n="settings.authTitle">🔐 Authenticatie (Passkey)</div>
             <div id="authSection">
-              <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
-                <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
-                  <input type="checkbox" id="authToggle" onchange="toggleAuth()" style="accent-color:var(--accent); width:16px; height:16px;">
-                  <span data-i18n="settings.authActive">Authenticatie actief</span>
-                </label>
-                <span id="authStatusBadge" class="tag" style="font-size:0.7rem;"></span>
-                <button class="btn btn-secondary" id="btnLogoutSettings" onclick="logoutApp()" style="display:none; margin-left:auto; padding:7px 12px; font-size:0.74rem;" data-i18n="settings.logout">↩ Uitloggen</button>
-              </div>
-
-              <div id="registrationToggleRow" style="display:none; margin-bottom:16px;">
-                <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
-                  <input type="checkbox" id="registrationToggle" onchange="toggleRegistration()" style="accent-color:var(--accent); width:16px; height:16px;">
-                  <span data-i18n="settings.registrationEnabled">Nieuwe gebruikers mogen zich registreren</span>
-                </label>
-                <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:4px;" data-i18n="settings.registrationDesc">
-                  Als dit uitstaat kunnen nieuwe gebruikers geen account aanmaken via het login-scherm.
-                </div>
-              </div>
-
               <div id="authNoCredentials" style="display:none; padding:16px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.25); border-radius:8px; margin-bottom:16px;">
                 <div style="font-size:0.88rem; margin-bottom:12px;" data-i18n="settings.noPasskey">
                   Nog geen passkey geregistreerd. Registreer er één om authenticatie in te schakelen.
@@ -780,6 +765,130 @@
             <div id="mcpLogsList" style="font-family:'DM Mono',monospace; font-size:0.76rem; color:var(--text-muted); max-height:360px; overflow-y:scroll; border:1px solid var(--border); border-radius:6px; -webkit-overflow-scrolling:touch;">
               <div style="text-align:center; padding:20px; color:var(--text-muted);">Laden...</div>
             </div>
+          </div>
+        </div>
+
+      </div><!-- /.profile-content -->
+    </div><!-- /.profile-layout -->
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div class="panel" id="panel-admin">
+    <div class="profile-layout">
+
+      <!-- Sidebar navigation -->
+      <nav class="profile-sidebar" aria-label="Admin navigatie">
+        <button class="profile-sidebar-btn active" type="button" data-admin-sub="security" onclick="switchAdminSubmenu('security')">
+          <span class="mdi mdi-shield-lock-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span>Beveiliging</span>
+        </button>
+        <button class="profile-sidebar-btn" type="button" data-admin-sub="users" onclick="switchAdminSubmenu('users')">
+          <span class="mdi mdi-account-group-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span>Gebruikers</span>
+        </button>
+        <button class="profile-sidebar-btn" type="button" data-admin-sub="groups" onclick="switchAdminSubmenu('groups')">
+          <span class="mdi mdi-folder-account-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span>Groepen</span>
+        </button>
+        <button class="profile-sidebar-btn" type="button" data-admin-sub="advanced" onclick="switchAdminSubmenu('advanced')">
+          <span class="mdi mdi-cog-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span>Geavanceerd</span>
+        </button>
+      </nav>
+
+      <!-- Content area -->
+      <div class="profile-content">
+
+        <!-- ── BEVEILIGING ── -->
+        <div class="profile-sub-section active" id="adminSubSecurity">
+          <div class="card">
+            <div class="card-title">🔐 Authenticatie</div>
+            <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+              <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
+                <input type="checkbox" id="authToggle" onchange="toggleAuth()" style="accent-color:var(--accent); width:16px; height:16px;">
+                <span data-i18n="settings.authActive">Authenticatie actief</span>
+              </label>
+              <span id="authStatusBadge" class="tag" style="font-size:0.7rem;"></span>
+              <button class="btn btn-secondary" id="btnLogoutSettings" onclick="logoutApp()" style="display:none; margin-left:auto; padding:7px 12px; font-size:0.74rem;" data-i18n="settings.logout">↩ Uitloggen</button>
+            </div>
+            <div id="registrationToggleRow" style="display:none; margin-bottom:16px;">
+              <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
+                <input type="checkbox" id="registrationToggle" onchange="toggleRegistration()" style="accent-color:var(--accent); width:16px; height:16px;">
+                <span data-i18n="settings.registrationEnabled">Nieuwe gebruikers mogen zich registreren</span>
+              </label>
+              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:4px;" data-i18n="settings.registrationDesc">
+                Als dit uitstaat kunnen nieuwe gebruikers geen account aanmaken via het login-scherm.
+              </div>
+            </div>
+          </div>
+
+          <!-- Admin: Invite Codes -->
+          <div id="adminInviteCard" class="card" style="display:none; margin-top:20px;">
+            <div class="card-title" data-i18n="settings.inviteTitle">✉️ Uitnodigingscodes</div>
+            <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:16px;" data-i18n="settings.inviteDesc">
+              Maak tijdelijke codes aan waarmee nieuwe gebruikers een account kunnen registreren.
+            </div>
+            <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+              <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+                <label data-i18n="settings.inviteUsername">Gebruikersnaam nieuwe gebruiker</label>
+                <input type="text" id="newInviteUsername" placeholder="bijv. jan">
+              </div>
+              <button class="btn btn-primary" onclick="createInviteCode()" style="height:40px;" data-i18n="settings.inviteCreate">+ Code aanmaken</button>
+            </div>
+            <div id="inviteCodeResult" style="display:none; padding:12px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.25); border-radius:8px; margin-bottom:16px;">
+              <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:6px;"><span data-i18n="settings.inviteCodeLabel">Code</span>: <strong id="inviteCodeForUser"></strong></div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div id="inviteCodeDisplay" style="font-family:'DM Mono',monospace; font-size:1.2rem; letter-spacing:2px; flex:1; color:var(--accent);"></div>
+                <button class="btn btn-secondary" onclick="copyInviteCode()" style="padding:6px 12px; font-size:0.78rem;" data-i18n="settings.inviteCopy">📋 Kopiëren</button>
+              </div>
+              <div id="inviteCodeExpiry" style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;"></div>
+            </div>
+            <div id="adminInviteStatus" class="status-msg" style="margin-bottom:8px;"></div>
+            <div id="adminInviteList"></div>
+          </div>
+        </div>
+
+        <!-- ── GEBRUIKERS ── -->
+        <div class="profile-sub-section" id="adminSubUsers">
+          <div id="adminUsersCard" class="card" style="display:none;">
+            <div class="card-title" data-i18n="settings.usersTitle">👥 Gebruikersbeheer</div>
+            <div id="adminUsersList"></div>
+          </div>
+        </div>
+
+        <!-- ── GROEPEN ── -->
+        <div class="profile-sub-section" id="adminSubGroups">
+          <div id="adminGroupsCard" class="card" style="display:none;">
+            <div class="card-title" data-i18n="settings.groupsTitle">📁 Groepen</div>
+            <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+              <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+                <label data-i18n="settings.groupName">Groepsnaam</label>
+                <input type="text" id="newGroupName" placeholder="Bijv. Familie">
+              </div>
+              <button class="btn btn-primary" onclick="createGroup()" style="height:40px;" data-i18n="settings.groupCreateBtn">+ Groep aanmaken</button>
+            </div>
+            <div id="adminGroupsList"></div>
+          </div>
+          <div id="myGroupsCard" class="card" style="display:none; margin-top:20px;">
+            <div class="card-title" data-i18n="settings.myGroupsTitle">📁 Mijn Groepen</div>
+            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;" data-i18n="settings.myGroupsDesc">Maak je eigen groep aan en nodig anderen uit om samen een collectie te delen.</p>
+            <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+              <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+                <label data-i18n="settings.myGroupName">Groepsnaam</label>
+                <input type="text" id="myNewGroupName" placeholder="Bijv. Familie">
+              </div>
+              <button class="btn btn-primary" onclick="createMyGroup()" style="height:40px;" data-i18n="settings.myGroupCreate">+ Aanmaken</button>
+            </div>
+            <div id="myGroupStatus" class="status-msg"></div>
+            <div id="myGroupsList"></div>
+          </div>
+        </div>
+
+        <!-- ── GEAVANCEERD ── -->
+        <div class="profile-sub-section" id="adminSubAdvanced">
+          <div class="card">
+            <div class="card-title">⚙️ Geavanceerd</div>
+            <p style="font-size:0.84rem; color:var(--text-muted); line-height:1.6;">Geavanceerde beheeropties komen hier.</p>
           </div>
         </div>
 
@@ -1023,66 +1132,6 @@
       </div>
 
       <div class="settings-sub-section" id="settingsSubSecurity">
-
-      <!-- Admin: User Management -->
-      <div id="adminUsersCard" class="card" style="display:none; margin-top:20px;">
-        <div class="card-title" data-i18n="settings.usersTitle">👥 Gebruikersbeheer</div>
-        <div id="adminUsersList"></div>
-      </div>
-
-      <!-- Admin: Invite Codes -->
-      <div id="adminInviteCard" class="card" style="display:none; margin-top:20px;">
-        <div class="card-title" data-i18n="settings.inviteTitle">✉️ Uitnodigingscodes</div>
-        <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:16px;" data-i18n="settings.inviteDesc">
-          Maak tijdelijke codes aan waarmee nieuwe gebruikers een account kunnen registreren.
-        </div>
-        <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
-          <div class="input-group" style="margin:0; flex:1; min-width:180px;">
-            <label data-i18n="settings.inviteUsername">Gebruikersnaam nieuwe gebruiker</label>
-            <input type="text" id="newInviteUsername" placeholder="bijv. jan">
-          </div>
-          <button class="btn btn-primary" onclick="createInviteCode()" style="height:40px;" data-i18n="settings.inviteCreate">+ Code aanmaken</button>
-        </div>
-        <div id="inviteCodeResult" style="display:none; padding:12px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.25); border-radius:8px; margin-bottom:16px;">
-          <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:6px;"><span data-i18n="settings.inviteCodeLabel">Code</span>: <strong id="inviteCodeForUser"></strong></div>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <div id="inviteCodeDisplay" style="font-family:'DM Mono',monospace; font-size:1.2rem; letter-spacing:2px; flex:1; color:var(--accent);"></div>
-            <button class="btn btn-secondary" onclick="copyInviteCode()" style="padding:6px 12px; font-size:0.78rem;" data-i18n="settings.inviteCopy">📋 Kopiëren</button>
-          </div>
-          <div id="inviteCodeExpiry" style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;"></div>
-        </div>
-        <div id="adminInviteStatus" class="status-msg" style="margin-bottom:8px;"></div>
-        <div id="adminInviteList"></div>
-      </div>
-
-      <!-- Admin: Group Management -->
-      <div id="adminGroupsCard" class="card" style="display:none; margin-top:20px;">
-        <div class="card-title" data-i18n="settings.groupsTitle">📁 Groepen</div>
-        <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
-          <div class="input-group" style="margin:0; flex:1; min-width:180px;">
-            <label data-i18n="settings.groupName">Groepsnaam</label>
-            <input type="text" id="newGroupName" placeholder="Bijv. Familie">
-          </div>
-          <button class="btn btn-primary" onclick="createGroup()" style="height:40px;" data-i18n="settings.groupCreateBtn">+ Groep aanmaken</button>
-        </div>
-        <div id="adminGroupsList"></div>
-      </div>
-
-      <!-- MemberGroups: Mijn Groepen -->
-      <div id="myGroupsCard" class="card" style="display:none; margin-top:20px;">
-        <div class="card-title" data-i18n="settings.myGroupsTitle">📁 Mijn Groepen</div>
-        <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;" data-i18n="settings.myGroupsDesc">Maak je eigen groep aan en nodig anderen uit om samen een collectie te delen.</p>
-        <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
-          <div class="input-group" style="margin:0; flex:1; min-width:180px;">
-            <label data-i18n="settings.myGroupName">Groepsnaam</label>
-            <input type="text" id="myNewGroupName" placeholder="Bijv. Familie">
-          </div>
-          <button class="btn btn-primary" onclick="createMyGroup()" style="height:40px;" data-i18n="settings.myGroupCreate">+ Aanmaken</button>
-        </div>
-        <div id="myGroupStatus" class="status-msg"></div>
-        <div id="myGroupsList"></div>
-      </div>
-
       </div>
 
     </div>

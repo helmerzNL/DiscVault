@@ -423,8 +423,8 @@ function openLogsFromSettings() {
 }
 
 // ── Client-side Routing ───────────────────────────────────────────────────────
-const _TAB_PATHS = { collection:'/', settings:'/settings', search:'/search', lists:'/lists', toevoegen:'/add', profile:'/profile' };
-const _PATH_TABS = { '/':'collection', '/settings':'settings', '/search':'search', '/lists':'lists', '/add':'toevoegen', '/profile':'profile' };
+const _TAB_PATHS = { collection:'/', settings:'/settings', search:'/search', lists:'/lists', toevoegen:'/add', profile:'/profile', admin:'/admin' };
+const _PATH_TABS = { '/':'collection', '/settings':'settings', '/search':'search', '/lists':'lists', '/add':'toevoegen', '/profile':'profile', '/admin':'admin' };
 
 function _tabPath(tab) {
   const base = (tab === 'logs') ? 'settings' : (tab === 'scan' || tab === 'import') ? 'toevoegen' : tab;

@@ -143,7 +143,7 @@ function switchToevoegen(sub) {
 function switchTab(name) {
   closeMeerMenu();
   const activeTabName = (name === 'logs' || name === 'settings' || name === 'toevoegen'
-    || name === 'scan' || name === 'import') ? 'meer'
+    || name === 'scan' || name === 'import' || name === 'admin') ? 'meer'
     : name;
   const panelName = (name === 'scan' || name === 'import') ? 'toevoegen'
     : name;
@@ -158,6 +158,7 @@ function switchTab(name) {
   if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
   if (name === 'settings') loadSettings();
+  if (name === 'admin') loadAdminTab();
   if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
