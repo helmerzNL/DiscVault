@@ -580,7 +580,7 @@ async function openMovieDetail(id) {
     row(t('d.purchasePrice'),   movie.purchase_price),
     row(t('d.purchaseDate'),   movie.purchase_date),
     row(t('d.location'),        movie.location),
-    movie.barcode       ? `<div class="detail-item"><label>${t('d.barcode')}</label><span style="font-family:'DM Mono',monospace;font-size:0.8rem">${movie.barcode}</span></div>` : '',
+    (movie.barcode && !movie.barcode.startsWith('IMPORT-')) ? `<div class="detail-item"><label>${t('d.barcode')}</label><span style="font-family:'DM Mono',monospace;font-size:0.8rem">${movie.barcode}</span></div>` : '',
     link('IMDb',          movie.imdb_url || (movie.imdb_id ? `https://www.imdb.com/title/${movie.imdb_id}` : ''), movie.imdb_id || 'Open'),
     row(t('d.added'),     movie.added_at ? movie.added_at.slice(0,10) : ''),
     row(t('d.notes'),       movie.notes, true),
