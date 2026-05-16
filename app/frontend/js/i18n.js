@@ -265,8 +265,12 @@ function syncOverlayScrollLock() {
 function applyDebugVisibility() {
   const movieRow = document.getElementById('modalMovieDebugRow');
   const personRow = document.getElementById('personDebugRow');
+  const i18nBlock = document.getElementById('modalDebugI18nBlock');
+  const personI18nBlock = document.getElementById('personDebugI18nBlock');
   if (movieRow) movieRow.style.display = debugModeEnabled ? 'flex' : 'none';
   if (personRow) personRow.style.display = debugModeEnabled ? 'flex' : 'none';
+  if (i18nBlock) i18nBlock.style.display = debugModeEnabled ? 'block' : 'none';
+  if (personI18nBlock) personI18nBlock.style.display = debugModeEnabled ? 'block' : 'none';
   filterMovies();
   filterSearchMovies();
 }

@@ -533,6 +533,29 @@ async function openMovieDetail(id) {
   document.getElementById('modalPlot').textContent = movie.plot || '';
   document.getElementById('modalPlotGroup').style.display = movie.plot ? 'block' : 'none';
 
+  // Debug: populate multilingual title + plot block (visibility controlled by applyDebugVisibility)
+  const _debugI18nContent = document.getElementById('modalDebugI18nContent');
+  if (_debugI18nContent) {
+    const _i18nLangs = [
+      { code: 'nl', flag: '🇳🇱', name: 'Nederlands' },
+      { code: 'fr', flag: '🇫🇷', name: 'Français' },
+      { code: 'de', flag: '🇩🇪', name: 'Deutsch' },
+      { code: 'es', flag: '🇪🇸', name: 'Español' },
+      { code: 'pt', flag: '🇵🇹', name: 'Português' },
+      { code: 'it', flag: '🇮🇹', name: 'Italiano' },
+    ];
+    const _i18nItems = _i18nLangs.filter(l => movie[`title_${l.code}`] || movie[`plot_${l.code}`]);
+    if (_i18nItems.length) {
+      _debugI18nContent.innerHTML = _i18nItems.map((l, i) => `
+        <div style="margin-bottom:${i < _i18nItems.length - 1 ? '14px' : '0'}; padding-bottom:${i < _i18nItems.length - 1 ? '14px' : '0'}; ${i < _i18nItems.length - 1 ? 'border-bottom:1px solid rgba(255,165,0,0.18);' : ''}">
+          <div style="font-weight:600; font-size:0.92rem; margin-bottom:4px;">${l.flag} ${movie[`title_${l.code}`] || '<em style="opacity:.5">—</em>'}</div>
+          ${movie[`plot_${l.code}`] ? `<div style="font-size:0.83rem; color:var(--text-muted); line-height:1.55;">${movie[`plot_${l.code}`]}</div>` : ''}
+        </div>`).join('');
+    } else {
+      _debugI18nContent.innerHTML = '<span style="font-size:0.83rem; color:var(--text-muted);">Geen vertalingen beschikbaar voor deze film.</span>';
+    }
+  }
+
   // Reset to info tab and scroll to top
   switchDetailTab('info');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -703,6 +726,29 @@ async function openPersonDetail(personId) {
     document.getElementById('personMeta').innerHTML = meta.join(' · ');
     // Biography
     document.getElementById('personBio').textContent = p.biography || t('person.noBio');
+
+    // Debug: populate multilingual biography block (visibility controlled by applyDebugVisibility)
+    const _personDebugContent = document.getElementById('personDebugI18nContent');
+    if (_personDebugContent) {
+      const _bioLangs = [
+        { code: 'nl', flag: '🇳🇱', name: 'Nederlands' },
+        { code: 'fr', flag: '🇫🇷', name: 'Français' },
+        { code: 'de', flag: '🇩🇪', name: 'Deutsch' },
+        { code: 'es', flag: '🇪🇸', name: 'Español' },
+        { code: 'pt', flag: '🇵🇹', name: 'Português' },
+        { code: 'it', flag: '🇮🇹', name: 'Italiano' },
+      ];
+      const _bioItems = _bioLangs.filter(l => p[`biography_${l.code}`]);
+      if (_bioItems.length) {
+        _personDebugContent.innerHTML = _bioItems.map((l, i) => `
+          <div style="margin-bottom:${i < _bioItems.length - 1 ? '14px' : '0'}; padding-bottom:${i < _bioItems.length - 1 ? '14px' : '0'}; ${i < _bioItems.length - 1 ? 'border-bottom:1px solid rgba(255,165,0,0.18);' : ''}">
+            <div style="font-weight:600; font-size:0.82rem; margin-bottom:6px;">${l.flag} ${l.name}</div>
+            <div style="font-size:0.83rem; color:var(--text-muted); line-height:1.55;">${p[`biography_${l.code}`]}</div>
+          </div>`).join('');
+      } else {
+        _personDebugContent.innerHTML = '<span style="font-size:0.83rem; color:var(--text-muted);">Geen vertalingen beschikbaar voor deze persoon.</span>';
+      }
+    }
     // Filmography from collection
     const movies = p.movies || [];
     if (!movies.length) {

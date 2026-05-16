@@ -1221,6 +1221,12 @@
           <label data-i18n="modal.plot">Verhaal</label>
           <p id="modalPlot" style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;"></p>
         </div>
+
+        <!-- Debug: multilingual title + plot per language -->
+        <div id="modalDebugI18nBlock" style="display:none; margin-top:24px; padding:16px; background:rgba(255,165,0,0.07); border:1px solid rgba(255,165,0,0.28); border-radius:10px;">
+          <div style="font-size:0.7rem; font-weight:700; color:#f90; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:14px;">🐛 Debug — meertalige metadata</div>
+          <div id="modalDebugI18nContent"></div>
+        </div>
       </div>
 
       <!-- Tab: Cast & Crew -->
@@ -1436,6 +1442,13 @@
       </div>
     </div>
     <div class="person-bio" id="personBio"></div>
+
+    <!-- Debug: multilingual biography per language -->
+    <div id="personDebugI18nBlock" style="display:none; margin-top:24px; padding:16px; background:rgba(255,165,0,0.07); border:1px solid rgba(255,165,0,0.28); border-radius:10px;">
+      <div style="font-size:0.7rem; font-weight:700; color:#f90; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:14px;">🐛 Debug — meertalige biografie</div>
+      <div id="personDebugI18nContent"></div>
+    </div>
+
     <div style="margin-bottom: 12px;">
       <div class="crew-section-title" id="personFilmographyTitle" data-i18n="person.inCollection">In jouw collectie</div>
     </div>

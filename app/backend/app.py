@@ -438,6 +438,12 @@ def init_db():
             name        TEXT NOT NULL,
             photo_file  TEXT,
             biography   TEXT,
+            biography_nl TEXT,
+            biography_fr TEXT,
+            biography_de TEXT,
+            biography_es TEXT,
+            biography_pt TEXT,
+            biography_it TEXT,
             birthday    TEXT,
             deathday    TEXT,
             place_of_birth TEXT,
@@ -528,6 +534,13 @@ def init_db():
             JOIN groups g ON g.id=ug.group_id AND g.created_by=ug.user_id
         )
     """)
+
+    # Migrate people: add multilingual biography columns if missing
+    people_cols = {row[1] for row in conn.execute("PRAGMA table_info(people)")}
+    for lang_code, _ in TMDB_LANGUAGES:
+        col = f"biography_{lang_code}"
+        if col not in people_cols:
+            conn.execute(f"ALTER TABLE people ADD COLUMN {col} TEXT")
 
     # Auto-assign existing movies (no owner) to first admin user
     first_user = conn.execute("SELECT id FROM users ORDER BY created_at ASC LIMIT 1").fetchone()
@@ -1885,6 +1898,31 @@ def get_person(person_id):
                     p["photo_file"] = photo_file
         except Exception:
             pass
+
+    # Fetch multilingual biographies if not yet stored
+    if p.get("tmdb_id") and TMDB_API_KEY:
+        missing_langs = [
+            (lc, tl) for lc, tl in TMDB_LANGUAGES
+            if not p.get(f"biography_{lc}")
+        ]
+        if missing_langs:
+            try:
+                for lang_code, tmdb_lang in missing_langs:
+                    rl = requests.get(
+                        f"https://api.themoviedb.org/3/person/{p['tmdb_id']}"
+                        f"?api_key={TMDB_API_KEY}&language={tmdb_lang}",
+                        timeout=5
+                    )
+                    if rl.status_code == 200:
+                        lang_bio = rl.json().get("biography", "") or ""
+                        conn.execute(
+                            f"UPDATE people SET biography_{lang_code}=? WHERE id=?",
+                            (lang_bio, person_id)
+                        )
+                        p[f"biography_{lang_code}"] = lang_bio
+                conn.commit()
+            except Exception:
+                pass
 
     # Get all movies this person appears in
     movies = conn.execute("""
