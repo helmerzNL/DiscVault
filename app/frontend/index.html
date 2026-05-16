@@ -120,45 +120,16 @@
         <div class="card-title" data-i18n="scan.movieInfo">Film Informatie</div>
         <div id="scanStatus" class="status-msg"></div>
 
-        <div id="movieResult" class="movie-result">
+        <div id="movieResult" class="movie-result" style="display:none;">
           <div class="movie-poster" id="resultPoster">
             <div class="no-poster">🎬</div>
           </div>
           <div class="movie-meta" style="flex:1">
             <h3 id="resultTitle">—</h3>
             <div class="movie-tags" id="resultTags"></div>
-            <p class="movie-plot" id="resultPlot"></p>
-
-            <!-- Editable fields -->
-            <div style="margin-top:14px;">
-              <div class="input-group">
-                <label data-i18n="scan.format">Formaat</label>
-                <select id="resultFormat">
-                  <option value="4K UHD">4K UHD</option>
-                  <option value="Blu-ray">Blu-ray</option>
-                  <option value="DVD">DVD</option>
-                </select>
-              </div>
-              <div class="input-group">
-                <label data-i18n="scan.location">Locatie (optioneel)</label>
-                <input type="text" id="resultLocation" placeholder="Bijv. Rek B plank 3" data-i18n-placeholder="scan.locationPlaceholder">
-              </div>
-              <div class="input-group">
-                <label data-i18n="scan.hdr">Dolby Vision / HDR</label>
-                <input type="text" id="resultHdr" placeholder="Bijv. Dolby Vision, HDR10+, HDR10" data-i18n-placeholder="scan.hdrPlaceholder">
-              </div>
-              <div class="input-group">
-                <label data-i18n="scan.audioTracks">Audiosporen</label>
-                <input type="text" id="resultAudioTracks" placeholder="Bijv. Dolby Atmos, DTS-HD MA 5.1" data-i18n-placeholder="scan.audioPlaceholder">
-              </div>
-              <div class="input-group">
-                <label data-i18n="scan.subtitles">Ondertiteltracks</label>
-                <input type="text" id="resultSubtitles" placeholder="Bijv. NL, EN, DE" data-i18n-placeholder="scan.subtitlesPlaceholder">
-              </div>
-            </div>
-
-            <div class="btn-row">
-              <button class="btn btn-success" onclick="saveMovie()" id="btnSave" data-i18n="scan.save">💾 Opslaan in Collectie</button>
+            <div class="btn-row" style="margin-top:20px; flex-wrap:wrap;">
+              <button class="btn btn-success" onclick="saveMovie()" id="btnSave" data-i18n="scan.save">💾 Opslaan</button>
+              <button class="btn btn-secondary" onclick="supplementMovie()" data-i18n="scan.supplement">✏️ Aanvullen</button>
             </div>
           </div>
         </div>

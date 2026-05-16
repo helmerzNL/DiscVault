@@ -7,6 +7,37 @@ function _supportsNativeDetector() {
   return typeof BarcodeDetector !== 'undefined';
 }
 
+// Validate EAN-13 and UPC-A checksums — the only formats used on disc media
+function _validateBarcode(code) {
+  if (/^\d{13}$/.test(code)) {
+    // EAN-13 (worldwide standard for DVD/Blu-ray/4K UHD)
+    let s = 0;
+    for (let i = 0; i < 12; i++) s += parseInt(code[i]) * (i % 2 === 0 ? 1 : 3);
+    return (10 - (s % 10)) % 10 === parseInt(code[12]);
+  }
+  if (/^\d{12}$/.test(code)) {
+    // UPC-A (North American releases; effectively EAN-13 with leading zero omitted)
+    let s = 0;
+    for (let i = 0; i < 11; i++) s += parseInt(code[i]) * (i % 2 === 0 ? 3 : 1);
+    return (10 - (s % 10)) % 10 === parseInt(code[11]);
+  }
+  return false; // EAN-8, UPC-E etc. are never used on disc media — reject
+}
+
+// Try to apply continuous autofocus to a video track (best-effort)
+async function _applyFocusConstraints(stream) {
+  try {
+    const track = stream.getVideoTracks()[0];
+    if (!track || !track.getCapabilities) return;
+    const caps = track.getCapabilities();
+    const adv = {};
+    if (caps.focusMode && caps.focusMode.includes('continuous')) adv.focusMode = 'continuous';
+    if (caps.exposureMode && caps.exposureMode.includes('continuous')) adv.exposureMode = 'continuous';
+    if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes('continuous')) adv.whiteBalanceMode = 'continuous';
+    if (Object.keys(adv).length > 0) await track.applyConstraints({ advanced: [adv] });
+  } catch(e) { /* not supported on this device */ }
+}
+
 function _loadQuagga2() {
   return new Promise((resolve, reject) => {
     if (window.Quagga) { resolve(); return; }
@@ -35,14 +66,20 @@ function _resetScannerUI() {
 async function _tryNativeScanner(container) {
   let detector;
   try {
-    detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
+    detector = new BarcodeDetector({ formats: ['ean_13', 'upc_a'] });
   } catch(e) {
     return 'fallback';
   }
 
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 }
+      }
+    });
   } catch(e) {
     showStatus('scanStatus', t('js.cameraError', e.message), 'error');
     _resetScannerUI();
@@ -51,6 +88,7 @@ async function _tryNativeScanner(container) {
 
   _usingNative = true;
   _nativeStream = stream;
+  await _applyFocusConstraints(stream);
 
   const video = document.createElement('video');
   video.setAttribute('playsinline', ''); // required for iOS
@@ -89,16 +127,17 @@ async function _tryNativeScanner(container) {
       if (results.length === 0) { _confirmCode = ''; _confirmCount = 0; }
       for (const barcode of results) {
         const code = barcode.rawValue;
+        if (!_validateBarcode(code)) continue; // reject checksums that don't add up
         const now = Date.now();
         if (code === lastCode && now - lastTime < 3000) continue;
-        // Require 2 consecutive detections of the same code to filter false positives
+        // Require 3 consecutive detections of the same code to filter false positives
         if (code === _confirmCode) {
           _confirmCount++;
         } else {
           _confirmCode = code;
           _confirmCount = 1;
         }
-        if (_confirmCount < 2) break;
+        if (_confirmCount < 3) break;
         lastCode = code; lastTime = now;
         _confirmCode = ''; _confirmCount = 0;
         stopScanner();
@@ -139,12 +178,18 @@ async function startScanner() {
       name: 'Live',
       type: 'LiveStream',
       target: container,
-      constraints: { facingMode: 'environment' }
+      constraints: {
+        facingMode: 'environment',
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 }
+      }
     },
     decoder: {
-      readers: ['ean_reader', 'upc_reader', 'upc_e_reader', 'ean_8_reader']
+      readers: ['ean_reader', 'upc_reader'],
+      multiple: false
     },
-    locate: true
+    locate: true,
+    frequency: 10
   }, function(err) {
     if (err) {
       showStatus('scanStatus', t('js.cameraError', err.message), 'error');
@@ -166,14 +211,31 @@ async function startScanner() {
     overlay.className = 'scanner-overlay';
     overlay.innerHTML = '<div class="scanner-frame"><div class="scan-line"></div></div>';
     container.appendChild(overlay);
+
+    // Apply continuous autofocus after Quagga has acquired the stream
+    const quaggaStream = quaggaVideo && quaggaVideo.srcObject;
+    if (quaggaStream) _applyFocusConstraints(quaggaStream);
   });
 
   let lastCode = '';
   let lastTime = 0;
+  let _quaggaConfirmCode = '';
+  let _quaggaConfirmCount = 0;
   Quagga.onDetected(result => {
     const code = result.codeResult.code;
+    if (!_validateBarcode(code)) return; // reject invalid checksums
     const now = Date.now();
     if (code === lastCode && now - lastTime < 3000) return;
+    // Require 3 consecutive consistent reads before accepting
+    if (code === _quaggaConfirmCode) {
+      _quaggaConfirmCount++;
+    } else {
+      _quaggaConfirmCode = code;
+      _quaggaConfirmCount = 1;
+    }
+    if (_quaggaConfirmCount < 3) return;
+    _quaggaConfirmCode = '';
+    _quaggaConfirmCount = 0;
     lastCode = code;
     lastTime = now;
     stopScanner();
@@ -202,7 +264,7 @@ function lookupBarcode() {
 
 async function doLookup(barcode) {
   showStatus('scanStatus', t('js.lookingUp'), 'info');
-  document.getElementById('movieResult').classList.remove('visible');
+  document.getElementById('movieResult').style.display = 'none';
   document.getElementById('noResult').style.display = 'none';
   document.getElementById('tmdbCandidates').style.display = 'none';
 
@@ -210,15 +272,13 @@ async function doLookup(barcode) {
     const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
-    let buf = '';
-    let finalData = null;
+    let buf = '', finalData = null;
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
+      const lines = buf.split('\n'); buf = lines.pop();
       for (const line of lines) {
         if (!line.trim()) continue;
         const msg = JSON.parse(line);
@@ -237,7 +297,6 @@ async function doLookup(barcode) {
       document.getElementById('noResult').style.display = 'block';
       return;
     }
-
     if (finalData.error) {
       showStatus('scanStatus', t('js.error', finalData.error), 'error');
       document.getElementById('noResult').style.display = 'block';
@@ -254,15 +313,16 @@ async function doLookup(barcode) {
         displayTmdbCandidates(finalData.tmdb_candidates, barcode);
       }
     } else {
+      // Barcode not found: show empty placeholder so user can still supplement
       showStatus('scanStatus', t('js.movieNotFound', barcode), 'error');
       currentBarcode = barcode;
       currentMovieData = { title: finalData.raw_title || '', barcode };
-      document.getElementById('movieResult').classList.add('visible');
-      document.getElementById('resultTitle').textContent = finalData.raw_title || t('js.unknown');
-      document.getElementById('resultPlot').textContent = '';
+      document.getElementById('resultTitle').textContent = finalData.raw_title || barcode;
       document.getElementById('resultTags').innerHTML = '';
-      const poster = document.getElementById('resultPoster');
-      poster.innerHTML = '<div class="no-poster">🎬</div>';
+      document.getElementById('resultPoster').innerHTML = '<div class="no-poster">🎬</div>';
+      document.getElementById('movieResult').style.display = 'flex';
+      document.getElementById('noResult').style.display = 'none';
+      document.getElementById('btnSave').style.display = 'none';
     }
   } catch(e) {
     showStatus('scanStatus', t('js.connectionError', e.message), 'error');
@@ -280,6 +340,7 @@ function displayTmdbCandidates(candidates, barcode) {
       </div>
       <div class="tmdb-candidate-info">
         <strong>${esc(c.title)}${c.year ? ` <span class="tag">${esc(c.year)}</span>` : ''}</strong>
+        ${c.vote_average ? `<div class="tmdb-candidate-vote">⭐ ${Number(c.vote_average).toFixed(1)}</div>` : ''}
         <p>${esc(c.overview)}</p>
       </div>
     </div>
@@ -323,15 +384,14 @@ function displayMovieResult(movie, barcode, alreadyInCollection) {
   currentMovieData = { ...movie, barcode };
 
   document.getElementById('resultTitle').textContent = movie.title || '—';
-  document.getElementById('resultPlot').textContent = movie.plot || '';
 
   const tags = document.getElementById('resultTags');
   tags.innerHTML = '';
-  if (movie.year) tags.innerHTML += `<span class="tag">${movie.year}</span>`;
+  if (movie.year)     tags.innerHTML += `<span class="tag">${movie.year}</span>`;
   if (movie.director) tags.innerHTML += `<span class="tag">${movie.director}</span>`;
-  if (movie.genre) movie.genre.split(',').forEach(g => { tags.innerHTML += `<span class="tag">${g.trim()}</span>`; });
-  if (movie.rating) tags.innerHTML += `<span class="tag">⭐ ${movie.rating}</span>`;
-  if (movie.runtime) tags.innerHTML += `<span class="tag">${movie.runtime}</span>`;
+  if (movie.genre)    movie.genre.split(',').slice(0, 2).forEach(g => { tags.innerHTML += `<span class="tag">${g.trim()}</span>`; });
+  if (movie.rating)   tags.innerHTML += `<span class="tag">⭐ ${movie.rating}</span>`;
+  if (movie.runtime)  tags.innerHTML += `<span class="tag">${movie.runtime} min</span>`;
 
   const src = posterSrc(movie);
   const poster = document.getElementById('resultPoster');
@@ -341,32 +401,21 @@ function displayMovieResult(movie, barcode, alreadyInCollection) {
     poster.innerHTML = '<div class="no-poster">🎬</div>';
   }
 
-  document.getElementById('movieResult').classList.add('visible');
+  document.getElementById('movieResult').style.display = 'flex';
   document.getElementById('noResult').style.display = 'none';
-  document.getElementById('btnSave').style.display = alreadyInCollection ? 'none' : 'inline-flex';
-  document.getElementById('resultHdr').value = movie.hdr || '';
-  document.getElementById('resultAudioTracks').value = movie.audio_tracks || '';
-  document.getElementById('resultSubtitles').value = movie.subtitles || '';
 
-  if (alreadyInCollection) {
-    document.getElementById('btnSave').textContent = t('js.alreadyInCollectionBtn');
-  }
+  const btnSave = document.getElementById('btnSave');
+  btnSave.style.display = alreadyInCollection ? 'none' : '';
+  btnSave.disabled = false;
+  if (!alreadyInCollection) btnSave.innerHTML = '💾 Opslaan';
 }
 
 async function saveMovie() {
   const btn = document.getElementById('btnSave');
-  btn.innerHTML = t('js.saving');
+  btn.innerHTML = '<span class="spinner"></span>';
   btn.disabled = true;
 
-  const payload = {
-    ...currentMovieData,
-    barcode: currentBarcode,
-    format: document.getElementById('resultFormat').value,
-    location: document.getElementById('resultLocation').value,
-    hdr: document.getElementById('resultHdr').value,
-    audio_tracks: document.getElementById('resultAudioTracks').value,
-    subtitles: document.getElementById('resultSubtitles').value,
-  };
+  const payload = { ...currentMovieData, barcode: currentBarcode };
 
   try {
     const r = await fetch(`${API}/movies`, {
@@ -382,7 +431,8 @@ async function saveMovie() {
         btn.disabled = true;
       } else {
         showStatus('scanStatus', t('js.savedToCollection', d.movie.title), 'success');
-        btn.style.display = 'none';
+        document.getElementById('movieResult').style.display = 'none';
+        document.getElementById('noResult').style.display = 'block';
         loadStats();
       }
     } else {
@@ -394,6 +444,19 @@ async function saveMovie() {
     showStatus('scanStatus', t('js.error', e.message), 'error');
     btn.innerHTML = t('js.saveToCollectionBtn');
     btn.disabled = false;
+  }
+}
+
+function supplementMovie() {
+  // Switch to manual add tab and pre-fill all available data from the scan result
+  if (typeof switchToevoegen === 'function') switchToevoegen('manual');
+  const addBarcodeEl = document.getElementById('addBarcode');
+  if (addBarcodeEl) addBarcodeEl.value = currentBarcode || '';
+  if (currentMovieData && typeof _fillAddFields === 'function') {
+    _fillAddFields(currentMovieData);
+    if (typeof showStatus === 'function' && currentMovieData.title) {
+      showStatus('addStatus', t('js.infoFound', currentMovieData.title), 'success');
+    }
   }
 }
 
