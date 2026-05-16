@@ -1,9 +1,117 @@
 // ── Barcode Scanner ───────────────────────────────────────────────────────────
-function startScanner() {
+let _usingNative = false;
+let _nativeStream = null;
+let _nativeTimer = null;
+
+function _supportsNativeDetector() {
+  return typeof BarcodeDetector !== 'undefined';
+}
+
+function _loadQuagga2() {
+  return new Promise((resolve, reject) => {
+    if (window.Quagga) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Quagga2 load failed'));
+    document.head.appendChild(s);
+  });
+}
+
+function _resetScannerUI() {
+  document.getElementById('btnStartScan').style.display = 'inline-flex';
+  document.getElementById('btnStopScan').style.display = 'none';
+  const container = document.getElementById('scanner-container');
+  const video = container.querySelector('video');
+  if (video) video.remove();
+  const overlay = container.querySelector('.scanner-overlay');
+  if (overlay) overlay.remove();
+  const ph = document.getElementById('scannerPlaceholder');
+  ph.style.display = 'flex';
+  ph.style.flexDirection = 'column';
+  ph.style.alignItems = 'center';
+}
+
+async function _tryNativeScanner(container) {
+  let detector;
+  try {
+    detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
+  } catch(e) {
+    return 'fallback';
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  } catch(e) {
+    showStatus('scanStatus', t('js.cameraError', e.message), 'error');
+    _resetScannerUI();
+    return 'error';
+  }
+
+  _usingNative = true;
+  _nativeStream = stream;
+
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', '');
+  video.muted = true;
+  video.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:8px;';
+  video.srcObject = stream;
+  container.appendChild(video);
+  video.play().catch(() => {});
+
+  const overlay = document.createElement('div');
+  overlay.className = 'scanner-overlay';
+  overlay.innerHTML = '<div class="scanner-frame"><div class="scan-line"></div></div>';
+  container.appendChild(overlay);
+
+  scannerRunning = true;
+
+  let lastCode = '';
+  let lastTime = 0;
+
+  async function runDetect() {
+    if (!scannerRunning || !_usingNative) return;
+    try {
+      const results = await detector.detect(video);
+      for (const barcode of results) {
+        const code = barcode.rawValue;
+        const now = Date.now();
+        if (code === lastCode && now - lastTime < 3000) continue;
+        lastCode = code;
+        lastTime = now;
+        stopScanner();
+        document.getElementById('manualBarcode').value = code;
+        doLookup(code);
+        return;
+      }
+    } catch(e) { /* video not ready yet */ }
+    if (scannerRunning && _usingNative) _nativeTimer = setTimeout(runDetect, 150);
+  }
+  _nativeTimer = setTimeout(runDetect, 200);
+  return 'success';
+}
+
+async function startScanner() {
   const container = document.getElementById('scanner-container');
   document.getElementById('scannerPlaceholder').style.display = 'none';
   document.getElementById('btnStartScan').style.display = 'none';
   document.getElementById('btnStopScan').style.display = 'inline-flex';
+
+  if (_supportsNativeDetector()) {
+    const result = await _tryNativeScanner(container);
+    if (result !== 'fallback') return;
+  }
+
+  // Fallback: Quagga2 (lazy-loaded)
+  _usingNative = false;
+  try {
+    await _loadQuagga2();
+  } catch(e) {
+    showStatus('scanStatus', t('js.cameraError', e.message), 'error');
+    _resetScannerUI();
+    return;
+  }
 
   Quagga.init({
     inputStream: {
@@ -25,7 +133,6 @@ function startScanner() {
     Quagga.start();
     scannerRunning = true;
 
-    // Add scan line animation
     const overlay = document.createElement('div');
     overlay.className = 'scanner-overlay';
     overlay.innerHTML = '<div class="scanner-frame"><div class="scan-line"></div></div>';
@@ -47,19 +154,15 @@ function startScanner() {
 }
 
 function stopScanner() {
-  if (scannerRunning) {
-    Quagga.stop();
-    scannerRunning = false;
+  if (_usingNative) {
+    if (_nativeTimer) { clearTimeout(_nativeTimer); _nativeTimer = null; }
+    if (_nativeStream) { _nativeStream.getTracks().forEach(t => t.stop()); _nativeStream = null; }
+    _usingNative = false;
+  } else if (scannerRunning) {
+    try { Quagga.stop(); } catch(e) {}
   }
-  document.getElementById('btnStartScan').style.display = 'inline-flex';
-  document.getElementById('btnStopScan').style.display = 'none';
-  // Re-show placeholder
-  const container = document.getElementById('scanner-container');
-  const overlay = container.querySelector('.scanner-overlay');
-  if (overlay) overlay.remove();
-  document.getElementById('scannerPlaceholder').style.display = 'flex';
-  document.getElementById('scannerPlaceholder').style.flexDirection = 'column';
-  document.getElementById('scannerPlaceholder').style.alignItems = 'center';
+  scannerRunning = false;
+  _resetScannerUI();
 }
 
 function lookupBarcode() {
