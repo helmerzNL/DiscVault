@@ -394,7 +394,6 @@ function switchTabDirect(name) {
     || name === 'scan' || name === 'import') ? 'meer'
     : name;
   const panelName = (name === 'scan' || name === 'import') ? 'toevoegen'
-    : (name === 'profile') ? 'settings'
     : name;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -406,8 +405,8 @@ function switchTabDirect(name) {
   if (panelName === 'collection') loadCollection();
   if (panelName === 'lists') loadWatchlist();
   if (name === 'logs') loadLogs();
-  if (name === 'settings' || name === 'profile') loadSettings();
-  if (name === 'profile') switchSettingsSubmenu('profile');
+  if (name === 'settings') loadSettings();
+  if (name === 'profile') { loadProfile(); loadApiKeys(); loadMcpLogs(); }
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();

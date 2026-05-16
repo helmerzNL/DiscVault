@@ -33,7 +33,7 @@ async function loadSettings() {
   switchSettingsSubmenu(currentSettingsSubmenu);
 }
 
-let currentSettingsSubmenu = 'profile';
+let currentSettingsSubmenu = 'general';
 
 function switchSettingsSubmenu(name) {
   currentSettingsSubmenu = name;
@@ -41,7 +41,6 @@ function switchSettingsSubmenu(name) {
     btn.classList.toggle('active', btn.getAttribute('data-settings-sub') === name);
   });
   const map = {
-    profile: 'settingsSubProfile',
     general: 'settingsSubGeneral',
     security: 'settingsSubSecurity',
     backup: 'settingsSubBackup',
@@ -53,9 +52,8 @@ function switchSettingsSubmenu(name) {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
-  const target = document.getElementById(map[name] || map.profile);
+  const target = document.getElementById(map[name] || map.general);
   if (target) target.classList.add('active');
-  if (name === 'profile') { loadProfile(); loadApiKeys(); loadMcpLogs(); }
   if (name === 'logs') loadLogs();
   if (name === 'notifications') initPushNotifications();
 }

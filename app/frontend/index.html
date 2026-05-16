@@ -560,16 +560,111 @@
     </div>
   </div>
 
+  <!-- PROFILE PANEL -->
+  <div class="panel" id="panel-profile">
+    <div class="card" style="margin-top:20px;">
+      <div class="card-title" data-i18n="settings.profileTitle">👤 Gebruikersprofiel</div>
+
+      <!-- Avatar -->
+      <div style="display:flex; align-items:center; gap:20px; margin-bottom:24px;">
+        <div id="profileAvatarPreview" onclick="document.getElementById('profileAvatarInput').click()" style="width:80px; height:80px; border-radius:50%; background:var(--surface2); border:2px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; position:relative; transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span id="profileAvatarPlaceholder" class="mdi mdi-camera-plus-outline" style="font-size:1.6rem; color:var(--text-muted);"></span>
+          <img id="profileAvatarImg" src="" alt="" style="display:none; width:100%; height:100%; object-fit:cover;">
+        </div>
+        <div>
+          <div style="font-size:0.85rem; font-weight:500; margin-bottom:4px;" data-i18n="settings.profilePhoto">Profielfoto</div>
+          <div style="font-size:0.72rem; color:var(--text-muted);" data-i18n="settings.profilePhotoDesc">Klik om een foto te uploaden (max 2MB)</div>
+          <button id="profileAvatarRemoveBtn" class="btn btn-secondary" onclick="removeProfileAvatar()" style="display:none; margin-top:6px; padding:4px 10px; font-size:0.7rem;" data-i18n="settings.profilePhotoRemove">Verwijderen</button>
+        </div>
+        <input type="file" id="profileAvatarInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" onchange="uploadProfileAvatar(this)">
+      </div>
+
+      <!-- Username -->
+      <div class="input-group" style="max-width:340px; margin-bottom:16px;">
+        <label data-i18n="settings.profileUsername">Gebruikersnaam</label>
+        <input type="text" id="profileUsername" placeholder="username" maxlength="50">
+        <div id="profileUsernameError" style="display:none; font-size:0.72rem; color:var(--error); margin-top:4px;"></div>
+      </div>
+
+      <!-- First name -->
+      <div class="input-group" style="max-width:340px; margin-bottom:16px;">
+        <label data-i18n="settings.profileFirstName">Voornaam</label>
+        <input type="text" id="profileFirstName" placeholder="" maxlength="100">
+      </div>
+
+      <!-- Last name -->
+      <div class="input-group" style="max-width:340px; margin-bottom:16px;">
+        <label data-i18n="settings.profileLastName">Achternaam</label>
+        <input type="text" id="profileLastName" placeholder="" maxlength="100">
+      </div>
+
+      <!-- Save -->
+      <button class="btn btn-primary" onclick="saveProfile()" data-i18n="settings.profileSave">💾 Opslaan</button>
+      <div id="profileStatus" class="status-msg" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card" style="margin-top:20px;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="switchTab('settings'); switchSettingsSubmenu('security')" data-i18n="settings.profilePasskeys">🔑 Passkeys beheren</button>
+        <button class="btn btn-secondary" id="btnLogoutProfile" onclick="logoutApp()" style="display:none;" data-i18n="settings.profileLogout">↩ Uitloggen</button>
+      </div>
+    </div>
+
+    <!-- API keys -->
+    <div class="card" id="apiKeysCard" style="margin-top:20px; display:none;">
+      <div class="card-title">🔗 API-sleutels</div>
+      <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
+        Gebruik een persoonlijke API-sleutel om DiscVault te verbinden met AI-clients zoals Claude of Cursor via MCP.
+        Elke sleutel is gekoppeld aan jouw account — je ziet alleen jouw eigen collectie, watchlist en geschiedenis.
+      </p>
+
+      <!-- Generate new key -->
+      <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="input-group" style="margin:0; flex:1; min-width:160px;">
+          <label style="font-size:0.78rem;">Label (optioneel)</label>
+          <input type="text" id="apiKeyLabel" placeholder="bijv. Claude Desktop" maxlength="80" style="padding:8px 10px; font-size:0.84rem;">
+        </div>
+        <button class="btn btn-primary" onclick="generateApiKey()" style="white-space:nowrap;">+ Sleutel aanmaken</button>
+      </div>
+
+      <!-- One-time reveal -->
+      <div id="apiKeyReveal" style="display:none; padding:14px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.3); border-radius:8px; margin-bottom:16px;">
+        <div style="font-size:0.78rem; color:var(--accent); font-weight:600; margin-bottom:8px;">⚠ Kopieer deze sleutel nu — hij wordt nooit meer getoond</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <code id="apiKeyRevealValue" style="flex:1; font-family:'DM Mono',monospace; font-size:0.78rem; word-break:break-all; color:var(--text); background:var(--surface2); padding:8px 10px; border-radius:6px; border:1px solid var(--border);"></code>
+          <button class="btn btn-secondary" onclick="copyApiKey()" style="padding:7px 12px; font-size:0.76rem; flex-shrink:0;">📋</button>
+        </div>
+        <div style="font-size:0.72rem; color:var(--text-muted); margin-top:8px;">
+          Gebruik in je MCP-client config: <code style="color:var(--accent);">"Authorization": "Bearer &lt;sleutel&gt;"</code>
+        </div>
+      </div>
+
+      <div id="apiKeyStatus" class="status-msg" style="margin-bottom:8px;"></div>
+      <div id="apiKeysList"></div>
+    </div>
+
+    <!-- MCP activiteit log -->
+    <div class="card" id="mcpLogsCard" style="margin-top:20px; display:none;">
+      <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>🤖 MCP Activiteit</span>
+        <button class="btn btn-secondary" onclick="loadMcpLogs()" style="padding:5px 10px; font-size:0.76rem;">↻ Vernieuwen</button>
+      </div>
+      <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px; line-height:1.6;">
+        Recente tool-aanroepen via de MCP-koppeling voor jouw account.
+      </p>
+      <div id="mcpLogsList" style="font-family:'DM Mono',monospace; font-size:0.76rem; color:var(--text-muted); max-height:360px; overflow-y:scroll; border:1px solid var(--border); border-radius:6px; -webkit-overflow-scrolling:touch;">
+        <div style="text-align:center; padding:20px; color:var(--text-muted);">Laden...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- SETTINGS PANEL -->
   <div class="panel" id="panel-settings">
     <div>
 
       <div class="settings-submenu">
-        <button class="settings-sub-btn active" type="button" data-settings-sub="profile" onclick="switchSettingsSubmenu('profile')">
-          <span class="settings-sub-icon mdi mdi-account-circle-outline" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="settings.menuProfile">Profiel</span>
-        </button>
-        <button class="settings-sub-btn" type="button" data-settings-sub="general" onclick="switchSettingsSubmenu('general')">
+        <button class="settings-sub-btn active" type="button" data-settings-sub="general" onclick="switchSettingsSubmenu('general')">
           <span class="settings-sub-icon mdi mdi-tune-variant" aria-hidden="true"></span>
           <span class="settings-sub-label" data-i18n="settings.menuGeneral">Algemeen</span>
         </button>
@@ -595,106 +690,7 @@
         </button>
       </div>
 
-      <!-- Profile section -->
-      <div class="settings-sub-section active" id="settingsSubProfile">
-        <div class="card" style="margin-top:20px;">
-          <div class="card-title" data-i18n="settings.profileTitle">👤 Gebruikersprofiel</div>
-
-          <!-- Avatar -->
-          <div style="display:flex; align-items:center; gap:20px; margin-bottom:24px;">
-            <div id="profileAvatarPreview" onclick="document.getElementById('profileAvatarInput').click()" style="width:80px; height:80px; border-radius:50%; background:var(--surface2); border:2px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; position:relative; transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-              <span id="profileAvatarPlaceholder" class="mdi mdi-camera-plus-outline" style="font-size:1.6rem; color:var(--text-muted);"></span>
-              <img id="profileAvatarImg" src="" alt="" style="display:none; width:100%; height:100%; object-fit:cover;">
-            </div>
-            <div>
-              <div style="font-size:0.85rem; font-weight:500; margin-bottom:4px;" data-i18n="settings.profilePhoto">Profielfoto</div>
-              <div style="font-size:0.72rem; color:var(--text-muted);" data-i18n="settings.profilePhotoDesc">Klik om een foto te uploaden (max 2MB)</div>
-              <button id="profileAvatarRemoveBtn" class="btn btn-secondary" onclick="removeProfileAvatar()" style="display:none; margin-top:6px; padding:4px 10px; font-size:0.7rem;" data-i18n="settings.profilePhotoRemove">Verwijderen</button>
-            </div>
-            <input type="file" id="profileAvatarInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" onchange="uploadProfileAvatar(this)">
-          </div>
-
-          <!-- Username -->
-          <div class="input-group" style="max-width:340px; margin-bottom:16px;">
-            <label data-i18n="settings.profileUsername">Gebruikersnaam</label>
-            <input type="text" id="profileUsername" placeholder="username" maxlength="50">
-            <div id="profileUsernameError" style="display:none; font-size:0.72rem; color:var(--error); margin-top:4px;"></div>
-          </div>
-
-          <!-- First name -->
-          <div class="input-group" style="max-width:340px; margin-bottom:16px;">
-            <label data-i18n="settings.profileFirstName">Voornaam</label>
-            <input type="text" id="profileFirstName" placeholder="" maxlength="100">
-          </div>
-
-          <!-- Last name -->
-          <div class="input-group" style="max-width:340px; margin-bottom:16px;">
-            <label data-i18n="settings.profileLastName">Achternaam</label>
-            <input type="text" id="profileLastName" placeholder="" maxlength="100">
-          </div>
-
-          <!-- Save -->
-          <button class="btn btn-primary" onclick="saveProfile()" data-i18n="settings.profileSave">💾 Opslaan</button>
-          <div id="profileStatus" class="status-msg" style="margin-top:10px;"></div>
-        </div>
-
-        <!-- Actions -->
-        <div class="card" style="margin-top:20px;">
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="btn btn-secondary" onclick="switchSettingsSubmenu('security')" data-i18n="settings.profilePasskeys">🔑 Passkeys beheren</button>
-            <button class="btn btn-secondary" id="btnLogoutProfile" onclick="logoutApp()" style="display:none;" data-i18n="settings.profileLogout">↩ Uitloggen</button>
-          </div>
-        </div>
-
-        <!-- API keys -->
-        <div class="card" id="apiKeysCard" style="margin-top:20px; display:none;">
-          <div class="card-title">🔗 API-sleutels</div>
-          <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
-            Gebruik een persoonlijke API-sleutel om DiscVault te verbinden met AI-clients zoals Claude of Cursor via MCP.
-            Elke sleutel is gekoppeld aan jouw account — je ziet alleen jouw eigen collectie, watchlist en geschiedenis.
-          </p>
-
-          <!-- Generate new key -->
-          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
-            <div class="input-group" style="margin:0; flex:1; min-width:160px;">
-              <label style="font-size:0.78rem;">Label (optioneel)</label>
-              <input type="text" id="apiKeyLabel" placeholder="bijv. Claude Desktop" maxlength="80" style="padding:8px 10px; font-size:0.84rem;">
-            </div>
-            <button class="btn btn-primary" onclick="generateApiKey()" style="white-space:nowrap;">+ Sleutel aanmaken</button>
-          </div>
-
-          <!-- One-time reveal -->
-          <div id="apiKeyReveal" style="display:none; padding:14px; background:rgba(232,197,71,.06); border:1px solid rgba(232,197,71,.3); border-radius:8px; margin-bottom:16px;">
-            <div style="font-size:0.78rem; color:var(--accent); font-weight:600; margin-bottom:8px;">⚠ Kopieer deze sleutel nu — hij wordt nooit meer getoond</div>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <code id="apiKeyRevealValue" style="flex:1; font-family:'DM Mono',monospace; font-size:0.78rem; word-break:break-all; color:var(--text); background:var(--surface2); padding:8px 10px; border-radius:6px; border:1px solid var(--border);"></code>
-              <button class="btn btn-secondary" onclick="copyApiKey()" style="padding:7px 12px; font-size:0.76rem; flex-shrink:0;">📋</button>
-            </div>
-            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:8px;">
-              Gebruik in je MCP-client config: <code style="color:var(--accent);">"Authorization": "Bearer &lt;sleutel&gt;"</code>
-            </div>
-          </div>
-
-          <div id="apiKeyStatus" class="status-msg" style="margin-bottom:8px;"></div>
-          <div id="apiKeysList"></div>
-        </div>
-
-        <!-- MCP activiteit log -->
-        <div class="card" id="mcpLogsCard" style="margin-top:20px; display:none;">
-          <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>🤖 MCP Activiteit</span>
-            <button class="btn btn-secondary" onclick="loadMcpLogs()" style="padding:5px 10px; font-size:0.76rem;">↻ Vernieuwen</button>
-          </div>
-          <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px; line-height:1.6;">
-            Recente tool-aanroepen via de MCP-koppeling voor jouw account.
-          </p>
-          <div id="mcpLogsList" style="font-family:'DM Mono',monospace; font-size:0.76rem; color:var(--text-muted); max-height:360px; overflow-y:scroll; border:1px solid var(--border); border-radius:6px; -webkit-overflow-scrolling:touch;">
-            <div style="text-align:center; padding:20px; color:var(--text-muted);">Laden...</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="settings-sub-section" id="settingsSubGeneral">
+      <div class="settings-sub-section active" id="settingsSubGeneral">
 
       <!-- DB Stats -->
       <div class="card" id="settingsStats">
