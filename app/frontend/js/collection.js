@@ -429,10 +429,12 @@ async function openMovieDetail(id) {
   const movie = allMovies.find(m => m.id === id);
   if (!movie) return;
 
-  // Hide edit button if user doesn't own this movie (and isn't admin / auth disabled)
+  // Hide edit/refresh buttons if user doesn't own this movie (and isn't admin / auth disabled)
   const canEdit = canEditMovie(movie);
   const editBtn = document.getElementById('btnEditMovie');
   if (editBtn) editBtn.style.display = canEdit ? '' : 'none';
+  const refreshBtn = document.getElementById('btnRefreshSingle');
+  if (refreshBtn) refreshBtn.style.display = canEdit ? '' : 'none';
 
   document.getElementById('modalTitle').textContent = movie.title;
   document.getElementById('modalDirector').textContent = movie.director || '';
@@ -781,64 +783,10 @@ async function deleteCurrentMovie() {
   loadStats();
 }
 
-async function refreshSingleMovie() {
-  const btn = document.getElementById('btnRefreshSingle');
+async function refreshSingleMovie(btnEl) {
+  const btn = btnEl || document.getElementById('btnRefreshSingle');
   const origText = btn.innerHTML;
   btn.innerHTML = t('js.fetching');
-  btn.disabled = true;
-
-  try {
-    const r = await fetch(`${API}/movies/bulk-refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: [currentMovieId], fetch_posters: true })
-    });
-    const d = await parseApiJson(r);
-
-    if (d.updated > 0) {
-      // Reload the movie from API to get fresh data
-      const mr = await fetch(`${API}/movies/${currentMovieId}`);
-      const fresh = await mr.json();
-      const idx = allMovies.findIndex(m => m.id === currentMovieId);
-      if (idx >= 0) allMovies[idx] = fresh;
-
-      // Re-render the detail view
-      openMovieDetail(currentMovieId);
-      filterMovies();
-
-      btn.innerHTML = t('js.updated');
-      btn.style.color = 'var(--success)';
-      btn.style.borderColor = 'rgba(64,192,128,.4)';
-      setTimeout(() => {
-        btn.innerHTML = origText;
-        btn.style.color = '';
-        btn.style.borderColor = '';
-        btn.disabled = false;
-      }, 2000);
-    } else {
-      btn.innerHTML = t('js.noNewData');
-      btn.style.color = 'var(--accent)';
-      setTimeout(() => {
-        btn.innerHTML = origText;
-        btn.style.color = '';
-        btn.disabled = false;
-      }, 2000);
-    }
-  } catch(e) {
-    btn.innerHTML = t('js.errorShort');
-    btn.style.color = 'var(--danger)';
-    setTimeout(() => {
-      btn.innerHTML = origText;
-      btn.style.color = '';
-      btn.disabled = false;
-    }, 2000);
-  }
-}
-
-async function syncSingleMovieAllBackends() {
-  const btn = document.getElementById('btnSyncAllBackends');
-  const origText = btn.innerHTML;
-  btn.innerHTML = t('js.syncing');
   btn.disabled = true;
 
   try {
@@ -854,26 +802,23 @@ async function syncSingleMovieAllBackends() {
       const fresh = await mr.json();
       const idx = allMovies.findIndex(m => m.id === currentMovieId);
       if (idx >= 0) allMovies[idx] = fresh;
-
       openMovieDetail(currentMovieId);
       filterMovies();
-
-      btn.innerHTML = t('js.synced');
+      btn.innerHTML = t('js.updated');
       btn.style.color = 'var(--success)';
       btn.style.borderColor = 'rgba(64,192,128,.4)';
       setTimeout(() => {
         btn.innerHTML = origText;
-        btn.style.color = '#86d5ff';
-        btn.style.borderColor = 'rgba(134,213,255,.45)';
+        btn.style.color = '';
+        btn.style.borderColor = '';
         btn.disabled = false;
       }, 2000);
     } else if (d.status === 'skipped') {
-      btn.innerHTML = t('js.noSourceData');
+      btn.innerHTML = t('js.noNewData');
       btn.style.color = 'var(--accent)';
       setTimeout(() => {
         btn.innerHTML = origText;
-        btn.style.color = '#86d5ff';
-        btn.style.borderColor = 'rgba(134,213,255,.45)';
+        btn.style.color = '';
         btn.disabled = false;
       }, 2000);
     } else {
@@ -881,8 +826,7 @@ async function syncSingleMovieAllBackends() {
       btn.style.color = 'var(--danger)';
       setTimeout(() => {
         btn.innerHTML = origText;
-        btn.style.color = '#86d5ff';
-        btn.style.borderColor = 'rgba(134,213,255,.45)';
+        btn.style.color = '';
         btn.disabled = false;
       }, 2000);
     }
@@ -891,8 +835,7 @@ async function syncSingleMovieAllBackends() {
     btn.style.color = 'var(--danger)';
     setTimeout(() => {
       btn.innerHTML = origText;
-      btn.style.color = '#86d5ff';
-      btn.style.borderColor = 'rgba(134,213,255,.45)';
+      btn.style.color = '';
       btn.disabled = false;
     }, 2000);
   }
@@ -1110,6 +1053,14 @@ async function saveEdit() {
       if (d && typeof d === 'object') d.group_ids = selectedGroupIds;
       if (d.queued) {
         showStatus('editStatus', t('js.queuedEdit'), 'info');
+        // Reset dirty state so cancel/back doesn't prompt about unsaved changes
+        _editSnapshot = {};
+        for (const [suffix] of Object.entries(EDIT_FIELDS)) {
+          const el = document.getElementById('edit' + suffix);
+          if (el) _editSnapshot[suffix] = el.value;
+        }
+        _editSnapshot._groups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
+        _editDirty = false;
       } else {
         // Update local cache
         const idx = allMovies.findIndex(m => m.id === currentMovieId);

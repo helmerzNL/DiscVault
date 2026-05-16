@@ -1161,6 +1161,7 @@
               </div>
             </div>
             <button class="btn btn-secondary" id="btnEditMovie" onclick="startEdit()" data-i18n="modal.edit">Bewerken</button>
+            <button class="btn btn-secondary" id="btnRefreshSingle" onclick="refreshSingleMovie(this)" data-i18n="modal.refreshMeta">Refresh metadata</button>
           </div>
         </div>
       </div>
@@ -1200,8 +1201,7 @@
       <div class="btn-row modal-edit-actions" style="flex-wrap:wrap;">
         <button class="btn btn-secondary" id="btnSaveEdit" onclick="saveEdit()" data-i18n="edit.save">Opslaan</button>
         <button class="btn btn-secondary" onclick="cancelEdit()" data-i18n="edit.cancel">Annuleren</button>
-        <button class="btn btn-secondary" onclick="refreshSingleMovie()" id="btnRefreshSingle" data-i18n="modal.refreshMeta">Refresh metadata</button>
-        <button class="btn btn-secondary" onclick="syncSingleMovieAllBackends()" id="btnSyncAllBackends" data-i18n="modal.syncAll">Sync alle bronnen</button>
+        <button class="btn btn-secondary" onclick="refreshSingleMovie(this)" data-i18n="modal.refreshMeta">Refresh metadata</button>
         <button class="btn btn-danger" onclick="deleteCurrentMovie()" data-i18n="modal.delete">Verwijderen</button>
       </div>
 

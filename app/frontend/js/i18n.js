@@ -134,10 +134,16 @@ function updateQueueIndicator() {
 
 function isQueueableMutation(pathname, method) {
   if (!['POST', 'PUT', 'DELETE'].includes(method)) return false;
-  if (!pathname.startsWith('/api/movies')) return false;
-  if (pathname.includes('/bulk-refresh')) return false;
-  if (pathname.endsWith('/refresh')) return false;
-  return true;
+  if (pathname.startsWith('/api/movies')) {
+    if (pathname.includes('/bulk-refresh')) return false;
+    if (pathname.includes('/sync-all')) return false;
+    if (pathname.includes('/sync-source')) return false;
+    if (pathname.endsWith('/refresh')) return false;
+    return true;
+  }
+  if (pathname.startsWith('/api/watchlist')) return true;
+  if (pathname.startsWith('/api/watched')) return true;
+  return false;
 }
 
 function serializeBodyForQueue(body) {

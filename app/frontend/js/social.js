@@ -543,7 +543,8 @@ async function markWatchedModal(type) {
   });
   if (!r.ok) return;
   // Re-fetch history to get accurate most-recent date and update history section
-  const entries = await _refreshWatchedHistoryPopup(currentMovieId);
+  let entries = [];
+  try { entries = await _refreshWatchedHistoryPopup(currentMovieId); } catch(e) {}
   _modalMovieLastWatched = entries.length ? entries[0].watched_at.slice(0,10) : date;
   _updateWatchedBtn();
   const m = allMovies.find(x => x.id === currentMovieId);
