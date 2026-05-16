@@ -58,8 +58,9 @@ async function _tryNativeScanner(container) {
   video.setAttribute('muted', '');       // attribute form required for iOS autoplay policy
   video.muted = true;
   video.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:8px;';
-  video.srcObject = stream;
+  // iOS requires the element to be in the DOM *before* srcObject is set
   container.appendChild(video);
+  video.srcObject = stream;
 
   try {
     await video.play();
@@ -138,6 +139,14 @@ async function startScanner() {
       showStatus('scanStatus', t('js.cameraError', err.message), 'error');
       stopScanner();
       return;
+    }
+    // iOS fix: Quagga2 doesn't add playsinline/muted to its internal <video>,
+    // which causes a black screen on iOS Safari. Inject the attributes before start.
+    const quaggaVideo = container.querySelector('video');
+    if (quaggaVideo) {
+      quaggaVideo.setAttribute('playsinline', '');
+      quaggaVideo.setAttribute('muted', '');
+      quaggaVideo.muted = true;
     }
     Quagga.start();
     scannerRunning = true;
