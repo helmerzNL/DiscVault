@@ -128,36 +128,42 @@ body::before {
 .lang-switcher {
   display: flex;
   align-items: center;
-  gap: 2px;
   border-left: 1px solid var(--border);
   padding-left: 0.9rem;
   margin-left: 0.15rem;
 }
 
-.lang-btn {
-  background: none;
-  border: 1px solid transparent;
+.lang-select {
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6' fill='none' stroke='%237878a0' stroke-width='1.5' stroke-linejoin='round'/%3E%3C%2Fsvg%3E") no-repeat right 0.45rem center;
+  border: 1px solid var(--border);
   color: var(--text-muted);
   font-family: "DM Mono", monospace;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 500;
-  letter-spacing: 0.06em;
-  padding: 0.22rem 0.44rem;
+  padding: 0.28rem 1.6rem 0.28rem 0.5rem;
   border-radius: 6px;
   cursor: pointer;
-  transition: color 150ms, border-color 150ms, background 150ms;
+  transition: color 150ms, border-color 150ms, background-color 150ms;
   line-height: 1;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.lang-btn:hover {
+.lang-select:hover {
   color: var(--text);
-  background: var(--surface2);
+  border-color: rgba(232, 197, 71, 0.4);
+  background-color: var(--surface2);
 }
 
-.lang-btn[aria-pressed="true"] {
-  color: var(--accent);
+.lang-select:focus {
+  outline: none;
   border-color: rgba(232, 197, 71, 0.4);
-  background: rgba(232, 197, 71, 0.08);
+  color: var(--accent);
+}
+
+.lang-select option {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .hamburger {
@@ -556,19 +562,18 @@ code {
 
   .lang-switcher {
     border-left: none;
-    padding-left: 0.7rem;
+    padding-left: 0;
     border-top: 1px solid var(--border);
     padding-top: 0.5rem;
     margin-top: 0.2rem;
     margin-left: 0;
-    justify-content: flex-start;
-    gap: 4px;
     width: 100%;
   }
 
-  .lang-btn {
-    font-size: 0.82rem;
-    padding: 0.35rem 0.6rem;
+  .lang-select {
+    font-size: 0.85rem;
+    width: 100%;
+    padding: 0.4rem 1.8rem 0.4rem 0.6rem;
   }
 
   .hero {

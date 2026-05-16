@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=7" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -41,14 +41,16 @@
         <a href="#install" data-i18n="nav.install">Install</a>
         <a href="#community" data-i18n="nav.community">Community</a>
         <a class="nav-github" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
-        <div class="lang-switcher" role="group" aria-label="Language">
-          <button class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
-          <button class="lang-btn" data-lang="nl" aria-pressed="false">NL</button>
-          <button class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
-          <button class="lang-btn" data-lang="de" aria-pressed="false">DE</button>
-          <button class="lang-btn" data-lang="es" aria-pressed="false">ES</button>
-          <button class="lang-btn" data-lang="pt" aria-pressed="false">PT</button>
-          <button class="lang-btn" data-lang="it" aria-pressed="false">IT</button>
+        <div class="lang-switcher">
+          <select class="lang-select" aria-label="Language">
+            <option value="en">🇬🇧 English</option>
+            <option value="nl">🇳🇱 Nederlands</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="es">🇪🇸 Español</option>
+            <option value="pt">🇵🇹 Português</option>
+            <option value="it">🇮🇹 Italiano</option>
+          </select>
         </div>
       </nav>
     </header>
@@ -471,7 +473,7 @@
       <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="footer.github">Source on GitHub</a>
     </footer>
 
-    <script src="./translations.js?v=4"></script>
+    <script src="./translations.js?v=5"></script>
     <script>
 
     function setLang(lang) {
@@ -481,14 +483,13 @@
         var v = t[el.getAttribute('data-i18n')];
         if (v !== undefined) el.innerHTML = v;
       });
-      document.querySelectorAll('.lang-btn').forEach(function(b) {
-        b.setAttribute('aria-pressed', b.dataset.lang === lang ? 'true' : 'false');
-      });
+      var sel = document.querySelector('.lang-select');
+      if (sel) sel.value = lang;
       try { localStorage.setItem('dv-lang', lang); } catch(e) {}
     }
 
-    document.querySelectorAll('.lang-btn').forEach(function(b) {
-      b.addEventListener('click', function() { setLang(this.dataset.lang); });
+    document.querySelector('.lang-select').addEventListener('change', function() {
+      setLang(this.value);
     });
 
     (function() {
