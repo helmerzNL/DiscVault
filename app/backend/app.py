@@ -42,7 +42,7 @@ AVATAR_DIR = os.environ.get("AVATAR_DIR", "/data/avatars")
 OMDB_API_KEY  = os.environ.get("OMDB_API_KEY",  "")
 TMDB_API_KEY  = os.environ.get("TMDB_API_KEY",  "")
 # DiscVault supported languages — used for multilingual TMDb title/plot lookups
-TMDB_LANGUAGES = [("nl", "nl-NL"), ("fr", "fr-FR"), ("de", "de-DE"), ("es", "es-ES")]
+TMDB_LANGUAGES = [("nl", "nl-NL"), ("fr", "fr-FR"), ("de", "de-DE"), ("es", "es-ES"), ("pt", "pt-PT"), ("it", "it-IT")]
 MCP_API_KEY   = os.environ.get("MCP_API_KEY", "")
 JWT_SECRET    = os.environ.get("JWT_SECRET", secrets.token_hex(32))
 RP_ID         = os.environ.get("RP_ID", "localhost")
@@ -154,10 +154,14 @@ SCHEMA_COLUMNS = [
     ("title_fr",             "TEXT"),
     ("title_de",             "TEXT"),
     ("title_es",             "TEXT"),
+    ("title_pt",             "TEXT"),
+    ("title_it",             "TEXT"),
     ("plot_nl",              "TEXT"),
     ("plot_fr",              "TEXT"),
     ("plot_de",              "TEXT"),
     ("plot_es",              "TEXT"),
+    ("plot_pt",              "TEXT"),
+    ("plot_it",              "TEXT"),
     ("extras",               "TEXT"),
     ("box_set",              "TEXT"),
     # External IDs & links
