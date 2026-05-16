@@ -4,6 +4,7 @@ ARG BUILD_VERSION=dev
 
 COPY index.html /usr/share/nginx/html/index.html
 COPY styles.css /usr/share/nginx/html/styles.css
+COPY i18n/ /usr/share/nginx/html/i18n/
 COPY js/ /usr/share/nginx/html/js/
 COPY logo.svg /usr/share/nginx/html/logo.svg
 COPY icon.svg /usr/share/nginx/html/icon.svg

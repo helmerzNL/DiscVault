@@ -167,7 +167,10 @@ function switchTab(name) {
   _pushRoute(_tabPath(name));
 }
 
-init();
+(async () => {
+  await loadTranslations();
+  init();
+})();
 
 // ── Push notifications ────────────────────────────────────────────────────────
 let _pushSubscription = null;
