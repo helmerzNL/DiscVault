@@ -528,40 +528,51 @@
 
   <!-- LISTS PANEL -->
   <div class="panel" id="panel-lists">
-    <div>
-      <div class="settings-submenu">
-        <button class="settings-sub-btn active" type="button" data-lists-sub="watchlist" onclick="switchListsSubmenu('watchlist')">
-          <span class="settings-sub-icon mdi mdi-bookmark-outline" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="lists.menuWatchlist">Watchlist</span>
+    <div class="profile-layout">
+
+      <!-- Sidebar navigation -->
+      <nav class="profile-sidebar" aria-label="Lijsten navigatie">
+        <button class="profile-sidebar-btn active" type="button" data-lists-sub="watchlist" onclick="switchListsSubmenu('watchlist')">
+          <span class="mdi mdi-bookmark-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="lists.menuWatchlist">Watchlist</span>
         </button>
-        <button class="settings-sub-btn" type="button" data-lists-sub="watchhistory" onclick="switchListsSubmenu('watchhistory')">
-          <span class="settings-sub-icon mdi mdi-history" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="lists.menuWatchHistory">Watch History</span>
+        <button class="profile-sidebar-btn" type="button" data-lists-sub="watchhistory" onclick="switchListsSubmenu('watchhistory')">
+          <span class="mdi mdi-history profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="lists.menuWatchHistory">Kijkgeschiedenis</span>
         </button>
-        <button class="settings-sub-btn disabled" type="button" disabled data-i18n-title="general.comingSoon" title="Binnenkort beschikbaar">
-          <span class="settings-sub-icon mdi mdi-format-list-bulleted" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="lists.menuCustomLists">Custom Lists</span>
+        <button class="profile-sidebar-btn" type="button" disabled data-i18n-title="general.comingSoon" title="Binnenkort beschikbaar">
+          <span class="mdi mdi-format-list-bulleted profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="lists.menuCustomLists">Custom Lists</span>
         </button>
-        <button class="settings-sub-btn disabled" type="button" disabled data-i18n-title="general.comingSoon" title="Binnenkort beschikbaar">
-          <span class="settings-sub-icon mdi mdi-tag-outline" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="lists.menuTags">Tags</span>
+        <button class="profile-sidebar-btn" type="button" disabled data-i18n-title="general.comingSoon" title="Binnenkort beschikbaar">
+          <span class="mdi mdi-tag-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="lists.menuTags">Tags</span>
         </button>
-      </div>
-      <div class="settings-sub-section active" id="listsSubWatchlist">
-        <div id="watchlistEmpty" style="display:none; text-align:center; padding:60px 20px; color:var(--text-muted);">
-          <div style="font-size:3rem; margin-bottom:12px; opacity:0.3;">🔖</div>
-          <div style="font-size:0.9rem;" data-i18n-html="lists.watchlistEmpty">Je watchlist is leeg.<br>Voeg films toe via het detailscherm of via Selecteren in de collectie.</div>
+      </nav>
+
+      <!-- Content -->
+      <div class="profile-content">
+
+        <!-- Watchlist -->
+        <div class="profile-sub-section active" id="listsSubWatchlist">
+          <div id="watchlistEmpty" style="display:none; text-align:center; padding:60px 20px; color:var(--text-muted);">
+            <div style="font-size:3rem; margin-bottom:12px; opacity:0.3;">🔖</div>
+            <div style="font-size:0.9rem;" data-i18n-html="lists.watchlistEmpty">Je watchlist is leeg.<br>Voeg films toe via het detailscherm of via Selecteren in de collectie.</div>
+          </div>
+          <div id="watchlistGrid" class="movies-grid" style="margin-top:20px;"></div>
         </div>
-        <div id="watchlistGrid" class="movies-grid" style="margin-top:20px;"></div>
-      </div>
-      <div class="settings-sub-section" id="listsSubWatchHistory">
-        <div id="watchHistoryEmpty" style="display:none; text-align:center; padding:60px 20px; color:var(--text-muted);">
-          <div style="font-size:3rem; margin-bottom:12px; opacity:0.3;">📅</div>
-          <div style="font-size:0.9rem;" data-i18n="lists.watchHistoryEmpty">Je hebt nog geen films als bekeken gemarkeerd.</div>
+
+        <!-- Kijkgeschiedenis -->
+        <div class="profile-sub-section" id="listsSubWatchHistory">
+          <div id="watchHistoryEmpty" style="display:none; text-align:center; padding:60px 20px; color:var(--text-muted);">
+            <div style="font-size:3rem; margin-bottom:12px; opacity:0.3;">📅</div>
+            <div style="font-size:0.9rem;" data-i18n="lists.watchHistoryEmpty">Je hebt nog geen films als bekeken gemarkeerd.</div>
+          </div>
+          <div id="watchHistoryList" style="margin-top:16px;"></div>
         </div>
-        <div id="watchHistoryList" style="margin-top:16px;"></div>
-      </div>
-    </div>
+
+      </div><!-- /.profile-content -->
+    </div><!-- /.profile-layout -->
   </div>
 
   <!-- PROFILE PANEL -->

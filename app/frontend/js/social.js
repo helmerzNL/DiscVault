@@ -315,7 +315,7 @@ function switchListsSubmenu(sub) {
   document.querySelectorAll('[data-lists-sub]').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-lists-sub') === sub);
   });
-  document.querySelectorAll('#panel-lists .settings-sub-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('#panel-lists .profile-sub-section').forEach(s => s.classList.remove('active'));
   if (sub === 'watchlist') {
     const el = document.getElementById('listsSubWatchlist');
     if (el) el.classList.add('active');
