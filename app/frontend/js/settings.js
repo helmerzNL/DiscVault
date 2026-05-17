@@ -604,18 +604,24 @@ async function loadDigitalSources() {
 }
 
 function openAddDigitalSource(type) {
-  document.getElementById('addDigitalSourceType').value = type;
-  document.getElementById('addDigitalSourceTitle').textContent = type === 'plex'
+  const modal = document.getElementById('addDigitalSourceModal');
+  if (!modal) { console.error('[DiscVault] addDigitalSourceModal not found in DOM'); return; }
+  const typeEl = document.getElementById('addDigitalSourceType');
+  if (typeEl) typeEl.value = type;
+  const titleEl = document.getElementById('addDigitalSourceTitle');
+  if (titleEl) titleEl.textContent = type === 'plex'
     ? '🟡 ' + t('digital.addPlexTitle')
     : '🔵 ' + t('digital.addJellyfinTitle');
-  document.getElementById('addDigitalTokenLabel').textContent = type === 'plex'
+  const labelEl = document.getElementById('addDigitalTokenLabel');
+  if (labelEl) labelEl.textContent = type === 'plex'
     ? t('digital.plexToken')
     : t('digital.jellyfinToken');
-  document.getElementById('addDigitalName').value = '';
-  document.getElementById('addDigitalUrl').value = '';
-  document.getElementById('addDigitalToken').value = '';
-  document.getElementById('addDigitalSourceStatus').className = 'status-msg';
-  document.getElementById('addDigitalSourceModal').style.display = 'flex';
+  const nameEl  = document.getElementById('addDigitalName');   if (nameEl)  nameEl.value  = '';
+  const urlEl   = document.getElementById('addDigitalUrl');    if (urlEl)   urlEl.value   = '';
+  const tokenEl = document.getElementById('addDigitalToken');  if (tokenEl) tokenEl.value = '';
+  const statusEl = document.getElementById('addDigitalSourceStatus');
+  if (statusEl) statusEl.className = 'status-msg';
+  modal.style.display = 'flex';
 }
 
 function closeAddDigitalSource() {

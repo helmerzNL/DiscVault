@@ -422,14 +422,15 @@ function switchAdminSubmenu(name) {
     advanced: 'adminSubAdvanced',
   };
   const targetId = map[name] || map.security;
-  // Hide all admin sub-sections (scoped, same pattern as switchProfileSubmenu)
-  document.querySelectorAll('#panel-admin .profile-sub-section').forEach(el => {
+  // Hide all admin sub-sections
+  document.querySelectorAll('#panel-profile .profile-sub-section[id^="adminSub"]').forEach(el => {
     el.style.display = 'none';
   });
   const target = document.getElementById(targetId);
   if (target) target.style.display = 'block';
-  if (name === 'logs')   loadLogs();
-  if (name === 'backup') loadBackups();
+  if (name === 'logs')     loadLogs();
+  if (name === 'backup')   loadBackups();
+  if (name === 'advanced') loadDigitalSources();
 }
 
 async function loadAdminTab() {
