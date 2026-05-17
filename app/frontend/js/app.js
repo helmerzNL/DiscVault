@@ -84,6 +84,22 @@ async function loadCollection(retries = 2) {
       throw new Error(`HTTP ${r.status}`);
     }
     allMovies = await r.json();
+    // When group_editions is on, also index nested editions into allMovies so they
+    // can be accessed via detail/edit view. They are flagged _isNested so
+    // getCurrentMovies() filters them from the grid.
+    if (groupEditionsEnabled) {
+      const nested = [];
+      allMovies.forEach(m => {
+        if (m.editions) {
+          m.editions.forEach(e => {
+            if (e.id !== m.id && !allMovies.some(x => x.id === e.id)) {
+              nested.push({ ...e, _isNested: true, _primaryId: m.id });
+            }
+          });
+        }
+      });
+      if (nested.length) allMovies = allMovies.concat(nested);
+    }
     setCachedData('dv_movies_cache', allMovies);
     filterMovies();
     filterSearchMovies();

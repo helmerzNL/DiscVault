@@ -1059,6 +1059,52 @@
   .movie-card:hover .movie-card-delete { display: flex; }
   .movie-card-delete:hover { background: var(--danger); }
 
+  /* ── Edition / stack / digital card badges ── */
+  .movie-card-edition-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(10,10,15,0.85);
+    color: var(--accent);
+    border: 1px solid rgba(232,197,71,0.4);
+    pointer-events: none;
+  }
+  .movie-card-stack-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 5;
+    user-select: none;
+    transition: transform 0.15s;
+  }
+  .movie-card-stack-badge:hover { transform: scale(1.12); }
+  .movie-card-digital-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 0.8rem;
+    line-height: 1;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .movie-card-editions-drawer {
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .movie-card-editions-drawer > div:hover { background: var(--surface3); }
+
   /* ── Selectiemodus ── */
   .select-mode .movie-card { cursor: pointer; }
   .select-mode .movie-card:hover { border-color: var(--accent2); }

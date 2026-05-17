@@ -45,6 +45,7 @@ function getCurrentMovies() {
   const groupFilter = document.getElementById('groupFilter');
   const activeGroup = groupFilter ? groupFilter.value : '';
   return allMovies.filter(m => {
+    if (m._isNested) return false; // nested editions only accessible via drawer/detail
     const matchesFormat  = !activeFormat || m.format === activeFormat;
     const matchesGroup   = !activeGroup ||
       (activeGroup === '_mine' ? (m.owner_id === currentUserId) : (m.group_ids || []).includes(parseInt(activeGroup)));
@@ -134,9 +135,9 @@ function renderGrid(movies) {
       ? `<div class="movie-card-edition-badge" title="${t('edition.' + edType.replace('_',''), edType)}">${_editionShortLabel(edType)}</div>`
       : '';
 
-    // Edition stack badge (grouped mode, multiple editions)
+    // Edition stack badge (grouped mode, multiple editions) — click to expand drawer
     const stackBadge = (m.editions_count > 1)
-      ? `<div class="movie-card-stack-badge">${m.editions_count}×</div>`
+      ? `<div class="movie-card-stack-badge" onclick="event.stopPropagation(); toggleEditionsDrawer(${m.id})">${m.editions_count}×</div>`
       : '';
 
     // Digital badge (Plex/Jellyfin)
@@ -1245,6 +1246,8 @@ function startEdit() {
   const egId = movie.edition_group_id;
   document.getElementById('editEditionGroupId').value = egId || '';
   document.getElementById('editEditionGroupSearch').value = '';
+  const egDropdown = document.getElementById('editEditionGroupDropdown');
+  if (egDropdown) egDropdown.style.display = 'none';
   const badge = document.getElementById('editEditionGroupBadge');
   if (egId) {
     // Look up group name from cache or fetch
@@ -1321,6 +1324,8 @@ async function saveEdit() {
 
   // Collect selected group IDs from checkboxes
   const selectedGroupIds = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => parseInt(cb.value));
+  // Capture previous edition group for comparison after save
+  const _prevEgId = (allMovies.find(m => m.id === currentMovieId) || {}).edition_group_id ?? null;
 
   try {
     const r = await fetch(`${API}/movies/${currentMovieId}`, {
@@ -1365,7 +1370,13 @@ async function saveEdit() {
         }
         _editSnapshot._groups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
         _editDirty = false;
-        filterMovies();  // Update grid
+        _editionGroupCache = []; // Invalidate so next search fetches fresh member counts
+        // Reload full collection when edition group assignment changes in grouped view
+        if (groupEditionsEnabled && (payload.edition_group_id ?? null) !== _prevEgId) {
+          loadCollection();
+        } else {
+          filterMovies();  // Update grid
+        }
       }
     } else {
       showStatus('editStatus', d.error || t('js.saveError'), 'error');
@@ -1769,6 +1780,38 @@ function setEditionFilter(btn) {
   activeEditionFilter = !activeEditionFilter;
   btn.classList.toggle('active', activeEditionFilter);
   filterMovies();
+}
+
+function toggleEditionsDrawer(id) {
+  const drawer = document.getElementById(`edDrawer_${id}`);
+  if (!drawer) return;
+  // Close if already open
+  if (drawer.style.display !== 'none' && drawer.innerHTML) {
+    drawer.style.display = 'none';
+    return;
+  }
+  const movie = allMovies.find(m => m.id === id);
+  if (!movie || !movie.editions) return;
+  // Make all editions accessible via openMovieDetail
+  movie.editions.forEach(e => {
+    if (!allMovies.some(m => m.id === e.id)) {
+      allMovies.push({ ...e, _isNested: true, _primaryId: id });
+    }
+  });
+  // Render mini-cards for each edition
+  drawer.innerHTML = movie.editions.map(e => {
+    const fmt = e.format || '4K';
+    const edLabel = (e.edition_type && e.edition_type !== 'standard')
+      ? `<span style="color:var(--accent);font-size:0.72rem;">${_editionShortLabel(e.edition_type)}</span>`
+      : '';
+    const isPrimary = (e.id === id) ? `<span style="color:var(--text-muted);font-size:0.68rem;">★</span>` : '';
+    return `<div onclick="event.stopPropagation(); openMovieDetail(${e.id})"
+               style="padding:6px 10px; display:flex; align-items:center; gap:8px; cursor:pointer; border-top:1px solid rgba(255,255,255,.06); font-size:0.8rem; color:var(--text);">
+      <span style="background:rgba(232,197,71,.15); color:var(--accent); border-radius:4px; padding:1px 5px; font-size:0.71rem; font-weight:700;">${fmt}</span>
+      ${edLabel}${isPrimary}
+    </div>`;
+  }).join('');
+  drawer.style.display = 'block';
 }
 
 // Edition group autocomplete in edit modal
