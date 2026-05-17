@@ -189,9 +189,17 @@ function renderGrid(movies) {
         const filtered = digitalBadgeFilter === 'all'
           ? match.digital_matches
           : match.digital_matches.filter(x => x.source_type === digitalBadgeFilter);
-        if (filtered.length) {
-          const srcType = filtered[0].source_type;
-          digitalBadge = `<div class="movie-card-digital-badge" title="${filtered.map(x=>x.source_name).join(', ')}">${srcType === 'plex' ? '🟡' : '🔵'}</div>`;
+        // Deduplicate by source_type so we get one badge per platform
+        const types = [...new Set(filtered.map(x => x.source_type))];
+        if (types.length) {
+          const badges = types.map(st => {
+            const names = filtered.filter(x => x.source_type === st).map(x => x.source_name).join(', ');
+            const logo = st === 'plex'
+              ? '<svg viewBox="0 0 24 24" width="14" height="14"><polygon points="12,2 22,12 12,22 2,12" fill="#E5A00D"/></svg>'
+              : '<svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="10" fill="#00A4DC"/><path d="M12 5.5l-6 11h12z" fill="#fff"/></svg>';
+            return `<div class="movie-card-digital-badge-icon" title="${names}">${logo}</div>`;
+          }).join('');
+          digitalBadge = `<div class="movie-card-digital-badge">${badges}</div>`;
         }
       }
     }

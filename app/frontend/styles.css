@@ -1104,12 +1104,26 @@
   }
   .movie-card-digital-badge {
     position: absolute;
-    top: 8px;
-    left: 8px;
-    font-size: 0.8rem;
-    line-height: 1;
+    top: 6px;
+    left: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
     z-index: 5;
     pointer-events: none;
+  }
+  .movie-card-digital-badge-icon {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,.55);
+    border-radius: 4px;
+    line-height: 0;
+  }
+  .movie-card-digital-badge-icon svg {
+    display: block;
   }
   .movie-card-editions-drawer {
     border-top: 1px solid var(--border);
