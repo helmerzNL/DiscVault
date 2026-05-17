@@ -103,6 +103,8 @@ async function loadCollection(retries = 2) {
     setCachedData('dv_movies_cache', allMovies);
     filterMovies();
     filterSearchMovies();
+    // Load digital badge data in background if enabled
+    if (showDigitalBadges && !compareData) loadDigitalBadgeData();
   } catch(e) {
     allMovies = getCachedData('dv_movies_cache', []);
     if (allMovies.length) {

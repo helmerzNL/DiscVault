@@ -591,6 +591,11 @@ function saveDigitalBadgesSetting() {
   const toggle = document.getElementById('showDigitalBadgesToggle');
   showDigitalBadges = !!(toggle && toggle.checked);
   localStorage.setItem('dv_digital_badges', showDigitalBadges ? 'true' : 'false');
+  if (showDigitalBadges && !compareData) {
+    loadDigitalBadgeData();
+  } else {
+    renderGrid(getCurrentMovies());
+  }
   showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }
 

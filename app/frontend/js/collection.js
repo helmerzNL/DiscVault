@@ -10,6 +10,19 @@ function _flagImg(code) {
 let compareMode     = false;
 let compareData     = null;
 let activeCompareTab = 'both';
+
+// Fetch compare data for digital badges (non-blocking)
+async function loadDigitalBadgeData() {
+  if (!showDigitalBadges) return;
+  try {
+    const r = await fetch(`${API}/collection/compare`);
+    if (r.ok) {
+      compareData = await r.json();
+      renderGrid(getCurrentMovies());
+    }
+  } catch(e) { /* silently ignore — badges are optional */ }
+}
+
 let groupEditionsEnabled = localStorage.getItem('dv_group_editions') === 'true';
 let showDigitalBadges    = localStorage.getItem('dv_digital_badges') === 'true';
 let collectorsMode       = localStorage.getItem('dv_collectors_mode') === 'true';
