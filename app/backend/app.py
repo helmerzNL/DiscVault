@@ -172,6 +172,7 @@ SCHEMA_COLUMNS = [
     ("edition_type",         "TEXT DEFAULT 'standard'"),
     ("custom_edition_label", "TEXT"),
     ("edition_group_id",     "INTEGER"),
+    ("super_group_id",       "INTEGER"),
     ("country",              "TEXT"),
     ("language",             "TEXT"),
     # People
@@ -545,6 +546,8 @@ def init_db():
     if "owner_id" not in existing:
         conn.execute("ALTER TABLE movies ADD COLUMN owner_id TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_movies_owner ON movies(owner_id)")
+    if "super_group_id" not in existing:
+        conn.execute("ALTER TABLE movies ADD COLUMN super_group_id INTEGER")
 
     # Migrate: move old group_id column data to movie_groups table
     if "group_id" in existing:
@@ -2024,6 +2027,7 @@ def list_movies():
                 primary["_parent_group_id"] = eg_info["parent_group_id"]
             collapsed.append(primary)
         # Build super-group cards for groups that have a parent_group_id
+        # AND for loose movies that have super_group_id set
         child_by_parent = {}
         direct_collapsed = []
         for card in collapsed:
@@ -2033,15 +2037,30 @@ def list_movies():
                 child_by_parent.setdefault(par_gid, []).append(card)
             else:
                 direct_collapsed.append(card)
-        if child_by_parent:
-            par_gids = list(child_by_parent.keys())
-            par_eg   = {}
+
+        # Collect loose movies (no edition_group_id) that have super_group_id
+        loose_by_sgid = {}
+        new_ungrouped = []
+        for m in ungrouped:
+            sgid = m.get("super_group_id")
+            if sgid:
+                loose_by_sgid.setdefault(sgid, []).append(m)
+            else:
+                new_ungrouped.append(m)
+        ungrouped = new_ungrouped
+
+        all_sg_ids = set(child_by_parent.keys()) | set(loose_by_sgid.keys())
+        if all_sg_ids:
+            par_eg = {}
             for r in conn.execute(
-                f"SELECT id, title, badge_label FROM edition_groups WHERE id IN ({','.join('?'*len(par_gids))})",
-                par_gids
+                f"SELECT id, title, badge_label FROM edition_groups WHERE id IN ({','.join('?'*len(all_sg_ids))})",
+                list(all_sg_ids)
             ).fetchall():
                 par_eg[r["id"]] = dict(r)
+
+            # Super-groups that have child edition-groups
             for par_gid, child_cards in child_by_parent.items():
+                lm = loose_by_sgid.pop(par_gid, [])
                 rep = child_cards[0]
                 sg  = dict(rep)
                 sg["_is_super_group"]   = True
@@ -2050,9 +2069,26 @@ def list_movies():
                 sg["_group_badge_label"]= (par_eg.get(par_gid) or {}).get("badge_label")
                 sg["_sub_groups"]       = child_cards
                 sg["_sub_group_count"]  = len(child_cards)
-                sg["editions_count"]    = sum(c["editions_count"] for c in child_cards)
+                sg["_loose_movies"]     = lm
+                sg["editions_count"]    = sum(c["editions_count"] for c in child_cards) + len(lm)
                 sg["editions"]          = []
                 direct_collapsed.append(sg)
+
+            # Super-groups with only loose movies (no child edition-groups)
+            for par_gid, lm in loose_by_sgid.items():
+                rep = lm[0]
+                sg  = dict(rep)
+                sg["_is_super_group"]   = True
+                sg["_parent_group_id"]  = par_gid
+                sg["_group_title"]      = (par_eg.get(par_gid) or {}).get("title") or sg.get("title")
+                sg["_group_badge_label"]= (par_eg.get(par_gid) or {}).get("badge_label")
+                sg["_sub_groups"]       = []
+                sg["_sub_group_count"]  = 0
+                sg["_loose_movies"]     = lm
+                sg["editions_count"]    = len(lm)
+                sg["editions"]          = []
+                direct_collapsed.append(sg)
+
             collapsed = direct_collapsed
         movies = ungrouped + collapsed
         movies.sort(key=lambda m: (m.get("sort_title") or m.get("title") or "").lower())

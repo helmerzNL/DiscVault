@@ -517,11 +517,17 @@ let _currentSuperGroup = null;
 function openSuperGroupView(movie) {
   _currentSuperGroup = movie;
   document.getElementById('egPanelTitle').textContent = movie._group_title || movie.title || '';
-  const cnt = movie._sub_group_count || 0;
+  const subCnt  = movie._sub_group_count || 0;
+  const looseCnt = (movie._loose_movies || []).length;
+  const totalEditions = movie.editions_count || 0;
   document.getElementById('egPanelSubtitle').textContent =
-    `${cnt} set${cnt !== 1 ? 's' : ''} \u00b7 ${movie.editions_count} edities`;
+    [subCnt ? `${subCnt} set${subCnt !== 1 ? 's' : ''}` : null,
+     looseCnt ? `${looseCnt} losse film${looseCnt !== 1 ? 's' : ''}` : null,
+     `${totalEditions} edities`].filter(Boolean).join(' \u00b7 ');
   const grid = document.getElementById('egPanelGrid');
-  grid.innerHTML = (movie._sub_groups || []).map(child => {
+
+  // Sub-group cards
+  const subGroupHtml = (movie._sub_groups || []).map(child => {
     const src = posterSrc(child);
     const imgHtml = src
       ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>\ud83c\udfa6</div>'">`
@@ -536,7 +542,28 @@ function openSuperGroupView(movie) {
         </div>
         <div class="eg-edition-info">${child._group_title || child.title || ''}</div>
       </div>`;
-  }).join('');
+  });
+
+  // Loose movie cards (direct members of super-group)
+  const looseHtml = (movie._loose_movies || []).map(lm => {
+    const src = posterSrc(lm);
+    const imgHtml = src
+      ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>\ud83c\udfa6</div>'">`
+      : '<div class="no-img">\ud83c\udfa6</div>';
+    const edType = lm.edition_type && lm.edition_type !== 'standard'
+      ? _editionShortLabel(lm.edition_type, lm.custom_edition_label) : '';
+    return `
+      <div class="eg-edition-card" onclick="openMovieDetail(${lm.id})">
+        <div class="eg-edition-poster">
+          ${imgHtml}
+          <div class="eg-edition-fmt">${lm.format || '4K'}</div>
+          ${edType ? `<div class="eg-edition-type-label">${edType}</div>` : ''}
+        </div>
+        <div class="eg-edition-info">${lm.title || ''} ${lm.year ? '<span style="color:var(--text-muted);font-size:0.75rem;">' + lm.year + '</span>' : ''}</div>
+      </div>`;
+  });
+
+  grid.innerHTML = [...subGroupHtml, ...looseHtml].join('');
   _populateEgManageSection(movie);
   window.scrollTo({ top: 0, behavior: 'smooth' });
   switchTabDirect('edition-group');
@@ -1490,6 +1517,25 @@ function startEdit() {
     badge.style.display = 'none';
   }
 
+  // Populate super-group field
+  const sgId = movie.super_group_id;
+  const sgIdEl = document.getElementById('editSuperGroupId');
+  const sgSearch = document.getElementById('editSuperGroupSearch');
+  const sgBadge = document.getElementById('editSuperGroupBadge');
+  const sgDropdown = document.getElementById('editSuperGroupDropdown');
+  if (sgIdEl) sgIdEl.value = sgId || '';
+  if (sgSearch) sgSearch.value = '';
+  if (sgDropdown) sgDropdown.style.display = 'none';
+  if (sgId && sgBadge) {
+    fetch(`${API}/edition-groups/${sgId}`).then(r => r.ok ? r.json() : null).then(g => {
+      if (!g) return;
+      document.getElementById('editSuperGroupName').textContent = g.title || '';
+      sgBadge.style.display = 'flex';
+    }).catch(() => {});
+  } else if (sgBadge) {
+    sgBadge.style.display = 'none';
+  }
+
   document.getElementById('editStatus').className = 'status-msg';
   document.getElementById('modalViewMode').style.display = 'none';
   document.getElementById('modalEditMode').style.display = 'block';
@@ -1544,6 +1590,12 @@ async function saveEdit() {
   if (egIdEl) {
     const egVal = egIdEl.value.trim();
     payload.edition_group_id = egVal ? parseInt(egVal) : null;
+  }
+  // Super-group assignment
+  const sgIdEl = document.getElementById('editSuperGroupId');
+  if (sgIdEl) {
+    const sgVal = sgIdEl.value.trim();
+    payload.super_group_id = sgVal ? parseInt(sgVal) : null;
   }
 
   // Collect selected group IDs from checkboxes
@@ -2127,6 +2179,52 @@ async function createEditionGroupFromSearch(title) {
     _editionGroupCache.push(g);
     selectEditionGroup(g.id, g.title);
   } catch(e) {}
+}
+
+async function searchSuperGroup(query) {
+  const dropdown = document.getElementById('editSuperGroupDropdown');
+  if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
+  try {
+    const r = await fetch(`${API}/edition-groups?q=${encodeURIComponent(query)}`);
+    const groups = await r.json();
+    const items = groups.slice(0, 8).map(g =>
+      `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
+            onmousedown="selectSuperGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">
+        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">${g.member_count || 0} edities</span>
+       </div>`
+    );
+    items.push(`<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent2); cursor:pointer;"
+         onmousedown="createAndSelectSuperGroup('${query.replace(/'/g,"\\'")}')">+ Maak "${query}" aan als nieuwe groep</div>`);
+    dropdown.innerHTML = items.join('');
+    dropdown.style.display = 'block';
+  } catch(e) {}
+}
+
+async function createAndSelectSuperGroup(title) {
+  document.getElementById('editSuperGroupDropdown').style.display = 'none';
+  try {
+    const r = await fetch(`${API}/edition-groups`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ title })
+    });
+    const g = await r.json();
+    selectSuperGroup(g.id, g.title);
+  } catch(e) {}
+}
+
+function selectSuperGroup(id, name) {
+  document.getElementById('editSuperGroupId').value = id;
+  document.getElementById('editSuperGroupSearch').value = '';
+  document.getElementById('editSuperGroupDropdown').style.display = 'none';
+  document.getElementById('editSuperGroupName').textContent = name;
+  document.getElementById('editSuperGroupBadge').style.display = 'flex';
+}
+
+function unlinkSuperGroup() {
+  document.getElementById('editSuperGroupId').value = '';
+  document.getElementById('editSuperGroupSearch').value = '';
+  document.getElementById('editSuperGroupBadge').style.display = 'none';
 }
 
 // ── Compare mode ─────────────────────────────────────────────────────────────

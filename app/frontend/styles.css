@@ -1451,8 +1451,6 @@
   }
   /* Edit form tabs */
   .edit-mode-tabs { margin-bottom: 16px; }
-  .edit-tab-content { display: none; }
-  .edit-tab-content.active { display: grid; }
 
   .eg-panel-grid {
     display: flex;
@@ -1694,6 +1692,10 @@
   }
 
   .form-grid .full { grid-column: 1/-1; }
+
+  /* Edit tab content: must come after .form-grid to override display:grid */
+  .edit-tab-content { display: none; }
+  .edit-tab-content.active { display: grid; }
 
   /* ── Log viewer ── */
   .log-controls {

@@ -1592,7 +1592,20 @@
           <div id="editEditionGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
           <input type="hidden" id="editEditionGroupId">
         </div>
-      </div>
+        <div class="input-group full">
+          <label>Super-groep (losse film)</label>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak super-groep..."
+                   oninput="searchSuperGroup(this.value)" autocomplete="off" style="flex:1; min-width:160px;">
+            <span id="editSuperGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(124,106,247,.12); border:1px solid rgba(124,106,247,.35); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent2);">
+              <span id="editSuperGroupName"></span>
+              <button type="button" onclick="unlinkSuperGroup()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
+            </span>
+          </div>
+          <div id="editSuperGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
+          <input type="hidden" id="editSuperGroupId">
+          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;">Gebruik dit alleen als deze film losse staat (geen editiegroep) maar wel onderdeel is van een trilogie-set.</div>
+        </div>
 
       <!-- Edit Tab: Details -->
       <div class="form-grid edit-tab-content" id="editTabDetails">
