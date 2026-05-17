@@ -540,11 +540,7 @@ let _currentSuperGroup = null;
 function openSuperGroupView(movie) {
   _currentSuperGroup = movie;
 
-  // Inject sub-group cards into allMovies so openEditionGroupView can find them
-  (movie._sub_groups || []).forEach(child => {
-    if (!allMovies.some(m => m.id === child.id))
-      allMovies.push({ ...child, _isNested: true });
-  });
+  // Inject loose movies into allMovies so openMovieDetail can find them
   (movie._loose_movies || []).forEach(lm => {
     if (!allMovies.some(m => m.id === lm.id))
       allMovies.push({ ...lm, _isNested: true });
@@ -605,12 +601,15 @@ function openSuperGroupView(movie) {
 
 function openEditionGroupViewFromSuper(id) {
   _egViewStack.push({ type: 'super', movie: _currentSuperGroup });
-  openEditionGroupView(id);
+  // Pass the child data directly — don't rely on allMovies lookup
+  // (the super group card may share the same id as the first child)
+  const child = (_currentSuperGroup._sub_groups || []).find(c => c.id === id);
+  openEditionGroupView(id, child);
 }
 
-function openEditionGroupView(id) {
+function openEditionGroupView(id, primaryOverride) {
   _currentEditionGroupPrimaryId = id;
-  const primary = allMovies.find(m => m.id === id);
+  const primary = primaryOverride || allMovies.find(m => m.id === id);
   if (!primary) return;
   // Ensure all editions are in allMovies so openMovieDetail can find them
   (primary.editions || []).forEach(e => {
@@ -639,7 +638,7 @@ function openEditionGroupView(id) {
       : '';
     const isPrimary = (e.id === id);
     return `
-      <div class="eg-edition-card" onclick="openMovieDetail(${e.id})">
+      <div class="eg-edition-card" onclick="openMovieDetail(${e.id}, true)">
         <div class="eg-edition-poster">
           ${imgHtml}
           <div class="eg-edition-fmt">${e.format || '4K'}</div>
@@ -771,7 +770,7 @@ function closeEditionGroupView() {
   switchTabDirect(_detailReturnTab);
 }
 
-async function openMovieDetail(id) {
+async function openMovieDetail(id, skipGroupRedirect) {
   // Remember which panel/tab we're coming from (for back navigation)
   // Only update if we're NOT already in movie-detail or person-detail
   const currentActive = document.querySelector('.panel.active');
@@ -801,7 +800,7 @@ async function openMovieDetail(id) {
   if (!movie) return;
 
   // Redirect grouped editions to the stack view when group_editions mode is active
-  if (groupEditionsEnabled && (movie.editions_count || 0) > 1 && !movie._isNested) {
+  if (!skipGroupRedirect && groupEditionsEnabled && (movie.editions_count || 0) > 1 && !movie._isNested) {
     if (movie._is_super_group) {
       openSuperGroupView(movie);
     } else {

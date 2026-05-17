@@ -767,7 +767,7 @@
                 <span data-i18n="edition.collectorsMode">🏆 Collectors mode</span>
               </label>
               <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:6px; padding-left:28px;" data-i18n="edition.collectorsModeDesc">
-                Schakel geavanceerde functies in voor verzamelaars: editiegroepen (meerdere versies van dezelfde film), super-groepen (trilogie-sets) en groepsbeheer in het bewerkscherm.
+                Schakel geavanceerde functies in voor verzamelaars: editiegroepen (meerdere versies van dezelfde film), filmreeksen (trilogie-sets) en groepsbeheer in het bewerkscherm.
               </div>
             </div>
 
@@ -1617,9 +1617,9 @@
           <input type="hidden" id="editEditionGroupId">
         </div>
         <div class="input-group full collectors-only">
-          <label data-i18n="edit.superGroup">Super-groep (losse film)</label>
+          <label data-i18n="edit.superGroup">Filmreeks (losse film)</label>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak super-groep..."
+            <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak filmreeks..."
                    oninput="searchSuperGroup(this.value)" autocomplete="off" style="flex:1; min-width:160px;" data-i18n-placeholder="edit.superGroupPlaceholder">
             <span id="editSuperGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(124,106,247,.12); border:1px solid rgba(124,106,247,.35); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent2);">
               <span id="editSuperGroupName"></span>
@@ -1628,7 +1628,7 @@
           </div>
           <div id="editSuperGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
           <input type="hidden" id="editSuperGroupId">
-          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.superGroupHelp">Gebruik dit alleen als deze film losse staat (geen editiegroep) maar wel onderdeel is van een trilogie-set.</div>
+          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.superGroupHelp">Gebruik dit alleen als deze film losse staat (geen editiegroep) maar wel onderdeel is van een filmreeks of trilogie-set.</div>
         </div>
       </div><!-- /editTabEdition -->
 
@@ -1797,8 +1797,8 @@
           <input type="text" id="egBadgeLabel" placeholder="bijv. Trilogy, 4K Set..." maxlength="20" style="margin-top:4px;" data-i18n-placeholder="edition.egBadgeLabelPlaceholder">
         </div>
         <div class="input-group" style="margin-bottom:16px;">
-          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egParentGroup">Samenvoegen onder super-groep</label>
-          <input type="text" id="egParentGroupSearch" placeholder="Zoek super-groep..." autocomplete="off"
+          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egParentGroup">Samenvoegen onder filmreeks</label>
+          <input type="text" id="egParentGroupSearch" placeholder="Zoek filmreeks..." autocomplete="off"
                  style="margin-top:4px;" oninput="searchParentGroup(this.value)" data-i18n-placeholder="edition.egParentGroupSearch">
           <div id="egParentGroupDropdown" style="display:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:140px; overflow-y:auto; position:relative; z-index:10;"></div>
           <div id="egParentGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(232,197,71,.1); border:1px solid rgba(232,197,71,.3); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent); margin-top:6px;">
