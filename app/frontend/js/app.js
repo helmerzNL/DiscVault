@@ -10,6 +10,8 @@ async function init() {
   loadLanguagePicker();
   const ok = await checkAuth();
   if (!ok) return;
+  // Load user preferences from server (overrides localStorage)
+  await loadUserPrefsFromServer();
   loadAdminPanel();
   updateQueueIndicator();
   flushQueuedMutations();

@@ -1,5 +1,54 @@
 // ── Backup / Restore / Reset ──────────────────────────────────────────────────
 
+// ── Server-synced user preferences ───────────────────────────────────────────
+// Map: localStorage key → server pref key
+const PREF_KEY_MAP = {
+  dv_lang:                  'lang',
+  dv_rating_country:        'rating_country',
+  dv_collectors_mode:       'collectors_mode',
+  dv_group_editions:        'group_editions',
+  dv_digital_badges:        'digital_badges',
+  dv_digital_badge_filter:  'digital_badge_filter',
+};
+
+function saveUserPref(localKey, value) {
+  localStorage.setItem(localKey, value);
+  const serverKey = PREF_KEY_MAP[localKey];
+  if (!serverKey) return;
+  // Fire-and-forget sync to server
+  fetch(`${API}/auth/preferences`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [serverKey]: value }),
+  }).catch(() => {});
+}
+
+async function loadUserPrefsFromServer() {
+  try {
+    const r = await fetch(`${API}/auth/preferences`);
+    if (!r.ok) return;
+    const prefs = await r.json();
+    // Reverse map: server key → localStorage key
+    const reverseMap = {};
+    for (const [lk, sk] of Object.entries(PREF_KEY_MAP)) reverseMap[sk] = lk;
+    for (const [key, value] of Object.entries(prefs)) {
+      const localKey = reverseMap[key];
+      if (localKey && value != null) localStorage.setItem(localKey, value);
+    }
+    // Apply loaded prefs to JS variables
+    const lang = prefs.lang;
+    if (lang && lang !== currentLang) setLanguage(lang);
+    if ('rating_country' in prefs) { /* already in localStorage, picked up on next render */ }
+    if ('collectors_mode' in prefs) {
+      collectorsMode = prefs.collectors_mode === 'true';
+      document.body.classList.toggle('collectors-mode', collectorsMode);
+    }
+    if ('group_editions' in prefs) groupEditionsEnabled = prefs.group_editions === 'true';
+    if ('digital_badges' in prefs) showDigitalBadges = prefs.digital_badges === 'true';
+    if ('digital_badge_filter' in prefs) digitalBadgeFilter = prefs.digital_badge_filter || 'all';
+  } catch(e) { /* offline or no auth — use localStorage fallback */ }
+}
+
 async function loadSettings() {
   loadDbStats();
   loadAuthSettings();
@@ -41,7 +90,7 @@ function loadRatingCountryPicker() {
 
 function selectRatingCountry(code) {
   preferredRatingCountry = code;
-  localStorage.setItem('dv_rating_country', code);
+  saveUserPref('dv_rating_country', code);
   loadRatingCountryPicker();
   showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }
@@ -557,14 +606,14 @@ function loadCollectorsModeSetting() {
 function saveCollectorsModeSetting() {
   const toggle = document.getElementById('collectorsModeToggle');
   collectorsMode = !!(toggle && toggle.checked);
-  localStorage.setItem('dv_collectors_mode', collectorsMode ? 'true' : 'false');
+  saveUserPref('dv_collectors_mode', collectorsMode ? 'true' : 'false');
   if (collectorsMode) {
     document.body.classList.add('collectors-mode');
   } else {
     document.body.classList.remove('collectors-mode');
     // When disabling, also disable grouping
     groupEditionsEnabled = false;
-    localStorage.setItem('dv_group_editions', 'false');
+    saveUserPref('dv_group_editions', 'false');
     const gt = document.getElementById('groupEditionsToggle');
     if (gt) gt.checked = false;
   }
@@ -586,7 +635,7 @@ function loadGroupEditionsSetting() {
 function saveGroupEditionsSetting() {
   const toggle = document.getElementById('groupEditionsToggle');
   groupEditionsEnabled = !!(toggle && toggle.checked);
-  localStorage.setItem('dv_group_editions', groupEditionsEnabled ? 'true' : 'false');
+  saveUserPref('dv_group_editions', groupEditionsEnabled ? 'true' : 'false');
   loadCollection();
   showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }
@@ -594,7 +643,7 @@ function saveGroupEditionsSetting() {
 function saveDigitalBadgesSetting() {
   const toggle = document.getElementById('showDigitalBadgesToggle');
   showDigitalBadges = !!(toggle && toggle.checked);
-  localStorage.setItem('dv_digital_badges', showDigitalBadges ? 'true' : 'false');
+  saveUserPref('dv_digital_badges', showDigitalBadges ? 'true' : 'false');
   const filterRow = document.getElementById('digitalBadgeFilterRow');
   if (filterRow) filterRow.style.display = showDigitalBadges ? '' : 'none';
   if (showDigitalBadges && !compareData) {
@@ -608,7 +657,7 @@ function saveDigitalBadgesSetting() {
 function saveDigitalBadgeFilter() {
   const sel = document.getElementById('digitalBadgeFilterSelect');
   digitalBadgeFilter = sel ? sel.value : 'all';
-  localStorage.setItem('dv_digital_badge_filter', digitalBadgeFilter);
+  saveUserPref('dv_digital_badge_filter', digitalBadgeFilter);
   renderGrid(getCurrentMovies());
   showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }

@@ -44,6 +44,7 @@ function applyLanguage() {
 function setLanguage(lang) {
   currentLang = lang;
   localStorage.setItem('dv_lang', lang);
+  if (typeof saveUserPref === 'function') saveUserPref('dv_lang', lang);
   applyLanguage();
 }
 

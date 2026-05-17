@@ -298,6 +298,15 @@ def init_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id TEXT NOT NULL,
+            key     TEXT NOT NULL,
+            value   TEXT,
+            PRIMARY KEY (user_id, key),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS api_keys (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id    TEXT NOT NULL,
@@ -4795,6 +4804,47 @@ def delete_avatar():
         if os.path.isfile(old_path):
             os.remove(old_path)
     conn.execute("UPDATE users SET avatar=NULL WHERE id=?", (uid,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# Auth: User preferences (per-user key-value, synced across devices)
+# ---------------------------------------------------------------------------
+
+ALLOWED_PREF_KEYS = {
+    "lang", "rating_country", "collectors_mode", "group_editions",
+    "digital_badges", "digital_badge_filter",
+}
+
+@app.route("/api/auth/preferences", methods=["GET"])
+def get_user_preferences():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({})
+    conn = get_db()
+    rows = conn.execute("SELECT key, value FROM user_preferences WHERE user_id=?", (uid,)).fetchall()
+    conn.close()
+    return jsonify({r["key"]: r["value"] for r in rows})
+
+
+@app.route("/api/auth/preferences", methods=["PUT"])
+def set_user_preferences():
+    uid = _get_current_user_id()
+    if not uid:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    for key, value in data.items():
+        if key not in ALLOWED_PREF_KEYS:
+            continue
+        val = str(value) if value is not None else None
+        conn.execute(
+            "INSERT INTO user_preferences (user_id, key, value) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id, key) DO UPDATE SET value=excluded.value",
+            (uid, key, val)
+        )
     conn.commit()
     conn.close()
     return jsonify({"status": "ok"})
