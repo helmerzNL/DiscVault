@@ -6381,27 +6381,25 @@ def user_mcp_logs():
 def list_collections():
     q = (request.args.get("q") or "").strip()
     conn = get_db()
+    col_sql = """
+            SELECT c.*,
+                   (SELECT COUNT(*) FROM edition_groups eg WHERE eg.collection_id = c.id) AS group_count,
+                   (SELECT COUNT(*) FROM movies m WHERE m.collection_id = c.id) AS loose_movie_count,
+                   (SELECT COUNT(*) FROM movies m WHERE m.edition_group_id IN (
+                       SELECT id FROM edition_groups WHERE collection_id = c.id
+                       UNION ALL
+                       SELECT eg2.id FROM edition_groups eg2
+                       WHERE eg2.parent_group_id IN (SELECT id FROM edition_groups WHERE collection_id = c.id)
+                   )) AS eg_movie_count,
+                   (SELECT COUNT(*) FROM movies m WHERE m.super_group_id IN (
+                       SELECT id FROM edition_groups WHERE collection_id = c.id
+                   )) AS boxset_loose_count
+            FROM collections c
+    """
     if q:
-        rows = conn.execute("""
-            SELECT c.*,
-                   (SELECT COUNT(*) FROM edition_groups eg WHERE eg.collection_id = c.id) AS group_count,
-                   (SELECT COUNT(*) FROM movies m WHERE m.collection_id = c.id) AS loose_movie_count,
-                   (SELECT COUNT(*) FROM movies m WHERE m.edition_group_id IN
-                       (SELECT id FROM edition_groups WHERE collection_id = c.id)) AS eg_movie_count
-            FROM collections c
-            WHERE c.title LIKE ?
-            ORDER BY c.title ASC
-        """, (f"%{q}%",)).fetchall()
+        rows = conn.execute(col_sql + " WHERE c.title LIKE ? ORDER BY c.title ASC", (f"%{q}%",)).fetchall()
     else:
-        rows = conn.execute("""
-            SELECT c.*,
-                   (SELECT COUNT(*) FROM edition_groups eg WHERE eg.collection_id = c.id) AS group_count,
-                   (SELECT COUNT(*) FROM movies m WHERE m.collection_id = c.id) AS loose_movie_count,
-                   (SELECT COUNT(*) FROM movies m WHERE m.edition_group_id IN
-                       (SELECT id FROM edition_groups WHERE collection_id = c.id)) AS eg_movie_count
-            FROM collections c
-            ORDER BY c.title ASC
-        """).fetchall()
+        rows = conn.execute(col_sql + " ORDER BY c.title ASC").fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
