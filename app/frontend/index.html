@@ -1781,6 +1781,10 @@
       </button>
       <div id="egManageSection" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:8px;">
         <div class="input-group" style="margin-bottom:12px;">
+          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egGroupName">Groepnaam</label>
+          <input type="text" id="egGroupTitle" maxlength="80" style="margin-top:4px;" data-i18n-placeholder="edition.egGroupNamePlaceholder">
+        </div>
+        <div class="input-group" style="margin-bottom:12px;">
           <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egBadgeLabel">Badge label</label>
           <input type="text" id="egBadgeLabel" placeholder="bijv. Trilogy, 4K Set..." maxlength="20" style="margin-top:4px;" data-i18n-placeholder="edition.egBadgeLabelPlaceholder">
         </div>
@@ -1795,7 +1799,10 @@
           </div>
           <input type="hidden" id="egParentGroupId">
         </div>
-        <button class="btn btn-secondary" type="button" onclick="saveEditionGroupMeta()" style="padding:6px 16px; font-size:0.82rem;" data-i18n="edition.egSave">Opslaan</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="btn btn-secondary" type="button" onclick="saveEditionGroupMeta()" style="padding:6px 16px; font-size:0.82rem;" data-i18n="edition.egSave">Opslaan</button>
+          <button class="btn btn-danger" type="button" onclick="deleteEditionGroup()" style="padding:6px 16px; font-size:0.82rem; margin-left:auto;" data-i18n="edition.egDelete">Groep verwijderen</button>
+        </div>
       </div>
     </div>
   </div>

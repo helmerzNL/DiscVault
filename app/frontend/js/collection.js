@@ -628,6 +628,8 @@ function _populateEgManageSection(movieCard) {
   const bl   = movieCard && movieCard._group_badge_label;
   const elBl = document.getElementById('egBadgeLabel');
   if (elBl) elBl.value = bl || '';
+  const titleEl = document.getElementById('egGroupTitle');
+  if (titleEl) titleEl.value = (movieCard && movieCard._group_title) || '';
   const elPgId   = document.getElementById('egParentGroupId');
   const badge    = document.getElementById('egParentGroupBadge');
   const pgSearch = document.getElementById('egParentGroupSearch');
@@ -704,14 +706,27 @@ async function saveEditionGroupMeta() {
   const primary = allMovies.find(m => m.id === _currentEditionGroupPrimaryId);
   const groupId = primary && primary.edition_group_id;
   if (!groupId) return;
+  const title         = (document.getElementById('egGroupTitle') || {}).value || null;
   const badge_label   = (document.getElementById('egBadgeLabel') || {}).value || null;
   const parent_raw    = (document.getElementById('egParentGroupId') || {}).value;
   const parent_group_id = parent_raw ? parseInt(parent_raw) : null;
   await fetch(`${API}/edition-groups/${groupId}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ badge_label, parent_group_id })
+    body: JSON.stringify({ title, badge_label, parent_group_id })
   });
+  _editionGroupCache = [];
+  await loadCollection();
+  closeEditionGroupView();
+}
+
+async function deleteEditionGroup() {
+  const primary = allMovies.find(m => m.id === _currentEditionGroupPrimaryId);
+  const groupId = primary && primary.edition_group_id;
+  if (!groupId) return;
+  const name = (document.getElementById('egGroupTitle') || {}).value || (primary && primary._group_title) || '';
+  if (!confirm(t('js.egDeleteConfirm', name))) return;
+  await fetch(`${API}/edition-groups/${groupId}`, { method: 'DELETE' });
   _editionGroupCache = [];
   await loadCollection();
   closeEditionGroupView();
