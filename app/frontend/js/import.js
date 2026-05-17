@@ -461,36 +461,6 @@ function _handleRoute() {
     tryOpen(15);
     return;
   }
-  // Collection route: /collection/c/<id> (collection) or /collection/g/<id> (edition group / box set)
-  const colRouteMatch = path.match(/^\/collection\/(c|g)\/(\d+)$/);
-  if (colRouteMatch) {
-    const type = colRouteMatch[1];
-    const id = parseInt(colRouteMatch[2], 10);
-    switchTabDirect('collection');
-    const tryOpenGroup = (tries) => {
-      if (typeof allMovies === 'undefined' || !allMovies.length) {
-        if (tries > 0) { setTimeout(() => tryOpenGroup(tries - 1), 300); return; }
-        _replaceRoute('/'); return;
-      }
-      if (type === 'c') {
-        // Find collection card in allMovies
-        const col = allMovies.find(m => m._is_collection && m._collection_id === id);
-        if (col) { openCollectionView(col); }
-        else if (tries > 0) { setTimeout(() => tryOpenGroup(tries - 1), 300); }
-        else { _replaceRoute('/'); }
-      } else {
-        // Find edition group (vault or box set) in allMovies
-        const sg = allMovies.find(m => m._is_super_group && m._parent_group_id === id);
-        if (sg) { openSuperGroupView(sg); return; }
-        const vault = allMovies.find(m => m._is_group && m.edition_group_id === id);
-        if (vault) { openEditionGroupView(vault.id); return; }
-        if (tries > 0) { setTimeout(() => tryOpenGroup(tries - 1), 300); }
-        else { _replaceRoute('/'); }
-      }
-    };
-    tryOpenGroup(15);
-    return;
-  }
   const tab = _PATH_TABS[path];
   if (tab) switchTabDirect(tab);
   else _replaceRoute('/');
@@ -503,24 +473,10 @@ window.addEventListener('popstate', (e) => {
   const movieMatch = path.match(/^\/movie\/(\d+)$/);
   if (movieMatch) {
     openMovieDetail(parseInt(movieMatch[1], 10));
-    return;
+  } else {
+    const tab = _PATH_TABS[path] || 'collection';
+    switchTabDirect(tab);
   }
-  const colRouteMatch = path.match(/^\/collection\/(c|g)\/(\d+)$/);
-  if (colRouteMatch) {
-    const type = colRouteMatch[1];
-    const id = parseInt(colRouteMatch[2], 10);
-    if (type === 'c') {
-      const col = allMovies.find(m => m._is_collection && m._collection_id === id);
-      if (col) { openCollectionView(col); return; }
-    } else {
-      const sg = allMovies.find(m => m._is_super_group && m._parent_group_id === id);
-      if (sg) { openSuperGroupView(sg); return; }
-      const vault = allMovies.find(m => m._is_group && m.edition_group_id === id);
-      if (vault) { openEditionGroupView(vault.id); return; }
-    }
-  }
-  const tab = _PATH_TABS[path] || 'collection';
-  switchTabDirect(tab);
 });
 
 window.addEventListener('resize', () => {

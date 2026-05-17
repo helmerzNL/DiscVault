@@ -654,9 +654,6 @@ function openCollectionView(movie) {
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
   switchTabDirect('edition-group');
-
-  // Push URL route
-  if (colId) _pushRoute(`/collection/c/${colId}`);
 }
 
 function openBoxSetFromCollection(parentGroupId) {
@@ -757,9 +754,6 @@ function openSuperGroupView(movie) {
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
   switchTabDirect('edition-group');
-
-  // Push URL route
-  if (pgId) _pushRoute(`/collection/g/${pgId}`);
 }
 
 function openEditionGroupViewFromSuper(id) {
@@ -836,9 +830,6 @@ function openEditionGroupView(id, primaryOverride) {
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
   switchTabDirect('edition-group');
-
-  // Push URL route
-  if (groupId) _pushRoute(`/collection/g/${groupId}`);
 }
 
 function _populateEgManageSection(movieCard, groupData) {
