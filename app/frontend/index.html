@@ -1210,9 +1210,14 @@
           <!-- Group management: Vaults, Box Sets, Collections -->
           <div class="card" style="margin-top:20px;">
             <div class="card-title" data-i18n="settings.groupMgmtTitle">📦 Vaults, Box Sets & Collections</div>
-            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="settings.groupMgmtDesc">
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px; line-height:1.6;" data-i18n="settings.groupMgmtDesc">
               Beheer alle groepen. Je kunt ze hernoemen of verwijderen, ook als er geen films aan gekoppeld zijn.
             </p>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.6; margin-bottom:16px; padding:12px 14px; background:var(--surface2); border-radius:8px; border:1px solid var(--border);">
+              <div style="margin-bottom:6px;"><strong style="color:var(--text);">Vault</strong> — <span data-i18n="settings.groupHelpVault">Groepeer meerdere edities van dezelfde film (bijv. Blu-ray, 4K, Steelbook).</span></div>
+              <div style="margin-bottom:6px;"><strong style="color:var(--text);">Box Set</strong> — <span data-i18n="settings.groupHelpBoxSet">Een fysieke verzamelbox met meerdere films (bijv. een trilogie-set).</span></div>
+              <div><strong style="color:var(--text);">Collection</strong> — <span data-i18n="settings.groupHelpCollection">Een overkoepelende groep die vaults, box sets en losse films bundelt (bijv. alle Marvel-films).</span></div>
+            </div>
             <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
               <button class="btn btn-secondary active" onclick="loadGroupMgmtList('all')" style="font-size:0.82rem;" id="gmFilterAll">Alles</button>
               <button class="btn btn-secondary" onclick="loadGroupMgmtList('vault')" style="font-size:0.82rem;" id="gmFilterVault">Vaults</button>
