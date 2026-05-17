@@ -1531,7 +1531,7 @@
         </div>
         <div class="input-group">
           <label data-i18n="edit.editionType">Editie type</label>
-          <select id="editEditionType">
+          <select id="editEditionType" onchange="toggleCustomEditionInput()">
             <option value="standard"     data-i18n="edition.standard">Standaard</option>
             <option value="steelbook"    data-i18n="edition.steelbook">Steelbook</option>
             <option value="directors_cut" data-i18n="edition.directorsCut">Director's Cut</option>
@@ -1542,7 +1542,10 @@
             <option value="4k_upgrade"   data-i18n="edition.4kUpgrade">4K Upgrade</option>
             <option value="boxset_disc"  data-i18n="edition.boxsetDisc">Box Set Disc</option>
             <option value="other"        data-i18n="edition.other">Overig</option>
+            <option value="custom"       data-i18n="edition.custom">Eigen label</option>
           </select>
+          <input type="text" id="editCustomEditionLabel" placeholder="Eigen label..." maxlength="30"
+                 style="display:none; margin-top:6px;" oninput="_editDirty=true">
         </div>
         <div class="input-group full">
           <label data-i18n="edit.editionGroup">Editiegroep</label>
@@ -1708,6 +1711,23 @@
       <div class="crew-section-title" id="personFilmographyTitle" data-i18n="person.inCollection">In jouw collectie</div>
     </div>
     <div class="person-filmography" id="personFilmography"></div>
+  </div>
+</div>
+
+<!-- Edition Group Stack Panel -->
+<div class="panel" id="panel-edition-group">
+  <div class="detail-page" style="padding-top:20px;">
+    <div class="detail-page-nav">
+      <button class="btn-back" type="button" onclick="closeEditionGroupView()">
+        <span class="mdi mdi-arrow-left" aria-hidden="true"></span>
+        <span data-i18n="general.back">Terug</span>
+      </button>
+    </div>
+    <div style="padding:0 20px 16px;">
+      <div class="modal-title" id="egPanelTitle"></div>
+      <div id="egPanelSubtitle" style="font-size:0.82rem; color:var(--text-muted); margin-top:4px;"></div>
+    </div>
+    <div class="eg-panel-grid" id="egPanelGrid"></div>
   </div>
 </div>
 

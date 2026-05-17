@@ -170,6 +170,7 @@ SCHEMA_COLUMNS = [
     ("edition_release_year", "TEXT"),
     ("edition_release_date", "TEXT"),
     ("edition_type",         "TEXT DEFAULT 'standard'"),
+    ("custom_edition_label", "TEXT"),
     ("edition_group_id",     "INTEGER"),
     ("country",              "TEXT"),
     ("language",             "TEXT"),

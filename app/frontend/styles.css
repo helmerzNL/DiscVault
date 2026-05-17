@@ -1421,6 +1421,66 @@
   #panel-movie-detail { position: relative; }
   #panel-movie-detail.active { display: flex; flex-direction: column; }
 
+  /* Edition Group Stack Panel */
+  #panel-edition-group.active { display: flex; flex-direction: column; }
+  .eg-panel-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 0 20px 48px;
+  }
+  .eg-edition-card {
+    width: 150px;
+    cursor: pointer;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+    position: relative;
+  }
+  .eg-edition-card:hover {
+    border-color: var(--accent2);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .eg-edition-poster {
+    aspect-ratio: 2/3;
+    background: var(--surface2);
+    overflow: hidden;
+    position: relative;
+  }
+  .eg-edition-poster img { width: 100%; height: 100%; object-fit: cover; }
+  .eg-edition-poster .no-img {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem; color: var(--text-muted);
+  }
+  .eg-edition-fmt {
+    position: absolute; top: 6px; right: 6px;
+    font-family: 'DM Mono', monospace; font-size: 0.58rem;
+    padding: 2px 5px; border-radius: 4px;
+    background: rgba(10,10,15,.85); color: var(--accent);
+    border: 1px solid rgba(232,197,71,.4);
+  }
+  .eg-edition-type-label {
+    position: absolute; bottom: 6px; left: 6px;
+    font-family: 'DM Mono', monospace; font-size: 0.55rem;
+    padding: 2px 5px; border-radius: 4px;
+    background: rgba(10,10,15,.85); color: #ccc;
+    border: 1px solid rgba(255,255,255,.15); max-width: 80%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .eg-primary-marker {
+    position: absolute; bottom: 6px; right: 6px;
+    font-size: 0.7rem; color: var(--accent);
+  }
+  .eg-edition-info {
+    padding: 8px 10px;
+    font-size: 0.78rem; font-weight: 500; line-height: 1.3;
+    color: var(--text-muted);
+  }
+
   .detail-hero-wrap {
     position: relative;
     width: 100%;

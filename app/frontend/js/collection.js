@@ -132,12 +132,12 @@ function renderGrid(movies) {
     // Edition badge
     const edType = m.edition_type || 'standard';
     const editionBadge = (edType && edType !== 'standard')
-      ? `<div class="movie-card-edition-badge" title="${t('edition.' + edType.replace('_',''), edType)}">${_editionShortLabel(edType)}</div>`
+      ? `<div class="movie-card-edition-badge" title="${t('edition.' + edType.replace('_',''), edType)}">${_editionShortLabel(edType, m.custom_edition_label)}</div>`
       : '';
 
-    // Edition stack badge (grouped mode, multiple editions) — click to expand drawer
+    // Edition stack badge (grouped mode, multiple editions) — click to open stack view
     const stackBadge = (m.editions_count > 1)
-      ? `<div class="movie-card-stack-badge" onclick="event.stopPropagation(); toggleEditionsDrawer(${m.id})">${m.editions_count}×</div>`
+      ? `<div class="movie-card-stack-badge" onclick="event.stopPropagation(); openEditionGroupView(${m.id})">${_stackBadgeLabel(m)}</div>`
       : '';
 
     // Digital badge (Plex/Jellyfin)
@@ -481,7 +481,7 @@ function cancelBulkRefresh() {
 
 function setFormatFilter(format, btn) {
   activeFormat = format;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.filter-btn:not(#btnEditionFilter)').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   filterMovies();
 }
@@ -496,19 +496,75 @@ async function quickDelete(id, title) {
 }
 
 // ── Movie Detail Modal ────────────────────────────────────────────────────────
+let _currentEditionGroupPrimaryId = null;
+
+function openEditionGroupView(id) {
+  _currentEditionGroupPrimaryId = id;
+  const primary = allMovies.find(m => m.id === id);
+  if (!primary) return;
+  // Ensure all editions are in allMovies so openMovieDetail can find them
+  (primary.editions || []).forEach(e => {
+    if (!allMovies.some(m => m.id === e.id))
+      allMovies.push({ ...e, _isNested: true, _primaryId: id });
+  });
+  // Header
+  document.getElementById('egPanelTitle').textContent = primary.title || '';
+  const fmtShort = { '4K UHD': '4K', 'Blu-ray': 'BD', 'DVD': 'DVD' };
+  const editionTypes = [...new Set((primary.editions || []).map(e => {
+    if (e.edition_type && e.edition_type !== 'standard')
+      return e.edition_type === 'custom' ? (e.custom_edition_label || 'Custom') : _editionShortLabel(e.edition_type);
+    return fmtShort[e.format] || (e.format || '');
+  }).filter(Boolean))];
+  document.getElementById('egPanelSubtitle').textContent =
+    `${(primary.editions || []).length} edities${editionTypes.length ? ' · ' + editionTypes.join(' · ') : ''}`;
+  // Edition cards
+  const grid = document.getElementById('egPanelGrid');
+  grid.innerHTML = (primary.editions || []).map(e => {
+    const src = posterSrc(e);
+    const imgHtml = src
+      ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
+      : '<div class="no-img">🎬</div>';
+    const typeLabel = e.edition_type && e.edition_type !== 'standard'
+      ? (e.edition_type === 'custom' ? (e.custom_edition_label || 'Custom') : _editionShortLabel(e.edition_type))
+      : '';
+    const isPrimary = (e.id === id);
+    return `
+      <div class="eg-edition-card" onclick="openMovieDetail(${e.id})">
+        <div class="eg-edition-poster">
+          ${imgHtml}
+          <div class="eg-edition-fmt">${e.format || '4K'}</div>
+          ${typeLabel ? `<div class="eg-edition-type-label">${typeLabel}</div>` : ''}
+          ${isPrimary ? '<div class="eg-primary-marker">★</div>' : ''}
+        </div>
+        <div class="eg-edition-info">${e.year || ''}</div>
+      </div>`;
+  }).join('');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  switchTabDirect('edition-group');
+}
+
+function closeEditionGroupView() {
+  _replaceRoute(_tabPath(_detailReturnTab));
+  switchTabDirect(_detailReturnTab);
+}
+
 async function openMovieDetail(id) {
   // Remember which panel/tab we're coming from (for back navigation)
   // Only update if we're NOT already in movie-detail or person-detail
   const currentActive = document.querySelector('.panel.active');
   const currentPanelId = currentActive ? currentActive.id : '';
   if (currentPanelId !== 'panel-movie-detail' && currentPanelId !== 'panel-person-detail') {
-    // Determine return tab from active nav tab
-    const activeTab = document.querySelector('.tab.active');
-    _detailReturnTab = activeTab ? (activeTab.dataset.tab || 'collection') : 'collection';
+    if (currentPanelId === 'panel-edition-group') {
+      _detailReturnTab = 'edition-group';
+    } else {
+      // Determine return tab from active nav tab
+      const activeTab = document.querySelector('.tab.active');
+      _detailReturnTab = activeTab ? (activeTab.dataset.tab || 'collection') : 'collection';
+    }
     // Capture the navigation list for swipe-between-movies
     if (currentPanelId === 'panel-search') {
       _detailNavList = getSearchMovies().map(m => m.id);
-    } else {
+    } else if (currentPanelId !== 'panel-edition-group') {
       _detailNavList = getCurrentMovies().map(m => m.id);
     }
   }
@@ -520,6 +576,12 @@ async function openMovieDetail(id) {
   currentMovieId = id;
   const movie = allMovies.find(m => m.id === id);
   if (!movie) return;
+
+  // Redirect grouped editions to the stack view when group_editions mode is active
+  if (groupEditionsEnabled && (movie.editions_count || 0) > 1 && !movie._isNested) {
+    openEditionGroupView(id);
+    return;
+  }
 
   // Hide edit/refresh buttons if user doesn't own this movie (and isn't admin / auth disabled)
   const canEdit = canEditMovie(movie);
@@ -748,9 +810,17 @@ function closeMovieDetail() {
   // Reset to view mode when closing
   document.getElementById('modalViewMode').style.display = '';
   document.getElementById('modalEditMode').style.display = 'none';
-  // Restore URL
-  _replaceRoute(_tabPath(_detailReturnTab));
-  switchTabDirect(_detailReturnTab);
+  // Restore URL and navigate back
+  if (_detailReturnTab === 'edition-group') {
+    // Return to the edition group stack panel (its content is still rendered)
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    const egPanel = document.getElementById('panel-edition-group');
+    if (egPanel) egPanel.classList.add('active');
+    _replaceRoute('/');
+  } else {
+    _replaceRoute(_tabPath(_detailReturnTab));
+    switchTabDirect(_detailReturnTab);
+  }
 }
 
 // Alias kept for any legacy inline calls
@@ -1166,6 +1236,7 @@ const EDIT_FIELDS = {
   Genre:              'genre',
   Format:             'format',
   EditionType:        'edition_type',
+  CustomEditionLabel: 'custom_edition_label',
   Runtime:            'runtime',
   Hdr:                'hdr',
   ScreenRatios:       'screen_ratios',
@@ -1271,6 +1342,7 @@ function startEdit() {
   document.getElementById('editStatus').className = 'status-msg';
   document.getElementById('modalViewMode').style.display = 'none';
   document.getElementById('modalEditMode').style.display = 'block';
+  toggleCustomEditionInput(); // Show/hide custom label input based on current edition type
 
   // Snapshot original values for dirty-checking
   _editSnapshot = {};
@@ -1761,7 +1833,8 @@ document.addEventListener('DOMContentLoaded', initDetailSwipe);
 
 // ── Edition helpers ───────────────────────────────────────────────────────────
 
-function _editionShortLabel(edType) {
+function _editionShortLabel(edType, customLabel) {
+  if (edType === 'custom') return customLabel || '…';
   const labels = {
     steelbook:    'Steel',
     directors_cut: 'DC',
@@ -1780,6 +1853,24 @@ function setEditionFilter(btn) {
   activeEditionFilter = !activeEditionFilter;
   btn.classList.toggle('active', activeEditionFilter);
   filterMovies();
+}
+
+function _stackBadgeLabel(m) {
+  if (!m.editions) return m.editions_count + '×';
+  const fmtShort = { '4K UHD': '4K', 'Blu-ray': 'BD', 'DVD': 'DVD' };
+  const lbls = [...new Set(m.editions.map(e => {
+    if (e.edition_type && e.edition_type !== 'standard')
+      return e.edition_type === 'custom' ? (e.custom_edition_label || '…') : _editionShortLabel(e.edition_type);
+    return fmtShort[e.format] || (e.format || '?').slice(0, 3);
+  }))];
+  if (lbls.length <= 3) return lbls.join('·');
+  return lbls.slice(0, 2).join('·') + `+${lbls.length - 2}`;
+}
+
+function toggleCustomEditionInput() {
+  const sel = document.getElementById('editEditionType');
+  const inp = document.getElementById('editCustomEditionLabel');
+  if (inp) inp.style.display = (sel && sel.value === 'custom') ? '' : 'none';
 }
 
 function toggleEditionsDrawer(id) {
