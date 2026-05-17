@@ -520,6 +520,17 @@ let _currentSuperGroup = null;
 
 function openSuperGroupView(movie) {
   _currentSuperGroup = movie;
+
+  // Inject sub-group cards into allMovies so openEditionGroupView can find them
+  (movie._sub_groups || []).forEach(child => {
+    if (!allMovies.some(m => m.id === child.id))
+      allMovies.push({ ...child, _isNested: true });
+  });
+  (movie._loose_movies || []).forEach(lm => {
+    if (!allMovies.some(m => m.id === lm.id))
+      allMovies.push({ ...lm, _isNested: true });
+  });
+
   document.getElementById('egPanelTitle').textContent = movie._group_title || movie.title || '';
   const subCnt  = movie._sub_group_count || 0;
   const looseCnt = (movie._loose_movies || []).length;
