@@ -173,6 +173,7 @@ SCHEMA_COLUMNS = [
     ("custom_edition_label", "TEXT"),
     ("edition_group_id",     "INTEGER"),
     ("super_group_id",       "INTEGER"),
+    ("collection_id",        "INTEGER"),
     ("country",              "TEXT"),
     ("language",             "TEXT"),
     # People
@@ -626,6 +627,18 @@ def init_db():
         conn.execute("ALTER TABLE edition_groups ADD COLUMN badge_label TEXT")
     if "parent_group_id" not in eg_cols:
         conn.execute("ALTER TABLE edition_groups ADD COLUMN parent_group_id INTEGER")
+    if "collection_id" not in eg_cols:
+        conn.execute("ALTER TABLE edition_groups ADD COLUMN collection_id INTEGER")
+
+    # Collections: top-level grouping of Vaults, Box Sets and loose movies
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS collections (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT NOT NULL,
+            badge_label TEXT,
+            created_at  TEXT NOT NULL
+        )
+    """)
 
     # Digital library sources (Plex / Jellyfin)
     conn.execute("""
@@ -2012,11 +2025,12 @@ def list_movies():
             gid_list = list(grouped.keys())
             gplaceholders = ",".join("?" * len(gid_list))
             eg_rows_raw = conn.execute(
-                f"SELECT id, primary_movie_id, title, badge_label, parent_group_id FROM edition_groups WHERE id IN ({gplaceholders})",
+                f"SELECT id, primary_movie_id, title, badge_label, parent_group_id, collection_id FROM edition_groups WHERE id IN ({gplaceholders})",
                 gid_list
             ).fetchall()
             eg_rows = {r["id"]: {"primary_id": r["primary_movie_id"], "group_title": r["title"],
-                                  "badge_label": r["badge_label"], "parent_group_id": r["parent_group_id"]} for r in eg_rows_raw}
+                                  "badge_label": r["badge_label"], "parent_group_id": r["parent_group_id"],
+                                  "collection_id": r["collection_id"]} for r in eg_rows_raw}
         collapsed = []
         for gid, members in grouped.items():
             eg_info  = eg_rows.get(gid) or {}
@@ -2100,6 +2114,79 @@ def list_movies():
 
             collapsed = direct_collapsed
         movies = ungrouped + collapsed
+
+        # ── Collection grouping ──────────────────────────────────────
+        # A Collection groups Box Sets, standalone Vaults, and loose
+        # movies into one top-level card.
+        # Sources of collection_id:
+        #   - edition_groups.collection_id  → Vault / Box Set belongs to a Collection
+        #   - movies.collection_id          → loose movie belongs to a Collection
+        col_children = {}   # collection_id -> list of items (cards / movies)
+        final_movies = []
+        for item in movies:
+            cid = None
+            # Box Set (super group) – check collection_id on its parent edition_group
+            if item.get("_is_super_group"):
+                par_gid = item.get("_parent_group_id")
+                if par_gid:
+                    cid = (eg_rows.get(par_gid) or {}).get("collection_id")
+                    if not cid:
+                        # check the parent EG we fetched earlier (par_eg dict)
+                        cid_row = conn.execute("SELECT collection_id FROM edition_groups WHERE id=?", (par_gid,)).fetchone()
+                        if cid_row:
+                            cid = cid_row["collection_id"]
+            # Vault (edition group card, not super group)
+            elif item.get("_is_group"):
+                gid = item.get("edition_group_id")
+                if gid:
+                    cid = (eg_rows.get(gid) or {}).get("collection_id")
+                    if not cid:
+                        cid_row = conn.execute("SELECT collection_id FROM edition_groups WHERE id=?", (gid,)).fetchone()
+                        if cid_row:
+                            cid = cid_row["collection_id"]
+            # Loose movie
+            else:
+                cid = item.get("collection_id")
+            if cid:
+                col_children.setdefault(cid, []).append(item)
+            else:
+                final_movies.append(item)
+
+        if col_children:
+            col_ids = list(col_children.keys())
+            col_meta = {}
+            for r in conn.execute(
+                f"SELECT id, title, badge_label FROM collections WHERE id IN ({','.join('?'*len(col_ids))})",
+                col_ids
+            ).fetchall():
+                col_meta[r["id"]] = dict(r)
+
+            for cid, children in col_children.items():
+                meta = col_meta.get(cid) or {}
+                # Separate into box_sets, vaults, loose_movies
+                box_sets = [c for c in children if c.get("_is_super_group")]
+                vaults   = [c for c in children if c.get("_is_group") and not c.get("_is_super_group")]
+                loose    = [c for c in children if not c.get("_is_group") and not c.get("_is_super_group")]
+                rep = children[0]
+                cc  = dict(rep)
+                cc["_is_collection"]       = True
+                cc["_collection_id"]       = cid
+                cc["_group_title"]         = meta.get("title") or cc.get("title", "")
+                cc["_group_badge_label"]   = meta.get("badge_label")
+                cc["_box_sets"]            = box_sets
+                cc["_vaults"]              = vaults
+                cc["_loose_movies"]        = loose
+                total = 0
+                for bs in box_sets:
+                    total += bs.get("editions_count", 0)
+                for v in vaults:
+                    total += v.get("editions_count", 0)
+                total += len(loose)
+                cc["editions_count"]       = total
+                cc["editions"]             = []
+                final_movies.append(cc)
+
+        movies = final_movies
         movies.sort(key=lambda m: (m.get("sort_title") or m.get("title") or "").lower())
 
     conn.close()
@@ -6278,6 +6365,91 @@ def user_mcp_logs():
 
 
 # ---------------------------------------------------------------------------
+# Routes: Collections
+# ---------------------------------------------------------------------------
+
+@app.route("/api/collections", methods=["GET"])
+def list_collections():
+    q = (request.args.get("q") or "").strip()
+    conn = get_db()
+    if q:
+        rows = conn.execute(
+            "SELECT * FROM collections WHERE title LIKE ? ORDER BY title ASC",
+            (f"%{q}%",)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM collections ORDER BY title ASC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/collections", methods=["POST"])
+def create_collection():
+    data = request.json or {}
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO collections (title, badge_label, created_at) VALUES (?,?,?)",
+        (title, data.get("badge_label"), datetime.utcnow().isoformat())
+    )
+    conn.commit()
+    cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    row = conn.execute("SELECT * FROM collections WHERE id=?", (cid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/collections/<int:col_id>", methods=["GET"])
+def get_collection(col_id):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM collections WHERE id=?", (col_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    conn.close()
+    return jsonify(dict(row))
+
+
+@app.route("/api/collections/<int:col_id>", methods=["PUT"])
+def update_collection(col_id):
+    data = request.json or {}
+    conn = get_db()
+    row = conn.execute("SELECT * FROM collections WHERE id=?", (col_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    fields = {}
+    if "title" in data:
+        fields["title"] = (data["title"] or "").strip()
+    if "badge_label" in data:
+        fields["badge_label"] = data.get("badge_label")
+    if fields:
+        set_clause = ", ".join(f"{k}=?" for k in fields)
+        conn.execute(
+            f"UPDATE collections SET {set_clause} WHERE id=?",
+            list(fields.values()) + [col_id]
+        )
+        conn.commit()
+    updated = conn.execute("SELECT * FROM collections WHERE id=?", (col_id,)).fetchone()
+    conn.close()
+    return jsonify(dict(updated))
+
+
+@app.route("/api/collections/<int:col_id>", methods=["DELETE"])
+def delete_collection(col_id):
+    conn = get_db()
+    # Unlink all members
+    conn.execute("UPDATE edition_groups SET collection_id=NULL WHERE collection_id=?", (col_id,))
+    conn.execute("UPDATE movies SET collection_id=NULL WHERE collection_id=?", (col_id,))
+    conn.execute("DELETE FROM collections WHERE id=?", (col_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # Routes: Edition Groups
 # ---------------------------------------------------------------------------
 
@@ -6366,6 +6538,8 @@ def update_edition_group(group_id):
         fields["badge_label"] = data.get("badge_label")
     if "parent_group_id" in data:
         fields["parent_group_id"] = data.get("parent_group_id")
+    if "collection_id" in data:
+        fields["collection_id"] = data.get("collection_id")
     if fields:
         set_clause = ", ".join(f"{k}=?" for k in fields)
         conn.execute(

@@ -148,8 +148,10 @@ function renderGrid(movies) {
     const showDelete = !selectMode && debugModeEnabled && ownable;
 
     const isGroupCard = !!(m._is_group && m.editions_count > 1);
-    const displayTitle = isGroupCard ? (m._group_title || m.title) : m.title;
-    const displayYear  = isGroupCard ? `${m.editions_count} edities` : (m.year || '\u2014');
+    const isCollectionCard = !!m._is_collection;
+    const isBoxSetCard = !!(m._is_super_group && !m._is_collection);
+    const displayTitle = (isGroupCard || isCollectionCard || isBoxSetCard) ? (m._group_title || m.title) : m.title;
+    const displayYear  = isGroupCard ? `${m.editions_count} ${t('js.editions', 'editions')}` : (m.year || '\u2014');
 
     // Edition badge
     const edType = m.edition_type || 'standard';
@@ -164,13 +166,20 @@ function renderGrid(movies) {
 
     // Group indicator — only in collectors mode
     const groupIndicator = (collectorsMode && !groupEditionsEnabled && m.edition_group_id)
-      ? `<div class="movie-card-group-indicator" title="Onderdeel van een editiegroep">🗂</div>`
+      ? `<div class="movie-card-group-indicator" title="${t('js.partOfVault', 'Part of a vault')}">🗂</div>`
       : '';
 
-    // Format label: for group cards show edition count, otherwise show format
-    const formatLabel = isGroupCard
-      ? `<div class="movie-card-format group-count-badge">${m.editions_count}×</div>`
-      : `<div class="movie-card-format">${m.format || '4K'}</div>`;
+    // Format label: for group/collection/boxset cards show type label, otherwise format
+    let formatLabel;
+    if (isCollectionCard) {
+      formatLabel = `<div class="movie-card-format group-count-badge">Collection</div>`;
+    } else if (isBoxSetCard) {
+      formatLabel = `<div class="movie-card-format group-count-badge">Box Set</div>`;
+    } else if (isGroupCard) {
+      formatLabel = `<div class="movie-card-format group-count-badge">Vault</div>`;
+    } else {
+      formatLabel = `<div class="movie-card-format">${m.format || '4K'}</div>`;
+    }
 
     // Digital badge (Plex/Jellyfin)
     let digitalBadge = '';
@@ -536,6 +545,101 @@ async function quickDelete(id, title) {
 let _currentEditionGroupPrimaryId = null;
 let _egViewStack = []; // navigation stack for nested group views
 let _currentSuperGroup = null;
+let _currentCollection = null;
+
+/* ── Collection view ─────────────────────────────────────────────────────── */
+function openCollectionView(movie) {
+  _currentCollection = movie;
+
+  // Inject loose movies into allMovies so openMovieDetail can find them
+  (movie._loose_movies || []).forEach(lm => {
+    if (!allMovies.some(m => m.id === lm.id))
+      allMovies.push({ ...lm, _isNested: true });
+  });
+
+  document.getElementById('egPanelTitle').textContent = movie._group_title || movie.title || '';
+  const boxSets = movie._box_sets || [];
+  const vaults  = movie._vaults || [];
+  const loose   = movie._loose_movies || [];
+  const parts = [];
+  if (boxSets.length) parts.push(`${boxSets.length} box set${boxSets.length > 1 ? 's' : ''}`);
+  if (vaults.length)  parts.push(`${vaults.length} vault${vaults.length > 1 ? 's' : ''}`);
+  if (loose.length)   parts.push(`${loose.length} film${loose.length > 1 ? 's' : ''}`);
+  document.getElementById('egPanelSubtitle').textContent = parts.join(' · ') || '';
+
+  const grid = document.getElementById('egPanelGrid');
+  // Box Set cards
+  const boxSetHtml = boxSets.map(bs => {
+    const src = posterSrc(bs);
+    const imgHtml = src
+      ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
+      : '<div class="no-img">🎬</div>';
+    const count = bs.editions_count || bs._sub_group_count || 0;
+    return `
+      <div class="eg-edition-card" onclick="openBoxSetFromCollection(${bs._parent_group_id})">
+        <div class="eg-edition-poster">
+          ${imgHtml}
+          <div class="eg-edition-fmt">${count}×</div>
+          <div class="eg-edition-type-label">Box Set</div>
+        </div>
+        <div class="eg-edition-info">${bs._group_title || bs.title || ''}</div>
+      </div>`;
+  });
+  // Vault cards
+  const vaultHtml = vaults.map(v => {
+    const src = posterSrc(v);
+    const imgHtml = src
+      ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
+      : '<div class="no-img">🎬</div>';
+    const count = v.editions_count || 0;
+    return `
+      <div class="eg-edition-card" onclick="openVaultFromCollection(${v.id})">
+        <div class="eg-edition-poster">
+          ${imgHtml}
+          <div class="eg-edition-fmt">${count}×</div>
+          <div class="eg-edition-type-label">Vault</div>
+        </div>
+        <div class="eg-edition-info">${v._group_title || v.title || ''}</div>
+      </div>`;
+  });
+  // Loose movie cards
+  const looseHtml = loose.map(lm => {
+    const src = posterSrc(lm);
+    const imgHtml = src
+      ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
+      : '<div class="no-img">🎬</div>';
+    return `
+      <div class="eg-edition-card" onclick="openMovieDetail(${lm.id}, true)">
+        <div class="eg-edition-poster">
+          ${imgHtml}
+          <div class="eg-edition-fmt">${lm.format || ''}</div>
+        </div>
+        <div class="eg-edition-info">${lm.title || ''} ${lm.year ? '(' + lm.year + ')' : ''}</div>
+      </div>`;
+  });
+  grid.innerHTML = [...boxSetHtml, ...vaultHtml, ...looseHtml].join('');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Hide manage section for collection view (managed separately)
+  const mgmt = document.getElementById('egManageSection');
+  if (mgmt) mgmt.style.display = 'none';
+  switchTabDirect('edition-group');
+}
+
+function openBoxSetFromCollection(parentGroupId) {
+  // Find the box set card from the collection's _box_sets
+  const bs = (_currentCollection._box_sets || []).find(b => b._parent_group_id === parentGroupId);
+  if (!bs) return;
+  _egViewStack.push({ type: 'collection', movie: _currentCollection });
+  // Open it as a super group view
+  openSuperGroupView(bs);
+}
+
+function openVaultFromCollection(movieId) {
+  _egViewStack.push({ type: 'collection', movie: _currentCollection });
+  // Find the vault card from the collection's _vaults
+  const vault = (_currentCollection._vaults || []).find(v => v.id === movieId);
+  openEditionGroupView(movieId, vault);
+}
 
 function openSuperGroupView(movie) {
   _currentSuperGroup = movie;
@@ -551,9 +655,9 @@ function openSuperGroupView(movie) {
   const looseCnt = (movie._loose_movies || []).length;
   const totalEditions = movie.editions_count || 0;
   document.getElementById('egPanelSubtitle').textContent =
-    [subCnt ? `${subCnt} set${subCnt !== 1 ? 's' : ''}` : null,
-     looseCnt ? `${looseCnt} losse film${looseCnt !== 1 ? 's' : ''}` : null,
-     `${totalEditions} edities`].filter(Boolean).join(' \u00b7 ');
+    [subCnt ? `${subCnt} vault${subCnt !== 1 ? 's' : ''}` : null,
+     looseCnt ? `${looseCnt} film${looseCnt !== 1 ? 's' : ''}` : null,
+     `${totalEditions} ${t('js.editions', 'editions')}`].filter(Boolean).join(' \u00b7 ');
   const grid = document.getElementById('egPanelGrid');
 
   // Sub-group cards
@@ -625,7 +729,7 @@ function openEditionGroupView(id, primaryOverride) {
     return fmtShort[e.format] || (e.format || '');
   }).filter(Boolean))];
   document.getElementById('egPanelSubtitle').textContent =
-    `${(primary.editions || []).length} edities${editionTypes.length ? ' · ' + editionTypes.join(' · ') : ''}`;
+    `${(primary.editions || []).length} ${t('js.editions', 'editions')}${editionTypes.length ? ' · ' + editionTypes.join(' · ') : ''}`;
   // Edition cards
   const grid = document.getElementById('egPanelGrid');
   grid.innerHTML = (primary.editions || []).map(e => {
@@ -696,7 +800,7 @@ function searchParentGroup(query) {
     .then(r => r.json())
     .then(groups => {
       const items = groups.slice(0, 8).map(g =>
-        `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectParentGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">${g.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${g.member_count || 0} edities)</span></div>`
+        `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectParentGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">${g.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${g.member_count || 0})</span></div>`
       );
       // Always offer to create a new super-group with the typed name
       items.push(`<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem; border-top:1px solid var(--border); color:var(--accent);" onclick="createAndSelectParentGroup('${query.replace(/'/g,"\\'")}')">➕ ${t('edition.egCreateGroup', query)}</div>`);
@@ -739,10 +843,12 @@ async function saveEditionGroupMeta() {
   const badge_label   = (document.getElementById('egBadgeLabel') || {}).value || null;
   const parent_raw    = (document.getElementById('egParentGroupId') || {}).value;
   const parent_group_id = parent_raw ? parseInt(parent_raw) : null;
+  const col_raw       = (document.getElementById('egCollectionId') || {}).value;
+  const collection_id = col_raw ? parseInt(col_raw) : null;
   await fetch(`${API}/edition-groups/${groupId}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ title, badge_label, parent_group_id })
+    body: JSON.stringify({ title, badge_label, parent_group_id, collection_id })
   });
   _editionGroupCache = [];
   await loadCollection();
@@ -764,6 +870,7 @@ async function deleteEditionGroup() {
 function closeEditionGroupView() {
   if (_egViewStack.length > 0) {
     const prev = _egViewStack.pop();
+    if (prev.type === 'collection') { openCollectionView(prev.movie); return; }
     if (prev.type === 'super') { openSuperGroupView(prev.movie); return; }
   }
   _replaceRoute(_tabPath(_detailReturnTab));
@@ -801,7 +908,9 @@ async function openMovieDetail(id, skipGroupRedirect) {
 
   // Redirect grouped editions to the stack view when group_editions mode is active
   if (!skipGroupRedirect && groupEditionsEnabled && (movie.editions_count || 0) > 1 && !movie._isNested) {
-    if (movie._is_super_group) {
+    if (movie._is_collection) {
+      openCollectionView(movie);
+    } else if (movie._is_super_group) {
       openSuperGroupView(movie);
     } else {
       openEditionGroupView(id);
@@ -1584,6 +1693,25 @@ function startEdit() {
     sgBadge.style.display = 'none';
   }
 
+  // Populate collection field
+  const colId = movie.collection_id;
+  const colIdEl = document.getElementById('editCollectionId');
+  const colSearch = document.getElementById('editCollectionSearch');
+  const colBadge = document.getElementById('editCollectionBadge');
+  const colDropdown = document.getElementById('editCollectionDropdown');
+  if (colIdEl) colIdEl.value = colId || '';
+  if (colSearch) colSearch.value = '';
+  if (colDropdown) colDropdown.style.display = 'none';
+  if (colId && colBadge) {
+    fetch(`${API}/collections/${colId}`).then(r => r.ok ? r.json() : null).then(c => {
+      if (!c) return;
+      document.getElementById('editCollectionName').textContent = c.title || '';
+      colBadge.style.display = 'flex';
+    }).catch(() => {});
+  } else if (colBadge) {
+    colBadge.style.display = 'none';
+  }
+
   document.getElementById('editStatus').className = 'status-msg';
   switchEditTab('general'); // initialize tab state before showing modal
   document.getElementById('modalViewMode').style.display = 'none';
@@ -1644,6 +1772,12 @@ async function saveEdit() {
   if (sgIdEl) {
     const sgVal = sgIdEl.value.trim();
     payload.super_group_id = sgVal ? parseInt(sgVal) : null;
+  }
+  // Collection assignment
+  const colIdEl = document.getElementById('editCollectionId');
+  if (colIdEl) {
+    const colVal = colIdEl.value.trim();
+    payload.collection_id = colVal ? parseInt(colVal) : null;
   }
 
   // Collect selected group IDs from checkboxes
@@ -2242,11 +2376,11 @@ async function searchSuperGroup(query) {
     const items = groups.slice(0, 8).map(g =>
       `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
             onmousedown="selectSuperGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">
-        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">${g.member_count || 0} edities</span>
+        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">(${g.member_count || 0})</span>
        </div>`
     );
     items.push(`<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent2); cursor:pointer;"
-         onmousedown="createAndSelectSuperGroup('${query.replace(/'/g,"\\'")}')">+ Maak "${query}" aan als nieuwe groep</div>`);
+         onmousedown="createAndSelectSuperGroup('${query.replace(/'/g,"\\'")}')">+ ${t('edit.superGroupCreate', query)}</div>`);
     dropdown.innerHTML = items.join('');
     dropdown.style.display = 'block';
   } catch(e) {}
@@ -2277,6 +2411,143 @@ function unlinkSuperGroup() {
   document.getElementById('editSuperGroupId').value = '';
   document.getElementById('editSuperGroupSearch').value = '';
   document.getElementById('editSuperGroupBadge').style.display = 'none';
+}
+
+// ── Collection autocomplete in edit modal ──────────────────────────────────
+
+async function searchCollection(query) {
+  const dropdown = document.getElementById('editCollectionDropdown');
+  if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
+  try {
+    const r = await fetch(`${API}/collections?q=${encodeURIComponent(query)}`);
+    const cols = await r.json();
+    const items = cols.slice(0, 8).map(c =>
+      `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
+            onmousedown="selectCollection(${c.id}, '${(c.title||'').replace(/'/g,"\\'")}')">
+        ${c.title}
+       </div>`
+    );
+    items.push(`<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:#2ecc71; cursor:pointer;"
+         onmousedown="createAndSelectCollection('${query.replace(/'/g,"\\'")}')">+ ${t('edit.collectionCreate', query)}</div>`);
+    dropdown.innerHTML = items.join('');
+    dropdown.style.display = 'block';
+  } catch(e) {}
+}
+
+async function createAndSelectCollection(title) {
+  document.getElementById('editCollectionDropdown').style.display = 'none';
+  try {
+    const r = await fetch(`${API}/collections`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ title })
+    });
+    const c = await r.json();
+    selectCollection(c.id, c.title);
+  } catch(e) {}
+}
+
+function selectCollection(id, name) {
+  document.getElementById('editCollectionId').value = id;
+  document.getElementById('editCollectionSearch').value = '';
+  document.getElementById('editCollectionDropdown').style.display = 'none';
+  document.getElementById('editCollectionName').textContent = name;
+  document.getElementById('editCollectionBadge').style.display = 'flex';
+}
+
+function unlinkCollection() {
+  document.getElementById('editCollectionId').value = '';
+  document.getElementById('editCollectionSearch').value = '';
+  document.getElementById('editCollectionBadge').style.display = 'none';
+}
+
+// ── Group Management (admin panel) ───────────────────────────────────────────
+
+let _gmFilter = 'all';
+
+async function loadGroupMgmtList(filter) {
+  _gmFilter = filter || 'all';
+  // Update filter button states
+  ['all','vault','boxset','collection'].forEach(f => {
+    const btn = document.getElementById('gmFilter' + f.charAt(0).toUpperCase() + f.slice(1));
+    if (btn) btn.classList.toggle('active', f === _gmFilter);
+  });
+
+  const container = document.getElementById('groupMgmtList');
+  if (!container) return;
+  container.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">${t('general.loading', 'Laden...')}</div>`;
+
+  try {
+    const items = [];
+
+    // Fetch edition groups (Vaults + Box Sets)
+    if (_gmFilter === 'all' || _gmFilter === 'vault' || _gmFilter === 'boxset') {
+      const r = await fetch(`${API}/edition-groups`);
+      const egs = await r.json();
+      for (const eg of egs) {
+        const isBoxSet = !!(eg.parent_group_id === null && egs.some(e => e.parent_group_id === eg.id));
+        const isParent = egs.some(e => e.parent_group_id === eg.id);
+        const hasChildren = eg.parent_group_id != null;
+        let type;
+        if (isParent) type = 'boxset';
+        else if (hasChildren) type = 'vault'; // child of a box set
+        else type = 'vault'; // standalone vault
+
+        if (_gmFilter !== 'all' && _gmFilter !== type) continue;
+        items.push({ id: eg.id, title: eg.title, type, memberCount: eg.member_count || 0, src: 'eg' });
+      }
+    }
+
+    // Fetch collections
+    if (_gmFilter === 'all' || _gmFilter === 'collection') {
+      const r = await fetch(`${API}/collections`);
+      const cols = await r.json();
+      for (const c of cols) {
+        items.push({ id: c.id, title: c.title, type: 'collection', memberCount: 0, src: 'col' });
+      }
+    }
+
+    if (items.length === 0) {
+      container.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">${t('settings.groupMgmtEmpty', 'Geen groepen gevonden.')}</div>`;
+      return;
+    }
+
+    items.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    container.innerHTML = items.map(item => {
+      const typeBadge = item.type === 'collection' ? 'Collection'
+        : item.type === 'boxset' ? 'Box Set' : 'Vault';
+      const badgeColor = item.type === 'collection' ? '#2ecc71'
+        : item.type === 'boxset' ? 'var(--accent2)' : 'var(--accent)';
+      return `
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+          <span style="font-size:0.72rem; padding:2px 8px; border-radius:4px; background:${badgeColor}22; color:${badgeColor}; font-weight:600; white-space:nowrap;">${typeBadge}</span>
+          <input type="text" value="${(item.title || '').replace(/"/g, '&quot;')}" style="flex:1; font-size:0.85rem; background:transparent; border:1px solid transparent; padding:4px 8px; border-radius:4px; color:var(--text);"
+                 onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'"
+                 onchange="renameGroupMgmt('${item.src}', ${item.id}, this.value)">
+          <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">${item.memberCount} film${item.memberCount !== 1 ? 's' : ''}</span>
+          <button type="button" onclick="deleteGroupMgmt('${item.src}', ${item.id}, '${(item.title || '').replace(/'/g, "\\'")}')"
+                  style="background:none; border:none; cursor:pointer; color:var(--danger); font-size:1rem; padding:4px;" title="Verwijderen">🗑</button>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = `<div style="color:var(--danger); font-size:0.85rem;">Error: ${e.message}</div>`;
+  }
+}
+
+async function renameGroupMgmt(src, id, newTitle) {
+  const url = src === 'col' ? `${API}/collections/${id}` : `${API}/edition-groups/${id}`;
+  await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: newTitle })
+  });
+}
+
+async function deleteGroupMgmt(src, id, title) {
+  if (!confirm(`${title} verwijderen?`)) return;
+  const url = src === 'col' ? `${API}/collections/${id}` : `${API}/edition-groups/${id}`;
+  await fetch(url, { method: 'DELETE' });
+  loadGroupMgmtList(_gmFilter);
 }
 
 // ── Compare mode ─────────────────────────────────────────────────────────────

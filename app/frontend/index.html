@@ -767,7 +767,7 @@
                 <span data-i18n="edition.collectorsMode">🏆 Collectors mode</span>
               </label>
               <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:6px; padding-left:28px;" data-i18n="edition.collectorsModeDesc">
-                Schakel geavanceerde functies in voor verzamelaars: editiegroepen (meerdere versies van dezelfde film), filmreeksen (trilogie-sets) en groepsbeheer in het bewerkscherm.
+                Schakel geavanceerde functies in voor verzamelaars: vaults (meerdere versies van dezelfde film), box sets (trilogie-sets) en groepsbeheer in het bewerkscherm.
               </div>
             </div>
 
@@ -932,6 +932,10 @@
         <button class="profile-sidebar-btn" type="button" data-admin-sub="advanced" onclick="switchAdminSubmenu('advanced')">
           <span class="mdi mdi-cog-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span data-i18n="settings.menuAdvanced">Geavanceerd</span>
+        </button>
+        <button class="profile-sidebar-btn" type="button" data-admin-sub="groupmgmt" onclick="switchAdminSubmenu('groupmgmt')">
+          <span class="mdi mdi-folder-multiple-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="settings.menuGroupMgmt">Vaults & Sets</span>
         </button>
       </nav>
 
@@ -1120,6 +1124,23 @@
             <button class="btn btn-danger" onclick="resetDatabase()" data-i18n="settings.resetButton">🗑 Database Wissen</button>
           </div>
 
+        </div>
+
+        <!-- ── GROUP MANAGEMENT (Vaults, Box Sets, Collections) ── -->
+        <div class="profile-sub-section" id="adminSubGroupmgmt" style="display:none;">
+          <div class="card">
+            <div class="card-title" data-i18n="settings.groupMgmtTitle">📦 Vaults, Box Sets & Collections</div>
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="settings.groupMgmtDesc">
+              Beheer alle groepen. Je kunt ze hernoemen of verwijderen, ook als er geen films aan gekoppeld zijn.
+            </p>
+            <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+              <button class="btn btn-secondary active" onclick="loadGroupMgmtList('all')" style="font-size:0.82rem;" id="gmFilterAll">Alles</button>
+              <button class="btn btn-secondary" onclick="loadGroupMgmtList('vault')" style="font-size:0.82rem;" id="gmFilterVault">Vaults</button>
+              <button class="btn btn-secondary" onclick="loadGroupMgmtList('boxset')" style="font-size:0.82rem;" id="gmFilterBoxset">Box Sets</button>
+              <button class="btn btn-secondary" onclick="loadGroupMgmtList('collection')" style="font-size:0.82rem;" id="gmFilterCollection">Collections</button>
+            </div>
+            <div id="groupMgmtList" style="display:flex; flex-direction:column; gap:8px;"></div>
+          </div>
         </div>
 
       </div><!-- /.profile-content -->
@@ -1604,7 +1625,7 @@
                  style="display:none; margin-top:6px;" oninput="_editDirty=true">
         </div>
         <div class="input-group full collectors-only">
-          <label data-i18n="edit.editionGroup">Editiegroep</label>
+          <label data-i18n="edit.editionGroup">Vault</label>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="editEditionGroupSearch" placeholder="Zoek of maak groep..." data-i18n-placeholder="edit.editionGroupPlaceholder"
                    oninput="searchEditionGroups(this.value)" autocomplete="off" style="flex:1; min-width:160px;">
@@ -1617,9 +1638,9 @@
           <input type="hidden" id="editEditionGroupId">
         </div>
         <div class="input-group full collectors-only">
-          <label data-i18n="edit.superGroup">Filmreeks (losse film)</label>
+          <label data-i18n="edit.superGroup">Box Set (losse film)</label>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak filmreeks..."
+            <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak box set..."
                    oninput="searchSuperGroup(this.value)" autocomplete="off" style="flex:1; min-width:160px;" data-i18n-placeholder="edit.superGroupPlaceholder">
             <span id="editSuperGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(124,106,247,.12); border:1px solid rgba(124,106,247,.35); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent2);">
               <span id="editSuperGroupName"></span>
@@ -1628,7 +1649,21 @@
           </div>
           <div id="editSuperGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
           <input type="hidden" id="editSuperGroupId">
-          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.superGroupHelp">Gebruik dit alleen als deze film losse staat (geen editiegroep) maar wel onderdeel is van een filmreeks of trilogie-set.</div>
+          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.superGroupHelp">Gebruik dit alleen als deze film losse staat (geen vault) maar wel onderdeel is van een box set.</div>
+        </div>
+        <div class="input-group full collectors-only">
+          <label data-i18n="edit.collection">Collection (losse film)</label>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="text" id="editCollectionSearch" placeholder="Zoek of maak collection..."
+                   oninput="searchCollection(this.value)" autocomplete="off" style="flex:1; min-width:160px;" data-i18n-placeholder="edit.collectionPlaceholder">
+            <span id="editCollectionBadge" style="display:none; align-items:center; gap:6px; background:rgba(46,204,113,.12); border:1px solid rgba(46,204,113,.35); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:#2ecc71;">
+              <span id="editCollectionName"></span>
+              <button type="button" onclick="unlinkCollection()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
+            </span>
+          </div>
+          <div id="editCollectionDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
+          <input type="hidden" id="editCollectionId">
+          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.collectionHelp">Voeg deze film toe aan een collection die vaults, box sets en losse films groepeert.</div>
         </div>
       </div><!-- /editTabEdition -->
 
@@ -1797,8 +1832,8 @@
           <input type="text" id="egBadgeLabel" placeholder="bijv. Trilogy, 4K Set..." maxlength="20" style="margin-top:4px;" data-i18n-placeholder="edition.egBadgeLabelPlaceholder">
         </div>
         <div class="input-group" style="margin-bottom:16px;">
-          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egParentGroup">Samenvoegen onder filmreeks</label>
-          <input type="text" id="egParentGroupSearch" placeholder="Zoek filmreeks..." autocomplete="off"
+          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egParentGroup">Samenvoegen onder box set</label>
+          <input type="text" id="egParentGroupSearch" placeholder="Zoek box set..." autocomplete="off"
                  style="margin-top:4px;" oninput="searchParentGroup(this.value)" data-i18n-placeholder="edition.egParentGroupSearch">
           <div id="egParentGroupDropdown" style="display:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:140px; overflow-y:auto; position:relative; z-index:10;"></div>
           <div id="egParentGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(232,197,71,.1); border:1px solid rgba(232,197,71,.3); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent); margin-top:6px;">

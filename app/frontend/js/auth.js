@@ -406,7 +406,7 @@ function switchProfileSubmenu(name) {
 
 let currentAdminSubmenu = 'security';
 
-const ADMIN_SECTIONS = ['adminSubSecurity','adminSubUsers','adminSubGroups','adminSubBackup','adminSubLogs','adminSubAdvanced'];
+const ADMIN_SECTIONS = ['adminSubSecurity','adminSubUsers','adminSubGroups','adminSubBackup','adminSubLogs','adminSubAdvanced','adminSubGroupmgmt'];
 
 function switchAdminSubmenu(name) {
   currentAdminSubmenu = name;
@@ -414,12 +414,13 @@ function switchAdminSubmenu(name) {
     btn.classList.toggle('active', btn.getAttribute('data-admin-sub') === name);
   });
   const map = {
-    security: 'adminSubSecurity',
-    users:    'adminSubUsers',
-    groups:   'adminSubGroups',
-    backup:   'adminSubBackup',
-    logs:     'adminSubLogs',
-    advanced: 'adminSubAdvanced',
+    security:  'adminSubSecurity',
+    users:     'adminSubUsers',
+    groups:    'adminSubGroups',
+    backup:    'adminSubBackup',
+    logs:      'adminSubLogs',
+    advanced:  'adminSubAdvanced',
+    groupmgmt: 'adminSubGroupmgmt',
   };
   const targetId = map[name] || map.security;
   // Hide all admin sub-sections by ID (reliable, no CSS cascade dependency)
@@ -429,9 +430,10 @@ function switchAdminSubmenu(name) {
   });
   const target = document.getElementById(targetId);
   if (target) target.style.display = 'block';
-  if (name === 'logs')     loadLogs();
-  if (name === 'backup')   loadBackups();
-  if (name === 'advanced') loadDigitalSources();
+  if (name === 'logs')      loadLogs();
+  if (name === 'backup')    loadBackups();
+  if (name === 'advanced')  loadDigitalSources();
+  if (name === 'groupmgmt') loadGroupMgmtList();
 }
 
 async function loadAdminTab() {
