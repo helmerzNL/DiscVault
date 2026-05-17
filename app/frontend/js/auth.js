@@ -435,6 +435,8 @@ function switchAdminSubmenu(name) {
 }
 
 async function loadAdminTab() {
+  // Show submenu immediately — don't wait for async auth/settings fetches
+  switchAdminSubmenu(currentAdminSubmenu || 'security');
   try {
     const me = await fetch(`${API}/auth/me`).then(r => r.json());
     const isAdmin = !me.authenticated || me.role === 'admin';

@@ -1556,9 +1556,9 @@ function startEdit() {
   }
 
   document.getElementById('editStatus').className = 'status-msg';
+  switchEditTab('general'); // initialize tab state before showing modal
   document.getElementById('modalViewMode').style.display = 'none';
   document.getElementById('modalEditMode').style.display = 'block';
-  switchEditTab('general');
   toggleCustomEditionInput(); // Show/hide custom label input based on current edition type
 
   // Snapshot original values for dirty-checking
