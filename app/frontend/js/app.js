@@ -73,7 +73,8 @@ async function loadCollection(retries = 2) {
   // Load group filter options
   _loadGroupFilter();
   try {
-    const r = await fetch(`${API}/movies`);
+    const params = groupEditionsEnabled ? '?group_editions=true' : '';
+    const r = await fetch(`${API}/movies${params}`);
     if (!r.ok) {
       // Retry on server errors (502/503/504 = backend starting up)
       if (retries > 0 && r.status >= 500) {

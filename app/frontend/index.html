@@ -199,6 +199,7 @@
       </select>
       <button class="btn btn-secondary" id="btnSelectMode" onclick="toggleSelectMode()" data-i18n="collection.selectMode">☑ Selecteren</button>
       <button class="btn btn-secondary" onclick="loadCollection()" data-i18n="collection.refresh">↻ Vernieuwen</button>
+      <button class="btn btn-secondary" id="btnCompareMode" onclick="toggleCompareMode()" data-i18n="collection.compareMode">⚡ Vergelijk</button>
     </div>
 
     <!-- Bulk action toolbar (visible in select mode) -->
@@ -227,6 +228,18 @@
 
     <div id="filterCount" style="display:none; font-family:'DM Mono',monospace; font-size:0.78rem; color:var(--text-muted); margin-bottom:10px; padding:0 4px;"></div>
     <div id="moviesGrid" class="movies-grid"></div>
+
+    <!-- Compare view (hidden by default, shown when compareMode active) -->
+    <div id="compareView" style="display:none;">
+      <div style="display:flex; gap:6px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+        <button class="filter-btn active" id="compareTabBoth"    onclick="switchCompareTab('both')"     data-i18n="compare.tabBoth">💿+📺 Beide</button>
+        <button class="filter-btn"        id="compareTabPhys"    onclick="switchCompareTab('physical')" data-i18n="compare.tabPhysical">💿 Alleen fysiek</button>
+        <button class="filter-btn"        id="compareTabDigital" onclick="switchCompareTab('digital')"  data-i18n="compare.tabDigital">📺 Alleen digitaal</button>
+      </div>
+      <div id="compareContentBoth"    class="movies-grid"></div>
+      <div id="compareContentPhys"    class="movies-grid" style="display:none;"></div>
+      <div id="compareContentDigital" style="display:none;"></div>
+    </div>
   </div>
 
   <!-- SEARCH PANEL -->
@@ -741,6 +754,25 @@
             </div>
             <div id="preferencesStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
+
+          <!-- Edition grouping preference -->
+          <div class="card" style="margin-top:16px;">
+            <div class="card-title" data-i18n="edition.prefTitle">🗂 Editiebeheer</div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="groupEditionsToggle" onchange="saveGroupEditionsSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="edition.groupToggle">Meerdere edities samenvoegen als één titel</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:10px;" data-i18n="edition.groupToggleDesc">
+              Toon meerdere fysieke versies van dezelfde film als één tegel. Klik op de tegel om alle edities te zien.
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="showDigitalBadgesToggle" onchange="saveDigitalBadgesSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="edition.digitalBadges">Plex/Jellyfin badge tonen op filmtegel</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="edition.digitalBadgesDesc">
+              Toon een klein icoon als een film ook digitaal beschikbaar is in Plex of Jellyfin.
+            </div>
+          </div>
         </div>
 
         <!-- ── NOTIFICATIES ── -->
@@ -1040,6 +1072,20 @@
             <div id="mcpSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
 
+          <!-- Digitale bibliotheken (Plex / Jellyfin) -->
+          <div class="card" style="margin-top:20px;">
+            <div class="card-title" data-i18n="digital.title">📺 Digitale Bibliotheken</div>
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="digital.desc">
+              Koppel Plex of Jellyfin om te vergelijken welke fysieke schijven je ook digitaal bezit.
+            </p>
+            <div id="digitalSourcesList" style="margin-bottom:16px;"></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-secondary" onclick="openAddDigitalSource('plex')" data-i18n="digital.addPlex">+ Plex toevoegen</button>
+              <button class="btn btn-secondary" onclick="openAddDigitalSource('jellyfin')" data-i18n="digital.addJellyfin">+ Jellyfin toevoegen</button>
+            </div>
+            <div id="digitalSourceStatus" class="status-msg" style="margin-top:10px;"></div>
+          </div>
+
           <!-- Database resetten -->
           <div class="card" style="margin-top:20px; border-color: rgba(240,64,96,.3);">
             <div class="card-title" style="color:var(--danger);" data-i18n="settings.resetTitle">⚠ Database Resetten</div>
@@ -1129,6 +1175,51 @@
       <button onclick="closeInvitePanel()" style="background:none; border:none; color:var(--text-muted); font-size:1.3rem; cursor:pointer;">✕</button>
     </div>
     <div id="invitePanelList"><div style="color:var(--text-muted); font-size:0.85rem;"><span data-i18n="general.loading">Laden...</span></div></div>
+  </div>
+</div>
+
+<!-- EDITION LINK MODAL: shown after scan when duplicate TMDb ID detected -->
+<div id="editionLinkModal" onclick="if(event.target===this)closeEditionLinkModal()" style="display:none; position:fixed; inset:0; z-index:4500; background:rgba(0,0,0,.7); align-items:center; justify-content:center;">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; width:min(460px,90vw);">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:1rem;" data-i18n="edition.linkTitle">🗂 Meerdere edities gevonden</h2>
+      <button onclick="closeEditionLinkModal()" style="background:none;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;">✕</button>
+    </div>
+    <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" id="editionLinkDesc"></p>
+    <div id="editionLinkExisting" style="margin-bottom:16px;"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn btn-primary" id="editionLinkBtn" onclick="confirmEditionLink()" data-i18n="edition.linkBtn">🔗 Koppelen als editie</button>
+      <button class="btn btn-secondary" onclick="closeEditionLinkModal()" data-i18n="edition.linkSkip">Overslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD DIGITAL SOURCE MODAL -->
+<div id="addDigitalSourceModal" onclick="if(event.target===this)closeAddDigitalSource()" style="display:none; position:fixed; inset:0; z-index:4500; background:rgba(0,0,0,.7); align-items:center; justify-content:center;">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; width:min(440px,90vw);">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+      <h2 style="margin:0; font-size:1rem;" id="addDigitalSourceTitle" data-i18n="digital.addTitle">Digitale bibliotheek toevoegen</h2>
+      <button onclick="closeAddDigitalSource()" style="background:none;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;">✕</button>
+    </div>
+    <input type="hidden" id="addDigitalSourceType">
+    <div class="input-group">
+      <label data-i18n="digital.fieldName">Naam</label>
+      <input type="text" id="addDigitalName" placeholder="bijv. Thuis Plex" data-i18n-placeholder="digital.namePlaceholder">
+    </div>
+    <div class="input-group" style="margin-top:12px;">
+      <label data-i18n="digital.fieldUrl">Server URL</label>
+      <input type="text" id="addDigitalUrl" placeholder="http://192.168.1.10:32400" data-i18n-placeholder="digital.urlPlaceholder">
+    </div>
+    <div class="input-group" style="margin-top:12px;">
+      <label id="addDigitalTokenLabel" data-i18n="digital.fieldToken">API Token / Plex Token</label>
+      <input type="password" id="addDigitalToken" autocomplete="new-password">
+    </div>
+    <div id="addDigitalSourceStatus" class="status-msg" style="margin-top:10px;"></div>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveAddDigitalSource()" data-i18n="digital.saveBtn">💾 Opslaan</button>
+      <button class="btn btn-secondary" onclick="testDigitalSourceFromModal()" data-i18n="digital.testBtn">🔌 Testen</button>
+      <button class="btn btn-secondary" onclick="closeAddDigitalSource()" data-i18n="edit.cancel">Annuleren</button>
+    </div>
   </div>
 </div>
 
@@ -1436,6 +1527,32 @@
             <option value="Blu-ray">Blu-ray</option>
             <option value="DVD">DVD</option>
           </select>
+        </div>
+        <div class="input-group">
+          <label data-i18n="edit.editionType">Editie type</label>
+          <select id="editEditionType">
+            <option value="standard"     data-i18n="edition.standard">Standaard</option>
+            <option value="steelbook"    data-i18n="edition.steelbook">Steelbook</option>
+            <option value="directors_cut" data-i18n="edition.directorsCut">Director's Cut</option>
+            <option value="limited"      data-i18n="edition.limited">Limited Edition</option>
+            <option value="theatrical"   data-i18n="edition.theatrical">Theatrical Cut</option>
+            <option value="4k_upgrade"   data-i18n="edition.4kUpgrade">4K Upgrade</option>
+            <option value="boxset_disc"  data-i18n="edition.boxsetDisc">Box Set Disc</option>
+            <option value="other"        data-i18n="edition.other">Overig</option>
+          </select>
+        </div>
+        <div class="input-group full">
+          <label data-i18n="edit.editionGroup">Editiegroep</label>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="text" id="editEditionGroupSearch" placeholder="Zoek of maak groep..." data-i18n-placeholder="edit.editionGroupPlaceholder"
+                   oninput="searchEditionGroups(this.value)" autocomplete="off" style="flex:1; min-width:160px;">
+            <span id="editEditionGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(232,197,71,.1); border:1px solid rgba(232,197,71,.3); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent);">
+              <span id="editEditionGroupName"></span>
+              <button type="button" onclick="unlinkEditionGroup()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
+            </span>
+          </div>
+          <div id="editEditionGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
+          <input type="hidden" id="editEditionGroupId">
         </div>
         <div class="input-group">
           <label data-i18n="edit.runtime">Speelduur (min)</label>

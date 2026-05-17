@@ -6,6 +6,13 @@ function _flagImg(code) {
   return `<img src="/flags/${lc}.svg" width="20" height="15" alt="${lc.toUpperCase()}" style="border-radius:2px;vertical-align:middle;flex-shrink:0;">`;
 }
 
+// ── Edition / Compare state ───────────────────────────────────────────────────
+let compareMode     = false;
+let compareData     = null;
+let activeCompareTab = 'both';
+let groupEditionsEnabled = localStorage.getItem('dv_group_editions') === 'true';
+let showDigitalBadges    = localStorage.getItem('dv_digital_badges') === 'true';
+
 // ── Selection mode ────────────────────────────────────────────────────────────
 let selectMode = false;
 let selectedIds = new Set();
@@ -118,19 +125,43 @@ function renderGrid(movies) {
       : `openMovieDetail(${m.id})`;
     const safeTitle = (m.title || '').replace(/'/g, "\\'");
     const showDelete = !selectMode && debugModeEnabled && ownable;
+
+    // Edition badge
+    const edType = m.edition_type || 'standard';
+    const editionBadge = (edType && edType !== 'standard')
+      ? `<div class="movie-card-edition-badge" title="${t('edition.' + edType.replace('_',''), edType)}">${_editionShortLabel(edType)}</div>`
+      : '';
+
+    // Edition stack badge (grouped mode, multiple editions)
+    const stackBadge = (m.editions_count > 1)
+      ? `<div class="movie-card-stack-badge">${m.editions_count}×</div>`
+      : '';
+
+    // Digital badge (Plex/Jellyfin)
+    let digitalBadge = '';
+    if (showDigitalBadges && compareData) {
+      const match = (compareData.physical_and_digital || []).find(e => e.movie && e.movie.id === m.id);
+      if (match && match.digital_matches && match.digital_matches.length) {
+        const srcType = match.digital_matches[0].source_type;
+        digitalBadge = `<div class="movie-card-digital-badge" title="${match.digital_matches.map(x=>x.source_name).join(', ')}">${srcType === 'plex' ? '🟡' : '🔵'}</div>`;
+      }
+    }
+
     return `
-    <div class="movie-card${isSelected ? ' selected' : ''}${selectMode && !ownable ? ' not-owned' : ''}" data-id="${m.id}" onclick="${clickHandler}">
+    <div class="movie-card${isSelected ? ' selected' : ''}${selectMode && !ownable ? ' not-owned' : ''}${m.editions_count > 1 ? ' has-editions' : ''}" data-id="${m.id}" onclick="${clickHandler}">
       ${showDelete ? `<button class="movie-card-delete" onclick="event.stopPropagation(); quickDelete(${m.id}, '${safeTitle}')">✕</button>` : ''}
       ${m.on_watchlist ? `<div class="watchlist-dot" title="${t('js.onWatchlist')}"></div>` : ''}
       ${m.last_watched ? `<div class="watched-check" title="${t('js.watchedOn', m.last_watched.slice(0,10))}">✓</div>` : ''}
       <div class="movie-card-poster">
         ${imgHtml}
         <div class="movie-card-format">${m.format || '4K'}</div>
+        ${editionBadge}${stackBadge}${digitalBadge}
       </div>
       <div class="movie-card-info">
         <div class="movie-card-title">${m.title}</div>
         <div class="movie-card-year">${m.year || '—'}</div>
       </div>
+      ${(m.editions_count > 1) ? `<div class="movie-card-editions-drawer" id="edDrawer_${m.id}" style="display:none;"></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1131,6 +1162,7 @@ const EDIT_FIELDS = {
   Studios:            'studios',
   Genre:              'genre',
   Format:             'format',
+  EditionType:        'edition_type',
   Runtime:            'runtime',
   Hdr:                'hdr',
   ScreenRatios:       'screen_ratios',
@@ -1207,6 +1239,27 @@ function startEdit() {
   // Populate group checkboxes
   _populateGroupCheckboxes(movie.group_ids || []);
 
+  // Populate edition group field
+  const egId = movie.edition_group_id;
+  document.getElementById('editEditionGroupId').value = egId || '';
+  document.getElementById('editEditionGroupSearch').value = '';
+  const badge = document.getElementById('editEditionGroupBadge');
+  if (egId) {
+    // Look up group name from cache or fetch
+    const cached = _editionGroupCache.find(g => g.id === egId);
+    if (cached) {
+      document.getElementById('editEditionGroupName').textContent = cached.title;
+      badge.style.display = 'flex';
+    } else {
+      fetch(`${API}/edition-groups/${egId}`).then(r => r.json()).then(g => {
+        document.getElementById('editEditionGroupName').textContent = g.title || '';
+        badge.style.display = 'flex';
+      }).catch(() => {});
+    }
+  } else {
+    badge.style.display = 'none';
+  }
+
   document.getElementById('editStatus').className = 'status-msg';
   document.getElementById('modalViewMode').style.display = 'none';
   document.getElementById('modalEditMode').style.display = 'block';
@@ -1253,6 +1306,12 @@ async function saveEdit() {
   for (const [suffix, key] of Object.entries(EDIT_FIELDS)) {
     const el = document.getElementById('edit' + suffix);
     if (el) payload[key] = el.value;
+  }
+  // Edition group assignment
+  const egIdEl = document.getElementById('editEditionGroupId');
+  if (egIdEl) {
+    const egVal = egIdEl.value.trim();
+    payload.edition_group_id = egVal ? parseInt(egVal) : null;
   }
 
   // Collect selected group IDs from checkboxes
@@ -1683,3 +1742,193 @@ function initDetailSwipe() {
 }
 
 document.addEventListener('DOMContentLoaded', initDetailSwipe);
+
+// ── Edition helpers ───────────────────────────────────────────────────────────
+
+function _editionShortLabel(edType) {
+  const labels = {
+    steelbook:    'Steel',
+    directors_cut: 'DC',
+    limited:      'LE',
+    theatrical:   'TC',
+    '4k_upgrade': '4K+',
+    boxset_disc:  'Box',
+    other:        '…',
+  };
+  return labels[edType] || edType;
+}
+
+// Edition group autocomplete in edit modal
+let _editionGroupCache = [];
+
+async function searchEditionGroups(query) {
+  const dropdown = document.getElementById('editEditionGroupDropdown');
+  if (!query || query.length < 1) {
+    dropdown.style.display = 'none';
+    return;
+  }
+  if (!_editionGroupCache.length) {
+    try {
+      const r = await fetch(`${API}/edition-groups`);
+      _editionGroupCache = await r.json();
+    } catch(e) { _editionGroupCache = []; }
+  }
+  const q = query.toLowerCase();
+  const matches = _editionGroupCache.filter(g => (g.title || '').toLowerCase().includes(q));
+  if (!matches.length) {
+    dropdown.innerHTML = `<div style="padding:10px 12px; font-size:0.82rem; color:var(--text-muted);">
+      <span style="cursor:pointer; color:var(--accent);" onclick="createEditionGroupFromSearch('${query.replace(/'/g,"\\'")}')">+ ${t('edit.editionGroupCreate')} "${query}"</span>
+    </div>`;
+  } else {
+    dropdown.innerHTML = matches.map(g =>
+      `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
+            onmousedown="selectEditionGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">
+        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">${g.member_count || 0} ${t('edit.editionGroupMembers')}</span>
+       </div>`
+    ).join('') + `<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent); cursor:pointer;"
+         onmousedown="createEditionGroupFromSearch('${query.replace(/'/g,"\\'")}')">+ ${t('edit.editionGroupCreate')} "${query}"</div>`;
+  }
+  dropdown.style.display = 'block';
+}
+
+function selectEditionGroup(id, name) {
+  document.getElementById('editEditionGroupId').value = id;
+  document.getElementById('editEditionGroupSearch').value = '';
+  document.getElementById('editEditionGroupDropdown').style.display = 'none';
+  const badge = document.getElementById('editEditionGroupBadge');
+  document.getElementById('editEditionGroupName').textContent = name;
+  badge.style.display = 'flex';
+}
+
+function unlinkEditionGroup() {
+  document.getElementById('editEditionGroupId').value = '';
+  document.getElementById('editEditionGroupSearch').value = '';
+  document.getElementById('editEditionGroupBadge').style.display = 'none';
+}
+
+async function createEditionGroupFromSearch(title) {
+  document.getElementById('editEditionGroupDropdown').style.display = 'none';
+  try {
+    const r = await fetch(`${API}/edition-groups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    });
+    const g = await r.json();
+    _editionGroupCache.push(g);
+    selectEditionGroup(g.id, g.title);
+  } catch(e) {}
+}
+
+// ── Compare mode ─────────────────────────────────────────────────────────────
+
+async function toggleCompareMode() {
+  const btn   = document.getElementById('btnCompareMode');
+  const grid  = document.getElementById('moviesGrid');
+  const view  = document.getElementById('compareView');
+  const count = document.getElementById('filterCount');
+
+  if (compareMode) {
+    // Exit compare mode
+    compareMode = false;
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-secondary');
+    if (grid)  grid.style.display = '';
+    if (view)  view.style.display = 'none';
+    if (count) count.style.display = '';
+    filterMovies();
+    return;
+  }
+
+  // Enter compare mode
+  compareMode = true;
+  btn.classList.add('btn-primary');
+  btn.classList.remove('btn-secondary');
+  if (grid)  grid.style.display = 'none';
+  if (view)  view.style.display = 'block';
+  if (count) count.style.display = 'none';
+
+  // Show loading
+  const both = document.getElementById('compareContentBoth');
+  if (both) both.innerHTML = `<div style="grid-column:1/-1; color:var(--text-muted); padding:20px;" data-i18n="general.loading">${t('general.loading')}</div>`;
+
+  try {
+    const r = await fetch(`${API}/collection/compare`);
+    compareData = await r.json();
+    // Also populate digital badges for normal grid
+    renderCompareTab(activeCompareTab);
+  } catch(e) {
+    if (both) both.innerHTML = `<div style="grid-column:1/-1; color:var(--danger); padding:20px;">${t('js.error', e.message)}</div>`;
+  }
+}
+
+function switchCompareTab(tab) {
+  activeCompareTab = tab;
+  ['both', 'physical', 'digital'].forEach(t2 => {
+    const btn  = document.getElementById(`compareTab${t2.charAt(0).toUpperCase() + t2.slice(1)}`);
+    const cont = document.getElementById(`compareContent${t2.charAt(0).toUpperCase() + t2.slice(1)}`);
+    if (btn)  btn.classList.toggle('active', t2 === tab);
+    if (cont) cont.style.display = t2 === tab ? '' : 'none';
+  });
+  renderCompareTab(tab);
+}
+
+function renderCompareTab(tab) {
+  if (!compareData) return;
+  if (tab === 'both') {
+    const cont = document.getElementById('compareContentBoth');
+    const items = compareData.physical_and_digital || [];
+    if (!cont) return;
+    if (!items.length) {
+      cont.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="big-icon">💿</span><h3>${t('compare.noBoth')}</h3></div>`;
+      return;
+    }
+    cont.innerHTML = items.map(entry => {
+      const m   = entry.movie;
+      const src = posterSrc(m);
+      const img = src ? `<img src="${src}" loading="lazy">` : '<div class="no-img">🎬</div>';
+      const sources = (entry.digital_matches || []).map(x =>
+        `<span style="font-size:0.72rem; background:rgba(${x.source_type==='plex'?'232,197,71':'124,106,247'},.15); color:var(--${x.source_type==='plex'?'accent':'accent2'}); border:1px solid rgba(${x.source_type==='plex'?'232,197,71':'124,106,247'},.3); border-radius:4px; padding:1px 6px;">${x.source_name}</span>`
+      ).join(' ');
+      return `<div class="movie-card" data-id="${m.id}" onclick="openMovieDetail(${m.id})">
+        <div class="movie-card-poster">${img}<div class="movie-card-format">${m.format||'4K'}</div></div>
+        <div class="movie-card-info"><div class="movie-card-title">${m.title}</div>
+        <div class="movie-card-year" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">${sources}</div></div></div>`;
+    }).join('');
+  } else if (tab === 'physical') {
+    const cont = document.getElementById('compareContentPhys');
+    const items = compareData.physical_only || [];
+    if (!cont) return;
+    if (!items.length) {
+      cont.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="big-icon">✅</span><h3>${t('compare.allRipped')}</h3></div>`;
+      return;
+    }
+    cont.innerHTML = items.map(entry => {
+      const m   = entry.movie;
+      const src = posterSrc(m);
+      const img = src ? `<img src="${src}" loading="lazy">` : '<div class="no-img">🎬</div>';
+      return `<div class="movie-card" data-id="${m.id}" onclick="openMovieDetail(${m.id})">
+        <div class="movie-card-poster">${img}<div class="movie-card-format">${m.format||'4K'}</div></div>
+        <div class="movie-card-info"><div class="movie-card-title">${m.title}</div>
+        <div class="movie-card-year">${m.year||'—'}</div></div></div>`;
+    }).join('');
+  } else {
+    const cont = document.getElementById('compareContentDigital');
+    const items = compareData.digital_only || [];
+    if (!cont) return;
+    if (!items.length) {
+      cont.innerHTML = `<div class="empty-state"><span class="big-icon">📺</span><h3>${t('compare.noDigitalOnly')}</h3></div>`;
+      return;
+    }
+    cont.innerHTML = `<div style="display:flex; flex-direction:column; gap:8px;">` +
+      items.map(item =>
+        `<div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:500; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
+            <div style="font-size:0.78rem; color:var(--text-muted);">${item.year||'—'}</div>
+          </div>
+          <span style="font-size:0.72rem; background:rgba(${item.source_type==='plex'?'232,197,71':'124,106,247'},.15); color:var(--${item.source_type==='plex'?'accent':'accent2'}); border:1px solid rgba(${item.source_type==='plex'?'232,197,71':'124,106,247'},.3); border-radius:4px; padding:2px 8px; flex-shrink:0;">${item.source_name}</span>
+        </div>`
+      ).join('') + `</div>`;
+  }
+}

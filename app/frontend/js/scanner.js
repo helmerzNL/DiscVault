@@ -477,6 +477,10 @@ async function saveMovie() {
         document.getElementById('movieResult').style.display = 'none';
         document.getElementById('noResult').style.display = 'block';
         loadStats();
+        // Show edition link prompt if duplicate TMDb ID detected
+        if (d.duplicate_tmdb_hint && d.duplicate_tmdb_hint.existing_movies && d.duplicate_tmdb_hint.existing_movies.length) {
+          _showEditionLinkPrompt(d.movie, d.duplicate_tmdb_hint);
+        }
       }
     } else {
       showStatus('scanStatus', d.error || t('js.saveFailed'), 'error');
@@ -486,6 +490,74 @@ async function saveMovie() {
   } catch(e) {
     showStatus('scanStatus', t('js.error', e.message), 'error');
     btn.innerHTML = t('js.saveToCollectionBtn');
+    btn.disabled = false;
+  }
+}
+
+let _editionLinkNewMovie  = null;
+let _editionLinkHint      = null;
+
+function _showEditionLinkPrompt(newMovie, hint) {
+  _editionLinkNewMovie = newMovie;
+  _editionLinkHint     = hint;
+  const modal = document.getElementById('editionLinkModal');
+  const desc  = document.getElementById('editionLinkDesc');
+  const existing = document.getElementById('editionLinkExisting');
+  if (!modal) return;
+  desc.textContent = t('edition.linkDesc', newMovie.title);
+  existing.innerHTML = hint.existing_movies.map(m =>
+    `<div style="padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px; font-size:0.84rem;">
+      <strong>${m.title}</strong> · ${m.format || ''}
+      ${m.edition_type && m.edition_type !== 'standard' ? `<span style="color:var(--accent); font-size:0.76rem;"> · ${m.edition_type}</span>` : ''}
+    </div>`
+  ).join('');
+  modal.style.display = 'flex';
+}
+
+function closeEditionLinkModal() {
+  const modal = document.getElementById('editionLinkModal');
+  if (modal) modal.style.display = 'none';
+  _editionLinkNewMovie = null;
+  _editionLinkHint     = null;
+}
+
+async function confirmEditionLink() {
+  if (!_editionLinkNewMovie || !_editionLinkHint) return;
+  const btn = document.getElementById('editionLinkBtn');
+  btn.disabled = true;
+  try {
+    let groupId = _editionLinkHint.suggested_group_id;
+    if (!groupId) {
+      // Create a new edition group for this film
+      const r = await fetch(`${API}/edition-groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: _editionLinkNewMovie.title,
+          tmdb_id: _editionLinkNewMovie.tmdb_id,
+          imdb_id: _editionLinkNewMovie.imdb_id,
+          year: _editionLinkNewMovie.year,
+        })
+      });
+      const g = await r.json();
+      groupId = g.id;
+      // Add all existing movies with same tmdb_id to the group
+      const existingIds = _editionLinkHint.existing_movies.map(m => m.id);
+      await fetch(`${API}/edition-groups/${groupId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ movie_ids: existingIds })
+      });
+    }
+    // Add the newly scanned movie to the group
+    await fetch(`${API}/edition-groups/${groupId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ movie_ids: [_editionLinkNewMovie.id] })
+    });
+    closeEditionLinkModal();
+    if (typeof loadCollection === 'function') loadCollection();
+  } catch(e) {
     btn.disabled = false;
   }
 }

@@ -12,6 +12,7 @@ import hmac
 import base64
 import time
 import struct
+import threading
 import requests
 import jwt
 import cbor2
@@ -24,6 +25,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from PIL import Image, ImageOps, UnidentifiedImageError
 from bs4 import BeautifulSoup
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric.ec import ECDSA, EllipticCurvePublicKey
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from cryptography.hazmat.primitives.hashes import SHA256
@@ -114,6 +116,43 @@ def _clear_import_cancel(import_id: str):
     conn.commit()
     conn.close()
 
+
+# ---------------------------------------------------------------------------
+# Token encryption (Fernet / AES-128-CBC via cryptography)
+# ---------------------------------------------------------------------------
+
+def _get_fernet() -> Fernet:
+    """Derive a Fernet key from JWT_SECRET so tokens are encrypted at rest."""
+    key_bytes = hashlib.sha256(JWT_SECRET.encode()).digest()
+    fernet_key = base64.urlsafe_b64encode(key_bytes)
+    return Fernet(fernet_key)
+
+
+def _encrypt_token(token: str) -> str:
+    if not token:
+        return ""
+    try:
+        return _get_fernet().encrypt(token.encode()).decode()
+    except Exception:
+        return ""
+
+
+def _decrypt_token(enc: str) -> str:
+    if not enc:
+        return ""
+    try:
+        return _get_fernet().decrypt(enc.encode()).decode()
+    except Exception:
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Digital library sync job state (in-memory, per process)
+# ---------------------------------------------------------------------------
+
+_sync_jobs: dict = {}  # source_id -> {"status": "running"|"done"|"error", "progress": int, "total": int, "error": str}
+
+
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
@@ -130,6 +169,8 @@ SCHEMA_COLUMNS = [
     ("edition",              "TEXT"),
     ("edition_release_year", "TEXT"),
     ("edition_release_date", "TEXT"),
+    ("edition_type",         "TEXT DEFAULT 'standard'"),
+    ("edition_group_id",     "INTEGER"),
     ("country",              "TEXT"),
     ("language",             "TEXT"),
     # People
@@ -552,6 +593,55 @@ def init_db():
         orphan_count = conn.execute("SELECT COUNT(*) FROM movies WHERE owner_id IS NULL").fetchone()[0]
         if orphan_count > 0:
             conn.execute("UPDATE movies SET owner_id=? WHERE owner_id IS NULL", (first_user[0],))
+
+    # Edition groups: group multiple physical copies of the same film
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS edition_groups (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            tmdb_id          TEXT,
+            imdb_id          TEXT,
+            title            TEXT NOT NULL,
+            year             TEXT,
+            primary_movie_id INTEGER,
+            created_at       TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_edition_groups_tmdb ON edition_groups(tmdb_id)")
+
+    # Digital library sources (Plex / Jellyfin)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS digital_library_sources (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            type        TEXT NOT NULL,
+            base_url    TEXT NOT NULL,
+            token_enc   TEXT,
+            library_ids TEXT,
+            last_synced TEXT,
+            item_count  INTEGER DEFAULT 0,
+            enabled     INTEGER DEFAULT 1,
+            owner_id    TEXT
+        )
+    """)
+
+    # Cached items from digital library syncs
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS digital_library_items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id   INTEGER NOT NULL REFERENCES digital_library_sources(id) ON DELETE CASCADE,
+            external_id TEXT NOT NULL,
+            title       TEXT NOT NULL,
+            year        TEXT,
+            tmdb_id     TEXT,
+            imdb_id     TEXT,
+            media_type  TEXT DEFAULT 'movie',
+            synced_at   TEXT NOT NULL,
+            UNIQUE(source_id, external_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dli_tmdb ON digital_library_items(tmdb_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dli_imdb ON digital_library_items(imdb_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dli_source ON digital_library_items(source_id)")
 
     # Migrate: re-generate VAPID keys if stored in old PEM format (any format starting with -----BEGIN)
     # New format: raw base64url 32-byte EC scalar, as expected by pywebpush/py_vapid from_string()
@@ -1759,7 +1849,7 @@ def unhandled(e):
 
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "version": "2.6.0"})
+    return jsonify({"status": "ok", "version": "2.7.0"})
 
 
 @app.route("/api/stats")
@@ -1841,6 +1931,7 @@ def list_movies():
     conn = get_db()
     q   = request.args.get("q", "")
     fmt = request.args.get("format", "")
+    group_editions = request.args.get("group_editions", "false").lower() == "true"
     owner_clause, owner_params = _movie_owner_filter()
     sql = ("SELECT movies.*, users.display_name AS owner_name"
            " FROM movies LEFT JOIN users ON movies.owner_id = users.id"
@@ -1884,6 +1975,41 @@ def list_movies():
         for m in movies:
             m["on_watchlist"] = m["id"] in wl_set
             m["last_watched"] = wh_map.get(m["id"])
+
+    # Collapse grouped editions: one representative per edition_group_id
+    if group_editions and movies:
+        grouped = {}   # edition_group_id -> list of movies
+        ungrouped = []
+        for m in movies:
+            gid = m.get("edition_group_id")
+            if gid:
+                grouped.setdefault(gid, []).append(m)
+            else:
+                ungrouped.append(m)
+        # For each group, pick primary (primary_movie_id) or best format (4K > Blu-ray > DVD > first)
+        format_rank = {"4K UHD": 0, "Blu-ray": 1, "DVD": 2}
+        eg_rows = {}
+        if grouped:
+            gid_list = list(grouped.keys())
+            gplaceholders = ",".join("?" * len(gid_list))
+            eg_rows_raw = conn.execute(
+                f"SELECT id, primary_movie_id FROM edition_groups WHERE id IN ({gplaceholders})",
+                gid_list
+            ).fetchall()
+            eg_rows = {r["id"]: r["primary_movie_id"] for r in eg_rows_raw}
+        collapsed = []
+        for gid, members in grouped.items():
+            primary_id = eg_rows.get(gid)
+            primary = next((m for m in members if m["id"] == primary_id), None)
+            if not primary:
+                primary = sorted(members, key=lambda x: format_rank.get(x.get("format", ""), 99))[0]
+            primary = dict(primary)
+            primary["editions"] = members
+            primary["editions_count"] = len(members)
+            collapsed.append(primary)
+        movies = ungrouped + collapsed
+        movies.sort(key=lambda m: (m.get("sort_title") or m.get("title") or "").lower())
+
     conn.close()
     return jsonify(movies)
 
@@ -2087,7 +2213,31 @@ def add_movie():
 
         conn.close()
         add_log("add", f"Film toegevoegd: {data['title']}", f"Barcode: {data['barcode']}, Format: {data.get('format','')}", "success")
-        return jsonify({"status": "added", "movie": dict(movie)}), 201
+
+        # Check for duplicate TMDb ID to suggest edition grouping
+        hint = None
+        tmdb_id_new = dict(movie).get("tmdb_id", "")
+        if tmdb_id_new:
+            dup_conn = get_db()
+            dups = dup_conn.execute(
+                "SELECT id, title, edition_type, format, edition_group_id FROM movies"
+                " WHERE tmdb_id = ? AND id != ?",
+                (tmdb_id_new, movie["id"])
+            ).fetchall()
+            dup_conn.close()
+            if dups:
+                hint = {
+                    "existing_movies": [
+                        {"id": d["id"], "title": d["title"], "edition_type": d["edition_type"] or "standard",
+                         "format": d["format"], "edition_group_id": d["edition_group_id"]}
+                        for d in dups
+                    ]
+                }
+                # Suggest existing group if one of the dupes is already in a group
+                existing_gid = next((d["edition_group_id"] for d in dups if d["edition_group_id"]), None)
+                hint["suggested_group_id"] = existing_gid
+
+        return jsonify({"status": "added", "movie": dict(movie), "duplicate_tmdb_hint": hint}), 201
     except sqlite3.IntegrityError:
         conn.close()
         add_log("add", f"Duplicaat barcode: {data['barcode']}", f"Titel: {data['title']}", "warn")
@@ -5992,6 +6142,528 @@ def user_mcp_logs():
     ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+
+# ---------------------------------------------------------------------------
+# Routes: Edition Groups
+# ---------------------------------------------------------------------------
+
+@app.route("/api/edition-groups", methods=["GET"])
+def list_edition_groups():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT eg.*, COUNT(m.id) AS member_count
+        FROM edition_groups eg
+        LEFT JOIN movies m ON m.edition_group_id = eg.id
+        GROUP BY eg.id
+        ORDER BY eg.title ASC
+    """).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/edition-groups", methods=["POST"])
+def create_edition_group():
+    data = request.json or {}
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO edition_groups (title, tmdb_id, imdb_id, year, created_at) VALUES (?,?,?,?,?)",
+        (title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
+         data.get("year") or "", datetime.utcnow().isoformat())
+    )
+    conn.commit()
+    gid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    row = conn.execute("SELECT * FROM edition_groups WHERE id=?", (gid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/edition-groups/<int:group_id>", methods=["GET"])
+def get_edition_group(group_id):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM edition_groups WHERE id=?", (group_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    members = conn.execute(
+        "SELECT id, title, edition_type, format, year, poster_file, poster FROM movies"
+        " WHERE edition_group_id=? ORDER BY format ASC",
+        (group_id,)
+    ).fetchall()
+    conn.close()
+    result = dict(row)
+    result["members"] = [dict(m) for m in members]
+    return jsonify(result)
+
+
+@app.route("/api/edition-groups/<int:group_id>", methods=["PUT"])
+def update_edition_group(group_id):
+    data = request.json or {}
+    conn = get_db()
+    row = conn.execute("SELECT * FROM edition_groups WHERE id=?", (group_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    fields = {}
+    if "title" in data:
+        fields["title"] = (data["title"] or "").strip()
+    if "primary_movie_id" in data:
+        fields["primary_movie_id"] = data["primary_movie_id"]
+    if "tmdb_id" in data:
+        fields["tmdb_id"] = data["tmdb_id"]
+    if "imdb_id" in data:
+        fields["imdb_id"] = data["imdb_id"]
+    if "year" in data:
+        fields["year"] = data["year"]
+    if fields:
+        set_clause = ", ".join(f"{k}=?" for k in fields)
+        conn.execute(
+            f"UPDATE edition_groups SET {set_clause} WHERE id=?",
+            list(fields.values()) + [group_id]
+        )
+        conn.commit()
+    updated = conn.execute("SELECT * FROM edition_groups WHERE id=?", (group_id,)).fetchone()
+    conn.close()
+    return jsonify(dict(updated))
+
+
+@app.route("/api/edition-groups/<int:group_id>", methods=["DELETE"])
+def delete_edition_group(group_id):
+    conn = get_db()
+    conn.execute("UPDATE movies SET edition_group_id=NULL WHERE edition_group_id=?", (group_id,))
+    conn.execute("DELETE FROM edition_groups WHERE id=?", (group_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/edition-groups/<int:group_id>/members", methods=["POST"])
+def add_edition_group_member(group_id):
+    data = request.json or {}
+    movie_ids = data.get("movie_ids", [])
+    if isinstance(movie_ids, int):
+        movie_ids = [movie_ids]
+    if not movie_ids:
+        return jsonify({"error": "movie_ids required"}), 400
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM edition_groups WHERE id=?", (group_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Group not found"}), 404
+    for mid in movie_ids:
+        conn.execute("UPDATE movies SET edition_group_id=? WHERE id=?", (group_id, mid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/edition-groups/<int:group_id>/members/<int:movie_id>", methods=["DELETE"])
+def remove_edition_group_member(group_id, movie_id):
+    conn = get_db()
+    conn.execute(
+        "UPDATE movies SET edition_group_id=NULL WHERE id=? AND edition_group_id=?",
+        (movie_id, group_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Routes: Digital Library Sources (Plex / Jellyfin)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/digital-sources", methods=["GET"])
+def list_digital_sources():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, name, type, base_url, library_ids, last_synced, item_count, enabled, owner_id"
+        " FROM digital_library_sources ORDER BY id ASC"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/digital-sources", methods=["POST"])
+def create_digital_source():
+    data = request.json or {}
+    name     = (data.get("name") or "").strip()
+    src_type = (data.get("type") or "").lower()
+    base_url = (data.get("base_url") or "").strip().rstrip("/")
+    token    = (data.get("token") or "").strip()
+    if not name or not src_type or not base_url:
+        return jsonify({"error": "name, type, and base_url are required"}), 400
+    if src_type not in ("plex", "jellyfin"):
+        return jsonify({"error": "type must be 'plex' or 'jellyfin'"}), 400
+    token_enc = _encrypt_token(token)
+    owner_id  = _get_current_user_id()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO digital_library_sources (name, type, base_url, token_enc, library_ids, enabled, owner_id)"
+        " VALUES (?,?,?,?,?,1,?)",
+        (name, src_type, base_url, token_enc, json.dumps(data.get("library_ids") or []), owner_id)
+    )
+    conn.commit()
+    sid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    row = conn.execute(
+        "SELECT id, name, type, base_url, library_ids, last_synced, item_count, enabled, owner_id"
+        " FROM digital_library_sources WHERE id=?", (sid,)
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/digital-sources/<int:source_id>", methods=["PUT"])
+def update_digital_source(source_id):
+    data = request.json or {}
+    conn = get_db()
+    row = conn.execute("SELECT * FROM digital_library_sources WHERE id=?", (source_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    fields = {}
+    if "name" in data:
+        fields["name"] = (data["name"] or "").strip()
+    if "base_url" in data:
+        fields["base_url"] = (data["base_url"] or "").strip().rstrip("/")
+    if "token" in data and data["token"]:
+        fields["token_enc"] = _encrypt_token(data["token"])
+    if "library_ids" in data:
+        fields["library_ids"] = json.dumps(data["library_ids"] or [])
+    if "enabled" in data:
+        fields["enabled"] = 1 if data["enabled"] else 0
+    if fields:
+        set_clause = ", ".join(f"{k}=?" for k in fields)
+        conn.execute(
+            f"UPDATE digital_library_sources SET {set_clause} WHERE id=?",
+            list(fields.values()) + [source_id]
+        )
+        conn.commit()
+    updated = conn.execute(
+        "SELECT id, name, type, base_url, library_ids, last_synced, item_count, enabled, owner_id"
+        " FROM digital_library_sources WHERE id=?", (source_id,)
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(updated))
+
+
+@app.route("/api/digital-sources/<int:source_id>", methods=["DELETE"])
+def delete_digital_source(source_id):
+    conn = get_db()
+    conn.execute("DELETE FROM digital_library_items WHERE source_id=?", (source_id,))
+    conn.execute("DELETE FROM digital_library_sources WHERE id=?", (source_id,))
+    conn.commit()
+    conn.close()
+    _sync_jobs.pop(source_id, None)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/digital-sources/<int:source_id>/test", methods=["POST"])
+def test_digital_source(source_id):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM digital_library_sources WHERE id=?", (source_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    src = dict(row)
+    token = _decrypt_token(src.get("token_enc") or "")
+    base_url = src["base_url"]
+    try:
+        if src["type"] == "plex":
+            r = requests.get(f"{base_url}/", params={"X-Plex-Token": token}, timeout=8)
+            ok = r.status_code in (200, 401)  # 401 = wrong token but server reachable
+            msg = "Plex server reachable" if r.status_code == 200 else f"HTTP {r.status_code}"
+        else:  # jellyfin
+            r = requests.get(f"{base_url}/System/Info/Public", timeout=8)
+            ok = r.status_code == 200
+            info = r.json() if ok else {}
+            msg = f"Jellyfin {info.get('Version', 'server reachable')}" if ok else f"HTTP {r.status_code}"
+        return jsonify({"ok": ok, "message": msg})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+
+def _run_plex_sync(source_id: int):
+    """Background thread: fetch all movie items from Plex and upsert into digital_library_items."""
+    _sync_jobs[source_id] = {"status": "running", "progress": 0, "total": 0, "error": ""}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM digital_library_sources WHERE id=?", (source_id,)).fetchone()
+        if not row:
+            conn.close()
+            _sync_jobs[source_id]["status"] = "error"
+            _sync_jobs[source_id]["error"] = "Source not found"
+            return
+        src = dict(row)
+        token = _decrypt_token(src.get("token_enc") or "")
+        base_url = src["base_url"]
+        lib_ids_raw = src.get("library_ids") or "[]"
+        try:
+            configured_lib_ids = [str(x) for x in json.loads(lib_ids_raw)]
+        except Exception:
+            configured_lib_ids = []
+
+        # Get library sections
+        r = requests.get(f"{base_url}/library/sections",
+                         params={"X-Plex-Token": token}, timeout=10)
+        r.raise_for_status()
+        root = ET.fromstring(r.text)
+        sections = [
+            {"key": d.get("key"), "title": d.get("title"), "type": d.get("type")}
+            for d in root.findall(".//Directory")
+            if d.get("type") == "movie"
+        ]
+        if configured_lib_ids:
+            sections = [s for s in sections if s["key"] in configured_lib_ids]
+
+        all_items = []
+        for section in sections:
+            r2 = requests.get(
+                f"{base_url}/library/sections/{section['key']}/all",
+                params={"X-Plex-Token": token, "type": "1"},
+                timeout=30
+            )
+            r2.raise_for_status()
+            root2 = ET.fromstring(r2.text)
+            for video in root2.findall(".//Video"):
+                tmdb_id = ""
+                imdb_id = ""
+                guid = video.get("guid", "")
+                # Parse primary guid
+                if "themoviedb" in guid or "tmdb" in guid:
+                    m = re.search(r'themoviedb[:/]+(\d+)', guid)
+                    if m:
+                        tmdb_id = m.group(1)
+                elif "imdb" in guid:
+                    m = re.search(r'tt\d+', guid)
+                    if m:
+                        imdb_id = m.group(0)
+                # Also check Guid children (modern Plex)
+                for g in video.findall("Guid"):
+                    gid = g.get("id", "")
+                    if gid.startswith("tmdb://"):
+                        tmdb_id = gid[7:]
+                    elif gid.startswith("imdb://"):
+                        imdb_id = gid[7:]
+                all_items.append({
+                    "external_id": video.get("ratingKey", ""),
+                    "title": video.get("title", ""),
+                    "year": str(video.get("year", "")) if video.get("year") else "",
+                    "tmdb_id": tmdb_id,
+                    "imdb_id": imdb_id,
+                })
+
+        _sync_jobs[source_id]["total"] = len(all_items)
+        synced_at = datetime.utcnow().isoformat()
+        # Delete old items for this source and reinsert
+        conn.execute("DELETE FROM digital_library_items WHERE source_id=?", (source_id,))
+        for i, item in enumerate(all_items):
+            conn.execute(
+                "INSERT OR REPLACE INTO digital_library_items"
+                " (source_id, external_id, title, year, tmdb_id, imdb_id, media_type, synced_at)"
+                " VALUES (?,?,?,?,?,?,?,?)",
+                (source_id, item["external_id"], item["title"], item["year"],
+                 item["tmdb_id"], item["imdb_id"], "movie", synced_at)
+            )
+            _sync_jobs[source_id]["progress"] = i + 1
+        conn.execute(
+            "UPDATE digital_library_sources SET last_synced=?, item_count=? WHERE id=?",
+            (synced_at, len(all_items), source_id)
+        )
+        conn.commit()
+        conn.close()
+        _sync_jobs[source_id]["status"] = "done"
+    except Exception as e:
+        _sync_jobs[source_id]["status"] = "error"
+        _sync_jobs[source_id]["error"] = str(e)
+
+
+def _run_jellyfin_sync(source_id: int):
+    """Background thread: fetch all movie items from Jellyfin and upsert into digital_library_items."""
+    _sync_jobs[source_id] = {"status": "running", "progress": 0, "total": 0, "error": ""}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM digital_library_sources WHERE id=?", (source_id,)).fetchone()
+        if not row:
+            conn.close()
+            _sync_jobs[source_id]["status"] = "error"
+            _sync_jobs[source_id]["error"] = "Source not found"
+            return
+        src = dict(row)
+        token = _decrypt_token(src.get("token_enc") or "")
+        base_url = src["base_url"]
+
+        params = {
+            "IncludeItemTypes": "Movie",
+            "Recursive": "true",
+            "Fields": "ProviderIds",
+            "Limit": "5000",
+            "api_key": token,
+        }
+        r = requests.get(f"{base_url}/Items", params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        items_raw = data.get("Items", [])
+
+        all_items = []
+        for item in items_raw:
+            pids = item.get("ProviderIds", {})
+            tmdb_id = str(pids.get("Tmdb", "") or pids.get("tmdb", "") or "")
+            imdb_id = str(pids.get("Imdb", "") or pids.get("imdb", "") or "")
+            all_items.append({
+                "external_id": str(item.get("Id", "")),
+                "title": item.get("Name", ""),
+                "year": str(item.get("ProductionYear", "")) if item.get("ProductionYear") else "",
+                "tmdb_id": tmdb_id,
+                "imdb_id": imdb_id,
+            })
+
+        _sync_jobs[source_id]["total"] = len(all_items)
+        synced_at = datetime.utcnow().isoformat()
+        conn.execute("DELETE FROM digital_library_items WHERE source_id=?", (source_id,))
+        for i, item in enumerate(all_items):
+            conn.execute(
+                "INSERT OR REPLACE INTO digital_library_items"
+                " (source_id, external_id, title, year, tmdb_id, imdb_id, media_type, synced_at)"
+                " VALUES (?,?,?,?,?,?,?,?)",
+                (source_id, item["external_id"], item["title"], item["year"],
+                 item["tmdb_id"], item["imdb_id"], "movie", synced_at)
+            )
+            _sync_jobs[source_id]["progress"] = i + 1
+        conn.execute(
+            "UPDATE digital_library_sources SET last_synced=?, item_count=? WHERE id=?",
+            (synced_at, len(all_items), source_id)
+        )
+        conn.commit()
+        conn.close()
+        _sync_jobs[source_id]["status"] = "done"
+    except Exception as e:
+        _sync_jobs[source_id]["status"] = "error"
+        _sync_jobs[source_id]["error"] = str(e)
+
+
+@app.route("/api/digital-sources/<int:source_id>/sync", methods=["POST"])
+def sync_digital_source(source_id):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM digital_library_sources WHERE id=?", (source_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    job = _sync_jobs.get(source_id, {})
+    if job.get("status") == "running":
+        return jsonify({"status": "running", "progress": job.get("progress", 0), "total": job.get("total", 0)})
+    src_type = row["type"]
+    target = _run_plex_sync if src_type == "plex" else _run_jellyfin_sync
+    t = threading.Thread(target=target, args=(source_id,), daemon=True)
+    t.start()
+    return jsonify({"status": "started"})
+
+
+@app.route("/api/digital-sources/<int:source_id>/sync-status", methods=["GET"])
+def digital_source_sync_status(source_id):
+    job = _sync_jobs.get(source_id)
+    if not job:
+        # No job in memory — check last_synced from DB
+        conn = get_db()
+        row = conn.execute(
+            "SELECT last_synced, item_count FROM digital_library_sources WHERE id=?", (source_id,)
+        ).fetchone()
+        conn.close()
+        if row and row["last_synced"]:
+            return jsonify({"status": "done", "last_synced": row["last_synced"], "item_count": row["item_count"]})
+        return jsonify({"status": "idle"})
+    return jsonify(job)
+
+
+# ---------------------------------------------------------------------------
+# Routes: Collection Compare (Physical vs Digital)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/collection/compare", methods=["GET"])
+def collection_compare():
+    conn = get_db()
+    owner_clause, owner_params = _movie_owner_filter()
+    movies = conn.execute(
+        "SELECT id, title, original_title, year, tmdb_id, imdb_id, format, poster_file, poster"
+        " FROM movies WHERE 1=1" + owner_clause,
+        list(owner_params)
+    ).fetchall()
+    digital_items = conn.execute(
+        "SELECT dli.*, dls.name AS source_name, dls.type AS source_type"
+        " FROM digital_library_items dli"
+        " JOIN digital_library_sources dls ON dls.id = dli.source_id"
+        " WHERE dls.enabled=1"
+    ).fetchall()
+    conn.close()
+
+    # Index digital items
+    digital_by_tmdb: dict = {}
+    digital_by_imdb: dict = {}
+    digital_by_title_year: dict = {}
+    for d in digital_items:
+        dd = dict(d)
+        if dd.get("tmdb_id"):
+            digital_by_tmdb.setdefault(dd["tmdb_id"], []).append(dd)
+        if dd.get("imdb_id"):
+            digital_by_imdb.setdefault(dd["imdb_id"], []).append(dd)
+        key = f"{(dd.get('title') or '').lower().strip()}|{(dd.get('year') or '').strip()}"
+        digital_by_title_year.setdefault(key, []).append(dd)
+
+    physical_and_digital = []
+    physical_only = []
+    matched_digital_ids: set = set()
+
+    for m in movies:
+        md = dict(m)
+        matches = []
+        # Match by tmdb_id first
+        if md.get("tmdb_id"):
+            matches = digital_by_tmdb.get(str(md["tmdb_id"]), [])
+        # Fallback: imdb_id
+        if not matches and md.get("imdb_id"):
+            matches = digital_by_imdb.get(str(md["imdb_id"]), [])
+        # Fallback: title+year
+        if not matches:
+            key = f"{(md.get('original_title') or md.get('title') or '').lower().strip()}|{(md.get('year') or '').strip()}"
+            matches = digital_by_title_year.get(key, [])
+        if matches:
+            for match in matches:
+                matched_digital_ids.add(match["id"])
+            physical_and_digital.append({
+                "movie": md,
+                "digital_matches": [
+                    {"source_name": x["source_name"], "source_type": x["source_type"],
+                     "title": x["title"], "year": x["year"]}
+                    for x in matches
+                ]
+            })
+        else:
+            physical_only.append({"movie": md})
+
+    # Digital only: items not matched to any physical disc
+    digital_only = []
+    seen_digital_only: set = set()
+    for d in digital_items:
+        dd = dict(d)
+        if dd["id"] not in matched_digital_ids:
+            key = f"{dd['source_id']}:{dd['external_id']}"
+            if key not in seen_digital_only:
+                seen_digital_only.add(key)
+                digital_only.append({
+                    "title": dd["title"], "year": dd["year"],
+                    "tmdb_id": dd.get("tmdb_id"), "imdb_id": dd.get("imdb_id"),
+                    "source_name": dd["source_name"], "source_type": dd["source_type"],
+                })
+
+    return jsonify({
+        "physical_and_digital": physical_and_digital,
+        "physical_only": physical_only,
+        "digital_only": digital_only,
+    })
 
 
 if __name__ == "__main__":

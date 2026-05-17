@@ -7,6 +7,8 @@ async function loadSettings() {
   loadSourceSettings();
   loadDebugSettings(); // also initialises showLocalTitleToggle
   loadLanguagePicker();
+  loadGroupEditionsSetting();
+  loadDigitalSources();
 }
 
 // ── Rating country picker ────────────────────────────────────────────────────
@@ -536,6 +538,175 @@ async function loadMcpSettings() {
     // Default: MCP is enabled — restore correct default if fetch fails
     const el = document.getElementById('mcpEnabledToggle');
     if (el) el.checked = true;
+  }
+}
+
+// ── Edition grouping preference ───────────────────────────────────────────────
+
+function loadGroupEditionsSetting() {
+  const toggle = document.getElementById('groupEditionsToggle');
+  if (toggle) toggle.checked = groupEditionsEnabled;
+  const badgeToggle = document.getElementById('showDigitalBadgesToggle');
+  if (badgeToggle) badgeToggle.checked = showDigitalBadges;
+}
+
+function saveGroupEditionsSetting() {
+  const toggle = document.getElementById('groupEditionsToggle');
+  groupEditionsEnabled = !!(toggle && toggle.checked);
+  localStorage.setItem('dv_group_editions', groupEditionsEnabled ? 'true' : 'false');
+  loadCollection();
+  showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
+}
+
+function saveDigitalBadgesSetting() {
+  const toggle = document.getElementById('showDigitalBadgesToggle');
+  showDigitalBadges = !!(toggle && toggle.checked);
+  localStorage.setItem('dv_digital_badges', showDigitalBadges ? 'true' : 'false');
+  showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
+}
+
+// ── Digital library management ────────────────────────────────────────────────
+
+async function loadDigitalSources() {
+  const container = document.getElementById('digitalSourcesList');
+  if (!container) return;
+  try {
+    const r = await fetch(`${API}/digital-sources`, { headers: authHeaders() });
+    if (!r.ok) { container.innerHTML = ''; return; }
+    const sources = await r.json();
+    if (!sources.length) {
+      container.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted);" data-i18n="digital.noSources">${t('digital.noSources')}</div>`;
+      return;
+    }
+    container.innerHTML = sources.map(s => {
+      const typeLabel = s.type === 'plex' ? '🟡 Plex' : '🔵 Jellyfin';
+      const syncedInfo = s.last_synced
+        ? `${s.item_count || 0} items · ${t('digital.lastSynced')} ${s.last_synced.slice(0, 10)}`
+        : t('digital.neverSynced');
+      return `<div style="padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div>
+            <span style="font-weight:500; font-size:0.88rem;">${s.name}</span>
+            <span style="font-size:0.76rem; color:var(--text-muted); margin-left:6px;">${typeLabel}</span>
+            <div style="font-size:0.74rem; color:var(--text-muted); margin-top:2px;">${s.base_url}</div>
+            <div style="font-size:0.74rem; color:var(--text-muted);" id="syncStatus_${s.id}">${syncedInfo}</div>
+          </div>
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            <button class="btn btn-secondary" onclick="syncDigitalSource(${s.id})" style="padding:5px 10px; font-size:0.76rem;" data-i18n="digital.syncBtn">${t('digital.syncBtn')}</button>
+            <button class="btn btn-danger" onclick="removeDigitalSource(${s.id})" style="padding:5px 10px; font-size:0.76rem;" data-i18n="digital.removeBtn">${t('digital.removeBtn')}</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    if (container) container.innerHTML = `<div style="color:var(--danger); font-size:0.82rem;">${t('js.error', e.message)}</div>`;
+  }
+}
+
+function openAddDigitalSource(type) {
+  document.getElementById('addDigitalSourceType').value = type;
+  document.getElementById('addDigitalSourceTitle').textContent = type === 'plex'
+    ? '🟡 ' + t('digital.addPlexTitle')
+    : '🔵 ' + t('digital.addJellyfinTitle');
+  document.getElementById('addDigitalTokenLabel').textContent = type === 'plex'
+    ? t('digital.plexToken')
+    : t('digital.jellyfinToken');
+  document.getElementById('addDigitalName').value = '';
+  document.getElementById('addDigitalUrl').value = '';
+  document.getElementById('addDigitalToken').value = '';
+  document.getElementById('addDigitalSourceStatus').className = 'status-msg';
+  document.getElementById('addDigitalSourceModal').style.display = 'flex';
+}
+
+function closeAddDigitalSource() {
+  document.getElementById('addDigitalSourceModal').style.display = 'none';
+}
+
+async function saveAddDigitalSource() {
+  const type   = document.getElementById('addDigitalSourceType').value;
+  const name   = document.getElementById('addDigitalName').value.trim();
+  const url    = document.getElementById('addDigitalUrl').value.trim();
+  const token  = document.getElementById('addDigitalToken').value.trim();
+  if (!name || !url) {
+    showStatus('addDigitalSourceStatus', t('digital.nameUrlRequired'), 'error');
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/digital-sources`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name, type, base_url: url, token })
+    });
+    const d = await r.json();
+    if (!r.ok) { showStatus('addDigitalSourceStatus', d.error || t('js.saveFailed'), 'error'); return; }
+    closeAddDigitalSource();
+    loadDigitalSources();
+  } catch(e) {
+    showStatus('addDigitalSourceStatus', t('js.error', e.message), 'error');
+  }
+}
+
+async function testDigitalSourceFromModal() {
+  const type  = document.getElementById('addDigitalSourceType').value;
+  const name  = document.getElementById('addDigitalName').value.trim();
+  const url   = document.getElementById('addDigitalUrl').value.trim();
+  const token = document.getElementById('addDigitalToken').value.trim();
+  if (!url) { showStatus('addDigitalSourceStatus', t('digital.urlRequired'), 'error'); return; }
+  showStatus('addDigitalSourceStatus', t('digital.testing'), 'info');
+  try {
+    // Save temporarily to test (will be overridden if user saves)
+    const r = await fetch(`${API}/digital-sources`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name: name || 'test', type, base_url: url, token })
+    });
+    const d = await r.json();
+    if (!r.ok) { showStatus('addDigitalSourceStatus', d.error || t('js.error', ''), 'error'); return; }
+    const testId = d.id;
+    const r2 = await fetch(`${API}/digital-sources/${testId}/test`, { method: 'POST', headers: authHeaders() });
+    const d2 = await r2.json();
+    // Remove temporary source
+    await fetch(`${API}/digital-sources/${testId}`, { method: 'DELETE', headers: authHeaders() });
+    showStatus('addDigitalSourceStatus', d2.ok ? `✓ ${d2.message}` : `✗ ${d2.message}`, d2.ok ? 'success' : 'error');
+  } catch(e) {
+    showStatus('addDigitalSourceStatus', t('js.error', e.message), 'error');
+  }
+}
+
+async function removeDigitalSource(id) {
+  if (!confirm(t('digital.confirmRemove'))) return;
+  try {
+    await fetch(`${API}/digital-sources/${id}`, { method: 'DELETE', headers: authHeaders() });
+    loadDigitalSources();
+  } catch(e) {}
+}
+
+async function syncDigitalSource(id) {
+  const statusEl = document.getElementById(`syncStatus_${id}`);
+  if (statusEl) statusEl.textContent = t('digital.syncing');
+  try {
+    await fetch(`${API}/digital-sources/${id}/sync`, { method: 'POST', headers: authHeaders() });
+    // Poll for completion
+    const poll = setInterval(async () => {
+      const r = await fetch(`${API}/digital-sources/${id}/sync-status`, { headers: authHeaders() });
+      const d = await r.json();
+      if (statusEl) {
+        if (d.status === 'running') {
+          statusEl.textContent = t('digital.syncProgress', d.progress || 0, d.total || '?');
+        } else if (d.status === 'done') {
+          clearInterval(poll);
+          loadDigitalSources();
+          showStatus('digitalSourceStatus', t('digital.syncDone'), 'success');
+        } else if (d.status === 'error') {
+          clearInterval(poll);
+          statusEl.textContent = t('js.error', d.error || '');
+        }
+      } else {
+        clearInterval(poll);
+      }
+    }, 2000);
+  } catch(e) {
+    if (statusEl) statusEl.textContent = t('js.error', e.message);
   }
 }
 
