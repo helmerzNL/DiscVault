@@ -2074,17 +2074,12 @@ function _editionShortLabel(edType, customLabel) {
 
 function switchEditTab(name) {
   document.querySelectorAll('[data-edit-tab]').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.edit-tab-content').forEach(el => {
-    el.classList.remove('active');
-    el.style.display = 'none';
-  });
   const btn = document.querySelector(`[data-edit-tab="${name}"]`);
   if (btn) btn.classList.add('active');
-  const el = document.getElementById('editTab' + name.charAt(0).toUpperCase() + name.slice(1));
-  if (el) {
-    el.classList.add('active');
-    el.style.display = 'grid';
-  }
+  ['General', 'Edition', 'Details'].forEach(tab => {
+    const el = document.getElementById('editTab' + tab);
+    if (el) el.style.display = (tab.toLowerCase() === name) ? 'grid' : 'none';
+  });
 }
 
 function setEditionFilter(btn) {

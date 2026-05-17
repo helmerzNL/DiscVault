@@ -1696,9 +1696,7 @@
 
   .form-grid .full { grid-column: 1/-1; }
 
-  /* Edit tab content: must come after .form-grid to override display:grid */
-  .edit-tab-content { display: none; }
-  .edit-tab-content.active { display: grid; }
+  /* Edit tabs: visibility managed purely by inline styles in switchEditTab() */
 
   /* ── Log viewer ── */
   .log-controls {
