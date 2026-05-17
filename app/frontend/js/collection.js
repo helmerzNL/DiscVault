@@ -2493,16 +2493,18 @@ async function loadGroupMgmtList(filter) {
       const r = await fetch(`${API}/edition-groups`);
       const egs = await r.json();
       for (const eg of egs) {
-        const isBoxSet = !!(eg.parent_group_id === null && egs.some(e => e.parent_group_id === eg.id));
-        const isParent = egs.some(e => e.parent_group_id === eg.id);
-        const hasChildren = eg.parent_group_id != null;
+        // Box Set = has child edition_groups OR has loose movies via super_group_id
+        const hasChildGroups = (eg.child_group_count || 0) > 0;
+        const hasLooseMovies = (eg.loose_movie_count || 0) > 0;
+        const isChildOfBoxSet = eg.parent_group_id != null;
         let type;
-        if (isParent) type = 'boxset';
-        else if (hasChildren) type = 'vault'; // child of a box set
+        if (hasChildGroups || hasLooseMovies) type = 'boxset';
+        else if (isChildOfBoxSet) type = 'vault'; // child vault inside a box set
         else type = 'vault'; // standalone vault
 
+        const totalMembers = (eg.member_count || 0) + (eg.loose_movie_count || 0);
         if (_gmFilter !== 'all' && _gmFilter !== type) continue;
-        items.push({ id: eg.id, title: eg.title, type, memberCount: eg.member_count || 0, src: 'eg' });
+        items.push({ id: eg.id, title: eg.title, type, memberCount: totalMembers, src: 'eg' });
       }
     }
 

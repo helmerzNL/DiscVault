@@ -6459,7 +6459,10 @@ def list_edition_groups():
     conn = get_db()
     if q:
         rows = conn.execute("""
-            SELECT eg.*, COUNT(m.id) AS member_count
+            SELECT eg.*,
+                   COUNT(DISTINCT m.id) AS member_count,
+                   (SELECT COUNT(*) FROM edition_groups eg2 WHERE eg2.parent_group_id = eg.id) AS child_group_count,
+                   (SELECT COUNT(*) FROM movies m2 WHERE m2.super_group_id = eg.id) AS loose_movie_count
             FROM edition_groups eg
             LEFT JOIN movies m ON m.edition_group_id = eg.id
             WHERE eg.title LIKE ?
@@ -6468,7 +6471,10 @@ def list_edition_groups():
         """, (f"%{q}%",)).fetchall()
     else:
         rows = conn.execute("""
-            SELECT eg.*, COUNT(m.id) AS member_count
+            SELECT eg.*,
+                   COUNT(DISTINCT m.id) AS member_count,
+                   (SELECT COUNT(*) FROM edition_groups eg2 WHERE eg2.parent_group_id = eg.id) AS child_group_count,
+                   (SELECT COUNT(*) FROM movies m2 WHERE m2.super_group_id = eg.id) AS loose_movie_count
             FROM edition_groups eg
             LEFT JOIN movies m ON m.edition_group_id = eg.id
             GROUP BY eg.id
