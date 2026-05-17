@@ -7,6 +7,7 @@ async function init() {
   applyLanguage();
   await loadAppVersion();
   await loadDebugSettings();
+  loadRatingCountryPicker();
   const ok = await checkAuth();
   if (!ok) return;
   loadAdminPanel();

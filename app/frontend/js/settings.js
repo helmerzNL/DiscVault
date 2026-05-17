@@ -415,6 +415,7 @@ async function resetDatabase() {
 // ── Language & MCP Settings ───────────────────────────────────────────────────
 function changeLanguage(lang) {
   setLanguage(lang);
+  loadRatingCountryPicker();
   _updateWatchedBtn();
   _updateWatchlistBtn();
   loadCollection();
