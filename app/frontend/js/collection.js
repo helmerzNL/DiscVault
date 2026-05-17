@@ -12,6 +12,10 @@ let compareData     = null;
 let activeCompareTab = 'both';
 let groupEditionsEnabled = localStorage.getItem('dv_group_editions') === 'true';
 let showDigitalBadges    = localStorage.getItem('dv_digital_badges') === 'true';
+let collectorsMode       = localStorage.getItem('dv_collectors_mode') === 'true';
+
+// Apply body class immediately so CSS .collectors-only rules take effect before render
+if (collectorsMode) document.body.classList.add('collectors-mode');
 let activeEditionFilter  = false;
 
 // ── Selection mode ────────────────────────────────────────────────────────────
@@ -139,13 +143,13 @@ function renderGrid(movies) {
       ? `<div class="movie-card-edition-badge" title="${t('edition.' + edType.replace('_',''), edType)}">${_editionShortLabel(edType, m.custom_edition_label)}</div>`
       : '';
 
-    // Edition stack badge (grouped mode, multiple editions) — only on non-group cards
-    const stackBadge = (!isGroupCard && m.editions_count > 1)
+    // Edition stack badge — only in collectors mode
+    const stackBadge = (collectorsMode && !isGroupCard && m.editions_count > 1)
       ? `<div class="movie-card-stack-badge" onclick="event.stopPropagation(); openEditionGroupView(${m.id})">${_stackBadgeLabel(m)}</div>`
       : '';
 
-    // Group indicator (grouping disabled but movie belongs to a group)
-    const groupIndicator = (!groupEditionsEnabled && m.edition_group_id)
+    // Group indicator — only in collectors mode
+    const groupIndicator = (collectorsMode && !groupEditionsEnabled && m.edition_group_id)
       ? `<div class="movie-card-group-indicator" title="Onderdeel van een editiegroep">🗂</div>`
       : '';
 

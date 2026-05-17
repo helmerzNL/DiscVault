@@ -73,7 +73,7 @@ async function loadCollection(retries = 2) {
   // Load group filter options
   _loadGroupFilter();
   try {
-    const params = groupEditionsEnabled ? '?group_editions=true' : '';
+    const params = (groupEditionsEnabled && collectorsMode) ? '?group_editions=true' : '';
     const r = await fetch(`${API}/movies${params}`);
     if (!r.ok) {
       // Retry on server errors (502/503/504 = backend starting up)
@@ -87,7 +87,7 @@ async function loadCollection(retries = 2) {
     // When group_editions is on, also index nested editions into allMovies so they
     // can be accessed via detail/edit view. They are flagged _isNested so
     // getCurrentMovies() filters them from the grid.
-    if (groupEditionsEnabled) {
+    if (groupEditionsEnabled && collectorsMode) {
       const nested = [];
       allMovies.forEach(m => {
         if (m.editions) {

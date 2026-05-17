@@ -1452,6 +1452,9 @@
   /* Edit form tabs */
   .edit-mode-tabs { margin-bottom: 16px; }
 
+  /* Collectors mode: hide advanced features when mode is off */
+  body:not(.collectors-mode) .collectors-only { display: none !important; }
+
   .eg-panel-grid {
     display: flex;
     flex-wrap: wrap;

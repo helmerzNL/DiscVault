@@ -759,13 +759,29 @@
           <!-- Edition grouping preference -->
           <div class="card" style="margin-top:16px;">
             <div class="card-title" data-i18n="edition.prefTitle">🗂 Editiebeheer</div>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-              <input type="checkbox" id="groupEditionsToggle" onchange="saveGroupEditionsSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="edition.groupToggle">Meerdere edities samenvoegen als één titel</span>
-            </label>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:10px;" data-i18n="edition.groupToggleDesc">
-              Toon meerdere fysieke versies van dezelfde film als één tegel. Klik op de tegel om alle edities te zien.
+
+            <!-- Collectors mode master toggle -->
+            <div style="background:rgba(232,197,71,.07); border:1px solid rgba(232,197,71,.25); border-radius:10px; padding:14px 16px; margin-bottom:16px;">
+              <label style="display:flex; align-items:center; gap:10px; font-size:0.92rem; cursor:pointer; color:var(--text); font-weight:600;">
+                <input type="checkbox" id="collectorsModeToggle" onchange="saveCollectorsModeSetting()" style="accent-color:var(--accent); width:18px; height:18px; flex-shrink:0;">
+                <span>🏆 Collectors mode</span>
+              </label>
+              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:6px; padding-left:28px;">
+                Schakel geavanceerde functies in voor verzamelaars: editiegroepen (meerdere versies van dezelfde film), super-groepen (trilogie-sets) en groepsbeheer in het bewerkscherm.
+              </div>
             </div>
+
+            <!-- Advanced settings: only visible in collectors mode -->
+            <div class="collectors-only">
+              <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+                <input type="checkbox" id="groupEditionsToggle" onchange="saveGroupEditionsSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
+                <span data-i18n="edition.groupToggle">Meerdere edities samenvoegen als één titel</span>
+              </label>
+              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:10px;" data-i18n="edition.groupToggleDesc">
+                Toon meerdere fysieke versies van dezelfde film als één tegel. Klik op de tegel om alle edities te zien.
+              </div>
+            </div>
+
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showDigitalBadgesToggle" onchange="saveDigitalBadgesSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="edition.digitalBadges">Plex/Jellyfin badge tonen op filmtegel</span>
@@ -1579,7 +1595,7 @@
           <input type="text" id="editCustomEditionLabel" placeholder="Eigen label..." maxlength="30"
                  style="display:none; margin-top:6px;" oninput="_editDirty=true">
         </div>
-        <div class="input-group full">
+        <div class="input-group full collectors-only">
           <label data-i18n="edit.editionGroup">Editiegroep</label>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="editEditionGroupSearch" placeholder="Zoek of maak groep..." data-i18n-placeholder="edit.editionGroupPlaceholder"
@@ -1592,7 +1608,7 @@
           <div id="editEditionGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
           <input type="hidden" id="editEditionGroupId">
         </div>
-        <div class="input-group full">
+        <div class="input-group full collectors-only">
           <label>Super-groep (losse film)</label>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak super-groep..."
@@ -1758,7 +1774,7 @@
     </div>
     <div class="eg-panel-grid" id="egPanelGrid"></div>
     <!-- Group management -->
-    <div id="egGroupManage" style="padding:0 20px 32px;">
+    <div id="egGroupManage" class="collectors-only" style="padding:0 20px 32px;">
       <button type="button" onclick="toggleEgManageSection()" style="background:none;border:1px solid var(--border);color:var(--text-muted);font-size:0.78rem;padding:6px 14px;border-radius:6px;cursor:pointer;">
         ⚙ Groep beheren
       </button>

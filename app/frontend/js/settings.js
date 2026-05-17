@@ -7,6 +7,7 @@ async function loadSettings() {
   loadSourceSettings();
   loadDebugSettings(); // also initialises showLocalTitleToggle
   loadLanguagePicker();
+  loadCollectorsModeSetting();
   loadGroupEditionsSetting();
   loadDigitalSources();
 }
@@ -542,6 +543,34 @@ async function loadMcpSettings() {
 }
 
 // ── Edition grouping preference ───────────────────────────────────────────────
+
+function loadCollectorsModeSetting() {
+  const toggle = document.getElementById('collectorsModeToggle');
+  if (toggle) toggle.checked = collectorsMode;
+  if (collectorsMode) {
+    document.body.classList.add('collectors-mode');
+  } else {
+    document.body.classList.remove('collectors-mode');
+  }
+}
+
+function saveCollectorsModeSetting() {
+  const toggle = document.getElementById('collectorsModeToggle');
+  collectorsMode = !!(toggle && toggle.checked);
+  localStorage.setItem('dv_collectors_mode', collectorsMode ? 'true' : 'false');
+  if (collectorsMode) {
+    document.body.classList.add('collectors-mode');
+  } else {
+    document.body.classList.remove('collectors-mode');
+    // When disabling, also disable grouping
+    groupEditionsEnabled = false;
+    localStorage.setItem('dv_group_editions', 'false');
+    const gt = document.getElementById('groupEditionsToggle');
+    if (gt) gt.checked = false;
+  }
+  loadCollection();
+  showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
+}
 
 function loadGroupEditionsSetting() {
   const toggle = document.getElementById('groupEditionsToggle');
