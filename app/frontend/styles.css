@@ -1295,7 +1295,7 @@
     color: var(--accent);
     border-bottom-color: var(--accent);
   }
-  .modal-tab-content { display: none; }
+  .modal-tab-content { display: none; position: relative; z-index: 3; }
   .modal-tab-content.active { display: block; }
 
   /* Cast & crew grid */

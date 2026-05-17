@@ -67,7 +67,7 @@ function getCurrentMovies() {
     const matchesFormat  = !activeFormat || m.format === activeFormat;
     const matchesGroup   = !activeGroup ||
       (activeGroup === '_mine' ? (m.owner_id === currentUserId) : (m.group_ids || []).includes(parseInt(activeGroup)));
-    const matchesEdition = !activeEditionFilter || (m.edition_group_id != null);
+    const matchesEdition = !activeEditionFilter || (m.edition_group_id != null || m._is_super_group || m._is_collection);
     const matchesQuery   = !q ||
       (m.title || '').toLowerCase().includes(q) ||
       (m.original_title || '').toLowerCase().includes(q) ||
@@ -654,6 +654,10 @@ function openCollectionView(movie) {
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
   switchTabDirect('edition-group');
+
+  // Push URL route
+  const colId = movie._collection_id;
+  if (colId) _pushRoute(`/collection/c/${colId}`);
 }
 
 function openBoxSetFromCollection(parentGroupId) {
@@ -754,6 +758,10 @@ function openSuperGroupView(movie) {
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
   switchTabDirect('edition-group');
+
+  // Push URL route
+  const pgId = movie._parent_group_id;
+  if (pgId) _pushRoute(`/collection/g/${pgId}`);
 }
 
 function openEditionGroupViewFromSuper(id) {
@@ -830,6 +838,10 @@ function openEditionGroupView(id, primaryOverride) {
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
   switchTabDirect('edition-group');
+
+  // Push URL route
+  const egId = primary.edition_group_id;
+  if (egId) _pushRoute(`/collection/g/${egId}`);
 }
 
 function _populateEgManageSection(movieCard, groupData) {
@@ -1232,8 +1244,17 @@ async function openMovieDetail(id, skipGroupRedirect) {
   }
 
   currentMovieId = id;
-  const movie = allMovies.find(m => m.id === id);
-  if (!movie) return;
+  let movie = allMovies.find(m => m.id === id);
+  if (!movie) {
+    // Movie might not be in allMovies (e.g. loose movie inside a box set).
+    // Fetch from API so watchlist / external links can still open it.
+    try {
+      const r = await fetch(`${API}/movies/${id}`);
+      if (!r.ok) return;
+      movie = await r.json();
+      allMovies.push(movie);
+    } catch { return; }
+  }
 
   // Redirect grouped editions to the stack view when group_editions mode is active
   if (!skipGroupRedirect && groupEditionsEnabled && (movie.editions_count || 0) > 1 && !movie._isNested) {
@@ -2556,7 +2577,7 @@ function _editionShortLabel(edType, customLabel) {
     limited:      'Limited Edition',
     theatrical:   'Theatrical Cut',
     '4k_upgrade': '4K',
-    '4k_combo':   '4K+BD',
+    '4k_combo':   '4K Ultra HD + Blu-ray',
     boxset_disc:  'Box-Set',
     dvd:          'DVD',
     bluray:       'Blu-ray',
