@@ -180,8 +180,6 @@ function renderGrid(movies) {
       </div>
       ${(m.editions_count > 1) ? `<div class="movie-card-editions-drawer" id="edDrawer_${m.id}" style="display:none;"></div>` : ''}
     </div>`;
-      ${(m.editions_count > 1) ? `<div class="movie-card-editions-drawer" id="edDrawer_${m.id}" style="display:none;"></div>` : ''}
-    </div>`;
   }).join('');
 }
 
