@@ -656,7 +656,6 @@ function openCollectionView(movie) {
   switchTabDirect('edition-group');
 
   // Push URL route
-  const colId = movie._collection_id;
   if (colId) _pushRoute(`/collection/c/${colId}`);
 }
 
@@ -760,7 +759,6 @@ function openSuperGroupView(movie) {
   switchTabDirect('edition-group');
 
   // Push URL route
-  const pgId = movie._parent_group_id;
   if (pgId) _pushRoute(`/collection/g/${pgId}`);
 }
 
@@ -840,8 +838,7 @@ function openEditionGroupView(id, primaryOverride) {
   switchTabDirect('edition-group');
 
   // Push URL route
-  const egId = primary.edition_group_id;
-  if (egId) _pushRoute(`/collection/g/${egId}`);
+  if (groupId) _pushRoute(`/collection/g/${groupId}`);
 }
 
 function _populateEgManageSection(movieCard, groupData) {
