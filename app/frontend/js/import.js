@@ -418,8 +418,7 @@ function switchTabDirect(name) {
 }
 
 function openLogsFromSettings() {
-  switchTab('settings');
-  switchSettingsSubmenu('logs');
+  switchTab('admin');
 }
 
 // ── Client-side Routing ───────────────────────────────────────────────────────

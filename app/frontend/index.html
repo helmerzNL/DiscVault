@@ -586,11 +586,11 @@
           <span class="mdi mdi-bell-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>Notificaties</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-profile-sub="apikeys" onclick="switchProfileSubmenu('apikeys')" disabled>
+        <button class="profile-sidebar-btn" type="button" data-profile-sub="apikeys" onclick="switchProfileSubmenu('apikeys')">
           <span class="mdi mdi-key-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>API Sleutels</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-profile-sub="mcp" onclick="switchProfileSubmenu('mcp')" disabled>
+        <button class="profile-sidebar-btn" type="button" data-profile-sub="mcp" onclick="switchProfileSubmenu('mcp')">
           <span class="mdi mdi-robot-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span>MCP Activiteit</span>
         </button>
@@ -1028,18 +1028,7 @@
   <div class="panel" id="panel-settings">
     <div>
 
-      <div class="settings-submenu">
-        <button class="settings-sub-btn active" type="button" data-settings-sub="general" onclick="switchSettingsSubmenu('general')">
-          <span class="settings-sub-icon mdi mdi-tune-variant" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="settings.menuGeneral">Algemeen</span>
-        </button>
-        <button class="settings-sub-btn" type="button" data-settings-sub="security" onclick="switchSettingsSubmenu('security')">
-          <span class="settings-sub-icon mdi mdi-shield-lock-outline" aria-hidden="true"></span>
-          <span class="settings-sub-label" data-i18n="settings.menuSecurity">Veiligheid</span>
-        </button>
-      </div>
 
-      <div class="settings-sub-section active" id="settingsSubGeneral">
 
       <!-- DB Stats -->
       <div class="card" id="settingsStats">
@@ -1104,12 +1093,6 @@
         </select>
       </div>
 
-      </div><!-- /settingsSubGeneral -->
-
-
-
-      <div class="settings-sub-section" id="settingsSubSecurity">
-      </div>
 
     </div>
   </div>

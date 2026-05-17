@@ -6,26 +6,6 @@ async function loadSettings() {
   loadQueueSettings();
   loadSourceSettings();
   loadDebugSettings(); // also initialises showLocalTitleToggle
-  switchSettingsSubmenu(currentSettingsSubmenu);
-}
-
-let currentSettingsSubmenu = 'general';
-
-function switchSettingsSubmenu(name) {
-  currentSettingsSubmenu = name;
-  document.querySelectorAll('[data-settings-sub]').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-settings-sub') === name);
-  });
-  const map = {
-    general: 'settingsSubGeneral',
-    security: 'settingsSubSecurity',
-  };
-  Object.values(map).forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('active');
-  });
-  const target = document.getElementById(map[name] || map.general);
-  if (target) target.classList.add('active');
 }
 
 async function loadSourceSettings() {
