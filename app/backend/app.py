@@ -6731,12 +6731,20 @@ def collection_compare():
         if matches:
             for match in matches:
                 matched_digital_ids.add(match["id"])
+            # Deduplicate by source — one badge per source, not per library item
+            seen_sources: set = set()
+            deduped = []
+            for x in matches:
+                src_key = x.get("source_id") or x.get("source_name")
+                if src_key not in seen_sources:
+                    seen_sources.add(src_key)
+                    deduped.append(x)
             physical_and_digital.append({
                 "movie": md,
                 "digital_matches": [
                     {"source_name": x["source_name"], "source_type": x["source_type"],
                      "title": x["title"], "year": x["year"]}
-                    for x in matches
+                    for x in deduped
                 ]
             })
         else:
