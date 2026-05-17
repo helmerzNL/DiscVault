@@ -2020,6 +2020,8 @@ def list_movies():
                 primary["_group_title"] = eg_info["group_title"]
             if eg_info.get("badge_label"):
                 primary["_group_badge_label"] = eg_info["badge_label"]
+            if eg_info.get("parent_group_id"):
+                primary["_parent_group_id"] = eg_info["parent_group_id"]
             collapsed.append(primary)
         # Build super-group cards for groups that have a parent_group_id
         child_by_parent = {}
@@ -6195,14 +6197,25 @@ def user_mcp_logs():
 
 @app.route("/api/edition-groups", methods=["GET"])
 def list_edition_groups():
+    q = (request.args.get("q") or "").strip()
     conn = get_db()
-    rows = conn.execute("""
-        SELECT eg.*, COUNT(m.id) AS member_count
-        FROM edition_groups eg
-        LEFT JOIN movies m ON m.edition_group_id = eg.id
-        GROUP BY eg.id
-        ORDER BY eg.title ASC
-    """).fetchall()
+    if q:
+        rows = conn.execute("""
+            SELECT eg.*, COUNT(m.id) AS member_count
+            FROM edition_groups eg
+            LEFT JOIN movies m ON m.edition_group_id = eg.id
+            WHERE eg.title LIKE ?
+            GROUP BY eg.id
+            ORDER BY eg.title ASC
+        """, (f"%{q}%",)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT eg.*, COUNT(m.id) AS member_count
+            FROM edition_groups eg
+            LEFT JOIN movies m ON m.edition_group_id = eg.id
+            GROUP BY eg.id
+            ORDER BY eg.title ASC
+        """).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 

@@ -594,16 +594,31 @@ function openEditionGroupView(id) {
 }
 
 function _populateEgManageSection(movieCard) {
-  const egId = movieCard && (movieCard._parent_group_id || movieCard.edition_group_id);
   const bl   = movieCard && movieCard._group_badge_label;
   const elBl = document.getElementById('egBadgeLabel');
   if (elBl) elBl.value = bl || '';
-  const elPgId = document.getElementById('egParentGroupId');
-  if (elPgId) elPgId.value = '';
-  const badge  = document.getElementById('egParentGroupBadge');
-  const manage = document.getElementById('egManageSection');
+  const elPgId   = document.getElementById('egParentGroupId');
+  const badge    = document.getElementById('egParentGroupBadge');
+  const pgSearch = document.getElementById('egParentGroupSearch');
+  const manage   = document.getElementById('egManageSection');
   if (manage) manage.style.display = 'none';
-  if (badge)  badge.style.display  = 'none';
+  if (pgSearch) pgSearch.value = '';
+
+  const existingParentId = movieCard && movieCard._parent_group_id;
+  if (elPgId) elPgId.value = existingParentId || '';
+
+  if (existingParentId && badge) {
+    // Load parent name from API
+    fetch(`${API}/edition-groups/${existingParentId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(g => {
+        if (!g) return;
+        document.getElementById('egParentGroupName').textContent = g.title || `#${existingParentId}`;
+        badge.style.display = 'flex';
+      });
+  } else if (badge) {
+    badge.style.display = 'none';
+  }
 }
 
 function toggleEgManageSection() {
@@ -618,12 +633,27 @@ function searchParentGroup(query) {
   fetch(`${API}/edition-groups?q=${encodeURIComponent(query)}`)
     .then(r => r.json())
     .then(groups => {
-      if (!groups.length) { dropdown.style.display = 'none'; return; }
-      dropdown.innerHTML = groups.slice(0, 8).map(g =>
-        `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectParentGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">${g.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${g.member_count || 0} items)</span></div>`
-      ).join('');
+      const items = groups.slice(0, 8).map(g =>
+        `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectParentGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">${g.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${g.member_count || 0} edities)</span></div>`
+      );
+      // Always offer to create a new super-group with the typed name
+      items.push(`<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem; border-top:1px solid var(--border); color:var(--accent);" onclick="createAndSelectParentGroup('${query.replace(/'/g,"\\'")}')">➕ Maak &ldquo;${query}&rdquo; aan als nieuwe groep</div>`);
+      dropdown.innerHTML = items.join('');
       dropdown.style.display = '';
     });
+}
+
+async function createAndSelectParentGroup(title) {
+  const res = await fetch(`${API}/edition-groups`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ title })
+  });
+  if (!res.ok) return;
+  const g = await res.json();
+  document.getElementById('egParentGroupSearch').value = '';
+  document.getElementById('egParentGroupDropdown').style.display = 'none';
+  selectParentGroup(g.id, g.title);
 }
 
 function selectParentGroup(id, title) {
