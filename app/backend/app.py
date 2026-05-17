@@ -629,6 +629,10 @@ def init_db():
         conn.execute("ALTER TABLE edition_groups ADD COLUMN parent_group_id INTEGER")
     if "collection_id" not in eg_cols:
         conn.execute("ALTER TABLE edition_groups ADD COLUMN collection_id INTEGER")
+    if "backdrop" not in eg_cols:
+        conn.execute("ALTER TABLE edition_groups ADD COLUMN backdrop TEXT")
+    if "description" not in eg_cols:
+        conn.execute("ALTER TABLE edition_groups ADD COLUMN description TEXT")
 
     # Collections: top-level grouping of Vaults, Box Sets and loose movies
     conn.execute("""
@@ -639,6 +643,11 @@ def init_db():
             created_at  TEXT NOT NULL
         )
     """)
+    col_cols = {row[1] for row in conn.execute("PRAGMA table_info(collections)")}
+    if "backdrop" not in col_cols:
+        conn.execute("ALTER TABLE collections ADD COLUMN backdrop TEXT")
+    if "description" not in col_cols:
+        conn.execute("ALTER TABLE collections ADD COLUMN description TEXT")
 
     # Digital library sources (Plex / Jellyfin)
     conn.execute("""
@@ -6408,8 +6417,32 @@ def get_collection(col_id):
     if not row:
         conn.close()
         return jsonify({"error": "Not found"}), 404
+    # Member edition_groups
+    egs = conn.execute(
+        "SELECT id, title, badge_label, parent_group_id FROM edition_groups WHERE collection_id=? ORDER BY title ASC",
+        (col_id,)
+    ).fetchall()
+    # Loose movies directly linked to this collection
+    loose = conn.execute(
+        "SELECT id, title, year, poster_file, poster, backdrop, backdrops FROM movies WHERE collection_id=? ORDER BY title ASC",
+        (col_id,)
+    ).fetchall()
+    # Also gather backdrops from all movies linked via edition_groups
+    eg_ids = [eg["id"] for eg in egs]
+    eg_movies = []
+    if eg_ids:
+        placeholders = ",".join("?" * len(eg_ids))
+        eg_movies = conn.execute(
+            f"SELECT id, title, year, poster_file, poster, backdrop, backdrops FROM movies"
+            f" WHERE edition_group_id IN ({placeholders}) ORDER BY title ASC",
+            eg_ids
+        ).fetchall()
     conn.close()
-    return jsonify(dict(row))
+    result = dict(row)
+    result["edition_groups"] = [dict(eg) for eg in egs]
+    result["loose_movies"] = [dict(m) for m in loose]
+    result["eg_movies"] = [dict(m) for m in eg_movies]
+    return jsonify(result)
 
 
 @app.route("/api/collections/<int:col_id>", methods=["PUT"])
@@ -6425,6 +6458,10 @@ def update_collection(col_id):
         fields["title"] = (data["title"] or "").strip()
     if "badge_label" in data:
         fields["badge_label"] = data.get("badge_label")
+    if "backdrop" in data:
+        fields["backdrop"] = data.get("backdrop")
+    if "description" in data:
+        fields["description"] = data.get("description")
     if fields:
         set_clause = ", ".join(f"{k}=?" for k in fields)
         conn.execute(
@@ -6511,13 +6548,24 @@ def get_edition_group(group_id):
         conn.close()
         return jsonify({"error": "Not found"}), 404
     members = conn.execute(
-        "SELECT id, title, edition_type, format, year, poster_file, poster FROM movies"
+        "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops FROM movies"
         " WHERE edition_group_id=? ORDER BY format ASC",
+        (group_id,)
+    ).fetchall()
+    loose = conn.execute(
+        "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops FROM movies"
+        " WHERE super_group_id=? ORDER BY title ASC",
+        (group_id,)
+    ).fetchall()
+    child_groups = conn.execute(
+        "SELECT id, title, badge_label FROM edition_groups WHERE parent_group_id=? ORDER BY title ASC",
         (group_id,)
     ).fetchall()
     conn.close()
     result = dict(row)
     result["members"] = [dict(m) for m in members]
+    result["loose_movies"] = [dict(m) for m in loose]
+    result["child_groups"] = [dict(g) for g in child_groups]
     return jsonify(result)
 
 
@@ -6546,6 +6594,10 @@ def update_edition_group(group_id):
         fields["parent_group_id"] = data.get("parent_group_id")
     if "collection_id" in data:
         fields["collection_id"] = data.get("collection_id")
+    if "backdrop" in data:
+        fields["backdrop"] = data.get("backdrop")
+    if "description" in data:
+        fields["description"] = data.get("description")
     if fields:
         set_clause = ", ".join(f"{k}=?" for k in fields)
         conn.execute(
