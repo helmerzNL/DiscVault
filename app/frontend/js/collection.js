@@ -129,14 +129,18 @@ function renderGrid(movies) {
     const safeTitle = (m.title || '').replace(/'/g, "\\'");
     const showDelete = !selectMode && debugModeEnabled && ownable;
 
+    const isGroupCard = !!(m._is_group && m.editions_count > 1);
+    const displayTitle = isGroupCard ? (m._group_title || m.title) : m.title;
+    const displayYear  = isGroupCard ? `${m.editions_count} edities` : (m.year || '\u2014');
+
     // Edition badge
     const edType = m.edition_type || 'standard';
-    const editionBadge = (edType && edType !== 'standard')
+    const editionBadge = (!isGroupCard && edType && edType !== 'standard')
       ? `<div class="movie-card-edition-badge" title="${t('edition.' + edType.replace('_',''), edType)}">${_editionShortLabel(edType, m.custom_edition_label)}</div>`
       : '';
 
-    // Edition stack badge (grouped mode, multiple editions) — click to open stack view
-    const stackBadge = (m.editions_count > 1)
+    // Edition stack badge (grouped mode, multiple editions) — only on non-group cards
+    const stackBadge = (!isGroupCard && m.editions_count > 1)
       ? `<div class="movie-card-stack-badge" onclick="event.stopPropagation(); openEditionGroupView(${m.id})">${_stackBadgeLabel(m)}</div>`
       : '';
 
@@ -144,6 +148,11 @@ function renderGrid(movies) {
     const groupIndicator = (!groupEditionsEnabled && m.edition_group_id)
       ? `<div class="movie-card-group-indicator" title="Onderdeel van een editiegroep">🗂</div>`
       : '';
+
+    // Format label: for group cards show edition count, otherwise show format
+    const formatLabel = isGroupCard
+      ? `<div class="movie-card-format group-count-badge">${m.editions_count}×</div>`
+      : `<div class="movie-card-format">${m.format || '4K'}</div>`;
 
     // Digital badge (Plex/Jellyfin)
     let digitalBadge = '';
@@ -156,19 +165,21 @@ function renderGrid(movies) {
     }
 
     return `
-    <div class="movie-card${isSelected ? ' selected' : ''}${selectMode && !ownable ? ' not-owned' : ''}${m.editions_count > 1 ? ' has-editions' : ''}" data-id="${m.id}" onclick="${clickHandler}">
+    <div class="movie-card${isGroupCard ? ' edition-group-card' : ''}${isSelected ? ' selected' : ''}${selectMode && !ownable ? ' not-owned' : ''}" data-id="${m.id}" onclick="${clickHandler}">
       ${showDelete ? `<button class="movie-card-delete" onclick="event.stopPropagation(); quickDelete(${m.id}, '${safeTitle}')">✕</button>` : ''}
-      ${m.on_watchlist ? `<div class="watchlist-dot" title="${t('js.onWatchlist')}"></div>` : ''}
-      ${m.last_watched ? `<div class="watched-check" title="${t('js.watchedOn', m.last_watched.slice(0,10))}">✓</div>` : ''}
+      ${!isGroupCard && m.on_watchlist ? `<div class="watchlist-dot" title="${t('js.onWatchlist')}"></div>` : ''}
+      ${!isGroupCard && m.last_watched ? `<div class="watched-check" title="${t('js.watchedOn', m.last_watched.slice(0,10))}">✓</div>` : ''}
       <div class="movie-card-poster">
         ${imgHtml}
-        <div class="movie-card-format">${m.format || '4K'}</div>
+        ${formatLabel}
         ${editionBadge}${stackBadge}${groupIndicator}${digitalBadge}
       </div>
       <div class="movie-card-info">
-        <div class="movie-card-title">${m.title}</div>
-        <div class="movie-card-year">${m.year || '—'}</div>
+        <div class="movie-card-title">${displayTitle}</div>
+        <div class="movie-card-year${isGroupCard ? ' group-edition-count' : ''}">${displayYear}</div>
       </div>
+      ${(m.editions_count > 1) ? `<div class="movie-card-editions-drawer" id="edDrawer_${m.id}" style="display:none;"></div>` : ''}
+    </div>`;
       ${(m.editions_count > 1) ? `<div class="movie-card-editions-drawer" id="edDrawer_${m.id}" style="display:none;"></div>` : ''}
     </div>`;
   }).join('');
@@ -502,6 +513,41 @@ async function quickDelete(id, title) {
 
 // ── Movie Detail Modal ────────────────────────────────────────────────────────
 let _currentEditionGroupPrimaryId = null;
+let _egViewStack = []; // navigation stack for nested group views
+let _currentSuperGroup = null;
+
+function openSuperGroupView(movie) {
+  _currentSuperGroup = movie;
+  document.getElementById('egPanelTitle').textContent = movie._group_title || movie.title || '';
+  const cnt = movie._sub_group_count || 0;
+  document.getElementById('egPanelSubtitle').textContent =
+    `${cnt} set${cnt !== 1 ? 's' : ''} \u00b7 ${movie.editions_count} edities`;
+  const grid = document.getElementById('egPanelGrid');
+  grid.innerHTML = (movie._sub_groups || []).map(child => {
+    const src = posterSrc(child);
+    const imgHtml = src
+      ? `<img src="${src}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>\ud83c\udfa6</div>'">`
+      : '<div class="no-img">\ud83c\udfa6</div>';
+    const lbl = child._group_badge_label || child._group_title || child.title || '';
+    return `
+      <div class="eg-edition-card" onclick="openEditionGroupViewFromSuper(${child.id})">
+        <div class="eg-edition-poster">
+          ${imgHtml}
+          <div class="eg-edition-fmt">${child.editions_count}\u00d7</div>
+          ${lbl ? `<div class="eg-edition-type-label">${lbl}</div>` : ''}
+        </div>
+        <div class="eg-edition-info">${child._group_title || child.title || ''}</div>
+      </div>`;
+  }).join('');
+  _populateEgManageSection(movie);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  switchTabDirect('edition-group');
+}
+
+function openEditionGroupViewFromSuper(id) {
+  _egViewStack.push({ type: 'super', movie: _currentSuperGroup });
+  openEditionGroupView(id);
+}
 
 function openEditionGroupView(id) {
   _currentEditionGroupPrimaryId = id;
@@ -513,7 +559,7 @@ function openEditionGroupView(id) {
       allMovies.push({ ...e, _isNested: true, _primaryId: id });
   });
   // Header
-  document.getElementById('egPanelTitle').textContent = primary.title || '';
+  document.getElementById('egPanelTitle').textContent = primary._group_title || primary.title || '';
   const fmtShort = { '4K UHD': '4K', 'Blu-ray': 'BD', 'DVD': 'DVD' };
   const editionTypes = [...new Set((primary.editions || []).map(e => {
     if (e.edition_type && e.edition_type !== 'standard')
@@ -545,10 +591,78 @@ function openEditionGroupView(id) {
       </div>`;
   }).join('');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  _populateEgManageSection(primary);
   switchTabDirect('edition-group');
 }
 
+function _populateEgManageSection(movieCard) {
+  const egId = movieCard && (movieCard._parent_group_id || movieCard.edition_group_id);
+  const bl   = movieCard && movieCard._group_badge_label;
+  const elBl = document.getElementById('egBadgeLabel');
+  if (elBl) elBl.value = bl || '';
+  const elPgId = document.getElementById('egParentGroupId');
+  if (elPgId) elPgId.value = '';
+  const badge  = document.getElementById('egParentGroupBadge');
+  const manage = document.getElementById('egManageSection');
+  if (manage) manage.style.display = 'none';
+  if (badge)  badge.style.display  = 'none';
+}
+
+function toggleEgManageSection() {
+  const s = document.getElementById('egManageSection');
+  if (s) s.style.display = (s.style.display === 'none') ? '' : 'none';
+}
+
+function searchParentGroup(query) {
+  const dropdown = document.getElementById('egParentGroupDropdown');
+  if (!dropdown) return;
+  if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
+  fetch(`${API}/edition-groups?q=${encodeURIComponent(query)}`)
+    .then(r => r.json())
+    .then(groups => {
+      if (!groups.length) { dropdown.style.display = 'none'; return; }
+      dropdown.innerHTML = groups.slice(0, 8).map(g =>
+        `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectParentGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">${g.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${g.member_count || 0} items)</span></div>`
+      ).join('');
+      dropdown.style.display = '';
+    });
+}
+
+function selectParentGroup(id, title) {
+  document.getElementById('egParentGroupId').value = id;
+  document.getElementById('egParentGroupSearch').value = '';
+  document.getElementById('egParentGroupDropdown').style.display = 'none';
+  document.getElementById('egParentGroupName').textContent = title;
+  document.getElementById('egParentGroupBadge').style.display = 'flex';
+}
+
+function unlinkParentGroup() {
+  document.getElementById('egParentGroupId').value = '';
+  document.getElementById('egParentGroupBadge').style.display = 'none';
+}
+
+async function saveEditionGroupMeta() {
+  const primary = allMovies.find(m => m.id === _currentEditionGroupPrimaryId);
+  const groupId = primary && primary.edition_group_id;
+  if (!groupId) return;
+  const badge_label   = (document.getElementById('egBadgeLabel') || {}).value || null;
+  const parent_raw    = (document.getElementById('egParentGroupId') || {}).value;
+  const parent_group_id = parent_raw ? parseInt(parent_raw) : null;
+  await fetch(`${API}/edition-groups/${groupId}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ badge_label, parent_group_id })
+  });
+  _editionGroupCache = [];
+  await loadCollection();
+  closeEditionGroupView();
+}
+
 function closeEditionGroupView() {
+  if (_egViewStack.length > 0) {
+    const prev = _egViewStack.pop();
+    if (prev.type === 'super') { openSuperGroupView(prev.movie); return; }
+  }
   _replaceRoute(_tabPath(_detailReturnTab));
   switchTabDirect(_detailReturnTab);
 }
@@ -584,7 +698,11 @@ async function openMovieDetail(id) {
 
   // Redirect grouped editions to the stack view when group_editions mode is active
   if (groupEditionsEnabled && (movie.editions_count || 0) > 1 && !movie._isNested) {
-    openEditionGroupView(id);
+    if (movie._is_super_group) {
+      openSuperGroupView(movie);
+    } else {
+      openEditionGroupView(id);
+    }
     return;
   }
 
@@ -1347,6 +1465,7 @@ function startEdit() {
   document.getElementById('editStatus').className = 'status-msg';
   document.getElementById('modalViewMode').style.display = 'none';
   document.getElementById('modalEditMode').style.display = 'block';
+  switchEditTab('general');
   toggleCustomEditionInput(); // Show/hide custom label input based on current edition type
 
   // Snapshot original values for dirty-checking
@@ -1852,6 +1971,15 @@ function _editionShortLabel(edType, customLabel) {
     other:        '…',
   };
   return labels[edType] || edType;
+}
+
+function switchEditTab(name) {
+  document.querySelectorAll('[data-edit-tab]').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.edit-tab-content').forEach(el => el.classList.remove('active'));
+  const btn = document.querySelector(`[data-edit-tab="${name}"]`);
+  if (btn) btn.classList.add('active');
+  const el = document.getElementById('editTab' + name.charAt(0).toUpperCase() + name.slice(1));
+  if (el) el.classList.add('active');
 }
 
 function setEditionFilter(btn) {

@@ -1435,6 +1435,25 @@
 
   /* Edition Group Stack Panel */
   #panel-edition-group.active { display: flex; flex-direction: column; }
+  /* Edition group card — stacked visual effect */
+  .edition-group-card {
+    border-color: rgba(232,197,71,0.35) !important;
+    box-shadow: 3px 3px 0 0 rgba(232,197,71,0.15), 6px 6px 0 0 rgba(232,197,71,0.08);
+  }
+  .movie-card-format.group-count-badge {
+    background: var(--accent);
+    color: #0a0a0f;
+    font-weight: 700;
+  }
+  .movie-card-year.group-edition-count {
+    color: var(--accent);
+    font-size: 0.72rem;
+  }
+  /* Edit form tabs */
+  .edit-mode-tabs { margin-bottom: 16px; }
+  .edit-tab-content { display: none; }
+  .edit-tab-content.active { display: grid; }
+
   .eg-panel-grid {
     display: flex;
     flex-wrap: wrap;

@@ -1426,7 +1426,7 @@
       <div class="modal-tabs">
         <button class="modal-tab active" onclick="switchDetailTab('info')" data-detail-tab="info" data-i18n="modal.tabInfo">Basisinfo</button>
         <button class="modal-tab" onclick="switchDetailTab('cast')" data-detail-tab="cast" data-i18n="modal.tabCast">Cast &amp; Crew</button>
-        <button class="modal-tab" onclick="switchDetailTab('media')" data-detail-tab="media" data-i18n="modal.tabMedia" disabled style="display:none;">Media</button>
+        <button class="modal-tab" onclick="switchDetailTab('media')" data-detail-tab="media" data-i18n="modal.tabMedia">Media</button>
       </div>
 
       <!-- Tab: Basic Info -->
@@ -1480,7 +1480,15 @@
         <button class="btn btn-danger" onclick="deleteCurrentMovie()" data-i18n="modal.delete">Verwijderen</button>
       </div>
 
-      <div class="form-grid">
+      <!-- Edit mode tabs -->
+      <div class="modal-tabs edit-mode-tabs">
+        <button class="modal-tab active" onclick="switchEditTab('general')" data-edit-tab="general">Algemeen</button>
+        <button class="modal-tab" onclick="switchEditTab('edition')" data-edit-tab="edition">Editie</button>
+        <button class="modal-tab" onclick="switchEditTab('details')" data-edit-tab="details">Details</button>
+      </div>
+
+      <!-- Edit Tab: Algemeen -->
+      <div class="form-grid edit-tab-content active" id="editTabGeneral">
         <div class="input-group full">
           <label data-i18n="edit.titleLabel">Titel *</label>
           <input type="text" id="editTitle">
@@ -1521,6 +1529,30 @@
           <label data-i18n="edit.genre">Genre</label>
           <input type="text" id="editGenre">
         </div>
+        <div class="input-group full">
+          <label data-i18n="edit.plot">Verhaal</label>
+          <textarea id="editPlot" rows="3"></textarea>
+        </div>
+        <div class="input-group full">
+          <label data-i18n="edit.notes">Notities</label>
+          <textarea id="editNotes" rows="2"></textarea>
+        </div>
+        <div class="input-group full">
+          <label data-i18n="edit.posterUrl">Poster URL</label>
+          <input type="text" id="editPoster">
+        </div>
+        <div class="input-group full">
+          <label data-i18n="edit.coverUpload">Eigen Cover Upload</label>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="file" id="editPosterUpload" accept="image/*" style="max-width:320px;">
+            <button class="btn btn-secondary" type="button" onclick="uploadCustomCover()" data-i18n="edit.uploadCover">🖼 Upload cover</button>
+          </div>
+          <div style="font-size:0.74rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.coverHelp">Afbeelding wordt automatisch geschaald en gecomprimeerd.</div>
+        </div>
+      </div>
+
+      <!-- Edit Tab: Editie -->
+      <div class="form-grid edit-tab-content" id="editTabEdition">
         <div class="input-group">
           <label data-i18n="edit.format">Formaat</label>
           <select id="editFormat">
@@ -1560,6 +1592,10 @@
           <div id="editEditionGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
           <input type="hidden" id="editEditionGroupId">
         </div>
+      </div>
+
+      <!-- Edit Tab: Details -->
+      <div class="form-grid edit-tab-content" id="editTabDetails">
         <div class="input-group">
           <label data-i18n="edit.runtime">Speelduur (min)</label>
           <input type="text" id="editRuntime">
@@ -1641,26 +1677,6 @@
           <input type="text" id="editExtras">
         </div>
         <div class="input-group full">
-          <label data-i18n="edit.plot">Verhaal</label>
-          <textarea id="editPlot" rows="3"></textarea>
-        </div>
-        <div class="input-group full">
-          <label data-i18n="edit.notes">Notities</label>
-          <textarea id="editNotes" rows="2"></textarea>
-        </div>
-        <div class="input-group full">
-          <label data-i18n="edit.posterUrl">Poster URL</label>
-          <input type="text" id="editPoster">
-        </div>
-        <div class="input-group full">
-          <label data-i18n="edit.coverUpload">Eigen Cover Upload</label>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="file" id="editPosterUpload" accept="image/*" style="max-width:320px;">
-            <button class="btn btn-secondary" type="button" onclick="uploadCustomCover()" data-i18n="edit.uploadCover">🖼 Upload cover</button>
-          </div>
-          <div style="font-size:0.74rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.coverHelp">Afbeelding wordt automatisch geschaald en gecomprimeerd.</div>
-        </div>
-        <div class="input-group full">
           <label data-i18n="edit.groups">Groepen</label>
           <div id="editGroupsContainer" style="display:flex; flex-wrap:wrap; gap:8px; padding:8px 0;"></div>
         </div>
@@ -1728,6 +1744,30 @@
       <div id="egPanelSubtitle" style="font-size:0.82rem; color:var(--text-muted); margin-top:4px;"></div>
     </div>
     <div class="eg-panel-grid" id="egPanelGrid"></div>
+    <!-- Group management -->
+    <div id="egGroupManage" style="padding:0 20px 32px;">
+      <button type="button" onclick="toggleEgManageSection()" style="background:none;border:1px solid var(--border);color:var(--text-muted);font-size:0.78rem;padding:6px 14px;border-radius:6px;cursor:pointer;">
+        ⚙ Groep beheren
+      </button>
+      <div id="egManageSection" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:8px;">
+        <div class="input-group" style="margin-bottom:12px;">
+          <label style="font-size:0.8rem; font-weight:600;">Badge label</label>
+          <input type="text" id="egBadgeLabel" placeholder="bijv. Trilogy, 4K Set..." maxlength="20" style="margin-top:4px;">
+        </div>
+        <div class="input-group" style="margin-bottom:16px;">
+          <label style="font-size:0.8rem; font-weight:600;">Samenvoegen onder super-groep</label>
+          <input type="text" id="egParentGroupSearch" placeholder="Zoek super-groep..." autocomplete="off"
+                 style="margin-top:4px;" oninput="searchParentGroup(this.value)">
+          <div id="egParentGroupDropdown" style="display:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:140px; overflow-y:auto; position:relative; z-index:10;"></div>
+          <div id="egParentGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(232,197,71,.1); border:1px solid rgba(232,197,71,.3); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent); margin-top:6px;">
+            <span id="egParentGroupName"></span>
+            <button type="button" onclick="unlinkParentGroup()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
+          </div>
+          <input type="hidden" id="egParentGroupId">
+        </div>
+        <button class="btn btn-secondary" type="button" onclick="saveEditionGroupMeta()" style="padding:6px 16px; font-size:0.82rem;">Opslaan</button>
+      </div>
+    </div>
   </div>
 </div>
 

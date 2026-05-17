@@ -608,6 +608,12 @@ def init_db():
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_edition_groups_tmdb ON edition_groups(tmdb_id)")
+    # Migrate edition_groups: add badge_label and parent_group_id if missing
+    eg_cols = {row[1] for row in conn.execute("PRAGMA table_info(edition_groups)")}
+    if "badge_label" not in eg_cols:
+        conn.execute("ALTER TABLE edition_groups ADD COLUMN badge_label TEXT")
+    if "parent_group_id" not in eg_cols:
+        conn.execute("ALTER TABLE edition_groups ADD COLUMN parent_group_id INTEGER")
 
     # Digital library sources (Plex / Jellyfin)
     conn.execute("""
@@ -1994,20 +2000,58 @@ def list_movies():
             gid_list = list(grouped.keys())
             gplaceholders = ",".join("?" * len(gid_list))
             eg_rows_raw = conn.execute(
-                f"SELECT id, primary_movie_id FROM edition_groups WHERE id IN ({gplaceholders})",
+                f"SELECT id, primary_movie_id, title, badge_label, parent_group_id FROM edition_groups WHERE id IN ({gplaceholders})",
                 gid_list
             ).fetchall()
-            eg_rows = {r["id"]: r["primary_movie_id"] for r in eg_rows_raw}
+            eg_rows = {r["id"]: {"primary_id": r["primary_movie_id"], "group_title": r["title"],
+                                  "badge_label": r["badge_label"], "parent_group_id": r["parent_group_id"]} for r in eg_rows_raw}
         collapsed = []
         for gid, members in grouped.items():
-            primary_id = eg_rows.get(gid)
+            eg_info  = eg_rows.get(gid) or {}
+            primary_id = eg_info.get("primary_id")
             primary = next((m for m in members if m["id"] == primary_id), None)
             if not primary:
                 primary = sorted(members, key=lambda x: format_rank.get(x.get("format", ""), 99))[0]
             primary = dict(primary)
-            primary["editions"] = members
+            primary["editions"]       = members
             primary["editions_count"] = len(members)
+            primary["_is_group"]      = True
+            if eg_info.get("group_title"):
+                primary["_group_title"] = eg_info["group_title"]
+            if eg_info.get("badge_label"):
+                primary["_group_badge_label"] = eg_info["badge_label"]
             collapsed.append(primary)
+        # Build super-group cards for groups that have a parent_group_id
+        child_by_parent = {}
+        direct_collapsed = []
+        for card in collapsed:
+            gid      = card.get("edition_group_id")
+            par_gid  = (eg_rows.get(gid) or {}).get("parent_group_id")
+            if par_gid:
+                child_by_parent.setdefault(par_gid, []).append(card)
+            else:
+                direct_collapsed.append(card)
+        if child_by_parent:
+            par_gids = list(child_by_parent.keys())
+            par_eg   = {}
+            for r in conn.execute(
+                f"SELECT id, title, badge_label FROM edition_groups WHERE id IN ({','.join('?'*len(par_gids))})",
+                par_gids
+            ).fetchall():
+                par_eg[r["id"]] = dict(r)
+            for par_gid, child_cards in child_by_parent.items():
+                rep = child_cards[0]
+                sg  = dict(rep)
+                sg["_is_super_group"]   = True
+                sg["_parent_group_id"]  = par_gid
+                sg["_group_title"]      = (par_eg.get(par_gid) or {}).get("title") or sg.get("_group_title") or sg.get("title")
+                sg["_group_badge_label"]= (par_eg.get(par_gid) or {}).get("badge_label")
+                sg["_sub_groups"]       = child_cards
+                sg["_sub_group_count"]  = len(child_cards)
+                sg["editions_count"]    = sum(c["editions_count"] for c in child_cards)
+                sg["editions"]          = []
+                direct_collapsed.append(sg)
+            collapsed = direct_collapsed
         movies = ungrouped + collapsed
         movies.sort(key=lambda m: (m.get("sort_title") or m.get("title") or "").lower())
 
@@ -6219,6 +6263,10 @@ def update_edition_group(group_id):
         fields["imdb_id"] = data["imdb_id"]
     if "year" in data:
         fields["year"] = data["year"]
+    if "badge_label" in data:
+        fields["badge_label"] = data.get("badge_label")
+    if "parent_group_id" in data:
+        fields["parent_group_id"] = data.get("parent_group_id")
     if fields:
         set_clause = ", ".join(f"{k}=?" for k in fields)
         conn.execute(
