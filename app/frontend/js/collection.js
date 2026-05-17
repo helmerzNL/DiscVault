@@ -2073,12 +2073,15 @@ function _editionShortLabel(edType, customLabel) {
 }
 
 function switchEditTab(name) {
+  console.log('[DV] switchEditTab called:', name);
   document.querySelectorAll('[data-edit-tab]').forEach(b => b.classList.remove('active'));
   const btn = document.querySelector(`[data-edit-tab="${name}"]`);
   if (btn) btn.classList.add('active');
-  ['General', 'Edition', 'Details'].forEach(tab => {
-    const el = document.getElementById('editTab' + tab);
-    if (el) el.style.display = (tab.toLowerCase() === name) ? 'grid' : 'none';
+  const tabs = { General: 'editTabGeneral', Edition: 'editTabEdition', Details: 'editTabDetails' };
+  Object.entries(tabs).forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    console.log('[DV]  ', id, 'found:', !!el, 'setting:', key.toLowerCase() === name ? 'grid' : 'none');
+    if (el) el.style.display = (key.toLowerCase() === name) ? 'grid' : 'none';
   });
 }
 
