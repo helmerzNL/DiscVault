@@ -140,6 +140,11 @@ function renderGrid(movies) {
       ? `<div class="movie-card-stack-badge" onclick="event.stopPropagation(); openEditionGroupView(${m.id})">${_stackBadgeLabel(m)}</div>`
       : '';
 
+    // Group indicator (grouping disabled but movie belongs to a group)
+    const groupIndicator = (!groupEditionsEnabled && m.edition_group_id)
+      ? `<div class="movie-card-group-indicator" title="Onderdeel van een editiegroep">🗂</div>`
+      : '';
+
     // Digital badge (Plex/Jellyfin)
     let digitalBadge = '';
     if (showDigitalBadges && compareData) {
@@ -158,7 +163,7 @@ function renderGrid(movies) {
       <div class="movie-card-poster">
         ${imgHtml}
         <div class="movie-card-format">${m.format || '4K'}</div>
-        ${editionBadge}${stackBadge}${digitalBadge}
+        ${editionBadge}${stackBadge}${groupIndicator}${digitalBadge}
       </div>
       <div class="movie-card-info">
         <div class="movie-card-title">${m.title}</div>
@@ -1856,15 +1861,16 @@ function setEditionFilter(btn) {
 }
 
 function _stackBadgeLabel(m) {
-  if (!m.editions) return m.editions_count + '×';
+  const countPrefix = m.editions_count + '\u00d7 ';
+  if (!m.editions) return countPrefix;
   const fmtShort = { '4K UHD': '4K', 'Blu-ray': 'BD', 'DVD': 'DVD' };
   const lbls = [...new Set(m.editions.map(e => {
     if (e.edition_type && e.edition_type !== 'standard')
-      return e.edition_type === 'custom' ? (e.custom_edition_label || '…') : _editionShortLabel(e.edition_type);
+      return e.edition_type === 'custom' ? (e.custom_edition_label || '\u2026') : _editionShortLabel(e.edition_type);
     return fmtShort[e.format] || (e.format || '?').slice(0, 3);
   }))];
-  if (lbls.length <= 3) return lbls.join('·');
-  return lbls.slice(0, 2).join('·') + `+${lbls.length - 2}`;
+  if (lbls.length <= 3) return countPrefix + lbls.join('\u00b7');
+  return countPrefix + lbls.slice(0, 2).join('\u00b7') + `+${lbls.length - 2}`;
 }
 
 function toggleCustomEditionInput() {
