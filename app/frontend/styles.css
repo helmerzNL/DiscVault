@@ -1274,8 +1274,6 @@
     gap: 0;
     border-bottom: 1px solid var(--border);
     margin-bottom: 20px;
-    position: relative;
-    z-index: 3;
   }
   .modal-tab {
     padding: 10px 20px;
@@ -1295,7 +1293,7 @@
     color: var(--accent);
     border-bottom-color: var(--accent);
   }
-  .modal-tab-content { display: none; position: relative; z-index: 3; }
+  .modal-tab-content { display: none; }
   .modal-tab-content.active { display: block; }
 
   /* Cast & crew grid */
@@ -1450,7 +1448,6 @@
   #panel-movie-detail.active { display: flex; flex-direction: column; }
 
   /* Edition Group Stack Panel */
-  #panel-edition-group { position: relative; }
   #panel-edition-group.active { display: flex; flex-direction: column; }
   /* Edition group card — stacked visual effect */
   .edition-group-card {

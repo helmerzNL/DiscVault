@@ -1,6 +1,6 @@
-const SW_VERSION = "discvault-sw-v82";
+const SW_VERSION = "discvault-sw-v77";
 const APP_CACHE = `${SW_VERSION}-app`;
-const API_CACHE = 'discvault-api-data'; // Fixed name — persists across SW version bumps
+const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
 
 const APP_SHELL = [
@@ -49,7 +49,7 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys => {
-      const oldKeys = keys.filter(k => k !== API_CACHE && !k.startsWith(SW_VERSION));
+      const oldKeys = keys.filter(k => !k.startsWith(SW_VERSION));
       const didUpdate = oldKeys.length > 0;
       return Promise.all(oldKeys.map(k => caches.delete(k)))
         .then(() => self.clients.claim())

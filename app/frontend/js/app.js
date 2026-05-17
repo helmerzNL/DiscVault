@@ -71,7 +71,7 @@ async function _loadGroupFilter() {
   }
 }
 
-async function loadCollection(retries = 5) {
+async function loadCollection(retries = 2) {
   // Load group filter options
   _loadGroupFilter();
   try {
@@ -108,9 +108,8 @@ async function loadCollection(retries = 5) {
     // Load digital badge data in background if enabled
     if (showDigitalBadges && !compareData) loadDigitalBadgeData();
   } catch(e) {
-    const cached = getCachedData('dv_movies_cache', []);
-    if (cached.length) {
-      allMovies = cached;
+    allMovies = getCachedData('dv_movies_cache', []);
+    if (allMovies.length) {
       filterMovies();
       filterSearchMovies();
       const msg = navigator.onLine
@@ -120,14 +119,7 @@ async function loadCollection(retries = 5) {
         'afterbegin',
         `<div style="grid-column:1/-1; margin-bottom:12px; color:#ffd89a; border:1px solid rgba(240,144,64,.4); background:rgba(240,144,64,.08); border-radius:8px; padding:10px 12px; font-size:0.82rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">${msg} <button class="btn btn-secondary" onclick="loadCollection()" style="padding:4px 12px; font-size:0.78rem;">↻ ${t('collection.refresh')}</button></div>`
       );
-    } else if (retries > 0) {
-      // No local cache yet — backend may be starting up. Show spinner and retry.
-      const grid = document.getElementById('moviesGrid');
-      if (grid) grid.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--text-muted);font-size:0.88rem;">Verbinding maken met server…</div>`;
-      await new Promise(res => setTimeout(res, 2000));
-      return loadCollection(retries - 1);
     } else {
-      allMovies = [];
       document.getElementById('moviesGrid').innerHTML = `<div style="color: var(--danger); padding: 20px;">${t('js.offlineNoCache')}</div>`;
     }
   }
