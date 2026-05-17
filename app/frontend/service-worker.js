@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v45";
+const SW_VERSION = "discvault-sw-v46";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -36,9 +36,13 @@ const APP_SHELL = [
 
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(APP_CACHE)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
+    caches.open(APP_CACHE).then(cache =>
+      Promise.all(
+        APP_SHELL.map(url =>
+          cache.add(url).catch(err => console.warn('[SW] Failed to cache', url, err))
+        )
+      )
+    ).then(() => self.skipWaiting())
   );
 });
 

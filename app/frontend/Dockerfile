@@ -13,6 +13,7 @@ COPY favicon-32.png /usr/share/nginx/html/favicon-32.png
 COPY favicon-192.png /usr/share/nginx/html/favicon-192.png
 COPY manifest.json /usr/share/nginx/html/manifest.json
 COPY service-worker.js /usr/share/nginx/html/service-worker.js
+COPY flags/ /usr/share/nginx/html/flags/
 RUN printf '{"version":"%s"}\n' "$BUILD_VERSION" > /usr/share/nginx/html/version.json
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
