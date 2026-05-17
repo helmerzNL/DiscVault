@@ -364,7 +364,7 @@ h1 {
 }
 
 .shot-desktop {
-  width: min(80%, 720px);
+  width: min(42%, 320px);
 }
 
 .shot-mobile {
@@ -382,6 +382,25 @@ h1 {
   font-size: 0.8rem;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* Screenshot platform sections */
+.platform-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 2.8rem 0 1rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.platform-label:first-of-type {
+  margin-top: 1.5rem;
 }
 
 /* Screenshot groups */
@@ -605,11 +624,11 @@ h1 {
 .install-preview img {
   display: block;
   width: 100%;
-  max-width: 880px;
+  max-width: 480px;
   height: auto;
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 
 .install-preview figcaption {
