@@ -50,6 +50,7 @@ async function loadUserPrefsFromServer() {
 }
 
 async function loadSettings() {
+  switchSettingsSubmenu(_currentSettingsSubmenu || 'general');
   loadDbStats();
   loadAuthSettings();
   loadQueueSettings();
@@ -59,6 +60,31 @@ async function loadSettings() {
   loadCollectorsModeSetting();
   loadGroupEditionsSetting();
   loadDigitalSources();
+}
+
+// ── Settings submenu switching ───────────────────────────────────────────────
+
+const SETTINGS_SECTIONS = ['settingsSubGeneral', 'settingsSubCollectionmgmt'];
+let _currentSettingsSubmenu = 'general';
+
+function switchSettingsSubmenu(name) {
+  _currentSettingsSubmenu = name;
+  document.querySelectorAll('[data-settings-sub]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-settings-sub') === name);
+  });
+  const map = { general: 'settingsSubGeneral', collectionmgmt: 'settingsSubCollectionmgmt' };
+  const targetId = map[name] || map.general;
+  SETTINGS_SECTIONS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const target = document.getElementById(targetId);
+  if (target) target.style.display = 'block';
+  if (name === 'collectionmgmt') {
+    loadCollectorsModeSetting();
+    loadGroupEditionsSetting();
+    loadGroupMgmtList();
+  }
 }
 
 // ── Rating country picker ────────────────────────────────────────────────────

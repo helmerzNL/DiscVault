@@ -406,7 +406,7 @@ function switchProfileSubmenu(name) {
 
 let currentAdminSubmenu = 'security';
 
-const ADMIN_SECTIONS = ['adminSubSecurity','adminSubUsers','adminSubGroups','adminSubBackup','adminSubLogs','adminSubAdvanced','adminSubGroupmgmt'];
+const ADMIN_SECTIONS = ['adminSubSecurity','adminSubUsers','adminSubGroups','adminSubBackup','adminSubLogs','adminSubAdvanced'];
 
 function switchAdminSubmenu(name) {
   currentAdminSubmenu = name;
@@ -420,7 +420,6 @@ function switchAdminSubmenu(name) {
     backup:    'adminSubBackup',
     logs:      'adminSubLogs',
     advanced:  'adminSubAdvanced',
-    groupmgmt: 'adminSubGroupmgmt',
   };
   const targetId = map[name] || map.security;
   // Hide all admin sub-sections by ID (reliable, no CSS cascade dependency)
@@ -433,7 +432,6 @@ function switchAdminSubmenu(name) {
   if (name === 'logs')      loadLogs();
   if (name === 'backup')    loadBackups();
   if (name === 'advanced')  loadDigitalSources();
-  if (name === 'groupmgmt') loadGroupMgmtList();
 }
 
 async function loadAdminTab() {

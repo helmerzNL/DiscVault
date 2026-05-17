@@ -755,48 +755,6 @@
             </div>
             <div id="preferencesStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
-
-          <!-- Edition grouping preference -->
-          <div class="card" style="margin-top:16px;">
-            <div class="card-title" data-i18n="edition.prefTitle">🗂 Editiebeheer</div>
-
-            <!-- Collectors mode master toggle -->
-            <div style="background:rgba(232,197,71,.07); border:1px solid rgba(232,197,71,.25); border-radius:10px; padding:14px 16px; margin-bottom:16px;">
-              <label style="display:flex; align-items:center; gap:10px; font-size:0.92rem; cursor:pointer; color:var(--text); font-weight:600;">
-                <input type="checkbox" id="collectorsModeToggle" onchange="saveCollectorsModeSetting()" style="accent-color:var(--accent); width:18px; height:18px; flex-shrink:0;">
-                <span data-i18n="edition.collectorsMode">🏆 Collectors mode</span>
-              </label>
-              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:6px; padding-left:28px;" data-i18n="edition.collectorsModeDesc">
-                Schakel geavanceerde functies in voor verzamelaars: vaults (meerdere versies van dezelfde film), box sets (trilogie-sets) en groepsbeheer in het bewerkscherm.
-              </div>
-            </div>
-
-            <!-- Advanced settings: only visible in collectors mode -->
-            <div class="collectors-only">
-              <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-                <input type="checkbox" id="groupEditionsToggle" onchange="saveGroupEditionsSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
-                <span data-i18n="edition.groupToggle">Meerdere edities samenvoegen als één titel</span>
-              </label>
-              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:10px;" data-i18n="edition.groupToggleDesc">
-                Toon meerdere fysieke versies van dezelfde film als één tegel. Klik op de tegel om alle edities te zien.
-              </div>
-            </div>
-
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-              <input type="checkbox" id="showDigitalBadgesToggle" onchange="saveDigitalBadgesSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="edition.digitalBadges">Plex/Jellyfin badge tonen op filmtegel</span>
-            </label>
-            <div id="digitalBadgeFilterRow" style="display:none; margin-bottom:10px; margin-left:24px;">
-              <select id="digitalBadgeFilterSelect" onchange="saveDigitalBadgeFilter()" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.82rem;">
-                <option value="all" data-i18n="edition.badgeFilterAll">Alle bronnen</option>
-                <option value="plex" data-i18n="edition.badgeFilterPlex">Alleen Plex</option>
-                <option value="jellyfin" data-i18n="edition.badgeFilterJellyfin">Alleen Jellyfin</option>
-              </select>
-            </div>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="edition.digitalBadgesDesc">
-              Toon een klein icoon als een film ook digitaal beschikbaar is in Plex of Jellyfin.
-            </div>
-          </div>
         </div>
 
         <!-- ── NOTIFICATIES ── -->
@@ -932,10 +890,6 @@
         <button class="profile-sidebar-btn" type="button" data-admin-sub="advanced" onclick="switchAdminSubmenu('advanced')">
           <span class="mdi mdi-cog-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span data-i18n="settings.menuAdvanced">Geavanceerd</span>
-        </button>
-        <button class="profile-sidebar-btn" type="button" data-admin-sub="groupmgmt" onclick="switchAdminSubmenu('groupmgmt')">
-          <span class="mdi mdi-folder-multiple-outline profile-sidebar-icon" aria-hidden="true"></span>
-          <span data-i18n="settings.menuGroupMgmt">Vaults & Sets</span>
         </button>
       </nav>
 
@@ -1126,9 +1080,135 @@
 
         </div>
 
-        <!-- ── GROUP MANAGEMENT (Vaults, Box Sets, Collections) ── -->
-        <div class="profile-sub-section" id="adminSubGroupmgmt" style="display:none;">
+      </div><!-- /.profile-content -->
+    </div><!-- /.profile-layout -->
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div class="panel" id="panel-settings">
+    <div class="profile-layout">
+      <!-- Sidebar navigation -->
+      <nav class="profile-sidebar" aria-label="Settings navigatie">
+        <button class="profile-sidebar-btn active" type="button" data-settings-sub="general" onclick="switchSettingsSubmenu('general')">
+          <span class="mdi mdi-cog-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="settings.menuGeneral">Algemeen</span>
+        </button>
+        <button class="profile-sidebar-btn" type="button" data-settings-sub="collectionmgmt" onclick="switchSettingsSubmenu('collectionmgmt')">
+          <span class="mdi mdi-folder-multiple-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="settings.menuCollectionMgmt">Collection Management</span>
+        </button>
+      </nav>
+
+      <!-- Content area -->
+      <div class="profile-content">
+
+        <!-- ── ALGEMEEN ── -->
+        <div class="profile-sub-section" id="settingsSubGeneral">
+
+          <!-- DB Stats -->
+          <div class="card" id="settingsStats">
+            <div class="card-title" data-i18n="settings.dbInfo">Database Informatie</div>
+            <div style="font-family:'DM Mono',monospace; font-size:0.74rem; color:var(--text-muted); margin-bottom:12px;">
+              <span data-i18n="settings.version">Versie:</span> <span id="settingsVersion" data-i18n="settings.versionLoading">laden...</span>
+            </div>
+            <div id="dbStatsContent" style="font-size:0.88rem; color:var(--text-muted);" data-i18n="settings.loading">Laden...</div>
+          </div>
+
+          <!-- Metadata bronnen -->
+          <div class="card" style="margin-top:20px;">
+            <div class="card-title" data-i18n="settings.metadataSources">Metadata Bronnen</div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="sourceOmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.omdbDesc">OMDb — filminformatie via IMDb-id of titel</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="sourceTmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.tmdbDesc">TMDb — filminformatie via titel + jaar</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="sourceBlurayToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.blurayDesc">Blu-ray.com scraper (experimenteel)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="sourceBlurayDiscDeToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.blurayDeDesc">bluray-disc.de scraper (experimenteel)</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.sourceHelp">
+              OMDb en TMDb vereisen een API-key (zie .env). De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiele API.
+            </div>
+            <div id="sourceSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
+          </div>
+
+          <!-- Offline wachtrij -->
+          <div class="card" style="margin-top:20px;">
+            <div class="card-title" data-i18n="settings.offlineQueue">📶 Offline Wachtrij</div>
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px;" data-i18n="settings.offlineQueueDesc">
+              Acties die offline zijn uitgevoerd worden hier tijdelijk bewaard en later gesynchroniseerd.
+            </p>
+            <div class="btn-row" style="margin-bottom:12px;">
+              <button class="btn btn-secondary" onclick="syncQueueNow()" data-i18n="settings.syncNow">↻ Nu synchroniseren</button>
+              <button class="btn btn-danger" onclick="clearQueuedMutations()" data-i18n="settings.clearQueue">🗑 Wachtrij legen</button>
+            </div>
+            <div id="queueStatus" class="status-msg"></div>
+            <div id="queueList" style="margin-top:12px;"></div>
+          </div>
+
+          <!-- Language -->
+          <div class="card" style="margin-top:20px;">
+            <div class="card-title" data-i18n="settings.language">Taal</div>
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px;" data-i18n="settings.languageDesc">Kies de taal voor de interface.</p>
+            <div id="languagePicker" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+          </div>
+
+        </div>
+
+        <!-- ── COLLECTION MANAGEMENT ── -->
+        <div class="profile-sub-section" id="settingsSubCollectionmgmt" style="display:none;">
+
+          <!-- Edition / Collectors mode -->
           <div class="card">
+            <div class="card-title" data-i18n="edition.prefTitle">🗂 Editiebeheer</div>
+
+            <!-- Collectors mode master toggle -->
+            <div style="background:rgba(232,197,71,.07); border:1px solid rgba(232,197,71,.25); border-radius:10px; padding:14px 16px; margin-bottom:16px;">
+              <label style="display:flex; align-items:center; gap:10px; font-size:0.92rem; cursor:pointer; color:var(--text); font-weight:600;">
+                <input type="checkbox" id="collectorsModeToggle" onchange="saveCollectorsModeSetting()" style="accent-color:var(--accent); width:18px; height:18px; flex-shrink:0;">
+                <span data-i18n="edition.collectorsMode">🏆 Collectors mode</span>
+              </label>
+              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:6px; padding-left:28px;" data-i18n="edition.collectorsModeDesc">
+                Schakel geavanceerde functies in voor verzamelaars: vaults (meerdere versies van dezelfde film), box sets (trilogie-sets) en groepsbeheer in het bewerkscherm.
+              </div>
+            </div>
+
+            <!-- Advanced settings: only visible in collectors mode -->
+            <div class="collectors-only">
+              <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+                <input type="checkbox" id="groupEditionsToggle" onchange="saveGroupEditionsSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
+                <span data-i18n="edition.groupToggle">Meerdere edities samenvoegen als één titel</span>
+              </label>
+              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:10px;" data-i18n="edition.groupToggleDesc">
+                Toon meerdere fysieke versies van dezelfde film als één tegel. Klik op de tegel om alle edities te zien.
+              </div>
+            </div>
+
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="showDigitalBadgesToggle" onchange="saveDigitalBadgesSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="edition.digitalBadges">Plex/Jellyfin badge tonen op filmtegel</span>
+            </label>
+            <div id="digitalBadgeFilterRow" style="display:none; margin-bottom:10px; margin-left:24px;">
+              <select id="digitalBadgeFilterSelect" onchange="saveDigitalBadgeFilter()" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.82rem;">
+                <option value="all" data-i18n="edition.badgeFilterAll">Alle bronnen</option>
+                <option value="plex" data-i18n="edition.badgeFilterPlex">Alleen Plex</option>
+                <option value="jellyfin" data-i18n="edition.badgeFilterJellyfin">Alleen Jellyfin</option>
+              </select>
+            </div>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="edition.digitalBadgesDesc">
+              Toon een klein icoon als een film ook digitaal beschikbaar is in Plex of Jellyfin.
+            </div>
+          </div>
+
+          <!-- Group management: Vaults, Box Sets, Collections -->
+          <div class="card" style="margin-top:20px;">
             <div class="card-title" data-i18n="settings.groupMgmtTitle">📦 Vaults, Box Sets & Collections</div>
             <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="settings.groupMgmtDesc">
               Beheer alle groepen. Je kunt ze hernoemen of verwijderen, ook als er geen films aan gekoppeld zijn.
@@ -1141,75 +1221,11 @@
             </div>
             <div id="groupMgmtList" style="display:flex; flex-direction:column; gap:8px;"></div>
           </div>
+
         </div>
 
       </div><!-- /.profile-content -->
     </div><!-- /.profile-layout -->
-  </div>
-
-  <!-- SETTINGS PANEL -->
-  <div class="panel" id="panel-settings">
-    <div>
-
-
-
-      <!-- DB Stats -->
-      <div class="card" id="settingsStats">
-        <div class="card-title" data-i18n="settings.dbInfo">Database Informatie</div>
-        <div style="font-family:'DM Mono',monospace; font-size:0.74rem; color:var(--text-muted); margin-bottom:12px;">
-          <span data-i18n="settings.version">Versie:</span> <span id="settingsVersion" data-i18n="settings.versionLoading">laden...</span>
-        </div>
-        <div id="dbStatsContent" style="font-size:0.88rem; color:var(--text-muted);" data-i18n="settings.loading">Laden...</div>
-      </div>
-
-      <!-- Metadata bronnen -->
-      <div class="card" style="margin-top:20px;">
-        <div class="card-title" data-i18n="settings.metadataSources">Metadata Bronnen</div>
-        <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-          <input type="checkbox" id="sourceOmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-          <span data-i18n="settings.omdbDesc">OMDb — filminformatie via IMDb-id of titel</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-          <input type="checkbox" id="sourceTmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-          <span data-i18n="settings.tmdbDesc">TMDb — filminformatie via titel + jaar</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-          <input type="checkbox" id="sourceBlurayToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-          <span data-i18n="settings.blurayDesc">Blu-ray.com scraper (experimenteel)</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-          <input type="checkbox" id="sourceBlurayDiscDeToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-          <span data-i18n="settings.blurayDeDesc">bluray-disc.de scraper (experimenteel)</span>
-        </label>
-        <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.sourceHelp">
-          OMDb en TMDb vereisen een API-key (zie .env). De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiele API.
-        </div>
-        <div id="sourceSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
-      </div>
-
-      <!-- Offline wachtrij -->
-      <div class="card" style="margin-top:20px;">
-        <div class="card-title" data-i18n="settings.offlineQueue">📶 Offline Wachtrij</div>
-        <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px;" data-i18n="settings.offlineQueueDesc">
-          Acties die offline zijn uitgevoerd worden hier tijdelijk bewaard en later gesynchroniseerd.
-        </p>
-        <div class="btn-row" style="margin-bottom:12px;">
-          <button class="btn btn-secondary" onclick="syncQueueNow()" data-i18n="settings.syncNow">↻ Nu synchroniseren</button>
-          <button class="btn btn-danger" onclick="clearQueuedMutations()" data-i18n="settings.clearQueue">🗑 Wachtrij legen</button>
-        </div>
-        <div id="queueStatus" class="status-msg"></div>
-        <div id="queueList" style="margin-top:12px;"></div>
-      </div>
-
-      <!-- Language -->
-      <div class="card" style="margin-top:20px;">
-        <div class="card-title" data-i18n="settings.language">Taal</div>
-        <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px;" data-i18n="settings.languageDesc">Kies de taal voor de interface.</p>
-        <div id="languagePicker" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-      </div>
-
-
-    </div>
   </div>
 
 <!-- INVITE PANEL OVERLAY -->
