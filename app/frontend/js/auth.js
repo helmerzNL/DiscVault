@@ -423,12 +423,12 @@ function switchAdminSubmenu(name) {
     advanced: 'adminSubAdvanced',
   };
   const targetId = map[name] || map.security;
-  ADMIN_SECTIONS.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.classList.remove('active'); el.style.display = 'none'; }
+  // Hide all admin sub-sections (scoped, same pattern as switchProfileSubmenu)
+  document.querySelectorAll('#panel-admin .profile-sub-section').forEach(el => {
+    el.style.display = 'none';
   });
   const target = document.getElementById(targetId);
-  if (target) { target.classList.add('active'); target.style.display = 'block'; }
+  if (target) target.style.display = 'block';
   if (name === 'logs')   loadLogs();
   if (name === 'backup') loadBackups();
 }
@@ -698,7 +698,7 @@ async function toggleAuth() {
   updateLogoutButton();
   const r = await fetch(`${API}/auth/toggle`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ enabled })
   });
   const d = await r.json();

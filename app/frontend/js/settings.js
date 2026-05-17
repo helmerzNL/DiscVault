@@ -494,7 +494,12 @@ async function loadMcpSettings() {
   try {
     const r = await fetch(`${API}/settings/mcp`, { headers: authHeaders() });
     const d = await r.json();
-    document.getElementById('mcpEnabledToggle').checked = d.mcp_enabled !== false;
-  } catch(e) {}
+    const el = document.getElementById('mcpEnabledToggle');
+    if (el) el.checked = d.mcp_enabled !== false;
+  } catch(e) {
+    // Default: MCP is enabled — restore correct default if fetch fails
+    const el = document.getElementById('mcpEnabledToggle');
+    if (el) el.checked = true;
+  }
 }
 
