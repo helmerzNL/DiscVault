@@ -752,8 +752,10 @@
 
         <!-- ── API SLEUTELS ── -->
         <div class="profile-sub-section" id="profileSubApiKeys">
+
+          <!-- MCP API Sleutels -->
           <div class="card" id="apiKeysCard" style="display:none;">
-            <div class="card-title">🔗 API-sleutels</div>
+            <div class="card-title">🤖 MCP API Sleutels</div>
             <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
               Gebruik een persoonlijke API-sleutel om DiscVault te verbinden met AI-clients zoals Claude of Cursor via MCP.
               Elke sleutel is gekoppeld aan jouw account — je ziet alleen jouw eigen collectie, watchlist en geschiedenis.
@@ -778,6 +780,25 @@
             <div id="apiKeyStatus" class="status-msg" style="margin-bottom:8px;"></div>
             <div id="apiKeysList"></div>
           </div>
+
+          <!-- Algemene API Sleutels (binnenkort) -->
+          <div class="card" style="margin-top:20px; opacity:0.5; pointer-events:none; user-select:none;">
+            <div class="card-title" style="display:flex; align-items:center; gap:10px;">
+              🔑 API Sleutels
+              <span style="font-size:0.68rem; font-weight:600; padding:2px 8px; border:1px solid var(--border); border-radius:20px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Binnenkort</span>
+            </div>
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
+              Genereer persoonlijke API-sleutels voor directe toegang tot de DiscVault REST API vanuit eigen scripts, apps of integraties.
+            </p>
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+              <div class="input-group" style="margin:0; flex:1; min-width:160px;">
+                <label style="font-size:0.78rem;">Label (optioneel)</label>
+                <input type="text" placeholder="bijv. Home Assistant" maxlength="80" style="padding:8px 10px; font-size:0.84rem;" disabled>
+              </div>
+              <button class="btn btn-primary" style="white-space:nowrap;" disabled>+ Sleutel aanmaken</button>
+            </div>
+          </div>
+
         </div>
 
         <!-- ── MCP ACTIVITEIT ── -->
