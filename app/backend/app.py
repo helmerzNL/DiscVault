@@ -1759,7 +1759,7 @@ def unhandled(e):
 
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "version": "2.5.5"})
+    return jsonify({"status": "ok", "version": "2.6.0"})
 
 
 @app.route("/api/stats")
