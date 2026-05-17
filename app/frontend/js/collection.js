@@ -12,6 +12,7 @@ let compareData     = null;
 let activeCompareTab = 'both';
 let groupEditionsEnabled = localStorage.getItem('dv_group_editions') === 'true';
 let showDigitalBadges    = localStorage.getItem('dv_digital_badges') === 'true';
+let activeEditionFilter  = false;
 
 // ── Selection mode ────────────────────────────────────────────────────────────
 let selectMode = false;
@@ -44,10 +45,11 @@ function getCurrentMovies() {
   const groupFilter = document.getElementById('groupFilter');
   const activeGroup = groupFilter ? groupFilter.value : '';
   return allMovies.filter(m => {
-    const matchesFormat = !activeFormat || m.format === activeFormat;
-    const matchesGroup  = !activeGroup ||
+    const matchesFormat  = !activeFormat || m.format === activeFormat;
+    const matchesGroup   = !activeGroup ||
       (activeGroup === '_mine' ? (m.owner_id === currentUserId) : (m.group_ids || []).includes(parseInt(activeGroup)));
-    const matchesQuery  = !q ||
+    const matchesEdition = !activeEditionFilter || (m.edition_group_id != null);
+    const matchesQuery   = !q ||
       (m.title || '').toLowerCase().includes(q) ||
       (m.original_title || '').toLowerCase().includes(q) ||
       (m.director || '').toLowerCase().includes(q) ||
@@ -56,7 +58,7 @@ function getCurrentMovies() {
       (m.box_set || '').toLowerCase().includes(q) ||
       (m.studios || '').toLowerCase().includes(q) ||
       (m.distributor || '').toLowerCase().includes(q);
-    return matchesFormat && matchesGroup && matchesQuery;
+    return matchesFormat && matchesGroup && matchesEdition && matchesQuery;
   });
 }
 
@@ -1753,9 +1755,17 @@ function _editionShortLabel(edType) {
     theatrical:   'TC',
     '4k_upgrade': '4K+',
     boxset_disc:  'Box',
+    dvd:          'DVD',
+    bluray:       'BD',
     other:        '…',
   };
   return labels[edType] || edType;
+}
+
+function setEditionFilter(btn) {
+  activeEditionFilter = !activeEditionFilter;
+  btn.classList.toggle('active', activeEditionFilter);
+  filterMovies();
 }
 
 // Edition group autocomplete in edit modal
