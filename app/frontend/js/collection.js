@@ -54,7 +54,7 @@ function getCurrentMovies() {
 }
 
 function canEditMovie(m) {
-  return !authEnabled || !currentUserId || currentUserRole === 'admin' || m.owner_id === currentUserId;
+  return !authEnabled || !currentUserId || currentUserRole === 'admin' || String(m.owner_id) === String(currentUserId);
 }
 
 function toggleCard(id) {

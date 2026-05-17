@@ -457,7 +457,7 @@ async function loadApiKeys() {
   if (!card || !currentUserId) return;
   card.style.display = '';
   try {
-    const r = await fetch(`${API}/user/api-keys`);
+    const r = await fetch(`${API}/user/api-keys`, { headers: authHeaders() });
     if (!r.ok) { card.style.display = 'none'; return; }
     const keys = await r.json();
     if (!keys.length) {
@@ -484,7 +484,7 @@ async function generateApiKey() {
   try {
     const r = await fetch(`${API}/user/api-keys`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ label }),
     });
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
@@ -508,7 +508,7 @@ function copyApiKey() {
 async function revokeApiKey(id) {
   const statusEl = document.getElementById('apiKeyStatus');
   try {
-    const r = await fetch(`${API}/user/api-keys/${id}`, { method: 'DELETE' });
+    const r = await fetch(`${API}/user/api-keys/${id}`, { method: 'DELETE', headers: authHeaders() });
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
     await loadApiKeys();
   } catch(e) {
@@ -521,7 +521,7 @@ async function loadMcpLogs() {
   const list = document.getElementById('mcpLogsList');
   if (!card || !currentUserId) return;
   try {
-    const r = await fetch(`${API}/user/mcp-logs?limit=50`);
+    const r = await fetch(`${API}/user/mcp-logs?limit=50`, { headers: authHeaders() });
     if (!r.ok) { card.style.display = 'none'; return; }
     const logs = await r.json();
     card.style.display = '';
