@@ -624,7 +624,7 @@ h1 {
 .install-preview img {
   display: block;
   width: 100%;
-  max-width: 240px;
+  max-width: 480px;
   height: auto;
   border-radius: var(--radius);
   border: 1px solid var(--border);
