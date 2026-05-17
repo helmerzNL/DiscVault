@@ -764,9 +764,9 @@
             <div style="background:rgba(232,197,71,.07); border:1px solid rgba(232,197,71,.25); border-radius:10px; padding:14px 16px; margin-bottom:16px;">
               <label style="display:flex; align-items:center; gap:10px; font-size:0.92rem; cursor:pointer; color:var(--text); font-weight:600;">
                 <input type="checkbox" id="collectorsModeToggle" onchange="saveCollectorsModeSetting()" style="accent-color:var(--accent); width:18px; height:18px; flex-shrink:0;">
-                <span>🏆 Collectors mode</span>
+                <span data-i18n="edition.collectorsMode">🏆 Collectors mode</span>
               </label>
-              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:6px; padding-left:28px;">
+              <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:6px; padding-left:28px;" data-i18n="edition.collectorsModeDesc">
                 Schakel geavanceerde functies in voor verzamelaars: editiegroepen (meerdere versies van dezelfde film), super-groepen (trilogie-sets) en groepsbeheer in het bewerkscherm.
               </div>
             </div>
@@ -1609,10 +1609,10 @@
           <input type="hidden" id="editEditionGroupId">
         </div>
         <div class="input-group full collectors-only">
-          <label>Super-groep (losse film)</label>
+          <label data-i18n="edit.superGroup">Super-groep (losse film)</label>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak super-groep..."
-                   oninput="searchSuperGroup(this.value)" autocomplete="off" style="flex:1; min-width:160px;">
+                   oninput="searchSuperGroup(this.value)" autocomplete="off" style="flex:1; min-width:160px;" data-i18n-placeholder="edit.superGroupPlaceholder">
             <span id="editSuperGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(124,106,247,.12); border:1px solid rgba(124,106,247,.35); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent2);">
               <span id="editSuperGroupName"></span>
               <button type="button" onclick="unlinkSuperGroup()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
@@ -1620,8 +1620,9 @@
           </div>
           <div id="editSuperGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
           <input type="hidden" id="editSuperGroupId">
-          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;">Gebruik dit alleen als deze film losse staat (geen editiegroep) maar wel onderdeel is van een trilogie-set.</div>
+          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.superGroupHelp">Gebruik dit alleen als deze film losse staat (geen editiegroep) maar wel onderdeel is van een trilogie-set.</div>
         </div>
+      </div><!-- /editTabEdition -->
 
       <!-- Edit Tab: Details -->
       <div class="form-grid edit-tab-content" id="editTabDetails">
@@ -1775,18 +1776,18 @@
     <div class="eg-panel-grid" id="egPanelGrid"></div>
     <!-- Group management -->
     <div id="egGroupManage" class="collectors-only" style="padding:0 20px 32px;">
-      <button type="button" onclick="toggleEgManageSection()" style="background:none;border:1px solid var(--border);color:var(--text-muted);font-size:0.78rem;padding:6px 14px;border-radius:6px;cursor:pointer;">
+      <button type="button" onclick="toggleEgManageSection()" style="background:none;border:1px solid var(--border);color:var(--text-muted);font-size:0.78rem;padding:6px 14px;border-radius:6px;cursor:pointer;" data-i18n="edition.egManage">
         ⚙ Groep beheren
       </button>
       <div id="egManageSection" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:8px;">
         <div class="input-group" style="margin-bottom:12px;">
-          <label style="font-size:0.8rem; font-weight:600;">Badge label</label>
-          <input type="text" id="egBadgeLabel" placeholder="bijv. Trilogy, 4K Set..." maxlength="20" style="margin-top:4px;">
+          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egBadgeLabel">Badge label</label>
+          <input type="text" id="egBadgeLabel" placeholder="bijv. Trilogy, 4K Set..." maxlength="20" style="margin-top:4px;" data-i18n-placeholder="edition.egBadgeLabelPlaceholder">
         </div>
         <div class="input-group" style="margin-bottom:16px;">
-          <label style="font-size:0.8rem; font-weight:600;">Samenvoegen onder super-groep</label>
+          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egParentGroup">Samenvoegen onder super-groep</label>
           <input type="text" id="egParentGroupSearch" placeholder="Zoek super-groep..." autocomplete="off"
-                 style="margin-top:4px;" oninput="searchParentGroup(this.value)">
+                 style="margin-top:4px;" oninput="searchParentGroup(this.value)" data-i18n-placeholder="edition.egParentGroupSearch">
           <div id="egParentGroupDropdown" style="display:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:140px; overflow-y:auto; position:relative; z-index:10;"></div>
           <div id="egParentGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(232,197,71,.1); border:1px solid rgba(232,197,71,.3); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent); margin-top:6px;">
             <span id="egParentGroupName"></span>
@@ -1794,7 +1795,7 @@
           </div>
           <input type="hidden" id="egParentGroupId">
         </div>
-        <button class="btn btn-secondary" type="button" onclick="saveEditionGroupMeta()" style="padding:6px 16px; font-size:0.82rem;">Opslaan</button>
+        <button class="btn btn-secondary" type="button" onclick="saveEditionGroupMeta()" style="padding:6px 16px; font-size:0.82rem;" data-i18n="edition.egSave">Opslaan</button>
       </div>
     </div>
   </div>

@@ -668,7 +668,7 @@ function searchParentGroup(query) {
         `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectParentGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">${g.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${g.member_count || 0} edities)</span></div>`
       );
       // Always offer to create a new super-group with the typed name
-      items.push(`<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem; border-top:1px solid var(--border); color:var(--accent);" onclick="createAndSelectParentGroup('${query.replace(/'/g,"\\'")}')">➕ Maak &ldquo;${query}&rdquo; aan als nieuwe groep</div>`);
+      items.push(`<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem; border-top:1px solid var(--border); color:var(--accent);" onclick="createAndSelectParentGroup('${query.replace(/'/g,"\\'")}')">➕ ${t('edition.egCreateGroup', query)}</div>`);
       dropdown.innerHTML = items.join('');
       dropdown.style.display = '';
     });
