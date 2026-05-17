@@ -311,7 +311,10 @@ async function respondInvite(inviteId, action) {
 
 // ── Lists: Watchlist & Watched ────────────────────────────────────────────────
 
+let currentListsSub = 'watchlist';
+
 function switchListsSubmenu(sub) {
+  currentListsSub = sub;
   document.querySelectorAll('[data-lists-sub]').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-lists-sub') === sub);
   });

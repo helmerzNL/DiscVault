@@ -403,7 +403,7 @@ function switchTabDirect(name) {
   if (panel) panel.classList.add('active');
   if (isMobileNav()) closeMobileMenu();
   if (panelName === 'collection') loadCollection();
-  if (panelName === 'lists') loadWatchlist();
+  if (panelName === 'lists') switchListsSubmenu(currentListsSub || 'watchlist');
   if (name === 'logs') loadLogs();
   if (name === 'settings') loadSettings();
   if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
