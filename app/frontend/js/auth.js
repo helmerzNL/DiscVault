@@ -939,7 +939,7 @@ async function loadAdminPanel() {
     }
     if (isAdmin) {
       document.getElementById('adminGroupsCard').style.display = 'block';
-      document.getElementById('myGroupsCard').style.display = 'none';
+      document.getElementById('myGroupsCard').style.display = 'block';
       if (me.authenticated) {
         document.getElementById('adminUsersCard').style.display = 'block';
         await loadAdminUsers();
@@ -950,6 +950,7 @@ async function loadAdminPanel() {
         document.getElementById('adminInviteCard').style.display = 'none';
       }
       await loadAdminGroups();
+      await loadMyGroups();
     } else {
       // MemberGroups
       document.getElementById('adminGroupsCard').style.display = 'none';

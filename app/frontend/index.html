@@ -706,12 +706,27 @@
             <button class="btn btn-secondary" onclick="document.getElementById('recoveryCodeCard').style.display='none'" style="margin-top:12px;" data-i18n="recovery.dismiss">Begrepen, ik heb de code opgeslagen</button>
           </div>
 
+          <!-- Mijn Groepen (MemberGroups / Admin) -->
+          <div id="myGroupsCard" class="card" style="display:none; margin-top:20px;">
+            <div class="card-title" data-i18n="settings.myGroupsTitle">📁 Mijn Groepen</div>
+            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;" data-i18n="settings.myGroupsDesc">Maak je eigen groep aan en nodig anderen uit om samen een collectie te delen.</p>
+            <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+              <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+                <label data-i18n="settings.myGroupName">Groepsnaam</label>
+                <input type="text" id="myNewGroupName" placeholder="Bijv. Familie">
+              </div>
+              <button class="btn btn-primary" onclick="createMyGroup()" style="height:40px;" data-i18n="settings.myGroupCreate">+ Aanmaken</button>
+            </div>
+            <div id="myGroupStatus" class="status-msg"></div>
+            <div id="myGroupsList"></div>
+          </div>
+
         </div>
 
         <!-- ── VOORKEUREN ── -->
         <div class="profile-sub-section" id="profileSubPreferences">
           <div class="card">
-            <div class="card-title">⚙️ Voorkeuren</div>
+            <div class="card-title" data-i18n="settings.preferencesTitle">⚙️ Voorkeuren</div>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="settings.showLocalTitle">Lokale taal voor filmtitel</span>
@@ -745,14 +760,14 @@
 
           <!-- Notification preferences — only visible while subscribed -->
           <div class="card" id="notifPrefsCard" style="margin-top:16px; display:none;">
-            <div class="card-title" style="font-size:0.95rem; margin-bottom:14px;">Waarvoor wil je meldingen ontvangen?</div>
+            <div class="card-title" style="font-size:0.95rem; margin-bottom:14px;" data-i18n="notif.prefsTitle">Waarvoor wil je meldingen ontvangen?</div>
             <div style="display:flex; flex-direction:column; gap:12px;">
               <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer;">
                 <input type="checkbox" id="prefGroupInvite" onchange="saveNotifPref('group_invite', this.checked)"
                        style="accent-color:var(--accent); width:16px; height:16px; margin-top:2px; flex-shrink:0;">
                 <span>
-                  <span style="font-size:0.9rem; color:var(--text); display:block;">Uitnodiging voor een MemberGroup</span>
-                  <span style="font-size:0.78rem; color:var(--text-muted); line-height:1.4; display:block; margin-top:2px;">
+                  <span style="font-size:0.9rem; color:var(--text); display:block;" data-i18n="invite.memberGroupInvite">Uitnodiging voor een MemberGroup</span>
+                  <span style="font-size:0.78rem; color:var(--text-muted); line-height:1.4; display:block; margin-top:2px;" data-i18n="invite.memberGroupInviteDesc">
                     Ontvang een melding wanneer iemand je uitnodigt om lid te worden van een groep.
                   </span>
                 </span>
@@ -795,18 +810,18 @@
           <!-- Algemene API Sleutels (binnenkort) -->
           <div class="card" style="margin-top:20px; opacity:0.5; pointer-events:none; user-select:none;">
             <div class="card-title" style="display:flex; align-items:center; gap:10px;">
-              🔑 API Sleutels
-              <span style="font-size:0.68rem; font-weight:600; padding:2px 8px; border:1px solid var(--border); border-radius:20px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Binnenkort</span>
+              <span data-i18n="apikeys.generalTitle">🔑 API Sleutels</span>
+              <span style="font-size:0.68rem; font-weight:600; padding:2px 8px; border:1px solid var(--border); border-radius:20px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;" data-i18n="apikeys.soonBadge">Binnenkort</span>
             </div>
-            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="apikeys.generalDesc">
               Genereer persoonlijke API-sleutels voor directe toegang tot de DiscVault REST API vanuit eigen scripts, apps of integraties.
             </p>
             <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
               <div class="input-group" style="margin:0; flex:1; min-width:160px;">
-                <label style="font-size:0.78rem;">Label (optioneel)</label>
+                <label style="font-size:0.78rem;" data-i18n="apikeys.labelOptional">Label (optioneel)</label>
                 <input type="text" placeholder="bijv. Home Assistant" maxlength="80" style="padding:8px 10px; font-size:0.84rem;" disabled>
               </div>
-              <button class="btn btn-primary" style="white-space:nowrap;" disabled>+ Sleutel aanmaken</button>
+              <button class="btn btn-primary" style="white-space:nowrap;" disabled data-i18n="apikeys.createBtn">+ Sleutel aanmaken</button>
             </div>
           </div>
 
@@ -816,14 +831,14 @@
         <div class="profile-sub-section" id="profileSubMcp">
           <div class="card" id="mcpLogsCard" style="display:none;">
             <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-              <span>🤖 MCP Activiteit</span>
-              <button class="btn btn-secondary" onclick="loadMcpLogs()" style="padding:5px 10px; font-size:0.76rem;">↻ Vernieuwen</button>
+              <span data-i18n="mcp.title">🤖 MCP Activiteit</span>
+              <button class="btn btn-secondary" onclick="loadMcpLogs()" style="padding:5px 10px; font-size:0.76rem;" data-i18n="logs.refresh">↻ Vernieuwen</button>
             </div>
-            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px; line-height:1.6;">
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:12px; line-height:1.6;" data-i18n="mcp.desc">
               Recente tool-aanroepen via de MCP-koppeling voor jouw account.
             </p>
             <div id="mcpLogsList" style="font-family:'DM Mono',monospace; font-size:0.76rem; color:var(--text-muted); max-height:360px; overflow-y:scroll; border:1px solid var(--border); border-radius:6px; -webkit-overflow-scrolling:touch;">
-              <div style="text-align:center; padding:20px; color:var(--text-muted);">Laden...</div>
+              <div style="text-align:center; padding:20px; color:var(--text-muted);" data-i18n="header.loading">Laden...</div>
             </div>
           </div>
         </div>
@@ -870,7 +885,7 @@
         <!-- ── BEVEILIGING ── -->
         <div class="profile-sub-section" id="adminSubSecurity" style="display:none;">
           <div class="card">
-            <div class="card-title">🔐 Authenticatie</div>
+            <div class="card-title" data-i18n="settings.adminAuthTitle">🔐 Authenticatie</div>
             <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
               <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; color:var(--text);">
                 <input type="checkbox" id="authToggle" onchange="toggleAuth()" style="accent-color:var(--accent); width:16px; height:16px;">
@@ -936,19 +951,6 @@
               <button class="btn btn-primary" onclick="createGroup()" style="height:40px;" data-i18n="settings.groupCreateBtn">+ Groep aanmaken</button>
             </div>
             <div id="adminGroupsList"></div>
-          </div>
-          <div id="myGroupsCard" class="card" style="display:none; margin-top:20px;">
-            <div class="card-title" data-i18n="settings.myGroupsTitle">📁 Mijn Groepen</div>
-            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;" data-i18n="settings.myGroupsDesc">Maak je eigen groep aan en nodig anderen uit om samen een collectie te delen.</p>
-            <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
-              <div class="input-group" style="margin:0; flex:1; min-width:180px;">
-                <label data-i18n="settings.myGroupName">Groepsnaam</label>
-                <input type="text" id="myNewGroupName" placeholder="Bijv. Familie">
-              </div>
-              <button class="btn btn-primary" onclick="createMyGroup()" style="height:40px;" data-i18n="settings.myGroupCreate">+ Aanmaken</button>
-            </div>
-            <div id="myGroupStatus" class="status-msg"></div>
-            <div id="myGroupsList"></div>
           </div>
         </div>
 

@@ -2139,7 +2139,7 @@ def update_movie(movie_id):
                 if filled:
                     add_log(
                         "refresh",
-                        f"Blu-ray.com aanvulling bij handmatige update: \"{merged.get('title') or lookup_title}\"",
+                        f'Blu-ray.com supplement for manual update: "{merged.get("title") or lookup_title}"',
                         f"Aangevuld: {', '.join(filled)}",
                         "info"
                     )
@@ -2156,7 +2156,7 @@ def update_movie(movie_id):
     conn.commit()
     movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     conn.close()
-    add_log("refresh", f"Handmatige update: \"{(movie['title'] if movie else existing.get('title','?'))}\"", f"Backends: {_trace_summary(attempts)}", "info")
+    add_log("refresh", f'Manual update: "{(movie["title"] if movie else existing.get("title","?"))}"', f"Backends: {_trace_summary(attempts)}", "info")
     return jsonify(dict(movie))
 
 
@@ -2438,7 +2438,7 @@ def sync_single_all_backends(movie_id):
 
         if not collected:
             conn.close()
-            add_log("refresh", f"Sync alle bronnen: geen resultaat voor \"{search_title}\"", f"Backends: {_trace_summary(attempts)}", "warn")
+            add_log("refresh", f'Sync all sources: no result for "{search_title}"', f"Backends: {_trace_summary(attempts)}", "warn")
             return jsonify({"status": "skipped", "reason": "not_found_in_api", "title": title})
 
         # Merge best-effort: prefer first provider that has a value for each field.
@@ -2546,8 +2546,8 @@ def sync_single_all_backends(movie_id):
         source_label = " + ".join(dict.fromkeys(used_sources)) or "alle actieve backends"
         add_log(
             "refresh",
-            f"Sync alle bronnen: \"{title}\"",
-            f"Bronnen: {source_label}. Velden: {', '.join(fields_updated)}. Backends: {_trace_summary(attempts)}",
+            f'Sync all sources: "{title}"',
+            f"Sources: {source_label}. Fields: {', '.join(fields_updated)}. Backends: {_trace_summary(attempts)}",
             "success"
         )
         return jsonify({
@@ -2559,7 +2559,7 @@ def sync_single_all_backends(movie_id):
         })
     except Exception as e:
         conn.close()
-        add_log("refresh", f"Fout bij sync alle bronnen \"{title}\"", str(e), "error")
+        add_log("refresh", f'Error syncing all sources "{title}"', str(e), "error")
         return jsonify({"status": "error", "title": title, "error": str(e)})
 
 
@@ -2681,7 +2681,7 @@ def sync_single_source(movie_id):
         return jsonify({"status": "updated", "title": title, "source": source_label, "fields": fields_updated, "has_poster": bool(has_poster)})
     except Exception as e:
         conn.close()
-        add_log("refresh", f"Fout bij sync bron \"{title}\"", f"Bron: {source_label}. {str(e)}", "error")
+        add_log("refresh", f'Error syncing source "{title}"', f"Source: {source_label}. {str(e)}", "error")
         return jsonify({"status": "error", "title": title, "error": str(e)}), 500
 
 
@@ -4502,7 +4502,7 @@ def update_profile():
     udata = {**dict(updated)}
     if udata.get("avatar"):
         udata["avatar_url"] = f"/api/avatars/{udata['avatar']}"
-    add_log("auth", f"Profiel bijgewerkt: {new_username}", level="info")
+    add_log("auth", f"Profile updated: {new_username}", level="info")
     return jsonify({"status": "ok", "token": token, **udata})
 
 
@@ -4864,7 +4864,7 @@ def delete_group(group_id):
     conn.execute("DELETE FROM groups WHERE id=?", (group_id,))
     conn.commit()
     conn.close()
-    add_log("groups", f"Groep '{group['name']}' verwijderd", level="warn")
+    add_log("groups", f"Group '{group['name']}' deleted", level="warn")
     return jsonify({"status": "deleted"})
 
 
@@ -5191,7 +5191,7 @@ def set_mcp_settings():
     )
     conn.commit()
     conn.close()
-    add_log("settings", f"MCP server {'ingeschakeld' if val else 'uitgeschakeld'}", level="info")
+    add_log("settings", f"MCP server {'enabled' if val else 'disabled'}", level="info")
     return jsonify({"mcp_enabled": val})
 
 
@@ -5317,7 +5317,7 @@ def create_backup():
             os.path.getsize(os.path.join(dp, f))
             for dp, _, fn in os.walk(backup_path) for f in fn
         )
-        add_log("settings", f"Backup aangemaakt: {backup_name}",
+        add_log("settings", f"Backup created: {backup_name}",
                 f"Grootte: {size // 1024} KB", "success")
         return jsonify({"status": "ok", "name": backup_name, "size": size})
     except Exception as e:
