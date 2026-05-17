@@ -2551,15 +2551,15 @@ document.addEventListener('DOMContentLoaded', initDetailSwipe);
 function _editionShortLabel(edType, customLabel) {
   if (edType === 'custom') return customLabel || '…';
   const labels = {
-    steelbook:    'Steel',
-    directors_cut: 'DC',
-    limited:      'LE',
-    theatrical:   'TC',
-    '4k_upgrade': '4K+',
-    boxset_disc:  'Box',
+    steelbook:    'Steelbook',
+    directors_cut: "Director's Cut",
+    limited:      'Limited Edition',
+    theatrical:   'Theatrical Cut',
+    '4k_upgrade': '4K',
+    '4k_combo':   '4K+BD',
+    boxset_disc:  'Box-Set',
     dvd:          'DVD',
-    bluray:       'BD',
-    other:        '…',
+    bluray:       'Blu-ray',
   };
   return labels[edType] || edType;
 }
@@ -2823,7 +2823,7 @@ async function loadGroupMgmtList(filter) {
         else if (isChildOfBoxSet) type = 'vault'; // child vault inside a box set
         else type = 'vault'; // standalone vault
 
-        const totalMembers = (eg.member_count || 0) + (eg.loose_movie_count || 0);
+        const totalMembers = (eg.member_count || 0) + (eg.loose_movie_count || 0) + (eg.child_member_count || 0);
         if (_gmFilter !== 'all' && _gmFilter !== type) continue;
         items.push({ id: eg.id, title: eg.title, type, memberCount: totalMembers, src: 'eg' });
       }
@@ -2834,7 +2834,8 @@ async function loadGroupMgmtList(filter) {
       const r = await fetch(`${API}/collections`);
       const cols = await r.json();
       for (const c of cols) {
-        items.push({ id: c.id, title: c.title, type: 'collection', memberCount: 0, src: 'col' });
+        const totalMembers = (c.eg_movie_count || 0) + (c.loose_movie_count || 0);
+        items.push({ id: c.id, title: c.title, type: 'collection', memberCount: totalMembers, src: 'col' });
       }
     }
 

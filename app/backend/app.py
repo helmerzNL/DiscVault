@@ -6382,12 +6382,26 @@ def list_collections():
     q = (request.args.get("q") or "").strip()
     conn = get_db()
     if q:
-        rows = conn.execute(
-            "SELECT * FROM collections WHERE title LIKE ? ORDER BY title ASC",
-            (f"%{q}%",)
-        ).fetchall()
+        rows = conn.execute("""
+            SELECT c.*,
+                   (SELECT COUNT(*) FROM edition_groups eg WHERE eg.collection_id = c.id) AS group_count,
+                   (SELECT COUNT(*) FROM movies m WHERE m.collection_id = c.id) AS loose_movie_count,
+                   (SELECT COUNT(*) FROM movies m WHERE m.edition_group_id IN
+                       (SELECT id FROM edition_groups WHERE collection_id = c.id)) AS eg_movie_count
+            FROM collections c
+            WHERE c.title LIKE ?
+            ORDER BY c.title ASC
+        """, (f"%{q}%",)).fetchall()
     else:
-        rows = conn.execute("SELECT * FROM collections ORDER BY title ASC").fetchall()
+        rows = conn.execute("""
+            SELECT c.*,
+                   (SELECT COUNT(*) FROM edition_groups eg WHERE eg.collection_id = c.id) AS group_count,
+                   (SELECT COUNT(*) FROM movies m WHERE m.collection_id = c.id) AS loose_movie_count,
+                   (SELECT COUNT(*) FROM movies m WHERE m.edition_group_id IN
+                       (SELECT id FROM edition_groups WHERE collection_id = c.id)) AS eg_movie_count
+            FROM collections c
+            ORDER BY c.title ASC
+        """).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -6499,7 +6513,8 @@ def list_edition_groups():
             SELECT eg.*,
                    COUNT(DISTINCT m.id) AS member_count,
                    (SELECT COUNT(*) FROM edition_groups eg2 WHERE eg2.parent_group_id = eg.id) AS child_group_count,
-                   (SELECT COUNT(*) FROM movies m2 WHERE m2.super_group_id = eg.id) AS loose_movie_count
+                   (SELECT COUNT(*) FROM movies m2 WHERE m2.super_group_id = eg.id) AS loose_movie_count,
+                   (SELECT COUNT(*) FROM movies m3 JOIN edition_groups eg3 ON m3.edition_group_id = eg3.id WHERE eg3.parent_group_id = eg.id) AS child_member_count
             FROM edition_groups eg
             LEFT JOIN movies m ON m.edition_group_id = eg.id
             WHERE eg.title LIKE ?
@@ -6511,7 +6526,8 @@ def list_edition_groups():
             SELECT eg.*,
                    COUNT(DISTINCT m.id) AS member_count,
                    (SELECT COUNT(*) FROM edition_groups eg2 WHERE eg2.parent_group_id = eg.id) AS child_group_count,
-                   (SELECT COUNT(*) FROM movies m2 WHERE m2.super_group_id = eg.id) AS loose_movie_count
+                   (SELECT COUNT(*) FROM movies m2 WHERE m2.super_group_id = eg.id) AS loose_movie_count,
+                   (SELECT COUNT(*) FROM movies m3 JOIN edition_groups eg3 ON m3.edition_group_id = eg3.id WHERE eg3.parent_group_id = eg.id) AS child_member_count
             FROM edition_groups eg
             LEFT JOIN movies m ON m.edition_group_id = eg.id
             GROUP BY eg.id
