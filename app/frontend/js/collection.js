@@ -25,6 +25,7 @@ async function loadDigitalBadgeData() {
 
 let groupEditionsEnabled = localStorage.getItem('dv_group_editions') === 'true';
 let showDigitalBadges    = localStorage.getItem('dv_digital_badges') === 'true';
+let digitalBadgeFilter   = localStorage.getItem('dv_digital_badge_filter') || 'all';
 let collectorsMode       = localStorage.getItem('dv_collectors_mode') === 'true';
 
 // Apply body class immediately so CSS .collectors-only rules take effect before render
@@ -176,8 +177,13 @@ function renderGrid(movies) {
     if (showDigitalBadges && compareData) {
       const match = (compareData.physical_and_digital || []).find(e => e.movie && e.movie.id === m.id);
       if (match && match.digital_matches && match.digital_matches.length) {
-        const srcType = match.digital_matches[0].source_type;
-        digitalBadge = `<div class="movie-card-digital-badge" title="${match.digital_matches.map(x=>x.source_name).join(', ')}">${srcType === 'plex' ? '🟡' : '🔵'}</div>`;
+        const filtered = digitalBadgeFilter === 'all'
+          ? match.digital_matches
+          : match.digital_matches.filter(x => x.source_type === digitalBadgeFilter);
+        if (filtered.length) {
+          const srcType = filtered[0].source_type;
+          digitalBadge = `<div class="movie-card-digital-badge" title="${filtered.map(x=>x.source_name).join(', ')}">${srcType === 'plex' ? '🟡' : '🔵'}</div>`;
+        }
       }
     }
 

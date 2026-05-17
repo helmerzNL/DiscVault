@@ -786,6 +786,13 @@
               <input type="checkbox" id="showDigitalBadgesToggle" onchange="saveDigitalBadgesSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="edition.digitalBadges">Plex/Jellyfin badge tonen op filmtegel</span>
             </label>
+            <div id="digitalBadgeFilterRow" style="display:none; margin-bottom:10px; margin-left:24px;">
+              <select id="digitalBadgeFilterSelect" onchange="saveDigitalBadgeFilter()" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.82rem;">
+                <option value="all" data-i18n="edition.badgeFilterAll">Alle bronnen</option>
+                <option value="plex" data-i18n="edition.badgeFilterPlex">Alleen Plex</option>
+                <option value="jellyfin" data-i18n="edition.badgeFilterJellyfin">Alleen Jellyfin</option>
+              </select>
+            </div>
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="edition.digitalBadgesDesc">
               Toon een klein icoon als een film ook digitaal beschikbaar is in Plex of Jellyfin.
             </div>

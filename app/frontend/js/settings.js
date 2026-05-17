@@ -577,6 +577,10 @@ function loadGroupEditionsSetting() {
   if (toggle) toggle.checked = groupEditionsEnabled;
   const badgeToggle = document.getElementById('showDigitalBadgesToggle');
   if (badgeToggle) badgeToggle.checked = showDigitalBadges;
+  const filterRow = document.getElementById('digitalBadgeFilterRow');
+  if (filterRow) filterRow.style.display = showDigitalBadges ? '' : 'none';
+  const filterSel = document.getElementById('digitalBadgeFilterSelect');
+  if (filterSel) filterSel.value = digitalBadgeFilter;
 }
 
 function saveGroupEditionsSetting() {
@@ -591,11 +595,21 @@ function saveDigitalBadgesSetting() {
   const toggle = document.getElementById('showDigitalBadgesToggle');
   showDigitalBadges = !!(toggle && toggle.checked);
   localStorage.setItem('dv_digital_badges', showDigitalBadges ? 'true' : 'false');
+  const filterRow = document.getElementById('digitalBadgeFilterRow');
+  if (filterRow) filterRow.style.display = showDigitalBadges ? '' : 'none';
   if (showDigitalBadges && !compareData) {
     loadDigitalBadgeData();
   } else {
     renderGrid(getCurrentMovies());
   }
+  showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
+}
+
+function saveDigitalBadgeFilter() {
+  const sel = document.getElementById('digitalBadgeFilterSelect');
+  digitalBadgeFilter = sel ? sel.value : 'all';
+  localStorage.setItem('dv_digital_badge_filter', digitalBadgeFilter);
+  renderGrid(getCurrentMovies());
   showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }
 
