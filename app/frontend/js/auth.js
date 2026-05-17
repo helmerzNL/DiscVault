@@ -400,8 +400,7 @@ function switchProfileSubmenu(name) {
   if (name === 'apikeys')       loadApiKeys();
   if (name === 'mcp')           loadMcpLogs();
   if (name === 'preferences') {
-    const sel = document.getElementById('profileLangSelect');
-    if (sel) sel.value = currentLang;
+    loadRatingCountryPicker();
   }
 }
 

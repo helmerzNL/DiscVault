@@ -1,4 +1,11 @@
 // ── Collection ────────────────────────────────────────────────────────────────
+
+// Country flag as inline SVG image (flagcdn.com), works on all platforms including Windows
+function _flagImg(code) {
+  const lc = (code || '').toLowerCase();
+  return `<img src="https://flagcdn.com/${lc}.svg" width="20" height="15" alt="${lc.toUpperCase()}" style="border-radius:2px;vertical-align:middle;flex-shrink:0;">`;
+}
+
 // ── Selection mode ────────────────────────────────────────────────────────────
 let selectMode = false;
 let selectedIds = new Set();
@@ -503,7 +510,13 @@ async function openMovieDetail(id) {
   tags.innerHTML = '';
   if (movie.format)          tags.innerHTML += `<span class="tag format">${movie.format}</span>`;
   if (movie.year)            tags.innerHTML += `<span class="tag">${movie.year}</span>`;
-  if (movie.audience_rating) tags.innerHTML += `<span class="tag">${movie.audience_rating}</span>`;
+  // Preferred content rating: from per-country JSON, fallback to manual audience_rating
+  let _preferredRating = '';
+  if (movie.content_ratings) {
+    try { const _cr = JSON.parse(movie.content_ratings); _preferredRating = _cr[preferredRatingCountry] || ''; } catch(e) {}
+  }
+  if (!_preferredRating) _preferredRating = movie.audience_rating || '';
+  if (_preferredRating) tags.innerHTML += `<span class="tag">${_preferredRating}</span>`;
   if (movie.hdr)             tags.innerHTML += `<span class="tag" style="color:#7cf">${movie.hdr}</span>`;
 
   const src = posterSrc(movie);
@@ -567,7 +580,7 @@ async function openMovieDetail(id) {
     row(t('d.packaging'),     movie.packaging),
     row(t('d.region'),          movie.regions),
     movie.rating ? `<div class="detail-item"><label>${t('d.imdbRating')}</label><span class="rating-stars">★ ${movie.rating}</span></div>` : '',
-    row(t('d.contentRating'),     movie.audience_rating),
+    row(t('d.contentRating'),     _preferredRating ? `<span style="display:inline-flex;align-items:center;gap:5px;">${_flagImg(preferredRatingCountry.toLowerCase())} ${_preferredRating}</span>` : (movie.audience_rating || '')),
     row(t('d.distributor'),   movie.distributor),
     row(t('d.studio'),         movie.studios),
     row(t('d.boxSet'),        movie.box_set, true),
@@ -614,12 +627,12 @@ async function openMovieDetail(id) {
     try { _ratings = movie.content_ratings ? JSON.parse(movie.content_ratings) : {}; } catch(e) {}
 
     const _i18nLangs = [
-      { code: 'nl', flag: '🇳🇱', name: 'Nederlands', country: 'NL' },
-      { code: 'fr', flag: '🇫🇷', name: 'Français',   country: 'FR' },
-      { code: 'de', flag: '🇩🇪', name: 'Deutsch',    country: 'DE' },
-      { code: 'es', flag: '🇪🇸', name: 'Español',    country: 'ES' },
-      { code: 'pt', flag: '🇵🇹', name: 'Português',  country: 'PT' },
-      { code: 'it', flag: '🇮🇹', name: 'Italiano',   country: 'IT' },
+      { code: 'nl', name: 'Nederlands', country: 'NL' },
+      { code: 'fr', name: 'Français',   country: 'FR' },
+      { code: 'de', name: 'Deutsch',    country: 'DE' },
+      { code: 'es', name: 'Español',    country: 'ES' },
+      { code: 'pt', name: 'Português',  country: 'PT' },
+      { code: 'it', name: 'Italiano',   country: 'IT' },
     ];
     const _ratingBadge = c => c
       ? `<span style="display:inline-block;font-size:0.68rem;font-weight:700;padding:1px 6px;border:1px solid rgba(255,165,0,0.5);border-radius:4px;color:#f90;margin-left:8px;vertical-align:middle;">${c}</span>`
@@ -629,15 +642,11 @@ async function openMovieDetail(id) {
     const _i18nItems = _i18nLangs.filter(l => movie[`title_${l.code}`] || movie[`plot_${l.code}`]);
 
     // Countries shown at the bottom: EN variants + langs with rating but no title/plot
-    const _enCountries = [
-      { country: 'US', flag: '🇺🇸' },
-      { country: 'GB', flag: '🇬🇧' },
-      { country: 'CA', flag: '🇨🇦' },
-    ];
+    const _enCountries = ['US', 'GB', 'CA'];
     const _bottomCountries = [
       ..._i18nLangs.filter(l => _ratings[l.country] && !_i18nItems.find(x => x.country === l.country))
-                   .map(l => ({ country: l.country, flag: l.flag })),
-      ..._enCountries.filter(e => _ratings[e.country]),
+                   .map(l => l.country),
+      ..._enCountries.filter(c => _ratings[c]),
     ];
 
     const hasContent = _i18nItems.length || _bottomCountries.length;
@@ -647,8 +656,8 @@ async function openMovieDetail(id) {
           ? 'margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,165,0,0.18);'
           : '';
         return `<div style="${divider}">
-          <div style="font-weight:600;font-size:0.92rem;margin-bottom:4px;">
-            ${l.flag} ${movie[`title_${l.code}`] || '<em style="opacity:.5">—</em>'}
+          <div style="font-weight:600;font-size:0.92rem;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+            ${_flagImg(l.code)} <span>${movie[`title_${l.code}`] || '<em style="opacity:.5">—</em>'}</span>
             ${_ratingBadge(_ratings[l.country])}
           </div>
           ${movie[`plot_${l.code}`] ? `<div style="font-size:0.83rem;color:var(--text-muted);line-height:1.55;">${movie[`plot_${l.code}`]}</div>` : ''}
@@ -657,7 +666,7 @@ async function openMovieDetail(id) {
 
       if (_bottomCountries.length) {
         html += `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;${_i18nItems.length ? 'margin-top:4px;' : ''}">
-          ${_bottomCountries.map(e => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.82rem;color:var(--text-muted);">${e.flag} ${e.country} ${_ratingBadge(_ratings[e.country])}</span>`).join('')}
+          ${_bottomCountries.map(c => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.82rem;color:var(--text-muted);">${_flagImg(c.toLowerCase())} ${c} ${_ratingBadge(_ratings[c])}</span>`).join('')}
         </div>`;
       }
       _debugI18nContent.innerHTML = html;
@@ -673,6 +682,7 @@ async function openMovieDetail(id) {
   document.getElementById('castLoading').style.display = 'block';
   document.getElementById('castContent').innerHTML = '';
   _castLoaded = false;
+  _mediaLoaded = false;
 
   // Update watchlist / watched state from allMovies cache
   const cachedMovie = allMovies.find(m => m.id === id);
@@ -714,18 +724,68 @@ function closeModalDirect() { closeMovieDetail(); }
 function closeModal(e) {}
 
 let _castLoaded = false;
+let _mediaLoaded = false;
 
 function switchDetailTab(tab) {
   document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.modal-tab-content').forEach(c => c.classList.remove('active'));
   const tabBtn = document.querySelector(`.modal-tab[data-detail-tab="${tab}"]`);
   if (tabBtn) tabBtn.classList.add('active');
-  const tabContent = document.getElementById(tab === 'info' ? 'detailTabInfo' : 'detailTabCast');
+  const tabMap = { info: 'detailTabInfo', cast: 'detailTabCast', media: 'detailTabMedia' };
+  const tabContent = document.getElementById(tabMap[tab] || 'detailTabInfo');
   if (tabContent) tabContent.classList.add('active');
   if (tab === 'cast' && !_castLoaded) {
     _castLoaded = true;
     loadMovieCast(currentMovieId);
   }
+  if (tab === 'media' && !_mediaLoaded) {
+    _mediaLoaded = true;
+    loadMovieMedia();
+  }
+}
+
+function loadMovieMedia() {
+  const container = document.getElementById('mediaTabContent');
+  if (!container) return;
+  const movie = currentMovieData;
+  let html = '';
+
+  // Trailer
+  const trailerUrl = movie.trailer_url || '';
+  const ytMatch = trailerUrl.match(/[?&]v=([^&]+)/) || trailerUrl.match(/youtu\.be\/([^?&]+)/);
+  if (ytMatch) {
+    const ytKey = ytMatch[1];
+    html += `<div style="margin-bottom:24px;">
+      <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
+      <div style="position:relative;width:100%;padding-bottom:56.25%;border-radius:10px;overflow:hidden;background:#000;">
+        <iframe
+          style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
+          src="https://www.youtube-nocookie.com/embed/${ytKey}"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+          loading="lazy"
+          title="Trailer"></iframe>
+      </div>
+    </div>`;
+  }
+
+  // Backdrops
+  let backdrops = [];
+  try { backdrops = movie.backdrops ? JSON.parse(movie.backdrops) : []; } catch(e) {}
+  if (!backdrops.length && movie.backdrop) backdrops = [movie.backdrop];
+  if (backdrops.length) {
+    html += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.backdrops')} (${backdrops.length})</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
+      ${backdrops.map(url => `<a href="${url}" target="_blank" rel="noopener noreferrer" style="display:block;border-radius:8px;overflow:hidden;">
+        <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+      </a>`).join('')}
+    </div>`;
+  }
+
+  if (!html) {
+    html = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+  }
+  container.innerHTML = html;
 }
 
 async function loadMovieCast(movieId) {
@@ -844,18 +904,18 @@ async function openPersonDetail(personId) {
     const _personDebugContent = document.getElementById('personDebugI18nContent');
     if (_personDebugContent) {
       const _bioLangs = [
-        { code: 'nl', flag: '🇳🇱', name: 'Nederlands' },
-        { code: 'fr', flag: '🇫🇷', name: 'Français' },
-        { code: 'de', flag: '🇩🇪', name: 'Deutsch' },
-        { code: 'es', flag: '🇪🇸', name: 'Español' },
-        { code: 'pt', flag: '🇵🇹', name: 'Português' },
-        { code: 'it', flag: '🇮🇹', name: 'Italiano' },
+        { code: 'nl', name: 'Nederlands' },
+        { code: 'fr', name: 'Français' },
+        { code: 'de', name: 'Deutsch' },
+        { code: 'es', name: 'Español' },
+        { code: 'pt', name: 'Português' },
+        { code: 'it', name: 'Italiano' },
       ];
       const _bioItems = _bioLangs.filter(l => p[`biography_${l.code}`]);
       if (_bioItems.length) {
         _personDebugContent.innerHTML = _bioItems.map((l, i) => `
           <div style="margin-bottom:${i < _bioItems.length - 1 ? '14px' : '0'}; padding-bottom:${i < _bioItems.length - 1 ? '14px' : '0'}; ${i < _bioItems.length - 1 ? 'border-bottom:1px solid rgba(255,165,0,0.18);' : ''}">
-            <div style="font-weight:600; font-size:0.82rem; margin-bottom:6px;">${l.flag} ${l.name}</div>
+            <div style="font-weight:600; font-size:0.82rem; margin-bottom:6px; display:flex; align-items:center; gap:6px;">${_flagImg(l.code)} <span>${l.name}</span></div>
             <div style="font-size:0.83rem; color:var(--text-muted); line-height:1.55;">${p[`biography_${l.code}`]}</div>
           </div>`).join('');
       } else {

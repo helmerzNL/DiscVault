@@ -8,6 +8,40 @@ async function loadSettings() {
   loadDebugSettings(); // also initialises showLocalTitleToggle
 }
 
+// ── Rating country picker ────────────────────────────────────────────────────
+
+const RATING_COUNTRY_NAMES = {
+  nl: { US: 'Verenigde Staten', GB: 'Verenigd Koninkrijk', CA: 'Canada', NL: 'Nederland',    FR: 'Frankrijk',  DE: 'Duitsland',   ES: 'Spanje',   PT: 'Portugal',   IT: 'Italië' },
+  en: { US: 'United States',    GB: 'United Kingdom',     CA: 'Canada', NL: 'Netherlands',   FR: 'France',     DE: 'Germany',     ES: 'Spain',    PT: 'Portugal',   IT: 'Italy'  },
+  fr: { US: 'États-Unis',       GB: 'Royaume-Uni',        CA: 'Canada', NL: 'Pays-Bas',      FR: 'France',     DE: 'Allemagne',   ES: 'Espagne',  PT: 'Portugal',   IT: 'Italie' },
+  de: { US: 'USA',              GB: 'Vereinigtes Königreich', CA: 'Kanada', NL: 'Niederlande', FR: 'Frankreich', DE: 'Deutschland', ES: 'Spanien',  PT: 'Portugal',   IT: 'Italien'},
+  es: { US: 'Estados Unidos',   GB: 'Reino Unido',        CA: 'Canadá', NL: 'Países Bajos',  FR: 'Francia',    DE: 'Alemania',    ES: 'España',   PT: 'Portugal',   IT: 'Italia' },
+  pt: { US: 'Estados Unidos',   GB: 'Reino Unido',        CA: 'Canadá', NL: 'Países Baixos', FR: 'França',     DE: 'Alemanha',    ES: 'Espanha',  PT: 'Portugal',   IT: 'Itália' },
+  it: { US: 'Stati Uniti',      GB: 'Regno Unito',        CA: 'Canada', NL: 'Paesi Bassi',   FR: 'Francia',    DE: 'Germania',    ES: 'Spagna',   PT: 'Portogallo', IT: 'Italia' },
+};
+const RATING_COUNTRIES_ORDER = ['NL', 'DE', 'FR', 'ES', 'PT', 'IT', 'US', 'GB', 'CA'];
+
+function loadRatingCountryPicker() {
+  const container = document.getElementById('ratingCountryPicker');
+  if (!container) return;
+  const names = RATING_COUNTRY_NAMES[currentLang] || RATING_COUNTRY_NAMES.en;
+  container.innerHTML = RATING_COUNTRIES_ORDER.map(c => {
+    const active = preferredRatingCountry === c;
+    return `<button type="button" onclick="selectRatingCountry('${c}')" id="rcBtn_${c}"
+      style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};border-radius:8px;background:${active ? 'rgba(232,197,71,0.08)' : 'var(--surface2)'};cursor:pointer;font-size:0.82rem;color:var(--text);">
+      <img src="https://flagcdn.com/${c.toLowerCase()}.svg" width="20" height="15" alt="${c}" style="border-radius:2px;flex-shrink:0;">
+      <span>${names[c] || c}</span>
+    </button>`;
+  }).join('');
+}
+
+function selectRatingCountry(code) {
+  preferredRatingCountry = code;
+  localStorage.setItem('dv_rating_country', code);
+  loadRatingCountryPicker();
+  showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
+}
+
 async function loadSourceSettings() {
   try {
     const r = await fetch(`${API}/settings/sources`);
@@ -451,6 +485,7 @@ async function loadDebugSettings() {
     const el2 = document.getElementById('showLocalTitleToggle');
     if (el2) el2.checked = true;
   }
+  loadRatingCountryPicker();
 }
 
 async function saveDisplaySettings() {

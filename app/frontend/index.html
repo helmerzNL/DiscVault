@@ -701,19 +701,17 @@
         <div class="profile-sub-section" id="profileSubPreferences">
           <div class="card">
             <div class="card-title">⚙️ Voorkeuren</div>
-            <div class="input-group" style="max-width:240px; margin-bottom:20px;">
-              <label>Taal / Language</label>
-              <select id="profileLangSelect" onchange="changeLanguage(this.value)" style="padding:9px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.84rem; width:100%;">
-                <option value="nl">🇳🇱 Nederlands</option>
-                <option value="en">🇬🇧 English</option>
-              </select>
-            </div>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.showLocalTitle">Lokale taal voor titel weergeven</span>
+              <span data-i18n="settings.showLocalTitle">Lokale taal voor filmtitel</span>
             </label>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.showLocalTitleDesc">
-              Toon de filmtitel in de taal van de app (als beschikbaar). Uitgeschakeld toont altijd de Engelse titel.
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.showLocalTitleDesc">
+              Toon de filmtitel in de taal van de app (indien beschikbaar). Uitgeschakeld toont altijd de Engelse originele titel.
+            </div>
+            <label style="display:block; font-size:0.88rem; font-weight:500; color:var(--text); margin-bottom:8px;" data-i18n="settings.ratingCountry">Leeftijdsrestrictie land</label>
+            <div id="ratingCountryPicker" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:8px;" data-i18n="settings.ratingCountryDesc">
+              Kies het land waarvan de leeftijdsclassificatie wordt weergegeven bij films.
             </div>
             <div id="preferencesStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
@@ -1310,6 +1308,7 @@
       <div class="modal-tabs">
         <button class="modal-tab active" onclick="switchDetailTab('info')" data-detail-tab="info" data-i18n="modal.tabInfo">Basisinfo</button>
         <button class="modal-tab" onclick="switchDetailTab('cast')" data-detail-tab="cast" data-i18n="modal.tabCast">Cast &amp; Crew</button>
+        <button class="modal-tab" onclick="switchDetailTab('media')" data-detail-tab="media" data-i18n="modal.tabMedia">Media</button>
       </div>
 
       <!-- Tab: Basic Info -->
@@ -1340,6 +1339,11 @@
           <span class="spinner"></span>
         </div>
         <div id="castContent" style="display:none;"></div>
+      </div>
+
+      <!-- Tab: Media -->
+      <div class="modal-tab-content" id="detailTabMedia">
+        <div id="mediaTabContent"></div>
       </div>
 
     </div>
