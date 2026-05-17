@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v41";
+const SW_VERSION = "discvault-sw-v42";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -22,7 +22,16 @@ const APP_SHELL = [
   "/js/social.js",
   "/js/settings.js",
   "/js/app.js",
-  "/i18n/translations.json"
+  "/i18n/translations.json",
+  "/flags/nl.svg",
+  "/flags/de.svg",
+  "/flags/fr.svg",
+  "/flags/es.svg",
+  "/flags/pt.svg",
+  "/flags/it.svg",
+  "/flags/us.svg",
+  "/flags/gb.svg",
+  "/flags/ca.svg"
 ];
 
 self.addEventListener("install", event => {

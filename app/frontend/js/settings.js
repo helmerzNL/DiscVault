@@ -29,7 +29,7 @@ function loadRatingCountryPicker() {
     const active = preferredRatingCountry === c;
     return `<button type="button" onclick="selectRatingCountry('${c}')" id="rcBtn_${c}"
       style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};border-radius:8px;background:${active ? 'rgba(232,197,71,0.08)' : 'var(--surface2)'};cursor:pointer;font-size:0.82rem;color:var(--text);">
-      <img src="https://flagcdn.com/${c.toLowerCase()}.svg" width="20" height="15" alt="${c}" style="border-radius:2px;flex-shrink:0;">
+      <img src="/flags/${c.toLowerCase()}.svg" width="20" height="15" alt="${c}" style="border-radius:2px;flex-shrink:0;">
       <span>${names[c] || c}</span>
     </button>`;
   }).join('');

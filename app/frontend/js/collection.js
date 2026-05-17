@@ -3,7 +3,7 @@
 // Country flag as inline SVG image (flagcdn.com), works on all platforms including Windows
 function _flagImg(code) {
   const lc = (code || '').toLowerCase();
-  return `<img src="https://flagcdn.com/${lc}.svg" width="20" height="15" alt="${lc.toUpperCase()}" style="border-radius:2px;vertical-align:middle;flex-shrink:0;">`;
+  return `<img src="/flags/${lc}.svg" width="20" height="15" alt="${lc.toUpperCase()}" style="border-radius:2px;vertical-align:middle;flex-shrink:0;">`;
 }
 
 // ── Selection mode ────────────────────────────────────────────────────────────
