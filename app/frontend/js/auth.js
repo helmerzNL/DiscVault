@@ -422,9 +422,10 @@ function switchAdminSubmenu(name) {
     advanced: 'adminSubAdvanced',
   };
   const targetId = map[name] || map.security;
-  // Hide all admin sub-sections
-  document.querySelectorAll('#panel-admin .profile-sub-section[id^="adminSub"]').forEach(el => {
-    el.style.display = 'none';
+  // Hide all admin sub-sections by ID (reliable, no CSS cascade dependency)
+  ADMIN_SECTIONS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
   });
   const target = document.getElementById(targetId);
   if (target) target.style.display = 'block';
