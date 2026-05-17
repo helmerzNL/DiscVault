@@ -72,14 +72,10 @@ function switchSettingsSubmenu(name) {
   document.querySelectorAll('[data-settings-sub]').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-settings-sub') === name);
   });
+  document.querySelectorAll('#panel-settings .profile-sub-section').forEach(s => s.classList.remove('active'));
   const map = { general: 'settingsSubGeneral', collectionmgmt: 'settingsSubCollectionmgmt' };
-  const targetId = map[name] || map.general;
-  SETTINGS_SECTIONS.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-  const target = document.getElementById(targetId);
-  if (target) target.style.display = 'block';
+  const el = document.getElementById(map[name] || map.general);
+  if (el) el.classList.add('active');
   if (name === 'collectionmgmt') {
     loadCollectorsModeSetting();
     loadGroupEditionsSetting();
