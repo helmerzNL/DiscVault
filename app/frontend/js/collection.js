@@ -1253,9 +1253,12 @@ function startEdit() {
       document.getElementById('editEditionGroupName').textContent = cached.title;
       badge.style.display = 'flex';
     } else {
+      const _editingId = currentMovieId;
       fetch(`${API}/edition-groups/${egId}`).then(r => r.json()).then(g => {
+        if (currentMovieId !== _editingId) return; // stale — user already opened another movie
         document.getElementById('editEditionGroupName').textContent = g.title || '';
         badge.style.display = 'flex';
+        _editionGroupCache.push(g); // cache it so next open is instant
       }).catch(() => {});
     }
   } else {
