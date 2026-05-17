@@ -6,6 +6,7 @@ async function loadSettings() {
   loadQueueSettings();
   loadSourceSettings();
   loadDebugSettings(); // also initialises showLocalTitleToggle
+  loadLanguagePicker();
 }
 
 // ── Rating country picker ────────────────────────────────────────────────────
@@ -412,10 +413,29 @@ async function resetDatabase() {
   }
 }
 
+// ── Language picker ─────────────────────────────────────────────────────────
+const LANGS_ORDER    = ['nl', 'en', 'fr', 'de', 'es', 'pt', 'it'];
+const LANG_NATIVE    = { nl: 'Nederlands', en: 'English', fr: 'Français', de: 'Deutsch', es: 'Español', pt: 'Português', it: 'Italiano' };
+const LANG_FLAG_CODE = { nl: 'nl', en: 'gb', fr: 'fr', de: 'de', es: 'es', pt: 'pt', it: 'it' };
+
+function loadLanguagePicker() {
+  const container = document.getElementById('languagePicker');
+  if (!container) return;
+  container.innerHTML = LANGS_ORDER.map(lang => {
+    const active = currentLang === lang;
+    return `<button type="button" onclick="changeLanguage('${lang}')" id="langBtn_${lang}"
+      style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};border-radius:8px;background:${active ? 'rgba(232,197,71,0.08)' : 'var(--surface2)'};cursor:pointer;font-size:0.82rem;color:var(--text);">
+      <img src="/flags/${LANG_FLAG_CODE[lang]}.svg" width="20" height="15" alt="${lang}" style="border-radius:2px;flex-shrink:0;">
+      <span>${LANG_NATIVE[lang]}</span>
+    </button>`;
+  }).join('');
+}
+
 // ── Language & MCP Settings ───────────────────────────────────────────────────
 function changeLanguage(lang) {
   setLanguage(lang);
   loadRatingCountryPicker();
+  loadLanguagePicker();
   _updateWatchedBtn();
   _updateWatchlistBtn();
   loadCollection();

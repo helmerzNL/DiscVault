@@ -3,11 +3,11 @@ async function init() {
   reorganizeToevoegenPanels();
   validateCriticalUiElements();
   applyDebugVisibility();
-  document.getElementById('languageSelect').value = currentLang;
   applyLanguage();
   await loadAppVersion();
   await loadDebugSettings();
   loadRatingCountryPicker();
+  loadLanguagePicker();
   const ok = await checkAuth();
   if (!ok) return;
   loadAdminPanel();

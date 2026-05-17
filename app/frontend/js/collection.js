@@ -744,10 +744,16 @@ function switchDetailTab(tab) {
   }
 }
 
+function _playYouTube(key) {
+  const el = document.getElementById(`ytThumb_${key}`);
+  if (!el) return;
+  el.innerHTML = `<iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" src="https://www.youtube-nocookie.com/embed/${key}?autoplay=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen title="Trailer"></iframe>`;
+}
+
 function loadMovieMedia() {
   const container = document.getElementById('mediaTabContent');
   if (!container) return;
-  const movie = currentMovieData;
+  const movie = allMovies.find(m => m.id === currentMovieId) || {};
   let html = '';
 
   // Trailer
@@ -757,14 +763,11 @@ function loadMovieMedia() {
     const ytKey = ytMatch[1];
     html += `<div style="margin-bottom:24px;">
       <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
-      <div style="position:relative;width:100%;padding-bottom:56.25%;border-radius:10px;overflow:hidden;background:#000;">
-        <iframe
-          style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
-          src="https://www.youtube-nocookie.com/embed/${ytKey}"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowfullscreen
-          loading="lazy"
-          title="Trailer"></iframe>
+      <div id="ytThumb_${ytKey}" onclick="_playYouTube('${ytKey}')" style="position:relative;width:100%;padding-bottom:56.25%;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
+        <img src="https://img.youtube.com/vi/${ytKey}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${ytKey}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:46px;background:rgba(180,0,0,0.88);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          <span style="display:block;width:0;height:0;border-style:solid;border-width:14px 0 14px 26px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
+        </div>
       </div>
     </div>`;
   }
