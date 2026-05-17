@@ -423,7 +423,7 @@ function switchAdminSubmenu(name) {
   };
   const targetId = map[name] || map.security;
   // Hide all admin sub-sections
-  document.querySelectorAll('#panel-profile .profile-sub-section[id^="adminSub"]').forEach(el => {
+  document.querySelectorAll('#panel-admin .profile-sub-section[id^="adminSub"]').forEach(el => {
     el.style.display = 'none';
   });
   const target = document.getElementById(targetId);
