@@ -298,7 +298,7 @@ async function doLookup(barcode) {
     const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
-    let buf = '', finalData = null;
+    let buf = '', finalData = null, stepRawTitle = '';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -309,6 +309,7 @@ async function doLookup(barcode) {
         if (!line.trim()) continue;
         const msg = JSON.parse(line);
         if (msg.type === 'step') {
+          if (msg.raw_title) stepRawTitle = msg.raw_title;
           const icon = msg.status === 'searching' ? '<span class="spinner"></span>'
             : msg.status === 'hit' ? '✓' : msg.status === 'miss' ? '—' : '✕';
           showStatus('scanStatus', `${icon} ${msg.source}${msg.detail ? ': ' + msg.detail : ''}`, msg.status === 'hit' ? 'success' : 'info');
