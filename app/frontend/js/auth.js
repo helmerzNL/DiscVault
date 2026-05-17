@@ -106,9 +106,6 @@ async function checkAuth() {
   try {
     const r = await _origFetch(`${API}/auth/status`);
     const d = await r.json();
-    // If the SW returned its offline fallback and we have a stored token,
-    // assume auth is enabled so we don't incorrectly clear the user session.
-    if (d.offline && authToken) d.auth_enabled = true;
     authEnabled = !!d.auth_enabled;
     updateLogoutButton();
     if (d.auth_enabled && !authToken) {
@@ -338,13 +335,9 @@ async function _doRegisterPasskey(username, credName) {
 async function loadProfile() {
   try {
     const r = await fetch(`${API}/auth/me`);
-    // Don't clear fields on network/backend errors — only on an explicit
-    // "not authenticated" response so a temporary Docker restart doesn't
-    // wipe the profile form while the user is looking at it.
-    if (!r.ok) return;
     const me = await r.json();
     if (!me.authenticated) {
-      // Explicitly not authenticated — clear fields
+      // Auth disabled or not logged in — clear fields
       document.getElementById('profileUsername').value = '';
       document.getElementById('profileFirstName').value = '';
       document.getElementById('profileLastName').value = '';
@@ -355,13 +348,6 @@ async function loadProfile() {
       if (placeholder) placeholder.style.display = '';
       if (removeBtn) removeBtn.style.display = 'none';
       return;
-    }
-    // If we didn't have currentUserId yet (e.g. backend was down during init),
-    // recover it now so ownership checks work going forward.
-    if (!currentUserId && me.id) {
-      currentUserId = me.id;
-      currentUserRole = me.role;
-      updateLogoutButton();
     }
 
     document.getElementById('profileUsername').value = me.username || '';
