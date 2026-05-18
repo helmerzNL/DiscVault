@@ -1480,6 +1480,8 @@ function closeMovieDetail() {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     const egPanel = document.getElementById('panel-edition-group');
     if (egPanel) egPanel.classList.add('active');
+    // Force the members (Inhoud) tab so the films list is visible again
+    if (typeof switchEgTab === 'function') switchEgTab('members');
     _replaceRoute('/');
   } else {
     _replaceRoute(_tabPath(_detailReturnTab));
