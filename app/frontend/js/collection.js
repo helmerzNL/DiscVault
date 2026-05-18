@@ -2845,7 +2845,7 @@ async function loadGroupMgmtList(filter) {
       const r = await fetch(`${API}/collections`);
       const cols = await r.json();
       for (const c of cols) {
-        const totalMembers = (c.eg_movie_count || 0) + (c.loose_movie_count || 0);
+        const totalMembers = (c.eg_movie_count || 0) + (c.loose_movie_count || 0) + (c.boxset_loose_count || 0);
         items.push({ id: c.id, title: c.title, type: 'collection', memberCount: totalMembers, src: 'col' });
       }
     }
