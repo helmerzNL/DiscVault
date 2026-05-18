@@ -959,6 +959,15 @@ function _refreshContainerImagePreviews(gd) {
   }
   if (clearBtn) clearBtn.style.display = pf ? '' : 'none';
 
+  // Also update the large panel header poster when a container poster is set
+  const egPosterEl = document.getElementById('egPoster');
+  if (egPosterEl) {
+    if (pf) {
+      const url = /^https?:\/\//i.test(pf) ? pf : `${API}/posters/${encodeURIComponent(pf.split(/[/\\]/).pop())}`;
+      egPosterEl.innerHTML = `<img src="${url}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📦</div>'">`;
+    }
+  }
+
   const bg = (gd && gd.backdrop) ? gd.backdrop : '';
   if (bgPrev) {
     if (bg) {
@@ -1047,11 +1056,16 @@ function _populateEgHero(movieCard, typeLabel) {
   // Description
   const descEl = document.getElementById('egPanelDescription');
   if (descEl) descEl.textContent = '';
-  // Poster — use first member's poster
+  // Poster — prefer the container's own uploaded poster if set, otherwise
+  // fall back to the first member's poster.
   const posterEl = document.getElementById('egPoster');
   if (posterEl) {
-    const firstMember = (movieCard.editions || movieCard._sub_groups || movieCard._loose_movies || [])[0];
-    const src = firstMember ? posterSrc(firstMember) : posterSrc(movieCard);
+    const containerPf = movieCard._container_poster_file;
+    let src = containerPf ? posterSrc({ poster_file: containerPf }) : null;
+    if (!src) {
+      const firstMember = (movieCard.editions || movieCard._sub_groups || movieCard._loose_movies || [])[0];
+      src = firstMember ? posterSrc(firstMember) : posterSrc(movieCard);
+    }
     posterEl.innerHTML = src
       ? `<img src="${src}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📦</div>'">`
       : '<div class="no-img">📦</div>';
