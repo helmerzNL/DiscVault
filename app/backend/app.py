@@ -2486,6 +2486,11 @@ def update_movie(movie_id):
     else:
         _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
 
+    # If the film is joining an existing vault, lock that vault's current
+    # representative first so the new film doesn't take over the poster.
+    new_eg_id = updates.get("edition_group_id")
+    if new_eg_id and new_eg_id != (existing.get("edition_group_id") or None):
+        _lock_edition_group_primary(conn, new_eg_id)
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     conn.execute(
         f"UPDATE movies SET {set_clause} WHERE id = ?",
@@ -4257,6 +4262,38 @@ def _inherit_groups_from_container_siblings(conn, movie_id):
     if not group_ids:
         return
     _apply_groups_to_movies(conn, [int(movie_id)], group_ids, replace=True)
+
+
+def _lock_edition_group_primary(conn, group_id):
+    """Pin the current representative movie of an edition_group so that adding
+    new members does not change which film's poster is shown for the group.
+
+    Only acts when:
+      - the group exists,
+      - its `primary_movie_id` is currently NULL,
+      - and it already has at least one member.
+    The picked member matches the fallback used by the movies aggregator
+    (best format first: 4K UHD > Blu-ray > DVD > other, then by sort_title)."""
+    if not group_id:
+        return
+    eg = conn.execute(
+        "SELECT primary_movie_id FROM edition_groups WHERE id=?", (group_id,)
+    ).fetchone()
+    if not eg or eg["primary_movie_id"]:
+        return
+    members = conn.execute(
+        "SELECT id, format FROM movies WHERE edition_group_id=? "
+        "ORDER BY COALESCE(NULLIF(sort_title,''), title) ASC",
+        (group_id,)
+    ).fetchall()
+    if not members:
+        return
+    rank = {"4K UHD": 0, "Blu-ray": 1, "DVD": 2}
+    members = sorted(members, key=lambda m: rank.get(m["format"] or "", 99))
+    conn.execute(
+        "UPDATE edition_groups SET primary_movie_id=? WHERE id=?",
+        (members[0]["id"], group_id)
+    )
 
 
 def _is_source_enabled(key: str, default: bool) -> bool:
@@ -6838,6 +6875,9 @@ def add_edition_group_member(group_id):
     if not conn.execute("SELECT 1 FROM edition_groups WHERE id=?", (group_id,)).fetchone():
         conn.close()
         return jsonify({"error": "Group not found"}), 404
+    # Pin the current representative before adding new members so the
+    # vault keeps showing its existing poster.
+    _lock_edition_group_primary(conn, group_id)
     for mid in movie_ids:
         conn.execute("UPDATE movies SET edition_group_id=? WHERE id=?", (group_id, mid))
     conn.commit()
