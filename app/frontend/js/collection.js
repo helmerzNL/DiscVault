@@ -854,6 +854,18 @@ function _populateEgManageSection(movieCard, groupData) {
   const colSection = document.getElementById('egCollectionId');
   if (colSection) colSection.closest('.input-group').style.display = isCollection ? 'none' : '';
 
+  // Determine container context for poster/backdrop uploads
+  let ctxType = null, ctxId = null;
+  if (isCollection) {
+    ctxType = 'collections';
+    ctxId = _currentCollection._collection_id;
+  } else if (gd.id) {
+    ctxType = 'edition-groups';
+    ctxId = gd.id;
+  }
+  _currentContainerImageCtx = (ctxType && ctxId) ? { type: ctxType, id: ctxId } : null;
+  _refreshContainerImagePreviews(gd);
+
   const elPgId   = document.getElementById('egParentGroupId');
   const badge    = document.getElementById('egParentGroupBadge');
   const pgSearch = document.getElementById('egParentGroupSearch');
@@ -897,6 +909,110 @@ function _populateEgManageSection(movieCard, groupData) {
 
 function toggleEgManageSection() {
   switchEgTab('manage');
+}
+
+let _currentContainerImageCtx = null;
+
+function _refreshContainerImagePreviews(gd) {
+  const posterPrev = document.getElementById('egContainerPosterPreview');
+  const bgPrev = document.getElementById('egContainerBackdropPreview');
+  const clearBtn = document.getElementById('egContainerPosterClear');
+  const wrap = document.getElementById('egContainerImagesGroup');
+  if (!wrap) return;
+
+  if (!_currentContainerImageCtx) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+
+  const pf = (gd && gd.poster_file) ? gd.poster_file : '';
+  if (posterPrev) {
+    if (pf) {
+      posterPrev.style.backgroundImage = `url('${API}/posters/${pf}')`;
+      posterPrev.textContent = '';
+    } else {
+      posterPrev.style.backgroundImage = '';
+      posterPrev.textContent = '—';
+    }
+  }
+  if (clearBtn) clearBtn.style.display = pf ? '' : 'none';
+
+  const bg = (gd && gd.backdrop) ? gd.backdrop : '';
+  if (bgPrev) {
+    if (bg) {
+      bgPrev.style.backgroundImage = `url('${bg}')`;
+      bgPrev.textContent = '';
+    } else {
+      bgPrev.style.backgroundImage = '';
+      bgPrev.textContent = '—';
+    }
+  }
+}
+
+async function _reloadContainerCtxData() {
+  if (!_currentContainerImageCtx) return null;
+  const { type, id } = _currentContainerImageCtx;
+  try {
+    const r = await fetch(`${API}/${type === 'collections' ? 'collections' : 'edition-groups'}/${id}`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (type === 'collections') _currentCollectionData = data; else _currentEgGroupData = data;
+    _refreshContainerImagePreviews(data);
+    return data;
+  } catch (_) { return null; }
+}
+
+async function uploadContainerPoster(inputEl) {
+  if (!_currentContainerImageCtx || !inputEl || !inputEl.files || !inputEl.files[0]) return;
+  const { type, id } = _currentContainerImageCtx;
+  const fd = new FormData();
+  fd.append('poster', inputEl.files[0]);
+  try {
+    const r = await fetch(`${API}/${type}/${id}/poster`, { method: 'POST', body: fd });
+    inputEl.value = '';
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      alert(e.error || 'Upload mislukt');
+      return;
+    }
+    await _reloadContainerCtxData();
+    if (typeof loadCollection === 'function') loadCollection();
+  } catch (err) {
+    alert('Upload mislukt: ' + err);
+  }
+}
+
+async function clearContainerPoster() {
+  if (!_currentContainerImageCtx) return;
+  const { type, id } = _currentContainerImageCtx;
+  try {
+    const r = await fetch(`${API}/${type}/${id}/poster`, { method: 'DELETE' });
+    if (!r.ok) return;
+    await _reloadContainerCtxData();
+    if (typeof loadCollection === 'function') loadCollection();
+  } catch (_) {}
+}
+
+async function uploadContainerBackdrop(inputEl) {
+  if (!_currentContainerImageCtx || !inputEl || !inputEl.files || !inputEl.files[0]) return;
+  const { type, id } = _currentContainerImageCtx;
+  const fd = new FormData();
+  fd.append('backdrop', inputEl.files[0]);
+  try {
+    const r = await fetch(`${API}/${type}/${id}/backdrop`, { method: 'POST', body: fd });
+    inputEl.value = '';
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      alert(e.error || 'Upload mislukt');
+      return;
+    }
+    const data = await _reloadContainerCtxData();
+    if (data && data.backdrop) _applyEgBackdrop(data.backdrop, null);
+    if (typeof loadCollection === 'function') loadCollection();
+  } catch (err) {
+    alert('Upload mislukt: ' + err);
+  }
 }
 
 // ── Edition Group detail: hero, tabs, media ─────────────────────────────────

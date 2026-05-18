@@ -633,6 +633,8 @@ def init_db():
         conn.execute("ALTER TABLE edition_groups ADD COLUMN backdrop TEXT")
     if "description" not in eg_cols:
         conn.execute("ALTER TABLE edition_groups ADD COLUMN description TEXT")
+    if "poster_file" not in eg_cols:
+        conn.execute("ALTER TABLE edition_groups ADD COLUMN poster_file TEXT")
 
     # Collections: top-level grouping of Vaults, Box Sets and loose movies
     conn.execute("""
@@ -648,6 +650,8 @@ def init_db():
         conn.execute("ALTER TABLE collections ADD COLUMN backdrop TEXT")
     if "description" not in col_cols:
         conn.execute("ALTER TABLE collections ADD COLUMN description TEXT")
+    if "poster_file" not in col_cols:
+        conn.execute("ALTER TABLE collections ADD COLUMN poster_file TEXT")
 
     # Digital library sources (Plex / Jellyfin)
     conn.execute("""
@@ -770,6 +774,31 @@ def save_uploaded_poster(file_storage):
         filename = uuid.uuid4().hex + ".jpg"
         out_path = os.path.join(POSTER_DIR, filename)
         img.save(out_path, format="JPEG", quality=88, optimize=True)
+        return filename, None
+    except UnidentifiedImageError:
+        return None, "Bestand is geen geldige afbeelding"
+    except Exception as e:
+        return None, f"Upload mislukt: {str(e)}"
+
+
+def save_uploaded_backdrop(file_storage):
+    """Save an uploaded backdrop image. Stored in the poster directory and
+    served via /api/posters/<filename>. Resized to a max 1920x1080 box while
+    preserving aspect ratio."""
+    if not file_storage or not file_storage.filename:
+        return None, "Geen bestand geupload"
+    try:
+        file_storage.stream.seek(0)
+        img = Image.open(file_storage.stream)
+        img = ImageOps.exif_transpose(img)
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        elif img.mode == "L":
+            img = img.convert("RGB")
+        img.thumbnail((1920, 1080), Image.Resampling.LANCZOS)
+        filename = uuid.uuid4().hex + ".jpg"
+        out_path = os.path.join(POSTER_DIR, filename)
+        img.save(out_path, format="JPEG", quality=85, optimize=True)
         return filename, None
     except UnidentifiedImageError:
         return None, "Bestand is geen geldige afbeelding"
@@ -2034,12 +2063,13 @@ def list_movies():
             gid_list = list(grouped.keys())
             gplaceholders = ",".join("?" * len(gid_list))
             eg_rows_raw = conn.execute(
-                f"SELECT id, primary_movie_id, title, badge_label, parent_group_id, collection_id FROM edition_groups WHERE id IN ({gplaceholders})",
+                f"SELECT id, primary_movie_id, title, badge_label, parent_group_id, collection_id, poster_file, backdrop FROM edition_groups WHERE id IN ({gplaceholders})",
                 gid_list
             ).fetchall()
             eg_rows = {r["id"]: {"primary_id": r["primary_movie_id"], "group_title": r["title"],
                                   "badge_label": r["badge_label"], "parent_group_id": r["parent_group_id"],
-                                  "collection_id": r["collection_id"]} for r in eg_rows_raw}
+                                  "collection_id": r["collection_id"],
+                                  "poster_file": r["poster_file"], "backdrop": r["backdrop"]} for r in eg_rows_raw}
         collapsed = []
         for gid, members in grouped.items():
             eg_info  = eg_rows.get(gid) or {}
@@ -2051,6 +2081,14 @@ def list_movies():
             primary["editions"]       = members
             primary["editions_count"] = len(members)
             primary["_is_group"]      = True
+            # Container's own poster / backdrop take precedence over the
+            # primary movie's media so vaults / box-sets / collections can be
+            # styled independently.
+            if eg_info.get("poster_file"):
+                primary["poster_file"] = eg_info["poster_file"]
+                primary["poster"] = None
+            if eg_info.get("backdrop"):
+                primary["backdrop"] = eg_info["backdrop"]
             if eg_info.get("group_title"):
                 primary["_group_title"] = eg_info["group_title"]
             if eg_info.get("badge_label"):
@@ -2085,10 +2123,17 @@ def list_movies():
         if all_sg_ids:
             par_eg = {}
             for r in conn.execute(
-                f"SELECT id, title, badge_label FROM edition_groups WHERE id IN ({','.join('?'*len(all_sg_ids))})",
+                f"SELECT id, title, badge_label, poster_file, backdrop FROM edition_groups WHERE id IN ({','.join('?'*len(all_sg_ids))})",
                 list(all_sg_ids)
             ).fetchall():
                 par_eg[r["id"]] = dict(r)
+
+            def _apply_container_media(sg, meta):
+                if meta.get("poster_file"):
+                    sg["poster_file"] = meta["poster_file"]
+                    sg["poster"] = None
+                if meta.get("backdrop"):
+                    sg["backdrop"] = meta["backdrop"]
 
             # Super-groups that have child edition-groups
             for par_gid, child_cards in child_by_parent.items():
@@ -2097,8 +2142,10 @@ def list_movies():
                 sg  = dict(rep)
                 sg["_is_super_group"]   = True
                 sg["_parent_group_id"]  = par_gid
-                sg["_group_title"]      = (par_eg.get(par_gid) or {}).get("title") or sg.get("_group_title") or sg.get("title")
-                sg["_group_badge_label"]= (par_eg.get(par_gid) or {}).get("badge_label")
+                meta = par_eg.get(par_gid) or {}
+                sg["_group_title"]      = meta.get("title") or sg.get("_group_title") or sg.get("title")
+                sg["_group_badge_label"]= meta.get("badge_label")
+                _apply_container_media(sg, meta)
                 sg["_sub_groups"]       = child_cards
                 sg["_sub_group_count"]  = len(child_cards)
                 sg["_loose_movies"]     = lm
@@ -2112,8 +2159,10 @@ def list_movies():
                 sg  = dict(rep)
                 sg["_is_super_group"]   = True
                 sg["_parent_group_id"]  = par_gid
-                sg["_group_title"]      = (par_eg.get(par_gid) or {}).get("title") or sg.get("title")
-                sg["_group_badge_label"]= (par_eg.get(par_gid) or {}).get("badge_label")
+                meta = par_eg.get(par_gid) or {}
+                sg["_group_title"]      = meta.get("title") or sg.get("title")
+                sg["_group_badge_label"]= meta.get("badge_label")
+                _apply_container_media(sg, meta)
                 sg["_sub_groups"]       = []
                 sg["_sub_group_count"]  = 0
                 sg["_loose_movies"]     = lm
@@ -2165,7 +2214,7 @@ def list_movies():
             col_ids = list(col_children.keys())
             col_meta = {}
             for r in conn.execute(
-                f"SELECT id, title, badge_label FROM collections WHERE id IN ({','.join('?'*len(col_ids))})",
+                f"SELECT id, title, badge_label, poster_file, backdrop FROM collections WHERE id IN ({','.join('?'*len(col_ids))})",
                 col_ids
             ).fetchall():
                 col_meta[r["id"]] = dict(r)
@@ -2182,6 +2231,12 @@ def list_movies():
                 cc["_collection_id"]       = cid
                 cc["_group_title"]         = meta.get("title") or cc.get("title", "")
                 cc["_group_badge_label"]   = meta.get("badge_label")
+                # Collection's own poster / backdrop override the rep's media.
+                if meta.get("poster_file"):
+                    cc["poster_file"] = meta["poster_file"]
+                    cc["poster"] = None
+                if meta.get("backdrop"):
+                    cc["backdrop"] = meta["backdrop"]
                 cc["_box_sets"]            = box_sets
                 cc["_vaults"]              = vaults
                 cc["_loose_movies"]        = loose
@@ -6861,6 +6916,120 @@ def delete_edition_group(group_id):
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+
+def _container_image_replace(conn, table, row_id, column, new_filename):
+    """Update a poster/backdrop column on a container, removing the previous
+    local file from disk if it was a local upload."""
+    row = conn.execute(f"SELECT {column} FROM {table} WHERE id=?", (row_id,)).fetchone()
+    if not row:
+        return False
+    old = (row[column] or "").strip() if row[column] else ""
+    if old and not old.startswith(("http://", "https://")):
+        try:
+            os.remove(os.path.join(POSTER_DIR, os.path.basename(old)))
+        except OSError:
+            pass
+    conn.execute(f"UPDATE {table} SET {column}=? WHERE id=?", (new_filename, row_id))
+    return True
+
+
+@app.route("/api/edition-groups/<int:group_id>/poster", methods=["POST"])
+def upload_edition_group_poster(group_id):
+    if "poster" not in request.files:
+        return jsonify({"error": "Geen posterbestand meegegeven"}), 400
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM edition_groups WHERE id=?", (group_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Group not found"}), 404
+    new_file, err = save_uploaded_poster(request.files["poster"])
+    if err:
+        conn.close()
+        return jsonify({"error": err}), 400
+    _container_image_replace(conn, "edition_groups", group_id, "poster_file", new_file)
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "updated", "poster_file": new_file})
+
+
+@app.route("/api/edition-groups/<int:group_id>/poster", methods=["DELETE"])
+def clear_edition_group_poster(group_id):
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM edition_groups WHERE id=?", (group_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Group not found"}), 404
+    _container_image_replace(conn, "edition_groups", group_id, "poster_file", None)
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "cleared"})
+
+
+@app.route("/api/edition-groups/<int:group_id>/backdrop", methods=["POST"])
+def upload_edition_group_backdrop(group_id):
+    if "backdrop" not in request.files:
+        return jsonify({"error": "Geen backdropbestand meegegeven"}), 400
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM edition_groups WHERE id=?", (group_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Group not found"}), 404
+    new_file, err = save_uploaded_backdrop(request.files["backdrop"])
+    if err:
+        conn.close()
+        return jsonify({"error": err}), 400
+    url = f"/api/posters/{new_file}"
+    _container_image_replace(conn, "edition_groups", group_id, "backdrop", url)
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "updated", "backdrop": url})
+
+
+@app.route("/api/collections/<int:col_id>/poster", methods=["POST"])
+def upload_collection_poster(col_id):
+    if "poster" not in request.files:
+        return jsonify({"error": "Geen posterbestand meegegeven"}), 400
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM collections WHERE id=?", (col_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Collection not found"}), 404
+    new_file, err = save_uploaded_poster(request.files["poster"])
+    if err:
+        conn.close()
+        return jsonify({"error": err}), 400
+    _container_image_replace(conn, "collections", col_id, "poster_file", new_file)
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "updated", "poster_file": new_file})
+
+
+@app.route("/api/collections/<int:col_id>/poster", methods=["DELETE"])
+def clear_collection_poster(col_id):
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM collections WHERE id=?", (col_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Collection not found"}), 404
+    _container_image_replace(conn, "collections", col_id, "poster_file", None)
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "cleared"})
+
+
+@app.route("/api/collections/<int:col_id>/backdrop", methods=["POST"])
+def upload_collection_backdrop(col_id):
+    if "backdrop" not in request.files:
+        return jsonify({"error": "Geen backdropbestand meegegeven"}), 400
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM collections WHERE id=?", (col_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Collection not found"}), 404
+    new_file, err = save_uploaded_backdrop(request.files["backdrop"])
+    if err:
+        conn.close()
+        return jsonify({"error": err}), 400
+    url = f"/api/posters/{new_file}"
+    _container_image_replace(conn, "collections", col_id, "backdrop", url)
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "updated", "backdrop": url})
 
 
 @app.route("/api/edition-groups/<int:group_id>/members", methods=["POST"])
