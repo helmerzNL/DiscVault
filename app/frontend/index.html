@@ -210,6 +210,7 @@
       <button class="btn btn-secondary" onclick="deselectAll()" data-i18n="bulk.deselect">Deselecteer</button>
       <button class="btn btn-secondary" style="color:#4caf50; border-color:rgba(76,175,80,.4);" onclick="bulkAddToWatchlist()" data-i18n="bulk.watchlist">🔖 Watchlist</button>
       <button class="btn btn-secondary" style="color:var(--accent); border-color:rgba(232,197,71,.4);" onclick="showBulkGroupAssign()" data-i18n="bulk.assignGroup">📁 Groep toewijzen</button>
+      <button class="btn btn-secondary" style="color:#9b59b6; border-color:rgba(155,89,182,.4);" onclick="showBulkContainerAssign()" data-i18n="bulk.assignContainer">📦 Vault / Collectie</button>
       <button class="btn btn-secondary" style="color:var(--accent2); border-color:rgba(124,106,247,.4);" onclick="bulkRefresh()" data-i18n="bulk.refresh">
         ↺ Bijwerken via TMDb/OMDb
       </button>
@@ -224,6 +225,17 @@
           <button class="btn btn-secondary" onclick="document.getElementById('bulkGroupPanel').style.display='none'" style="padding:8px 16px;" data-i18n="bulk.cancelGroup">Annuleren</button>
         </div>
         <div id="bulkGroupStatus" class="status-msg" style="margin-top:8px;"></div>
+      </div>
+      <!-- Bulk container assignment panel (Vault / Box-Set / Collection) -->
+      <div id="bulkContainerPanel" style="display:none; flex-basis:100%; padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+        <div style="font-weight:500; font-size:0.9rem; margin-bottom:10px;" data-i18n="bulk.selectContainer">Kies een Vault / Box-Set of Collectie:</div>
+        <input type="text" id="bulkContainerSearch" class="form-control" placeholder="Zoeken…" style="max-width:320px; margin-bottom:12px; padding:6px 10px; font-size:0.84rem; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); outline:none;">
+        <div id="bulkContainerList" style="max-height:240px; overflow-y:auto; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" onclick="bulkAssignContainer()" style="padding:8px 16px;" data-i18n="bulk.applyContainer">✓ Toewijzen</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('bulkContainerPanel').style.display='none'" style="padding:8px 16px;" data-i18n="bulk.cancelGroup">Annuleren</button>
+        </div>
+        <div id="bulkContainerStatus" class="status-msg" style="margin-top:8px;"></div>
       </div>
     </div>
 

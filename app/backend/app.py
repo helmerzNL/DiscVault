@@ -5788,6 +5788,28 @@ def bulk_remove_movie_groups():
     return jsonify({"status": "ok", "updated": removed})
 
 
+@app.route("/api/movies/bulk/collection", methods=["PUT"])
+def bulk_assign_collection():
+    """Assign multiple movies directly to a collection."""
+    data = request.json or {}
+    movie_ids = data.get("movie_ids", [])
+    col_id = data.get("collection_id")
+    if not movie_ids or not col_id:
+        return jsonify({"error": "movie_ids and collection_id required"}), 400
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM collections WHERE id=?", (col_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Collection not found"}), 404
+    for mid in movie_ids:
+        conn.execute("UPDATE movies SET collection_id=? WHERE id=?", (col_id, int(mid)))
+    conn.commit()
+    for mid in movie_ids:
+        _inherit_groups_from_container_siblings(conn, int(mid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/settings/sources", methods=["GET"])
 def get_source_settings():
     return jsonify({
