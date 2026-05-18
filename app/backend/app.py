@@ -6444,10 +6444,20 @@ def get_collection(col_id):
     eg_movies = []
     if eg_ids:
         placeholders = ",".join("?" * len(eg_ids))
+        # Include movies in:
+        #  - direct edition_groups of this collection
+        #  - child vaults whose parent_group_id is one of those edition_groups
+        #  - loose box-set movies linked via super_group_id
         eg_movies = conn.execute(
-            f"SELECT id, title, year, poster_file, poster, backdrop, backdrops FROM movies"
-            f" WHERE edition_group_id IN ({placeholders}) ORDER BY title ASC",
-            eg_ids
+            f"SELECT DISTINCT id, title, year, poster_file, poster, backdrop, backdrops"
+            f" FROM movies"
+            f" WHERE edition_group_id IN ({placeholders})"
+            f"    OR edition_group_id IN ("
+            f"        SELECT id FROM edition_groups WHERE parent_group_id IN ({placeholders})"
+            f"    )"
+            f"    OR super_group_id IN ({placeholders})"
+            f" ORDER BY title ASC",
+            eg_ids + eg_ids + eg_ids
         ).fetchall()
     conn.close()
     result = dict(row)
