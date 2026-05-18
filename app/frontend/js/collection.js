@@ -1297,7 +1297,7 @@ function _renderMediaGrid(container, allMembers, currentBackdrop, type, groupId)
   });
 
   if (!html) {
-    html = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+    html = `<div style="text-align:center;padding:40px;color:var(--text
   } else {
     html = `<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">${t('group.mediaHint', 'Klik op een afbeelding om deze als backdrop voor de groep in te stellen.')}</p>` + html;
   }
@@ -2889,6 +2889,7 @@ function switchEditTab(name) {
   });
 }
 
+window.setEditionFilter = setEditionFilter;
 function setEditionFilter(btn) {
   activeEditionFilter = !activeEditionFilter;
   btn.classList.toggle('active', activeEditionFilter);
