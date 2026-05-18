@@ -715,6 +715,8 @@ function openSuperGroupView(movie) {
   });
 
   // Loose movie cards (direct members of super-group)
+  // Pass skipGroupRedirect=true so the movie detail opens directly instead of
+  // bouncing back to the collection/super-group via the fallback redirect block.
   const looseHtml = (movie._loose_movies || []).map(lm => {
     const src = posterSrc(lm);
     const imgHtml = src
@@ -854,17 +856,27 @@ function _populateEgManageSection(movieCard, groupData) {
   const colSection = document.getElementById('egCollectionId');
   if (colSection) colSection.closest('.input-group').style.display = isCollection ? 'none' : '';
 
-  // Determine container context for poster/backdrop uploads
+  // Determine container context for poster/backdrop uploads.
+  // Use immediate card fields so the panel is available even before async data loads.
   let ctxType = null, ctxId = null;
   if (isCollection) {
     ctxType = 'collections';
     ctxId = _currentCollection._collection_id;
-  } else if (gd.id) {
+  } else if (_currentSuperGroup && _currentSuperGroup._parent_group_id) {
+    // Box-set: edition_groups id stored in _parent_group_id on the aggregated card
+    ctxType = 'edition-groups';
+    ctxId = _currentSuperGroup._parent_group_id;
+  } else if (gd && gd.id) {
+    // Vault: edition group data loaded from API
     ctxType = 'edition-groups';
     ctxId = gd.id;
+  } else if (movieCard && movieCard.edition_group_id) {
+    // Vault: API data not yet loaded — use the primary movie's edition_group_id
+    ctxType = 'edition-groups';
+    ctxId = movieCard.edition_group_id;
   }
   _currentContainerImageCtx = (ctxType && ctxId) ? { type: ctxType, id: ctxId } : null;
-  _refreshContainerImagePreviews(gd);
+  _refreshContainerImagePreviews(gd || {});
 
   const elPgId   = document.getElementById('egParentGroupId');
   const badge    = document.getElementById('egParentGroupBadge');
