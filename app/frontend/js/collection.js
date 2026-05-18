@@ -1054,9 +1054,10 @@ function searchEgCollection(query) {
   fetch(`${API}/collections?q=${encodeURIComponent(query)}`)
     .then(r => r.json())
     .then(cols => {
-      const items = cols.slice(0, 8).map(c =>
-        `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectEgCollection(${c.id}, '${(c.title||'').replace(/'/g,"\\'")}')">${c.title}</div>`
-      );
+      const items = cols.slice(0, 8).map(c => {
+        const total = (c.eg_movie_count || 0) + (c.loose_movie_count || 0) + (c.boxset_loose_count || 0);
+        return `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectEgCollection(${c.id}, '${(c.title||'').replace(/'/g,"\\'")}')">${c.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${total})</span></div>`;
+      });
       items.push(`<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem; border-top:1px solid var(--border); color:#2ecc71;" onclick="createAndSelectEgCollection('${query.replace(/'/g,"\\'")}')">➕ ${query}</div>`);
       dropdown.innerHTML = items.join('');
       dropdown.style.display = '';
@@ -2767,12 +2768,13 @@ async function searchCollection(query) {
   try {
     const r = await fetch(`${API}/collections?q=${encodeURIComponent(query)}`);
     const cols = await r.json();
-    const items = cols.slice(0, 8).map(c =>
-      `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
+    const items = cols.slice(0, 8).map(c => {
+      const total = (c.eg_movie_count || 0) + (c.loose_movie_count || 0) + (c.boxset_loose_count || 0);
+      return `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
             onmousedown="selectCollection(${c.id}, '${(c.title||'').replace(/'/g,"\\'")}')">
-        ${c.title}
-       </div>`
-    );
+        ${c.title} <span style="color:var(--text-muted); font-size:0.76rem;">(${total})</span>
+       </div>`;
+    });
     items.push(`<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:#2ecc71; cursor:pointer;"
          onmousedown="createAndSelectCollection('${query.replace(/'/g,"\\'")}')">+ ${t('edit.collectionCreate', query)}</div>`);
     dropdown.innerHTML = items.join('');
