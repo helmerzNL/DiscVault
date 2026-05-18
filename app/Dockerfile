@@ -30,6 +30,9 @@ RUN pip install -r /tmp/requirements-backend.txt \
 # App code
 COPY backend /opt/discvault/backend
 COPY mcp-server /opt/discvault/mcp-server
+
+# Cache-bust: changes with every build so frontend files are always fresh
+ARG CACHE_BUST=unknown
 COPY frontend /opt/discvault/frontend
 
 # Frontend static assets into nginx root
