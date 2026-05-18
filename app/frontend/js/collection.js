@@ -1263,6 +1263,23 @@ async function openMovieDetail(id, skipGroupRedirect) {
       openEditionGroupView(id);
       return;
     }
+    // Fallback: aggregated flags missing (e.g. deep-link before collection
+    // loaded, or single-film container). Use raw container fields to find
+    // the matching aggregated card or route directly.
+    if (movie.collection_id) {
+      const cc = allMovies.find(x => x._is_collection && x._collection_id === movie.collection_id);
+      if (cc) { openCollectionView(cc); return; }
+      _pushRoute(`/collection/${movie.collection_id}`);
+    }
+    if (movie.super_group_id) {
+      const sg = allMovies.find(x => x._is_super_group && x._parent_group_id === movie.super_group_id);
+      if (sg) { openSuperGroupView(sg); return; }
+      _pushRoute(`/boxset/${movie.super_group_id}`);
+    }
+    if (movie.edition_group_id && groupEditionsEnabled) {
+      openEditionGroupView(id);
+      return;
+    }
   }
 
   // Hide edit/refresh buttons if user doesn't own this movie (and isn't admin / auth disabled)
