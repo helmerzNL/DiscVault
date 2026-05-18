@@ -385,10 +385,13 @@ async function bulkAssignGroups() {
 
 async function showBulkContainerAssign() {
   const panel = document.getElementById('bulkContainerPanel');
+  if (!panel) { console.error('bulkContainerPanel not found'); return; }
   panel.style.display = 'block';
-  document.getElementById('bulkGroupPanel').style.display = 'none';
+  const groupPanel = document.getElementById('bulkGroupPanel');
+  if (groupPanel) groupPanel.style.display = 'none';
   const listEl = document.getElementById('bulkContainerList');
   const searchEl = document.getElementById('bulkContainerSearch');
+  if (!listEl || !searchEl) { console.error('bulkContainerList/Search not found'); return; }
   searchEl.value = '';
   listEl.innerHTML = `<span style="color:var(--text-muted); font-size:0.82rem;">${t('general.loading')}</span>`;
   try {
