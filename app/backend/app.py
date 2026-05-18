@@ -5607,12 +5607,14 @@ def get_movie_groups(movie_id):
 def set_movie_groups(movie_id):
     """Set the full list of group_ids for a movie (replaces existing).
 
-    Group memberships are propagated to every other movie that shares a
-    container (vault / box-set / collection) with this movie, so a container
-    behaves as a single unit for group membership.
-    """
+    Newly added groups are also added to every other movie that shares a
+    container (vault / box-set / collection) with this movie, so adding a
+    container to a group propagates to its members. Removals are *not*
+    propagated here: an empty/stale list coming from a newly added film must
+    not wipe the whole set. Use the bulk DELETE endpoint to remove a group
+    from an entire container."""
     data = request.json or {}
-    group_ids = data.get("group_ids", [])
+    group_ids = [int(g) for g in (data.get("group_ids") or [])]
     conn = get_db()
     movie = conn.execute("SELECT owner_id FROM movies WHERE id=?", (movie_id,)).fetchone()
     if not movie:
@@ -5622,18 +5624,41 @@ def set_movie_groups(movie_id):
     if uid and movie["owner_id"] != uid and _get_current_user_role() != "admin":
         conn.close()
         return jsonify({"error": "Not your movie"}), 403
-    target_ids = _get_container_sibling_ids(conn, movie_id)
-    _apply_groups_to_movies(conn, target_ids, group_ids, replace=True)
+
+    # Capture the diff against the current state of THIS movie so we can
+    # propagate only the additions to siblings.
+    prev = {r["group_id"] for r in conn.execute(
+        "SELECT group_id FROM movie_groups WHERE movie_id=?", (movie_id,)
+    ).fetchall()}
+    new = set(group_ids)
+    added = list(new - prev)
+
+    # Apply the full new list to this movie.
+    _apply_groups_to_movies(conn, [movie_id], group_ids, replace=True)
+
+    # Propagate only additions to the container.
+    if added:
+        siblings = _get_container_sibling_ids(conn, movie_id)
+        siblings.discard(int(movie_id))
+        if siblings:
+            _apply_groups_to_movies(conn, siblings, added, replace=False)
+
+    # Safety net: if siblings already share groups this movie now lacks, pull
+    # them in (handles the "new film just joined the container" case where the
+    # client posts a stale empty list right after the container linkage was
+    # set).
+    _inherit_groups_from_container_siblings(conn, movie_id)
+
     conn.commit()
     conn.close()
-    return jsonify({"status": "ok", "applied_to": len(target_ids)})
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/movies/bulk/groups", methods=["PUT"])
 def bulk_set_movie_groups():
     """Add group(s) to multiple movies at once.
 
-    For every supplied movie the change is also propagated to its container
+    For every supplied movie the addition is also propagated to its container
     siblings (vault / box-set / collection)."""
     data = request.json or {}
     movie_ids = data.get("movie_ids", [])
