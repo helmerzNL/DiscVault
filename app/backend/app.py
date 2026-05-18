@@ -6827,7 +6827,7 @@ def _run_plex_sync(source_id: int):
         for section in sections:
             r2 = requests.get(
                 f"{base_url}/library/sections/{section['key']}/all",
-                params={"X-Plex-Token": token, "type": "1"},
+                params={"X-Plex-Token": token, "type": "1", "includeGuids": "1"},
                 timeout=30
             )
             r2.raise_for_status()
