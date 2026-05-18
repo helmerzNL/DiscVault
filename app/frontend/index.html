@@ -193,7 +193,7 @@
         <button class="filter-btn" onclick="setFormatFilter('4K UHD', this)">4K UHD</button>
         <button class="filter-btn" onclick="setFormatFilter('Blu-ray', this)">Blu-ray</button>
         <button class="filter-btn" onclick="setFormatFilter('DVD', this)">DVD</button>
-        <button class="filter-btn" id="btnEditionFilter" onclick="setEditionFilter(this)" data-i18n="collection.filterEditions">🗂 Edities</button>
+        <button class="filter-btn" id="btnEditionFilter" onclick="setEditionFilter(this)" data-i18n="collection.filterEditions">🗂 Collecties</button>
       </div>
       <select id="groupFilter" onchange="filterMovies()" style="display:none; padding:7px 10px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:0.82rem; cursor:pointer;">
         <option value="">Alle collecties</option>
@@ -1639,7 +1639,7 @@
             <option value="bluray"       data-i18n="edition.bluray">Blu-ray</option>
             <option value="4k_upgrade"   data-i18n="edition.4kUpgrade">4K UHD</option>
             <option value="4k_combo"     data-i18n="edition.4kCombo">4K Ultra HD + Blu-ray</option>
-            <option value="boxset_disc"  data-i18n="edition.boxsetDisc">Box Set Disc</option>
+            <option value="boxset_disc"  data-i18n="edition.boxsetDisc">Box-Set</option>
             <option value="custom"       data-i18n="edition.custom">Eigen label</option>
           </select>
           <input type="text" id="editCustomEditionLabel" placeholder="Eigen label..." maxlength="30"
