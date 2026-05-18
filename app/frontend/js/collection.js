@@ -1252,15 +1252,17 @@ async function openMovieDetail(id, skipGroupRedirect) {
   }
 
   // Redirect grouped editions to the stack view when group_editions mode is active
-  if (!skipGroupRedirect && groupEditionsEnabled && (movie.editions_count || 0) > 1 && !movie._isNested) {
-    if (movie._is_collection) {
-      openCollectionView(movie);
-    } else if (movie._is_super_group) {
-      openSuperGroupView(movie);
-    } else {
+  if (!skipGroupRedirect && !movie._isNested) {
+    // Collection and box-set cards are always conceptual containers; open
+    // their view regardless of editions_count or groupEditionsEnabled.
+    if (movie._is_collection) { openCollectionView(movie); return; }
+    if (movie._is_super_group) { openSuperGroupView(movie); return; }
+    // Vault stacking is only relevant when group-editions mode is on and
+    // there's more than one edition to stack.
+    if (groupEditionsEnabled && (movie.editions_count || 0) > 1) {
       openEditionGroupView(id);
+      return;
     }
-    return;
   }
 
   // Hide edit/refresh buttons if user doesn't own this movie (and isn't admin / auth disabled)
