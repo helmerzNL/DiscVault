@@ -1006,6 +1006,19 @@ async function uploadContainerPoster(inputEl) {
       alert(e.error || 'Upload mislukt');
       return;
     }
+    // Directly update egPoster from the upload response so the panel header
+    // refreshes immediately without waiting on _reloadContainerCtxData.
+    const result = await r.json().catch(() => ({}));
+    const pf = result.poster_file;
+    if (pf) {
+      const imgUrl = `/api/posters/${encodeURIComponent(pf)}`;
+      const posterEl = document.getElementById('egPoster');
+      if (posterEl) posterEl.innerHTML = `<img src="${imgUrl}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📦</div>'">`;
+      const prev = document.getElementById('egContainerPosterPreview');
+      if (prev) { prev.style.backgroundImage = `url('${imgUrl}')`; prev.textContent = ''; }
+      const clearBtn = document.getElementById('egContainerPosterClear');
+      if (clearBtn) clearBtn.style.display = '';
+    }
     await _reloadContainerCtxData();
     if (typeof loadCollection === 'function') loadCollection();
   } catch (err) {
