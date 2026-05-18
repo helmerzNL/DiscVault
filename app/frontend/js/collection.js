@@ -2716,12 +2716,15 @@ async function searchSuperGroup(query) {
   try {
     const r = await fetch(`${API}/edition-groups?q=${encodeURIComponent(query)}`);
     const groups = await r.json();
-    const items = groups.slice(0, 8).map(g =>
-      `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
+    const items = groups.slice(0, 8).map(g => {
+      // Box sets have no direct edition_group_id members; films live in child
+      // vaults (child_member_count) and loose box-set movies (loose_movie_count).
+      const total = (g.member_count || 0) + (g.child_member_count || 0) + (g.loose_movie_count || 0);
+      return `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
             onmousedown="selectSuperGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">
-        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">(${g.member_count || 0})</span>
-       </div>`
-    );
+        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">(${total})</span>
+       </div>`;
+    });
     items.push(`<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent2); cursor:pointer;"
          onmousedown="createAndSelectSuperGroup('${query.replace(/'/g,"\\'")}')">+ ${t('edit.superGroupCreate', query)}</div>`);
     dropdown.innerHTML = items.join('');
