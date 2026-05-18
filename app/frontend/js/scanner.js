@@ -407,8 +407,12 @@ async function selectTmdbCandidate(tmdbId, barcode) {
 
 // Returns the best available poster URL for a movie object
 function posterSrc(m) {
-  if (m.poster_file) {
-    const raw = String(m.poster_file).trim();
+  // Container cards (vault / box-set / collection) store their own uploaded
+  // poster in _container_poster_file so the primary film's poster_file is
+  // never overwritten.  Use _container_poster_file first for those cards.
+  const pf = m._container_poster_file || m.poster_file;
+  if (pf) {
+    const raw = String(pf).trim();
     if (raw) {
       if (/^https?:\/\//i.test(raw)) return raw;
       const fileName = raw.split(/[/\\]/).pop();

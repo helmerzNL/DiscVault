@@ -1451,7 +1451,8 @@ async function openMovieDetail(id, skipGroupRedirect) {
   if (_preferredRating) tags.innerHTML += `<span class="tag">${_preferredRating}</span>`;
   if (movie.hdr)             tags.innerHTML += `<span class="tag" style="color:#7cf">${movie.hdr}</span>`;
 
-  const src = posterSrc(movie);
+  // Movie detail always shows the film's OWN poster, never the container's.
+  const src = posterSrc({ ...movie, _container_poster_file: null });
   const poster = document.getElementById('modalPoster');
   poster.innerHTML = src
     ? `<img src="${src}" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`

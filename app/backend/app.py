@@ -2083,10 +2083,11 @@ def list_movies():
             primary["_is_group"]      = True
             # Container's own poster / backdrop take precedence over the
             # primary movie's media so vaults / box-sets / collections can be
-            # styled independently.
+            # styled independently.  Store in _container_poster_file so the
+            # film's own poster_file is not overwritten (movie detail must
+            # always show the film's real poster).
             if eg_info.get("poster_file"):
-                primary["poster_file"] = eg_info["poster_file"]
-                primary["poster"] = None
+                primary["_container_poster_file"] = eg_info["poster_file"]
             if eg_info.get("backdrop"):
                 primary["backdrop"] = eg_info["backdrop"]
             if eg_info.get("group_title"):
@@ -2130,8 +2131,7 @@ def list_movies():
 
             def _apply_container_media(sg, meta):
                 if meta.get("poster_file"):
-                    sg["poster_file"] = meta["poster_file"]
-                    sg["poster"] = None
+                    sg["_container_poster_file"] = meta["poster_file"]
                 if meta.get("backdrop"):
                     sg["backdrop"] = meta["backdrop"]
 
@@ -2231,10 +2231,10 @@ def list_movies():
                 cc["_collection_id"]       = cid
                 cc["_group_title"]         = meta.get("title") or cc.get("title", "")
                 cc["_group_badge_label"]   = meta.get("badge_label")
-                # Collection's own poster / backdrop override the rep's media.
+                # Collection's own poster / backdrop go into _container_poster_file
+                # so the representative film's poster_file stays untouched.
                 if meta.get("poster_file"):
-                    cc["poster_file"] = meta["poster_file"]
-                    cc["poster"] = None
+                    cc["_container_poster_file"] = meta["poster_file"]
                 if meta.get("backdrop"):
                     cc["backdrop"] = meta["backdrop"]
                 cc["_box_sets"]            = box_sets
