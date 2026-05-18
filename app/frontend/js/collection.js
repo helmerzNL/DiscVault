@@ -2671,12 +2671,16 @@ async function searchEditionGroups(query) {
       <span style="cursor:pointer; color:var(--accent);" onclick="createEditionGroupFromSearch('${query.replace(/'/g,"\\'")}')">+ ${t('edit.editionGroupCreate')} "${query}"</span>
     </div>`;
   } else {
-    dropdown.innerHTML = matches.map(g =>
-      `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
+    dropdown.innerHTML = matches.map(g => {
+      // Sum direct members + child vault members + loose box-set movies so
+      // box sets and nested groups show their full film count, not just the
+      // (often empty) direct edition_group_id link count.
+      const total = (g.member_count || 0) + (g.child_member_count || 0) + (g.loose_movie_count || 0);
+      return `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
             onmousedown="selectEditionGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">
-        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">${g.member_count || 0} ${t('edit.editionGroupMembers')}</span>
-       </div>`
-    ).join('') + `<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent); cursor:pointer;"
+        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">${total} ${t('edit.editionGroupMembers')}</span>
+       </div>`;
+    }).join('') + `<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent); cursor:pointer;"
          onmousedown="createEditionGroupFromSearch('${query.replace(/'/g,"\\'")}')">+ ${t('edit.editionGroupCreate')} "${query}"</div>`;
   }
   dropdown.style.display = 'block';
