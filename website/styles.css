@@ -565,6 +565,39 @@ h1 {
   gap: 0.85rem;
 }
 
+.cards-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.feature-releases {
+  margin-top: 0;
+  border-top: 1px solid var(--border);
+}
+
+.release-group {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: 0 1.5rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+
+.release-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0;
+  padding-top: 0.9rem;
+}
+
+.release-cards {
+  margin-top: 0;
+}
+
 .feature-category {
   margin-top: 2rem;
 }
@@ -680,6 +713,19 @@ code {
 }
 
 @media (max-width: 800px) {
+  .cards-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .release-group {
+    grid-template-columns: 1fr;
+  }
+
+  .release-tag {
+    padding-top: 0;
+    margin-bottom: 0.4rem;
+  }
+
   .site-header {
     border-radius: var(--radius);
     padding: 0.6rem 0.75rem;
@@ -827,6 +873,10 @@ code {
 }
 
 @media (max-width: 480px) {
+  .cards-3 {
+    grid-template-columns: 1fr;
+  }
+
   .wrap {
     width: calc(100% - 1.25rem);
   }
