@@ -1050,8 +1050,15 @@ async function uploadContainerBackdrop(inputEl) {
       alert(e.error || 'Upload mislukt');
       return;
     }
-    const data = await _reloadContainerCtxData();
-    if (data && data.backdrop) _applyEgBackdrop(data.backdrop, null);
+    // Directly update the hero section from the upload response.
+    const result = await r.json().catch(() => ({}));
+    const bd = result.backdrop;
+    if (bd) {
+      _applyEgBackdrop(bd, null);
+      const prev = document.getElementById('egContainerBackdropPreview');
+      if (prev) { prev.style.backgroundImage = `url('${bd}')`; prev.textContent = ''; }
+    }
+    await _reloadContainerCtxData();
     if (typeof loadCollection === 'function') loadCollection();
   } catch (err) {
     alert('Upload mislukt: ' + err);
@@ -1083,8 +1090,9 @@ function _populateEgHero(movieCard, typeLabel) {
       ? `<img src="${src}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📦</div>'">`
       : '<div class="no-img">📦</div>';
   }
-  // Default: no backdrop
-  _applyEgBackdrop(null, movieCard);
+  // Use the container's own backdrop if available, otherwise fall back to
+  // a member's backdrop via the second argument.
+  _applyEgBackdrop(movieCard.backdrop || null, movieCard);
 }
 
 function _applyEgBackdrop(backdropUrl, movieCard) {
