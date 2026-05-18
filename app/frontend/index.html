@@ -1914,23 +1914,23 @@
           <input type="hidden" id="egCollectionId">
         </div>
         <div class="input-group" id="egContainerImagesGroup" style="margin-bottom:16px;">
-          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egContainerImages">Eigen afbeeldingen</label>
+          <label style="font-size:0.8rem; font-weight:600;" id="egContainerImagesLabel">Eigen afbeeldingen</label>
           <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:6px;">
             <div style="flex:1 1 140px; min-width:140px;">
-              <div style="font-size:0.72rem; color:var(--text-muted); margin-bottom:4px;" data-i18n="edition.egContainerPoster">Poster</div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-bottom:4px;" id="egContainerPosterLabel">Poster</div>
               <div id="egContainerPosterPreview" style="width:100%; aspect-ratio:2/3; border:1px dashed var(--border); border-radius:8px; background-size:cover; background-position:center; background-color:var(--surface); display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:0.75rem;">—</div>
               <input type="file" id="egContainerPosterInput" accept="image/*" style="display:none;" onchange="uploadContainerPoster(this)">
               <div style="display:flex; gap:6px; margin-top:6px;">
-                <button class="btn btn-secondary" type="button" style="padding:4px 10px; font-size:0.75rem; flex:1;" onclick="document.getElementById('egContainerPosterInput').click()" data-i18n="edition.egContainerUpload">Upload</button>
-                <button class="btn btn-danger" type="button" id="egContainerPosterClear" style="padding:4px 10px; font-size:0.75rem;" onclick="clearContainerPoster()" data-i18n="edition.egContainerClear">Wis</button>
+                <button class="btn btn-secondary" type="button" style="padding:4px 10px; font-size:0.75rem; flex:1;" onclick="document.getElementById('egContainerPosterInput').click()" id="egContainerUploadPosterBtn">Upload</button>
+                <button class="btn btn-danger" type="button" id="egContainerPosterClear" style="padding:4px 10px; font-size:0.75rem;" onclick="clearContainerPoster()">Wis</button>
               </div>
             </div>
             <div style="flex:2 1 240px; min-width:200px;">
-              <div style="font-size:0.72rem; color:var(--text-muted); margin-bottom:4px;" data-i18n="edition.egContainerBackdrop">Backdrop</div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-bottom:4px;" id="egContainerBackdropLabel">Achtergrond</div>
               <div id="egContainerBackdropPreview" style="width:100%; aspect-ratio:16/9; border:1px dashed var(--border); border-radius:8px; background-size:cover; background-position:center; background-color:var(--surface); display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:0.75rem;">—</div>
               <input type="file" id="egContainerBackdropInput" accept="image/*" style="display:none;" onchange="uploadContainerBackdrop(this)">
               <div style="display:flex; gap:6px; margin-top:6px;">
-                <button class="btn btn-secondary" type="button" style="padding:4px 10px; font-size:0.75rem; flex:1;" onclick="document.getElementById('egContainerBackdropInput').click()" data-i18n="edition.egContainerUpload">Upload</button>
+                <button class="btn btn-secondary" type="button" style="padding:4px 10px; font-size:0.75rem; flex:1;" onclick="document.getElementById('egContainerBackdropInput').click()" id="egContainerUploadBackdropBtn">Upload</button>
               </div>
             </div>
           </div>

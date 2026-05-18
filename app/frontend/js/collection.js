@@ -926,6 +926,19 @@ function _refreshContainerImagePreviews(gd) {
   }
   wrap.style.display = '';
 
+  // Apply translated labels at runtime so they're never raw keys
+  const imLabel = document.getElementById('egContainerImagesLabel');
+  if (imLabel) imLabel.textContent = t('edition.egContainerImages');
+  const pLabel = document.getElementById('egContainerPosterLabel');
+  if (pLabel) pLabel.textContent = t('edition.egContainerPoster');
+  const bLabel = document.getElementById('egContainerBackdropLabel');
+  if (bLabel) bLabel.textContent = t('edition.egContainerBackdrop');
+  const upPBtn = document.getElementById('egContainerUploadPosterBtn');
+  if (upPBtn) upPBtn.textContent = t('edition.egContainerUpload');
+  const upBBtn = document.getElementById('egContainerUploadBackdropBtn');
+  if (upBBtn) upBBtn.textContent = t('edition.egContainerUpload');
+  if (clearBtn) clearBtn.textContent = t('edition.egContainerClear');
+
   const pf = (gd && gd.poster_file) ? gd.poster_file : '';
   if (posterPrev) {
     if (pf) {
