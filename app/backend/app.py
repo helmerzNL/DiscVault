@@ -7010,11 +7010,13 @@ def collection_compare():
     digital_by_title_year: dict = {}
     for d in digital_items:
         dd = dict(d)
+        # Normalize ids to string keys so lookup matches regardless of how
+        # the source stored them (Plex may store as INTEGER, Jellyfin as TEXT).
         if dd.get("tmdb_id"):
-            digital_by_tmdb.setdefault(dd["tmdb_id"], []).append(dd)
+            digital_by_tmdb.setdefault(str(dd["tmdb_id"]), []).append(dd)
         if dd.get("imdb_id"):
-            digital_by_imdb.setdefault(dd["imdb_id"], []).append(dd)
-        key = f"{(dd.get('title') or '').lower().strip()}|{(dd.get('year') or '').strip()}"
+            digital_by_imdb.setdefault(str(dd["imdb_id"]), []).append(dd)
+        key = f"{(dd.get('title') or '').lower().strip()}|{str(dd.get('year') or '').strip()}"
         digital_by_title_year.setdefault(key, []).append(dd)
 
     physical_and_digital = []
@@ -7032,7 +7034,7 @@ def collection_compare():
             matches = digital_by_imdb.get(str(md["imdb_id"]), [])
         # Fallback: title+year
         if not matches:
-            key = f"{(md.get('original_title') or md.get('title') or '').lower().strip()}|{(md.get('year') or '').strip()}"
+            key = f"{(md.get('original_title') or md.get('title') or '').lower().strip()}|{str(md.get('year') or '').strip()}"
             matches = digital_by_title_year.get(key, [])
         if matches:
             for match in matches:
