@@ -1094,9 +1094,12 @@ function searchParentGroup(query) {
   fetch(`${API}/edition-groups?q=${encodeURIComponent(query)}`)
     .then(r => r.json())
     .then(groups => {
-      const items = groups.slice(0, 8).map(g =>
-        `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectParentGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">${g.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${g.member_count || 0})</span></div>`
-      );
+      const items = groups.slice(0, 8).map(g => {
+        // Box sets have no direct members (member_count=0). The real films live in
+        // child vaults (child_member_count) and loose movies (loose_movie_count).
+        const total = (g.member_count || 0) + (g.child_member_count || 0) + (g.loose_movie_count || 0);
+        return `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectParentGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">${g.title} <span style='color:var(--text-muted);font-size:0.75rem;'>(${total})</span></div>`;
+      });
       // Always offer to create a new super-group with the typed name
       items.push(`<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem; border-top:1px solid var(--border); color:var(--accent);" onclick="createAndSelectParentGroup('${query.replace(/'/g,"\\'")}')">➕ ${t('edition.egCreateGroup', query)}</div>`);
       dropdown.innerHTML = items.join('');
