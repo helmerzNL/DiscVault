@@ -933,10 +933,6 @@ function _refreshContainerImagePreviews(gd) {
   if (pLabel) pLabel.textContent = t('edition.egContainerPoster');
   const bLabel = document.getElementById('egContainerBackdropLabel');
   if (bLabel) bLabel.textContent = t('edition.egContainerBackdrop');
-  const upPBtn = document.getElementById('egContainerUploadPosterBtn');
-  if (upPBtn) upPBtn.textContent = t('edition.egContainerUpload');
-  const upBBtn = document.getElementById('egContainerUploadBackdropBtn');
-  if (upBBtn) upBBtn.textContent = t('edition.egContainerUpload');
   if (clearBtn) clearBtn.textContent = t('edition.egContainerClear');
 
   const pf = (gd && gd.poster_file) ? gd.poster_file : '';
@@ -946,7 +942,7 @@ function _refreshContainerImagePreviews(gd) {
       posterPrev.textContent = '';
     } else {
       posterPrev.style.backgroundImage = '';
-      posterPrev.textContent = '—';
+      posterPrev.textContent = '+';
     }
   }
   if (clearBtn) clearBtn.style.display = pf ? '' : 'none';
@@ -958,7 +954,7 @@ function _refreshContainerImagePreviews(gd) {
       bgPrev.textContent = '';
     } else {
       bgPrev.style.backgroundImage = '';
-      bgPrev.textContent = '—';
+      bgPrev.textContent = '+';
     }
   }
 }
