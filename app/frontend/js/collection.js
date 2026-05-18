@@ -723,7 +723,7 @@ function openSuperGroupView(movie) {
     const edType = lm.edition_type && lm.edition_type !== 'standard'
       ? _editionShortLabel(lm.edition_type, lm.custom_edition_label) : '';
     return `
-      <div class="eg-edition-card" onclick="openMovieDetail(${lm.id})">
+      <div class="eg-edition-card" onclick="openMovieDetail(${lm.id}, true)">
         <div class="eg-edition-poster">
           ${imgHtml}
           <div class="eg-edition-fmt">${lm.format || '4K'}</div>
