@@ -554,15 +554,10 @@ let _currentEditionGroupPrimaryId = null;
 let _egViewStack = []; // navigation stack for nested group views
 let _currentSuperGroup = null;
 let _currentCollection = null;
-let _currentCollectionData = null;
 
 /* ── Collection view ─────────────────────────────────────────────────────── */
 function openCollectionView(movie) {
   _currentCollection = movie;
-  _currentSuperGroup = null;
-  _currentEditionGroupPrimaryId = null;
-  _currentEgGroupData = null;
-  _currentCollectionData = null;
 
   // Inject loose movies into allMovies so openMovieDetail can find them
   (movie._loose_movies || []).forEach(lm => {
@@ -631,28 +626,10 @@ function openCollectionView(movie) {
       </div>`;
   });
   grid.innerHTML = [...boxSetHtml, ...vaultHtml, ...looseHtml].join('');
-  _populateEgHero(movie, 'Collection');
-  _populateEgManageSection(movie);
-  switchEgTab('members');
-
-  // Load collection detail from API for backdrop/description
-  const colId = movie._collection_id;
-  if (colId) {
-    fetch(`${API}/collections/${colId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(c => {
-        if (!c) return;
-        _currentCollectionData = c;
-        if (c.backdrop) _applyEgBackdrop(c.backdrop, movie);
-        if (c.description) {
-          const descEl = document.getElementById('egPanelDescription');
-          if (descEl) descEl.textContent = c.description;
-        }
-        _populateEgManageSection(movie);
-      });
-  }
-
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Hide manage section for collection view (managed separately)
+  const mgmt = document.getElementById('egManageSection');
+  if (mgmt) mgmt.style.display = 'none';
   switchTabDirect('edition-group');
 }
 
@@ -674,10 +651,6 @@ function openVaultFromCollection(movieId) {
 
 function openSuperGroupView(movie) {
   _currentSuperGroup = movie;
-  _currentCollection = null;
-  _currentEditionGroupPrimaryId = null;
-  _currentCollectionData = null;
-  _currentEgGroupData = null;
 
   // Inject loose movies into allMovies so openMovieDetail can find them
   (movie._loose_movies || []).forEach(lm => {
@@ -734,24 +707,6 @@ function openSuperGroupView(movie) {
 
   grid.innerHTML = [...subGroupHtml, ...looseHtml].join('');
   _populateEgManageSection(movie);
-  _populateEgHero(movie, 'Box Set');
-  switchEgTab('members');
-  // Load extended data from API (backdrop, description, collection)
-  const pgId = movie._parent_group_id;
-  if (pgId) {
-    fetch(`${API}/edition-groups/${pgId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(g => {
-        if (!g) return;
-        _currentEgGroupData = g;
-        _applyEgBackdrop(g.backdrop, movie);
-        if (g.description) {
-          const descEl = document.getElementById('egPanelDescription');
-          if (descEl) descEl.textContent = g.description;
-        }
-        _populateEgManageSection(movie, g);
-      });
-  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
   switchTabDirect('edition-group');
 }
@@ -766,10 +721,6 @@ function openEditionGroupViewFromSuper(id) {
 
 function openEditionGroupView(id, primaryOverride) {
   _currentEditionGroupPrimaryId = id;
-  _currentSuperGroup = null;
-  _currentCollection = null;
-  _currentCollectionData = null;
-  _currentEgGroupData = null;
   const primary = primaryOverride || allMovies.find(m => m.id === id);
   if (!primary) return;
   // Ensure all editions are in allMovies so openMovieDetail can find them
@@ -809,282 +760,44 @@ function openEditionGroupView(id, primaryOverride) {
         <div class="eg-edition-info">${e.year || ''}</div>
       </div>`;
   }).join('');
-  _populateEgManageSection(primary);
-  _populateEgHero(primary, 'Vault');
-  switchEgTab('members');
-  // Load extended data from API
-  const groupId = primary.edition_group_id;
-  if (groupId) {
-    fetch(`${API}/edition-groups/${groupId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(g => {
-        if (!g) return;
-        _currentEgGroupData = g;
-        _applyEgBackdrop(g.backdrop, primary);
-        if (g.description) {
-          const descEl = document.getElementById('egPanelDescription');
-          if (descEl) descEl.textContent = g.description;
-        }
-        _populateEgManageSection(primary, g);
-      });
-  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  _populateEgManageSection(primary);
   switchTabDirect('edition-group');
 }
 
-function _populateEgManageSection(movieCard, groupData) {
-  const isCollection = !!(_currentCollection && _currentCollection._collection_id);
-  const gd = isCollection ? (_currentCollectionData || {}) : (groupData || _currentEgGroupData || {});
-
-  const titleEl = document.getElementById('egGroupTitle');
-  if (titleEl) titleEl.value = gd.title || (movieCard && movieCard._group_title) || '';
-  const descEl = document.getElementById('egGroupDescription');
-  if (descEl) descEl.value = gd.description || '';
+function _populateEgManageSection(movieCard) {
+  const bl   = movieCard && movieCard._group_badge_label;
   const elBl = document.getElementById('egBadgeLabel');
-  if (elBl) elBl.value = (gd.badge_label || (movieCard && movieCard._group_badge_label)) || '';
-
-  // Hide fields not applicable to collections
-  const pgSection = document.getElementById('egParentGroupId');
-  if (pgSection) pgSection.closest('.input-group').style.display = isCollection ? 'none' : '';
-  const blSection = elBl;
-  if (blSection) blSection.closest('.input-group').style.display = isCollection ? 'none' : '';
-  const colSection = document.getElementById('egCollectionId');
-  if (colSection) colSection.closest('.input-group').style.display = isCollection ? 'none' : '';
-
+  if (elBl) elBl.value = bl || '';
+  const titleEl = document.getElementById('egGroupTitle');
+  if (titleEl) titleEl.value = (movieCard && movieCard._group_title) || '';
   const elPgId   = document.getElementById('egParentGroupId');
   const badge    = document.getElementById('egParentGroupBadge');
   const pgSearch = document.getElementById('egParentGroupSearch');
+  const manage   = document.getElementById('egManageSection');
+  if (manage) manage.style.display = 'none';
   if (pgSearch) pgSearch.value = '';
 
-  if (!isCollection) {
-    const existingParentId = gd.parent_group_id || (movieCard && movieCard._parent_group_id);
-    if (elPgId) elPgId.value = existingParentId || '';
-    if (existingParentId && badge) {
-      fetch(`${API}/edition-groups/${existingParentId}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(g => {
-          if (!g) return;
-          document.getElementById('egParentGroupName').textContent = g.title || `#${existingParentId}`;
-          badge.style.display = 'flex';
-        });
-    } else if (badge) {
-      badge.style.display = 'none';
-    }
+  const existingParentId = movieCard && movieCard._parent_group_id;
+  if (elPgId) elPgId.value = existingParentId || '';
 
-    // Collection link
-    const colId = gd.collection_id || '';
-    const elColId = document.getElementById('egCollectionId');
-    const colBadge = document.getElementById('egCollectionBadge');
-    const colSearch = document.getElementById('egCollectionSearch');
-    if (elColId) elColId.value = colId || '';
-    if (colSearch) colSearch.value = '';
-    if (colId && colBadge) {
-      fetch(`${API}/collections/${colId}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(c => {
-          if (!c) return;
-          document.getElementById('egCollectionName').textContent = c.title || `#${colId}`;
-          colBadge.style.display = 'flex';
-        });
-    } else if (colBadge) {
-      colBadge.style.display = 'none';
-    }
+  if (existingParentId && badge) {
+    // Load parent name from API
+    fetch(`${API}/edition-groups/${existingParentId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(g => {
+        if (!g) return;
+        document.getElementById('egParentGroupName').textContent = g.title || `#${existingParentId}`;
+        badge.style.display = 'flex';
+      });
+  } else if (badge) {
+    badge.style.display = 'none';
   }
 }
 
 function toggleEgManageSection() {
-  switchEgTab('manage');
-}
-
-// ── Edition Group detail: hero, tabs, media ─────────────────────────────────
-
-let _currentEgGroupData = null;
-
-function _populateEgHero(movieCard, typeLabel) {
-  // Type tag
-  const tagsEl = document.getElementById('egPanelTags');
-  if (tagsEl) tagsEl.innerHTML = `<span class="movie-tag">${typeLabel}</span>`;
-  // Description
-  const descEl = document.getElementById('egPanelDescription');
-  if (descEl) descEl.textContent = '';
-  // Poster — use first member's poster
-  const posterEl = document.getElementById('egPoster');
-  if (posterEl) {
-    const firstMember = (movieCard.editions || movieCard._sub_groups || movieCard._loose_movies || [])[0];
-    const src = firstMember ? posterSrc(firstMember) : posterSrc(movieCard);
-    posterEl.innerHTML = src
-      ? `<img src="${src}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📦</div>'">`
-      : '<div class="no-img">📦</div>';
-  }
-  // Default: no backdrop
-  _applyEgBackdrop(null, movieCard);
-}
-
-function _applyEgBackdrop(backdropUrl, movieCard) {
-  const heroWrap = document.getElementById('egHeroWrap');
-  const heroImg = document.getElementById('egHeroImg');
-  const bgBlur = document.getElementById('egDetailBg');
-  if (!backdropUrl) {
-    // Fallback: try first member's backdrop
-    const members = movieCard.editions || movieCard._sub_groups || movieCard._loose_movies || [];
-    for (const m of members) {
-      if (m.backdrop) { backdropUrl = m.backdrop; break; }
-    }
-  }
-  if (backdropUrl) {
-    if (heroImg) heroImg.style.backgroundImage = `url('${backdropUrl}')`;
-    if (heroWrap) heroWrap.classList.remove('no-backdrop');
-    if (bgBlur) bgBlur.style.backgroundImage = `url('${backdropUrl}')`;
-  } else {
-    if (heroImg) heroImg.style.backgroundImage = '';
-    if (heroWrap) heroWrap.classList.add('no-backdrop');
-    if (bgBlur) bgBlur.style.backgroundImage = '';
-  }
-}
-
-function switchEgTab(name) {
-  document.querySelectorAll('#panel-edition-group [data-eg-tab]').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-eg-tab') === name);
-  });
-  document.querySelectorAll('#panel-edition-group .modal-tab-content').forEach(el => {
-    el.classList.remove('active');
-  });
-  const map = { members: 'egTabMembers', media: 'egTabMedia', manage: 'egTabManage' };
-  const target = document.getElementById(map[name]);
-  if (target) target.classList.add('active');
-  if (name === 'media') loadEgMedia();
-}
-
-function loadEgMedia() {
-  const container = document.getElementById('egMediaContent');
-  if (!container) return;
-  container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('general.loading', 'Laden...')}</div>`;
-
-  // Determine if this is a collection or edition-group view
-  if (_currentCollection && _currentCollection._collection_id) {
-    _loadCollectionMedia(container, _currentCollection._collection_id);
-    return;
-  }
-
-  const isSuperGroup = !!_currentSuperGroup;
-  const groupId = isSuperGroup
-    ? (_currentSuperGroup._parent_group_id)
-    : (_currentEditionGroupPrimaryId ? (allMovies.find(m => m.id === _currentEditionGroupPrimaryId) || {}).edition_group_id : null);
-
-  if (!groupId) {
-    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
-    return;
-  }
-
-  fetch(`${API}/edition-groups/${groupId}`)
-    .then(r => r.ok ? r.json() : null)
-    .then(g => {
-      if (!g) { container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`; return; }
-      _currentEgGroupData = g;
-      const allMembers = [...(g.members || []), ...(g.loose_movies || [])];
-      _renderMediaGrid(container, allMembers, g.backdrop || '', 'eg', groupId);
-    });
-}
-
-function _loadCollectionMedia(container, colId) {
-  fetch(`${API}/collections/${colId}`)
-    .then(r => r.ok ? r.json() : null)
-    .then(c => {
-      if (!c) { container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`; return; }
-      _currentCollectionData = c;
-      const allMembers = [...(c.eg_movies || []), ...(c.loose_movies || [])];
-      _renderMediaGrid(container, allMembers, c.backdrop || '', 'col', colId);
-    });
-}
-
-function _renderMediaGrid(container, allMembers, currentBackdrop, type, groupId) {
-  let html = '';
-  allMembers.forEach(m => {
-    let backdrops = [];
-    try { backdrops = m.backdrops ? JSON.parse(m.backdrops) : []; } catch(e) {}
-    if (!backdrops.length && m.backdrop) backdrops = [m.backdrop];
-    if (!backdrops.length) return;
-
-    html += `<div style="margin-bottom:20px;">
-      <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">${m.title || ''} ${m.year ? '(' + m.year + ')' : ''}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
-        ${backdrops.map(url => {
-          const isActive = url === currentBackdrop;
-          return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setGroupBackdrop('${type}', ${groupId}, '${url.replace(/'/g, "\\'")}')">
-            <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-            ${isActive ? '<div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;">Backdrop</div>' : ''}
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
-  });
-
-  if (!html) {
-    html = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
-  } else {
-    html = `<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">${t('group.mediaHint', 'Klik op een afbeelding om deze als backdrop voor de groep in te stellen.')}</p>` + html;
-  }
-  container.innerHTML = html;
-}
-
-async function setGroupBackdrop(type, groupId, url) {
-  const endpoint = type === 'col'
-    ? `${API}/collections/${groupId}`
-    : `${API}/edition-groups/${groupId}`;
-  await fetch(endpoint, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ backdrop: url })
-  });
-  // Apply immediately
-  const movieCard = _currentCollection || _currentSuperGroup || allMovies.find(m => m.id === _currentEditionGroupPrimaryId);
-  _applyEgBackdrop(url, movieCard || {});
-  if (type === 'col' && _currentCollectionData) _currentCollectionData.backdrop = url;
-  if (type === 'eg' && _currentEgGroupData) _currentEgGroupData.backdrop = url;
-  // Reload media tab to update active indicator
-  loadEgMedia();
-}
-
-// ── Edition Group: Collection search/link ───────────────────────────────────
-
-function searchEgCollection(query) {
-  const dropdown = document.getElementById('egCollectionDropdown');
-  if (!dropdown) return;
-  if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
-  fetch(`${API}/collections?q=${encodeURIComponent(query)}`)
-    .then(r => r.json())
-    .then(cols => {
-      const items = cols.slice(0, 8).map(c =>
-        `<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem;" onclick="selectEgCollection(${c.id}, '${(c.title||'').replace(/'/g,"\\'")}')">${c.title}</div>`
-      );
-      items.push(`<div style="padding:8px 12px; cursor:pointer; font-size:0.85rem; border-top:1px solid var(--border); color:#2ecc71;" onclick="createAndSelectEgCollection('${query.replace(/'/g,"\\'")}')">➕ ${query}</div>`);
-      dropdown.innerHTML = items.join('');
-      dropdown.style.display = '';
-    });
-}
-
-async function createAndSelectEgCollection(title) {
-  const res = await fetch(`${API}/collections`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ title })
-  });
-  if (!res.ok) return;
-  const c = await res.json();
-  selectEgCollection(c.id, c.title);
-}
-
-function selectEgCollection(id, title) {
-  document.getElementById('egCollectionId').value = id;
-  document.getElementById('egCollectionSearch').value = '';
-  document.getElementById('egCollectionDropdown').style.display = 'none';
-  document.getElementById('egCollectionName').textContent = title;
-  document.getElementById('egCollectionBadge').style.display = 'flex';
-}
-
-function unlinkEgCollection() {
-  document.getElementById('egCollectionId').value = '';
-  document.getElementById('egCollectionBadge').style.display = 'none';
+  const s = document.getElementById('egManageSection');
+  if (s) s.style.display = (s.style.display === 'none') ? '' : 'none';
 }
 
 function searchParentGroup(query) {
@@ -1131,30 +844,10 @@ function unlinkParentGroup() {
 }
 
 async function saveEditionGroupMeta() {
-  // Collection save
-  if (_currentCollection && _currentCollection._collection_id) {
-    const colId = _currentCollection._collection_id;
-    const title = (document.getElementById('egGroupTitle') || {}).value || null;
-    const description = (document.getElementById('egGroupDescription') || {}).value || null;
-    await fetch(`${API}/collections/${colId}`, {
-      method: 'PUT',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ title, description })
-    });
-    _editionGroupCache = [];
-    await loadCollection();
-    closeEditionGroupView();
-    return;
-  }
-
   const primary = allMovies.find(m => m.id === _currentEditionGroupPrimaryId);
-  // For super groups, the groupId is the parent_group_id stored on the super group card
-  const groupId = _currentSuperGroup
-    ? _currentSuperGroup._parent_group_id
-    : (primary && primary.edition_group_id);
+  const groupId = primary && primary.edition_group_id;
   if (!groupId) return;
   const title         = (document.getElementById('egGroupTitle') || {}).value || null;
-  const description   = (document.getElementById('egGroupDescription') || {}).value || null;
   const badge_label   = (document.getElementById('egBadgeLabel') || {}).value || null;
   const parent_raw    = (document.getElementById('egParentGroupId') || {}).value;
   const parent_group_id = parent_raw ? parseInt(parent_raw) : null;
@@ -1163,7 +856,7 @@ async function saveEditionGroupMeta() {
   await fetch(`${API}/edition-groups/${groupId}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ title, description, badge_label, parent_group_id, collection_id })
+    body: JSON.stringify({ title, badge_label, parent_group_id, collection_id })
   });
   _editionGroupCache = [];
   await loadCollection();
@@ -1171,22 +864,8 @@ async function saveEditionGroupMeta() {
 }
 
 async function deleteEditionGroup() {
-  // Collection delete
-  if (_currentCollection && _currentCollection._collection_id) {
-    const colId = _currentCollection._collection_id;
-    const name = (document.getElementById('egGroupTitle') || {}).value || _currentCollection._group_title || '';
-    if (!confirm(t('js.egDeleteConfirm', name))) return;
-    await fetch(`${API}/collections/${colId}`, { method: 'DELETE' });
-    _editionGroupCache = [];
-    await loadCollection();
-    closeEditionGroupView();
-    return;
-  }
-
   const primary = allMovies.find(m => m.id === _currentEditionGroupPrimaryId);
-  const groupId = _currentSuperGroup
-    ? _currentSuperGroup._parent_group_id
-    : (primary && primary.edition_group_id);
+  const groupId = primary && primary.edition_group_id;
   if (!groupId) return;
   const name = (document.getElementById('egGroupTitle') || {}).value || (primary && primary._group_title) || '';
   if (!confirm(t('js.egDeleteConfirm', name))) return;
@@ -2551,15 +2230,15 @@ document.addEventListener('DOMContentLoaded', initDetailSwipe);
 function _editionShortLabel(edType, customLabel) {
   if (edType === 'custom') return customLabel || '…';
   const labels = {
-    steelbook:    'Steelbook',
-    directors_cut: "Director's Cut",
-    limited:      'Limited Edition',
-    theatrical:   'Theatrical Cut',
-    '4k_upgrade': '4K',
-    '4k_combo':   '4K+BD',
-    boxset_disc:  'Box-Set',
+    steelbook:    'Steel',
+    directors_cut: 'DC',
+    limited:      'LE',
+    theatrical:   'TC',
+    '4k_upgrade': '4K+',
+    boxset_disc:  'Box',
     dvd:          'DVD',
-    bluray:       'Blu-ray',
+    bluray:       'BD',
+    other:        '…',
   };
   return labels[edType] || edType;
 }
@@ -2823,7 +2502,7 @@ async function loadGroupMgmtList(filter) {
         else if (isChildOfBoxSet) type = 'vault'; // child vault inside a box set
         else type = 'vault'; // standalone vault
 
-        const totalMembers = (eg.member_count || 0) + (eg.loose_movie_count || 0) + (eg.child_member_count || 0);
+        const totalMembers = (eg.member_count || 0) + (eg.loose_movie_count || 0);
         if (_gmFilter !== 'all' && _gmFilter !== type) continue;
         items.push({ id: eg.id, title: eg.title, type, memberCount: totalMembers, src: 'eg' });
       }
@@ -2834,8 +2513,7 @@ async function loadGroupMgmtList(filter) {
       const r = await fetch(`${API}/collections`);
       const cols = await r.json();
       for (const c of cols) {
-        const totalMembers = (c.eg_movie_count || 0) + (c.loose_movie_count || 0);
-        items.push({ id: c.id, title: c.title, type: 'collection', memberCount: totalMembers, src: 'col' });
+        items.push({ id: c.id, title: c.title, type: 'collection', memberCount: 0, src: 'col' });
       }
     }
 

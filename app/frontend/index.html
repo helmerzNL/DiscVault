@@ -1637,9 +1637,9 @@
             <option value="theatrical"   data-i18n="edition.theatrical">Theatrical Cut</option>
             <option value="dvd"          data-i18n="edition.dvd">DVD</option>
             <option value="bluray"       data-i18n="edition.bluray">Blu-ray</option>
-            <option value="4k_upgrade"   data-i18n="edition.4kUpgrade">4K UHD</option>
-            <option value="4k_combo"     data-i18n="edition.4kCombo">4K Ultra HD + Blu-ray</option>
+            <option value="4k_upgrade"   data-i18n="edition.4kUpgrade">4K Upgrade</option>
             <option value="boxset_disc"  data-i18n="edition.boxsetDisc">Box Set Disc</option>
+            <option value="other"        data-i18n="edition.other">Overig</option>
             <option value="custom"       data-i18n="edition.custom">Eigen label</option>
           </select>
           <input type="text" id="editCustomEditionLabel" placeholder="Eigen label..." maxlength="30"
@@ -1826,73 +1826,33 @@
 
 <!-- Edition Group Stack Panel -->
 <div class="panel" id="panel-edition-group">
-  <!-- Full-viewport blurred background -->
-  <div id="egDetailBg" class="detail-bg-blur"></div>
-
-  <!-- Hero banner -->
-  <div class="detail-hero-wrap" id="egHeroWrap">
-    <div class="detail-hero-img" id="egHeroImg"></div>
-    <div class="detail-hero-gradient"></div>
-    <div class="detail-hero-nav">
+  <div class="detail-page" style="padding-top:20px;">
+    <div class="detail-page-nav">
       <button class="btn-back" type="button" onclick="closeEditionGroupView()">
         <span class="mdi mdi-arrow-left" aria-hidden="true"></span>
         <span data-i18n="general.back">Terug</span>
       </button>
     </div>
-  </div>
-
-  <div class="detail-page">
-    <!-- Info row: poster + title -->
-    <div class="detail-info-row">
-      <div class="detail-poster-col">
-        <div class="modal-poster" id="egPoster"><div class="no-img">📦</div></div>
-      </div>
-      <div class="detail-title-col">
-        <div class="movie-tags" id="egPanelTags" style="margin-bottom:10px;"></div>
-        <div class="modal-title" id="egPanelTitle"></div>
-        <div id="egPanelSubtitle" style="font-size:0.82rem; color:var(--text-muted); margin-top:6px;"></div>
-        <div id="egPanelDescription" style="font-size:0.85rem; color:var(--text-muted); margin-top:10px; line-height:1.6;"></div>
-        <div class="btn-row modal-edit-actions" style="flex-wrap:wrap; margin-top:20px;">
-          <button class="btn btn-secondary collectors-only" id="btnEgEdit" onclick="toggleEgManageSection()" data-i18n="edition.egManage">⚙ Groep beheren</button>
-        </div>
-      </div>
+    <div style="padding:0 20px 16px;">
+      <div class="modal-title" id="egPanelTitle"></div>
+      <div id="egPanelSubtitle" style="font-size:0.82rem; color:var(--text-muted); margin-top:4px;"></div>
     </div>
-
-    <!-- Tabs -->
-    <div class="modal-tabs">
-      <button class="modal-tab active" onclick="switchEgTab('members')" data-eg-tab="members" data-i18n="group.tabMembers">Inhoud</button>
-      <button class="modal-tab" onclick="switchEgTab('media')" data-eg-tab="media" data-i18n="modal.tabMedia">Media</button>
-      <button class="modal-tab collectors-only" onclick="switchEgTab('manage')" data-eg-tab="manage" data-i18n="edition.egManage">Beheer</button>
-    </div>
-
-    <!-- Tab: Members (edition cards) -->
-    <div class="modal-tab-content active" id="egTabMembers">
-      <div class="eg-panel-grid" id="egPanelGrid"></div>
-    </div>
-
-    <!-- Tab: Media -->
-    <div class="modal-tab-content" id="egTabMedia">
-      <div id="egMediaContent" style="padding:0 4px;">
-        <div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;" data-i18n="modal.noMedia">Geen media beschikbaar.</div>
-      </div>
-    </div>
-
-    <!-- Tab: Manage -->
-    <div class="modal-tab-content" id="egTabManage">
-      <div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:8px;">
+    <div class="eg-panel-grid" id="egPanelGrid"></div>
+    <!-- Group management -->
+    <div id="egGroupManage" class="collectors-only" style="padding:0 20px 32px;">
+      <button type="button" onclick="toggleEgManageSection()" style="background:none;border:1px solid var(--border);color:var(--text-muted);font-size:0.78rem;padding:6px 14px;border-radius:6px;cursor:pointer;" data-i18n="edition.egManage">
+        ⚙ Groep beheren
+      </button>
+      <div id="egManageSection" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:8px;">
         <div class="input-group" style="margin-bottom:12px;">
           <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egGroupName">Groepnaam</label>
           <input type="text" id="egGroupTitle" maxlength="80" style="margin-top:4px;" data-i18n-placeholder="edition.egGroupNamePlaceholder">
         </div>
         <div class="input-group" style="margin-bottom:12px;">
-          <label style="font-size:0.8rem; font-weight:600;" data-i18n="group.description">Beschrijving</label>
-          <textarea id="egGroupDescription" rows="3" maxlength="500" style="margin-top:4px; resize:vertical; font-family:inherit; width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:0.85rem;" data-i18n-placeholder="group.descriptionPlaceholder"></textarea>
-        </div>
-        <div class="input-group" style="margin-bottom:12px;">
           <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egBadgeLabel">Badge label</label>
           <input type="text" id="egBadgeLabel" placeholder="bijv. Trilogy, 4K Set..." maxlength="20" style="margin-top:4px;" data-i18n-placeholder="edition.egBadgeLabelPlaceholder">
         </div>
-        <div class="input-group" style="margin-bottom:12px;">
+        <div class="input-group" style="margin-bottom:16px;">
           <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egParentGroup">Samenvoegen onder box set</label>
           <input type="text" id="egParentGroupSearch" placeholder="Zoek box set..." autocomplete="off"
                  style="margin-top:4px;" oninput="searchParentGroup(this.value)" data-i18n-placeholder="edition.egParentGroupSearch">
@@ -1903,24 +1863,12 @@
           </div>
           <input type="hidden" id="egParentGroupId">
         </div>
-        <div class="input-group" style="margin-bottom:16px;">
-          <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egCollection">Collection</label>
-          <input type="text" id="egCollectionSearch" placeholder="Zoek collection..." autocomplete="off"
-                 style="margin-top:4px;" oninput="searchEgCollection(this.value)" data-i18n-placeholder="edition.egCollectionSearch">
-          <div id="egCollectionDropdown" style="display:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:140px; overflow-y:auto; position:relative; z-index:10;"></div>
-          <div id="egCollectionBadge" style="display:none; align-items:center; gap:6px; background:rgba(46,204,113,.1); border:1px solid rgba(46,204,113,.3); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:#2ecc71; margin-top:6px;">
-            <span id="egCollectionName"></span>
-            <button type="button" onclick="unlinkEgCollection()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
-          </div>
-          <input type="hidden" id="egCollectionId">
-        </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <button class="btn btn-secondary" type="button" onclick="saveEditionGroupMeta()" style="padding:6px 16px; font-size:0.82rem;" data-i18n="edition.egSave">Opslaan</button>
           <button class="btn btn-danger" type="button" onclick="deleteEditionGroup()" style="padding:6px 16px; font-size:0.82rem; margin-left:auto;" data-i18n="edition.egDelete">Groep verwijderen</button>
         </div>
       </div>
     </div>
-
   </div>
 </div>
 
