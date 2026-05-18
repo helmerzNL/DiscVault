@@ -2491,6 +2491,15 @@ def update_movie(movie_id):
         f"UPDATE movies SET {set_clause} WHERE id = ?",
         list(updates.values()) + [movie_id]
     )
+    # If any container linkage changed, copy the container's existing group
+    # memberships onto this movie so it joins the set in lock-step.
+    container_fields = ("edition_group_id", "super_group_id", "collection_id")
+    container_changed = any(
+        k in updates and (updates[k] or None) != (existing.get(k) or None)
+        for k in container_fields
+    )
+    if container_changed:
+        _inherit_groups_from_container_siblings(conn, movie_id)
     conn.commit()
     movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     conn.close()
@@ -4095,6 +4104,161 @@ def _check_movie_owner(movie_row) -> bool:
     return movie_row["owner_id"] == uid
 
 
+def _get_container_sibling_ids(conn, movie_id):
+    """Return the set of movie ids that share a container (vault / box-set /
+    collection) with the given movie. The returned set includes movie_id itself
+    so callers can apply group changes uniformly across the whole container.
+
+    A "container" here is any of:
+      - vault       = edition_group (movies sharing the same edition_group_id)
+      - box-set     = parent edition_group (parent_group_id of a vault, or
+                      directly via movies.super_group_id)
+      - collection  = a collection (linked via movies.collection_id, via
+                      edition_groups.collection_id, or transitively via the
+                      box-set's collection_id)
+    """
+    sibling_ids = {int(movie_id)}
+    row = conn.execute(
+        "SELECT edition_group_id, super_group_id, collection_id FROM movies WHERE id=?",
+        (movie_id,)
+    ).fetchone()
+    if not row:
+        return sibling_ids
+    eg_id = row["edition_group_id"]
+    sg_id = row["super_group_id"]
+    col_id = row["collection_id"]
+
+    parent_gid = None
+    eg_col_id = None
+    if eg_id:
+        eg = conn.execute(
+            "SELECT parent_group_id, collection_id FROM edition_groups WHERE id=?",
+            (eg_id,)
+        ).fetchone()
+        if eg:
+            parent_gid = eg["parent_group_id"]
+            eg_col_id = eg["collection_id"]
+
+    boxset_id = parent_gid or sg_id
+    boxset_col_id = None
+    if boxset_id:
+        eg = conn.execute(
+            "SELECT collection_id FROM edition_groups WHERE id=?",
+            (boxset_id,)
+        ).fetchone()
+        if eg:
+            boxset_col_id = eg["collection_id"]
+
+    effective_col = col_id or eg_col_id or boxset_col_id
+
+    # 1) Vault siblings
+    if eg_id:
+        for r in conn.execute(
+            "SELECT id FROM movies WHERE edition_group_id=?", (eg_id,)
+        ).fetchall():
+            sibling_ids.add(r["id"])
+
+    # 2) Box-set siblings (films in any child vault + films directly linked via super_group_id)
+    if boxset_id:
+        for r in conn.execute(
+            "SELECT id FROM movies WHERE edition_group_id IN "
+            "(SELECT id FROM edition_groups WHERE parent_group_id=?)",
+            (boxset_id,)
+        ).fetchall():
+            sibling_ids.add(r["id"])
+        for r in conn.execute(
+            "SELECT id FROM movies WHERE super_group_id=?", (boxset_id,)
+        ).fetchall():
+            sibling_ids.add(r["id"])
+
+    # 3) Collection siblings (direct, via vault, via box-set)
+    if effective_col:
+        for r in conn.execute(
+            "SELECT id FROM movies WHERE collection_id=?", (effective_col,)
+        ).fetchall():
+            sibling_ids.add(r["id"])
+        for r in conn.execute(
+            "SELECT id FROM movies WHERE edition_group_id IN "
+            "(SELECT id FROM edition_groups WHERE collection_id=?)",
+            (effective_col,)
+        ).fetchall():
+            sibling_ids.add(r["id"])
+        for r in conn.execute(
+            "SELECT m.id FROM movies m "
+            "JOIN edition_groups eg ON eg.id = m.edition_group_id "
+            "WHERE eg.parent_group_id IN "
+            "(SELECT id FROM edition_groups WHERE collection_id=?)",
+            (effective_col,)
+        ).fetchall():
+            sibling_ids.add(r["id"])
+        for r in conn.execute(
+            "SELECT id FROM movies WHERE super_group_id IN "
+            "(SELECT id FROM edition_groups WHERE collection_id=?)",
+            (effective_col,)
+        ).fetchall():
+            sibling_ids.add(r["id"])
+
+    return sibling_ids
+
+
+def _apply_groups_to_movies(conn, movie_ids, group_ids, *, replace=True,
+                            remove_only=False):
+    """Apply a group assignment to a set of movies, respecting ownership.
+
+    - replace=True (default): the given group_ids become the full group list
+      for each movie (existing memberships are removed first).
+    - replace=False, remove_only=False: add the given group_ids on top of
+      existing memberships.
+    - remove_only=True: remove the given group_ids from each movie.
+
+    Returns the number of movies that were actually touched.
+    """
+    uid = _get_current_user_id()
+    is_admin = _get_current_user_role() == "admin"
+    touched = 0
+    for mid in movie_ids:
+        m = conn.execute("SELECT owner_id FROM movies WHERE id=?", (int(mid),)).fetchone()
+        if not m:
+            continue
+        if uid and m["owner_id"] != uid and not is_admin:
+            continue
+        if remove_only:
+            for gid in group_ids:
+                conn.execute(
+                    "DELETE FROM movie_groups WHERE movie_id=? AND group_id=?",
+                    (int(mid), int(gid))
+                )
+        else:
+            if replace:
+                conn.execute("DELETE FROM movie_groups WHERE movie_id=?", (int(mid),))
+            for gid in group_ids:
+                conn.execute(
+                    "INSERT OR IGNORE INTO movie_groups (movie_id, group_id) VALUES (?,?)",
+                    (int(mid), int(gid))
+                )
+        touched += 1
+    return touched
+
+
+def _inherit_groups_from_container_siblings(conn, movie_id):
+    """If `movie_id` is part of a container, replace its group memberships with
+    the union of the groups its container siblings already have. No-op when
+    there are no siblings (i.e. the movie isn't in a container yet)."""
+    siblings = _get_container_sibling_ids(conn, movie_id)
+    siblings.discard(int(movie_id))
+    if not siblings:
+        return
+    placeholders = ",".join(["?"] * len(siblings))
+    rows = conn.execute(
+        f"SELECT DISTINCT group_id FROM movie_groups WHERE movie_id IN ({placeholders})",
+        tuple(siblings)
+    ).fetchall()
+    group_ids = [r["group_id"] for r in rows]
+    if not group_ids:
+        return
+    _apply_groups_to_movies(conn, [int(movie_id)], group_ids, replace=True)
+
+
 def _is_source_enabled(key: str, default: bool) -> bool:
     conn = sqlite3.connect(DB_PATH)
     row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
@@ -5441,7 +5605,12 @@ def get_movie_groups(movie_id):
 
 @app.route("/api/movies/<int:movie_id>/groups", methods=["PUT"])
 def set_movie_groups(movie_id):
-    """Set the full list of group_ids for a movie (replaces existing)."""
+    """Set the full list of group_ids for a movie (replaces existing).
+
+    Group memberships are propagated to every other movie that shares a
+    container (vault / box-set / collection) with this movie, so a container
+    behaves as a single unit for group membership.
+    """
     data = request.json or {}
     group_ids = data.get("group_ids", [])
     conn = get_db()
@@ -5453,36 +5622,29 @@ def set_movie_groups(movie_id):
     if uid and movie["owner_id"] != uid and _get_current_user_role() != "admin":
         conn.close()
         return jsonify({"error": "Not your movie"}), 403
-    conn.execute("DELETE FROM movie_groups WHERE movie_id=?", (movie_id,))
-    for gid in group_ids:
-        conn.execute("INSERT OR IGNORE INTO movie_groups (movie_id, group_id) VALUES (?,?)",
-                     (movie_id, int(gid)))
+    target_ids = _get_container_sibling_ids(conn, movie_id)
+    _apply_groups_to_movies(conn, target_ids, group_ids, replace=True)
     conn.commit()
     conn.close()
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "applied_to": len(target_ids)})
 
 
 @app.route("/api/movies/bulk/groups", methods=["PUT"])
 def bulk_set_movie_groups():
-    """Add group(s) to multiple movies at once."""
+    """Add group(s) to multiple movies at once.
+
+    For every supplied movie the change is also propagated to its container
+    siblings (vault / box-set / collection)."""
     data = request.json or {}
     movie_ids = data.get("movie_ids", [])
     group_ids = data.get("group_ids", [])
     if not movie_ids or not group_ids:
         return jsonify({"error": "movie_ids and group_ids required"}), 400
     conn = get_db()
-    uid = _get_current_user_id()
-    added = 0
+    expanded = set()
     for mid in movie_ids:
-        movie = conn.execute("SELECT owner_id FROM movies WHERE id=?", (mid,)).fetchone()
-        if not movie:
-            continue
-        if uid and movie["owner_id"] != uid and _get_current_user_role() != "admin":
-            continue
-        for gid in group_ids:
-            conn.execute("INSERT OR IGNORE INTO movie_groups (movie_id, group_id) VALUES (?,?)",
-                         (int(mid), int(gid)))
-        added += 1
+        expanded.update(_get_container_sibling_ids(conn, int(mid)))
+    added = _apply_groups_to_movies(conn, expanded, group_ids, replace=False)
     conn.commit()
     conn.close()
     return jsonify({"status": "ok", "updated": added})
@@ -5490,25 +5652,20 @@ def bulk_set_movie_groups():
 
 @app.route("/api/movies/bulk/groups", methods=["DELETE"])
 def bulk_remove_movie_groups():
-    """Remove group(s) from multiple movies at once."""
+    """Remove group(s) from multiple movies at once.
+
+    The removal is propagated to every container sibling so the whole vault /
+    box-set / collection leaves the group together."""
     data = request.json or {}
     movie_ids = data.get("movie_ids", [])
     group_ids = data.get("group_ids", [])
     if not movie_ids or not group_ids:
         return jsonify({"error": "movie_ids and group_ids required"}), 400
     conn = get_db()
-    uid = _get_current_user_id()
-    removed = 0
+    expanded = set()
     for mid in movie_ids:
-        movie = conn.execute("SELECT owner_id FROM movies WHERE id=?", (mid,)).fetchone()
-        if not movie:
-            continue
-        if uid and movie["owner_id"] != uid and _get_current_user_role() != "admin":
-            continue
-        for gid in group_ids:
-            conn.execute("DELETE FROM movie_groups WHERE movie_id=? AND group_id=?",
-                         (int(mid), int(gid)))
-        removed += 1
+        expanded.update(_get_container_sibling_ids(conn, int(mid)))
+    removed = _apply_groups_to_movies(conn, expanded, group_ids, remove_only=True)
     conn.commit()
     conn.close()
     return jsonify({"status": "ok", "updated": removed})
@@ -6658,6 +6815,10 @@ def add_edition_group_member(group_id):
         return jsonify({"error": "Group not found"}), 404
     for mid in movie_ids:
         conn.execute("UPDATE movies SET edition_group_id=? WHERE id=?", (group_id, mid))
+    conn.commit()
+    # New members inherit the vault's existing group memberships.
+    for mid in movie_ids:
+        _inherit_groups_from_container_siblings(conn, int(mid))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
