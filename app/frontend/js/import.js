@@ -435,6 +435,42 @@ function _pushRoute(path) {
 function _replaceRoute(path) {
   history.replaceState({ path }, '', path);
 }
+
+/* ── Deep-link resolvers for group routes ────────────────────────────────── */
+// Find the aggregated collection card in allMovies and open it.
+function _openCollectionRoute(id) {
+  switchTabDirect('collection');
+  const tryOpen = (tries) => {
+    const card = allMovies.find(m => m._is_collection && m._collection_id === id);
+    if (card) { openCollectionView(card); }
+    else if (tries > 0) { setTimeout(() => tryOpen(tries - 1), 300); }
+    else { _replaceRoute('/'); }
+  };
+  tryOpen(15);
+}
+// Find the aggregated box-set card and open it.
+function _openBoxSetRoute(id) {
+  switchTabDirect('collection');
+  const tryOpen = (tries) => {
+    const card = allMovies.find(m => m._is_super_group && !m._is_collection && m._parent_group_id === id);
+    if (card) { openSuperGroupView(card); }
+    else if (tries > 0) { setTimeout(() => tryOpen(tries - 1), 300); }
+    else { _replaceRoute('/'); }
+  };
+  tryOpen(15);
+}
+// Open a vault by edition_group id (uses primary movie lookup).
+function _openVaultRoute(id) {
+  switchTabDirect('collection');
+  const tryOpen = (tries) => {
+    const primary = allMovies.find(m => m.edition_group_id === id && !m._isNested);
+    if (primary) { openEditionGroupView(primary.id, primary); }
+    else if (tries > 0) { setTimeout(() => tryOpen(tries - 1), 300); }
+    else { _replaceRoute('/'); }
+  };
+  tryOpen(15);
+}
+
 function _handleRoute() {
   // Handle hash-based deep links (e.g. from push notification clicks).
   if (window.location.hash === '#invites') {
@@ -461,6 +497,12 @@ function _handleRoute() {
     tryOpen(15);
     return;
   }
+  const collectionMatch = path.match(/^\/collection\/(\d+)$/);
+  if (collectionMatch) { _openCollectionRoute(parseInt(collectionMatch[1], 10)); return; }
+  const boxsetMatch = path.match(/^\/boxset\/(\d+)$/);
+  if (boxsetMatch) { _openBoxSetRoute(parseInt(boxsetMatch[1], 10)); return; }
+  const vaultMatch = path.match(/^\/vault\/(\d+)$/);
+  if (vaultMatch) { _openVaultRoute(parseInt(vaultMatch[1], 10)); return; }
   const tab = _PATH_TABS[path];
   if (tab) switchTabDirect(tab);
   else _replaceRoute('/');
@@ -471,12 +513,15 @@ window.addEventListener('popstate', (e) => {
   const personMatch = path.match(/^\/person\/(\d+)$/);
   if (personMatch) { openPersonDetail(parseInt(personMatch[1], 10)); return; }
   const movieMatch = path.match(/^\/movie\/(\d+)$/);
-  if (movieMatch) {
-    openMovieDetail(parseInt(movieMatch[1], 10));
-  } else {
-    const tab = _PATH_TABS[path] || 'collection';
-    switchTabDirect(tab);
-  }
+  if (movieMatch) { openMovieDetail(parseInt(movieMatch[1], 10)); return; }
+  const collectionMatch = path.match(/^\/collection\/(\d+)$/);
+  if (collectionMatch) { _openCollectionRoute(parseInt(collectionMatch[1], 10)); return; }
+  const boxsetMatch = path.match(/^\/boxset\/(\d+)$/);
+  if (boxsetMatch) { _openBoxSetRoute(parseInt(boxsetMatch[1], 10)); return; }
+  const vaultMatch = path.match(/^\/vault\/(\d+)$/);
+  if (vaultMatch) { _openVaultRoute(parseInt(vaultMatch[1], 10)); return; }
+  const tab = _PATH_TABS[path] || 'collection';
+  switchTabDirect(tab);
 });
 
 window.addEventListener('resize', () => {
