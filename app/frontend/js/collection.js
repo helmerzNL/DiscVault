@@ -1206,13 +1206,22 @@ function _applyEgBackdrop(backdropUrl, movieCard) {
     }
   }
   if (backdropUrl) {
-    if (heroImg) heroImg.style.backgroundImage = `url('${backdropUrl}')`;
     if (heroWrap) heroWrap.classList.remove('no-backdrop');
-    if (bgBlur) bgBlur.style.backgroundImage = `url('${backdropUrl}')`;
+    // Preload image before showing — same pattern as openMovieDetail
+    const img = new Image();
+    img.onload = () => {
+      if (heroImg) { heroImg.style.backgroundImage = `url('${backdropUrl}')`; heroImg.classList.add('loaded'); }
+      if (bgBlur)  { bgBlur.style.backgroundImage  = `url('${backdropUrl}')`; bgBlur.classList.add('loaded'); }
+    };
+    img.onerror = () => {
+      if (heroImg) heroImg.style.backgroundImage = '';
+      if (heroWrap) heroWrap.classList.add('no-backdrop');
+    };
+    img.src = backdropUrl;
   } else {
-    if (heroImg) heroImg.style.backgroundImage = '';
+    if (heroImg) { heroImg.style.backgroundImage = ''; heroImg.classList.remove('loaded'); }
     if (heroWrap) heroWrap.classList.add('no-backdrop');
-    if (bgBlur) bgBlur.style.backgroundImage = '';
+    if (bgBlur)  { bgBlur.style.backgroundImage  = ''; bgBlur.classList.remove('loaded'); }
   }
 }
 
