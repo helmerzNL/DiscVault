@@ -406,6 +406,7 @@ function switchTabDirect(name) {
   if (panelName === 'lists') switchListsSubmenu(currentListsSub || 'watchlist');
   if (name === 'logs') loadLogs();
   if (name === 'settings') loadSettings();
+  if (name === 'admin')    loadAdminTab();
   if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {

@@ -1490,6 +1490,11 @@ function closeEditionGroupView() {
     if (prev.type === 'collection') { openCollectionView(prev.movie); return; }
     if (prev.type === 'super') { openSuperGroupView(prev.movie); return; }
   }
+  // Clean up backdrop so it doesn't bleed into other views
+  const egBg = document.getElementById('egDetailBg');
+  if (egBg) { egBg.classList.remove('loaded'); egBg.style.backgroundImage = ''; }
+  const egHeroEl = document.getElementById('egHeroImg');
+  if (egHeroEl) { egHeroEl.classList.remove('loaded'); egHeroEl.style.backgroundImage = ''; }
   _replaceRoute(_tabPath(_detailReturnTab));
   switchTabDirect(_detailReturnTab);
 }
