@@ -1200,7 +1200,7 @@ def lookup_movie_tmdb(title, year=""):
             if v.get("type") == "Trailer" and not trailer_url:
                 trailer_url = url
             elif v.get("type") in ("Featurette", "Behind the Scenes", "Clip", "Bloopers", "Teaser"):
-                extra_videos.append({"url": url, "label": v.get("name") or v.get("type"), "type": v.get("type")})
+                extra_videos.append({"url": url, "label": v.get("name") or v.get("type"), "type": v.get("type"), "source": "tmdb"})
 
         # Build full cast/crew list for people table
         cast_crew = []
@@ -1351,7 +1351,7 @@ def lookup_movie_tmdb_by_id(tmdb_id):
             if v.get("type") == "Trailer" and not trailer_url:
                 trailer_url = url
             elif v.get("type") in ("Featurette", "Behind the Scenes", "Clip", "Bloopers", "Teaser"):
-                extra_videos.append({"url": url, "label": v.get("name") or v.get("type"), "type": v.get("type")})
+                extra_videos.append({"url": url, "label": v.get("name") or v.get("type"), "type": v.get("type"), "source": "tmdb"})
         cast_crew = []
         for i, c in enumerate(cast[:20]):
             cast_crew.append({
@@ -6171,6 +6171,7 @@ def get_display_settings():
     return jsonify({
         "show_local_title": _is_source_enabled("show_local_title", True),
         "show_search_button": _is_source_enabled("show_search_button", True),
+        "show_auto_videos": _is_source_enabled("show_auto_videos", True),
     })
 
 
@@ -6182,6 +6183,7 @@ def set_display_settings():
     data = request.json or {}
     val = bool(data.get("show_local_title", True))
     val2 = bool(data.get("show_search_button", True))
+    val3 = bool(data.get("show_auto_videos", True))
     conn = get_db()
     conn.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
@@ -6191,9 +6193,13 @@ def set_display_settings():
         "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
         ("show_search_button", "true" if val2 else "false")
     )
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        ("show_auto_videos", "true" if val3 else "false")
+    )
     conn.commit()
     conn.close()
-    return jsonify({"show_local_title": val, "show_search_button": val2})
+    return jsonify({"show_local_title": val, "show_search_button": val2, "show_auto_videos": val3})
 
 
 @app.route("/api/settings/registration", methods=["GET"])
@@ -7007,7 +7013,7 @@ def get_collection(col_id):
     ).fetchall()
     # Loose movies directly linked to this collection
     loose = conn.execute(
-        "SELECT id, title, year, poster_file, poster, backdrop, backdrops FROM movies WHERE collection_id=? ORDER BY title ASC",
+        "SELECT id, title, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies WHERE collection_id=? ORDER BY title ASC",
         (col_id,)
     ).fetchall()
     # Also gather backdrops from all movies linked via edition_groups
@@ -7020,7 +7026,7 @@ def get_collection(col_id):
         #  - child vaults whose parent_group_id is one of those edition_groups
         #  - loose box-set movies linked via super_group_id
         eg_movies = conn.execute(
-            f"SELECT DISTINCT id, title, year, poster_file, poster, backdrop, backdrops"
+            f"SELECT DISTINCT id, title, year, poster_file, poster, backdrop, backdrops, trailer_url, videos"
             f" FROM movies"
             f" WHERE edition_group_id IN ({placeholders})"
             f"    OR edition_group_id IN ("
@@ -7146,12 +7152,12 @@ def get_edition_group(group_id):
         conn.close()
         return jsonify({"error": "Not found"}), 404
     members = conn.execute(
-        "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops FROM movies"
+        "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies"
         " WHERE edition_group_id=? ORDER BY format ASC",
         (group_id,)
     ).fetchall()
     loose = conn.execute(
-        "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops FROM movies"
+        "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies"
         " WHERE super_group_id=? ORDER BY title ASC",
         (group_id,)
     ).fetchall()

@@ -1233,20 +1233,23 @@ function switchEgTab(name) {
   document.querySelectorAll('#panel-edition-group .modal-tab-content').forEach(el => {
     el.classList.remove('active');
   });
-  const map = { members: 'egTabMembers', media: 'egTabMedia', manage: 'egTabManage' };
+  const map = { members: 'egTabMembers', images: 'egTabImages', videos: 'egTabVideos', manage: 'egTabManage' };
   const target = document.getElementById(map[name]);
   if (target) target.classList.add('active');
-  if (name === 'media') loadEgMedia();
+  if (name === 'images' || name === 'videos') loadEgMedia();
 }
 
 function loadEgMedia() {
-  const container = document.getElementById('egMediaContent');
-  if (!container) return;
-  container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('general.loading', 'Laden...')}</div>`;
+  const imgContainer = document.getElementById('egImagesContent');
+  const vidContainer = document.getElementById('egVideosContent');
+  const loading = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('general.loading', 'Laden...')}</div>`;
+  const noMedia = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+  if (imgContainer) imgContainer.innerHTML = loading;
+  if (vidContainer) vidContainer.innerHTML = loading;
 
   // Determine if this is a collection or edition-group view
   if (_currentCollection && _currentCollection._collection_id) {
-    _loadCollectionMedia(container, _currentCollection._collection_id);
+    _loadCollectionMedia(imgContainer, vidContainer, _currentCollection._collection_id);
     return;
   }
 
@@ -1256,28 +1259,40 @@ function loadEgMedia() {
     : (_currentEditionGroupPrimaryId ? (allMovies.find(m => m.id === _currentEditionGroupPrimaryId) || {}).edition_group_id : null);
 
   if (!groupId) {
-    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+    if (imgContainer) imgContainer.innerHTML = noMedia;
+    if (vidContainer) vidContainer.innerHTML = noMedia;
     return;
   }
 
   fetch(`${API}/edition-groups/${groupId}`)
     .then(r => r.ok ? r.json() : null)
     .then(g => {
-      if (!g) { container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`; return; }
+      if (!g) {
+        if (imgContainer) imgContainer.innerHTML = noMedia;
+        if (vidContainer) vidContainer.innerHTML = noMedia;
+        return;
+      }
       _currentEgGroupData = g;
       const allMembers = [...(g.members || []), ...(g.loose_movies || [])];
-      _renderMediaGrid(container, allMembers, g.backdrop || '', 'eg', groupId);
+      if (imgContainer) _renderMediaGrid(imgContainer, allMembers, g.backdrop || '', 'eg', groupId);
+      if (vidContainer) _renderVideosGrid(vidContainer, allMembers);
     });
 }
 
-function _loadCollectionMedia(container, colId) {
+function _loadCollectionMedia(imgContainer, vidContainer, colId) {
+  const noMedia = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
   fetch(`${API}/collections/${colId}`)
     .then(r => r.ok ? r.json() : null)
     .then(c => {
-      if (!c) { container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`; return; }
+      if (!c) {
+        if (imgContainer) imgContainer.innerHTML = noMedia;
+        if (vidContainer) vidContainer.innerHTML = noMedia;
+        return;
+      }
       _currentCollectionData = c;
       const allMembers = [...(c.eg_movies || []), ...(c.loose_movies || [])];
-      _renderMediaGrid(container, allMembers, c.backdrop || '', 'col', colId);
+      if (imgContainer) _renderMediaGrid(imgContainer, allMembers, c.backdrop || '', 'col', colId);
+      if (vidContainer) _renderVideosGrid(vidContainer, allMembers);
     });
 }
 
@@ -1309,6 +1324,33 @@ function _renderMediaGrid(container, allMembers, currentBackdrop, type, groupId)
     html = `<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">${t('group.mediaHint', 'Klik op een afbeelding om deze als backdrop voor de groep in te stellen.')}</p>` + html;
   }
   container.innerHTML = html;
+}
+
+function _renderVideosGrid(container, allMembers) {
+  let html = '';
+  allMembers.forEach(m => {
+    const items = [];
+    const trailerUrl = m.trailer_url || '';
+    const ytMatch = trailerUrl.match(/[?&]v=([^&]+)/) || trailerUrl.match(/youtu\.be\/([^?&]+)/);
+    if (ytMatch) items.push({ key: ytMatch[1], label: t('modal.trailer') });
+    let extraVideos = [];
+    try { extraVideos = m.videos ? JSON.parse(m.videos) : []; } catch(e) {}
+    for (const v of extraVideos) {
+      const vm = v.url && (v.url.match(/[?&]v=([^&]+)/) || v.url.match(/youtu\.be\/([^?&]+)/));
+      if (vm) items.push({ key: vm[1], label: v.label || v.type || '' });
+    }
+    if (!items.length) return;
+    html += `<div style="margin-bottom:20px;">
+      <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">${m.title || ''}${m.year ? ' (' + m.year + ')' : ''}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+        ${items.map(({key, label}) => `<div>
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">${label}</div>
+          ${_ytThumbHtml(key)}
+        </div>`).join('')}
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html || `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
 }
 
 async function setGroupBackdrop(type, groupId, url) {
@@ -1882,19 +1924,44 @@ function loadMovieMedia() {
   // --- Videos tab ---
   const vidContainer = document.getElementById('mediaVideosContent');
   if (vidContainer) {
+    // Build flat list, optionally filtering auto-fetched
+    const seenKeys = new Set();
     const allVidItems = [];
-    if (ytMatch) allVidItems.push({ key: ytMatch[1], label: t('modal.trailer') });
+    const addItem = (key, label, videoType, source) => {
+      if (seenKeys.has(key)) return;
+      if (!showAutoVideos && source === 'tmdb') return;
+      seenKeys.add(key);
+      allVidItems.push({ key, label, type: videoType, source });
+    };
+    if (ytMatch) addItem(ytMatch[1], '', 'Trailer', 'tmdb');
     for (const v of extraVideos) {
       const vm = v.url && (v.url.match(/[?&]v=([^&]+)/) || v.url.match(/youtu\.be\/([^?&]+)/));
-      if (vm) allVidItems.push({ key: vm[1], label: v.label || v.type || '' });
+      if (vm) addItem(vm[1], v.label || '', v.type || '', v.source || 'manual');
     }
     if (allVidItems.length > 0) {
-      vidContainer.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
-        ${allVidItems.map(({key, label}) => `<div>
-          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">${label}</div>
-          ${_ytThumbHtml(key)}
-        </div>`).join('')}
-      </div>`;
+      // Group by type in canonical order
+      const typeOrder = [..._VIDEO_TYPES, ''];
+      const grouped = Object.fromEntries(typeOrder.map(k => [k, []]));
+      for (const item of allVidItems) {
+        const cat = _VIDEO_TYPES.includes(item.type) ? item.type : '';
+        grouped[cat].push(item);
+      }
+      let html = '';
+      for (const typeKey of typeOrder) {
+        const items = grouped[typeKey];
+        if (!items.length) continue;
+        const heading = typeKey || t('modal.videoTypeOther');
+        html += `<div style="margin-bottom:24px;">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px;">${heading}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+            ${items.map(item => `<div>
+              ${item.label ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:5px;">${escHtml(item.label)}</div>` : ''}
+              ${_ytThumbHtml(item.key)}
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+      vidContainer.innerHTML = html;
     } else {
       vidContainer.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
     }
@@ -2571,14 +2638,24 @@ function _renderEditVideosList(videosJson) {
   let videos = [];
   try { videos = videosJson ? JSON.parse(videosJson) : []; } catch(e) {}
   videos.forEach((v, i) => {
-    list.insertAdjacentHTML('beforeend', _videoEntryHtml(v.url || '', v.label || '', i));
+    list.insertAdjacentHTML('beforeend', _videoEntryHtml(v.url || '', v.label || '', v.type || '', v.source || 'manual', i));
   });
 }
 
-function _videoEntryHtml(url, label, idx) {
+const _VIDEO_TYPES = ['Trailer', 'Teaser', 'Clip', 'Featurette', 'Behind the Scenes', 'Bloopers'];
+
+function _videoEntryHtml(url, label, videoType, source, idx) {
+  const typeOpts = ['', ..._VIDEO_TYPES].map(opt =>
+    `<option value="${opt}"${videoType === opt ? ' selected' : ''}>${opt || t('modal.videoTypeOther')}</option>`
+  ).join('');
+  const srcOpts = ['manual', 'tmdb'].map(opt =>
+    `<option value="${opt}"${source === opt ? ' selected' : ''}>${opt === 'tmdb' ? 'TMDb' : t('edit.videoSourceManual')}</option>`
+  ).join('');
   return `<div class="edit-video-entry" data-idx="${idx}" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
     <input type="text" class="ev-url" value="${url.replace(/"/g, '&quot;')}" placeholder="YouTube URL" style="flex:2;min-width:180px;">
-    <input type="text" class="ev-label" value="${label.replace(/"/g, '&quot;')}" placeholder="${t('edit.videoLabelPlaceholder')}" style="flex:1;min-width:120px;">
+    <input type="text" class="ev-label" value="${label.replace(/"/g, '&quot;')}" placeholder="${t('edit.videoLabelPlaceholder')}" style="flex:1;min-width:110px;">
+    <select class="ev-type" style="flex:1;min-width:120px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:0.82rem;">${typeOpts}</select>
+    <select class="ev-source" style="min-width:90px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:0.82rem;">${srcOpts}</select>
     <button class="btn btn-secondary" type="button" style="padding:5px 10px;min-width:unset;" onclick="this.closest('.edit-video-entry').remove()">✕</button>
   </div>`;
 }
@@ -2588,16 +2665,19 @@ function addVideoEntry() {
   if (!list) return;
   const urlInput = document.getElementById('editVideoUrl');
   const labelInput = document.getElementById('editVideoLabel');
+  const typeInput = document.getElementById('editVideoType');
   const url = urlInput ? urlInput.value.trim() : '';
   const label = labelInput ? labelInput.value.trim() : '';
+  const videoType = typeInput ? typeInput.value : '';
   if (!url) {
     if (urlInput) { urlInput.style.outline = '2px solid var(--danger, #e05)'; setTimeout(() => { urlInput.style.outline = ''; }, 1200); }
     return;
   }
   const idx = list.querySelectorAll('.edit-video-entry').length;
-  list.insertAdjacentHTML('beforeend', _videoEntryHtml(url, label, idx));
+  list.insertAdjacentHTML('beforeend', _videoEntryHtml(url, label, videoType, 'manual', idx));
   if (urlInput) urlInput.value = '';
   if (labelInput) labelInput.value = '';
+  if (typeInput) typeInput.value = '';
   _editDirty = true;
 }
 
@@ -2605,8 +2685,10 @@ function _collectEditVideos() {
   const list = document.getElementById('editVideosList');
   if (!list) return '';
   const entries = [...list.querySelectorAll('.edit-video-entry')].map(row => ({
-    url: row.querySelector('.ev-url')?.value?.trim() || '',
-    label: row.querySelector('.ev-label')?.value?.trim() || '',
+    url:    row.querySelector('.ev-url')?.value?.trim() || '',
+    label:  row.querySelector('.ev-label')?.value?.trim() || '',
+    type:   row.querySelector('.ev-type')?.value || '',
+    source: row.querySelector('.ev-source')?.value || 'manual',
   })).filter(v => v.url);
   return entries.length ? JSON.stringify(entries) : '';
 }

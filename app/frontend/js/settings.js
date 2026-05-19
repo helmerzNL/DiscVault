@@ -578,6 +578,9 @@ async function loadDebugSettings() {
     showSearchButton = d2.show_search_button !== false;
     const el3 = document.getElementById('showSearchButtonToggle');
     if (el3) el3.checked = showSearchButton;
+    showAutoVideos = d2.show_auto_videos !== false;
+    const el4 = document.getElementById('showAutoVideosToggle');
+    if (el4) el4.checked = showAutoVideos;
     applySearchButtonVisibility();
   } catch(e) {
     showLocalTitle = true;
@@ -586,6 +589,9 @@ async function loadDebugSettings() {
     showSearchButton = true;
     const el3 = document.getElementById('showSearchButtonToggle');
     if (el3) el3.checked = true;
+    showAutoVideos = true;
+    const el4 = document.getElementById('showAutoVideosToggle');
+    if (el4) el4.checked = true;
     applySearchButtonVisibility();
   }
   loadRatingCountryPicker();
@@ -601,15 +607,18 @@ async function saveDisplaySettings() {
   const val = !!(el && el.checked);
   const el2 = document.getElementById('showSearchButtonToggle');
   const val2 = !!(el2 && el2.checked);
+  const el3 = document.getElementById('showAutoVideosToggle');
+  const val3 = !!(el3 && el3.checked);
   try {
     const r = await fetch(`${API}/settings/display`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ show_local_title: val, show_search_button: val2 })
+      body: JSON.stringify({ show_local_title: val, show_search_button: val2, show_auto_videos: val3 })
     });
     await r.json();
     showLocalTitle = val;
     showSearchButton = val2;
+    showAutoVideos = val3;
     applySearchButtonVisibility();
     showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
   } catch(e) {

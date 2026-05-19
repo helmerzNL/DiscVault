@@ -758,6 +758,13 @@
           <div class="card">
             <div class="card-title" data-i18n="settings.preferencesTitle">⚙️ Voorkeuren</div>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="showAutoVideosToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.showAutoVideos">Automatische video's tonen</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.showAutoVideosDesc">
+              Toont video's die automatisch via TMDb zijn opgehaald. Uitgeschakeld toont alleen de video's die je zelf hebt toegevoegd.
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showSearchButtonToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="settings.showSearchButton">Zoekbalk in collectie</span>
             </label>
@@ -1848,6 +1855,15 @@
           <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center;">
             <input type="text" id="editVideoUrl" placeholder="YouTube URL" style="flex:2; min-width:180px;">
             <input type="text" id="editVideoLabel" data-i18n-placeholder="edit.videoLabelPlaceholder" placeholder="Label (bijv. Making of)" style="flex:1; min-width:120px;">
+            <select id="editVideoType" style="flex:1; min-width:130px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:0.84rem;">
+              <option value="" data-i18n="modal.videoTypeOther">Overig</option>
+              <option value="Trailer">Trailer</option>
+              <option value="Teaser">Teaser</option>
+              <option value="Clip">Clip</option>
+              <option value="Featurette">Featurette</option>
+              <option value="Behind the Scenes">Behind the Scenes</option>
+              <option value="Bloopers">Bloopers</option>
+            </select>
             <button class="btn btn-secondary" type="button" onclick="addVideoEntry()" data-i18n="edit.addVideo">+ Toevoegen</button>
           </div>
         </div>
@@ -1930,7 +1946,8 @@
     <!-- Tabs -->
     <div class="modal-tabs">
       <button class="modal-tab active" onclick="switchEgTab('members')" data-eg-tab="members" data-i18n="group.tabMembers">Inhoud</button>
-      <button class="modal-tab" onclick="switchEgTab('media')" data-eg-tab="media" data-i18n="modal.tabMedia">Media</button>
+      <button class="modal-tab" onclick="switchEgTab('images')" data-eg-tab="images" data-i18n="modal.tabImages">Afbeeldingen</button>
+      <button class="modal-tab" onclick="switchEgTab('videos')" data-eg-tab="videos" data-i18n="modal.tabVideos">Video's</button>
     </div>
 
     <!-- Tab: Members (edition cards) -->
@@ -1938,11 +1955,14 @@
       <div class="eg-panel-grid" id="egPanelGrid"></div>
     </div>
 
-    <!-- Tab: Media -->
-    <div class="modal-tab-content" id="egTabMedia">
-      <div id="egMediaContent" style="padding:0 4px;">
-        <div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;" data-i18n="modal.noMedia">Geen media beschikbaar.</div>
-      </div>
+    <!-- Tab: Afbeeldingen -->
+    <div class="modal-tab-content" id="egTabImages">
+      <div id="egImagesContent" style="padding:0 4px;"></div>
+    </div>
+
+    <!-- Tab: Video's -->
+    <div class="modal-tab-content" id="egTabVideos">
+      <div id="egVideosContent" style="padding:0 4px;"></div>
     </div>
 
     <!-- Tab: Manage -->
