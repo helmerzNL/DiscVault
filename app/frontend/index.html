@@ -200,7 +200,7 @@
       </select>
       <button class="btn btn-secondary" id="btnSelectMode" onclick="toggleSelectMode()" data-i18n="collection.selectMode">☑ Selecteren</button>
       <button class="btn btn-secondary" onclick="loadCollection()" data-i18n="collection.refresh">↻ Vernieuwen</button>
-      <button class="btn btn-secondary" id="btnCompareMode" onclick="toggleCompareMode()" data-i18n="collection.compareMode">⚡ Vergelijk</button>
+      <button class="btn btn-secondary digital-feature" id="btnCompareMode" onclick="toggleCompareMode()" data-i18n="collection.compareMode">⚡ Vergelijk</button>
     </div>
 
     <!-- Bulk action toolbar (visible in select mode) -->
@@ -1214,7 +1214,7 @@
                 <option value="jellyfin" data-i18n="edition.badgeFilterJellyfin">Alleen Jellyfin</option>
               </select>
             </div>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="edition.digitalBadgesDesc">
+            <div class="digital-feature" style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="edition.digitalBadgesDesc">
               Toon een klein icoon als een film ook digitaal beschikbaar is in Plex of Jellyfin.
             </div>
           </div>
