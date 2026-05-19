@@ -134,6 +134,10 @@ async function checkAuth() {
         if (me.authenticated) {
           currentUserId = me.id;
           currentUserRole = me.role;
+          // Apply group-level digital feature restriction
+          groupHideDigital = !!me.group_hide_digital;
+          document.body.classList.toggle('hide-digital', groupHideDigital);
+          if (groupHideDigital) showDigitalBadges = false;
         }
       } catch(e) {}
     }

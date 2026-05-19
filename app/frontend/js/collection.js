@@ -13,7 +13,7 @@ let activeCompareTab = 'both';
 
 // Fetch compare data for digital badges (non-blocking)
 async function loadDigitalBadgeData() {
-  if (!showDigitalBadges) return;
+  if (!showDigitalBadges || groupHideDigital) return;
   try {
     const r = await fetch(`${API}/collection/compare`);
     if (r.ok) {
@@ -27,6 +27,7 @@ let groupEditionsEnabled = localStorage.getItem('dv_group_editions') === 'true';
 let showDigitalBadges    = localStorage.getItem('dv_digital_badges') === 'true';
 let digitalBadgeFilter   = localStorage.getItem('dv_digital_badge_filter') || 'all';
 let collectorsMode       = localStorage.getItem('dv_collectors_mode') === 'true';
+let groupHideDigital     = false;  // set from /api/auth/me — hides Plex/Jellyfin for group members
 
 // Apply body class immediately so CSS .collectors-only rules take effect before render
 if (collectorsMode) document.body.classList.add('collectors-mode');
@@ -183,7 +184,7 @@ function renderGrid(movies) {
 
     // Digital badge (Plex/Jellyfin)
     let digitalBadge = '';
-    if (showDigitalBadges && compareData) {
+    if (showDigitalBadges && compareData && !groupHideDigital) {
       const match = (compareData.physical_and_digital || []).find(e => e.movie && e.movie.id === m.id);
       if (match && match.digital_matches && match.digital_matches.length) {
         const filtered = digitalBadgeFilter === 'all'

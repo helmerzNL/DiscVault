@@ -1471,6 +1471,8 @@
 
   /* Collectors mode: hide advanced features when mode is off */
   body:not(.collectors-mode) .collectors-only { display: none !important; }
+  /* Hide all Plex/Jellyfin UI for group members when admin disabled it */
+  body.hide-digital .digital-feature { display: none !important; }
 
   .eg-panel-grid {
     display: flex;

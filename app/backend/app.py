@@ -592,6 +592,10 @@ def init_db():
             JOIN groups g ON g.id=ug.group_id AND g.created_by=ug.user_id
         )
     """)
+    # Migrate groups: add hide_digital flag
+    g_cols = {row[1] for row in conn.execute("PRAGMA table_info(groups)")}
+    if "hide_digital" not in g_cols:
+        conn.execute("ALTER TABLE groups ADD COLUMN hide_digital INTEGER NOT NULL DEFAULT 0")
 
     # Migrate people: add multilingual biography columns if missing
     people_cols = {row[1] for row in conn.execute("PRAGMA table_info(people)")}
@@ -5041,12 +5045,24 @@ def get_current_user():
         return jsonify({"authenticated": False})
     conn = get_db()
     user = conn.execute("SELECT id, username, display_name, role, first_name, last_name, avatar, created_at FROM users WHERE id=?", (uid,)).fetchone()
-    conn.close()
     if not user:
+        conn.close()
         return jsonify({"authenticated": False})
     data = {**dict(user), "authenticated": True}
     if data.get("avatar"):
         data["avatar_url"] = f"/api/avatars/{data['avatar']}"
+    # Check if user's group restricts digital features (non-admins only)
+    group_hide_digital = False
+    if data.get("role") != "admin":
+        row = conn.execute("""
+            SELECT 1 FROM user_groups ug
+            JOIN groups g ON g.id = ug.group_id
+            WHERE ug.user_id = ? AND g.hide_digital = 1
+            LIMIT 1
+        """, (uid,)).fetchone()
+        group_hide_digital = row is not None
+    data["group_hide_digital"] = group_hide_digital
+    conn.close()
     return jsonify(data)
 
 
@@ -5465,9 +5481,15 @@ def update_group(group_id):
     name = data.get("name", "").strip()
     if not name:
         return jsonify({"error": "Group name required"}), 400
+    is_admin = (_get_current_user_role() == "admin") if _is_auth_enabled() else True
+    hide_digital = data.get("hide_digital")
     conn = get_db()
     try:
-        conn.execute("UPDATE groups SET name=? WHERE id=?", (name, group_id))
+        if hide_digital is not None and is_admin:
+            conn.execute("UPDATE groups SET name=?, hide_digital=? WHERE id=?",
+                         (name, 1 if hide_digital else 0, group_id))
+        else:
+            conn.execute("UPDATE groups SET name=? WHERE id=?", (name, group_id))
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()

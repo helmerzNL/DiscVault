@@ -18,6 +18,9 @@ async function loadAdminGroups() {
             ${t('js.groupStatsFull', g.member_count, g.movie_count, g.created_by_username || '?')}
           </div>
         </div>
+        <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem; ${g.hide_digital ? 'color:var(--danger); border-color:rgba(240,64,96,.4);' : ''}"
+                onclick="toggleGroupHideDigital(${g.id},'${g.name.replace(/'/g,"\\'")}',${ g.hide_digital ? 1 : 0})"
+                title="${g.hide_digital ? 'Plex/Jellyfin verborgen voor leden — klik om in te schakelen' : 'Plex/Jellyfin zichtbaar voor leden — klik om te verbergen'}">📺${g.hide_digital ? '✗' : '✓'}</button>
         <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="manageGroupMembers(${g.id},'${g.name}')" title="${t('js.manageMembersBtn')}">👥</button>
         <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteGroup(${g.id},'${g.name}')" title="${t('js.deleteTitle')}">✕</button>
       </div>
@@ -42,6 +45,15 @@ async function createGroup() {
 async function deleteGroup(id, name) {
   if (!confirm(t('js.confirmDeleteGroup', name))) return;
   await fetch(`${API}/groups/${id}`, { method: 'DELETE' });
+  loadAdminGroups();
+}
+
+async function toggleGroupHideDigital(groupId, groupName, currentVal) {
+  await fetch(`${API}/groups/${groupId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: groupName, hide_digital: currentVal ? 0 : 1 })
+  });
   loadAdminGroups();
 }
 
