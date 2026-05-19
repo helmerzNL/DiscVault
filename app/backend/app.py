@@ -5810,6 +5810,28 @@ def bulk_assign_collection():
     return jsonify({"ok": True})
 
 
+@app.route("/api/movies/bulk/boxset", methods=["PUT"])
+def bulk_assign_boxset():
+    """Assign multiple movies as loose members of a Box-Set (via super_group_id)."""
+    data = request.json or {}
+    movie_ids = data.get("movie_ids", [])
+    sg_id = data.get("super_group_id")
+    if not movie_ids or not sg_id:
+        return jsonify({"error": "movie_ids and super_group_id required"}), 400
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM edition_groups WHERE id=?", (sg_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Box-Set not found"}), 404
+    for mid in movie_ids:
+        conn.execute("UPDATE movies SET super_group_id=? WHERE id=?", (int(sg_id), int(mid)))
+    conn.commit()
+    for mid in movie_ids:
+        _inherit_groups_from_container_siblings(conn, int(mid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/settings/sources", methods=["GET"])
 def get_source_settings():
     return jsonify({

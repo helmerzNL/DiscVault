@@ -387,10 +387,9 @@ async function showBulkContainerAssign() {
   const panel = document.getElementById('bulkContainerPanel');
   panel.style.display = 'block';
   document.getElementById('bulkGroupPanel').style.display = 'none';
-  const listEl = document.getElementById('bulkContainerList');
-  const searchEl = document.getElementById('bulkContainerSearch');
-  searchEl.value = '';
-  listEl.innerHTML = `<span style="color:var(--text-muted); font-size:0.82rem;">${t('general.loading')}</span>`;
+  const sel = document.getElementById('bulkContainerSelect');
+  if (!sel) { console.error('bulkContainerSelect not found'); return; }
+  sel.innerHTML = `<option value="">${t('general.loading')}</option>`;
   try {
     const [egR, colR] = await Promise.all([
       fetch(`${API}/edition-groups`),
@@ -398,65 +397,55 @@ async function showBulkContainerAssign() {
     ]);
     const egs = await egR.json();
     const cols = await colR.json();
-    _renderContainerList(egs, cols, '');
-    searchEl.oninput = function() {
-      _renderContainerList(egs, cols, this.value.toLowerCase().trim());
-    };
+    const vaults  = egs.filter(g => !((g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0));
+    const boxsets = egs.filter(g =>  (g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0);
+    let html = `<option value="">-- ${t('bulk.selectContainerPlaceholder', 'Kies een container')} --</option>`;
+    if (vaults.length) {
+      html += `<optgroup label="Vault">`;
+      vaults.forEach(g => { html += `<option value="vault:${g.id}">${escHtml(g.title)}</option>`; });
+      html += `</optgroup>`;
+    }
+    if (boxsets.length) {
+      html += `<optgroup label="Box-Set">`;
+      boxsets.forEach(g => { html += `<option value="boxset:${g.id}">${escHtml(g.title)}</option>`; });
+      html += `</optgroup>`;
+    }
+    if (cols.length) {
+      html += `<optgroup label="Collectie">`;
+      cols.forEach(c => { html += `<option value="col:${c.id}">${escHtml(c.title)}</option>`; });
+      html += `</optgroup>`;
+    }
+    sel.innerHTML = html;
   } catch(e) {
-    listEl.innerHTML = `<span style="color:var(--danger);">${t('js.error', e.message)}</span>`;
+    sel.innerHTML = `<option value="">${t('js.error', e.message)}</option>`;
   }
-}
-
-function _renderContainerList(egs, cols, q) {
-  const listEl = document.getElementById('bulkContainerList');
-  const filteredEgs  = q ? egs.filter(g => (g.title || '').toLowerCase().includes(q))  : egs;
-  const filteredCols = q ? cols.filter(c => (c.title || '').toLowerCase().includes(q)) : cols;
-  if (!filteredEgs.length && !filteredCols.length) {
-    listEl.innerHTML = `<span style="color:var(--text-muted); font-size:0.82rem;">${t('bulk.noContainers')}</span>`;
-    return;
-  }
-  const sectionLabel = (text) =>
-    `<div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin:10px 0 6px;">${text}</div>`;
-  const chip = (value, label, color) =>
-    `<label style="display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:0.84rem;white-space:nowrap;">
-      <input type="radio" name="bulkContainer" value="${value}" style="accent-color:${color};width:14px;height:14px;">
-      ${label}
-    </label>`;
-  let html = '';
-  if (filteredEgs.length) {
-    html += sectionLabel('Vault / Box-Set');
-    html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">`;
-    filteredEgs.forEach(g => { html += chip(`eg:${g.id}`, g.title, 'var(--accent)'); });
-    html += '</div>';
-  }
-  if (filteredCols.length) {
-    html += sectionLabel('Collectie');
-    html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">`;
-    filteredCols.forEach(c => { html += chip(`col:${c.id}`, c.title, 'var(--accent2)'); });
-    html += '</div>';
-  }
-  listEl.innerHTML = html;
 }
 
 async function bulkAssignContainer() {
   const ids = [...selectedIds];
   if (!ids.length) return;
-  const selected = document.querySelector('input[name="bulkContainer"]:checked');
-  if (!selected) {
+  const sel = document.getElementById('bulkContainerSelect');
+  if (!sel || !sel.value) {
     showStatus('bulkContainerStatus', t('bulk.selectOneContainer'), 'error');
     return;
   }
-  const [type, idStr] = selected.value.split(':');
+  const [type, idStr] = sel.value.split(':');
   const targetId = parseInt(idStr);
-  const targetLabel = selected.closest('label').textContent.trim();
+  const targetLabel = sel.options[sel.selectedIndex].text;
   try {
     showStatus('bulkContainerStatus', '<span class="spinner"></span> ' + t('bulk.assigning'), 'info');
     let r;
-    if (type === 'eg') {
+    if (type === 'vault') {
       r = await fetch(`${API}/edition-groups/${targetId}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ movie_ids: ids })
+      });
+    } else if (type === 'boxset') {
+      r = await fetch(`${API}/movies/bulk/boxset`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ movie_ids: ids, super_group_id: targetId })
       });
     } else {
       r = await fetch(`${API}/movies/bulk/collection`, {
@@ -469,7 +458,8 @@ async function bulkAssignContainer() {
     // Update local cache
     for (const m of allMovies) {
       if (selectedIds.has(m.id)) {
-        if (type === 'eg') m.edition_group_id = targetId;
+        if (type === 'vault') m.edition_group_id = targetId;
+        else if (type === 'boxset') m.super_group_id = targetId;
         else m.collection_id = targetId;
       }
     }
