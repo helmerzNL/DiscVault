@@ -1823,14 +1823,14 @@ function switchDetailTab(tab) {
   document.querySelectorAll('.modal-tab-content').forEach(c => c.classList.remove('active'));
   const tabBtn = document.querySelector(`.modal-tab[data-detail-tab="${tab}"]`);
   if (tabBtn) tabBtn.classList.add('active');
-  const tabMap = { info: 'detailTabInfo', cast: 'detailTabCast', media: 'detailTabMedia' };
+  const tabMap = { info: 'detailTabInfo', cast: 'detailTabCast', images: 'detailTabImages', videos: 'detailTabVideos' };
   const tabContent = document.getElementById(tabMap[tab] || 'detailTabInfo');
   if (tabContent) tabContent.classList.add('active');
   if (tab === 'cast' && !_castLoaded) {
     _castLoaded = true;
     loadMovieCast(currentMovieId);
   }
-  if (tab === 'media' && !_mediaLoaded) {
+  if ((tab === 'images' || tab === 'videos') && !_mediaLoaded) {
     _mediaLoaded = true;
     loadMovieMedia();
   }
@@ -1840,11 +1840,11 @@ function _playYouTube(key) {
   const el = document.getElementById(`ytThumb_${key}`);
   if (!el) return;
   el.innerHTML = `<iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" src="https://www.youtube-nocookie.com/embed/${key}?autoplay=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen title="Trailer"></iframe>`;
+  el.style.removeProperty('cursor');
+  el.onclick = null;
 }
 
 function loadMovieMedia() {
-  const container = document.getElementById('mediaTabContent');
-  if (!container) return;
   const movie = allMovies.find(m => m.id === currentMovieId) || {};
 
   // Backdrops
@@ -1860,89 +1860,59 @@ function loadMovieMedia() {
   let extraVideos = [];
   try { extraVideos = movie.videos ? JSON.parse(movie.videos) : []; } catch(e) {}
 
-  const hasImages = backdrops.length > 0;
-  const hasVideos = !!ytMatch || extraVideos.length > 0;
-
-  if (!hasImages && !hasVideos) {
-    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
-    return;
-  }
-
-  // Images sub-tab content
-  let imagesHtml = '';
-  if (hasImages) {
-    const currentBackdrop = movie.backdrop || '';
-    imagesHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
-      ${backdrops.map(url => {
-        const isActive = url === currentBackdrop;
-        return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setMovieBackdrop(${movie.id}, '${url.replace(/'/g, "\\'")}')">
-          <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-          ${isActive ? '<div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;">Backdrop</div>' : ''}
-        </div>`;
-      }).join('')}
-    </div>`;
-  } else {
-    imagesHtml = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
-  }
-
-  // Videos sub-tab content
-  let videosHtml = '';
-  if (ytMatch) {
-    const ytKey = ytMatch[1];
-    videosHtml += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
-      <div id="ytThumb_${ytKey}" onclick="_playYouTube('${ytKey}')" style="position:relative;max-width:640px;width:100%;padding-bottom:${640*9/16}px;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
-        <img src="https://img.youtube.com/vi/${ytKey}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${ytKey}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:46px;background:rgba(180,0,0,0.88);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-          <span style="display:block;width:0;height:0;border-style:solid;border-width:14px 0 14px 26px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
-        </div>
-      </div>`;
-  }
-  if (extraVideos.length > 0) {
-    videosHtml += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin:${ytMatch ? '24px' : '0px'} 0 10px;">${t('modal.extraVideos')}</div>
-      <div style="display:flex;flex-direction:column;gap:16px;">
-        ${extraVideos.map(v => {
-          const vm = v.url && (v.url.match(/[?&]v=([^&]+)/) || v.url.match(/youtu\.be\/([^?&]+)/));
-          if (!vm) return '';
-          const vk = vm[1];
-          return `<div>
-            <div style="font-size:0.82rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">${v.label || v.type || ''}</div>
-            <div id="ytThumb_${vk}" onclick="_playYouTube('${vk}')" style="position:relative;max-width:640px;width:100%;padding-bottom:${640*9/16}px;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
-              <img src="https://img.youtube.com/vi/${vk}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${vk}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
-              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:46px;background:rgba(180,0,0,0.88);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-                <span style="display:block;width:0;height:0;border-style:solid;border-width:14px 0 14px 26px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
-              </div>
-            </div>
+  // --- Images tab ---
+  const imgContainer = document.getElementById('mediaImagesContent');
+  if (imgContainer) {
+    if (backdrops.length > 0) {
+      const currentBackdrop = movie.backdrop || '';
+      imgContainer.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
+        ${backdrops.map(url => {
+          const isActive = url === currentBackdrop;
+          return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setMovieBackdrop(${movie.id}, '${url.replace(/'/g, "\\'")}')">
+            <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+            ${isActive ? '<div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;">Backdrop</div>' : ''}
           </div>`;
         }).join('')}
       </div>`;
-  }
-  if (!videosHtml) {
-    videosHtml = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+    } else {
+      imgContainer.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+    }
   }
 
-  const defaultSub = hasImages ? 'images' : 'videos';
-  container.innerHTML = `
-    <div class="media-sub-tabs">
-      <button class="media-sub-tab${defaultSub === 'images' ? ' active' : ''}" onclick="switchMediaSubTab('images')" data-media-sub="images">
-        ${t('modal.subImages')}${hasImages ? ' (' + backdrops.length + ')' : ''}
-      </button>
-      <button class="media-sub-tab${defaultSub === 'videos' ? ' active' : ''}" onclick="switchMediaSubTab('videos')" data-media-sub="videos">
-        ${t('modal.subVideos')}${hasVideos ? ' (' + ((ytMatch ? 1 : 0) + extraVideos.length) + ')' : ''}
-      </button>
-    </div>
-    <div id="mediaSubImages" style="${defaultSub === 'images' ? '' : 'display:none'}">${imagesHtml}</div>
-    <div id="mediaSubVideos" style="${defaultSub === 'videos' ? '' : 'display:none'}">${videosHtml}</div>
-  `;
+  // --- Videos tab ---
+  const vidContainer = document.getElementById('mediaVideosContent');
+  if (vidContainer) {
+    let html = '';
+    if (ytMatch) {
+      const ytKey = ytMatch[1];
+      html += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
+        ${_ytThumbHtml(ytKey)}`;
+    }
+    if (extraVideos.length > 0) {
+      html += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin:${ytMatch ? '24px' : '0px'} 0 10px;">${t('modal.extraVideos')}</div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          ${extraVideos.map(v => {
+            const vm = v.url && (v.url.match(/[?&]v=([^&]+)/) || v.url.match(/youtu\.be\/([^?&]+)/));
+            if (!vm) return '';
+            const vk = vm[1];
+            return `<div>
+              <div style="font-size:0.82rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">${v.label || v.type || ''}</div>
+              ${_ytThumbHtml(vk)}
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+    vidContainer.innerHTML = html || `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+  }
 }
 
-function switchMediaSubTab(name) {
-  document.querySelectorAll('.media-sub-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mediaSub === name);
-  });
-  const imagesEl = document.getElementById('mediaSubImages');
-  const videosEl = document.getElementById('mediaSubVideos');
-  if (imagesEl) imagesEl.style.display = name === 'images' ? '' : 'none';
-  if (videosEl) videosEl.style.display = name === 'videos' ? '' : 'none';
+function _ytThumbHtml(key) {
+  return `<div id="ytThumb_${key}" onclick="_playYouTube('${key}')" style="position:relative;max-width:480px;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
+    <img src="https://img.youtube.com/vi/${key}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${key}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:40px;background:rgba(180,0,0,0.88);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+      <span style="display:block;width:0;height:0;border-style:solid;border-width:12px 0 12px 22px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
+    </div>
+  </div>`;
 }
 
 async function setMovieBackdrop(movieId, url) {
@@ -2625,7 +2595,10 @@ function addVideoEntry() {
   const labelInput = document.getElementById('editVideoLabel');
   const url = urlInput ? urlInput.value.trim() : '';
   const label = labelInput ? labelInput.value.trim() : '';
-  if (!url) return;
+  if (!url) {
+    if (urlInput) { urlInput.style.outline = '2px solid var(--danger, #e05)'; setTimeout(() => { urlInput.style.outline = ''; }, 1200); }
+    return;
+  }
   const idx = list.querySelectorAll('.edit-video-entry').length;
   list.insertAdjacentHTML('beforeend', _videoEntryHtml(url, label, idx));
   if (urlInput) urlInput.value = '';
