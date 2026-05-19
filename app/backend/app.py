@@ -6155,7 +6155,10 @@ def get_display_settings():
     err = _require_admin()
     if err:
         return err
-    return jsonify({"show_local_title": _is_source_enabled("show_local_title", True)})
+    return jsonify({
+        "show_local_title": _is_source_enabled("show_local_title", True),
+        "show_search_button": _is_source_enabled("show_search_button", True),
+    })
 
 
 @app.route("/api/settings/display", methods=["POST"])
@@ -6165,14 +6168,19 @@ def set_display_settings():
         return err
     data = request.json or {}
     val = bool(data.get("show_local_title", True))
+    val2 = bool(data.get("show_search_button", True))
     conn = get_db()
     conn.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
         ("show_local_title", "true" if val else "false")
     )
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        ("show_search_button", "true" if val2 else "false")
+    )
     conn.commit()
     conn.close()
-    return jsonify({"show_local_title": val})
+    return jsonify({"show_local_title": val, "show_search_button": val2})
 
 
 @app.route("/api/settings/registration", methods=["GET"])

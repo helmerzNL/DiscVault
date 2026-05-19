@@ -55,6 +55,7 @@ let currentMovieId = null;
 let currentPersonId = null;
 let debugModeEnabled = false;
 let showLocalTitle = true;
+let showSearchButton = true;
 let preferredRatingCountry = localStorage.getItem('dv_rating_country') || 'NL';
 let allMovies = [];
 let activeFormat = '';
