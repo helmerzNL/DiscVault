@@ -701,6 +701,35 @@ def init_db():
         conn.execute("DELETE FROM settings WHERE key IN ('vapid_private_key', 'vapid_public_key')")
         conn.execute("DELETE FROM push_subscriptions")  # old subs used old public key, must re-subscribe
 
+    # RBAC: custom roles, permissions and user-role assignments
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS custom_roles (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT UNIQUE NOT NULL,
+            description TEXT,
+            created_by  TEXT,
+            created_at  TEXT NOT NULL,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS role_permissions (
+            role_id    INTEGER NOT NULL,
+            permission TEXT NOT NULL,
+            PRIMARY KEY (role_id, permission),
+            FOREIGN KEY (role_id) REFERENCES custom_roles(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_roles (
+            user_id TEXT NOT NULL,
+            role_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, role_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (role_id) REFERENCES custom_roles(id) ON DELETE CASCADE
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -5062,6 +5091,19 @@ def get_current_user():
         """, (uid,)).fetchone()
         group_hide_digital = row is not None
     data["group_hide_digital"] = group_hide_digital
+    # Custom RBAC roles and effective permissions
+    custom_role_rows = conn.execute("""
+        SELECT cr.name FROM custom_roles cr
+        JOIN user_roles ur ON ur.role_id = cr.id
+        WHERE ur.user_id = ?
+    """, (uid,)).fetchall()
+    perm_rows = conn.execute("""
+        SELECT DISTINCT rp.permission FROM role_permissions rp
+        JOIN user_roles ur ON ur.role_id = rp.role_id
+        WHERE ur.user_id = ?
+    """, (uid,)).fetchall()
+    data["custom_roles"] = [r["name"] for r in custom_role_rows]
+    data["permissions"]  = [r["permission"] for r in perm_rows]
     conn.close()
     return jsonify(data)
 
@@ -5704,6 +5746,172 @@ def decline_invite(invite_id):
     conn.commit()
     conn.close()
     return jsonify({"status": "declined"})
+
+
+# ---------------------------------------------------------------------------
+# RBAC: Custom Roles
+# ---------------------------------------------------------------------------
+
+ALL_PERMISSIONS = [
+    "collection.view", "collection.add", "collection.edit_own",
+    "collection.edit_all", "collection.delete_own", "collection.delete_all",
+    "collection.import", "groups.create", "groups.manage", "groups.invite",
+    "digital.view", "watchlist.manage", "admin.users", "admin.settings",
+]
+
+
+@app.route("/api/roles", methods=["GET"])
+def list_roles():
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    roles = conn.execute("SELECT id, name, description, created_at FROM custom_roles ORDER BY name").fetchall()
+    result = []
+    for r in roles:
+        perms = conn.execute("SELECT permission FROM role_permissions WHERE role_id=?", (r["id"],)).fetchall()
+        user_count = conn.execute("SELECT COUNT(*) FROM user_roles WHERE role_id=?", (r["id"],)).fetchone()[0]
+        result.append({**dict(r), "permissions": [p["permission"] for p in perms], "user_count": user_count})
+    conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/roles", methods=["POST"])
+def create_role():
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    name = (data.get("name") or "").strip()
+    description = (data.get("description") or "").strip() or None
+    permissions = [p for p in (data.get("permissions") or []) if p in ALL_PERMISSIONS]
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    if len(name) > 64:
+        return jsonify({"error": "name too long"}), 400
+    uid = _get_current_user_id()
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO custom_roles (name, description, created_by, created_at) VALUES (?,?,?,?)",
+            (name, description, uid, datetime.utcnow().isoformat())
+        )
+        role_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        for p in permissions:
+            conn.execute("INSERT INTO role_permissions (role_id, permission) VALUES (?,?)", (role_id, p))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "Role name already exists"}), 409
+    conn.close()
+    return jsonify({"id": role_id, "status": "created"}), 201
+
+
+@app.route("/api/roles/<int:role_id>", methods=["PUT"])
+def update_role(role_id):
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    conn = get_db()
+    role = conn.execute("SELECT id FROM custom_roles WHERE id=?", (role_id,)).fetchone()
+    if not role:
+        conn.close()
+        return jsonify({"error": "Role not found"}), 404
+    if "name" in data:
+        name = (data["name"] or "").strip()
+        if not name:
+            conn.close()
+            return jsonify({"error": "name required"}), 400
+        if len(name) > 64:
+            conn.close()
+            return jsonify({"error": "name too long"}), 400
+        try:
+            conn.execute("UPDATE custom_roles SET name=? WHERE id=?", (name, role_id))
+        except sqlite3.IntegrityError:
+            conn.close()
+            return jsonify({"error": "Role name already exists"}), 409
+    if "description" in data:
+        conn.execute("UPDATE custom_roles SET description=? WHERE id=?",
+                     ((data["description"] or "").strip() or None, role_id))
+    if "permissions" in data:
+        permissions = [p for p in (data["permissions"] or []) if p in ALL_PERMISSIONS]
+        conn.execute("DELETE FROM role_permissions WHERE role_id=?", (role_id,))
+        for p in permissions:
+            conn.execute("INSERT INTO role_permissions (role_id, permission) VALUES (?,?)", (role_id, p))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/roles/<int:role_id>", methods=["DELETE"])
+def delete_role(role_id):
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    role = conn.execute("SELECT name FROM custom_roles WHERE id=?", (role_id,)).fetchone()
+    if not role:
+        conn.close()
+        return jsonify({"error": "Role not found"}), 404
+    conn.execute("DELETE FROM custom_roles WHERE id=?", (role_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "deleted"})
+
+
+@app.route("/api/roles/<int:role_id>/users", methods=["GET"])
+def list_role_users(role_id):
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT u.id, u.username, u.display_name, u.role
+        FROM users u JOIN user_roles ur ON ur.user_id=u.id
+        WHERE ur.role_id=?
+        ORDER BY u.username
+    """, (role_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/roles/<int:role_id>/users", methods=["POST"])
+def assign_user_role(role_id):
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    user_id = (data.get("user_id") or "").strip()
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM custom_roles WHERE id=?", (role_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Role not found"}), 404
+    if not conn.execute("SELECT 1 FROM users WHERE id=?", (user_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "User not found"}), 404
+    try:
+        conn.execute("INSERT INTO user_roles (user_id, role_id) VALUES (?,?)", (user_id, role_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "User already has this role"}), 409
+    conn.close()
+    return jsonify({"status": "ok"}), 201
+
+
+@app.route("/api/roles/<int:role_id>/users/<user_id>", methods=["DELETE"])
+def revoke_user_role(role_id, user_id):
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    conn.execute("DELETE FROM user_roles WHERE user_id=? AND role_id=?", (user_id, role_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/movies/<int:movie_id>/groups", methods=["GET"])

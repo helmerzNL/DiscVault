@@ -891,6 +891,10 @@
           <span class="mdi mdi-folder-account-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span data-i18n="settings.menuGroups">Groepen</span>
         </button>
+        <button class="profile-sidebar-btn" type="button" data-admin-sub="roles" onclick="switchAdminSubmenu('roles')">
+          <span class="mdi mdi-shield-account-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span>Rollen</span>
+        </button>
         <button class="profile-sidebar-btn" type="button" data-admin-sub="backup" onclick="switchAdminSubmenu('backup')">
           <span class="mdi mdi-database-export-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span data-i18n="settings.menuBackup">Backup</span>
@@ -977,6 +981,29 @@
               <button class="btn btn-primary" onclick="createGroup()" style="height:40px;" data-i18n="settings.groupCreateBtn">+ Groep aanmaken</button>
             </div>
             <div id="adminGroupsList"></div>
+          </div>
+        </div>
+
+        <!-- ── ROLLEN ── -->
+        <div class="profile-sub-section" id="adminSubRoles" style="display:none;">
+          <div id="adminRolesCard" class="card" style="display:none;">
+            <div class="card-title">🎭 Rollen &amp; Rechten</div>
+            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;">
+              Maak aangepaste rollen aan, wijs rechten toe en koppel gebruikers. Gebruikers kunnen meerdere rollen hebben naast hun systeemrol (admin / gebruiker).
+            </p>
+            <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:16px;">
+              <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+                <label>Rolnaam</label>
+                <input type="text" id="newRoleName" placeholder="Bijv. Redacteur">
+              </div>
+              <div class="input-group" style="margin:0; flex:1; min-width:180px;">
+                <label>Omschrijving (optioneel)</label>
+                <input type="text" id="newRoleDesc" placeholder="Bijv. Kan films bewerken">
+              </div>
+              <button class="btn btn-primary" onclick="createRole()" style="height:40px;">+ Rol aanmaken</button>
+            </div>
+            <div id="adminRolesStatus" class="status-msg" style="margin-bottom:8px;"></div>
+            <div id="adminRolesList"></div>
           </div>
         </div>
 

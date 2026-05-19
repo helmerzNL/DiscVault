@@ -410,7 +410,7 @@ function switchProfileSubmenu(name) {
 
 let currentAdminSubmenu = 'security';
 
-const ADMIN_SECTIONS = ['adminSubSecurity','adminSubUsers','adminSubGroups','adminSubBackup','adminSubLogs','adminSubAdvanced'];
+const ADMIN_SECTIONS = ['adminSubSecurity','adminSubUsers','adminSubGroups','adminSubRoles','adminSubBackup','adminSubLogs','adminSubAdvanced'];
 
 function switchAdminSubmenu(name) {
   currentAdminSubmenu = name;
@@ -421,6 +421,7 @@ function switchAdminSubmenu(name) {
     security:  'adminSubSecurity',
     users:     'adminSubUsers',
     groups:    'adminSubGroups',
+    roles:     'adminSubRoles',
     backup:    'adminSubBackup',
     logs:      'adminSubLogs',
     advanced:  'adminSubAdvanced',
@@ -436,6 +437,7 @@ function switchAdminSubmenu(name) {
   if (name === 'logs')      loadLogs();
   if (name === 'backup')    loadBackups();
   if (name === 'advanced')  loadDigitalSources();
+  if (name === 'roles')     loadRoles();
 }
 
 async function loadAdminTab() {
@@ -942,6 +944,7 @@ async function loadAdminPanel() {
     if (!isAdmin && !isMemberGroups) {
       document.getElementById('adminUsersCard').style.display = 'none';
       document.getElementById('adminGroupsCard').style.display = 'none';
+      document.getElementById('adminRolesCard').style.display = 'none';
       document.getElementById('myGroupsCard').style.display = 'none';
       return;
     }
@@ -953,9 +956,11 @@ async function loadAdminPanel() {
         await loadAdminUsers();
         document.getElementById('adminInviteCard').style.display = 'block';
         await loadInviteCodes();
+        document.getElementById('adminRolesCard').style.display = 'block';
       } else {
         document.getElementById('adminUsersCard').style.display = 'none';
         document.getElementById('adminInviteCard').style.display = 'none';
+        document.getElementById('adminRolesCard').style.display = 'none';
       }
       await loadAdminGroups();
       await loadMyGroups();
@@ -964,6 +969,7 @@ async function loadAdminPanel() {
       document.getElementById('adminGroupsCard').style.display = 'none';
       document.getElementById('adminUsersCard').style.display = 'none';
       document.getElementById('adminInviteCard').style.display = 'none';
+      document.getElementById('adminRolesCard').style.display = 'none';
       document.getElementById('myGroupsCard').style.display = 'block';
       await loadMyGroups();
     }
@@ -971,6 +977,7 @@ async function loadAdminPanel() {
     document.getElementById('adminUsersCard').style.display = 'none';
     document.getElementById('adminGroupsCard').style.display = 'none';
     document.getElementById('adminInviteCard').style.display = 'none';
+    document.getElementById('adminRolesCard').style.display = 'none';
     const mgc = document.getElementById('myGroupsCard');
     if (mgc) mgc.style.display = 'none';
   }
