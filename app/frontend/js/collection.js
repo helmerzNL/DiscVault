@@ -1846,32 +1846,29 @@ function loadMovieMedia() {
   const container = document.getElementById('mediaTabContent');
   if (!container) return;
   const movie = allMovies.find(m => m.id === currentMovieId) || {};
-  let html = '';
-
-  // Trailer
-  const trailerUrl = movie.trailer_url || '';
-  const ytMatch = trailerUrl.match(/[?&]v=([^&]+)/) || trailerUrl.match(/youtu\.be\/([^?&]+)/);
-  if (ytMatch) {
-    const ytKey = ytMatch[1];
-    html += `<div style="margin-bottom:24px;">
-      <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
-      <div id="ytThumb_${ytKey}" onclick="_playYouTube('${ytKey}')" style="position:relative;width:100%;padding-bottom:56.25%;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
-        <img src="https://img.youtube.com/vi/${ytKey}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${ytKey}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:46px;background:rgba(180,0,0,0.88);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-          <span style="display:block;width:0;height:0;border-style:solid;border-width:14px 0 14px 26px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
-        </div>
-      </div>
-    </div>`;
-  }
 
   // Backdrops
   let backdrops = [];
   try { backdrops = movie.backdrops ? JSON.parse(movie.backdrops) : []; } catch(e) {}
   if (!backdrops.length && movie.backdrop) backdrops = [movie.backdrop];
-  if (backdrops.length) {
+
+  // Trailer
+  const trailerUrl = movie.trailer_url || '';
+  const ytMatch = trailerUrl.match(/[?&]v=([^&]+)/) || trailerUrl.match(/youtu\.be\/([^?&]+)/);
+
+  const hasImages = backdrops.length > 0;
+  const hasVideos = !!ytMatch;
+
+  if (!hasImages && !hasVideos) {
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+    return;
+  }
+
+  // Images sub-tab content
+  let imagesHtml = '';
+  if (hasImages) {
     const currentBackdrop = movie.backdrop || '';
-    html += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.backdrops')} (${backdrops.length})</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
+    imagesHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
       ${backdrops.map(url => {
         const isActive = url === currentBackdrop;
         return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setMovieBackdrop(${movie.id}, '${url.replace(/'/g, "\\'")}')">
@@ -1880,12 +1877,48 @@ function loadMovieMedia() {
         </div>`;
       }).join('')}
     </div>`;
+  } else {
+    imagesHtml = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
   }
 
-  if (!html) {
-    html = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+  // Videos sub-tab content
+  let videosHtml = '';
+  if (hasVideos) {
+    const ytKey = ytMatch[1];
+    videosHtml = `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
+      <div id="ytThumb_${ytKey}" onclick="_playYouTube('${ytKey}')" style="position:relative;max-width:640px;width:100%;padding-bottom:56.25%;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
+        <img src="https://img.youtube.com/vi/${ytKey}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${ytKey}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:46px;background:rgba(180,0,0,0.88);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          <span style="display:block;width:0;height:0;border-style:solid;border-width:14px 0 14px 26px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
+        </div>
+      </div>`;
+  } else {
+    videosHtml = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
   }
-  container.innerHTML = html;
+
+  const defaultSub = hasImages ? 'images' : 'videos';
+  container.innerHTML = `
+    <div class="media-sub-tabs">
+      <button class="media-sub-tab${defaultSub === 'images' ? ' active' : ''}" onclick="switchMediaSubTab('images')" data-media-sub="images">
+        ${t('modal.subImages')}${hasImages ? ' (' + backdrops.length + ')' : ''}
+      </button>
+      <button class="media-sub-tab${defaultSub === 'videos' ? ' active' : ''}" onclick="switchMediaSubTab('videos')" data-media-sub="videos">
+        ${t('modal.subVideos')}${hasVideos ? ' (1)' : ''}
+      </button>
+    </div>
+    <div id="mediaSubImages" style="${defaultSub === 'images' ? '' : 'display:none'}">${imagesHtml}</div>
+    <div id="mediaSubVideos" style="${defaultSub === 'videos' ? '' : 'display:none'}">${videosHtml}</div>
+  `;
+}
+
+function switchMediaSubTab(name) {
+  document.querySelectorAll('.media-sub-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mediaSub === name);
+  });
+  const imagesEl = document.getElementById('mediaSubImages');
+  const videosEl = document.getElementById('mediaSubVideos');
+  if (imagesEl) imagesEl.style.display = name === 'images' ? '' : 'none';
+  if (videosEl) videosEl.style.display = name === 'videos' ? '' : 'none';
 }
 
 async function setMovieBackdrop(movieId, url) {

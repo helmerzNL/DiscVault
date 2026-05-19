@@ -1298,6 +1298,30 @@
   .modal-tab-content { display: none; position: relative; z-index: 3; }
   .modal-tab-content.active { display: block; }
 
+  /* Media sub-tabs (Afbeeldingen / Video's) */
+  .media-sub-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .media-sub-tab {
+    padding: 5px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .media-sub-tab:hover { color: var(--text); border-color: var(--text-muted); }
+  .media-sub-tab.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(232, 197, 71, 0.08);
+  }
+
   /* Cast & crew grid */
   .cast-grid {
     display: grid;
