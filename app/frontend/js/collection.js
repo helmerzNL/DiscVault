@@ -385,21 +385,27 @@ async function bulkAssignGroups() {
 
 async function showBulkContainerAssign() {
   const panel = document.getElementById('bulkContainerPanel');
+  if (!panel) { console.error('[DV] bulkContainerPanel not found'); return; }
   panel.style.display = 'block';
-  document.getElementById('bulkGroupPanel').style.display = 'none';
+  const groupPanel = document.getElementById('bulkGroupPanel');
+  if (groupPanel) groupPanel.style.display = 'none';
   const sel = document.getElementById('bulkContainerSelect');
-  if (!sel) { console.error('bulkContainerSelect not found'); return; }
+  if (!sel) { console.error('[DV] bulkContainerSelect not found'); return; }
   sel.innerHTML = `<option value="">${t('general.loading')}</option>`;
   try {
     const [egR, colR] = await Promise.all([
       fetch(`${API}/edition-groups`),
       fetch(`${API}/collections`)
     ]);
-    const egs = await egR.json();
+    if (!egR.ok) throw new Error(`Edition-groups API: ${egR.status}`);
+    if (!colR.ok) throw new Error(`Collections API: ${colR.status}`);
+    const egs  = await egR.json();
     const cols = await colR.json();
+    if (!Array.isArray(egs))  throw new Error('Edition-groups response is not an array');
+    if (!Array.isArray(cols)) throw new Error('Collections response is not an array');
     const vaults  = egs.filter(g => !((g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0));
     const boxsets = egs.filter(g =>  (g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0);
-    let html = `<option value="">-- ${t('bulk.selectContainerPlaceholder', 'Kies een container')} --</option>`;
+    let html = `<option value="">-- Kies een container --</option>`;
     if (vaults.length) {
       html += `<optgroup label="Vault">`;
       vaults.forEach(g => { html += `<option value="vault:${g.id}">${escHtml(g.title)}</option>`; });
@@ -417,7 +423,8 @@ async function showBulkContainerAssign() {
     }
     sel.innerHTML = html;
   } catch(e) {
-    sel.innerHTML = `<option value="">${t('js.error', e.message)}</option>`;
+    console.error('[DV] showBulkContainerAssign error:', e);
+    sel.innerHTML = `<option value="">Fout: ${escHtml(e.message)}</option>`;
   }
 }
 
