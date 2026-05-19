@@ -220,6 +220,7 @@ SCHEMA_COLUMNS = [
     ("backdrop",             "TEXT"),
     ("backdrops",            "TEXT"),
     ("trailer_url",          "TEXT"),
+    ("videos",               "TEXT"),
     # Distribution
     ("distributor",          "TEXT"),
     # Purchase
@@ -1191,10 +1192,15 @@ def lookup_movie_tmdb(title, year=""):
 
         # Trailer: first YouTube trailer from videos
         trailer_url = ""
+        extra_videos = []
         for v in d.get("videos", {}).get("results", []):
-            if v.get("site") == "YouTube" and v.get("type") == "Trailer":
-                trailer_url = f"https://www.youtube.com/watch?v={v['key']}"
-                break
+            if v.get("site") != "YouTube" or not v.get("key"):
+                continue
+            url = f"https://www.youtube.com/watch?v={v['key']}"
+            if v.get("type") == "Trailer" and not trailer_url:
+                trailer_url = url
+            elif v.get("type") in ("Featurette", "Behind the Scenes", "Clip", "Bloopers", "Teaser"):
+                extra_videos.append({"url": url, "label": v.get("name") or v.get("type"), "type": v.get("type")})
 
         # Build full cast/crew list for people table
         cast_crew = []
@@ -1236,6 +1242,7 @@ def lookup_movie_tmdb(title, year=""):
             "backdrop":       backdrops[0] if backdrops else "",
             "backdrops":      json.dumps(backdrops),
             "trailer_url":    trailer_url,
+            "videos":         json.dumps(extra_videos) if extra_videos else "",
             "runtime":        str(d.get("runtime", "")),
             "rating":         str(round(d.get("vote_average", 0), 1)),
             "imdb_id":        d.get("imdb_id", "") or "",
@@ -1336,10 +1343,15 @@ def lookup_movie_tmdb_by_id(tmdb_id):
         if not backdrops and d.get("backdrop_path"):
             backdrops = [f"https://image.tmdb.org/t/p/original{d['backdrop_path']}"]
         trailer_url = ""
+        extra_videos = []
         for v in d.get("videos", {}).get("results", []):
-            if v.get("site") == "YouTube" and v.get("type") == "Trailer":
-                trailer_url = f"https://www.youtube.com/watch?v={v['key']}"
-                break
+            if v.get("site") != "YouTube" or not v.get("key"):
+                continue
+            url = f"https://www.youtube.com/watch?v={v['key']}"
+            if v.get("type") == "Trailer" and not trailer_url:
+                trailer_url = url
+            elif v.get("type") in ("Featurette", "Behind the Scenes", "Clip", "Bloopers", "Teaser"):
+                extra_videos.append({"url": url, "label": v.get("name") or v.get("type"), "type": v.get("type")})
         cast_crew = []
         for i, c in enumerate(cast[:20]):
             cast_crew.append({
@@ -1378,6 +1390,7 @@ def lookup_movie_tmdb_by_id(tmdb_id):
             "backdrop":       backdrops[0] if backdrops else "",
             "backdrops":      json.dumps(backdrops),
             "trailer_url":    trailer_url,
+            "videos":         json.dumps(extra_videos) if extra_videos else "",
             "runtime":        str(d.get("runtime", "")),
             "rating":         str(round(d.get("vote_average", 0), 1)),
             "imdb_id":        d.get("imdb_id", "") or "",
@@ -2756,7 +2769,7 @@ def refresh_single(movie_id):
             "hdr", "audio_tracks", "subtitles",
             "title_nl", "title_fr", "title_de", "title_es",
             "plot_nl",  "plot_fr",  "plot_de",  "plot_es",
-            "backdrop", "backdrops", "trailer_url",
+            "backdrop", "backdrops", "trailer_url", "videos",
         ]
         updates = {f: info[f] for f in refresh_fields if info.get(f)}
 
@@ -2946,7 +2959,7 @@ def sync_single_all_backends(movie_id):
             "hdr", "audio_tracks", "subtitles",
             "title_nl", "title_fr", "title_de", "title_es",
             "plot_nl",  "plot_fr",  "plot_de",  "plot_es",
-            "backdrop", "backdrops", "trailer_url",
+            "backdrop", "backdrops", "trailer_url", "videos",
             "audience_rating", "content_ratings",
         ]
         updates = {f: info[f] for f in refresh_fields if info.get(f)}

@@ -1832,6 +1832,19 @@
           <label data-i18n="edit.imdbUrl">IMDb URL</label>
           <input type="text" id="editImdbUrl">
         </div>
+        <div class="input-group full">
+          <label data-i18n="edit.trailerUrl">Trailer URL (YouTube)</label>
+          <input type="text" id="editTrailerUrl" placeholder="https://www.youtube.com/watch?v=...">
+        </div>
+        <div class="input-group full" id="editVideosSection">
+          <label data-i18n="edit.extraVideos">Extra video's</label>
+          <div id="editVideosList"></div>
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center;">
+            <input type="text" id="editVideoUrl" placeholder="YouTube URL" style="flex:2; min-width:180px;">
+            <input type="text" id="editVideoLabel" data-i18n-placeholder="edit.videoLabelPlaceholder" placeholder="Label (bijv. Making of)" style="flex:1; min-width:120px;">
+            <button class="btn btn-secondary" type="button" onclick="addVideoEntry()" data-i18n="edit.addVideo">+ Toevoegen</button>
+          </div>
+        </div>
       </div>
 
     </div>

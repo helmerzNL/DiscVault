@@ -1856,8 +1856,12 @@ function loadMovieMedia() {
   const trailerUrl = movie.trailer_url || '';
   const ytMatch = trailerUrl.match(/[?&]v=([^&]+)/) || trailerUrl.match(/youtu\.be\/([^?&]+)/);
 
+  // Extra videos
+  let extraVideos = [];
+  try { extraVideos = movie.videos ? JSON.parse(movie.videos) : []; } catch(e) {}
+
   const hasImages = backdrops.length > 0;
-  const hasVideos = !!ytMatch;
+  const hasVideos = !!ytMatch || extraVideos.length > 0;
 
   if (!hasImages && !hasVideos) {
     container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
@@ -1883,16 +1887,36 @@ function loadMovieMedia() {
 
   // Videos sub-tab content
   let videosHtml = '';
-  if (hasVideos) {
+  if (ytMatch) {
     const ytKey = ytMatch[1];
-    videosHtml = `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
-      <div id="ytThumb_${ytKey}" onclick="_playYouTube('${ytKey}')" style="position:relative;max-width:640px;width:100%;padding-bottom:56.25%;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
+    videosHtml += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
+      <div id="ytThumb_${ytKey}" onclick="_playYouTube('${ytKey}')" style="position:relative;max-width:640px;width:100%;padding-bottom:${640*9/16}px;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
         <img src="https://img.youtube.com/vi/${ytKey}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${ytKey}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:46px;background:rgba(180,0,0,0.88);border-radius:10px;display:flex;align-items:center;justify-content:center;">
           <span style="display:block;width:0;height:0;border-style:solid;border-width:14px 0 14px 26px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
         </div>
       </div>`;
-  } else {
+  }
+  if (extraVideos.length > 0) {
+    videosHtml += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin:${ytMatch ? '24px' : '0px'} 0 10px;">${t('modal.extraVideos')}</div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        ${extraVideos.map(v => {
+          const vm = v.url && (v.url.match(/[?&]v=([^&]+)/) || v.url.match(/youtu\.be\/([^?&]+)/));
+          if (!vm) return '';
+          const vk = vm[1];
+          return `<div>
+            <div style="font-size:0.82rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">${v.label || v.type || ''}</div>
+            <div id="ytThumb_${vk}" onclick="_playYouTube('${vk}')" style="position:relative;max-width:640px;width:100%;padding-bottom:${640*9/16}px;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
+              <img src="https://img.youtube.com/vi/${vk}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${vk}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:46px;background:rgba(180,0,0,0.88);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                <span style="display:block;width:0;height:0;border-style:solid;border-width:14px 0 14px 26px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+  if (!videosHtml) {
     videosHtml = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
   }
 
@@ -1903,7 +1927,7 @@ function loadMovieMedia() {
         ${t('modal.subImages')}${hasImages ? ' (' + backdrops.length + ')' : ''}
       </button>
       <button class="media-sub-tab${defaultSub === 'videos' ? ' active' : ''}" onclick="switchMediaSubTab('videos')" data-media-sub="videos">
-        ${t('modal.subVideos')}${hasVideos ? ' (1)' : ''}
+        ${t('modal.subVideos')}${hasVideos ? ' (' + ((ytMatch ? 1 : 0) + extraVideos.length) + ')' : ''}
       </button>
     </div>
     <div id="mediaSubImages" style="${defaultSub === 'images' ? '' : 'display:none'}">${imagesHtml}</div>
@@ -2320,6 +2344,7 @@ const EDIT_FIELDS = {
   Poster:             'poster',
   ImdbId:             'imdb_id',
   ImdbUrl:            'imdb_url',
+  TrailerUrl:         'trailer_url',
 };
 
 async function _populateGroupCheckboxes(currentGroupIds) {
@@ -2441,6 +2466,9 @@ function startEdit() {
   document.getElementById('modalEditMode').style.display = 'block';
   toggleCustomEditionInput(); // Show/hide custom label input based on current edition type
 
+  // Populate extra videos list
+  _renderEditVideosList(movie.videos || '');
+
   // Snapshot original values for dirty-checking
   _editSnapshot = {};
   for (const [suffix] of Object.entries(EDIT_FIELDS)) {
@@ -2484,6 +2512,8 @@ async function saveEdit() {
     const el = document.getElementById('edit' + suffix);
     if (el) payload[key] = el.value;
   }
+  // Extra videos JSON
+  payload.videos = _collectEditVideos();
   // Edition group assignment
   const egIdEl = document.getElementById('editEditionGroupId');
   if (egIdEl) {
@@ -2567,6 +2597,50 @@ async function saveEdit() {
   }
   btn.innerHTML = t('js.saveBtn');
   btn.disabled = false;
+}
+
+function _renderEditVideosList(videosJson) {
+  const list = document.getElementById('editVideosList');
+  if (!list) return;
+  list.innerHTML = '';
+  let videos = [];
+  try { videos = videosJson ? JSON.parse(videosJson) : []; } catch(e) {}
+  videos.forEach((v, i) => {
+    list.insertAdjacentHTML('beforeend', _videoEntryHtml(v.url || '', v.label || '', i));
+  });
+}
+
+function _videoEntryHtml(url, label, idx) {
+  return `<div class="edit-video-entry" data-idx="${idx}" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
+    <input type="text" class="ev-url" value="${url.replace(/"/g, '&quot;')}" placeholder="YouTube URL" style="flex:2;min-width:180px;">
+    <input type="text" class="ev-label" value="${label.replace(/"/g, '&quot;')}" placeholder="${t('edit.videoLabelPlaceholder')}" style="flex:1;min-width:120px;">
+    <button class="btn btn-secondary" type="button" style="padding:5px 10px;min-width:unset;" onclick="this.closest('.edit-video-entry').remove()">✕</button>
+  </div>`;
+}
+
+function addVideoEntry() {
+  const list = document.getElementById('editVideosList');
+  if (!list) return;
+  const urlInput = document.getElementById('editVideoUrl');
+  const labelInput = document.getElementById('editVideoLabel');
+  const url = urlInput ? urlInput.value.trim() : '';
+  const label = labelInput ? labelInput.value.trim() : '';
+  if (!url) return;
+  const idx = list.querySelectorAll('.edit-video-entry').length;
+  list.insertAdjacentHTML('beforeend', _videoEntryHtml(url, label, idx));
+  if (urlInput) urlInput.value = '';
+  if (labelInput) labelInput.value = '';
+  _editDirty = true;
+}
+
+function _collectEditVideos() {
+  const list = document.getElementById('editVideosList');
+  if (!list) return '';
+  const entries = [...list.querySelectorAll('.edit-video-entry')].map(row => ({
+    url: row.querySelector('.ev-url')?.value?.trim() || '',
+    label: row.querySelector('.ev-label')?.value?.trim() || '',
+  })).filter(v => v.url);
+  return entries.length ? JSON.stringify(entries) : '';
 }
 
 async function uploadCustomCover() {
