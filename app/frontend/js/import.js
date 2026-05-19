@@ -491,7 +491,7 @@ function _handleRoute() {
     switchTabDirect('collection');
     const tryOpen = (tries) => {
       const found = allMovies.find(m => m.id === id);
-      if (found) { openMovieDetail(id); }
+      if (found) { openMovieDetail(id, true); }
       else if (tries > 0) { setTimeout(() => tryOpen(tries - 1), 300); }
       else { _replaceRoute('/'); }
     };
@@ -514,7 +514,7 @@ window.addEventListener('popstate', (e) => {
   const personMatch = path.match(/^\/person\/(\d+)$/);
   if (personMatch) { openPersonDetail(parseInt(personMatch[1], 10)); return; }
   const movieMatch = path.match(/^\/movie\/(\d+)$/);
-  if (movieMatch) { openMovieDetail(parseInt(movieMatch[1], 10)); return; }
+  if (movieMatch) { openMovieDetail(parseInt(movieMatch[1], 10), true); return; }
   const collectionMatch = path.match(/^\/collection\/(\d+)$/);
   if (collectionMatch) { _openCollectionRoute(parseInt(collectionMatch[1], 10)); return; }
   const boxsetMatch = path.match(/^\/boxset\/(\d+)$/);
