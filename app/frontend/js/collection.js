@@ -380,11 +380,12 @@ async function bulkAssignGroups() {
     showStatus('bulkGroupStatus', t('js.error', e.message), 'error');
   }
 }
+// JS-version flag — used by index.html to detect stale-JS/new-HTML mismatch
+window.__DV_JS_VERSION = 85;
 
 // ── Bulk container (Vault / Box-Set / Collection) assignment ─────────────────
 
 async function showBulkContainerAssign() {
-  console.log('[DV] showBulkContainerAssign called');
   const panel = document.getElementById('bulkContainerPanel');
   if (!panel) { console.error('[DV] bulkContainerPanel not found'); return; }
   panel.style.display = 'block';
@@ -392,7 +393,7 @@ async function showBulkContainerAssign() {
   if (groupPanel) groupPanel.style.display = 'none';
   const sel = document.getElementById('bulkContainerSelect');
   if (!sel) { console.error('[DV] bulkContainerSelect not found'); return; }
-  sel.innerHTML = '<option value="">Ophalen...</option>';
+  sel.innerHTML = '<option value="">Laden…</option>';
   try {
     const [egR, colR] = await Promise.all([
       fetch(`${API}/edition-groups`),

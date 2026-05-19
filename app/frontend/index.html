@@ -230,8 +230,7 @@
       <div id="bulkContainerPanel" style="display:none; flex-basis:100%; padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
         <div style="font-weight:500; font-size:0.9rem; margin-bottom:10px;" data-i18n="bulk.selectContainer">Kies een Vault, Box-Set of Collectie:</div>
         <select id="bulkContainerSelect" class="form-control" style="width:100%; max-width:480px; margin-bottom:12px; padding:6px 10px; font-size:0.84rem; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text);">
-          <option value="">--</option>
-        </select>
+          <option value="">--</option>        </select>
         <div style="display:flex; gap:8px;">
           <button class="btn btn-primary" onclick="bulkAssignContainer()" style="padding:8px 16px;" data-i18n="bulk.applyContainer">✓ Toewijzen</button>
           <button class="btn btn-secondary" onclick="document.getElementById('bulkContainerPanel').style.display='none'" style="padding:8px 16px;" data-i18n="bulk.cancelGroup">Annuleren</button>
@@ -1964,6 +1963,17 @@
 <script src="js/social.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/app.js"></script>
+<script>
+// Guard: if JS was served stale from SW cache (version mismatch with HTML), clear all caches and hard-reload
+if (!window.__DV_JS_VERSION || window.__DV_JS_VERSION < 85) {
+  console.warn('[DV] Stale JS detected (expected v85, got ' + (window.__DV_JS_VERSION || 'none') + '). Clearing SW caches and reloading…');
+  (navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : Promise.resolve([]))
+    .then(function(regs) { return Promise.all(regs.map(function(r) { return r.unregister(); })); })
+    .then(function() { return caches.keys(); })
+    .then(function(keys) { return Promise.all(keys.map(function(k) { return caches.delete(k); })); })
+    .then(function() { window.location.reload(); });
+}
+</script>
 
 <!-- PWA install banner -->
 <div id="pwaInstallBanner" class="pwa-install-banner">
