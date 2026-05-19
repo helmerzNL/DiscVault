@@ -1157,6 +1157,11 @@ def lookup_movie_omdb(title=None, imdb_id=None):
                     "audience_rating": d.get("Rated", "") if d.get("Rated", "") not in ("", "N/A", "Not Rated") else "",
                     "_content_ratings": {"US": d["Rated"]} if d.get("Rated") and d.get("Rated") not in ("N/A", "Not Rated", "") else {},
                 }
+            err = d.get("Error", "")
+            if "Invalid API key" in err or "limit reached" in err.lower():
+                raise RuntimeError(f"OMDb: {err}")
+        elif r.status_code in (401, 403, 429):
+            raise RuntimeError(f"OMDb HTTP {r.status_code}")
     except Exception:
         pass
     return None
@@ -1174,6 +1179,8 @@ def lookup_movie_tmdb(title, year=""):
             f"https://api.themoviedb.org/3/search/movie?{params}", timeout=6
         )
         if r.status_code != 200:
+            if r.status_code in (401, 403, 429):
+                raise RuntimeError(f"HTTP {r.status_code}: {r.json().get('status_message', r.text[:120])}")
             return None
         results = r.json().get("results", [])
         if not results:
@@ -1189,6 +1196,8 @@ def lookup_movie_tmdb(title, year=""):
             timeout=8
         )
         if rd.status_code != 200:
+            if rd.status_code in (401, 403, 429):
+                raise RuntimeError(f"HTTP {rd.status_code}: {rd.json().get('status_message', rd.text[:120])}")
             return None
         d = rd.json()
 
@@ -1347,6 +1356,8 @@ def lookup_movie_tmdb_by_id(tmdb_id):
             timeout=8
         )
         if rd.status_code != 200:
+            if rd.status_code in (401, 403, 429):
+                raise RuntimeError(f"HTTP {rd.status_code}: {rd.json().get('status_message', rd.text[:120])}")
             return None
         d = rd.json()
         crew      = d.get("credits", {}).get("crew", [])
