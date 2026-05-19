@@ -65,6 +65,8 @@ async function manageGroupMembers(groupId, groupName) {
     `).join('');
   } else {
     html += `<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">${t('js.noMembers')}</div>`;
+  }
+  if (nonMembers.length) {
     html += `<div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
       <select id="addMemberSelect" style="flex:1; padding:8px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px;">
         ${nonMembers.map(u => `<option value="${u.id}">${u.display_name || u.username}</option>`).join('')}
