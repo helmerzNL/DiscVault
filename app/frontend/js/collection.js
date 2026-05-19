@@ -1334,14 +1334,21 @@ function _renderVideosGrid(container, allMembers) {
   let html = '';
   allMembers.forEach(m => {
     const items = [];
+    const seenKeys = new Set();
+    const addItem = (key, label, source) => {
+      if (seenKeys.has(key)) return;
+      if (!showAutoVideos && source === 'tmdb') return;
+      seenKeys.add(key);
+      items.push({ key, label });
+    };
     const trailerUrl = m.trailer_url || '';
     const ytMatch = trailerUrl.match(/[?&]v=([^&]+)/) || trailerUrl.match(/youtu\.be\/([^?&]+)/);
-    if (ytMatch) items.push({ key: ytMatch[1], label: t('modal.trailer') });
+    if (ytMatch) addItem(ytMatch[1], t('modal.trailer'), 'tmdb');
     let extraVideos = [];
     try { extraVideos = m.videos ? JSON.parse(m.videos) : []; } catch(e) {}
     for (const v of extraVideos) {
       const vm = v.url && (v.url.match(/[?&]v=([^&]+)/) || v.url.match(/youtu\.be\/([^?&]+)/));
-      if (vm) items.push({ key: vm[1], label: v.label || v.type || '' });
+      if (vm) addItem(vm[1], v.label || v.type || '', v.source || 'manual');
     }
     if (!items.length) return;
     html += `<div style="margin-bottom:20px;">
