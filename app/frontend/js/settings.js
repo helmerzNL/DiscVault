@@ -592,8 +592,8 @@ async function loadDebugSettings() {
 }
 
 function applySearchButtonVisibility() {
-  const btn = document.getElementById('btnSearchShortcut');
-  if (btn) btn.style.display = showSearchButton ? '' : 'none';
+  const bar = document.getElementById('collectionSearchBar');
+  if (bar) bar.style.display = showSearchButton ? '' : 'none';
 }
 
 async function saveDisplaySettings() {

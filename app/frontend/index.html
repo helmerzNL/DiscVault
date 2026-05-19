@@ -198,10 +198,13 @@
       <select id="groupFilter" onchange="filterMovies()" style="display:none; padding:7px 10px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:0.82rem; cursor:pointer;">
         <option value="">Alle collecties</option>
       </select>
-      <button class="btn btn-secondary" id="btnSearchShortcut" onclick="switchTab('search')" data-i18n="collection.searchBtn">🔍 Zoeken</button>
       <button class="btn btn-secondary" id="btnSelectMode" onclick="toggleSelectMode()" data-i18n="collection.selectMode">☑ Selecteren</button>
       <button class="btn btn-secondary" onclick="loadCollection()" data-i18n="collection.refresh">↻ Vernieuwen</button>
       <button class="btn btn-secondary digital-feature" id="btnCompareMode" onclick="toggleCompareMode()" data-i18n="collection.compareMode">⚡ Vergelijk</button>
+    </div>
+
+    <div id="collectionSearchBar" class="search-box" style="margin-bottom:10px;">
+      <input type="text" id="searchInput" oninput="filterMovies()" data-i18n-placeholder="collection.searchPlaceholder" placeholder="Zoek op titel, regisseur, genre...">
     </div>
 
     <!-- Bulk action toolbar (visible in select mode) -->
@@ -756,10 +759,10 @@
             <div class="card-title" data-i18n="settings.preferencesTitle">⚙️ Voorkeuren</div>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showSearchButtonToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.showSearchButton">Zoekknop in collectie</span>
+              <span data-i18n="settings.showSearchButton">Zoekbalk in collectie</span>
             </label>
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.showSearchButtonDesc">
-              Toont een zoekknop bovenaan de collectiepagina als snelkoppeling naar het zoekscherm.
+              Toont een zoekbalk bovenaan de collectiepagina om snel op titel, regisseur of genre te filteren.
             </div>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
