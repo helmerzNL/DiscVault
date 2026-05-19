@@ -1882,32 +1882,27 @@ function loadMovieMedia() {
   // --- Videos tab ---
   const vidContainer = document.getElementById('mediaVideosContent');
   if (vidContainer) {
-    let html = '';
-    if (ytMatch) {
-      const ytKey = ytMatch[1];
-      html += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
-        ${_ytThumbHtml(ytKey)}`;
+    const allVidItems = [];
+    if (ytMatch) allVidItems.push({ key: ytMatch[1], label: t('modal.trailer') });
+    for (const v of extraVideos) {
+      const vm = v.url && (v.url.match(/[?&]v=([^&]+)/) || v.url.match(/youtu\.be\/([^?&]+)/));
+      if (vm) allVidItems.push({ key: vm[1], label: v.label || v.type || '' });
     }
-    if (extraVideos.length > 0) {
-      html += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin:${ytMatch ? '24px' : '0px'} 0 10px;">${t('modal.extraVideos')}</div>
-        <div style="display:flex;flex-direction:column;gap:16px;">
-          ${extraVideos.map(v => {
-            const vm = v.url && (v.url.match(/[?&]v=([^&]+)/) || v.url.match(/youtu\.be\/([^?&]+)/));
-            if (!vm) return '';
-            const vk = vm[1];
-            return `<div>
-              <div style="font-size:0.82rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;">${v.label || v.type || ''}</div>
-              ${_ytThumbHtml(vk)}
-            </div>`;
-          }).join('')}
-        </div>`;
+    if (allVidItems.length > 0) {
+      vidContainer.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+        ${allVidItems.map(({key, label}) => `<div>
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">${label}</div>
+          ${_ytThumbHtml(key)}
+        </div>`).join('')}
+      </div>`;
+    } else {
+      vidContainer.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
     }
-    vidContainer.innerHTML = html || `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
   }
 }
 
 function _ytThumbHtml(key) {
-  return `<div id="ytThumb_${key}" onclick="_playYouTube('${key}')" style="position:relative;max-width:480px;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
+  return `<div id="ytThumb_${key}" onclick="_playYouTube('${key}')" style="position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
     <img src="https://img.youtube.com/vi/${key}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${key}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
     <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:40px;background:rgba(180,0,0,0.88);border-radius:8px;display:flex;align-items:center;justify-content:center;">
       <span style="display:block;width:0;height:0;border-style:solid;border-width:12px 0 12px 22px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
