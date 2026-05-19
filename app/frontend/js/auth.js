@@ -946,6 +946,8 @@ async function loadAdminPanel() {
       document.getElementById('adminGroupsCard').style.display = 'none';
       document.getElementById('adminRolesCard').style.display = 'none';
       document.getElementById('myGroupsCard').style.display = 'none';
+      const rolesSidebarBtn = document.querySelector('[data-admin-sub="roles"]');
+      if (rolesSidebarBtn) rolesSidebarBtn.style.display = 'none';
       return;
     }
     if (isAdmin) {
@@ -953,14 +955,16 @@ async function loadAdminPanel() {
       document.getElementById('myGroupsCard').style.display = 'block';
       if (me.authenticated) {
         document.getElementById('adminUsersCard').style.display = 'block';
-        await loadAdminUsers();
         document.getElementById('adminInviteCard').style.display = 'block';
-        await loadInviteCodes();
         document.getElementById('adminRolesCard').style.display = 'block';
+        await loadAdminUsers();
+        await loadInviteCodes();
       } else {
         document.getElementById('adminUsersCard').style.display = 'none';
         document.getElementById('adminInviteCard').style.display = 'none';
         document.getElementById('adminRolesCard').style.display = 'none';
+        const rolesSidebarBtn = document.querySelector('[data-admin-sub="roles"]');
+        if (rolesSidebarBtn) rolesSidebarBtn.style.display = 'none';
       }
       await loadAdminGroups();
       await loadMyGroups();
@@ -971,6 +975,8 @@ async function loadAdminPanel() {
       document.getElementById('adminInviteCard').style.display = 'none';
       document.getElementById('adminRolesCard').style.display = 'none';
       document.getElementById('myGroupsCard').style.display = 'block';
+      const rolesSidebarBtn = document.querySelector('[data-admin-sub="roles"]');
+      if (rolesSidebarBtn) rolesSidebarBtn.style.display = 'none';
       await loadMyGroups();
     }
   } catch(e) {

@@ -617,22 +617,162 @@ async function bulkAddToWatchlist() {
 
 // ── Admin: Role Management (RBAC) ────────────────────────────────────────────
 
-const PERMISSION_LABELS = {
-  'collection.view':        '👁 Collectie bekijken',
-  'collection.add':         '➕ Films toevoegen',
-  'collection.edit_own':    '✏️ Eigen films bewerken',
-  'collection.edit_all':    '✏️ Alle films bewerken',
-  'collection.delete_own':  '🗑 Eigen films verwijderen',
-  'collection.delete_all':  '🗑 Alle films verwijderen',
-  'collection.import':      '📥 Importeren',
-  'groups.create':          '📁 Groepen aanmaken',
-  'groups.manage':          '👥 Leden beheren',
-  'groups.invite':          '✉️ Uitnodigen',
-  'digital.view':           '🎬 Digitale bibliotheek',
-  'watchlist.manage':       '🔖 Watchlist beheren',
-  'admin.users':            '👤 Gebruikersbeheer',
-  'admin.settings':         '⚙️ Systeeminstellingen',
-};
+async function loadRoles() {
+  const list = document.getElementById('adminRolesList');
+  if (!list) return;
+  list.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">${t('rbac.loading')}</div>`;
+  try {
+    const r = await fetch(`${API}/roles`);
+    if (!r.ok) { list.innerHTML = ''; return; }
+    const roles = await r.json();
+    if (!roles.length) {
+      list.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">${t('rbac.noRoles')}</div>`;
+      return;
+    }
+    list.innerHTML = roles.map(role => `
+      <div id="roleRow_${role.id}" style="background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-bottom:10px; overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:12px; padding:12px 14px;">
+          <div style="font-size:1.1rem;">🎭</div>
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:0.9rem;">${role.name}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">${role.description ? role.description + ' &nbsp;·&nbsp; ' : ''}${t('rbac.userCount', role.user_count)} &nbsp;·&nbsp; ${t('rbac.permCount', role.permissions.length)}</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="toggleRolePanel(${role.id})">${t('rbac.manage')}</button>
+          <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteRole(${role.id},'${role.name.replace(/'/g, "\\'")}')">✕</button>
+        </div>
+        <div id="rolePanel_${role.id}" style="display:none; padding:14px; border-top:1px solid var(--border);">
+          <div style="font-size:0.8rem; font-weight:600; margin-bottom:10px;">${t('rbac.permissions')}</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:6px; margin-bottom:14px;">
+            ${Object.keys({
+              'collection.view':true,'collection.add':true,'collection.edit_own':true,
+              'collection.edit_all':true,'collection.delete_own':true,'collection.delete_all':true,
+              'collection.import':true,'groups.create':true,'groups.manage':true,'groups.invite':true,
+              'digital.view':true,'watchlist.manage':true,'admin.users':true,'admin.settings':true
+            }).map(perm => `
+              <label style="display:flex; align-items:center; gap:7px; font-size:0.82rem; cursor:pointer; padding:6px 8px; background:var(--surface); border:1px solid var(--border); border-radius:6px;">
+                <input type="checkbox" value="${perm}" ${role.permissions.includes(perm) ? 'checked' : ''}
+                       style="accent-color:var(--accent); width:14px; height:14px;"
+                       onchange="saveRolePermissions(${role.id})">
+                ${t('rbac.perm.' + perm)}
+              </label>
+            `).join('')}
+          </div>
+          <div style="border-top:1px solid var(--border); padding-top:12px; margin-bottom:8px; font-size:0.8rem; font-weight:600;">${t('rbac.usersWithRole')}</div>
+          <div id="roleUsersList_${role.id}" style="margin-bottom:8px;"></div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="roleUserSelect_${role.id}" style="flex:1; padding:7px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:0.82rem;"></select>
+            <button class="btn btn-primary" style="padding:7px 12px; font-size:0.8rem;" onclick="assignUserToRole(${role.id})">${t('rbac.add')}</button>
+          </div>
+          <div id="roleStatus_${role.id}" class="status-msg" style="margin-top:6px;"></div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    if (list) list.innerHTML = `<div style="color:var(--danger); font-size:0.85rem;">${t('rbac.loadError')}</div>`;
+  }
+}
+
+async function toggleRolePanel(roleId) {
+  const panel = document.getElementById(`rolePanel_${roleId}`);
+  if (!panel) return;
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+  } else {
+    panel.style.display = 'block';
+    await loadRoleUsers(roleId);
+    await populateRoleUserSelect(roleId);
+  }
+}
+
+async function loadRoleUsers(roleId) {
+  const listEl = document.getElementById(`roleUsersList_${roleId}`);
+  if (!listEl) return;
+  const r = await fetch(`${API}/roles/${roleId}/users`);
+  const users = await r.json();
+  if (!users.length) {
+    listEl.innerHTML = `<div style="color:var(--text-muted); font-size:0.82rem;">${t('rbac.noUsers')}</div>`;
+    return;
+  }
+  const roleIcon = { admin: '👑', MemberGroups: '🔑', user: '👤' };
+  listEl.innerHTML = users.map(u => `
+    <div style="display:flex; align-items:center; gap:10px; padding:6px 10px; background:var(--surface); border:1px solid var(--border); border-radius:6px; margin-bottom:5px;">
+      <span style="font-size:0.9rem;">${roleIcon[u.role] || '👤'}</span>
+      <span style="flex:1; font-size:0.83rem;">${u.display_name || u.username}</span>
+      <span style="font-size:0.72rem; color:var(--text-muted);">${u.role}</span>
+      <button class="btn btn-danger" style="padding:3px 7px; font-size:0.7rem;" onclick="removeUserFromRole(${roleId},'${u.id}')">✕</button>
+    </div>
+  `).join('');
+}
+
+async function populateRoleUserSelect(roleId) {
+  const select = document.getElementById(`roleUserSelect_${roleId}`);
+  if (!select) return;
+  const [allUsers, members] = await Promise.all([
+    fetch(`${API}/auth/users`).then(r => r.json()),
+    fetch(`${API}/roles/${roleId}/users`).then(r => r.json()),
+  ]);
+  const memberIds = new Set(members.map(m => m.id));
+  const available = allUsers.filter(u => !memberIds.has(u.id));
+  select.innerHTML = available.length
+    ? available.map(u => `<option value="${u.id}">${u.display_name || u.username}</option>`).join('')
+    : `<option value="" disabled>${t('rbac.allAssigned')}</option>`;
+}
+
+async function saveRolePermissions(roleId) {
+  const panel = document.getElementById(`rolePanel_${roleId}`);
+  if (!panel) return;
+  const perms = [...panel.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value);
+  await fetch(`${API}/roles/${roleId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ permissions: perms }),
+  });
+}
+
+async function createRole() {
+  const nameEl = document.getElementById('newRoleName');
+  const descEl = document.getElementById('newRoleDesc');
+  const name = nameEl.value.trim();
+  if (!name) return;
+  const r = await fetch(`${API}/roles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description: descEl.value.trim() }),
+  });
+  const d = await r.json();
+  if (d.error) { showStatus('adminRolesStatus', d.error, 'error'); return; }
+  nameEl.value = '';
+  descEl.value = '';
+  showStatus('adminRolesStatus', t('rbac.created', name), 'success');
+  await loadRoles();
+}
+
+async function deleteRole(id, name) {
+  if (!confirm(t('rbac.confirmDelete', name))) return;
+  await fetch(`${API}/roles/${id}`, { method: 'DELETE' });
+  await loadRoles();
+}
+
+async function assignUserToRole(roleId) {
+  const select = document.getElementById(`roleUserSelect_${roleId}`);
+  const userId = select?.value;
+  if (!userId) return;
+  const r = await fetch(`${API}/roles/${roleId}/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  const d = await r.json();
+  if (d.error) { showStatus(`roleStatus_${roleId}`, d.error, 'error'); return; }
+  await loadRoleUsers(roleId);
+  await populateRoleUserSelect(roleId);
+}
+
+async function removeUserFromRole(roleId, userId) {
+  await fetch(`${API}/roles/${roleId}/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  await loadRoleUsers(roleId);
+  await populateRoleUserSelect(roleId);
+}
 
 async function loadRoles() {
   const list = document.getElementById('adminRolesList');
