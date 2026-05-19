@@ -9,6 +9,9 @@ const PREF_KEY_MAP = {
   dv_group_editions:        'group_editions',
   dv_digital_badges:        'digital_badges',
   dv_digital_badge_filter:  'digital_badge_filter',
+  dv_show_local_title:      'show_local_title',
+  dv_show_search_button:    'show_search_button',
+  dv_show_auto_videos:      'show_auto_videos',
 };
 
 function saveUserPref(localKey, value) {
@@ -46,6 +49,12 @@ async function loadUserPrefsFromServer() {
     if ('group_editions' in prefs) groupEditionsEnabled = prefs.group_editions === 'true';
     if ('digital_badges' in prefs) showDigitalBadges = prefs.digital_badges === 'true';
     if ('digital_badge_filter' in prefs) digitalBadgeFilter = prefs.digital_badge_filter || 'all';
+    if ('show_local_title' in prefs) showLocalTitle = prefs.show_local_title !== 'false';
+    if ('show_search_button' in prefs) {
+      showSearchButton = prefs.show_search_button !== 'false';
+      applySearchButtonVisibility();
+    }
+    if ('show_auto_videos' in prefs) showAutoVideos = prefs.show_auto_videos !== 'false';
   } catch(e) { /* offline or no auth — use localStorage fallback */ }
 }
 
@@ -568,32 +577,17 @@ async function loadDebugSettings() {
     if (el) el.checked = false;
     applyDebugVisibility();
   }
-  // Load display settings together with debug settings
-  try {
-    const r2 = await fetch(`${API}/settings/display`, { headers: authHeaders() });
-    const d2 = await r2.json();
-    showLocalTitle = d2.show_local_title !== false;
-    const el2 = document.getElementById('showLocalTitleToggle');
-    if (el2) el2.checked = showLocalTitle;
-    showSearchButton = d2.show_search_button !== false;
-    const el3 = document.getElementById('showSearchButtonToggle');
-    if (el3) el3.checked = showSearchButton;
-    showAutoVideos = d2.show_auto_videos !== false;
-    const el4 = document.getElementById('showAutoVideosToggle');
-    if (el4) el4.checked = showAutoVideos;
-    applySearchButtonVisibility();
-  } catch(e) {
-    showLocalTitle = true;
-    const el2 = document.getElementById('showLocalTitleToggle');
-    if (el2) el2.checked = true;
-    showSearchButton = true;
-    const el3 = document.getElementById('showSearchButtonToggle');
-    if (el3) el3.checked = true;
-    showAutoVideos = true;
-    const el4 = document.getElementById('showAutoVideosToggle');
-    if (el4) el4.checked = true;
-    applySearchButtonVisibility();
-  }
+  // Load display settings from per-user localStorage (synced by loadUserPrefsFromServer)
+  showLocalTitle = localStorage.getItem('dv_show_local_title') !== 'false';
+  const el2 = document.getElementById('showLocalTitleToggle');
+  if (el2) el2.checked = showLocalTitle;
+  showSearchButton = localStorage.getItem('dv_show_search_button') !== 'false';
+  const el3 = document.getElementById('showSearchButtonToggle');
+  if (el3) el3.checked = showSearchButton;
+  showAutoVideos = localStorage.getItem('dv_show_auto_videos') !== 'false';
+  const el4 = document.getElementById('showAutoVideosToggle');
+  if (el4) el4.checked = showAutoVideos;
+  applySearchButtonVisibility();
   loadRatingCountryPicker();
 }
 
@@ -602,28 +596,21 @@ function applySearchButtonVisibility() {
   if (bar) bar.style.display = showSearchButton ? '' : 'none';
 }
 
-async function saveDisplaySettings() {
+function saveDisplaySettings() {
   const el = document.getElementById('showLocalTitleToggle');
   const val = !!(el && el.checked);
   const el2 = document.getElementById('showSearchButtonToggle');
   const val2 = !!(el2 && el2.checked);
   const el3 = document.getElementById('showAutoVideosToggle');
   const val3 = !!(el3 && el3.checked);
-  try {
-    const r = await fetch(`${API}/settings/display`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ show_local_title: val, show_search_button: val2, show_auto_videos: val3 })
-    });
-    await r.json();
-    showLocalTitle = val;
-    showSearchButton = val2;
-    showAutoVideos = val3;
-    applySearchButtonVisibility();
-    showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
-  } catch(e) {
-    showStatus('preferencesStatus', t('js.error', e.message), 'error');
-  }
+  showLocalTitle = val;
+  showSearchButton = val2;
+  showAutoVideos = val3;
+  saveUserPref('dv_show_local_title', String(val));
+  saveUserPref('dv_show_search_button', String(val2));
+  saveUserPref('dv_show_auto_videos', String(val3));
+  applySearchButtonVisibility();
+  showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }
 
 async function loadMcpSettings() {
