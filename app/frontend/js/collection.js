@@ -1869,11 +1869,16 @@ function loadMovieMedia() {
   try { backdrops = movie.backdrops ? JSON.parse(movie.backdrops) : []; } catch(e) {}
   if (!backdrops.length && movie.backdrop) backdrops = [movie.backdrop];
   if (backdrops.length) {
+    const currentBackdrop = movie.backdrop || '';
     html += `<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.backdrops')} (${backdrops.length})</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
-      ${backdrops.map(url => `<a href="${url}" target="_blank" rel="noopener noreferrer" style="display:block;border-radius:8px;overflow:hidden;">
-        <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-      </a>`).join('')}
+      ${backdrops.map(url => {
+        const isActive = url === currentBackdrop;
+        return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setMovieBackdrop(${movie.id}, '${url.replace(/'/g, "\\'")}')">
+          <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+          ${isActive ? '<div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;">Backdrop</div>' : ''}
+        </div>`;
+      }).join('')}
     </div>`;
   }
 
@@ -1881,6 +1886,38 @@ function loadMovieMedia() {
     html = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
   }
   container.innerHTML = html;
+}
+
+async function setMovieBackdrop(movieId, url) {
+  await fetch(`${API}/movies/${movieId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ backdrop: url })
+  });
+  // Update local cache and apply immediately
+  const movie = allMovies.find(m => m.id === movieId);
+  if (movie) movie.backdrop = url;
+  // Update hero/bg on the detail page
+  const hero = document.getElementById('detailHeroImg');
+  const bg = document.getElementById('movieDetailBg');
+  const heroWrap = document.querySelector('.detail-hero-wrap');
+  if (heroWrap) heroWrap.classList.remove('no-backdrop');
+  if (hero) {
+    hero.classList.remove('loaded');
+    hero.style.backgroundImage = `url('${url}')`;
+    const img = new Image();
+    img.onload = () => hero.classList.add('loaded');
+    img.src = url;
+  }
+  if (bg) {
+    bg.classList.remove('loaded');
+    bg.style.backgroundImage = `url('${url}')`;
+    const img = new Image();
+    img.onload = () => bg.classList.add('loaded');
+    img.src = url;
+  }
+  // Reload media tab to update active indicator
+  loadMovieMedia();
 }
 
 async function loadMovieCast(movieId) {
