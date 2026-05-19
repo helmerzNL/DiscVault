@@ -651,6 +651,7 @@ async function quickDelete(id, title) {
 
 // ── Movie Detail Modal ────────────────────────────────────────────────────────
 let _currentEditionGroupPrimaryId = null;
+let _currentEditionGroupId = null; // actual edition_group_id (group table id)
 let _egViewStack = []; // navigation stack for nested group views
 let _currentSuperGroup = null;
 let _currentCollection = null;
@@ -661,6 +662,7 @@ function openCollectionView(movie) {
   _currentCollection = movie;
   _currentSuperGroup = null;
   _currentEditionGroupPrimaryId = null;
+  _currentEditionGroupId = null;
   _currentEgGroupData = null;
   _currentCollectionData = null;
 
@@ -777,6 +779,7 @@ function openSuperGroupView(movie) {
   _currentSuperGroup = movie;
   _currentCollection = null;
   _currentEditionGroupPrimaryId = null;
+  _currentEditionGroupId = null;
   _currentCollectionData = null;
   _currentEgGroupData = null;
 
@@ -876,6 +879,7 @@ function openEditionGroupView(id, primaryOverride) {
   _currentEgGroupData = null;
   const primary = primaryOverride || allMovies.find(m => m.id === id);
   if (!primary) return;
+  _currentEditionGroupId = primary.edition_group_id || null;
   // Ensure all editions are in allMovies so openMovieDetail can find them
   (primary.editions || []).forEach(e => {
     if (!allMovies.some(m => m.id === e.id))
@@ -1256,7 +1260,7 @@ function loadEgMedia() {
   const isSuperGroup = !!_currentSuperGroup;
   const groupId = isSuperGroup
     ? (_currentSuperGroup._parent_group_id)
-    : (_currentEditionGroupPrimaryId ? (allMovies.find(m => m.id === _currentEditionGroupPrimaryId) || {}).edition_group_id : null);
+    : _currentEditionGroupId;
 
   if (!groupId) {
     if (imgContainer) imgContainer.innerHTML = noMedia;
