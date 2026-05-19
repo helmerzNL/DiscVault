@@ -403,8 +403,8 @@ async function showBulkContainerAssign() {
     const cols = await colR.json();
     if (!Array.isArray(egs))  throw new Error('Edition-groups response is not an array');
     if (!Array.isArray(cols)) throw new Error('Collections response is not an array');
-    const vaults  = egs.filter(g => !((g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0));
-    const boxsets = egs.filter(g =>  (g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0);
+    const vaults  = egs.filter(g => g.group_type !== 'boxset' && !((g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0));
+    const boxsets = egs.filter(g => g.group_type === 'boxset' ||  (g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0);
     let html = `<option value="">-- Kies een container --</option>`;
     if (vaults.length) {
       html += `<optgroup label="Vault">`;
@@ -1386,7 +1386,7 @@ async function createAndSelectParentGroup(title) {
   const res = await fetch(`${API}/edition-groups`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ title })
+    body: JSON.stringify({ title, group_type: 'boxset' })
   });
   if (!res.ok) return;
   const g = await res.json();
@@ -3037,7 +3037,7 @@ async function createAndSelectSuperGroup(title) {
     const r = await fetch(`${API}/edition-groups`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ title })
+      body: JSON.stringify({ title, group_type: 'boxset' })
     });
     const g = await r.json();
     selectSuperGroup(g.id, g.title);
@@ -3136,7 +3136,7 @@ async function loadGroupMgmtList(filter) {
         const hasLooseMovies = (eg.loose_movie_count || 0) > 0;
         const isChildOfBoxSet = eg.parent_group_id != null;
         let type;
-        if (hasChildGroups || hasLooseMovies) type = 'boxset';
+        if (eg.group_type === 'boxset' || hasChildGroups || hasLooseMovies) type = 'boxset';
         else if (isChildOfBoxSet) type = 'vault'; // child vault inside a box set
         else type = 'vault'; // standalone vault
 

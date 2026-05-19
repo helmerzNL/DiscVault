@@ -635,6 +635,8 @@ def init_db():
         conn.execute("ALTER TABLE edition_groups ADD COLUMN description TEXT")
     if "poster_file" not in eg_cols:
         conn.execute("ALTER TABLE edition_groups ADD COLUMN poster_file TEXT")
+    if "group_type" not in eg_cols:
+        conn.execute("ALTER TABLE edition_groups ADD COLUMN group_type TEXT DEFAULT 'vault'")
 
     # Collections: top-level grouping of Vaults, Box Sets and loose movies
     conn.execute("""
@@ -6870,10 +6872,13 @@ def create_edition_group():
     if not title:
         return jsonify({"error": "title is required"}), 400
     conn = get_db()
+    group_type = data.get("group_type") or "vault"
+    if group_type not in ("vault", "boxset"):
+        group_type = "vault"
     conn.execute(
-        "INSERT INTO edition_groups (title, tmdb_id, imdb_id, year, created_at) VALUES (?,?,?,?,?)",
+        "INSERT INTO edition_groups (title, tmdb_id, imdb_id, year, created_at, group_type) VALUES (?,?,?,?,?,?)",
         (title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
-         data.get("year") or "", datetime.utcnow().isoformat())
+         data.get("year") or "", datetime.utcnow().isoformat(), group_type)
     )
     conn.commit()
     gid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
