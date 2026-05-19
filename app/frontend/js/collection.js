@@ -323,7 +323,7 @@ async function showBulkGroupAssign() {
         ? `<span style="font-size:0.7rem; color:var(--accent); opacity:0.8;">(${inGroup}/${selMovies.length})</span>`
         : '';
       return `
-      <label style="display:flex; align-items:center; gap:6px; padding:6px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.84rem; white-space:nowrap;">
+      <label style="display:flex; align-items:center; gap:6px; padding:6px 12px; background:var(--surface2); border:1px solid ${inGroup === selMovies.length ? 'var(--accent)' : 'var(--border)'}; border-radius:6px; cursor:pointer; font-size:0.84rem; white-space:nowrap;">
         <input type="checkbox" class="bulk-group-cb" value="${g.id}" style="accent-color:var(--accent); width:15px; height:15px;"${inGroup === selMovies.length ? ' checked' : ''}>
         ${g.name} ${badge}
       </label>`;
@@ -385,13 +385,10 @@ async function bulkAssignGroups() {
 
 async function showBulkContainerAssign() {
   const panel = document.getElementById('bulkContainerPanel');
-  if (!panel) { console.error('bulkContainerPanel not found'); return; }
   panel.style.display = 'block';
-  const groupPanel = document.getElementById('bulkGroupPanel');
-  if (groupPanel) groupPanel.style.display = 'none';
+  document.getElementById('bulkGroupPanel').style.display = 'none';
   const listEl = document.getElementById('bulkContainerList');
   const searchEl = document.getElementById('bulkContainerSearch');
-  if (!listEl || !searchEl) { console.error('bulkContainerList/Search not found'); return; }
   searchEl.value = '';
   listEl.innerHTML = `<span style="color:var(--text-muted); font-size:0.82rem;">${t('general.loading')}</span>`;
   try {
@@ -1300,7 +1297,7 @@ function _renderMediaGrid(container, allMembers, currentBackdrop, type, groupId)
   });
 
   if (!html) {
-    html = `<div style="text-align:center;padding:40px;color:var(--text
+    html = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
   } else {
     html = `<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">${t('group.mediaHint', 'Klik op een afbeelding om deze als backdrop voor de groep in te stellen.')}</p>` + html;
   }
@@ -1847,7 +1844,7 @@ function loadMovieMedia() {
     html += `<div style="margin-bottom:24px;">
       <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">${t('modal.trailer')}</div>
       <div id="ytThumb_${ytKey}" onclick="_playYouTube('${ytKey}')" style="position:relative;width:100%;padding-bottom:56.25%;border-radius:10px;overflow:hidden;background:#111;cursor:pointer;">
-        <img src="https://img.youtube.com/vi/${ytKey}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${ytKey}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+        <img src="https://img.youtube.com/vi/${ytKey}/maxresdefault.jpg" onerror="this.onerror=null;this.src='https://img.youtube.com/vi/${ytKey}/hqdefault.jpg'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="">
         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:46px;background:rgba(180,0,0,0.88);border-radius:10px;display:flex;align-items:center;justify-content:center;">
           <span style="display:block;width:0;height:0;border-style:solid;border-width:14px 0 14px 26px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
         </div>
@@ -2892,7 +2889,6 @@ function switchEditTab(name) {
   });
 }
 
-window.setEditionFilter = setEditionFilter;
 function setEditionFilter(btn) {
   activeEditionFilter = !activeEditionFilter;
   btn.classList.toggle('active', activeEditionFilter);
@@ -2979,7 +2975,7 @@ async function searchEditionGroups(query) {
       const total = (g.member_count || 0) + (g.child_member_count || 0) + (g.loose_movie_count || 0);
       return `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
             onmousedown="selectEditionGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">
-        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">(${total})</span>
+        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">${total} ${t('edit.editionGroupMembers')}</span>
        </div>`;
     }).join('') + `<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent); cursor:pointer;"
          onmousedown="createEditionGroupFromSearch('${query.replace(/'/g,"\\'")}')">+ ${t('edit.editionGroupCreate')} "${query}"</div>`;
@@ -3176,7 +3172,7 @@ async function loadGroupMgmtList(filter) {
         : item.type === 'boxset' ? 'var(--accent2)' : 'var(--accent)';
       return `
         <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-          <span style="font-size:0.72rem; padding:2px 8px; border-radius:4px; background:${badgeColor}22; color:${badgeColor}; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${typeBadge}</span>
+          <span style="font-size:0.72rem; padding:2px 8px; border-radius:4px; background:${badgeColor}22; color:${badgeColor}; font-weight:600; white-space:nowrap;">${typeBadge}</span>
           <input type="text" value="${(item.title || '').replace(/"/g, '&quot;')}" style="flex:1; font-size:0.85rem; background:transparent; border:1px solid transparent; padding:4px 8px; border-radius:4px; color:var(--text);"
                  onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'"
                  onchange="renameGroupMgmt('${item.src}', ${item.id}, this.value)">
