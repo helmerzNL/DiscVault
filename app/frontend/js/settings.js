@@ -64,6 +64,7 @@ async function loadSettings() {
   loadAuthSettings();
   loadQueueSettings();
   loadSourceSettings();
+  loadApiKeySettings();
   loadDebugSettings(); // also initialises showLocalTitleToggle
   loadLanguagePicker();
   loadCollectorsModeSetting();
@@ -134,11 +135,60 @@ async function loadSourceSettings() {
     const elTmdb = document.getElementById('sourceTmdbToggle');
     const el = document.getElementById('sourceBlurayToggle');
     const el2 = document.getElementById('sourceBlurayDiscDeToggle');
-    if (elOmdb) elOmdb.checked = !!d.omdb_enabled;
-    if (elTmdb) elTmdb.checked = !!d.tmdb_enabled;
+    if (elOmdb) { elOmdb.checked = !!d.omdb_enabled; elOmdb.disabled = !d.omdb_key_set; }
+    if (elTmdb) { elTmdb.checked = !!d.tmdb_enabled; elTmdb.disabled = !d.tmdb_key_set; }
     if (el) el.checked = !!d.bluray_scrape_enabled;
     if (el2) el2.checked = !!d.bluraydiscde_scrape_enabled;
+    _applyApiKeyBadge('omdb', d.omdb_key_set);
+    _applyApiKeyBadge('tmdb', d.tmdb_key_set);
   } catch(e) {}
+}
+
+function _applyApiKeyBadge(service, isSet) {
+  const badge = document.getElementById(`${service}KeyBadge`);
+  if (!badge) return;
+  if (isSet) {
+    badge.textContent = '\u2713 Ingesteld';
+    badge.style.cssText = 'display:inline; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; background:rgba(80,200,120,0.15); color:#5c8; border:1px solid rgba(80,200,120,0.3);';
+  } else {
+    badge.textContent = '\u26A0 Geen key';
+    badge.style.cssText = 'display:inline; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; background:rgba(255,160,0,0.15); color:#fa0; border:1px solid rgba(255,160,0,0.3);';
+  }
+}
+
+async function loadApiKeySettings() {
+  try {
+    const r = await fetch(`${API}/settings/api-keys`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    _applyApiKeyBadge('omdb', d.omdb_key_set);
+    _applyApiKeyBadge('tmdb', d.tmdb_key_set);
+    const elOmdb = document.getElementById('sourceOmdbToggle');
+    const elTmdb = document.getElementById('sourceTmdbToggle');
+    if (elOmdb) elOmdb.disabled = !d.omdb_key_set;
+    if (elTmdb) elTmdb.disabled = !d.tmdb_key_set;
+  } catch(e) {}
+}
+
+async function saveApiKey(service) {
+  const input = document.getElementById(`${service}KeyInput`);
+  if (!input) return;
+  const key = input.value.trim();
+  try {
+    const r = await fetch(`${API}/settings/api-keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ [`${service}_key`]: key })
+    });
+    const d = await r.json();
+    if (!r.ok) { showStatus('sourceSettingsStatus', d.error || t('js.saveFailed'), 'error'); return; }
+    input.value = '';
+    await loadApiKeySettings();
+    await loadSourceSettings();
+    showStatus('sourceSettingsStatus', t('js.advancedSettingsSaved'), 'success');
+  } catch(e) {
+    showStatus('sourceSettingsStatus', t('js.error', e.message), 'error');
+  }
 }
 
 async function saveSourceSettings() {

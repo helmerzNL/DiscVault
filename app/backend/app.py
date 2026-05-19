@@ -41,8 +41,34 @@ POSTER_DIR = os.environ.get("POSTER_DIR", "/data/posters")
 PROFILE_DIR = os.environ.get("PROFILE_DIR", "/data/profiles")
 BACKUP_DIR = os.environ.get("BACKUP_DIR", "/data/backups")
 AVATAR_DIR = os.environ.get("AVATAR_DIR", "/data/avatars")
-OMDB_API_KEY  = os.environ.get("OMDB_API_KEY",  "")
-TMDB_API_KEY  = os.environ.get("TMDB_API_KEY",  "")
+_OMDB_API_KEY_ENV = os.environ.get("OMDB_API_KEY", "")
+_TMDB_API_KEY_ENV = os.environ.get("TMDB_API_KEY", "")
+
+class _LiveKey:
+    """String-like object that reads API key from DB on every access, falling back
+    to the env-var value supplied at startup. Lets OMDB_API_KEY / TMDB_API_KEY
+    work transparently whether the key was set via .env or the settings UI."""
+    def __init__(self, db_setting: str, env_fallback: str):
+        self._db_setting  = db_setting
+        self._env_fallback = env_fallback
+    def _resolve(self) -> str:
+        try:
+            with sqlite3.connect(DB_PATH) as _c:
+                row = _c.execute("SELECT value FROM settings WHERE key=?", (self._db_setting,)).fetchone()
+            if row and row[0]:
+                return row[0].strip()
+        except Exception:
+            pass
+        return self._env_fallback
+    def __bool__(self):        return bool(self._resolve())
+    def __str__(self):         return self._resolve()
+    def __repr__(self):        return repr(self._resolve())
+    def __format__(self, fmt): return format(self._resolve(), fmt)
+    def __eq__(self, other):   return self._resolve() == other
+    def __hash__(self):        return hash(self._resolve())
+
+OMDB_API_KEY = _LiveKey("omdb_api_key", _OMDB_API_KEY_ENV)
+TMDB_API_KEY = _LiveKey("tmdb_api_key", _TMDB_API_KEY_ENV)
 # DiscVault supported languages — used for multilingual TMDb title/plot lookups
 TMDB_LANGUAGES = [("nl", "nl-NL"), ("fr", "fr-FR"), ("de", "de-DE"), ("es", "es-ES"), ("pt", "pt-PT"), ("it", "it-IT")]
 RATING_COUNTRIES = {"US", "GB", "CA", "NL", "FR", "DE", "ES", "PT", "IT"}
@@ -3143,11 +3169,42 @@ def sync_single_source(movie_id):
 @app.route("/api/movies/bulk-refresh", methods=["POST"])
 def bulk_refresh():
     """Re-fetch metadata from TMDb/OMDb for a list of movie IDs.
-    With ?stream=1 streams NDJSON progress events (one per movie)."""
+    With ?stream=1 streams NDJSON progress events (one per movie).
+    IDs are automatically expanded to include all members of the same
+    vault (edition_group), box-set (super_group) or collection."""
     ids           = (request.json or {}).get("ids", [])
     fetch_posters = (request.json or {}).get("fetch_posters", True)
     if not ids:
         return jsonify({"error": "No ids provided"}), 400
+
+    # Expand: if a selected movie belongs to a vault/box-set/collection,
+    # also include all sibling movies so the whole group is refreshed.
+    _expand_conn = get_db()
+    expanded = set(ids)
+    for mid in list(ids):
+        row = _expand_conn.execute(
+            "SELECT collection_id, super_group_id, edition_group_id FROM movies WHERE id=?",
+            (mid,)
+        ).fetchone()
+        if not row:
+            continue
+        if row["collection_id"]:
+            for r in _expand_conn.execute(
+                "SELECT id FROM movies WHERE collection_id=?", (row["collection_id"],)
+            ):
+                expanded.add(r["id"])
+        if row["super_group_id"]:
+            for r in _expand_conn.execute(
+                "SELECT id FROM movies WHERE super_group_id=?", (row["super_group_id"],)
+            ):
+                expanded.add(r["id"])
+        if row["edition_group_id"]:
+            for r in _expand_conn.execute(
+                "SELECT id FROM movies WHERE edition_group_id=?", (row["edition_group_id"],)
+            ):
+                expanded.add(r["id"])
+    _expand_conn.close()
+    ids = list(expanded)
 
     def _process_movie(conn, movie_id, fetch_posters):
         """Process a single movie and return (status, title, error_detail)."""
@@ -4409,10 +4466,14 @@ def _is_source_enabled(key: str, default: bool) -> bool:
 
 
 def _is_omdb_enabled() -> bool:
+    if not OMDB_API_KEY:
+        return False
     return _is_source_enabled("omdb_enabled", OMDB_ENABLED_DEFAULT)
 
 
 def _is_tmdb_enabled() -> bool:
+    if not TMDB_API_KEY:
+        return False
     return _is_source_enabled("tmdb_enabled", TMDB_ENABLED_DEFAULT)
 
 
@@ -6081,9 +6142,11 @@ def bulk_assign_boxset():
 @app.route("/api/settings/sources", methods=["GET"])
 def get_source_settings():
     return jsonify({
-        "omdb_enabled": _is_omdb_enabled(),
-        "tmdb_enabled": _is_tmdb_enabled(),
-        "bluray_scrape_enabled": _is_bluray_scrape_enabled(),
+        "omdb_enabled":              _is_source_enabled("omdb_enabled", OMDB_ENABLED_DEFAULT),
+        "omdb_key_set":              bool(OMDB_API_KEY),
+        "tmdb_enabled":              _is_source_enabled("tmdb_enabled", TMDB_ENABLED_DEFAULT),
+        "tmdb_key_set":              bool(TMDB_API_KEY),
+        "bluray_scrape_enabled":     _is_bluray_scrape_enabled(),
         "bluraydiscde_scrape_enabled": _is_bluraydiscde_scrape_enabled(),
     })
 
@@ -6110,6 +6173,52 @@ def set_source_settings():
     conn.commit()
     conn.close()
     return jsonify(result)
+
+
+@app.route("/api/settings/api-keys", methods=["GET"])
+def get_api_keys_settings():
+    err = _require_admin()
+    if err:
+        return err
+    def _mask(k):
+        k = str(k)
+        if not k:
+            return ''
+        return ('\u2022' * max(len(k) - 4, 0)) + k[-4:]
+    tmdb = str(TMDB_API_KEY)
+    omdb = str(OMDB_API_KEY)
+    return jsonify({
+        "tmdb_key_set":    bool(tmdb),
+        "omdb_key_set":    bool(omdb),
+        "tmdb_key_masked": _mask(tmdb),
+        "omdb_key_masked": _mask(omdb),
+    })
+
+
+@app.route("/api/settings/api-keys", methods=["POST"])
+def set_api_keys_settings():
+    err = _require_admin()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    for service in ("tmdb", "omdb"):
+        field = f"{service}_key"
+        if field not in data:
+            continue
+        val = str(data[field]).strip()
+        if val:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (f"{service}_api_key", val)
+            )
+            add_log("settings", f"{service.upper()} API key bijgewerkt", level="info")
+        else:
+            conn.execute("DELETE FROM settings WHERE key=?", (f"{service}_api_key",))
+            add_log("settings", f"{service.upper()} API key verwijderd", level="info")
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/settings/mcp", methods=["GET"])

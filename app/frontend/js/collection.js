@@ -1361,7 +1361,7 @@ function _renderVideosGrid(container, allMembers) {
       </div>
     </div>`;
   });
-  container.innerHTML = html || `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+  container.innerHTML = html || `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${showAutoVideos ? t('modal.noVideosAuto') : t('modal.noVideosManual')}</div>`;
 }
 
 async function setGroupBackdrop(type, groupId, url) {
@@ -1974,7 +1974,7 @@ function loadMovieMedia() {
       }
       vidContainer.innerHTML = html;
     } else {
-      vidContainer.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
+      vidContainer.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${showAutoVideos ? t('modal.noVideosAuto') : t('modal.noVideosManual')}</div>`;
     }
   }
 }

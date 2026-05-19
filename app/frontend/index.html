@@ -1179,14 +1179,42 @@
           <!-- Metadata bronnen -->
           <div class="card" style="margin-top:20px;">
             <div class="card-title" data-i18n="settings.metadataSources">Metadata Bronnen</div>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+
+            <!-- OMDb -->
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:6px;">
               <input type="checkbox" id="sourceOmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="settings.omdbDesc">OMDb — filminformatie via IMDb-id of titel</span>
+              <span id="omdbKeyBadge" style="display:none; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; margin-left:4px;"></span>
             </label>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+            <div style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="password" id="omdbKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderOmdb" placeholder="Plak je OMDb API key hier..."
+                  style="flex:1; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <button class="btn btn-primary" onclick="saveApiKey('omdb')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
+              </div>
+              <div style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; line-height:1.55;" data-i18n-html="settings.omdbKeyHelp">
+                Gratis key via <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener" style="color:var(--accent);">omdbapi.com/apikey.aspx</a> — kies <em>FREE!</em> (1.000 verzoeken/dag), vul je e-mail in en bevestig via de activatiemail.
+              </div>
+            </div>
+
+            <!-- TMDb -->
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:6px;">
               <input type="checkbox" id="sourceTmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="settings.tmdbDesc">TMDb — filminformatie via titel + jaar</span>
+              <span id="tmdbKeyBadge" style="display:none; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; margin-left:4px;"></span>
             </label>
+            <div style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="password" id="tmdbKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderTmdb" placeholder="Plak je TMDb API key hier..."
+                  style="flex:1; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <button class="btn btn-primary" onclick="saveApiKey('tmdb')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
+              </div>
+              <div style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; line-height:1.55;" data-i18n-html="settings.tmdbKeyHelp">
+                Gratis key via <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener" style="color:var(--accent);">themoviedb.org/settings/api</a> — maak een account, ga naar Settings → API → Request an API key → Developer.
+              </div>
+            </div>
+
+            <!-- Scrapers -->
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="sourceBlurayToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="settings.blurayDesc">Blu-ray.com scraper (experimenteel)</span>
@@ -1196,7 +1224,7 @@
               <span data-i18n="settings.blurayDeDesc">bluray-disc.de scraper (experimenteel)</span>
             </label>
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.sourceHelp">
-              OMDb en TMDb vereisen een API-key (zie .env). De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiele API.
+              De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiële API.
             </div>
             <div id="sourceSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
