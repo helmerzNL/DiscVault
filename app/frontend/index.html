@@ -18,6 +18,11 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
 <link rel="stylesheet" href="styles.css">
+<!-- Critical inline CSS: prevents FOUC (white flash + visible panels) on F5 refresh -->
+<style>
+  body { background: #0a0a0f; color: #e8e8f0; }
+  .panel { display: none; }
+</style>
 </head>
 <body>
 
