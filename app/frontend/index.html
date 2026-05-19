@@ -1963,20 +1963,6 @@
 <script src="js/social.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/app.js"></script>
-<script>
-// Guard: if JS was served stale from SW cache (version mismatch with HTML), clear all caches and reload once.
-// sessionStorage flag prevents an infinite reload loop when the server itself still has old JS.
-if ((!window.__DV_JS_VERSION || window.__DV_JS_VERSION < 85) && !sessionStorage.getItem('dv_js_reload_85')) {
-  sessionStorage.setItem('dv_js_reload_85', '1');
-  console.warn('[DV] Stale JS detected (expected v85, got ' + (window.__DV_JS_VERSION || 'none') + '). Clearing SW caches and reloading\u2026');
-  (navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : Promise.resolve([]))
-    .then(function(regs) { return Promise.all(regs.map(function(r) { return r.unregister(); })); })
-    .then(function() { return caches.keys(); })
-    .then(function(keys) { return Promise.all(keys.map(function(k) { return caches.delete(k); })); })
-    .then(function() { window.location.reload(); });
-}
-</script>
-
 <!-- PWA install banner -->
 <div id="pwaInstallBanner" class="pwa-install-banner">
   <div class="pwa-install-banner-icon">📀</div>

@@ -380,8 +380,6 @@ async function bulkAssignGroups() {
     showStatus('bulkGroupStatus', t('js.error', e.message), 'error');
   }
 }
-// JS-version flag — used by index.html to detect stale-JS/new-HTML mismatch
-window.__DV_JS_VERSION = 85;
 
 // ── Bulk container (Vault / Box-Set / Collection) assignment ─────────────────
 
