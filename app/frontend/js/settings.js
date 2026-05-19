@@ -167,7 +167,41 @@ async function loadApiKeySettings() {
     const elTmdb = document.getElementById('sourceTmdbToggle');
     if (elOmdb) elOmdb.disabled = !d.omdb_key_set;
     if (elTmdb) elTmdb.disabled = !d.tmdb_key_set;
+    // Pre-fill inputs with current stored value so user can verify/correct
+    _fillKeyInput('omdb', d.omdb_key, d.omdb_key_set);
+    _fillKeyInput('tmdb', d.tmdb_key, d.tmdb_key_set);
   } catch(e) {}
+}
+
+function _fillKeyInput(service, key, isSet) {
+  const input = document.getElementById(`${service}KeyInput`);
+  const clearBtn = document.getElementById(`${service}KeyClearBtn`);
+  if (input) input.value = key || '';
+  if (clearBtn) clearBtn.style.display = isSet ? 'inline-block' : 'none';
+}
+
+function toggleKeyVisibility(service) {
+  const input = document.getElementById(`${service}KeyInput`);
+  if (!input) return;
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+async function clearApiKey(service) {
+  if (!confirm(`${service.toUpperCase()} API key verwijderen uit database? De app valt dan terug op de omgevingsvariabele.`)) return;
+  try {
+    const r = await fetch(`${API}/settings/api-keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ [`${service}_key`]: '' })
+    });
+    const d = await r.json();
+    if (!r.ok) { showStatus('sourceSettingsStatus', d.error || t('js.saveFailed'), 'error'); return; }
+    await loadApiKeySettings();
+    await loadSourceSettings();
+    showStatus('sourceSettingsStatus', `${service.toUpperCase()} key verwijderd`, 'success');
+  } catch(e) {
+    showStatus('sourceSettingsStatus', t('js.error', e.message), 'error');
+  }
 }
 
 async function saveApiKey(service) {
@@ -182,7 +216,6 @@ async function saveApiKey(service) {
     });
     const d = await r.json();
     if (!r.ok) { showStatus('sourceSettingsStatus', d.error || t('js.saveFailed'), 'error'); return; }
-    input.value = '';
     await loadApiKeySettings();
     await loadSourceSettings();
     showStatus('sourceSettingsStatus', t('js.advancedSettingsSaved'), 'success');

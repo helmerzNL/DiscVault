@@ -1190,7 +1190,9 @@
               <div style="display:flex; gap:8px; align-items:center;">
                 <input type="password" id="omdbKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderOmdb" placeholder="Plak je OMDb API key hier..."
                   style="flex:1; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <button type="button" onclick="toggleKeyVisibility('omdb')" title="Toon/verberg key" style="padding:6px 10px; font-size:0.85rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--text);">👁</button>
                 <button class="btn btn-primary" onclick="saveApiKey('omdb')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
+                <button type="button" id="omdbKeyClearBtn" onclick="clearApiKey('omdb')" style="display:none; padding:6px 10px; font-size:0.8rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--danger);">🗑</button>
               </div>
               <div style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; line-height:1.55;" data-i18n-html="settings.omdbKeyHelp">
                 Gratis key via <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener" style="color:var(--accent);">omdbapi.com/apikey.aspx</a> — kies <em>FREE!</em> (1.000 verzoeken/dag), vul je e-mail in en bevestig via de activatiemail.
@@ -1207,7 +1209,9 @@
               <div style="display:flex; gap:8px; align-items:center;">
                 <input type="password" id="tmdbKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderTmdb" placeholder="Plak je TMDb API key hier..."
                   style="flex:1; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <button type="button" onclick="toggleKeyVisibility('tmdb')" title="Toon/verberg key" style="padding:6px 10px; font-size:0.85rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--text);">👁</button>
                 <button class="btn btn-primary" onclick="saveApiKey('tmdb')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
+                <button type="button" id="tmdbKeyClearBtn" onclick="clearApiKey('tmdb')" style="display:none; padding:6px 10px; font-size:0.8rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--danger);">🗑</button>
               </div>
               <div style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; line-height:1.55;" data-i18n-html="settings.tmdbKeyHelp">
                 Gratis key via <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener" style="color:var(--accent);">themoviedb.org/settings/api</a> — maak een account, ga naar Settings → API → Request an API key → Developer.

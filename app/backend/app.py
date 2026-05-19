@@ -6203,6 +6203,8 @@ def get_api_keys_settings():
         "omdb_key_set":    bool(omdb),
         "tmdb_key_masked": _mask(tmdb),
         "omdb_key_masked": _mask(omdb),
+        "tmdb_key":        tmdb,
+        "omdb_key":        omdb,
     })
 
 
