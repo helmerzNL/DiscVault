@@ -1095,6 +1095,16 @@ function _permLabel(p) {
   return t('rbac.perm.' + p) || p;
 }
 
+function _roleDisplayName(name) {
+  const key = 'rbac.roleName.' + (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return t(key) || name;
+}
+
+function _roleDisplayDesc(name, fallback) {
+  const key = 'rbac.roleDesc.' + (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return t(key) || fallback || '';
+}
+
 async function loadRoles() {
   const list   = document.getElementById('adminRolesList');
   const status = document.getElementById('adminRolesStatus');
@@ -1129,7 +1139,7 @@ function renderRolesAdmin(roles) {
   }
   list.innerHTML = roles.map(role => _renderRoleCard(role)).join('');
   // Load user lists after HTML is in the DOM
-  roles.forEach(role => _loadRoleUserList(role.id, role.name));
+  roles.forEach(role => _loadRoleUserList(role.id, role.name, role.permissions || []));
 }
 
 function _renderRoleCard(role) {
@@ -1140,10 +1150,10 @@ function _renderRoleCard(role) {
   return `
   <div class="card" style="margin-bottom:16px; padding:16px;">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
-      <div style="font-weight:600; font-size:0.95rem;">${_escHtml(role.name)}</div>
+      <div style="font-weight:600; font-size:0.95rem;">${_escHtml(_roleDisplayName(role.name))}</div>
       <span class="tag" style="font-size:0.7rem;">${t('rbac.userCount').replace('{0}', role.user_count || 0)}</span>
     </div>
-    ${role.description ? `<p style="font-size:0.82rem; color:var(--text-muted); margin:0 0 10px;">${_escHtml(role.description)}</p>` : ''}
+    ${_roleDisplayDesc(role.name, role.description) ? `<p style="font-size:0.82rem; color:var(--text-muted); margin:0 0 10px;">${_escHtml(_roleDisplayDesc(role.name, role.description))}</p>` : ''}
     <div style="margin-bottom:12px;">${permChips}</div>
     <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:4px;">
       <div style="font-size:0.8rem; font-weight:600; margin-bottom:8px; color:var(--text-muted);">${t('rbac.usersWithRole').toUpperCase()}</div>
@@ -1161,12 +1171,12 @@ function _renderRoleCard(role) {
   </div>`;
 }
 
-async function _loadRoleUserList(roleId, roleName) {
+async function _loadRoleUserList(roleId, roleName, rolePerms = []) {
   const container = document.getElementById(`roleUserList_${roleId}`);
   if (!container) return;
   try {
     const users = await fetch(`${API}/roles/${roleId}/users`).then(r => r.json());
-    const isDigital = roleName === 'Digitale Libraries Viewer';
+    const isDigital = rolePerms.includes('digital.view');
     if (!users.length) {
       container.innerHTML = `<p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 6px;">${t('rbac.noUsers')}</p>`;
       return;
