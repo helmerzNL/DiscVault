@@ -1091,28 +1091,15 @@ async function resetUserPasskey(id, name) {
 
 // ── Roles admin ───────────────────────────────────────────────────────────────
 
-const PERM_LABELS = {
-  'collection.view':       '👁️ Films bekijken',
-  'collection.add':        '➕ Films toevoegen',
-  'collection.edit_own':   '✏️ Eigen films bewerken',
-  'collection.edit_all':   '✏️ Alle films bewerken',
-  'collection.delete_own': '🗑️ Eigen films verwijderen',
-  'collection.delete_all': '🗑️ Alle films verwijderen',
-  'collection.import':     '📥 Importeren',
-  'groups.create':         '📁 Groepen aanmaken',
-  'groups.manage':         '📁 Groepen beheren',
-  'groups.invite':         '📩 Uitnodigen',
-  'digital.view':          '📺 Digitale bibliotheken',
-  'watchlist.manage':      '📋 Watchlist beheren',
-  'admin.users':           '👑 Gebruikers beheren',
-  'admin.settings':        '⚙️ Instellingen beheren',
-};
+function _permLabel(p) {
+  return t('rbac.perm.' + p) || p;
+}
 
 async function loadRoles() {
   const list   = document.getElementById('adminRolesList');
   const status = document.getElementById('adminRolesStatus');
   if (!list) return;
-  list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem; padding:12px 0;">Bezig met laden\u2026</p>';
+  list.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; padding:12px 0;">${t('rbac.loading')}</p>`;
   try {
     const fetchJson = async (url) => {
       const r = await fetch(url);
@@ -1129,7 +1116,7 @@ async function loadRoles() {
     renderRolesAdmin(roles);
   } catch(e) {
     console.error('loadRoles error:', e);
-    list.innerHTML = `<p style="color:var(--danger); font-size:0.85rem;">Kon rollen niet laden: ${e.message}</p>`;
+    list.innerHTML = `<p style="color:var(--danger); font-size:0.85rem;">${t('rbac.loadError')}: ${e.message}</p>`;
   }
 }
 
@@ -1137,7 +1124,7 @@ function renderRolesAdmin(roles) {
   const list = document.getElementById('adminRolesList');
   if (!list) return;
   if (!roles || !roles.length) {
-    list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Geen rollen gevonden.</p>';
+    list.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem;">${t('rbac.noRoles')}</p>`;
     return;
   }
   list.innerHTML = roles.map(role => _renderRoleCard(role)).join('');
@@ -1147,30 +1134,28 @@ function renderRolesAdmin(roles) {
 
 function _renderRoleCard(role) {
   const permChips = (role.permissions || []).map(p =>
-    `<span style="display:inline-block; background:var(--surface3); border:1px solid var(--border); border-radius:12px; padding:2px 10px; font-size:0.72rem; margin:2px 2px 2px 0;">${PERM_LABELS[p] || p}</span>`
+    `<span style="display:inline-block; background:var(--surface3); border:1px solid var(--border); border-radius:12px; padding:2px 10px; font-size:0.72rem; margin:2px 2px 2px 0;">${_permLabel(p)}</span>`
   ).join('');
-
-  const isDigital = role.name === 'Digitale Libraries Viewer';
 
   return `
   <div class="card" style="margin-bottom:16px; padding:16px;">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
       <div style="font-weight:600; font-size:0.95rem;">${_escHtml(role.name)}</div>
-      <span class="tag" style="font-size:0.7rem;">${role.user_count || 0} ${(role.user_count || 0) === 1 ? 'gebruiker' : 'gebruikers'}</span>
+      <span class="tag" style="font-size:0.7rem;">${t('rbac.userCount').replace('{0}', role.user_count || 0)}</span>
     </div>
     ${role.description ? `<p style="font-size:0.82rem; color:var(--text-muted); margin:0 0 10px;">${_escHtml(role.description)}</p>` : ''}
     <div style="margin-bottom:12px;">${permChips}</div>
     <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:4px;">
-      <div style="font-size:0.8rem; font-weight:600; margin-bottom:8px; color:var(--text-muted);">GEBRUIKERS</div>
+      <div style="font-size:0.8rem; font-weight:600; margin-bottom:8px; color:var(--text-muted);">${t('rbac.usersWithRole').toUpperCase()}</div>
       <div id="roleUserList_${role.id}" style="margin-bottom:8px;"></div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <select id="roleUserSelect_${role.id}" data-role-name="${_escHtml(role.name)}" style="flex:1; min-width:150px; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface2); color:var(--text-primary); font-size:0.82rem;">
-          <option value="">— Gebruiker selecteren —</option>
+          <option value="">${t('rbac.selectUser')}</option>
           ${(window._roleAllUsers || []).map(u =>
             `<option value="${u.id}">${_escHtml(u.display_name || u.username)} (${_escHtml(u.username)})</option>`
           ).join('')}
         </select>
-        <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="assignRoleUser(${role.id})">+ Toewijzen</button>
+        <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="assignRoleUser(${role.id})">${t('rbac.assign')}</button>
       </div>
     </div>
   </div>`;
@@ -1183,7 +1168,7 @@ async function _loadRoleUserList(roleId, roleName) {
     const users = await fetch(`${API}/roles/${roleId}/users`).then(r => r.json());
     const isDigital = roleName === 'Digitale Libraries Viewer';
     if (!users.length) {
-      container.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 6px;">Geen gebruikers toegewezen.</p>';
+      container.innerHTML = `<p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 6px;">${t('rbac.noUsers')}</p>`;
       return;
     }
     container.innerHTML = users.map(u => `
@@ -1195,7 +1180,7 @@ async function _loadRoleUserList(roleId, roleName) {
       </div>
     `).join('');
   } catch(e) {
-    container.innerHTML = '<p style="font-size:0.8rem; color:var(--danger); margin:0 0 6px;">Kon gebruikers niet laden.</p>';
+    container.innerHTML = `<p style="font-size:0.8rem; color:var(--danger); margin:0 0 6px;">${t('rbac.loadError')}</p>`;
   }
 }
 
@@ -1214,7 +1199,7 @@ async function assignRoleUser(roleId) {
     await _loadRoleUserList(roleId, roleName);
   } else {
     const err = await r.json().catch(() => ({}));
-    showStatus('adminRolesStatus', err.error || 'Fout bij toewijzen.', 'error');
+    showStatus('adminRolesStatus', err.error || t('rbac.assignError'), 'error');
   }
 }
 
@@ -1235,7 +1220,7 @@ async function _toggleDigitalGroupConfig(roleId, userId) {
 }
 
 async function _renderDigitalGroupConfig(roleId, userId, panel) {
-  panel.innerHTML = '<p style="font-size:0.78rem; color:var(--text-muted);">Bezig…</p>';
+  panel.innerHTML = `<p style="font-size:0.78rem; color:var(--text-muted);">${t('rbac.loading')}</p>`;
   try {
     const [allowed, allGroups] = await Promise.all([
       fetch(`${API}/admin/users/${encodeURIComponent(userId)}/digital-groups`).then(r => r.json()),
@@ -1251,14 +1236,14 @@ async function _renderDigitalGroupConfig(roleId, userId, panel) {
     panel.innerHTML = `
       <div style="background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:4px;">
         <div style="font-size:0.78rem; font-weight:600; margin-bottom:8px; color:var(--text-muted);">
-          📺 Groepen waarvoor digitale info zichtbaar is (leeg = alle groepen)
+          ${t('rbac.digitalGroupsTitle')}
         </div>
-        ${checkboxes || '<p style="font-size:0.78rem; color:var(--text-muted);">Geen groepen beschikbaar.</p>'}
+        ${checkboxes || `<p style="font-size:0.78rem; color:var(--text-muted);">${t('rbac.noGroups')}</p>`}
         <button class="btn btn-primary" style="margin-top:8px; padding:5px 14px; font-size:0.78rem;"
-          onclick="_saveDigitalGroupConfig('${userId}')">Opslaan</button>
+          onclick="_saveDigitalGroupConfig('${userId}')">${t('rbac.save')}</button>
       </div>`;
   } catch(e) {
-    panel.innerHTML = '<p style="font-size:0.78rem; color:var(--danger);">Fout bij laden.</p>';
+    panel.innerHTML = `<p style="font-size:0.78rem; color:var(--danger);">${t('rbac.loadError')}</p>`;
   }
 }
 
@@ -1271,7 +1256,7 @@ async function _saveDigitalGroupConfig(userId) {
     body: JSON.stringify({ group_ids: groupIds }),
   });
   if (r.ok) {
-    showStatus('adminRolesStatus', 'Groepstoegang opgeslagen.', 'success');
+    showStatus('adminRolesStatus', t('rbac.digitalGroupsSaved'), 'success');
   }
 }
 
