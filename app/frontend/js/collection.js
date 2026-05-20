@@ -11,9 +11,9 @@ let compareMode     = false;
 let compareData     = null;
 let activeCompareTab = 'both';
 
-// Fetch compare data for digital badges (non-blocking)
+// Fetch compare data for digital badges + modal play links (non-blocking)
 async function loadDigitalBadgeData() {
-  if (!showDigitalBadges || !userHasDigital) return;
+  if (!userHasDigital) return;
   try {
     const r = await fetch(`${API}/collection/compare`);
     if (r.ok) {
