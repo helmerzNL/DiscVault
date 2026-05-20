@@ -7335,6 +7335,8 @@ def list_collections():
 
 @app.route("/api/collections", methods=["POST"])
 def create_collection():
+    err = _require_admin()
+    if err: return err
     data = request.json or {}
     title = (data.get("title") or "").strip()
     if not title:
@@ -7398,6 +7400,8 @@ def get_collection(col_id):
 
 @app.route("/api/collections/<int:col_id>", methods=["PUT"])
 def update_collection(col_id):
+    err = _require_admin()
+    if err: return err
     data = request.json or {}
     conn = get_db()
     row = conn.execute("SELECT * FROM collections WHERE id=?", (col_id,)).fetchone()
@@ -7427,6 +7431,8 @@ def update_collection(col_id):
 
 @app.route("/api/collections/<int:col_id>", methods=["DELETE"])
 def delete_collection(col_id):
+    err = _require_admin()
+    if err: return err
     conn = get_db()
     # Unlink all members
     conn.execute("UPDATE edition_groups SET collection_id=NULL WHERE collection_id=?", (col_id,))
@@ -7476,6 +7482,8 @@ def list_edition_groups():
 
 @app.route("/api/edition-groups", methods=["POST"])
 def create_edition_group():
+    err = _require_admin()
+    if err: return err
     data = request.json or {}
     title = (data.get("title") or "").strip()
     if not title:
@@ -7527,6 +7535,8 @@ def get_edition_group(group_id):
 
 @app.route("/api/edition-groups/<int:group_id>", methods=["PUT"])
 def update_edition_group(group_id):
+    err = _require_admin()
+    if err: return err
     data = request.json or {}
     conn = get_db()
     row = conn.execute("SELECT * FROM edition_groups WHERE id=?", (group_id,)).fetchone()
@@ -7568,8 +7578,9 @@ def update_edition_group(group_id):
 
 @app.route("/api/edition-groups/<int:group_id>", methods=["DELETE"])
 def delete_edition_group(group_id):
+    err = _require_admin()
+    if err: return err
     conn = get_db()
-    conn.execute("UPDATE movies SET edition_group_id=NULL WHERE edition_group_id=?", (group_id,))
     conn.execute("DELETE FROM edition_groups WHERE id=?", (group_id,))
     conn.commit()
     conn.close()
@@ -7594,6 +7605,8 @@ def _container_image_replace(conn, table, row_id, column, new_filename):
 
 @app.route("/api/edition-groups/<int:group_id>/poster", methods=["POST"])
 def upload_edition_group_poster(group_id):
+    err = _require_admin()
+    if err: return err
     if "poster" not in request.files:
         return jsonify({"error": "Geen posterbestand meegegeven"}), 400
     conn = get_db()
@@ -7612,6 +7625,8 @@ def upload_edition_group_poster(group_id):
 
 @app.route("/api/edition-groups/<int:group_id>/poster", methods=["DELETE"])
 def clear_edition_group_poster(group_id):
+    err = _require_admin()
+    if err: return err
     conn = get_db()
     if not conn.execute("SELECT 1 FROM edition_groups WHERE id=?", (group_id,)).fetchone():
         conn.close()
@@ -7624,6 +7639,8 @@ def clear_edition_group_poster(group_id):
 
 @app.route("/api/edition-groups/<int:group_id>/backdrop", methods=["POST"])
 def upload_edition_group_backdrop(group_id):
+    err = _require_admin()
+    if err: return err
     if "backdrop" not in request.files:
         return jsonify({"error": "Geen backdropbestand meegegeven"}), 400
     conn = get_db()
@@ -7643,6 +7660,8 @@ def upload_edition_group_backdrop(group_id):
 
 @app.route("/api/collections/<int:col_id>/poster", methods=["POST"])
 def upload_collection_poster(col_id):
+    err = _require_admin()
+    if err: return err
     if "poster" not in request.files:
         return jsonify({"error": "Geen posterbestand meegegeven"}), 400
     conn = get_db()
@@ -7661,6 +7680,8 @@ def upload_collection_poster(col_id):
 
 @app.route("/api/collections/<int:col_id>/poster", methods=["DELETE"])
 def clear_collection_poster(col_id):
+    err = _require_admin()
+    if err: return err
     conn = get_db()
     if not conn.execute("SELECT 1 FROM collections WHERE id=?", (col_id,)).fetchone():
         conn.close()
@@ -7673,6 +7694,8 @@ def clear_collection_poster(col_id):
 
 @app.route("/api/collections/<int:col_id>/backdrop", methods=["POST"])
 def upload_collection_backdrop(col_id):
+    err = _require_admin()
+    if err: return err
     if "backdrop" not in request.files:
         return jsonify({"error": "Geen backdropbestand meegegeven"}), 400
     conn = get_db()
@@ -7692,6 +7715,8 @@ def upload_collection_backdrop(col_id):
 
 @app.route("/api/edition-groups/<int:group_id>/members", methods=["POST"])
 def add_edition_group_member(group_id):
+    err = _require_admin()
+    if err: return err
     data = request.json or {}
     movie_ids = data.get("movie_ids", [])
     if isinstance(movie_ids, int):
@@ -7718,9 +7743,9 @@ def add_edition_group_member(group_id):
 
 @app.route("/api/edition-groups/<int:group_id>/members/<int:movie_id>", methods=["DELETE"])
 def remove_edition_group_member(group_id, movie_id):
+    err = _require_admin()
+    if err: return err
     conn = get_db()
-    conn.execute(
-        "UPDATE movies SET edition_group_id=NULL WHERE id=? AND edition_group_id=?",
         (movie_id, group_id)
     )
     conn.commit()
