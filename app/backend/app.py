@@ -2615,12 +2615,27 @@ def get_person_filmography(person_id):
         collection = conn.execute(
             "SELECT id, tmdb_id, format FROM movies WHERE tmdb_id IS NOT NULL"
         ).fetchall()
+        digital = conn.execute(
+            """SELECT dli.tmdb_id, dls.type AS source_type
+               FROM digital_library_items dli
+               JOIN digital_library_sources dls ON dls.id = dli.source_id
+               WHERE dli.tmdb_id IS NOT NULL AND dli.media_type='movie'"""
+        ).fetchall()
         conn.close()
         tmdb_to_col = {m["tmdb_id"]: {"id": m["id"], "format": m["format"]} for m in collection}
+        # Map tmdb_id → preferred source_type (plex > jellyfin)
+        digital_map = {}
+        for d in digital:
+            tid = str(d["tmdb_id"])
+            existing = digital_map.get(tid)
+            if not existing or d["source_type"] == "plex":
+                digital_map[tid] = d["source_type"]
 
         def enrich(entry):
             tmdb_mid = entry.get("id")
             col = tmdb_to_col.get(tmdb_mid)
+            in_digital = str(tmdb_mid) in digital_map if tmdb_mid else False
+            digital_source = digital_map.get(str(tmdb_mid)) if tmdb_mid else None
             year = (entry.get("release_date") or entry.get("first_air_date") or "")[:4]
             return {
                 "tmdb_id": tmdb_mid,
@@ -2634,6 +2649,8 @@ def get_person_filmography(person_id):
                 "in_collection": col is not None,
                 "collection_id": col["id"] if col else None,
                 "collection_format": col["format"] if col else None,
+                "in_digital": in_digital,
+                "digital_source": digital_source,
             }
 
         cast = [enrich(e) for e in data.get("cast", []) if e.get("media_type") == "movie"]
