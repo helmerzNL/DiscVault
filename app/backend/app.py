@@ -769,6 +769,29 @@ def get_db():
     return conn
 
 
+def _merge_video_updates(movie, info, updates):
+    """Merge trailer_url and videos from info into updates, preserving manual videos."""
+    new_trailer = info.get("trailer_url", "")
+    new_videos_raw = info.get("videos", "")
+    if not new_trailer and not new_videos_raw:
+        return
+    existing_videos = []
+    try:
+        existing_videos = json.loads(movie.get("videos") or "[]")
+    except Exception:
+        pass
+    manual_videos = [v for v in existing_videos if v.get("source") != "tmdb"]
+    new_tmdb_videos = []
+    try:
+        new_tmdb_videos = json.loads(new_videos_raw) if new_videos_raw else []
+    except Exception:
+        pass
+    merged = new_tmdb_videos + manual_videos
+    if new_trailer:
+        updates["trailer_url"] = new_trailer
+    updates["videos"] = json.dumps(merged) if merged else ""
+
+
 # ---------------------------------------------------------------------------
 # Logging helper
 # ---------------------------------------------------------------------------
@@ -2809,9 +2832,10 @@ def refresh_single(movie_id):
             "hdr", "audio_tracks", "subtitles",
             "title_nl", "title_fr", "title_de", "title_es",
             "plot_nl",  "plot_fr",  "plot_de",  "plot_es",
-            "backdrop", "backdrops", "trailer_url", "videos",
+            "backdrop", "backdrops",
         ]
         updates = {f: info[f] for f in refresh_fields if info.get(f)}
+        _merge_video_updates(movie, info, updates)
 
         new_poster_url = info.get("poster", "")
         if new_poster_url and new_poster_url != movie.get("poster"):
@@ -3323,6 +3347,7 @@ def bulk_refresh():
                 if not info.get("audience_rating") and cr.get("US"):
                     info["audience_rating"] = cr["US"]
             updates = {f: info[f] for f in refresh_fields if info.get(f)}
+            _merge_video_updates(movie, info, updates)
 
             new_poster_url = info.get("poster", "")
             if new_poster_url and new_poster_url != movie.get("poster"):
