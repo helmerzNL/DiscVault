@@ -7581,6 +7581,7 @@ def delete_edition_group(group_id):
     err = _require_admin()
     if err: return err
     conn = get_db()
+    conn.execute("UPDATE movies SET edition_group_id=NULL WHERE edition_group_id=?", (group_id,))
     conn.execute("DELETE FROM edition_groups WHERE id=?", (group_id,))
     conn.commit()
     conn.close()
@@ -7746,6 +7747,8 @@ def remove_edition_group_member(group_id, movie_id):
     err = _require_admin()
     if err: return err
     conn = get_db()
+    conn.execute(
+        "UPDATE movies SET edition_group_id=NULL WHERE id=? AND edition_group_id=?",
         (movie_id, group_id)
     )
     conn.commit()
