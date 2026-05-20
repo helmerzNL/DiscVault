@@ -507,25 +507,30 @@ async function loadApiKeys() {
   const card = document.getElementById('apiKeysCard');
   const list = document.getElementById('apiKeysList');
   if (!card || !currentUserId) return;
-  card.style.display = '';
+  card.style.display = '';  // always show for any authenticated user
   try {
     const r = await fetch(`${API}/user/api-keys`, { headers: authHeaders() });
-    if (!r.ok) { card.style.display = 'none'; return; }
+    if (!r.ok) {
+      list.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted);">${t('apikeys.noKeys') || 'Nog geen API-sleutels aangemaakt.'}</div>`;
+      return;
+    }
     const keys = await r.json();
     if (!keys.length) {
-      list.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted);">Nog geen API-sleutels aangemaakt.</div>`;
+      list.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted);">${t('apikeys.noKeys') || 'Nog geen API-sleutels aangemaakt.'}</div>`;
       return;
     }
     list.innerHTML = keys.map(k => `
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
         <div>
-          <div style="font-size:0.85rem; font-weight:500;">${k.label || '<span style="color:var(--text-muted);">Naamloos</span>'}</div>
-          <div style="font-size:0.72rem; color:var(--text-muted);">Aangemaakt: ${(k.created_at||'').slice(0,10)}</div>
+          <div style="font-size:0.85rem; font-weight:500;">${k.label || `<span style="color:var(--text-muted);">${t('apikeys.unnamed') || 'Naamloos'}</span>`}</div>
+          <div style="font-size:0.72rem; color:var(--text-muted);">${t('apikeys.createdOn') || 'Aangemaakt:'} ${(k.created_at||'').slice(0,10)}</div>
         </div>
-        <button class="btn btn-danger" onclick="revokeApiKey(${k.id})" style="padding:5px 10px; font-size:0.74rem;">🗑 Intrekken</button>
+        <button class="btn btn-danger" onclick="revokeApiKey(${k.id})" style="padding:5px 10px; font-size:0.74rem;">${t('apikeys.revoke') || '🗑 Intrekken'}</button>
       </div>
     `).join('');
-  } catch(e) { card.style.display = 'none'; }
+  } catch(e) {
+    list.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted);">${t('apikeys.noKeys') || 'Nog geen API-sleutels aangemaakt.'}</div>`;
+  }
 }
 
 async function generateApiKey() {
@@ -572,13 +577,16 @@ async function loadMcpLogs() {
   const card = document.getElementById('mcpLogsCard');
   const list = document.getElementById('mcpLogsList');
   if (!card || !currentUserId) return;
+  card.style.display = '';  // always show for any authenticated user
   try {
     const r = await fetch(`${API}/user/mcp-logs?limit=50`, { headers: authHeaders() });
-    if (!r.ok) { card.style.display = 'none'; return; }
+    if (!r.ok) {
+      list.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-family:inherit; font-size:0.84rem;">${t('mcp.noActivity') || 'Nog geen MCP-activiteit geregistreerd.'}</div>`;
+      return;
+    }
     const logs = await r.json();
-    card.style.display = '';
     if (!logs.length) {
-      list.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-family:inherit; font-size:0.84rem;">Nog geen MCP-activiteit geregistreerd.</div>`;
+      list.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-family:inherit; font-size:0.84rem;">${t('mcp.noActivity') || 'Nog geen MCP-activiteit geregistreerd.'}</div>`;
       return;
     }
     const levelColor = { error: 'var(--danger)', warn: 'var(--warning,#e8c547)', success: 'var(--success)', info: 'var(--text-muted)' };
@@ -594,7 +602,9 @@ async function loadMcpLogs() {
         </div>${detail}
       </div>`;
     }).join('');
-  } catch(e) { card.style.display = 'none'; }
+  } catch(e) {
+    list.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-family:inherit; font-size:0.84rem;">${t('mcp.noActivity') || 'Nog geen MCP-activiteit geregistreerd.'}</div>`;
+  }
 }
 
 async function saveProfile() {

@@ -1175,9 +1175,7 @@
               <span data-i18n="settings.omdbDesc">OMDb — filminformatie via IMDb-id of titel</span>
               <span id="omdbKeyBadge" style="display:none; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; margin-left:4px;"></span>
             </label>
-            <div style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input type="password" id="omdbKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderOmdb" placeholder="Plak je OMDb API key hier..."
+            <div id="omdbKeyBlock" style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;"> autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderOmdb" placeholder="Plak je OMDb API key hier..."
                   style="flex:1; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
                 <button type="button" onclick="toggleKeyVisibility('omdb')" title="Toon/verberg key" style="padding:6px 10px; font-size:0.85rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--text);">👁</button>
                 <button class="btn btn-primary" onclick="saveApiKey('omdb')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
@@ -1194,9 +1192,7 @@
               <span data-i18n="settings.tmdbDesc">TMDb — filminformatie via titel + jaar</span>
               <span id="tmdbKeyBadge" style="display:none; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; margin-left:4px;"></span>
             </label>
-            <div style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input type="password" id="tmdbKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderTmdb" placeholder="Plak je TMDb API key hier..."
+            <div id="tmdbKeyBlock" style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;"> autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderTmdb" placeholder="Plak je TMDb API key hier..."
                   style="flex:1; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
                 <button type="button" onclick="toggleKeyVisibility('tmdb')" title="Toon/verberg key" style="padding:6px 10px; font-size:0.85rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--text);">👁</button>
                 <button class="btn btn-primary" onclick="saveApiKey('tmdb')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>

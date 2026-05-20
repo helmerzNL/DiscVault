@@ -6389,6 +6389,9 @@ def get_source_settings():
 
 @app.route("/api/settings/sources", methods=["POST"])
 def set_source_settings():
+    err = _require_admin()
+    if err:
+        return err
     data = request.json or {}
     source_keys = [
         ("omdb_enabled", "OMDb"),

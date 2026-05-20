@@ -3467,6 +3467,7 @@ async function loadGroupMgmtList(filter) {
     }
 
     items.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    const canManage = !authEnabled || currentUserRole === 'admin';
     container.innerHTML = items.map(item => {
       const typeBadge = item.type === 'collection' ? 'Collection'
         : item.type === 'boxset' ? 'Box Set' : 'Vault';
@@ -3476,11 +3477,11 @@ async function loadGroupMgmtList(filter) {
         <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
           <span style="font-size:0.72rem; padding:2px 8px; border-radius:4px; background:${badgeColor}22; color:${badgeColor}; font-weight:600; white-space:nowrap;">${typeBadge}</span>
           <input type="text" value="${(item.title || '').replace(/"/g, '&quot;')}" style="flex:1; font-size:0.85rem; background:transparent; border:1px solid transparent; padding:4px 8px; border-radius:4px; color:var(--text);"
-                 onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'"
-                 onchange="renameGroupMgmt('${item.src}', ${item.id}, this.value)">
+                 ${canManage ? `onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'" onchange="renameGroupMgmt('${item.src}', ${item.id}, this.value)"` : 'readonly'}
+          >
           <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">${item.memberCount} film${item.memberCount !== 1 ? 's' : ''}</span>
-          <button type="button" onclick="deleteGroupMgmt('${item.src}', ${item.id}, '${(item.title || '').replace(/'/g, "\\'")}')"
-                  style="background:none; border:none; cursor:pointer; color:var(--danger); font-size:1rem; padding:4px;" title="Verwijderen">🗑</button>
+          ${canManage ? `<button type="button" onclick="deleteGroupMgmt('${item.src}', ${item.id}, '${(item.title || '').replace(/'/g, "\\'")}')"
+                  style="background:none; border:none; cursor:pointer; color:var(--danger); font-size:1rem; padding:4px;" title="Verwijderen">🗑</button>` : ''}
         </div>`;
     }).join('');
   } catch (e) {
