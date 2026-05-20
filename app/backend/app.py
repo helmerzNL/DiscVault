@@ -2131,7 +2131,7 @@ def unhandled(e):
 
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "version": "3.2.5"})
+    return jsonify({"status": "ok", "version": "3.2.6"})
 
 
 @app.route("/api/stats")
@@ -2587,6 +2587,73 @@ def get_person(person_id):
     p["photo_url"] = _make_signed_profile_url(p.get("photo_file"))
     p["movies"] = [dict(m) for m in movies]
     return jsonify(p)
+
+
+@app.route("/api/people/<int:person_id>/filmography", methods=["GET"])
+def get_person_filmography(person_id):
+    """Get full TMDB filmography for a person, enriched with collection status."""
+    conn = get_db()
+    person = conn.execute("SELECT tmdb_id FROM people WHERE id = ?", (person_id,)).fetchone()
+    if not person:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    tmdb_id = person["tmdb_id"]
+    if not tmdb_id or not TMDB_API_KEY:
+        conn.close()
+        return jsonify({"cast": [], "crew": [], "tmdb_available": False})
+    lang = request.args.get("language", "en-US")
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/person/{tmdb_id}/combined_credits"
+            f"?api_key={TMDB_API_KEY}&language={lang}",
+            timeout=10
+        )
+        if r.status_code != 200:
+            conn.close()
+            return jsonify({"cast": [], "crew": [], "tmdb_available": False})
+        data = r.json()
+        collection = conn.execute(
+            "SELECT id, tmdb_id, format FROM movies WHERE tmdb_id IS NOT NULL"
+        ).fetchall()
+        conn.close()
+        tmdb_to_col = {m["tmdb_id"]: {"id": m["id"], "format": m["format"]} for m in collection}
+
+        def enrich(entry):
+            tmdb_mid = entry.get("id")
+            col = tmdb_to_col.get(tmdb_mid)
+            year = (entry.get("release_date") or entry.get("first_air_date") or "")[:4]
+            return {
+                "tmdb_id": tmdb_mid,
+                "title": entry.get("title") or entry.get("name") or "",
+                "year": year,
+                "poster": (f"https://image.tmdb.org/t/p/w185{entry['poster_path']}"
+                           if entry.get("poster_path") else ""),
+                "vote_average": round(entry.get("vote_average") or 0, 1),
+                "character": entry.get("character") or "",
+                "job": entry.get("job") or "",
+                "in_collection": col is not None,
+                "collection_id": col["id"] if col else None,
+                "collection_format": col["format"] if col else None,
+            }
+
+        cast = [enrich(e) for e in data.get("cast", []) if e.get("media_type") == "movie"]
+        crew_dict = {}
+        for e in data.get("crew", []):
+            if e.get("media_type") != "movie":
+                continue
+            key = e.get("id")
+            if key not in crew_dict:
+                crew_dict[key] = enrich(e)
+            else:
+                crew_dict[key]["job"] += f", {e.get('job', '')}"
+        crew = list(crew_dict.values())
+        return jsonify({"cast": cast, "crew": crew, "tmdb_available": True})
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({"cast": [], "crew": [], "tmdb_available": False, "error": str(e)})
 
 
 @app.route("/api/debug/people/<int:person_id>/photo", methods=["GET"])

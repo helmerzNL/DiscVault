@@ -2239,37 +2239,140 @@ async function openPersonDetail(personId) {
         _personDebugContent.innerHTML = '<span style="font-size:0.83rem; color:var(--text-muted);">Geen vertalingen beschikbaar voor deze persoon.</span>';
       }
     }
-    // Filmography section title depends on detailedActorDetails preference
-    const filmTitle = document.getElementById('personFilmographyTitle');
-    if (filmTitle) {
-      filmTitle.textContent = detailedActorDetails
-        ? (t('person.filmography') || 'Filmografie')
-        : (t('person.inCollection') || 'In jouw collectie');
+    // Build collection movies HTML
+    const movies = p.movies || [];
+    let collectionHtml = '';
+    if (movies.length) {
+      movies.forEach(m => {
+        const src = m.poster_file ? `${API}/posters/${m.poster_file}` : (m.poster || '');
+        const posterImg = src
+          ? `<img class="person-film-poster" src="${src}" onerror="this.style.display='none'">`
+          : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
+        const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>`
+                   : m.job ? `<div class="person-film-year">${escHtml(m.job)}</div>` : '';
+        collectionHtml += `<div class="person-film-card" onclick="_detailReturnTab='person-detail';openMovieDetail(${m.id})">`;
+        collectionHtml += `<div style="position:relative">${posterImg}<div class="person-film-format-badge">${escHtml(m.format || '')}</div></div>`;
+        collectionHtml += `<div class="person-film-title">${escHtml(m.title)}</div><div class="person-film-year">${m.year || ''}</div>${role}</div>`;
+      });
+    } else {
+      collectionHtml = `<div style="color:var(--text-muted);font-size:0.85rem;">${t('js.noMoviesFound')}</div>`;
     }
 
-    // Filmography from collection
-    const movies = p.movies || [];
-    if (!movies.length) {
+    if (detailedActorDetails) {
+      // Show tabs: In collectie | Filmografie
+      const titleWrap = document.getElementById('personFilmographyTitle').parentElement;
+      titleWrap.innerHTML = `<div class="person-film-tabs">
+        <button class="person-film-tab active" id="personTabBtnCollection" onclick="_switchPersonTab('collection')">${t('person.tabCollection') || 'In collectie'}</button>
+        <button class="person-film-tab" id="personTabBtnFilmography" onclick="_switchPersonTab('filmography')">${t('person.tabFilmography') || 'Filmografie'}</button>
+      </div>`;
+      const sortLabels = [
+        ['newest', t('person.sortNewest') || 'Nieuwste eerst'],
+        ['oldest', t('person.sortOldest') || 'Oudste eerst'],
+        ['az', 'A–Z'],
+        ['rating', t('person.sortRating') || 'TMDb beoordeling'],
+      ];
+      const sortBtns = sortLabels.map(([s, lbl]) =>
+        `<button class="person-film-sort${s === 'newest' ? ' active' : ''}" data-sort="${s}" onclick="_sortFilmography('${s}')">${escHtml(lbl)}</button>`
+      ).join('');
       document.getElementById('personFilmography').innerHTML =
-        `<div style="color:var(--text-muted); font-size:0.85rem;">${t('js.noMoviesFound')}</div>`;
-      return;
+        `<div id="personTabCollection" class="person-filmography">${collectionHtml}</div>` +
+        `<div id="personTabFilmography" style="display:none">` +
+          `<div class="person-film-sort-bar">${sortBtns}</div>` +
+          `<div class="person-filmography" id="personFilmographyGrid"><span class="spinner"></span></div>` +
+        `</div>`;
+      _personFilmographySort = 'newest';
+      _loadPersonFilmography(personId);
+    } else {
+      // Simple mode: just show collection
+      const filmTitle = document.getElementById('personFilmographyTitle');
+      if (filmTitle) filmTitle.textContent = t('person.inCollection') || 'In jouw collectie';
+      document.getElementById('personFilmography').innerHTML =
+        `<div class="person-filmography">${collectionHtml}</div>`;
     }
-    let filmHtml = '';
-    movies.forEach(m => {
-      const src = m.poster_file ? `${API}/posters/${m.poster_file}` : (m.poster || '');
-      const posterImg = src
-        ? `<img class="person-film-poster" src="${src}" onerror="this.style.display='none'">`
-        : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
-      const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>`
-                 : m.job ? `<div class="person-film-year">${escHtml(m.job)}</div>` : '';
-      filmHtml += `<div class="person-film-card" onclick="_detailReturnTab='person-detail';openMovieDetail(${m.id})">`;
-      filmHtml += `${posterImg}<div class="person-film-title">${escHtml(m.title)}</div><div class="person-film-year">${m.year || ''} · ${m.format || ''}</div>${role}</div>`;
-    });
-    document.getElementById('personFilmography').innerHTML = filmHtml;
   } catch(e) {
     document.getElementById('personFilmography').innerHTML =
       `<div style="color:var(--danger)">${t('js.error', e.message)}</div>`;
   }
+}
+
+// ── Person filmography helpers ──────────────────────────────────────────────
+let _personFilmographyData = null;
+let _personFilmographySort = 'newest';
+
+function _switchPersonTab(tab) {
+  const tabCol = document.getElementById('personTabCollection');
+  const tabFilm = document.getElementById('personTabFilmography');
+  const btnCol = document.getElementById('personTabBtnCollection');
+  const btnFilm = document.getElementById('personTabBtnFilmography');
+  if (!tabCol || !tabFilm) return;
+  const showFilm = tab === 'filmography';
+  tabCol.style.display = showFilm ? 'none' : '';
+  tabFilm.style.display = showFilm ? '' : 'none';
+  btnCol?.classList.toggle('active', !showFilm);
+  btnFilm?.classList.toggle('active', showFilm);
+  if (showFilm && _personFilmographyData) _renderFilmographyGrid(_personFilmographyData, _personFilmographySort);
+}
+
+async function _loadPersonFilmography(personId) {
+  _personFilmographyData = null;
+  const langMap = {nl:'nl-NL', fr:'fr-FR', de:'de-DE', es:'es-ES', pt:'pt-PT', it:'it-IT'};
+  const lang = langMap[currentLang] || 'en-US';
+  try {
+    const r = await fetch(`${API}/people/${personId}/filmography?language=${lang}`);
+    const data = await r.json();
+    _personFilmographyData = data;
+    // Render immediately only if filmography tab is currently active
+    const tabFilm = document.getElementById('personTabFilmography');
+    if (tabFilm && tabFilm.style.display !== 'none') {
+      _renderFilmographyGrid(data, _personFilmographySort);
+    }
+  } catch(e) {
+    const grid = document.getElementById('personFilmographyGrid');
+    if (grid) grid.innerHTML = `<div style="color:var(--danger)">${t('js.error', e.message)}</div>`;
+  }
+}
+
+function _sortFilmography(sort) {
+  _personFilmographySort = sort;
+  document.querySelectorAll('.person-film-sort').forEach(b => {
+    b.classList.toggle('active', b.dataset.sort === sort);
+  });
+  if (_personFilmographyData) _renderFilmographyGrid(_personFilmographyData, sort);
+}
+
+function _renderFilmographyGrid(data, sort) {
+  const grid = document.getElementById('personFilmographyGrid');
+  if (!grid) return;
+  let movies = [...(data.cast || [])];
+  if (sort === 'newest') movies.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
+  else if (sort === 'oldest') movies.sort((a, b) => (a.year || '9999').localeCompare(b.year || '9999'));
+  else if (sort === 'az') movies.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  else if (sort === 'rating') movies.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+
+  if (!movies.length) {
+    grid.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">${t('person.noFilmography') || 'Geen filmografie beschikbaar.'}</div>`;
+    return;
+  }
+  let html = '';
+  movies.forEach(m => {
+    const onclick = m.in_collection ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${m.collection_id})"` : '';
+    const dim = m.in_collection ? '' : 'opacity:0.45;';
+    const cursor = m.in_collection ? '' : 'cursor:default;';
+    const poster = m.poster
+      ? `<img class="person-film-poster" src="${escHtml(m.poster)}" onerror="this.style.display='none'" loading="lazy">`
+      : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
+    const formatBadge = m.in_collection && m.collection_format
+      ? `<div class="person-film-format-badge">${escHtml(m.collection_format)}</div>` : '';
+    const ownedDot = m.in_collection ? `<div class="person-film-owned-dot"></div>` : '';
+    const rating = m.vote_average > 0 ? `<div class="person-film-rating">⭐ ${m.vote_average.toFixed(1)}</div>` : '';
+    const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>` : '';
+    html += `<div class="person-film-card" style="${dim}${cursor}" ${onclick}>`;
+    html += `<div style="position:relative">${poster}${formatBadge}${ownedDot}</div>`;
+    html += `<div class="person-film-title">${escHtml(m.title)}</div>`;
+    html += `<div class="person-film-year">${m.year || ''}</div>${rating}${role}`;
+    html += `</div>`;
+  });
+  grid.innerHTML = html;
 }
 
 function closePersonDetail() {
