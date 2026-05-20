@@ -478,7 +478,7 @@ function switchAdminSubmenu(name) {
   if (target) target.style.display = 'block';
   if (name === 'logs')      loadLogs();
   if (name === 'backup')    loadBackups();
-  if (name === 'advanced')  loadDigitalSources();
+  if (name === 'advanced')  { loadDigitalSources(); loadSourceSettings(); }
   if (name === 'roles')     loadRoles();
 }
 

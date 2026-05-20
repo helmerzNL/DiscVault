@@ -70,10 +70,10 @@ async function loadSettings() {
     _currentSettingsSubmenu = 'general';
   }
   switchSettingsSubmenu(_currentSettingsSubmenu || 'general');
+  // Note: loadSourceSettings is now called from Admin > Geavanceerd (auth.js)
   loadDbStats();
   loadAuthSettings();
   loadQueueSettings();
-  loadSourceSettings();
   loadApiKeySettings();
   loadDebugSettings(); // also initialises showLocalTitleToggle
   loadLanguagePicker();
@@ -138,10 +138,6 @@ function selectRatingCountry(code) {
 }
 
 async function loadSourceSettings() {
-  const isAdmin = !authEnabled || currentUserRole === 'admin';
-  const card = document.getElementById('metadataSourcesCard');
-  if (card) card.style.display = isAdmin ? '' : 'none';
-  if (!isAdmin) return;
   try {
     const r = await fetch(`${API}/settings/sources`);
     const d = await r.json();

@@ -1120,52 +1120,6 @@
             <div id="digitalSourceStatus" class="status-msg" style="margin-top:10px;"></div>
           </div>
 
-          <!-- Database resetten -->
-          <div class="card" style="margin-top:20px; border-color: rgba(240,64,96,.3);">
-            <div class="card-title" style="color:var(--danger);" data-i18n="settings.resetTitle">⚠ Database Resetten</div>
-            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n-html="settings.resetDesc">
-              Verwijdert <strong>alle films, posters en logs</strong>. Maak eerst een backup!
-              Authenticatie-instellingen en passkeys blijven bewaard.
-            </p>
-            <button class="btn btn-danger" onclick="resetDatabase()" data-i18n="settings.resetButton">🗑 Database Wissen</button>
-          </div>
-
-        </div>
-
-      </div><!-- /.profile-content -->
-    </div><!-- /.profile-layout -->
-  </div>
-
-  <!-- SETTINGS PANEL -->
-  <div class="panel" id="panel-settings">
-    <div class="profile-layout">
-      <!-- Sidebar navigation -->
-      <nav class="profile-sidebar" aria-label="Settings navigatie">
-        <button class="profile-sidebar-btn active" type="button" data-settings-sub="general" onclick="switchSettingsSubmenu('general')">
-          <span class="mdi mdi-cog-outline profile-sidebar-icon" aria-hidden="true"></span>
-          <span data-i18n="settings.menuGeneral">Algemeen</span>
-        </button>
-        <button class="profile-sidebar-btn" id="settingsBtnCollectionmgmt" type="button" data-settings-sub="collectionmgmt" onclick="switchSettingsSubmenu('collectionmgmt')">
-          <span class="mdi mdi-folder-multiple-outline profile-sidebar-icon" aria-hidden="true"></span>
-          <span data-i18n="settings.menuCollectionMgmt">Vaults + Sets</span>
-        </button>
-      </nav>
-
-      <!-- Content area -->
-      <div class="profile-content">
-
-        <!-- ── ALGEMEEN ── -->
-        <div class="profile-sub-section" id="settingsSubGeneral">
-
-          <!-- DB Stats -->
-          <div class="card" id="settingsStats">
-            <div class="card-title" data-i18n="settings.dbInfo">Database Informatie</div>
-            <div style="font-family:'DM Mono',monospace; font-size:0.74rem; color:var(--text-muted); margin-bottom:12px;">
-              <span data-i18n="settings.version">Versie:</span> <span id="settingsVersion" data-i18n="settings.versionLoading">laden...</span>
-            </div>
-            <div id="dbStatsContent" style="font-size:0.88rem; color:var(--text-muted);" data-i18n="settings.loading">Laden...</div>
-          </div>
-
           <!-- Metadata bronnen -->
           <div class="card" id="metadataSourcesCard" style="margin-top:20px;">
             <div class="card-title" data-i18n="settings.metadataSources">Metadata Bronnen</div>
@@ -1221,6 +1175,52 @@
               De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiële API.
             </div>
             <div id="sourceSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
+          </div>
+
+          <!-- Database resetten -->
+          <div class="card" style="margin-top:20px; border-color: rgba(240,64,96,.3);">
+            <div class="card-title" style="color:var(--danger);" data-i18n="settings.resetTitle">⚠ Database Resetten</div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n-html="settings.resetDesc">
+              Verwijdert <strong>alle films, posters en logs</strong>. Maak eerst een backup!
+              Authenticatie-instellingen en passkeys blijven bewaard.
+            </p>
+            <button class="btn btn-danger" onclick="resetDatabase()" data-i18n="settings.resetButton">🗑 Database Wissen</button>
+          </div>
+
+        </div>
+
+      </div><!-- /.profile-content -->
+    </div><!-- /.profile-layout -->
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div class="panel" id="panel-settings">
+    <div class="profile-layout">
+      <!-- Sidebar navigation -->
+      <nav class="profile-sidebar" aria-label="Settings navigatie">
+        <button class="profile-sidebar-btn active" type="button" data-settings-sub="general" onclick="switchSettingsSubmenu('general')">
+          <span class="mdi mdi-cog-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="settings.menuGeneral">Algemeen</span>
+        </button>
+        <button class="profile-sidebar-btn" id="settingsBtnCollectionmgmt" type="button" data-settings-sub="collectionmgmt" onclick="switchSettingsSubmenu('collectionmgmt')">
+          <span class="mdi mdi-folder-multiple-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="settings.menuCollectionMgmt">Vaults + Sets</span>
+        </button>
+      </nav>
+
+      <!-- Content area -->
+      <div class="profile-content">
+
+        <!-- ── ALGEMEEN ── -->
+        <div class="profile-sub-section" id="settingsSubGeneral">
+
+          <!-- DB Stats -->
+          <div class="card" id="settingsStats">
+            <div class="card-title" data-i18n="settings.dbInfo">Database Informatie</div>
+            <div style="font-family:'DM Mono',monospace; font-size:0.74rem; color:var(--text-muted); margin-bottom:12px;">
+              <span data-i18n="settings.version">Versie:</span> <span id="settingsVersion" data-i18n="settings.versionLoading">laden...</span>
+            </div>
+            <div id="dbStatsContent" style="font-size:0.88rem; color:var(--text-muted);" data-i18n="settings.loading">Laden...</div>
           </div>
 
           <!-- Offline wachtrij -->
