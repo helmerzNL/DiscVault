@@ -128,6 +128,10 @@ function selectRatingCountry(code) {
 }
 
 async function loadSourceSettings() {
+  const isAdmin = !authEnabled || currentUserRole === 'admin';
+  const card = document.getElementById('metadataSourcesCard');
+  if (card) card.style.display = isAdmin ? '' : 'none';
+  if (!isAdmin) return;
   try {
     const r = await fetch(`${API}/settings/sources`);
     const d = await r.json();
@@ -135,18 +139,12 @@ async function loadSourceSettings() {
     const elTmdb = document.getElementById('sourceTmdbToggle');
     const el = document.getElementById('sourceBlurayToggle');
     const el2 = document.getElementById('sourceBlurayDiscDeToggle');
-    const isAdmin = !authEnabled || currentUserRole === 'admin';
-    if (elOmdb) { elOmdb.checked = !!d.omdb_enabled; elOmdb.disabled = !isAdmin || !d.omdb_key_set; }
-    if (elTmdb) { elTmdb.checked = !!d.tmdb_enabled; elTmdb.disabled = !isAdmin || !d.tmdb_key_set; }
-    if (el)  { el.checked  = !!d.bluray_scrape_enabled;    el.disabled  = !isAdmin; }
-    if (el2) { el2.checked = !!d.bluraydiscde_scrape_enabled; el2.disabled = !isAdmin; }
+    if (elOmdb) { elOmdb.checked = !!d.omdb_enabled; elOmdb.disabled = !d.omdb_key_set; }
+    if (elTmdb) { elTmdb.checked = !!d.tmdb_enabled; elTmdb.disabled = !d.tmdb_key_set; }
+    if (el)  el.checked  = !!d.bluray_scrape_enabled;
+    if (el2) el2.checked = !!d.bluraydiscde_scrape_enabled;
     _applyApiKeyBadge('omdb', d.omdb_key_set);
     _applyApiKeyBadge('tmdb', d.tmdb_key_set);
-    // Hide API key management inputs for non-admins
-    ['omdb', 'tmdb'].forEach(svc => {
-      const block = document.getElementById(`${svc}KeyBlock`);
-      if (block) block.style.display = isAdmin ? '' : 'none';
-    });
   } catch(e) {}
 }
 
