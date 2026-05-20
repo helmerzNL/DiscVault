@@ -59,6 +59,16 @@ async function loadUserPrefsFromServer() {
 }
 
 async function loadSettings() {
+  const isAdmin = !authEnabled || currentUserRole === 'admin';
+  // Hide admin-only sidebar button and section for non-admins
+  const collBtn = document.getElementById('settingsBtnCollectionmgmt');
+  const collSection = document.getElementById('settingsSubCollectionmgmt');
+  if (collBtn) collBtn.style.display = isAdmin ? '' : 'none';
+  if (collSection) collSection.style.display = isAdmin ? '' : 'none';
+  // If non-admin landed on collectionmgmt, redirect to general
+  if (!isAdmin && _currentSettingsSubmenu === 'collectionmgmt') {
+    _currentSettingsSubmenu = 'general';
+  }
   switchSettingsSubmenu(_currentSettingsSubmenu || 'general');
   loadDbStats();
   loadAuthSettings();
