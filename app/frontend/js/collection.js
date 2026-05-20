@@ -1937,6 +1937,7 @@ function _renderDigitalPlayBtn(match) {
   const safeName = (match.source_name || (isPlex ? 'Plex' : 'Jellyfin')).replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const webUrl   = (match.web_url  || '').replace(/"/g,'&quot;');
   const appUrl   = (match.app_url  || '').replace(/"/g,'&quot;');
+  const label = (t('digital.playOn') || 'Play on {0}').replace('{0}', safeName);
   // href = web URL (right-click "open in new tab" still works);
   // onclick tries native app first, falls back to web after 1.5 s
   return `<a href="${webUrl || appUrl}" target="_blank" rel="noopener noreferrer"
@@ -1945,7 +1946,7 @@ function _renderDigitalPlayBtn(match) {
            background:${bg};color:${fg};text-decoration:none;font-size:0.84rem;
            font-weight:600;line-height:1;transition:opacity 0.15s;"
     onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
-    title="Afspelen op ${safeName}">${icon}<span>Afspelen op ${safeName}</span></a>`;
+    title="${label}">${icon}<span>${label}</span></a>`;
 }
 
 // Alias kept for any legacy inline calls

@@ -780,7 +780,8 @@
     "rbac.roleDesc.beheerder": "Volledige beheerderstoegang — alle rechten, equivalent aan systeemrol admin.",
     "rbac.roleDesc.video_viewer": "Alleen leesrechten. Geen bewerkopties, geen groepen aanmaken, geen metadata vernieuwen.",
     "rbac.roleDesc.membergroup": "Kan zelf groepen aanmaken en beheren om films te delen met andere leden.",
-    "rbac.roleDesc.digitale_libraries_viewer": "Kan Jellyfin en Plex informatie bij films bekijken voor toegewezen groepen."
+    "rbac.roleDesc.digitale_libraries_viewer": "Kan Jellyfin en Plex informatie bij films bekijken voor toegewezen groepen.",
+    "digital.playOn": "Afspelen op {0}"
   },
   "en": {
     "nav.collection": "Collection",
@@ -1556,7 +1557,8 @@
     "rbac.roleDesc.beheerder": "Full administrator access — all permissions, equivalent to the admin system role.",
     "rbac.roleDesc.video_viewer": "Read-only access. No edit options, no group creation, no metadata refresh.",
     "rbac.roleDesc.membergroup": "Can create and manage groups to share movies with other members.",
-    "rbac.roleDesc.digitale_libraries_viewer": "Can view Jellyfin and Plex information for movies in assigned groups."
+    "rbac.roleDesc.digitale_libraries_viewer": "Can view Jellyfin and Plex information for movies in assigned groups.",
+    "digital.playOn": "Play on {0}"
   },
   "fr": {
     "nav.collection": "Collection",
@@ -2334,7 +2336,8 @@
     "rbac.roleDesc.beheerder": "Accès administrateur complet — toutes les permissions, équivalent au rôle système admin.",
     "rbac.roleDesc.video_viewer": "Accès en lecture seule. Pas d'options d'édition, pas de création de groupes, pas de rafraîchissement des métadonnées.",
     "rbac.roleDesc.membergroup": "Peut créer et gérer des groupes pour partager des films avec d'autres membres.",
-    "rbac.roleDesc.digitale_libraries_viewer": "Peut voir les informations Jellyfin et Plex pour les films des groupes assignés."
+    "rbac.roleDesc.digitale_libraries_viewer": "Peut voir les informations Jellyfin et Plex pour les films des groupes assignés.",
+    "digital.playOn": "Lire sur {0}"
   },
   "de": {
     "nav.collection": "Sammlung",
@@ -3111,7 +3114,8 @@
     "rbac.roleDesc.beheerder": "Vollständiger Administratorzugang — alle Rechte, gleichwertig mit der Systemrolle Admin.",
     "rbac.roleDesc.video_viewer": "Nur Lesezugriff. Keine Bearbeitungsoptionen, keine Gruppenerstellen, kein Metadaten-Aktualisieren.",
     "rbac.roleDesc.membergroup": "Kann Gruppen erstellen und verwalten, um Filme mit anderen Mitgliedern zu teilen.",
-    "rbac.roleDesc.digitale_libraries_viewer": "Kann Jellyfin- und Plex-Informationen für Filme in zugewiesenen Gruppen sehen."
+    "rbac.roleDesc.digitale_libraries_viewer": "Kann Jellyfin- und Plex-Informationen für Filme in zugewiesenen Gruppen sehen.",
+    "digital.playOn": "Abspielen auf {0}"
   },
   "es": {
     "nav.collection": "Colección",
@@ -3888,7 +3892,8 @@
     "rbac.roleDesc.beheerder": "Acceso de administrador completo — todos los permisos, equivalente al rol de sistema admin.",
     "rbac.roleDesc.video_viewer": "Acceso de solo lectura. Sin opciones de edición, sin creación de grupos, sin actualización de metadatos.",
     "rbac.roleDesc.membergroup": "Puede crear y gestionar grupos para compartir películas con otros miembros.",
-    "rbac.roleDesc.digitale_libraries_viewer": "Puede ver información de Jellyfin y Plex para películas en grupos asignados."
+    "rbac.roleDesc.digitale_libraries_viewer": "Puede ver información de Jellyfin y Plex para películas en grupos asignados.",
+    "digital.playOn": "Reproducir en {0}"
   },
   "pt": {
     "nav.collection": "Coleção",
@@ -4666,7 +4671,8 @@
     "rbac.roleDesc.beheerder": "Acesso de administrador completo — todas as permissões, equivalente ao papel de sistema admin.",
     "rbac.roleDesc.video_viewer": "Acesso apenas de leitura. Sem opções de edição, sem criação de grupos, sem atualização de metadados.",
     "rbac.roleDesc.membergroup": "Pode criar e gerir grupos para partilhar filmes com outros membros.",
-    "rbac.roleDesc.digitale_libraries_viewer": "Pode ver informações de Jellyfin e Plex para filmes nos grupos atribuídos."
+    "rbac.roleDesc.digitale_libraries_viewer": "Pode ver informações de Jellyfin e Plex para filmes nos grupos atribuídos.",
+    "digital.playOn": "Reproduzir em {0}"
   },
   "it": {
     "nav.collection": "Collezione",
@@ -5444,6 +5450,7 @@
     "rbac.roleDesc.beheerder": "Accesso amministratore completo — tutti i permessi, equivalente al ruolo di sistema admin.",
     "rbac.roleDesc.video_viewer": "Accesso in sola lettura. Nessuna opzione di modifica, nessuna creazione di gruppi, nessun aggiornamento dei metadati.",
     "rbac.roleDesc.membergroup": "Può creare e gestire gruppi per condividere film con altri membri.",
-    "rbac.roleDesc.digitale_libraries_viewer": "Può visualizzare le informazioni di Jellyfin e Plex per i film nei gruppi assegnati."
+    "rbac.roleDesc.digitale_libraries_viewer": "Può visualizzare le informazioni di Jellyfin e Plex per i film nei gruppi assegnati.",
+    "digital.playOn": "Riproduci su {0}"
   }
 }

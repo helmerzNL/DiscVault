@@ -169,9 +169,8 @@ def _make_digital_urls(item) -> dict:
             key_path = f"/library/metadata/{ext_id}"
             key_enc  = key_path.replace("/", "%2F")
             web_url  = f"{base_url}/web/index.html#!/server/{machine_id}/details?key={key_enc}" if base_url else ""
-            # plex:// URI opens the native Plex app (macOS, Windows, iOS, Android)
-            # key must be %2F-encoded so iOS doesn't split on the slashes
-            app_url  = f"plex://server/{machine_id}/details?key={key_enc}"
+            # plex:// URI: machineId as hostname so iOS routes correctly to the server
+            app_url  = f"plex://{machine_id}/details?key={key_enc}"
         else:
             web_url = f"{base_url}/web/index.html" if base_url else ""
             app_url = ""
