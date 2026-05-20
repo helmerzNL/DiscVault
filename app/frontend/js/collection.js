@@ -2239,6 +2239,14 @@ async function openPersonDetail(personId) {
         _personDebugContent.innerHTML = '<span style="font-size:0.83rem; color:var(--text-muted);">Geen vertalingen beschikbaar voor deze persoon.</span>';
       }
     }
+    // Filmography section title depends on detailedActorDetails preference
+    const filmTitle = document.getElementById('personFilmographyTitle');
+    if (filmTitle) {
+      filmTitle.textContent = detailedActorDetails
+        ? (t('person.filmography') || 'Filmografie')
+        : (t('person.inCollection') || 'In jouw collectie');
+    }
+
     // Filmography from collection
     const movies = p.movies || [];
     if (!movies.length) {

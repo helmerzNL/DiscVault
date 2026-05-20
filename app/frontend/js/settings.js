@@ -12,6 +12,7 @@ const PREF_KEY_MAP = {
   dv_show_local_title:      'show_local_title',
   dv_show_search_button:    'show_search_button',
   dv_show_auto_videos:      'show_auto_videos',
+  dv_detailed_actor:        'detailed_actor',
 };
 
 function saveUserPref(localKey, value) {
@@ -55,6 +56,7 @@ async function loadUserPrefsFromServer() {
       applySearchButtonVisibility();
     }
     if ('show_auto_videos' in prefs) showAutoVideos = prefs.show_auto_videos !== 'false';
+    if ('detailed_actor' in prefs) detailedActorDetails = prefs.detailed_actor === 'true';
   } catch(e) { /* offline or no auth — use localStorage fallback */ }
 }
 
@@ -680,6 +682,9 @@ async function loadDebugSettings() {
   showAutoVideos = localStorage.getItem('dv_show_auto_videos') !== 'false';
   const el4 = document.getElementById('showAutoVideosToggle');
   if (el4) el4.checked = showAutoVideos;
+  detailedActorDetails = localStorage.getItem('dv_detailed_actor') === 'true';
+  const el5 = document.getElementById('detailedActorDetailsToggle');
+  if (el5) el5.checked = detailedActorDetails;
   applySearchButtonVisibility();
   loadRatingCountryPicker();
 }
@@ -696,12 +701,16 @@ function saveDisplaySettings() {
   const val2 = !!(el2 && el2.checked);
   const el3 = document.getElementById('showAutoVideosToggle');
   const val3 = !!(el3 && el3.checked);
+  const el4 = document.getElementById('detailedActorDetailsToggle');
+  const val4 = !!(el4 && el4.checked);
   showLocalTitle = val;
   showSearchButton = val2;
   showAutoVideos = val3;
+  detailedActorDetails = val4;
   saveUserPref('dv_show_local_title', String(val));
   saveUserPref('dv_show_search_button', String(val2));
   saveUserPref('dv_show_auto_videos', String(val3));
+  saveUserPref('dv_detailed_actor', String(val4));
   applySearchButtonVisibility();
   showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }

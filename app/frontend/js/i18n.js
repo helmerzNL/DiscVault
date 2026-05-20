@@ -57,6 +57,7 @@ let debugModeEnabled = false;
 let showLocalTitle = true;
 let showSearchButton = true;
 let showAutoVideos = true;
+let detailedActorDetails = false;
 let preferredRatingCountry = localStorage.getItem('dv_rating_country') || 'NL';
 let allMovies = [];
 let activeFormat = '';

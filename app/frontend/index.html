@@ -783,6 +783,13 @@
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.showLocalTitleDesc">
               Toon de filmtitel in de taal van de app (indien beschikbaar). Uitgeschakeld toont altijd de Engelse originele titel.
             </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="detailedActorDetailsToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.detailedActorDetails">Uitgebreide acteurspagina</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.detailedActorDetailsDesc">
+              Toont ook digitale films (Plex/Jellyfin) en de volledige filmografie van een acteur of regisseur op de persoonspagina. Uitgeschakeld toont alleen fysiek bezit.
+            </div>
             <label style="display:block; font-size:0.88rem; font-weight:500; color:var(--text); margin-bottom:8px;" data-i18n="settings.ratingCountry">Leeftijdsrestrictie land</label>
             <div id="ratingCountryPicker" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-top:8px;" data-i18n="settings.ratingCountryDesc">
