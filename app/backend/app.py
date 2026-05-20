@@ -2131,7 +2131,7 @@ def unhandled(e):
 
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "version": "3.2.2"})
+    return jsonify({"status": "ok", "version": "3.2.5"})
 
 
 @app.route("/api/stats")
