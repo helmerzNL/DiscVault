@@ -95,7 +95,7 @@
   </div>
 </nav>
 <div id="meerMenu" class="meer-menu">
-  <button class="meer-menu-item" onclick="closeMeerMenu(); switchTab('toevoegen')">
+  <button class="meer-menu-item" id="meerMenuAdd" onclick="closeMeerMenu(); switchTab('toevoegen')">
     <span class="mdi mdi-plus-circle-outline meer-menu-icon" aria-hidden="true"></span>
     <span data-i18n="nav.add">Toevoegen</span>
   </button>
@@ -204,7 +204,7 @@
         <option value="">Alle collecties</option>
       </select>
       <button class="btn btn-secondary" id="btnSelectMode" onclick="toggleSelectMode()" data-i18n="collection.selectMode">☑ Selecteren</button>
-      <button class="btn btn-secondary" onclick="loadCollection()" data-i18n="collection.refresh">↻ Vernieuwen</button>
+      <button class="btn btn-secondary" id="btnCollectionRefresh" onclick="loadCollection()" data-i18n="collection.refresh">↻ Vernieuwen</button>
       <button class="btn btn-secondary digital-feature" id="btnCompareMode" onclick="toggleCompareMode()" data-i18n="collection.compareMode">⚡ Vergelijk</button>
     </div>
 

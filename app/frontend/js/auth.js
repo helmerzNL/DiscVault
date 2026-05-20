@@ -14,6 +14,27 @@ function hasPermission(p) {
   return userPermissions.includes(p);
 }
 
+/**
+ * Hide collection-write controls (Select / Refresh / Compare bar + Add menu)
+ * for users who only have read-only permissions (e.g. Video Viewer role).
+ * Called from checkAuth() after permissions are resolved.
+ */
+function applyCollectionWriteVisibility() {
+  const canWrite = !authEnabled
+    || currentUserRole === 'admin'
+    || ['collection.add', 'collection.edit_own', 'collection.edit_all',
+        'collection.delete_own', 'collection.delete_all', 'collection.import']
+      .some(p => hasPermission(p));
+  // ☑ Selecteren / ↻ Vernieuwen / ⚡ Vergelijk
+  ['btnSelectMode', 'btnCollectionRefresh', 'btnCompareMode'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = canWrite ? '' : 'none';
+  });
+  // Meer-menu: Toevoegen
+  const meerAdd = document.getElementById('meerMenuAdd');
+  if (meerAdd) meerAdd.style.display = canWrite ? '' : 'none';
+}
+
 function authHeaders() {
   return authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
 }
@@ -155,6 +176,7 @@ async function checkAuth() {
           // Apply digital visibility
           if (!userHasDigital) showDigitalBadges = false;
           document.body.classList.toggle('hide-digital', !userHasDigital);
+          applyCollectionWriteVisibility();
         }
       } catch(e) {}
     }
@@ -162,6 +184,7 @@ async function checkAuth() {
       currentUserId = null;
       currentUserRole = null;
     }
+    applyCollectionWriteVisibility();
     updateLogoutButton();
     return true;
   } catch(e) { return true; }

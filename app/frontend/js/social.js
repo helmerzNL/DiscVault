@@ -121,12 +121,16 @@ async function loadMyGroups() {
   try {
     const r = await fetch(`${API}/groups`);
     const groups = await r.json();
-    const owned = groups.filter(g => g.my_role === 'owner');
+    const owned  = groups.filter(g => g.my_role === 'owner');
     const member = groups.filter(g => g.my_role !== 'owner');
     if (!owned.length && !member.length) {
       list.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">${t('js.noMyGroups')}</div>`;
       return;
     }
+    // Can the current user manage group members / delete groups?
+    const canManageGroups = !authEnabled || currentUserRole === 'admin'
+      || (typeof hasPermission === 'function'
+          && (hasPermission('groups.create') || hasPermission('groups.manage')));
     let html = '';
     if (owned.length) {
       html += `<div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">${t('js.myGroupsOwned')}</div>`;
@@ -137,8 +141,10 @@ async function loadMyGroups() {
             <div style="font-weight:500; font-size:0.88rem;">${g.name}</div>
             <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">${t('js.groupStats', g.member_count, g.movie_count)}</div>
           </div>
+          ${canManageGroups ? `
           <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.7rem;" onclick="manageMyGroupMembers(${g.id},'${g.name}')" title="${t('js.manageMembersTitle')}">👥</button>
           <button class="btn btn-danger" style="padding:6px 10px; font-size:0.7rem;" onclick="deleteMyGroup(${g.id},'${g.name}')" title="${t('js.deleteTitle')}">✕</button>
+          ` : ''}
         </div>
       `).join('');
     }
