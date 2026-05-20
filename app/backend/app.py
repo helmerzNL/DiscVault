@@ -154,6 +154,25 @@ def _get_fernet() -> Fernet:
     return Fernet(fernet_key)
 
 
+def _make_digital_play_url(item) -> str:
+    """Construct a deep-link URL for a digital library item."""
+    source_type = item.get("source_type", "")
+    base_url = (item.get("base_url") or "").rstrip("/")
+    ext_id = str(item.get("external_id") or "")
+    machine_id = str(item.get("machine_id") or "")
+    if not base_url or not ext_id:
+        return ""
+    if source_type == "plex":
+        if machine_id:
+            key_enc = "/library/metadata/" + ext_id
+            key_enc = key_enc.replace("/", "%2F")
+            return f"{base_url}/web/index.html#!/server/{machine_id}/details?key={key_enc}"
+        return f"{base_url}/web/index.html"
+    elif source_type == "jellyfin":
+        return f"{base_url}/web/index.html#!/details?id={ext_id}"
+    return ""
+
+
 def _encrypt_token(token: str) -> str:
     if not token:
         return ""
@@ -701,6 +720,11 @@ def init_db():
             owner_id    TEXT
         )
     """)
+
+    # Migrate digital_library_sources: add machine_id column for Plex deep links
+    dls_cols = {row[1] for row in conn.execute("PRAGMA table_info(digital_library_sources)")}
+    if "machine_id" not in dls_cols:
+        conn.execute("ALTER TABLE digital_library_sources ADD COLUMN machine_id TEXT")
 
     # Cached items from digital library syncs
     conn.execute("""
@@ -7823,6 +7847,17 @@ def _run_plex_sync(source_id: int):
         except Exception:
             configured_lib_ids = []
 
+        # Fetch Plex server machine identifier (needed for deep links)
+        machine_id = ""
+        try:
+            r_id = requests.get(f"{base_url}/identity",
+                                params={"X-Plex-Token": token}, timeout=5)
+            r_id.raise_for_status()
+            root_id = ET.fromstring(r_id.text)
+            machine_id = root_id.get("machineIdentifier", "")
+        except Exception:
+            pass
+
         # Get library sections
         r = requests.get(f"{base_url}/library/sections",
                          params={"X-Plex-Token": token}, timeout=10)
@@ -7887,8 +7922,8 @@ def _run_plex_sync(source_id: int):
             )
             _sync_jobs[source_id]["progress"] = i + 1
         conn.execute(
-            "UPDATE digital_library_sources SET last_synced=?, item_count=? WHERE id=?",
-            (synced_at, len(all_items), source_id)
+            "UPDATE digital_library_sources SET last_synced=?, item_count=?, machine_id=? WHERE id=?",
+            (synced_at, len(all_items), machine_id, source_id)
         )
         conn.commit()
         conn.close()
@@ -8010,7 +8045,8 @@ def collection_compare():
         list(owner_params)
     ).fetchall()
     digital_items = conn.execute(
-        "SELECT dli.*, dls.name AS source_name, dls.type AS source_type"
+        "SELECT dli.*, dls.name AS source_name, dls.type AS source_type,"
+        " dls.base_url AS base_url, dls.machine_id AS machine_id"
         " FROM digital_library_items dli"
         " JOIN digital_library_sources dls ON dls.id = dli.source_id"
         " WHERE dls.enabled=1"
@@ -8064,7 +8100,8 @@ def collection_compare():
                 "movie": md,
                 "digital_matches": [
                     {"source_name": x["source_name"], "source_type": x["source_type"],
-                     "title": x["title"], "year": x["year"]}
+                     "title": x["title"], "year": x["year"],
+                     "play_url": _make_digital_play_url(x)}
                     for x in deduped
                 ]
             })
