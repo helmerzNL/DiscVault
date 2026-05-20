@@ -756,6 +756,15 @@ def init_db():
             FOREIGN KEY (role_id) REFERENCES custom_roles(id) ON DELETE CASCADE
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_digital_group_access (
+            user_id  TEXT    NOT NULL,
+            group_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, group_id),
+            FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+        )
+    """)
 
     conn.commit()
     conn.close()
@@ -763,10 +772,68 @@ def init_db():
 init_db()
 
 
+SYSTEM_ROLES = {
+    "Beheerder": {
+        "description": "Volledige beheerderstoegang — alle rechten, equivalent aan systeemrol admin.",
+        "permissions": [
+            "collection.view", "collection.add", "collection.edit_own",
+            "collection.edit_all", "collection.delete_own", "collection.delete_all",
+            "collection.import", "groups.create", "groups.manage", "groups.invite",
+            "digital.view", "watchlist.manage", "admin.users", "admin.settings",
+        ],
+    },
+    "Video Viewer": {
+        "description": "Alleen leesrechten. Geen bewerkopties, geen groepen aanmaken, geen metadata vernieuwen.",
+        "permissions": ["collection.view", "watchlist.manage"],
+    },
+    "MemberGroup": {
+        "description": "Kan zelf groepen aanmaken en beheren om films te delen met andere leden.",
+        "permissions": ["collection.view", "collection.add", "groups.create", "groups.manage", "groups.invite", "watchlist.manage"],
+    },
+    "Digitale Libraries Viewer": {
+        "description": "Kan Jellyfin en Plex informatie bij films bekijken voor toegewezen groepen.",
+        "permissions": ["collection.view", "digital.view", "watchlist.manage"],
+    },
+}
+
+
+def seed_default_roles():
+    """Ensure the four predefined system roles exist with their default permissions."""
+    conn = get_db()
+    for name, cfg in SYSTEM_ROLES.items():
+        row = conn.execute("SELECT id FROM custom_roles WHERE name=?", (name,)).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO custom_roles (name, description, created_by, created_at) VALUES (?,?,NULL,?)",
+                (name, cfg["description"], local_now_iso()),
+            )
+            conn.commit()
+            role_id = conn.execute("SELECT id FROM custom_roles WHERE name=?", (name,)).fetchone()["id"]
+        else:
+            role_id = row["id"]
+        existing = {
+            r["permission"]
+            for r in conn.execute(
+                "SELECT permission FROM role_permissions WHERE role_id=?", (role_id,)
+            ).fetchall()
+        }
+        for perm in cfg["permissions"]:
+            if perm not in existing:
+                conn.execute(
+                    "INSERT OR IGNORE INTO role_permissions (role_id, permission) VALUES (?,?)",
+                    (role_id, perm),
+                )
+    conn.commit()
+    conn.close()
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+seed_default_roles()
 
 
 def _merge_video_updates(movie, info, updates):
@@ -5046,17 +5113,38 @@ def _require_admin():
     return None
 
 
+def _has_permission(perm: str) -> bool:
+    """Return True if the current request user holds the given custom-role permission."""
+    if not _is_auth_enabled():
+        return True
+    uid = _get_current_user_id()
+    if not uid:
+        return False
+    if _get_current_user_role() == "admin":
+        return True
+    conn = get_db()
+    row = conn.execute("""
+        SELECT 1 FROM role_permissions rp
+        JOIN user_roles ur ON ur.role_id = rp.role_id
+        WHERE ur.user_id = ? AND rp.permission = ?
+        LIMIT 1
+    """, (uid, perm)).fetchone()
+    conn.close()
+    return row is not None
+
+
 def _require_group_manager():
-    """Check if current user can manage groups (admin or MemberGroups role). Returns error or None."""
+    """Check if current user can manage groups (admin or groups.create permission). Returns error or None."""
     if not _is_auth_enabled():
         return None
     uid = _get_current_user_id()
     if not uid:
         return jsonify({"error": "Unauthorized", "auth_required": True}), 401
-    role = _get_current_user_role()
-    if role not in ("admin", "MemberGroups"):
-        return jsonify({"error": "Group management permission required"}), 403
-    return None
+    if _get_current_user_role() == "admin":
+        return None
+    if _has_permission("groups.create"):
+        return None
+    return jsonify({"error": "Group management permission required"}), 403
 
 
 @app.route("/api/auth/users", methods=["GET"])
@@ -5213,17 +5301,28 @@ def get_current_user():
     data = {**dict(user), "authenticated": True}
     if data.get("avatar"):
         data["avatar_url"] = f"/api/avatars/{data['avatar']}"
-    # Check if user's group restricts digital features (non-admins only)
-    group_hide_digital = False
-    if data.get("role") != "admin":
-        row = conn.execute("""
-            SELECT 1 FROM user_groups ug
-            JOIN groups g ON g.id = ug.group_id
-            WHERE ug.user_id = ? AND g.hide_digital = 1
+    # Digital view permission and per-group restrictions (replaces legacy group_hide_digital)
+    if data.get("role") == "admin":
+        data["has_digital_view"]      = True
+        data["digital_allowed_groups"] = None  # admins: no group restriction
+    else:
+        perm_row = conn.execute("""
+            SELECT 1 FROM role_permissions rp
+            JOIN user_roles ur ON ur.role_id = rp.role_id
+            WHERE ur.user_id = ? AND rp.permission = 'digital.view'
             LIMIT 1
         """, (uid,)).fetchone()
-        group_hide_digital = row is not None
-    data["group_hide_digital"] = group_hide_digital
+        has_digital = perm_row is not None
+        data["has_digital_view"] = has_digital
+        if has_digital:
+            access_rows = conn.execute(
+                "SELECT group_id FROM user_digital_group_access WHERE user_id=?", (uid,)
+            ).fetchall()
+            data["digital_allowed_groups"] = (
+                [r["group_id"] for r in access_rows] if access_rows else None
+            )
+        else:
+            data["digital_allowed_groups"] = None
     # Custom RBAC roles and effective permissions
     custom_role_rows = conn.execute("""
         SELECT cr.name FROM custom_roles cr
@@ -6043,6 +6142,47 @@ def revoke_user_role(role_id, user_id):
         return err
     conn = get_db()
     conn.execute("DELETE FROM user_roles WHERE user_id=? AND role_id=?", (user_id, role_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/admin/users/<user_id>/digital-groups", methods=["GET"])
+def get_user_digital_groups(user_id):
+    """Return the groups a user with Digital Libraries Viewer role may see digital info for."""
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT g.id, g.name
+        FROM groups g
+        JOIN user_digital_group_access udga ON udga.group_id = g.id
+        WHERE udga.user_id = ?
+        ORDER BY g.name
+    """, (user_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/admin/users/<user_id>/digital-groups", methods=["PUT"])
+def set_user_digital_groups(user_id):
+    """Set (replace) the groups a user may see digital library info for."""
+    err = _require_admin()
+    if err:
+        return err
+    data = request.json or {}
+    group_ids = [int(x) for x in (data.get("group_ids") or [])]
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM users WHERE id=?", (user_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "User not found"}), 404
+    conn.execute("DELETE FROM user_digital_group_access WHERE user_id=?", (user_id,))
+    for gid in group_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO user_digital_group_access (user_id, group_id) VALUES (?,?)",
+            (user_id, gid),
+        )
     conn.commit()
     conn.close()
     return jsonify({"status": "ok"})

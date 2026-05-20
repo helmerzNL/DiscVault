@@ -13,7 +13,7 @@ let activeCompareTab = 'both';
 
 // Fetch compare data for digital badges (non-blocking)
 async function loadDigitalBadgeData() {
-  if (!showDigitalBadges || groupHideDigital) return;
+  if (!showDigitalBadges || !userHasDigital) return;
   try {
     const r = await fetch(`${API}/collection/compare`);
     if (r.ok) {
@@ -27,7 +27,6 @@ let groupEditionsEnabled = localStorage.getItem('dv_group_editions') === 'true';
 let showDigitalBadges    = localStorage.getItem('dv_digital_badges') === 'true';
 let digitalBadgeFilter   = localStorage.getItem('dv_digital_badge_filter') || 'all';
 let collectorsMode       = localStorage.getItem('dv_collectors_mode') === 'true';
-let groupHideDigital     = false;  // set from /api/auth/me — hides Plex/Jellyfin for group members
 
 // Apply body class immediately so CSS .collectors-only rules take effect before render
 if (collectorsMode) document.body.classList.add('collectors-mode');
@@ -83,7 +82,16 @@ function getCurrentMovies() {
 }
 
 function canEditMovie(m) {
-  return !authEnabled || !currentUserId || currentUserRole === 'admin' || String(m.owner_id) === String(currentUserId);
+  if (!authEnabled || !currentUserId) return true;
+  if (currentUserRole === 'admin') return true;
+  // If user has custom roles, enforce permission-based access
+  if (userCustomRoles && userCustomRoles.length > 0) {
+    if (hasPermission('collection.edit_all')) return true;
+    if (hasPermission('collection.edit_own') && String(m.owner_id) === String(currentUserId)) return true;
+    return false;
+  }
+  // Legacy: no custom role — owner can always edit their own movies
+  return String(m.owner_id) === String(currentUserId);
 }
 
 function toggleCard(id) {
@@ -182,25 +190,33 @@ function renderGrid(movies) {
       formatLabel = `<div class="movie-card-format">${m.format || '4K'}</div>`;
     }
 
-    // Digital badge (Plex/Jellyfin)
+    // Digital badge (Plex/Jellyfin) — only shown when user has digital.view permission
     let digitalBadge = '';
-    if (showDigitalBadges && compareData && !groupHideDigital) {
-      const match = (compareData.physical_and_digital || []).find(e => e.movie && e.movie.id === m.id);
-      if (match && match.digital_matches && match.digital_matches.length) {
-        const filtered = digitalBadgeFilter === 'all'
-          ? match.digital_matches
-          : match.digital_matches.filter(x => x.source_type === digitalBadgeFilter);
-        // Deduplicate by source_type so we get one badge per platform
-        const types = [...new Set(filtered.map(x => x.source_type))];
-        if (types.length) {
-          const badges = types.map(st => {
-            const names = filtered.filter(x => x.source_type === st).map(x => x.source_name).join(', ');
-            const logo = st === 'plex'
-              ? '<svg viewBox="0 0 24 24" width="14" height="14"><polygon points="12,2 22,12 12,22 2,12" fill="#E5A00D"/></svg>'
-              : '<svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="10" fill="#00A4DC"/><path d="M12 5.5l-6 11h12z" fill="#fff"/></svg>';
-            return `<div class="movie-card-digital-badge-icon" title="${names}">${logo}</div>`;
-          }).join('');
-          digitalBadge = `<div class="movie-card-digital-badge">${badges}</div>`;
+    if (showDigitalBadges && compareData && userHasDigital) {
+      // Check per-group restriction: if userDigitalGroups is set, only show when viewing an allowed group
+      const gf = document.getElementById('groupFilter');
+      const activeGroup = gf ? gf.value : '';
+      const groupOk = !userDigitalGroups ||
+        !activeGroup || activeGroup === '_mine' ||
+        userDigitalGroups.includes(parseInt(activeGroup));
+      if (groupOk) {
+        const match = (compareData.physical_and_digital || []).find(e => e.movie && e.movie.id === m.id);
+        if (match && match.digital_matches && match.digital_matches.length) {
+          const filtered = digitalBadgeFilter === 'all'
+            ? match.digital_matches
+            : match.digital_matches.filter(x => x.source_type === digitalBadgeFilter);
+          // Deduplicate by source_type so we get one badge per platform
+          const types = [...new Set(filtered.map(x => x.source_type))];
+          if (types.length) {
+            const badges = types.map(st => {
+              const names = filtered.filter(x => x.source_type === st).map(x => x.source_name).join(', ');
+              const logo = st === 'plex'
+                ? '<svg viewBox="0 0 24 24" width="14" height="14"><polygon points="12,2 22,12 12,22 2,12" fill="#E5A00D"/></svg>'
+                : '<svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="10" fill="#00A4DC"/><path d="M12 5.5l-6 11h12z" fill="#fff"/></svg>';
+              return `<div class="movie-card-digital-badge-icon" title="${names}">${logo}</div>`;
+            }).join('');
+            digitalBadge = `<div class="movie-card-digital-badge">${badges}</div>`;
+          }
         }
       }
     }

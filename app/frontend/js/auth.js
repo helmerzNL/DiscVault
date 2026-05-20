@@ -3,6 +3,16 @@ let authToken = localStorage.getItem('dv_token') || '';
 let authEnabled = false;
 let currentUserId = null;
 let currentUserRole = null;
+let userPermissions   = [];
+let userCustomRoles   = [];
+let userHasDigital    = false;
+let userDigitalGroups = null;  // null = all groups; [ids] = restricted to specific group IDs
+
+function hasPermission(p) {
+  if (!authEnabled) return true;
+  if (currentUserRole === 'admin') return true;
+  return userPermissions.includes(p);
+}
 
 function authHeaders() {
   return authToken ? { 'Authorization': 'Bearer ' + authToken } : {};
@@ -19,9 +29,13 @@ function updateLogoutButton() {
 }
 
 async function logoutApp() {
-  authToken = '';
-  currentUserId = null;
-  currentUserRole = null;
+  authToken        = '';
+  currentUserId    = null;
+  currentUserRole  = null;
+  userPermissions  = [];
+  userCustomRoles  = [];
+  userHasDigital   = false;
+  userDigitalGroups = null;
   localStorage.removeItem('dv_token');
   updateLogoutButton();
 
@@ -132,12 +146,15 @@ async function checkAuth() {
         const mr = await _origFetch(`${API}/auth/me`, { headers: authHeaders() });
         const me = await mr.json();
         if (me.authenticated) {
-          currentUserId = me.id;
-          currentUserRole = me.role;
-          // Apply group-level digital feature restriction
-          groupHideDigital = !!me.group_hide_digital;
-          document.body.classList.toggle('hide-digital', groupHideDigital);
-          if (groupHideDigital) showDigitalBadges = false;
+          currentUserId     = me.id;
+          currentUserRole   = me.role;
+          userPermissions   = me.permissions   || [];
+          userCustomRoles   = me.custom_roles  || [];
+          userHasDigital    = !!me.has_digital_view;
+          userDigitalGroups = me.digital_allowed_groups ?? null;
+          // Apply digital visibility
+          if (!userHasDigital) showDigitalBadges = false;
+          document.body.classList.toggle('hide-digital', !userHasDigital);
         }
       } catch(e) {}
     }
@@ -935,13 +952,17 @@ async function loadAdminPanel() {
   try {
     const me = await fetch(`${API}/auth/me`).then(r => r.json());
     const isAdmin = !me.authenticated || me.role === 'admin';
-    const isMemberGroups = me.authenticated && me.role === 'MemberGroups';
+    // Users with MemberGroup custom role (or legacy MemberGroups system role) can manage their own groups
+    const canManageGroups = me.authenticated && (
+      me.role === 'MemberGroups' ||
+      (me.permissions || []).includes('groups.create')
+    );
 
     // Show/hide Admin button in meer menu
     const adminMenuBtn = document.getElementById('meerMenuAdmin');
     if (adminMenuBtn) adminMenuBtn.style.display = isAdmin ? '' : 'none';
 
-    if (!isAdmin && !isMemberGroups) {
+    if (!isAdmin && !canManageGroups) {
       document.getElementById('adminUsersCard').style.display = 'none';
       document.getElementById('adminGroupsCard').style.display = 'none';
       document.getElementById('adminRolesCard').style.display = 'none';
@@ -969,7 +990,7 @@ async function loadAdminPanel() {
       await loadAdminGroups();
       await loadMyGroups();
     } else {
-      // MemberGroups
+      // canManageGroups but not full admin — show only own groups section
       document.getElementById('adminGroupsCard').style.display = 'none';
       document.getElementById('adminUsersCard').style.display = 'none';
       document.getElementById('adminInviteCard').style.display = 'none';
@@ -1041,5 +1062,189 @@ async function resetUserPasskey(id, name) {
   await fetch(`${API}/auth/users/${encodeURIComponent(id)}/reset-passkey`, { method: 'POST' });
   loadAdminUsers();
   loadAuthSettings();
+}
+
+// ── Roles admin ───────────────────────────────────────────────────────────────
+
+const PERM_LABELS = {
+  'collection.view':       '👁️ Films bekijken',
+  'collection.add':        '➕ Films toevoegen',
+  'collection.edit_own':   '✏️ Eigen films bewerken',
+  'collection.edit_all':   '✏️ Alle films bewerken',
+  'collection.delete_own': '🗑️ Eigen films verwijderen',
+  'collection.delete_all': '🗑️ Alle films verwijderen',
+  'collection.import':     '📥 Importeren',
+  'groups.create':         '📁 Groepen aanmaken',
+  'groups.manage':         '📁 Groepen beheren',
+  'groups.invite':         '📩 Uitnodigen',
+  'digital.view':          '📺 Digitale bibliotheken',
+  'watchlist.manage':      '📋 Watchlist beheren',
+  'admin.users':           '👑 Gebruikers beheren',
+  'admin.settings':        '⚙️ Instellingen beheren',
+};
+
+async function loadRoles() {
+  const list   = document.getElementById('adminRolesList');
+  const status = document.getElementById('adminRolesStatus');
+  if (!list) return;
+  list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem; padding:12px 0;">Bezig met laden…</p>';
+  try {
+    const [roles, allUsers, allGroups] = await Promise.all([
+      fetch(`${API}/roles`).then(r => r.json()),
+      fetch(`${API}/auth/users`).then(r => r.json()),
+      fetch(`${API}/groups`).then(r => r.json()),
+    ]);
+    window._roleAllUsers  = allUsers;
+    window._roleAllGroups = allGroups;
+    renderRolesAdmin(roles);
+  } catch(e) {
+    list.innerHTML = '<p style="color:var(--danger); font-size:0.85rem;">Kon rollen niet laden.</p>';
+  }
+}
+
+function renderRolesAdmin(roles) {
+  const list = document.getElementById('adminRolesList');
+  if (!list) return;
+  if (!roles || !roles.length) {
+    list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Geen rollen gevonden.</p>';
+    return;
+  }
+  list.innerHTML = roles.map(role => _renderRoleCard(role)).join('');
+  // Load user lists after HTML is in the DOM
+  roles.forEach(role => _loadRoleUserList(role.id, role.name));
+}
+
+function _renderRoleCard(role) {
+  const permChips = (role.permissions || []).map(p =>
+    `<span style="display:inline-block; background:var(--surface3); border:1px solid var(--border); border-radius:12px; padding:2px 10px; font-size:0.72rem; margin:2px 2px 2px 0;">${PERM_LABELS[p] || p}</span>`
+  ).join('');
+
+  const isDigital = role.name === 'Digitale Libraries Viewer';
+
+  return `
+  <div class="card" style="margin-bottom:16px; padding:16px;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+      <div style="font-weight:600; font-size:0.95rem;">${_escHtml(role.name)}</div>
+      <span class="tag" style="font-size:0.7rem;">${role.user_count || 0} ${(role.user_count || 0) === 1 ? 'gebruiker' : 'gebruikers'}</span>
+    </div>
+    ${role.description ? `<p style="font-size:0.82rem; color:var(--text-muted); margin:0 0 10px;">${_escHtml(role.description)}</p>` : ''}
+    <div style="margin-bottom:12px;">${permChips}</div>
+    <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:4px;">
+      <div style="font-size:0.8rem; font-weight:600; margin-bottom:8px; color:var(--text-muted);">GEBRUIKERS</div>
+      <div id="roleUserList_${role.id}" style="margin-bottom:8px;"></div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <select id="roleUserSelect_${role.id}" data-role-name="${_escHtml(role.name)}" style="flex:1; min-width:150px; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface2); color:var(--text-primary); font-size:0.82rem;">
+          <option value="">— Gebruiker selecteren —</option>
+          ${(window._roleAllUsers || []).map(u =>
+            `<option value="${u.id}">${_escHtml(u.display_name || u.username)} (${_escHtml(u.username)})</option>`
+          ).join('')}
+        </select>
+        <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="assignRoleUser(${role.id})">+ Toewijzen</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function _loadRoleUserList(roleId, roleName) {
+  const container = document.getElementById(`roleUserList_${roleId}`);
+  if (!container) return;
+  try {
+    const users = await fetch(`${API}/roles/${roleId}/users`).then(r => r.json());
+    const isDigital = roleName === 'Digitale Libraries Viewer';
+    if (!users.length) {
+      container.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 6px;">Geen gebruikers toegewezen.</p>';
+      return;
+    }
+    container.innerHTML = users.map(u => `
+      <div id="roleUserEntry_${roleId}_${u.id}" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px; font-size:0.82rem;">
+        <span style="flex:1; font-weight:500;">${_escHtml(u.display_name || u.username)}</span>
+        ${isDigital ? `<button class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="_toggleDigitalGroupConfig(${roleId},'${u.id}')">📺 Groepen</button>` : ''}
+        <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="revokeRoleUser(${roleId},'${u.id}','${roleName?.replace(/'/g,"\\'") || ''}')">✕</button>
+        ${isDigital ? `<div id="digitalGroupConfig_${roleId}_${u.id}" style="display:none; width:100%; margin-top:8px;"></div>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    container.innerHTML = '<p style="font-size:0.8rem; color:var(--danger); margin:0 0 6px;">Kon gebruikers niet laden.</p>';
+  }
+}
+
+async function assignRoleUser(roleId) {
+  const sel = document.getElementById(`roleUserSelect_${roleId}`);
+  if (!sel || !sel.value) return;
+  const userId   = sel.value;
+  const roleName = sel.dataset.roleName || '';
+  const r = await fetch(`${API}/roles/${roleId}/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  if (r.ok || r.status === 409) {
+    sel.value = '';
+    await _loadRoleUserList(roleId, roleName);
+  } else {
+    const err = await r.json().catch(() => ({}));
+    showStatus('adminRolesStatus', err.error || 'Fout bij toewijzen.', 'error');
+  }
+}
+
+async function revokeRoleUser(roleId, userId, roleName) {
+  await fetch(`${API}/roles/${roleId}/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  await _loadRoleUserList(roleId, roleName);
+}
+
+async function _toggleDigitalGroupConfig(roleId, userId) {
+  const panel = document.getElementById(`digitalGroupConfig_${roleId}_${userId}`);
+  if (!panel) return;
+  if (panel.style.display === 'none') {
+    panel.style.display = 'block';
+    await _renderDigitalGroupConfig(roleId, userId, panel);
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+async function _renderDigitalGroupConfig(roleId, userId, panel) {
+  panel.innerHTML = '<p style="font-size:0.78rem; color:var(--text-muted);">Bezig…</p>';
+  try {
+    const [allowed, allGroups] = await Promise.all([
+      fetch(`${API}/admin/users/${encodeURIComponent(userId)}/digital-groups`).then(r => r.json()),
+      Promise.resolve(window._roleAllGroups || []),
+    ]);
+    const allowedIds = new Set((allowed || []).map(g => g.id));
+    const checkboxes = (allGroups || []).map(g => `
+      <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; margin-bottom:4px; cursor:pointer;">
+        <input type="checkbox" value="${g.id}" ${allowedIds.has(g.id) ? 'checked' : ''} class="dg-cb-${userId}">
+        ${_escHtml(g.name)}
+      </label>
+    `).join('');
+    panel.innerHTML = `
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; margin-top:4px;">
+        <div style="font-size:0.78rem; font-weight:600; margin-bottom:8px; color:var(--text-muted);">
+          📺 Groepen waarvoor digitale info zichtbaar is (leeg = alle groepen)
+        </div>
+        ${checkboxes || '<p style="font-size:0.78rem; color:var(--text-muted);">Geen groepen beschikbaar.</p>'}
+        <button class="btn btn-primary" style="margin-top:8px; padding:5px 14px; font-size:0.78rem;"
+          onclick="_saveDigitalGroupConfig('${userId}')">Opslaan</button>
+      </div>`;
+  } catch(e) {
+    panel.innerHTML = '<p style="font-size:0.78rem; color:var(--danger);">Fout bij laden.</p>';
+  }
+}
+
+async function _saveDigitalGroupConfig(userId) {
+  const cbs = document.querySelectorAll(`.dg-cb-${userId}:checked`);
+  const groupIds = [...cbs].map(cb => parseInt(cb.value));
+  const r = await fetch(`${API}/admin/users/${encodeURIComponent(userId)}/digital-groups`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group_ids: groupIds }),
+  });
+  if (r.ok) {
+    showStatus('adminRolesStatus', 'Groepstoegang opgeslagen.', 'success');
+  }
+}
+
+function _escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
