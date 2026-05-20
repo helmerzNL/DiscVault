@@ -2740,7 +2740,10 @@ def refresh_single(movie_id):
         tmdb_id_known = movie.get("tmdb_id", "")
 
         # 1. TMDb — primary source (multilingual titles/plots, backdrops, trailer)
-        try:
+        if not TMDB_API_KEY:
+            _trace_add(attempts, "TMDb", "skipped", f"title={search_title}", "TMDB_API_KEY niet geconfigureerd")
+        else:
+          try:
             if tmdb_id_known:
                 info = lookup_movie_tmdb_by_id(tmdb_id_known)
                 _trace_add(attempts, "TMDb", "hit" if info else "miss", f"tmdb_id={tmdb_id_known}")
@@ -2752,7 +2755,7 @@ def refresh_single(movie_id):
                 _trace_add(attempts, "TMDb", "hit" if info else "miss", f"fallback title={title}, year={year}")
             if info:
                 source_parts.append("TMDb")
-        except Exception as ex:
+          except Exception as ex:
             _trace_add(attempts, "TMDb", "error", f"title={search_title}", str(ex))
 
         # 2. OMDb — supplementary: fills imdb_id, rating, and any fields TMDb missed
@@ -3217,6 +3220,17 @@ def bulk_refresh():
     _expand_conn.close()
     ids = list(expanded)
 
+    # Warn once per bulk if key(s) are missing
+    if not TMDB_API_KEY and not OMDB_API_KEY:
+        add_log("refresh", "Geen TMDb of OMDb API key geconfigureerd — alle films worden overgeslagen",
+                "Stel een key in via Instellingen → Metadata Bronnen.", "warn")
+    elif not TMDB_API_KEY:
+        add_log("refresh", "TMDb API key niet geconfigureerd",
+                "OMDb wordt als primaire bron gebruikt. Stel een TMDb key in via Instellingen → Metadata Bronnen.", "warn")
+    elif not OMDB_API_KEY:
+        add_log("refresh", "OMDb API key niet geconfigureerd",
+                "TMDb wordt als primaire bron gebruikt. Stel een OMDb key in via Instellingen → Metadata Bronnen.", "warn")
+
     def _process_movie(conn, movie_id, fetch_posters):
         """Process a single movie and return (status, title, error_detail)."""
         row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
@@ -3244,13 +3258,16 @@ def bulk_refresh():
             elif imdb_id and not OMDB_API_KEY:
                 _trace_add(attempts, "OMDb", "skipped", f"imdb_id={imdb_id}", "OMDB_API_KEY ontbreekt")
             if not info:
-                try:
-                    info = lookup_movie_tmdb(search_title, year)
-                    _trace_add(attempts, "TMDb", "hit" if info else "miss", f"title={search_title}, year={year}")
-                except Exception as ex:
-                    _trace_add(attempts, "TMDb", "error", f"title={search_title}, year={year}", str(ex))
-                if info:
-                    source = f"TMDb (titel=\"{search_title}\", jaar={year})"
+                if not TMDB_API_KEY:
+                    _trace_add(attempts, "TMDb", "skipped", f"title={search_title}", "TMDB_API_KEY niet geconfigureerd")
+                else:
+                    try:
+                        info = lookup_movie_tmdb(search_title, year)
+                        _trace_add(attempts, "TMDb", "hit" if info else "miss", f"title={search_title}, year={year}")
+                    except Exception as ex:
+                        _trace_add(attempts, "TMDb", "error", f"title={search_title}, year={year}", str(ex))
+                    if info:
+                        source = f"TMDb (titel=\"{search_title}\", jaar={year})"
             if not info:
                 try:
                     info = lookup_movie_omdb(title=search_title)
