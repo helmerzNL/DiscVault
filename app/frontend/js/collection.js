@@ -2313,17 +2313,13 @@ let _personCollectionMovies = null;
 let _personRatingMap = null;
 
 function _switchPersonTab(tab) {
-  const tabCol = document.getElementById('personTabCollection');
-  const tabFilm = document.getElementById('personTabFilmography');
-  const btnCol = document.getElementById('personTabBtnCollection');
-  const btnFilm = document.getElementById('personTabBtnFilmography');
-  if (!tabCol || !tabFilm) return;
-  const showFilm = tab === 'filmography';
-  tabCol.classList.toggle('active', !showFilm);
-  tabFilm.classList.toggle('active', showFilm);
-  btnCol?.classList.toggle('active', !showFilm);
-  btnFilm?.classList.toggle('active', showFilm);
-  if (showFilm && _personFilmographyData) _renderFilmographyGrid(_personFilmographyData, _personFilmographySort);
+  ['collection', 'digital', 'filmography'].forEach(id => {
+    const cap = id[0].toUpperCase() + id.slice(1);
+    document.getElementById('personTab' + cap)?.classList.toggle('active', id === tab);
+    document.getElementById('personTabBtn' + cap)?.classList.toggle('active', id === tab);
+  });
+  if (tab === 'filmography' && _personFilmographyData) _renderFilmographyGrid(_personFilmographyData, _personFilmographySort);
+  if (tab === 'digital' && _personFilmographyData) _renderDigitalGrid(_personFilmographyData, _personFilmographySort);
 }
 
 async function _loadPersonFilmography(personId) {
@@ -2340,14 +2336,23 @@ async function _loadPersonFilmography(personId) {
       if (m.tmdb_id && m.vote_average > 0) ratingMap[String(m.tmdb_id)] = m.vote_average;
     });
     _personRatingMap = ratingMap;
+    // Update pill counts
+    const digitalCount = (data.cast || []).filter(m => m.in_digital).length;
+    const elD = document.getElementById('personTabCountDigital');
+    const elF = document.getElementById('personTabCountFilmography');
+    if (elD) elD.textContent = digitalCount;
+    if (elF) elF.textContent = (data.cast || []).length;
     // Re-render collection grid with ratings now available
     if (_personCollectionMovies) _renderCollectionGrid(_personCollectionMovies, _personFilmographySort, ratingMap);
-    // Pre-render filmography grid so tab switch is instant
-    const grid = document.getElementById('personFilmographyGrid');
-    if (grid) _renderFilmographyGrid(data, _personFilmographySort);
+    // Pre-render all grids so tab switches are instant
+    const filmGrid = document.getElementById('personFilmographyGrid');
+    if (filmGrid) _renderFilmographyGrid(data, _personFilmographySort);
+    const digGrid = document.getElementById('personDigitalGrid');
+    if (digGrid) _renderDigitalGrid(data, _personFilmographySort);
   } catch(e) {
     const grid = document.getElementById('personFilmographyGrid');
     if (grid) grid.innerHTML = `<div style="color:var(--danger)">${t('js.error', e.message)}</div>`;
+    ['personTabCountDigital','personTabCountFilmography'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '!'; });
   }
 }
 
@@ -2355,12 +2360,12 @@ function _sortFilmography(sort) {
   _personFilmographySort = sort;
   const sel = document.getElementById('personFilmSort');
   if (sel && sel.value !== sort) sel.value = sort;
-  const tabCol = document.getElementById('personTabCollection');
-  if (tabCol && tabCol.classList.contains('active')) {
-    if (_personCollectionMovies) _renderCollectionGrid(_personCollectionMovies, sort, _personRatingMap);
-  } else if (_personFilmographyData) {
-    _renderFilmographyGrid(_personFilmographyData, sort);
-  }
+  const active = ['collection','digital','filmography'].find(id =>
+    document.getElementById('personTab' + id[0].toUpperCase() + id.slice(1))?.classList.contains('active')
+  );
+  if (active === 'collection' && _personCollectionMovies) _renderCollectionGrid(_personCollectionMovies, sort, _personRatingMap);
+  else if (active === 'digital' && _personFilmographyData) _renderDigitalGrid(_personFilmographyData, sort);
+  else if (active === 'filmography' && _personFilmographyData) _renderFilmographyGrid(_personFilmographyData, sort);
 }
 
 function _renderCollectionGrid(movies, sort, ratingMap) {
@@ -2392,6 +2397,76 @@ function _renderCollectionGrid(movies, sort, ratingMap) {
                : m.job ? `<div class="person-film-year">${escHtml(m.job)}</div>` : '';
     html += `<div class="person-film-card" onclick="_detailReturnTab='person-detail';openMovieDetail(${m.id})">`;
     html += `<div style="position:relative">${posterImg}${formatBadge}</div>`;
+    html += `<div class="person-film-title">${escHtml(m.title)}</div>`;
+    html += `<div class="person-film-year">${m.year || ''}</div>${rating}${role}`;
+    html += `</div>`;
+  });
+  grid.innerHTML = html;
+}
+
+function _renderDigitalGrid(data, sort) {
+  const grid = document.getElementById('personDigitalGrid');
+  if (!grid) return;
+  let movies = (data.cast || []).filter(m => m.in_digital);
+  if (sort === 'newest') movies.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
+  else if (sort === 'oldest') movies.sort((a, b) => (a.year || '9999').localeCompare(b.year || '9999'));
+  else if (sort === 'az') movies.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  else if (sort === 'rating') movies.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+  if (!movies.length) {
+    grid.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">Geen digitale films gevonden voor deze persoon.</div>`;
+    return;
+  }
+  let html = '';
+  movies.forEach(m => {
+    const onclick = m.in_collection ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${m.collection_id})"` : '';
+    const cursor = m.in_collection ? '' : 'cursor:default;';
+    const poster = m.poster
+      ? `<img class="person-film-poster" src="${escHtml(m.poster)}" onerror="this.style.display='none'" loading="lazy">`
+      : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">\uD83C\uDFAC</div>`;
+    const logo = m.digital_source === 'plex'
+      ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="#E5A00D"><path d="M3.987 8.409c-.96 0-1.587.28-2.12.933v-.72H0v8.88s.038.018.127.037c.138.03.821.187 1.331-.249.441-.377.542-.814.542-1.318v-1.283c.533.573 1.147.813 2 .813 1.84 0 3.253-1.493 3.253-3.48 0-2.12-1.36-3.613-3.266-3.613Zm16.748 5.595.406.591c.391.614.894.906 1.492.908.621-.012 1.064-.562 1.226-.755 0 0-.307-.27-.686-.72-.517-.614-1.214-1.755-1.24-1.803l-1.198 1.779Zm-3.205-1.955c0-2.08-1.52-3.64-3.52-3.64s-3.467 1.587-3.467 3.573a3.48 3.48 0 0 0 3.507 3.52c1.413 0 2.626-.84 3.253-2.293h-2.04l-.093.093c-.427.4-.72.533-1.227.533-.787 0-1.373-.506-1.453-1.266h4.986c.04-.214.054-.307.054-.52Zm-7.671-.219c0 .769.11 1.701.868 2.722l.056.069c-.306.526-.742.88-1.248.88-.399 0-.814-.211-1.138-.579a2.177 2.177 0 0 1-.538-1.441V6.409H9.86l-.001 5.421Zm9.283 3.46h-2.39l2.247-3.332-2.247-3.335h2.39l2.248 3.335-2.248 3.332Zm1.593-1.286Zm-17.162-.342c-.933 0-1.68-.773-1.68-1.72s.76-1.666 1.68-1.666c.92 0 1.68.733 1.68 1.68 0 .946-.733 1.706-1.68 1.706Zm18.361-1.974L24 8.622h-2.391l-.87 1.293 1.195 1.773Zm-9.404-.466c.16-.706.72-1.133 1.493-1.133.773 0 1.373.467 1.507 1.133h-3Z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="12" height="12" fill="#00A4DC"><path d="M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0C25.384 18.573 15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189.518 1.04 7.348 1.027 7.86 0 .511-1.027-2.874-7.19-3.93-7.19z"/></svg>';
+    const sourceBadge = `<div class="person-film-format-badge" style="background:rgba(20,20,28,0.82);display:flex;align-items:center;justify-content:center;padding:3px 5px;">${logo}</div>`;
+    const formatBadge = m.in_collection && m.collection_format ? `<div class="person-film-format-badge">${escHtml(m.collection_format)}</div>` : '';
+    const rating = m.vote_average > 0 ? `<div class="person-film-rating">\u2B50 ${m.vote_average.toFixed(1)}</div>` : '';
+    const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>` : '';
+    html += `<div class="person-film-card" style="${cursor}" ${onclick}>`;
+    html += `<div style="position:relative">${poster}${formatBadge || sourceBadge}</div>`;
+    html += `<div class="person-film-title">${escHtml(m.title)}</div>`;
+    html += `<div class="person-film-year">${m.year || ''}</div>${rating}${role}`;
+    html += `</div>`;
+  });
+  grid.innerHTML = html;
+}
+
+function _renderDigitalGrid(data, sort) {
+  const grid = document.getElementById('personDigitalGrid');
+  if (!grid) return;
+  let movies = (data.cast || []).filter(m => m.in_digital);
+  if (sort === 'newest') movies.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
+  else if (sort === 'oldest') movies.sort((a, b) => (a.year || '9999').localeCompare(b.year || '9999'));
+  else if (sort === 'az') movies.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  else if (sort === 'rating') movies.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+  if (!movies.length) {
+    grid.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">Geen digitale films gevonden voor deze persoon.</div>`;
+    return;
+  }
+  let html = '';
+  movies.forEach(m => {
+    const onclick = m.in_collection ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${m.collection_id})"` : '';
+    const cursor = m.in_collection ? '' : 'cursor:default;';
+    const poster = m.poster
+      ? `<img class="person-film-poster" src="${escHtml(m.poster)}" onerror="this.style.display='none'" loading="lazy">`
+      : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
+    const logo = m.digital_source === 'plex'
+      ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="#E5A00D"><path d="M3.987 8.409c-.96 0-1.587.28-2.12.933v-.72H0v8.88s.038.018.127.037c.138.03.821.187 1.331-.249.441-.377.542-.814.542-1.318v-1.283c.533.573 1.147.813 2 .813 1.84 0 3.253-1.493 3.253-3.48 0-2.12-1.36-3.613-3.266-3.613Zm16.748 5.595.406.591c.391.614.894.906 1.492.908.621-.012 1.064-.562 1.226-.755 0 0-.307-.27-.686-.72-.517-.614-1.214-1.755-1.24-1.803l-1.198 1.779Zm-3.205-1.955c0-2.08-1.52-3.64-3.52-3.64s-3.467 1.587-3.467 3.573a3.48 3.48 0 0 0 3.507 3.52c1.413 0 2.626-.84 3.253-2.293h-2.04l-.093.093c-.427.4-.72.533-1.227.533-.787 0-1.373-.506-1.453-1.266h4.986c.04-.214.054-.307.054-.52Zm-7.671-.219c0 .769.11 1.701.868 2.722l.056.069c-.306.526-.742.88-1.248.88-.399 0-.814-.211-1.138-.579a2.177 2.177 0 0 1-.538-1.441V6.409H9.86l-.001 5.421Zm9.283 3.46h-2.39l2.247-3.332-2.247-3.335h2.39l2.248 3.335-2.248 3.332Zm1.593-1.286Zm-17.162-.342c-.933 0-1.68-.773-1.68-1.72s.76-1.666 1.68-1.666c.92 0 1.68.733 1.68 1.68 0 .946-.733 1.706-1.68 1.706Zm18.361-1.974L24 8.622h-2.391l-.87 1.293 1.195 1.773Zm-9.404-.466c.16-.706.72-1.133 1.493-1.133.773 0 1.373.467 1.507 1.133h-3Z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="12" height="12" fill="#00A4DC"><path d="M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0C25.384 18.573 15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189.518 1.04 7.348 1.027 7.86 0 .511-1.027-2.874-7.19-3.93-7.19z"/></svg>';
+    const sourceBadge = `<div class="person-film-format-badge" style="background:rgba(20,20,28,0.82);display:flex;align-items:center;justify-content:center;padding:3px 5px;">${logo}</div>`;
+    const formatBadge = m.in_collection && m.collection_format ? `<div class="person-film-format-badge">${escHtml(m.collection_format)}</div>` : '';
+    const rating = m.vote_average > 0 ? `<div class="person-film-rating">⭐ ${m.vote_average.toFixed(1)}</div>` : '';
+    const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>` : '';
+    html += `<div class="person-film-card" style="${cursor}" ${onclick}>`;
+    html += `<div style="position:relative">${poster}${formatBadge || sourceBadge}</div>`;
     html += `<div class="person-film-title">${escHtml(m.title)}</div>`;
     html += `<div class="person-film-year">${m.year || ''}</div>${rating}${role}`;
     html += `</div>`;

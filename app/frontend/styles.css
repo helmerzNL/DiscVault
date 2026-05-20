@@ -1455,13 +1455,56 @@
     border: 1px solid rgba(255,255,255,0.4);
     pointer-events: none;
   }
-  /* Person sort dropdown */
-  .person-film-sort-wrap {
+  /* Person page — pill tab bar */
+  .person-film-pill-bar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .person-film-pill-tabs {
+    display: flex;
     gap: 8px;
-    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .person-film-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .person-film-pill:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  .person-film-pill.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .person-film-pill-count {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 10px;
+    min-width: 22px;
+    text-align: center;
+    background: rgba(255,255,255,0.18);
+  }
+  .person-film-pill:not(.active) .person-film-pill-count {
+    background: var(--surface);
+    color: var(--text-muted);
   }
   .person-film-sort-select {
     background: var(--surface2);
