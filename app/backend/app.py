@@ -3363,10 +3363,12 @@ def bulk_refresh():
                 _sync_movie_cast_crew(conn, movie_id, cast_crew, download_photos=fetch_posters)
 
             fields_str = ", ".join(updates.keys()) if updates else "(geen wijzigingen)"
+            conn.commit()
             add_log("refresh", f"Bijgewerkt: \"{title}\"",
                     f"Bron: {source}. Velden: {fields_str}. Backends: {_trace_summary(attempts)}", "success")
             return "updated", title, None
         except Exception as e:
+            conn.commit()
             add_log("refresh", f"Fout bij \"{title}\"", f"Exception: {str(e)}", "error")
             return "error", title, f"[{movie_id}] {title}: {str(e)}"
 
@@ -3393,6 +3395,10 @@ def bulk_refresh():
                 }) + "\n"
             conn.commit()
             conn.close()
+            add_log("refresh",
+                    f"Bulk refresh voltooid: {updated} bijgewerkt, {skipped} overgeslagen, {errors} fouten",
+                    ", ".join(error_details[:5]) if error_details else "",
+                    "success" if not errors else "warn")
             yield json.dumps({
                 "type":         "done",
                 "updated":      updated,
