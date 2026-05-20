@@ -2260,7 +2260,7 @@ async function openPersonDetail(personId) {
 
     if (detailedActorDetails) {
       // Show sort dropdown + modal-style tabs
-      const titleWrap = document.getElementById('personFilmographyTitle').parentElement;
+      const titleWrap = document.getElementById('personFilmographyTitleWrap');
       const sortLabels = [
         ['newest', t('person.sortNewest') || 'Nieuwste eerst'],
         ['oldest', t('person.sortOldest') || 'Oudste eerst'],
@@ -2294,8 +2294,8 @@ async function openPersonDetail(personId) {
       _loadPersonFilmography(personId);
     } else {
       // Simple mode: just show collection
-      const filmTitle = document.getElementById('personFilmographyTitle');
-      if (filmTitle) filmTitle.textContent = t('person.inCollection') || 'In jouw collectie';
+      const titleWrap = document.getElementById('personFilmographyTitleWrap');
+      if (titleWrap) titleWrap.innerHTML = `<div class="crew-section-title" id="personFilmographyTitle">${t('person.inCollection') || 'In jouw collectie'}</div>`;
       const filmEl = document.getElementById('personFilmography');
       filmEl.style.display = '';
       filmEl.innerHTML = collectionHtml;
