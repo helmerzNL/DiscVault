@@ -2259,35 +2259,46 @@ async function openPersonDetail(personId) {
     }
 
     if (detailedActorDetails) {
-      // Show tabs: In collectie | Filmografie
+      // Show sort dropdown + modal-style tabs
       const titleWrap = document.getElementById('personFilmographyTitle').parentElement;
-      titleWrap.innerHTML = `<div class="person-film-tabs">
-        <button class="person-film-tab active" id="personTabBtnCollection" onclick="_switchPersonTab('collection')">${t('person.tabCollection') || 'In collectie'}</button>
-        <button class="person-film-tab" id="personTabBtnFilmography" onclick="_switchPersonTab('filmography')">${t('person.tabFilmography') || 'Filmografie'}</button>
-      </div>`;
       const sortLabels = [
         ['newest', t('person.sortNewest') || 'Nieuwste eerst'],
         ['oldest', t('person.sortOldest') || 'Oudste eerst'],
         ['az', 'A–Z'],
         ['rating', t('person.sortRating') || 'TMDb beoordeling'],
       ];
-      const sortBtns = sortLabels.map(([s, lbl]) =>
-        `<button class="person-film-sort${s === 'newest' ? ' active' : ''}" data-sort="${s}" onclick="_sortFilmography('${s}')">${escHtml(lbl)}</button>`
+      const sortOptions = sortLabels.map(([s, lbl]) =>
+        `<option value="${s}">${escHtml(lbl)}</option>`
       ).join('');
-      document.getElementById('personFilmography').innerHTML =
-        `<div id="personTabCollection" class="person-filmography">${collectionHtml}</div>` +
-        `<div id="personTabFilmography" style="display:none">` +
-          `<div class="person-film-sort-bar">${sortBtns}</div>` +
+      titleWrap.innerHTML =
+        `<div class="person-film-sort-wrap">` +
+          `<select class="person-film-sort-select" id="personFilmSort" onchange="_sortFilmography(this.value)">${sortOptions}</select>` +
+        `</div>` +
+        `<div class="modal-tabs">` +
+          `<button class="modal-tab active" id="personTabBtnCollection" onclick="_switchPersonTab('collection')">${t('person.tabCollection') || 'In collectie'}</button>` +
+          `<button class="modal-tab" id="personTabBtnFilmography" onclick="_switchPersonTab('filmography')">${t('person.tabFilmography') || 'Filmografie'}</button>` +
+        `</div>`;
+      const filmEl = document.getElementById('personFilmography');
+      filmEl.style.display = 'block';
+      filmEl.innerHTML =
+        `<div class="modal-tab-content active" id="personTabCollection">` +
+          `<div class="person-filmography" id="personCollectionGrid"></div>` +
+        `</div>` +
+        `<div class="modal-tab-content" id="personTabFilmography">` +
           `<div class="person-filmography" id="personFilmographyGrid"><span class="spinner"></span></div>` +
         `</div>`;
       _personFilmographySort = 'newest';
+      _personCollectionMovies = movies;
+      _personRatingMap = null;
+      _renderCollectionGrid(movies, 'newest', null);
       _loadPersonFilmography(personId);
     } else {
       // Simple mode: just show collection
       const filmTitle = document.getElementById('personFilmographyTitle');
       if (filmTitle) filmTitle.textContent = t('person.inCollection') || 'In jouw collectie';
-      document.getElementById('personFilmography').innerHTML =
-        `<div class="person-filmography">${collectionHtml}</div>`;
+      const filmEl = document.getElementById('personFilmography');
+      filmEl.style.display = '';
+      filmEl.innerHTML = collectionHtml;
     }
   } catch(e) {
     document.getElementById('personFilmography').innerHTML =
@@ -2298,6 +2309,8 @@ async function openPersonDetail(personId) {
 // ── Person filmography helpers ──────────────────────────────────────────────
 let _personFilmographyData = null;
 let _personFilmographySort = 'newest';
+let _personCollectionMovies = null;
+let _personRatingMap = null;
 
 function _switchPersonTab(tab) {
   const tabCol = document.getElementById('personTabCollection');
@@ -2306,8 +2319,8 @@ function _switchPersonTab(tab) {
   const btnFilm = document.getElementById('personTabBtnFilmography');
   if (!tabCol || !tabFilm) return;
   const showFilm = tab === 'filmography';
-  tabCol.style.display = showFilm ? 'none' : '';
-  tabFilm.style.display = showFilm ? '' : 'none';
+  tabCol.classList.toggle('active', !showFilm);
+  tabFilm.classList.toggle('active', showFilm);
   btnCol?.classList.toggle('active', !showFilm);
   btnFilm?.classList.toggle('active', showFilm);
   if (showFilm && _personFilmographyData) _renderFilmographyGrid(_personFilmographyData, _personFilmographySort);
@@ -2321,11 +2334,17 @@ async function _loadPersonFilmography(personId) {
     const r = await fetch(`${API}/people/${personId}/filmography?language=${lang}`);
     const data = await r.json();
     _personFilmographyData = data;
-    // Render immediately only if filmography tab is currently active
-    const tabFilm = document.getElementById('personTabFilmography');
-    if (tabFilm && tabFilm.style.display !== 'none') {
-      _renderFilmographyGrid(data, _personFilmographySort);
-    }
+    // Build rating lookup map: tmdb_id → vote_average
+    const ratingMap = {};
+    [...(data.cast || []), ...(data.crew || [])].forEach(m => {
+      if (m.tmdb_id && m.vote_average > 0) ratingMap[String(m.tmdb_id)] = m.vote_average;
+    });
+    _personRatingMap = ratingMap;
+    // Re-render collection grid with ratings now available
+    if (_personCollectionMovies) _renderCollectionGrid(_personCollectionMovies, _personFilmographySort, ratingMap);
+    // Pre-render filmography grid so tab switch is instant
+    const grid = document.getElementById('personFilmographyGrid');
+    if (grid) _renderFilmographyGrid(data, _personFilmographySort);
   } catch(e) {
     const grid = document.getElementById('personFilmographyGrid');
     if (grid) grid.innerHTML = `<div style="color:var(--danger)">${t('js.error', e.message)}</div>`;
@@ -2334,10 +2353,50 @@ async function _loadPersonFilmography(personId) {
 
 function _sortFilmography(sort) {
   _personFilmographySort = sort;
-  document.querySelectorAll('.person-film-sort').forEach(b => {
-    b.classList.toggle('active', b.dataset.sort === sort);
+  const sel = document.getElementById('personFilmSort');
+  if (sel && sel.value !== sort) sel.value = sort;
+  const tabCol = document.getElementById('personTabCollection');
+  if (tabCol && tabCol.classList.contains('active')) {
+    if (_personCollectionMovies) _renderCollectionGrid(_personCollectionMovies, sort, _personRatingMap);
+  } else if (_personFilmographyData) {
+    _renderFilmographyGrid(_personFilmographyData, sort);
+  }
+}
+
+function _renderCollectionGrid(movies, sort, ratingMap) {
+  const grid = document.getElementById('personCollectionGrid');
+  if (!grid) return;
+  let sorted = [...movies];
+  if (sort === 'newest') sorted.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
+  else if (sort === 'oldest') sorted.sort((a, b) => (a.year || '9999').localeCompare(b.year || '9999'));
+  else if (sort === 'az') sorted.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  else if (sort === 'rating') sorted.sort((a, b) => {
+    const ra = ratingMap ? (ratingMap[String(a.tmdb_id)] || 0) : 0;
+    const rb = ratingMap ? (ratingMap[String(b.tmdb_id)] || 0) : 0;
+    return rb - ra;
   });
-  if (_personFilmographyData) _renderFilmographyGrid(_personFilmographyData, sort);
+  if (!sorted.length) {
+    grid.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">${t('js.noMoviesFound')}</div>`;
+    return;
+  }
+  let html = '';
+  sorted.forEach(m => {
+    const src = m.poster_file ? `${API}/posters/${m.poster_file}` : (m.poster || '');
+    const posterImg = src
+      ? `<img class="person-film-poster" src="${src}" onerror="this.style.display='none'">`
+      : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
+    const formatBadge = m.format ? `<div class="person-film-format-badge">${escHtml(m.format)}</div>` : '';
+    const voteAvg = ratingMap ? (ratingMap[String(m.tmdb_id)] || 0) : 0;
+    const rating = voteAvg > 0 ? `<div class="person-film-rating">⭐ ${voteAvg.toFixed(1)}</div>` : '';
+    const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>`
+               : m.job ? `<div class="person-film-year">${escHtml(m.job)}</div>` : '';
+    html += `<div class="person-film-card" onclick="_detailReturnTab='person-detail';openMovieDetail(${m.id})">`;
+    html += `<div style="position:relative">${posterImg}${formatBadge}</div>`;
+    html += `<div class="person-film-title">${escHtml(m.title)}</div>`;
+    html += `<div class="person-film-year">${m.year || ''}</div>${rating}${role}`;
+    html += `</div>`;
+  });
+  grid.innerHTML = html;
 }
 
 function _renderFilmographyGrid(data, sort) {

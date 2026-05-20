@@ -2576,7 +2576,7 @@ def get_person(person_id):
     # Get all movies this person appears in
     movies = conn.execute("""
         SELECT m.id, m.title, m.year, m.poster_file, m.poster, m.format,
-               mp.role, mp.character, mp.job
+               m.tmdb_id, mp.role, mp.character, mp.job
         FROM movie_people mp
         JOIN movies m ON m.id = mp.movie_id
         WHERE mp.person_id = ?

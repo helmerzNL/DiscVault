@@ -1455,49 +1455,22 @@
     border: 1px solid rgba(255,255,255,0.4);
     pointer-events: none;
   }
-  /* Tabs */
-  .person-film-tabs {
+  /* Person sort dropdown */
+  .person-film-sort-wrap {
     display: flex;
+    align-items: center;
+    justify-content: flex-end;
     gap: 8px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
+    margin-bottom: 8px;
   }
-  .person-film-tab {
-    padding: 6px 14px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: var(--surface2);
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-  }
-  .person-film-tab.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-  }
-  /* Sort bar */
-  .person-film-sort-bar {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-  }
-  .person-film-sort {
-    padding: 4px 10px;
-    border-radius: 14px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 0.72rem;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-  }
-  .person-film-sort.active {
+  .person-film-sort-select {
     background: var(--surface2);
     color: var(--text);
-    border-color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
   }
 
   /* ── Detail pages (film & persoon) ── */
