@@ -6220,15 +6220,16 @@ def set_api_keys_settings():
         if field not in data:
             continue
         val = str(data[field]).strip()
+        masked = ('\u2022' * max(len(val) - 4, 0)) + val[-4:] if val else ''
         if val:
             conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                 (f"{service}_api_key", val)
             )
-            add_log("settings", f"{service.upper()} API key bijgewerkt", level="info")
+            add_log("settings", f"{service.upper()} API key opgeslagen ({masked})", level="info")
         else:
             conn.execute("DELETE FROM settings WHERE key=?", (f"{service}_api_key",))
-            add_log("settings", f"{service.upper()} API key verwijderd", level="info")
+            add_log("settings", f"{service.upper()} API key verwijderd uit database", level="info")
     conn.commit()
     conn.close()
     return jsonify({"status": "ok"})
