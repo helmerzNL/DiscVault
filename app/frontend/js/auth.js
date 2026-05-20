@@ -25,7 +25,9 @@ function applyCollectionWriteVisibility() {
     || ['collection.add', 'collection.edit_own', 'collection.edit_all',
         'collection.delete_own', 'collection.delete_all', 'collection.import']
       .some(p => hasPermission(p));
-  // ☑ Selecteren / ↻ Vernieuwen / ⚡ Vergelijk
+  // CSS class on <body> (survives inline-style resets, highest priority via !important)
+  document.body.classList.toggle('hide-write-controls', !canWrite);
+  // Also set inline styles as belt-and-suspenders
   ['btnSelectMode', 'btnCollectionRefresh', 'btnCompareMode'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = canWrite ? '' : 'none';

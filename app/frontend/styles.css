@@ -1473,6 +1473,11 @@
   body:not(.collectors-mode) .collectors-only { display: none !important; }
   /* Hide all Plex/Jellyfin UI for group members when admin disabled it */
   body.hide-digital .digital-feature { display: none !important; }
+  /* Hide write-only controls for read-only users (Video Viewer etc.) */
+  body.hide-write-controls #btnSelectMode,
+  body.hide-write-controls #btnCollectionRefresh,
+  body.hide-write-controls #btnCompareMode,
+  body.hide-write-controls #meerMenuAdd { display: none !important; }
 
   .eg-panel-grid {
     display: flex;

@@ -17,6 +17,8 @@ async function init() {
   flushQueuedMutations();
   await loadStats();
   await loadCollection();
+  // Re-apply write-control visibility after all async init steps complete
+  applyCollectionWriteVisibility();
   loadInviteNotifications();
   _handleRoute();
 }
