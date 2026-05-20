@@ -154,23 +154,36 @@ def _get_fernet() -> Fernet:
     return Fernet(fernet_key)
 
 
-def _make_digital_play_url(item) -> str:
-    """Construct a deep-link URL for a digital library item."""
+def _make_digital_urls(item) -> dict:
+    """Return {'web_url': str, 'app_url': str} for a digital library item.
+    web_url  — browser fallback (Plex local web / Jellyfin web)
+    app_url  — native-app URI scheme (plex:// for Plex; empty for Jellyfin)
+    """
     source_type = item.get("source_type", "")
-    base_url = (item.get("base_url") or "").rstrip("/")
-    ext_id = str(item.get("external_id") or "")
-    machine_id = str(item.get("machine_id") or "")
-    if not base_url or not ext_id:
-        return ""
+    base_url    = (item.get("base_url") or "").rstrip("/")
+    ext_id      = str(item.get("external_id") or "")
+    machine_id  = str(item.get("machine_id") or "")
+
     if source_type == "plex":
-        if machine_id:
-            key_enc = "/library/metadata/" + ext_id
-            key_enc = key_enc.replace("/", "%2F")
-            return f"{base_url}/web/index.html#!/server/{machine_id}/details?key={key_enc}"
-        return f"{base_url}/web/index.html"
+        if machine_id and ext_id:
+            key_path = f"/library/metadata/{ext_id}"
+            key_enc  = key_path.replace("/", "%2F")
+            web_url  = f"{base_url}/web/index.html#!/server/{machine_id}/details?key={key_enc}" if base_url else ""
+            # plex:// URI opens the native Plex app (macOS, Windows, iOS, Android)
+            app_url  = f"plex://server/{machine_id}/details?key={key_path}"
+        else:
+            web_url = f"{base_url}/web/index.html" if base_url else ""
+            app_url = ""
+        return {"web_url": web_url, "app_url": app_url}
+
     elif source_type == "jellyfin":
-        return f"{base_url}/web/index.html#!/details?id={ext_id}"
-    return ""
+        if base_url and ext_id:
+            web_url = f"{base_url}/web/index.html#!/details?id={ext_id}"
+        else:
+            web_url = f"{base_url}/web/index.html" if base_url else ""
+        return {"web_url": web_url, "app_url": ""}
+
+    return {"web_url": "", "app_url": ""}
 
 
 def _encrypt_token(token: str) -> str:
@@ -8099,9 +8112,11 @@ def collection_compare():
             physical_and_digital.append({
                 "movie": md,
                 "digital_matches": [
-                    {"source_name": x["source_name"], "source_type": x["source_type"],
-                     "title": x["title"], "year": x["year"],
-                     "play_url": _make_digital_play_url(x)}
+                    dict(
+                        source_name=x["source_name"], source_type=x["source_type"],
+                        title=x["title"], year=x["year"],
+                        **_make_digital_urls(x)
+                    )
                     for x in deduped
                 ]
             })
