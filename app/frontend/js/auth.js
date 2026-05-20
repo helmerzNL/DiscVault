@@ -1087,18 +1087,24 @@ async function loadRoles() {
   const list   = document.getElementById('adminRolesList');
   const status = document.getElementById('adminRolesStatus');
   if (!list) return;
-  list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem; padding:12px 0;">Bezig met laden…</p>';
+  list.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem; padding:12px 0;">Bezig met laden\u2026</p>';
   try {
+    const fetchJson = async (url) => {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${url} \u2192 HTTP ${r.status}`);
+      return r.json();
+    };
     const [roles, allUsers, allGroups] = await Promise.all([
-      fetch(`${API}/roles`).then(r => r.json()),
-      fetch(`${API}/auth/users`).then(r => r.json()),
-      fetch(`${API}/groups`).then(r => r.json()),
+      fetchJson(`${API}/roles`),
+      fetchJson(`${API}/auth/users`),
+      fetchJson(`${API}/groups`),
     ]);
     window._roleAllUsers  = allUsers;
     window._roleAllGroups = allGroups;
     renderRolesAdmin(roles);
   } catch(e) {
-    list.innerHTML = '<p style="color:var(--danger); font-size:0.85rem;">Kon rollen niet laden.</p>';
+    console.error('loadRoles error:', e);
+    list.innerHTML = `<p style="color:var(--danger); font-size:0.85rem;">Kon rollen niet laden: ${e.message}</p>`;
   }
 }
 
