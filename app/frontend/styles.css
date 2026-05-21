@@ -1568,17 +1568,16 @@
     border-color: var(--accent);
   }
 
-  /* Responsive pills: on mobile filmography wraps below the other two */
+  /* Responsive pills: pills auto-width, dropdown on same row */
   @media (max-width: 560px) {
     .person-film-pill-bar {
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
     }
     .person-film-pill-tabs {
-      flex: 1 1 100%;
-    }
-    .person-film-pill-tabs .person-film-pill:last-child {
-      flex-basis: 100%;
+      display: contents;
     }
   }
 
