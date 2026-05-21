@@ -2259,7 +2259,7 @@ async function openPersonDetail(personId) {
     }
 
     if (detailedActorDetails) {
-      // Show sort dropdown + modal-style tabs
+      // Show pill tabs + sort dropdown
       const titleWrap = document.getElementById('personFilmographyTitleWrap');
       const sortLabels = [
         ['newest', t('person.sortNewest') || 'Nieuwste eerst'],
@@ -2271,18 +2271,22 @@ async function openPersonDetail(personId) {
         `<option value="${s}">${escHtml(lbl)}</option>`
       ).join('');
       titleWrap.innerHTML =
-        `<div class="person-film-sort-wrap">` +
+        `<div class="person-film-pill-bar">` +
+          `<div class="person-film-pill-tabs">` +
+            `<button class="person-film-pill active" id="personTabBtnCollection" onclick="_switchPersonTab('collection')">${t('person.tabCollection') || 'In collectie'} <span class="person-film-pill-count" id="personTabCountCollection">${movies.length}</span></button>` +
+            `<button class="person-film-pill" id="personTabBtnDigital" onclick="_switchPersonTab('digital')">${t('person.tabDigital') || 'Digitale bibliotheek'} <span class="person-film-pill-count" id="personTabCountDigital">…</span></button>` +
+            `<button class="person-film-pill" id="personTabBtnFilmography" onclick="_switchPersonTab('filmography')">${t('person.tabFilmography') || 'Filmografie'} <span class="person-film-pill-count" id="personTabCountFilmography">…</span></button>` +
+          `</div>` +
           `<select class="person-film-sort-select" id="personFilmSort" onchange="_sortFilmography(this.value)">${sortOptions}</select>` +
-        `</div>` +
-        `<div class="modal-tabs">` +
-          `<button class="modal-tab active" id="personTabBtnCollection" onclick="_switchPersonTab('collection')">${t('person.tabCollection') || 'In collectie'}</button>` +
-          `<button class="modal-tab" id="personTabBtnFilmography" onclick="_switchPersonTab('filmography')">${t('person.tabFilmography') || 'Filmografie'}</button>` +
         `</div>`;
       const filmEl = document.getElementById('personFilmography');
       filmEl.style.display = 'block';
       filmEl.innerHTML =
         `<div class="modal-tab-content active" id="personTabCollection">` +
           `<div class="person-filmography" id="personCollectionGrid"></div>` +
+        `</div>` +
+        `<div class="modal-tab-content" id="personTabDigital">` +
+          `<div class="person-filmography" id="personDigitalGrid"><span class="spinner"></span></div>` +
         `</div>` +
         `<div class="modal-tab-content" id="personTabFilmography">` +
           `<div class="person-filmography" id="personFilmographyGrid"><span class="spinner"></span></div>` +
