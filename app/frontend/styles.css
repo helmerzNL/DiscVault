@@ -1457,12 +1457,12 @@
   }
   /* Person page — pill tab bar */
   .person-film-pill-bar {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
     margin-bottom: 16px;
     flex-wrap: nowrap;
+    max-width: 100%;
     overflow-x: auto;
   }
   .person-film-pill-tabs {
@@ -1518,6 +1518,7 @@
     cursor: pointer;
     white-space: nowrap;
     flex-shrink: 0;
+    width: auto;
   }
   .person-film-sort-select:hover {
     border-color: var(--accent);
