@@ -11,7 +11,6 @@ struct CollectionView: View {
     @State private var manualBarcode: String = ""
     @State private var isLookingUp = false
     @State private var lookupError: String? = nil
-    @State private var scannedBarcode: String? = nil
 
     private let columns = [
         GridItem(.flexible(), spacing: 10),
@@ -27,22 +26,19 @@ struct CollectionView: View {
                 if let vm = viewModel {
                     content(vm: vm)
                 } else {
-                    ProgressView()
-                        .tint(.white)
+                    ProgressView().tint(.white)
                 }
             }
             .navigationTitle("Collection")
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbar {
-                toolbarItems
-            }
+            .toolbar { toolbarItems }
             .searchable(
                 text: Binding(
                     get: { viewModel?.searchText ?? "" },
                     set: { viewModel?.searchText = $0 }
                 ),
-                prompt: "Search titles, directors…"
+                prompt: "Search titles, directors\u{2026}"
             )
             .sheet(isPresented: $showFilters) {
                 if let vm = viewModel { FilterSheet(viewModel: vm) }
@@ -54,8 +50,9 @@ struct CollectionView: View {
                 BarcodeScannerView { barcode in
                     showScanner = false
                     showAddSheet = false
-                    scannedBarcode = barcode
-                    Task { await addByBarcode(barcode, vm: viewModel!) }
+                    if let vm = viewModel {
+                        Task { await addByBarcode(barcode, vm: vm) }
+                    }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .barcodeScanned)) { note in
@@ -85,7 +82,6 @@ struct CollectionView: View {
         } else {
             ScrollView {
                 statsBar(vm: vm)
-
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(vm.filteredMovies) { movie in
                         NavigationLink {
@@ -105,10 +101,8 @@ struct CollectionView: View {
 
     private var loadingView: some View {
         VStack(spacing: 16) {
-            ProgressView()
-                .tint(.white)
-                .scaleEffect(1.3)
-            Text("Loading collection…")
+            ProgressView().tint(.white).scaleEffect(1.3)
+            Text("Loading collection\u{2026}")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.5))
         }
@@ -119,7 +113,9 @@ struct CollectionView: View {
             Image(systemName: vm.searchText.isEmpty ? "opticaldisc" : "magnifyingglass")
                 .font(.system(size: 56))
                 .foregroundStyle(.white.opacity(0.2))
-            Text(vm.searchText.isEmpty ? "Your collection is empty" : "No results for \"\(vm.searchText)\"")
+            Text(vm.searchText.isEmpty
+                 ? "Your collection is empty"
+                 : "No results for \"\(vm.searchText)\"")
                 .font(.title3.weight(.medium))
                 .foregroundStyle(.white.opacity(0.5))
             if vm.searchText.isEmpty {
@@ -137,9 +133,9 @@ struct CollectionView: View {
     private func statsBar(vm: CollectionViewModel) -> some View {
         HStack(spacing: 16) {
             StatChip(value: vm.stats.totalMovies, label: "Movies", color: .white)
-            StatChip(value: vm.stats.total4K, label: "4K", color: Color(red: 0.6, green: 0.3, blue: 1.0))
-            StatChip(value: vm.stats.totalBluray, label: "BD", color: Color(red: 0.3, green: 0.5, blue: 1.0))
-            StatChip(value: vm.stats.totalDVD, label: "DVD", color: .gray)
+            StatChip(value: vm.stats.total4K,     label: "4K",     color: Color(red: 0.6, green: 0.3, blue: 1.0))
+            StatChip(value: vm.stats.totalBluray, label: "BD",     color: Color(red: 0.3, green: 0.5, blue: 1.0))
+            StatChip(value: vm.stats.totalDVD,    label: "DVD",    color: .gray)
             Spacer()
         }
         .padding(.horizontal, 12)
@@ -153,7 +149,6 @@ struct CollectionView: View {
             ZStack {
                 Color(red: 0.06, green: 0.06, blue: 0.14).ignoresSafeArea()
                 VStack(spacing: 20) {
-                    // Scan barcode
                     Button {
                         showScanner = true
                     } label: {
@@ -166,7 +161,6 @@ struct CollectionView: View {
                     }
                     .buttonStyle(.plain)
 
-                    // Manual barcode
                     VStack(alignment: .leading, spacing: 10) {
                         AddOptionRow(
                             icon: "keyboard",
@@ -188,7 +182,8 @@ struct CollectionView: View {
                                 guard let vm = viewModel else { return }
                                 Task { await addByBarcode(manualBarcode, vm: vm) }
                             } label: {
-                                SwiftUI.Group {
+                                // ZStack instead of Group so .frame() applies correctly
+                                ZStack {
                                     if isLookingUp {
                                         ProgressView().tint(.white)
                                     } else {
@@ -202,14 +197,10 @@ struct CollectionView: View {
                             }
                             .disabled(manualBarcode.count < 8 || isLookingUp)
                         }
-
                         if let err = lookupError {
-                            Text(err)
-                                .font(.caption)
-                                .foregroundStyle(.red)
+                            Text(err).font(.caption).foregroundStyle(.red)
                         }
                     }
-
                     Spacer()
                 }
                 .padding(24)
@@ -218,8 +209,7 @@ struct CollectionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showAddSheet = false }
-                        .foregroundStyle(.white)
+                    Button("Cancel") { showAddSheet = false }.foregroundStyle(.white)
                 }
             }
         }
@@ -231,19 +221,13 @@ struct CollectionView: View {
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showFilters = true
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .foregroundStyle(.white)
+            Button { showFilters = true } label: {
+                Image(systemName: "line.3.horizontal.decrease.circle").foregroundStyle(.white)
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showAddSheet = true
-            } label: {
-                Image(systemName: "plus")
-                    .foregroundStyle(.white)
+            Button { showAddSheet = true } label: {
+                Image(systemName: "plus").foregroundStyle(.white)
             }
         }
     }
@@ -252,8 +236,7 @@ struct CollectionView: View {
 
     private func addByBarcode(_ barcode: String, vm: CollectionViewModel) async {
         guard !barcode.isEmpty else { return }
-        isLookingUp = true
-        lookupError = nil
+        isLookingUp = true; lookupError = nil
         do {
             _ = try await vm.addMovieByBarcode(barcode)
             manualBarcode = ""
@@ -274,20 +257,14 @@ private struct FilterSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Format") {
-                    formatPicker
-                }
-                .listRowBackground(Color.white.opacity(0.06))
-
+                Section("Format") { formatPicker }
+                    .listRowBackground(Color.white.opacity(0.06))
                 Section("Show") {
                     Toggle("Wanted only", isOn: $viewModel.showWantedOnly)
                 }
                 .listRowBackground(Color.white.opacity(0.06))
-
-                Section("Sort By") {
-                    sortPicker
-                }
-                .listRowBackground(Color.white.opacity(0.06))
+                Section("Sort By") { sortPicker }
+                    .listRowBackground(Color.white.opacity(0.06))
             }
             .scrollContentBackground(.hidden)
             .background(Color(red: 0.06, green: 0.06, blue: 0.14))
@@ -304,16 +281,16 @@ private struct FilterSheet: View {
 
     private var formatPicker: some View {
         VStack(spacing: 0) {
-            FormatButton(label: "All Formats", isSelected: viewModel.selectedFormat == nil) {
+            FormatRow(label: "All Formats", selected: viewModel.selectedFormat == nil) {
                 viewModel.selectedFormat = nil
             }
-            FormatButton(label: "4K UHD", isSelected: viewModel.selectedFormat == "4K UHD") {
+            FormatRow(label: "4K UHD", selected: viewModel.selectedFormat == "4K UHD") {
                 viewModel.selectedFormat = "4K UHD"
             }
-            FormatButton(label: "Blu-ray", isSelected: viewModel.selectedFormat == "Blu-ray") {
+            FormatRow(label: "Blu-ray", selected: viewModel.selectedFormat == "Blu-ray") {
                 viewModel.selectedFormat = "Blu-ray"
             }
-            FormatButton(label: "DVD", isSelected: viewModel.selectedFormat == "DVD") {
+            FormatRow(label: "DVD", selected: viewModel.selectedFormat == "DVD") {
                 viewModel.selectedFormat = "DVD"
             }
         }
@@ -325,12 +302,10 @@ private struct FilterSheet: View {
                 viewModel.sortOrder = order
             } label: {
                 HStack {
-                    Text(order.rawValue)
-                        .foregroundStyle(.primary)
+                    Text(order.rawValue).foregroundStyle(.primary)
                     Spacer()
                     if viewModel.sortOrder == order {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(.blue)
+                        Image(systemName: "checkmark").foregroundStyle(.blue)
                     }
                 }
             }
@@ -338,9 +313,9 @@ private struct FilterSheet: View {
     }
 }
 
-private struct FormatButton: View {
+private struct FormatRow: View {
     let label: String
-    let isSelected: Bool
+    let selected: Bool
     let action: () -> Void
 
     var body: some View {
@@ -348,7 +323,7 @@ private struct FormatButton: View {
             HStack {
                 Text(label).foregroundStyle(.primary)
                 Spacer()
-                if isSelected { Image(systemName: "checkmark").foregroundStyle(.blue) }
+                if selected { Image(systemName: "checkmark").foregroundStyle(.blue) }
             }
         }
     }
@@ -357,50 +332,29 @@ private struct FormatButton: View {
 // MARK: - Helpers
 
 private struct StatChip: View {
-    let value: Int
-    let label: String
-    let color: Color
-
+    let value: Int; let label: String; let color: Color
     var body: some View {
         HStack(spacing: 4) {
-            Text("\(value)")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.45))
+            Text("\(value)").font(.caption.weight(.bold)).foregroundStyle(color)
+            Text(label).font(.caption).foregroundStyle(.white.opacity(0.45))
         }
     }
 }
 
 private struct AddOptionRow: View {
-    let icon: String
-    let color: Color
-    let title: String
-    let description: String
-
+    let icon: String; let color: Color; let title: String; let description: String
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(color.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundStyle(color)
+                RoundedRectangle(cornerRadius: 10).fill(color.opacity(0.15)).frame(width: 44, height: 44)
+                Image(systemName: icon).font(.system(size: 20)).foregroundStyle(color)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.45))
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Text(description).font(.caption).foregroundStyle(.white.opacity(0.45))
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.3))
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.white.opacity(0.3))
         }
         .padding(14)
         .background(.white.opacity(0.06))

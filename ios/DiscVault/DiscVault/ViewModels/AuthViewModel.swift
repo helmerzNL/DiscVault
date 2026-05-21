@@ -1,6 +1,7 @@
 import SwiftUI
 import AuthenticationServices
 
+@MainActor
 @Observable
 final class AuthViewModel: NSObject {
     var isLoading = false

@@ -181,8 +181,9 @@ struct LoginView: View {
 }
 
 #Preview {
+    let appState = AppStateManager()
     LoginView()
-        .environmentObject(AppStateManager())
-        .environment(AppStateManager().apiClient)
+        .environmentObject(appState)
+        .environment(appState.apiClient)
         .preferredColorScheme(.dark)
 }

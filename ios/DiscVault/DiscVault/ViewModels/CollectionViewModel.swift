@@ -17,6 +17,7 @@ struct CollectionStats {
     var wantedCount: Int = 0
 }
 
+@MainActor
 @Observable
 final class CollectionViewModel {
     var movies: [Movie] = []

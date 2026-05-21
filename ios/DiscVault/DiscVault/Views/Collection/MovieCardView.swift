@@ -62,7 +62,7 @@ struct MovieCardView: View {
     }
 
     private var formatBadge: some View {
-        Group {
+        SwiftUI.Group {
             if let format = movie.format {
                 Text(formatLabel(format))
                     .font(.system(size: 9, weight: .bold))

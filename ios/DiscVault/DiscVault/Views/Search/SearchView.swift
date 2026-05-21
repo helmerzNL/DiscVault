@@ -27,7 +27,7 @@ struct SearchView: View {
             }
             .navigationTitle("Search")
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .searchable(text: $searchText, prompt: "Title, director, genre…")
+            .searchable(text: $searchText, prompt: "Title, director, genre\u{2026}")
             .onChange(of: searchText) { _, newValue in
                 scheduleSearch(query: newValue)
             }
@@ -59,7 +59,7 @@ struct SearchView: View {
             Text("No results for")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.4))
-            Text(""\(searchText)"")
+            Text("\"\(searchText)\"")
                 .font(.title3.bold())
                 .foregroundStyle(.white.opacity(0.6))
         }
@@ -88,7 +88,7 @@ struct SearchView: View {
             return
         }
         searchTask = Task {
-            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+            try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
 
             await MainActor.run { isSearching = true }
@@ -117,22 +117,9 @@ private struct MovieSearchRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Thumbnail
-            Group {
-                if let url = apiClient.posterURL(for: movie.poster) {
-                    AsyncImage(url: url) { phase in
-                        if case .success(let img) = phase {
-                            img.resizable().aspectRatio(contentMode: .fill)
-                        } else {
-                            posterPlaceholder
-                        }
-                    }
-                } else {
-                    posterPlaceholder
-                }
-            }
-            .frame(width: 44, height: 66)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            posterThumbnail
+                .frame(width: 44, height: 66)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(movie.title)
@@ -164,12 +151,26 @@ private struct MovieSearchRow: View {
         .padding(.vertical, 4)
     }
 
+    @ViewBuilder
+    private var posterThumbnail: some View {
+        if let url = apiClient.posterURL(for: movie.poster) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let img):
+                    img.resizable().aspectRatio(contentMode: .fill)
+                default:
+                    posterPlaceholder
+                }
+            }
+        } else {
+            posterPlaceholder
+        }
+    }
+
     private var posterPlaceholder: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.white.opacity(0.08))
-            Image(systemName: "opticaldisc")
-                .foregroundStyle(.white.opacity(0.25))
+            RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.08))
+            Image(systemName: "opticaldisc").foregroundStyle(.white.opacity(0.25))
         }
     }
 
@@ -182,8 +183,7 @@ private struct MovieSearchRow: View {
         return Text(label)
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
+            .padding(.horizontal, 5).padding(.vertical, 2)
             .background(color)
             .clipShape(RoundedRectangle(cornerRadius: 4))
     }

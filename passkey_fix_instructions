@@ -1,0 +1,176 @@
+Implement mobile-app passkey login without breaking the existing PWA login.
+
+Goal
+The PWA keeps its current passkey flow, while the native iOS app can authenticate through ASWebAuthenticationSession for arbitrary self-hosted domains.
+
+Add a mobile auth flow:
+
+1. Add endpoint: GET /api/auth/mobile/start
+
+Accept query params:
+
+callback_scheme=discvault
+
+Optional:
+
+state=<random-client-state>
+
+Behavior:
+- Generate a temporary mobile_flow_id.
+- Store:
+  - mobile_flow_id
+  - callback_scheme
+  - optional state
+  - expiry, e.g. 5 minutes
+- Redirect or render the normal login page with the flow ID included, for example:
+
+/login?mobile_flow=<mobile_flow_id>
+
+or, if the app is single-page:
+
+/?mobile_flow=<mobile_flow_id>
+
+2. Keep the existing PWA passkey login unchanged.
+
+Current PWA behavior should remain:
+
+POST /api/auth/login/options
+navigator.credentials.get(...)
+POST /api/auth/login/verify
+return { token, username }
+PWA stores token in localStorage
+
+3. Extend the passkey verify request to optionally include mobile_flow.
+
+Example request from frontend:
+
+{
+  "credential": { "...": "existing WebAuthn credential payload" },
+  "mobile_flow": "abc123"
+}
+
+4. Update /api/auth/login/verify
+
+After successful passkey verification:
+
+- If mobile_flow is missing:
+  - keep current behavior exactly:
+
+{
+  "status": "ok",
+  "token": "...",
+  "username": "..."
+}
+
+- If mobile_flow is present:
+  - validate the flow exists and has not expired.
+  - create a short-lived one-time code, e.g. expires in 60 seconds.
+  - store the code mapped to the authenticated user.
+  - delete or mark the mobile flow as used.
+  - return a callback URL instead of exposing the long-lived token to the browser page:
+
+{
+  "status": "ok",
+  "callback_url": "discvault://auth-callback?code=ONE_TIME_CODE&state=OPTIONAL_STATE"
+}
+
+The frontend should then redirect:
+
+window.location.href = data.callback_url;
+
+5. Add endpoint: POST /api/auth/mobile/exchange
+
+Request:
+
+{
+  "code": "ONE_TIME_CODE"
+}
+
+Behavior:
+- Validate code exists, unused, and not expired.
+- Mark it used or delete it.
+- Create/return the normal API token for that user.
+
+Response:
+
+{
+  "status": "ok",
+  "token": "...",
+  "username": "..."
+}
+
+6. Security requirements
+
+- Do not put the long-lived API token directly in the custom-scheme callback URL.
+- Use a short-lived one-time code.
+- One-time code should expire quickly, e.g. 60 seconds.
+- Mobile flow ID should expire, e.g. 5 minutes.
+- Delete/consume both mobile flow and code after use.
+- Only allow expected callback schemes, at minimum:
+
+discvault
+
+- Keep all existing WebAuthn challenge validation exactly as-is:
+  - challenge
+  - origin
+  - RP ID hash
+  - signature
+  - credential ID
+  - sign count
+
+7. Frontend behavior
+
+On login page load:
+- Detect mobile_flow in the URL.
+- Store it in memory for the login attempt.
+- When calling /api/auth/login/verify, include that mobile_flow.
+- If response contains callback_url, redirect to it.
+- Otherwise keep existing PWA behavior and store token in localStorage.
+
+Pseudo-code:
+
+const params = new URLSearchParams(window.location.search);
+const mobileFlow = params.get('mobile_flow');
+
+const verifyBody = { credential };
+if (mobileFlow) {
+  verifyBody.mobile_flow = mobileFlow;
+}
+
+const res = await fetch(`${API}/auth/login/verify`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(verifyBody)
+});
+
+const data = await res.json();
+
+if (data.callback_url) {
+  window.location.href = data.callback_url;
+  return;
+}
+
+if (data.token) {
+  localStorage.setItem('dv_token', data.token);
+  init();
+}
+
+8. Native app expectation
+
+The iOS app will open:
+
+https://SERVER/api/auth/mobile/start?callback_scheme=discvault
+
+using ASWebAuthenticationSession.
+
+After passkey login, the website redirects to:
+
+discvault://auth-callback?code=ONE_TIME_CODE
+
+The app then calls:
+
+POST https://SERVER/api/auth/mobile/exchange
+
+with the code and stores the returned token in Keychain.
+
+This lets arbitrary self-hosted DiscVault servers use passkeys without requiring each domain to be listed in the iOS app's Associated Domains entitlement.

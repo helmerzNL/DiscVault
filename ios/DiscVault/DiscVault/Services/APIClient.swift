@@ -19,6 +19,7 @@ enum APIError: LocalizedError {
     }
 }
 
+@MainActor
 @Observable
 final class APIClient {
     var baseURL: String = ""
@@ -63,6 +64,31 @@ final class APIClient {
             KeychainService.save(rt, for: KeychainService.refreshToken)
         }
         return tokens
+    }
+
+    func getPasskeyLoginOptions() async throws -> PasskeyLoginOptions {
+        let response: PasskeyLoginOptionsResponse = try await request(
+            "/api/auth/login/options",
+            method: "POST",
+            body: EmptyRequestBody(),
+            skipAuth: true
+        )
+        return response.options
+    }
+
+    func verifyPasskeyLogin(credential: PasskeyAssertionCredential) async throws -> PasskeyAuthResponse {
+        let response: PasskeyAuthResponse = try await request(
+            "/api/auth/login/verify",
+            method: "POST",
+            body: PasskeyLoginVerificationRequest(credential: credential),
+            skipAuth: true
+        )
+        accessToken = response.token
+        refreshTokenValue = nil
+        isAuthenticated = true
+        KeychainService.save(response.token, for: KeychainService.accessToken)
+        KeychainService.delete(for: KeychainService.refreshToken)
+        return response
     }
 
     func refreshToken() async throws {
@@ -209,8 +235,7 @@ final class APIClient {
         }
 
         if http.statusCode >= 400 {
-            struct ErrorBody: Decodable { let error: String? }
-            let msg = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error ?? "HTTP \(http.statusCode)"
+            let msg = (try? JSONDecoder().decode(APIErrorBody.self, from: data))?.error ?? "HTTP \(http.statusCode)"
             throw APIError.serverError(msg)
         }
 
@@ -230,4 +255,9 @@ final class APIClient {
     }
 }
 
+private struct APIErrorBody: Decodable {
+    let error: String?
+}
+
+private struct EmptyRequestBody: Encodable {}
 private struct EmptyResponse: Decodable {}

@@ -72,7 +72,7 @@ struct MovieDetailView: View {
     private func heroSection(vm: MovieDetailViewModel) -> some View {
         ZStack(alignment: .bottomLeading) {
             // Backdrop
-            Group {
+            SwiftUI.Group {
                 if let url = apiClient.posterURL(for: vm.movie.backdrop ?? vm.movie.poster) {
                     AsyncImage(url: url) { phase in
                         if case .success(let img) = phase {
@@ -205,7 +205,7 @@ struct MovieDetailView: View {
     // MARK: - Plot
 
     private func plotSection(vm: MovieDetailViewModel) -> some View {
-        Group {
+        SwiftUI.Group {
             if let plot = vm.movie.plot, !plot.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Plot")
@@ -223,7 +223,7 @@ struct MovieDetailView: View {
     // MARK: - Cast
 
     private func castSection(vm: MovieDetailViewModel) -> some View {
-        Group {
+        SwiftUI.Group {
             if let cast = vm.movie.cast, !cast.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Cast & Crew")
@@ -316,7 +316,7 @@ private struct CastCardView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Group {
+            SwiftUI.Group {
                 if let url = apiClient.posterURL(for: member.profilePhoto) {
                     AsyncImage(url: url) { phase in
                         if case .success(let img) = phase {

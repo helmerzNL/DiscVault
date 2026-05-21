@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct DiscVaultApp: App {
-    @State private var appState = AppStateManager()
+    @StateObject private var appState = AppStateManager()
 
     var body: some Scene {
         WindowGroup {
@@ -18,22 +18,19 @@ struct RootView: View {
     @EnvironmentObject private var appState: AppStateManager
 
     var body: some View {
-        Group {
+        ZStack {
             switch appState.phase {
             case .welcome:
                 WelcomeView()
                     .transition(.opacity)
-
             case .serverSetup:
                 NavigationStack {
                     ServerSetupView()
                 }
                 .transition(.opacity)
-
             case .login:
                 LoginView()
                     .transition(.opacity)
-
             case .main:
                 MainTabView()
                     .transition(.opacity)

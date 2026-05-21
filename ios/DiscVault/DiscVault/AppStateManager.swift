@@ -1,18 +1,16 @@
 import SwiftUI
-import Combine
 
-enum AppPhase {
-    case welcome       // First launch — no server URL stored
-    case serverSetup   // Has been to welcome but needs to set/fix server URL
-    case login         // Has server URL, not authenticated
-    case main          // Authenticated and ready
+enum AppPhase: Equatable {
+    case welcome
+    case serverSetup
+    case login
+    case main
 }
 
-@Observable
+@MainActor
 final class AppStateManager: ObservableObject {
-
-    var phase: AppPhase = .welcome
-    var serverURL: String = ""
+    @Published var phase: AppPhase = .welcome
+    @Published var serverURL: String = ""
 
     let apiClient: APIClient
 

@@ -47,58 +47,25 @@ struct WelcomeView: View {
     }
 
     private var background: some View {
-        ZStack {
-            Color(red: 0.04, green: 0.04, blue: 0.12)
-                .ignoresSafeArea()
-
-            // Ambient glows
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color(red: 0.3, green: 0.1, blue: 0.8).opacity(0.35), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 300
-                    )
-                )
-                .frame(width: 500, height: 500)
-                .offset(x: -100, y: -250)
-
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color(red: 0.1, green: 0.3, blue: 0.9).opacity(0.25), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 250
-                    )
-                )
-                .frame(width: 400, height: 400)
-                .offset(x: 150, y: 200)
-        }
+        LinearGradient(
+            colors: [
+                Color(red: 0.04, green: 0.04, blue: 0.08),
+                Color(red: 0.07, green: 0.07, blue: 0.12)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
     }
 
     private var logoSection: some View {
         VStack(spacing: 24) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.45, green: 0.2, blue: 0.95),
-                                Color(red: 0.2, green: 0.45, blue: 0.95)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 100, height: 100)
-                    .shadow(color: Color(red: 0.45, green: 0.2, blue: 0.95).opacity(0.5), radius: 30)
-
-                Image(systemName: "opticaldisc.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.white)
-            }
+            Image("DiscVaultLogo")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 112, height: 112)
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+                .shadow(color: Color(red: 0.91, green: 0.77, blue: 0.28).opacity(0.35), radius: 28)
 
             VStack(spacing: 8) {
                 Text("DiscVault")

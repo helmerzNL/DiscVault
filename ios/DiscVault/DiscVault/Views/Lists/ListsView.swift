@@ -131,10 +131,8 @@ struct ListsView: View {
 
     private func loadAll() async {
         isLoading = true
-        async let wl = (try? apiClient.getWatchlist()) ?? []
-        async let wh = (try? apiClient.getWatchHistory()) ?? []
-        watchlist = await wl
-        watchHistory = await wh
+        watchlist = (try? await apiClient.getWatchlist()) ?? []
+        watchHistory = (try? await apiClient.getWatchHistory()) ?? []
         isLoading = false
     }
 
@@ -156,7 +154,7 @@ private struct WatchlistRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Group {
+            SwiftUI.Group {
                 if let url = apiClient.posterURL(for: item.poster) {
                     AsyncImage(url: url) { phase in
                         if case .success(let img) = phase {

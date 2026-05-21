@@ -1,5 +1,5 @@
 import SwiftUI
-import AVFoundation
+@preconcurrency import AVFoundation
 
 struct BarcodeScannerView: View {
     var onScan: (String) -> Void
@@ -194,10 +194,15 @@ private struct CameraPreview: UIViewRepresentable {
     }
 }
 
-private class CameraView: UIView, AVCaptureMetadataOutputObjectsDelegate {
-    var onScan: ((String) -> Void)?
+private class CameraView: UIView {
+    var onScan: ((String) -> Void)? {
+        didSet {
+            metadataDelegate.onScan = onScan
+        }
+    }
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
+    private let metadataDelegate = MetadataDelegate()
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
 
@@ -218,7 +223,7 @@ private class CameraView: UIView, AVCaptureMetadataOutputObjectsDelegate {
         let output = AVCaptureMetadataOutput()
         guard session.canAddOutput(output) else { return }
         session.addOutput(output)
-        output.setMetadataObjectsDelegate(self, queue: .main)
+        output.setMetadataObjectsDelegate(metadataDelegate, queue: .main)
         output.metadataObjectTypes = [.ean13, .upce, .ean8, .code128]
 
         videoPreviewLayer.session = session
@@ -237,14 +242,21 @@ private class CameraView: UIView, AVCaptureMetadataOutputObjectsDelegate {
         device.unlockForConfiguration()
     }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            captureSession?.stopRunning()
+        }
+    }
+}
+
+private final class MetadataDelegate: NSObject, AVCaptureMetadataOutputObjectsDelegate {
+    var onScan: ((String) -> Void)?
+
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
         guard let obj = objects.first as? AVMetadataMachineReadableCodeObject,
               let code = obj.stringValue else { return }
         onScan?(code)
-    }
-
-    deinit {
-        captureSession?.stopRunning()
     }
 }
 
