@@ -17,12 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
-<link rel="stylesheet" href="/styles.css">
-<!-- Critical inline CSS: prevents FOUC (white flash + visible panels) on F5 refresh -->
-<style>
-  body { background: #0a0a0f; color: #e8e8f0; }
-  .panel { display: none; }
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -95,7 +90,7 @@
   </div>
 </nav>
 <div id="meerMenu" class="meer-menu">
-  <button class="meer-menu-item" id="meerMenuAdd" onclick="closeMeerMenu(); switchTab('toevoegen')">
+  <button class="meer-menu-item" onclick="closeMeerMenu(); switchTab('toevoegen')">
     <span class="mdi mdi-plus-circle-outline meer-menu-icon" aria-hidden="true"></span>
     <span data-i18n="nav.add">Toevoegen</span>
   </button>
@@ -204,12 +199,8 @@
         <option value="">Alle collecties</option>
       </select>
       <button class="btn btn-secondary" id="btnSelectMode" onclick="toggleSelectMode()" data-i18n="collection.selectMode">☑ Selecteren</button>
-      <button class="btn btn-secondary" id="btnCollectionRefresh" onclick="loadCollection()" data-i18n="collection.refresh">↻ Vernieuwen</button>
-      <button class="btn btn-secondary digital-feature" id="btnCompareMode" onclick="toggleCompareMode()" data-i18n="collection.compareMode">⚡ Vergelijk</button>
-    </div>
-
-    <div id="collectionSearchBar" class="search-box" style="margin-bottom:10px;">
-      <input type="text" id="searchInput" oninput="filterMovies()" data-i18n-placeholder="collection.searchPlaceholder" placeholder="Zoek op titel, regisseur, genre...">
+      <button class="btn btn-secondary" onclick="loadCollection()" data-i18n="collection.refresh">↻ Vernieuwen</button>
+      <button class="btn btn-secondary" id="btnCompareMode" onclick="toggleCompareMode()" data-i18n="collection.compareMode">⚡ Vergelijk</button>
     </div>
 
     <!-- Bulk action toolbar (visible in select mode) -->
@@ -237,9 +228,9 @@
       </div>
       <!-- Bulk container assignment panel (Vault / Box-Set / Collection) -->
       <div id="bulkContainerPanel" style="display:none; flex-basis:100%; padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-        <div style="font-weight:500; font-size:0.9rem; margin-bottom:10px;" data-i18n="bulk.selectContainer">Kies een Vault, Box-Set of Collectie:</div>
-        <select id="bulkContainerSelect" class="form-control" style="width:100%; max-width:480px; margin-bottom:12px; padding:6px 10px; font-size:0.84rem; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text);">
-          <option value="">--</option>        </select>
+        <div style="font-weight:500; font-size:0.9rem; margin-bottom:10px;" data-i18n="bulk.selectContainer">Kies een Vault / Box-Set of Collectie:</div>
+        <input type="text" id="bulkContainerSearch" class="form-control" placeholder="Zoeken…" style="max-width:320px; margin-bottom:12px; padding:6px 10px; font-size:0.84rem; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); outline:none;">
+        <div id="bulkContainerList" style="max-height:240px; overflow-y:auto; margin-bottom:12px;"></div>
         <div style="display:flex; gap:8px;">
           <button class="btn btn-primary" onclick="bulkAssignContainer()" style="padding:8px 16px;" data-i18n="bulk.applyContainer">✓ Toewijzen</button>
           <button class="btn btn-secondary" onclick="document.getElementById('bulkContainerPanel').style.display='none'" style="padding:8px 16px;" data-i18n="bulk.cancelGroup">Annuleren</button>
@@ -763,32 +754,11 @@
           <div class="card">
             <div class="card-title" data-i18n="settings.preferencesTitle">⚙️ Voorkeuren</div>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-              <input type="checkbox" id="showAutoVideosToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.showAutoVideos">Automatische video's tonen</span>
-            </label>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.showAutoVideosDesc">
-              Toont video's die automatisch via TMDb zijn opgehaald. Uitgeschakeld toont alleen de video's die je zelf hebt toegevoegd.
-            </div>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-              <input type="checkbox" id="showSearchButtonToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.showSearchButton">Zoekbalk in collectie</span>
-            </label>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.showSearchButtonDesc">
-              Toont een zoekbalk bovenaan de collectiepagina om snel op titel, regisseur of genre te filteren.
-            </div>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="settings.showLocalTitle">Lokale taal voor filmtitel</span>
             </label>
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.showLocalTitleDesc">
               Toon de filmtitel in de taal van de app (indien beschikbaar). Uitgeschakeld toont altijd de Engelse originele titel.
-            </div>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-              <input type="checkbox" id="detailedActorDetailsToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.detailedActorDetails">Uitgebreide acteurspagina</span>
-            </label>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.detailedActorDetailsDesc">
-              Toont ook digitale films (Plex/Jellyfin) en de volledige filmografie van een acteur of regisseur op de persoonspagina. Uitgeschakeld toont alleen fysiek bezit.
             </div>
             <label style="display:block; font-size:0.88rem; font-weight:500; color:var(--text); margin-bottom:8px;" data-i18n="settings.ratingCountry">Leeftijdsrestrictie land</label>
             <div id="ratingCountryPicker" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
@@ -921,11 +891,6 @@
           <span class="mdi mdi-folder-account-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span data-i18n="settings.menuGroups">Groepen</span>
         </button>
-        <button class="profile-sidebar-btn" type="button" data-admin-sub="roles" disabled style="opacity:0.45; cursor:not-allowed; pointer-events:none;">
-          <span class="mdi mdi-shield-account-outline profile-sidebar-icon" aria-hidden="true"></span>
-          <span data-i18n="settings.menuRoles">Rollen</span>
-          <span style="font-size:0.62rem; margin-left:auto; padding:1px 5px; border-radius:4px; background:var(--surface3); color:var(--text-muted); font-weight:600; letter-spacing:0.02em;" data-i18n="apikeys.soonBadge">binnenkort</span>
-        </button>
         <button class="profile-sidebar-btn" type="button" data-admin-sub="backup" onclick="switchAdminSubmenu('backup')">
           <span class="mdi mdi-database-export-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span data-i18n="settings.menuBackup">Backup</span>
@@ -1012,18 +977,6 @@
               <button class="btn btn-primary" onclick="createGroup()" style="height:40px;" data-i18n="settings.groupCreateBtn">+ Groep aanmaken</button>
             </div>
             <div id="adminGroupsList"></div>
-          </div>
-        </div>
-
-        <!-- ── ROLLEN ── -->
-        <div class="profile-sub-section" id="adminSubRoles" style="display:none;">
-          <div id="adminRolesCard" class="card" style="display:none;">
-            <div class="card-title" data-i18n="settings.rolesTitle">🎭 Rollen &amp; Rechten</div>
-            <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:20px; line-height:1.6;" data-i18n="settings.rolesDesc">
-              Maak aangepaste rollen aan, wijs rechten toe en koppel gebruikers. Gebruikers kunnen meerdere rollen hebben naast hun systeemrol.
-            </p>
-            <div id="adminRolesStatus" class="status-msg" style="margin-bottom:8px;"></div>
-            <div id="adminRolesList"></div>
           </div>
         </div>
 
@@ -1114,7 +1067,7 @@
           </div>
 
           <!-- Digitale bibliotheken (Plex / Jellyfin) -->
-          <div class="card digital-feature" style="margin-top:20px;">
+          <div class="card" style="margin-top:20px;">
             <div class="card-title" data-i18n="digital.title">📺 Digitale Bibliotheken</div>
             <p style="font-size:0.84rem; color:var(--text-muted); margin-bottom:16px; line-height:1.6;" data-i18n="digital.desc">
               Koppel Plex of Jellyfin om te vergelijken welke fysieke schijven je ook digitaal bezit.
@@ -1125,63 +1078,6 @@
               <button type="button" class="btn btn-secondary" onclick="openAddDigitalSource('jellyfin')" data-i18n="digital.addJellyfin">+ Jellyfin toevoegen</button>
             </div>
             <div id="digitalSourceStatus" class="status-msg" style="margin-top:10px;"></div>
-          </div>
-
-          <!-- Metadata bronnen -->
-          <div class="card" id="metadataSourcesCard" style="margin-top:20px;">
-            <div class="card-title" data-i18n="settings.metadataSources">Metadata Bronnen</div>
-
-            <!-- OMDb -->
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:6px;">
-              <input type="checkbox" id="sourceOmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.omdbDesc">OMDb — filminformatie via IMDb-id of titel</span>
-              <span id="omdbKeyBadge" style="display:none; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; margin-left:4px;"></span>
-            </label>
-            <div id="omdbKeyBlock" style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input type="password" id="omdbKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderOmdb" placeholder="Plak je OMDb API key hier..."
-                  style="flex:1; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
-                <button type="button" onclick="toggleKeyVisibility('omdb')" title="Toon/verberg key" style="padding:6px 10px; font-size:0.85rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--text);">👁</button>
-                <button class="btn btn-primary" onclick="saveApiKey('omdb')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
-                <button type="button" id="omdbKeyClearBtn" onclick="clearApiKey('omdb')" style="display:none; padding:6px 10px; font-size:0.8rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--danger);">🗑</button>
-              </div>
-              <div style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; line-height:1.55;" data-i18n-html="settings.omdbKeyHelp">
-                Gratis key via <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener" style="color:var(--accent);">omdbapi.com/apikey.aspx</a> — kies <em>FREE!</em> (1.000 verzoeken/dag), vul je e-mail in en bevestig via de activatiemail.
-              </div>
-            </div>
-
-            <!-- TMDb -->
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:6px;">
-              <input type="checkbox" id="sourceTmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.tmdbDesc">TMDb — filminformatie via titel + jaar</span>
-              <span id="tmdbKeyBadge" style="display:none; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; margin-left:4px;"></span>
-            </label>
-            <div id="tmdbKeyBlock" style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input type="password" id="tmdbKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderTmdb" placeholder="Plak je TMDb API key hier..."
-                  style="flex:1; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
-                <button type="button" onclick="toggleKeyVisibility('tmdb')" title="Toon/verberg key" style="padding:6px 10px; font-size:0.85rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--text);">👁</button>
-                <button class="btn btn-primary" onclick="saveApiKey('tmdb')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
-                <button type="button" id="tmdbKeyClearBtn" onclick="clearApiKey('tmdb')" style="display:none; padding:6px 10px; font-size:0.8rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--danger);">🗑</button>
-              </div>
-              <div style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; line-height:1.55;" data-i18n-html="settings.tmdbKeyHelp">
-                Gratis key via <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener" style="color:var(--accent);">themoviedb.org/settings/api</a> — maak een account, ga naar Settings → API → Request an API key → Developer.
-              </div>
-            </div>
-
-            <!-- Scrapers -->
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-              <input type="checkbox" id="sourceBlurayToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.blurayDesc">Blu-ray.com scraper (experimenteel)</span>
-            </label>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-              <input type="checkbox" id="sourceBlurayDiscDeToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.blurayDeDesc">bluray-disc.de scraper (experimenteel)</span>
-            </label>
-            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.sourceHelp">
-              De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiële API.
-            </div>
-            <div id="sourceSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
 
           <!-- Database resetten -->
@@ -1232,6 +1128,31 @@
               <span data-i18n="settings.version">Versie:</span> <span id="settingsVersion" data-i18n="settings.versionLoading">laden...</span>
             </div>
             <div id="dbStatsContent" style="font-size:0.88rem; color:var(--text-muted);" data-i18n="settings.loading">Laden...</div>
+          </div>
+
+          <!-- Metadata bronnen -->
+          <div class="card" style="margin-top:20px;">
+            <div class="card-title" data-i18n="settings.metadataSources">Metadata Bronnen</div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="sourceOmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.omdbDesc">OMDb — filminformatie via IMDb-id of titel</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="sourceTmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.tmdbDesc">TMDb — filminformatie via titel + jaar</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="sourceBlurayToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.blurayDesc">Blu-ray.com scraper (experimenteel)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+              <input type="checkbox" id="sourceBlurayDiscDeToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.blurayDeDesc">bluray-disc.de scraper (experimenteel)</span>
+            </label>
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.sourceHelp">
+              OMDb en TMDb vereisen een API-key (zie .env). De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiele API.
+            </div>
+            <div id="sourceSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>
 
           <!-- Offline wachtrij -->
@@ -1286,18 +1207,18 @@
               </div>
             </div>
 
-            <label class="digital-feature" style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showDigitalBadgesToggle" onchange="saveDigitalBadgesSetting()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="edition.digitalBadges">Plex/Jellyfin badge tonen op filmtegel</span>
             </label>
-            <div id="digitalBadgeFilterRow" class="digital-feature" style="display:none; margin-bottom:10px; margin-left:24px;">
+            <div id="digitalBadgeFilterRow" style="display:none; margin-bottom:10px; margin-left:24px;">
               <select id="digitalBadgeFilterSelect" onchange="saveDigitalBadgeFilter()" style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.82rem;">
                 <option value="all" data-i18n="edition.badgeFilterAll">Alle bronnen</option>
                 <option value="plex" data-i18n="edition.badgeFilterPlex">Alleen Plex</option>
                 <option value="jellyfin" data-i18n="edition.badgeFilterJellyfin">Alleen Jellyfin</option>
               </select>
             </div>
-            <div class="digital-feature" style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="edition.digitalBadgesDesc">
+            <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="edition.digitalBadgesDesc">
               Toon een klein icoon als een film ook digitaal beschikbaar is in Plex of Jellyfin.
             </div>
           </div>
@@ -1320,37 +1241,6 @@
               <button class="btn btn-secondary" onclick="loadGroupMgmtList('collection')" style="font-size:0.82rem;" id="gmFilterCollection">Collections</button>
             </div>
             <div id="groupMgmtList" style="display:flex; flex-direction:column; gap:8px;"></div>
-          </div>
-
-        </div>
-
-        <!-- ── OVER ── -->
-        <div class="profile-sub-section" id="settingsSubAbout">
-
-          <div class="card">
-            <div class="card-title" data-i18n="settings.aboutTitle">Over DiscVault</div>
-            <div style="display:flex; align-items:center; gap:14px; margin-bottom:20px;">
-              <img src="/icons/icon-192.png" alt="DiscVault" style="width:56px; height:56px; border-radius:14px;">
-              <div>
-                <div style="font-size:1.1rem; font-weight:700; color:var(--text);">DiscVault</div>
-                <div style="font-size:0.82rem; color:var(--text-muted);" data-i18n="settings.version">Versie:</div>
-                <div style="font-size:0.95rem; font-weight:600; color:var(--accent);" id="aboutVersion">—</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card" style="margin-top:16px;">
-            <div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap;">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190.24 81.52" style="height:26px; flex-shrink:0; margin-top:2px;" aria-label="TMDb">
-                <defs><style>.tmdb1{fill:#90cea1}.tmdb2{fill:#01b4e4}.tmdb3{fill:#0d253f}</style></defs>
-                <path class="tmdb1" d="M105.27 36.37v7.44h21.2v14.9h-21.2v22.81H88.36V21.47h39.96v14.9h-23.05z"/>
-                <path class="tmdb2" d="M190.24 40.76C190.24 18.24 171.99 0 149.48 0S108.72 18.24 108.72 40.76s18.24 40.76 40.76 40.76 40.76-18.24 40.76-40.76z"/>
-                <path class="tmdb3" d="M5.91 21.47H0V6.57h44.67v14.9H38.8v60.05H5.91V21.47zM87.57 6.57v75h-32.9V51.14L40.55 81.52H28.73L14.65 51.4v30.12H0V6.57h29.22l14.5 31.98 14.63-31.98h29.22zM155.88 40.76c0-3.54-2.87-6.4-6.4-6.4s-6.4 2.87-6.4 6.4 2.87 6.4 6.4 6.4 6.4-2.87 6.4-6.4z"/>
-              </svg>
-              <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.6; margin:0;" data-i18n="settings.aboutTmdb">
-                Filmdata wordt aangeboden door The Movie Database (TMDB). Dit product gebruikt de TMDB API maar is niet bekrachtigd of gecertificeerd door TMDB.
-              </p>
-            </div>
           </div>
 
         </div>
@@ -1617,8 +1507,7 @@
       <div class="modal-tabs">
         <button class="modal-tab active" onclick="switchDetailTab('info')" data-detail-tab="info" data-i18n="modal.tabInfo">Basisinfo</button>
         <button class="modal-tab" onclick="switchDetailTab('cast')" data-detail-tab="cast" data-i18n="modal.tabCast">Cast &amp; Crew</button>
-        <button class="modal-tab" onclick="switchDetailTab('images')" data-detail-tab="images" data-i18n="modal.tabImages">Afbeeldingen</button>
-        <button class="modal-tab" onclick="switchDetailTab('videos')" data-detail-tab="videos" data-i18n="modal.tabVideos">Video's</button>
+        <button class="modal-tab" onclick="switchDetailTab('media')" data-detail-tab="media" data-i18n="modal.tabMedia">Media</button>
       </div>
 
       <!-- Tab: Basic Info -->
@@ -1627,12 +1516,6 @@
         <div class="input-group" id="modalPlotGroup">
           <label data-i18n="modal.plot">Verhaal</label>
           <p id="modalPlot" style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;"></p>
-        </div>
-
-        <!-- Digital play links (Plex / Jellyfin) — only visible to digital.view users -->
-        <div id="modalDigitalLinksSection" style="display:none; margin-top:18px;">
-          <div style="font-size:0.68rem; font-weight:700; color:var(--text-muted); letter-spacing:0.09em; text-transform:uppercase; margin-bottom:10px;">Ook beschikbaar op</div>
-          <div id="modalDigitalLinksBtns" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
         </div>
 
         <!-- English original block (shown when local title/plot is displayed) -->
@@ -1657,14 +1540,9 @@
         <div id="castContent" style="display:none;"></div>
       </div>
 
-      <!-- Tab: Afbeeldingen -->
-      <div class="modal-tab-content" id="detailTabImages">
-        <div id="mediaImagesContent"></div>
-      </div>
-
-      <!-- Tab: Video's -->
-      <div class="modal-tab-content" id="detailTabVideos">
-        <div id="mediaVideosContent"></div>
+      <!-- Tab: Media -->
+      <div class="modal-tab-content" id="detailTabMedia">
+        <div id="mediaTabContent"></div>
       </div>
 
     </div>
@@ -1920,28 +1798,6 @@
           <label data-i18n="edit.imdbUrl">IMDb URL</label>
           <input type="text" id="editImdbUrl">
         </div>
-        <div class="input-group full">
-          <label data-i18n="edit.trailerUrl">Trailer URL (YouTube)</label>
-          <input type="text" id="editTrailerUrl" placeholder="https://www.youtube.com/watch?v=...">
-        </div>
-        <div class="input-group full" id="editVideosSection">
-          <label data-i18n="edit.extraVideos">Extra video's</label>
-          <div id="editVideosList"></div>
-          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center;">
-            <input type="text" id="editVideoUrl" placeholder="YouTube URL" style="flex:2; min-width:180px;">
-            <input type="text" id="editVideoLabel" data-i18n-placeholder="edit.videoLabelPlaceholder" placeholder="Label (bijv. Making of)" style="flex:1; min-width:120px;">
-            <select id="editVideoType" style="flex:1; min-width:130px; background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:0.84rem;">
-              <option value="" data-i18n="modal.videoTypeOther">Overig</option>
-              <option value="Trailer">Trailer</option>
-              <option value="Teaser">Teaser</option>
-              <option value="Clip">Clip</option>
-              <option value="Featurette">Featurette</option>
-              <option value="Behind the Scenes">Behind the Scenes</option>
-              <option value="Bloopers">Bloopers</option>
-            </select>
-            <button class="btn btn-secondary" type="button" onclick="addVideoEntry()" data-i18n="edit.addVideo">+ Toevoegen</button>
-          </div>
-        </div>
       </div>
 
     </div>
@@ -1977,7 +1833,7 @@
       <div id="personDebugI18nContent"></div>
     </div>
 
-    <div id="personFilmographyTitleWrap" style="margin-bottom: 12px;">
+    <div style="margin-bottom: 12px;">
       <div class="crew-section-title" id="personFilmographyTitle" data-i18n="person.inCollection">In jouw collectie</div>
     </div>
     <div class="person-filmography" id="personFilmography"></div>
@@ -2021,8 +1877,7 @@
     <!-- Tabs -->
     <div class="modal-tabs">
       <button class="modal-tab active" onclick="switchEgTab('members')" data-eg-tab="members" data-i18n="group.tabMembers">Inhoud</button>
-      <button class="modal-tab" onclick="switchEgTab('images')" data-eg-tab="images" data-i18n="modal.tabImages">Afbeeldingen</button>
-      <button class="modal-tab" onclick="switchEgTab('videos')" data-eg-tab="videos" data-i18n="modal.tabVideos">Video's</button>
+      <button class="modal-tab" onclick="switchEgTab('media')" data-eg-tab="media" data-i18n="modal.tabMedia">Media</button>
     </div>
 
     <!-- Tab: Members (edition cards) -->
@@ -2030,14 +1885,11 @@
       <div class="eg-panel-grid" id="egPanelGrid"></div>
     </div>
 
-    <!-- Tab: Afbeeldingen -->
-    <div class="modal-tab-content" id="egTabImages">
-      <div id="egImagesContent" style="padding:0 4px;"></div>
-    </div>
-
-    <!-- Tab: Video's -->
-    <div class="modal-tab-content" id="egTabVideos">
-      <div id="egVideosContent" style="padding:0 4px;"></div>
+    <!-- Tab: Media -->
+    <div class="modal-tab-content" id="egTabMedia">
+      <div id="egMediaContent" style="padding:0 4px;">
+        <div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;" data-i18n="modal.noMedia">Geen media beschikbaar.</div>
+      </div>
     </div>
 
     <!-- Tab: Manage -->
@@ -2107,14 +1959,15 @@
   </div>
 </div>
 
-<script src="/js/i18n.js"></script>
-<script src="/js/scanner.js"></script>
-<script src="/js/collection.js"></script>
-<script src="/js/import.js"></script>
-<script src="/js/auth.js"></script>
-<script src="/js/social.js"></script>
-<script src="/js/settings.js"></script>
-<script src="/js/app.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/scanner.js"></script>
+<script src="js/collection.js"></script>
+<script src="js/import.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/social.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+
 <!-- PWA install banner -->
 <div id="pwaInstallBanner" class="pwa-install-banner">
   <div class="pwa-install-banner-icon">📀</div>
