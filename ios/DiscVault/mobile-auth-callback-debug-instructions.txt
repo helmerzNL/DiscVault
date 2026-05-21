@@ -1,0 +1,200 @@
+Probleem
+De iOS app opent de PWA via ASWebAuthenticationSession. De web app logt in, maar springt niet terug naar de iOS interface. De iOS app toont:
+
+The operation could not be completed.
+com.apple.AuthenticationServices.WebAuthenticationSession error 1
+
+Betekenis
+Deze error betekent hier vrijwel zeker dat ASWebAuthenticationSession is geannuleerd of nooit correct is afgerond. Omdat de web app wel inlogt, maar niet teruggaat naar iOS, krijgt de iOS app waarschijnlijk nooit deze redirect:
+
+discvault://auth-callback?code=ONE_TIME_CODE
+
+De iOS app wacht expliciet op callback scheme:
+
+discvault
+
+Als de PWA na passkey-login gewoon de web interface opent, of alleen de token in localStorage zet, dan rondt ASWebAuthenticationSession niet af.
+
+Wat Copilot moet controleren/fixen
+
+1. Test de mobiele login-start handmatig
+
+Open:
+
+https://JOUW-SERVER/api/auth/mobile/start?callback_scheme=discvault
+
+Na passkey-login mag de PWA bij een mobiele flow NIET normaal doorgaan naar de web interface. Hij moet eindigen met een redirect naar:
+
+discvault://auth-callback?code=ONE_TIME_CODE
+
+2. Controleer dat /api/auth/mobile/start mobile_flow doorgeeft
+
+De start endpoint moet een tijdelijke mobile_flow_id maken en daarna redirecten naar de bestaande login/PWA met mobile_flow in de URL, bijvoorbeeld:
+
+/?mobile_flow=abc123
+
+of:
+
+/login?mobile_flow=abc123
+
+Belangrijk: de frontend moet mobile_flow kunnen uitlezen uit window.location.search.
+
+3. Controleer dat de frontend mobile_flow uitleest
+
+In de login/passkey JS:
+
+const params = new URLSearchParams(window.location.search);
+const mobileFlow = params.get('mobile_flow');
+
+4. Controleer dat mobile_flow wordt meegestuurd naar /api/auth/login/verify
+
+De verify body moet bij mobiele login zoiets zijn:
+
+const verifyBody = { credential };
+
+if (mobileFlow) {
+  verifyBody.mobile_flow = mobileFlow;
+}
+
+const res = await fetch(`${API}/auth/login/verify`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(verifyBody)
+});
+
+5. Controleer backend /api/auth/login/verify gedrag
+
+Na succesvolle WebAuthn/passkey verificatie:
+
+Als mobile_flow ontbreekt:
+- bestaand PWA gedrag behouden
+- response:
+
+{
+  "status": "ok",
+  "token": "...",
+  "username": "..."
+}
+
+Als mobile_flow aanwezig is:
+- mobile_flow valideren
+- one-time code maken
+- code koppelen aan de ingelogde user
+- mobile_flow consumeren/verwijderen
+- GEEN normale token response voor de PWA geven
+- response:
+
+{
+  "status": "ok",
+  "callback_url": "discvault://auth-callback?code=ONE_TIME_CODE"
+}
+
+Optioneel met state:
+
+{
+  "status": "ok",
+  "callback_url": "discvault://auth-callback?code=ONE_TIME_CODE&state=OPTIONAL_STATE"
+}
+
+6. Frontend moet callback_url afhandelen vóór normale PWA-login
+
+Na:
+
+const data = await res.json();
+
+moet dit vóór localStorage/token gedrag komen:
+
+if (data.callback_url) {
+  window.location.href = data.callback_url;
+  return;
+}
+
+Daarna pas normaal PWA gedrag:
+
+if (data.token) {
+  localStorage.setItem('dv_token', data.token);
+  init();
+}
+
+Als de frontend tijdens mobiele login nog steeds localStorage.setItem('dv_token', ...) doet, dan is mobile_flow niet actief of wordt callback_url niet goed verwerkt.
+
+7. Controleer de exacte callback URL
+
+De callback URL moet exact beginnen met:
+
+discvault://
+
+Goed:
+
+discvault://auth-callback?code=abc123
+
+Fout:
+
+https://discvault://auth-callback?code=abc123
+discvault:/auth-callback?code=abc123
+DiscVault://auth-callback?code=abc123
+discvault://auth-callback
+
+De code parameter moet aanwezig zijn:
+
+code=...
+
+8. Controleer /api/auth/mobile/exchange
+
+De iOS app roept na callback aan:
+
+POST /api/auth/mobile/exchange
+
+Met JSON:
+
+{
+  "code": "ONE_TIME_CODE"
+}
+
+Deze endpoint moet teruggeven:
+
+{
+  "status": "ok",
+  "token": "...",
+  "username": "..."
+}
+
+9. Security checklist
+
+- Zet nooit de long-lived token direct in discvault://auth-callback.
+- Gebruik een short-lived one-time code.
+- Code verloopt snel, bijvoorbeeld na 60 seconden.
+- mobile_flow verloopt, bijvoorbeeld na 5 minuten.
+- Code en mobile_flow na gebruik verwijderen of als gebruikt markeren.
+- Alleen callback_scheme discvault toestaan.
+- WebAuthn checks intact houden:
+  - challenge
+  - origin
+  - RP ID hash
+  - signature
+  - credential ID
+  - sign count
+
+10. iOS app kant
+
+De iOS app verwacht:
+
+Start URL:
+
+https://SERVER/api/auth/mobile/start?callback_scheme=discvault
+
+Callback:
+
+discvault://auth-callback?code=ONE_TIME_CODE
+
+Exchange:
+
+POST https://SERVER/api/auth/mobile/exchange
+
+Als backend en PWA correct redirecten naar discvault://auth-callback?code=..., dan sluit ASWebAuthenticationSession automatisch en komt de iOS app terug in beeld.
+
+11. Na backend/PWA fix
+
+- Backend/container herstarten.
+- iOS app eventueel verwijderen en opnieuw installeren zodat de URL scheme registratie vers is.
+- Test opnieuw vanuit de iOS app.
