@@ -19,7 +19,7 @@ import cbor2
 import xml.etree.ElementTree as ET
 from functools import wraps
 from urllib.parse import quote_plus, quote
-from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g, stream_with_context
+from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g, stream_with_context, redirect
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
