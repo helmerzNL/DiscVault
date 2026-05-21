@@ -5113,7 +5113,7 @@ def mobile_auth_start():
     )
     conn.commit()
     conn.close()
-    return redirect(f"/?mobile_flow={flow_id}")
+    return redirect(f"/?mobile_flow={quote(flow_id, safe='')}")
 
 
 @app.route("/api/auth/mobile/exchange", methods=["POST"])
@@ -5239,9 +5239,9 @@ def login_verify():
         )
         conn2.commit()
         conn2.close()
-        callback_url = f"{flow['callback_scheme']}://auth-callback?code={code}"
+        callback_url = f"{flow['callback_scheme']}://auth-callback?code={quote(code, safe='')}"
         if flow["state"]:
-            callback_url += f"&state={flow['state']}"
+            callback_url += f"&state={quote(flow['state'], safe='')}"
         add_log("auth", f"Mobile login: {user['username']}", level="success")
         return jsonify({"status": "ok", "callback_url": callback_url})
 
