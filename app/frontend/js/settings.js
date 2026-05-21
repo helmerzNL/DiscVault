@@ -412,6 +412,13 @@ async function loadDbStats() {
   } catch(e) {}
 }
 
+function _fmtBackupLabel(name) {
+  const m = name.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})/);
+  if (!m) return name;
+  const prefix = name.startsWith('discvault_upload_') ? '⬆ ' : '';
+  return `${prefix}${m[3]}-${m[2]}-${m[1]}, ${m[4]}:${m[5]}`;
+}
+
 async function createBackup() {
   showStatus('settingsBackupStatus', t('js.creatingBackup'), 'info');
   try {
@@ -438,7 +445,7 @@ async function loadBackups() {
       <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:8px; flex-wrap:wrap;">
         <div style="font-size:1.2rem;">📦</div>
         <div style="flex:1; min-width:180px;">
-          <div style="font-weight:500; font-size:0.85rem;">${b.name}</div>
+          <div style="font-weight:600; font-size:0.9rem;">${_fmtBackupLabel(b.name)}</div>
           <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--text-muted);">
             ${(b.size/1024).toFixed(0)} KB · ${b.poster_count} posters${b.movie_count ? ' · ' + b.movie_count + ' films' : ''}${b.format === 'v1' ? ' · legacy' : ''}
           </div>
