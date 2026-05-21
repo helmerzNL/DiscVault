@@ -405,6 +405,26 @@ def init_db():
         )
     """)
 
+    # Auth: mobile auth flows (iOS ASWebAuthenticationSession)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mobile_flows (
+            flow_id         TEXT PRIMARY KEY,
+            callback_scheme TEXT NOT NULL,
+            state           TEXT,
+            created_at      REAL NOT NULL
+        )
+    """)
+
+    # Auth: mobile one-time codes (exchanged for a JWT by the native app)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mobile_codes (
+            code       TEXT PRIMARY KEY,
+            user_id    TEXT NOT NULL,
+            username   TEXT NOT NULL,
+            created_at REAL NOT NULL
+        )
+    """)
+
     # Groups: shared collections
     conn.execute("""
         CREATE TABLE IF NOT EXISTS groups (
@@ -5074,6 +5094,55 @@ def register_verify():
     return jsonify(result)
 
 
+@app.route("/api/auth/mobile/start", methods=["GET"])
+def mobile_auth_start():
+    """Start a mobile-app auth flow via ASWebAuthenticationSession."""
+    callback_scheme = request.args.get("callback_scheme", "").strip()
+    state = request.args.get("state", "").strip()
+
+    ALLOWED_SCHEMES = {"discvault"}
+    if callback_scheme not in ALLOWED_SCHEMES:
+        return jsonify({"error": "Invalid callback_scheme"}), 400
+
+    flow_id = secrets.token_urlsafe(32)
+    conn = get_db()
+    conn.execute("DELETE FROM mobile_flows WHERE created_at < ?", (time.time() - 300,))
+    conn.execute(
+        "INSERT INTO mobile_flows (flow_id, callback_scheme, state, created_at) VALUES (?,?,?,?)",
+        (flow_id, callback_scheme, state, time.time())
+    )
+    conn.commit()
+    conn.close()
+    return redirect(f"/?mobile_flow={flow_id}")
+
+
+@app.route("/api/auth/mobile/exchange", methods=["POST"])
+def mobile_auth_exchange():
+    """Exchange a one-time code (from the custom-scheme callback) for a JWT."""
+    data = request.json or {}
+    code = data.get("code", "").strip()
+    if not code:
+        return jsonify({"error": "Missing code"}), 400
+
+    conn = get_db()
+    conn.execute("DELETE FROM mobile_codes WHERE created_at < ?", (time.time() - 60,))
+    row = conn.execute(
+        "SELECT * FROM mobile_codes WHERE code = ? AND created_at > ?",
+        (code, time.time() - 60)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Invalid or expired code"}), 400
+
+    conn.execute("DELETE FROM mobile_codes WHERE code = ?", (code,))
+    conn.commit()
+    conn.close()
+
+    token = _create_token(row["user_id"], row["username"])
+    add_log("auth", f"Mobile token exchange: {row['username']}", level="success")
+    return jsonify({"status": "ok", "token": token, "username": row["username"]})
+
+
 @app.route("/api/auth/login/options", methods=["POST"])
 def login_options():
     conn = get_db()
@@ -5150,6 +5219,33 @@ def login_verify():
     user = conn.execute("SELECT * FROM users WHERE id = ?", (stored["user_id"],)).fetchone()
     conn.close()
 
+    # ── Mobile flow: return a one-time code via custom-scheme callback ──
+    mobile_flow_id = data.get("mobile_flow", "").strip()
+    if mobile_flow_id:
+        conn2 = get_db()
+        conn2.execute("DELETE FROM mobile_flows WHERE created_at < ?", (time.time() - 300,))
+        flow = conn2.execute(
+            "SELECT * FROM mobile_flows WHERE flow_id = ? AND created_at > ?",
+            (mobile_flow_id, time.time() - 300)
+        ).fetchone()
+        if not flow:
+            conn2.close()
+            return jsonify({"error": "Invalid or expired mobile flow"}), 400
+        conn2.execute("DELETE FROM mobile_flows WHERE flow_id = ?", (mobile_flow_id,))
+        code = secrets.token_urlsafe(32)
+        conn2.execute(
+            "INSERT INTO mobile_codes (code, user_id, username, created_at) VALUES (?,?,?,?)",
+            (code, user["id"], user["username"], time.time())
+        )
+        conn2.commit()
+        conn2.close()
+        callback_url = f"{flow['callback_scheme']}://auth-callback?code={code}"
+        if flow["state"]:
+            callback_url += f"&state={flow['state']}"
+        add_log("auth", f"Mobile login: {user['username']}", level="success")
+        return jsonify({"status": "ok", "callback_url": callback_url})
+
+    # ── Normal PWA flow ──
     token = _create_token(user["id"], user["username"])
     add_log("auth", f"Login: {user['username']}", level="success")
     return jsonify({"status": "ok", "token": token, "username": user["username"]})

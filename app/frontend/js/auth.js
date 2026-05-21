@@ -270,12 +270,22 @@ async function loginPasskey() {
       authenticatorAttachment: assertion.authenticatorAttachment,
     };
 
+    // Detect mobile flow (iOS app via ASWebAuthenticationSession)
+    const mobileFlow = new URLSearchParams(window.location.search).get('mobile_flow');
+    const verifyBody = { credential };
+    if (mobileFlow) verifyBody.mobile_flow = mobileFlow;
+
     const verResp = await _origFetch(`${API}/auth/login/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential })
+      body: JSON.stringify(verifyBody)
     });
     const verData = await verResp.json();
+    if (verData.callback_url) {
+      // Mobile flow: hand control back to the native app via custom scheme
+      window.location.href = verData.callback_url;
+      return;
+    }
     if (verData.token) {
       authToken = verData.token;
       localStorage.setItem('dv_token', authToken);
