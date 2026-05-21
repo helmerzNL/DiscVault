@@ -1509,11 +1509,17 @@
   .person-film-sort-select {
     background: var(--surface2);
     color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 5px 10px;
-    font-size: 0.8rem;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 0.82rem;
+    font-weight: 500;
     cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .person-film-sort-select:hover {
+    border-color: var(--accent);
   }
 
   /* ── Detail pages (film & persoon) ── */
