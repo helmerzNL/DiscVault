@@ -19,7 +19,7 @@ import cbor2
 import xml.etree.ElementTree as ET
 from functools import wraps
 from urllib.parse import quote_plus, quote
-from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g, stream_with_context
+from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g, stream_with_context, redirect
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -541,6 +541,27 @@ def init_db():
             expires_at  TEXT NOT NULL,
             used_at     TEXT,
             used_by     TEXT
+        )
+    """)
+
+    # Mobile auth: short-lived flow IDs and one-time exchange codes for iOS callback login
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mobile_auth_flows (
+            flow_id          TEXT PRIMARY KEY,
+            callback_scheme  TEXT NOT NULL,
+            callback_state   TEXT,
+            created_at       TEXT NOT NULL,
+            expires_at       TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mobile_auth_codes (
+            code_hash    TEXT PRIMARY KEY,
+            user_id      TEXT NOT NULL,
+            username     TEXT NOT NULL,
+            created_at   TEXT NOT NULL,
+            expires_at   TEXT NOT NULL,
+            used_at      TEXT
         )
     """)
 
@@ -4467,6 +4488,45 @@ def _pop_challenge(key: str) -> bytes | None:
     conn.close()
     return None
 
+
+def _cleanup_mobile_auth_records(conn: sqlite3.Connection):
+    now_iso = datetime.utcnow().isoformat()
+    conn.execute("DELETE FROM mobile_auth_flows WHERE expires_at <= ?", (now_iso,))
+    conn.execute("DELETE FROM mobile_auth_codes WHERE expires_at <= ? OR used_at IS NOT NULL", (now_iso,))
+
+
+def _consume_mobile_flow(conn: sqlite3.Connection, flow_id: str):
+    now_iso = datetime.utcnow().isoformat()
+    row = conn.execute(
+        "SELECT flow_id, callback_scheme, callback_state, expires_at FROM mobile_auth_flows WHERE flow_id=?",
+        (flow_id,)
+    ).fetchone()
+    if not row:
+        return None
+    if row["expires_at"] <= now_iso:
+        conn.execute("DELETE FROM mobile_auth_flows WHERE flow_id=?", (flow_id,))
+        return None
+    conn.execute("DELETE FROM mobile_auth_flows WHERE flow_id=?", (flow_id,))
+    return row
+
+
+def _create_mobile_auth_code(conn: sqlite3.Connection, user_id: str, username: str) -> str:
+    raw_code = secrets.token_urlsafe(24)
+    code_hash = hashlib.sha256(raw_code.encode()).hexdigest()
+    now = datetime.utcnow()
+    conn.execute(
+        "INSERT INTO mobile_auth_codes (code_hash, user_id, username, created_at, expires_at, used_at) VALUES (?,?,?,?,?,NULL)",
+        (code_hash, user_id, username, now.isoformat(), (now + timedelta(seconds=60)).isoformat())
+    )
+    return raw_code
+
+
+def _build_mobile_callback_url(callback_scheme: str, code: str, state: str | None = None) -> str:
+    callback_url = f"{callback_scheme}://auth-callback?code={quote(code, safe='')}"
+    if state:
+        callback_url += f"&state={quote(state, safe='')}"
+    return callback_url
+
 def _is_auth_enabled() -> bool:
     conn = sqlite3.connect(DB_PATH)
     row = conn.execute("SELECT value FROM settings WHERE key='auth_enabled'").fetchone()
@@ -5095,11 +5155,36 @@ def login_options():
     return jsonify({"options": options})
 
 
+@app.route("/api/auth/mobile/start", methods=["GET"])
+def mobile_auth_start():
+    callback_scheme = (request.args.get("callback_scheme") or "").strip()
+    state = (request.args.get("state") or "").strip() or None
+
+    # Keep this strict so ASWebAuthenticationSession always receives a trusted callback format.
+    if callback_scheme != "discvault":
+        return jsonify({"error": "Invalid callback_scheme"}), 400
+
+    flow_id = secrets.token_urlsafe(24)
+    now = datetime.utcnow()
+
+    conn = get_db()
+    _cleanup_mobile_auth_records(conn)
+    conn.execute(
+        "INSERT INTO mobile_auth_flows (flow_id, callback_scheme, callback_state, created_at, expires_at) VALUES (?,?,?,?,?)",
+        (flow_id, callback_scheme, state, now.isoformat(), (now + timedelta(minutes=5)).isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+    return redirect(f"/?mobile_flow={quote(flow_id, safe='')}", code=302)
+
+
 @app.route("/api/auth/login/verify", methods=["POST"])
 def login_verify():
     data = request.json or {}
     credential = data.get("credential", {})
     cred_id_b64 = credential.get("id", "")
+    mobile_flow = (data.get("mobile_flow") or "").strip()
 
     challenge = _pop_challenge("_login")
     if not challenge:
@@ -5148,10 +5233,62 @@ def login_verify():
     conn.commit()
 
     user = conn.execute("SELECT * FROM users WHERE id = ?", (stored["user_id"],)).fetchone()
+
+    if mobile_flow:
+        flow = _consume_mobile_flow(conn, mobile_flow)
+        if not flow:
+            conn.close()
+            return jsonify({"error": "Invalid or expired mobile flow"}), 400
+        if flow["callback_scheme"] != "discvault":
+            conn.close()
+            return jsonify({"error": "Invalid callback scheme"}), 400
+
+        code = _create_mobile_auth_code(conn, user["id"], user["username"])
+        callback_url = _build_mobile_callback_url(flow["callback_scheme"], code, flow["callback_state"])
+        conn.commit()
+        conn.close()
+
+        add_log("auth", f"Mobile login gestart voor {user['username']}", level="success")
+        return jsonify({"status": "ok", "callback_url": callback_url})
+
+    token = _create_token(user["id"], user["username"])
+    conn.close()
+    add_log("auth", f"Login: {user['username']}", level="success")
+    return jsonify({"status": "ok", "token": token, "username": user["username"]})
+
+
+@app.route("/api/auth/mobile/exchange", methods=["POST"])
+def mobile_auth_exchange():
+    data = request.json or {}
+    code = (data.get("code") or "").strip()
+    if not code:
+        return jsonify({"error": "code is required"}), 400
+
+    conn = get_db()
+    _cleanup_mobile_auth_records(conn)
+
+    code_hash = hashlib.sha256(code.encode()).hexdigest()
+    row = conn.execute(
+        "SELECT code_hash, user_id, username, expires_at FROM mobile_auth_codes WHERE code_hash=? AND used_at IS NULL",
+        (code_hash,)
+    ).fetchone()
+    if not row or row["expires_at"] <= datetime.utcnow().isoformat():
+        conn.close()
+        return jsonify({"error": "Invalid or expired code"}), 400
+
+    user = conn.execute("SELECT id, username FROM users WHERE id=?", (row["user_id"],)).fetchone()
+    if not user:
+        conn.execute("DELETE FROM mobile_auth_codes WHERE code_hash=?", (code_hash,))
+        conn.commit()
+        conn.close()
+        return jsonify({"error": "User not found"}), 400
+
+    conn.execute("UPDATE mobile_auth_codes SET used_at=? WHERE code_hash=?", (datetime.utcnow().isoformat(), code_hash))
+    conn.commit()
     conn.close()
 
     token = _create_token(user["id"], user["username"])
-    add_log("auth", f"Login: {user['username']}", level="success")
+    add_log("auth", f"Mobile code exchange: {user['username']}", level="success")
     return jsonify({"status": "ok", "token": token, "username": user["username"]})
 
 

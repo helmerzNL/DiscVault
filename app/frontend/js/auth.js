@@ -237,6 +237,16 @@ function bufferToBase64url(buffer) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+function getMobileFlowFromURL() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const flow = (params.get('mobile_flow') || '').trim();
+    return flow || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function loginPasskey() {
   const btn = document.getElementById('btnLogin');
   btn.innerHTML = t('js.waitingPasskey');
@@ -270,12 +280,23 @@ async function loginPasskey() {
       authenticatorAttachment: assertion.authenticatorAttachment,
     };
 
+    const mobileFlow = getMobileFlowFromURL();
+    const verifyBody = { credential };
+    if (mobileFlow) verifyBody.mobile_flow = mobileFlow;
+
     const verResp = await _origFetch(`${API}/auth/login/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential })
+      body: JSON.stringify(verifyBody)
     });
     const verData = await verResp.json();
+
+    // Mobile auth flow: hand control back to the native app callback first.
+    if (verData.callback_url) {
+      window.location.href = verData.callback_url;
+      return;
+    }
+
     if (verData.token) {
       authToken = verData.token;
       localStorage.setItem('dv_token', authToken);
