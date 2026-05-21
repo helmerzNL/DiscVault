@@ -134,6 +134,7 @@
     "settings.menuAbout": "Over",
     "settings.aboutTitle": "Over DiscVault",
     "settings.aboutTmdb": "Filmdata wordt aangeboden door The Movie Database (TMDB). Dit product gebruikt de TMDB API maar is niet bekrachtigd of gecertificeerd door TMDB.",
+    "settings.aboutAi": "Volledig gebouwd door AI-agents die nooit slapen, nooit klagen en gemiddeld één keer per sessie de verkeerde bestanden overschrijven — met de beste bedoelingen uiteraard.",
     "settings.groupMgmtTitle": "📦 Vaults, Box Sets & Collections",
     "settings.groupMgmtDesc": "Beheer alle groepen. Je kunt ze hernoemen of verwijderen, ook als er geen films aan gekoppeld zijn.",
     "settings.groupMgmtEmpty": "Geen groepen gevonden.",
@@ -931,6 +932,7 @@
     "settings.menuAbout": "About",
     "settings.aboutTitle": "About DiscVault",
     "settings.aboutTmdb": "Movie data is provided by The Movie Database (TMDB). This product uses the TMDB API but is not endorsed or certified by TMDB.",
+    "settings.aboutAi": "Built entirely by AI agents who never sleep, never complain, and accidentally overwrite the wrong files roughly once per session — always with the best of intentions.",
     "settings.groupMgmtTitle": "📦 Vaults, Box Sets & Collections",
     "settings.groupMgmtDesc": "Manage all groups. You can rename or delete them, even when no films are assigned.",
     "settings.groupMgmtEmpty": "No groups found.",
@@ -2379,7 +2381,8 @@
     "digital.playOn": "Lire sur {0}",
     "settings.menuAbout": "À propos",
     "settings.aboutTitle": "À propos de DiscVault",
-    "settings.aboutTmdb": "Les données de films sont fournies par The Movie Database (TMDB). Ce produit utilise l’API TMDB mais n’est pas approuvé ni certifié par TMDB."
+    "settings.aboutTmdb": "Les données de films sont fournies par The Movie Database (TMDB). Ce produit utilise l’API TMDB mais n’est pas approuvé ni certifié par TMDB.",
+    "settings.aboutAi": "Entièrement conçu par des agents IA qui ne dorment jamais, ne se plaignent jamais et écrasent accidentellement les mauvais fichiers environ une fois par session — toujours avec les meilleures intentions."
   },
   "de": {
     "nav.collection": "Sammlung",
@@ -3171,7 +3174,8 @@
     "digital.playOn": "Abspielen auf {0}",
     "settings.menuAbout": "Über",
     "settings.aboutTitle": "Über DiscVault",
-    "settings.aboutTmdb": "Filmdaten werden von The Movie Database (TMDB) bereitgestellt. Dieses Produkt nutzt die TMDB-API, wird jedoch nicht von TMDB unterstützt oder zertifiziert."
+    "settings.aboutTmdb": "Filmdaten werden von The Movie Database (TMDB) bereitgestellt. Dieses Produkt nutzt die TMDB-API, wird jedoch nicht von TMDB unterstützt oder zertifiziert.",
+    "settings.aboutAi": "Vollständig von KI-Agenten entwickelt, die niemals schlafen, niemals klagen und ungefähr einmal pro Sitzung die falschen Dateien überschreiben — immer in bester Absicht."
   },
   "es": {
     "nav.collection": "Colección",
@@ -3963,7 +3967,8 @@
     "digital.playOn": "Reproducir en {0}",
     "settings.menuAbout": "Acerca de",
     "settings.aboutTitle": "Acerca de DiscVault",
-    "settings.aboutTmdb": "Los datos de películas son proporcionados por The Movie Database (TMDB). Este producto utiliza la API de TMDB pero no está respaldado ni certificado por TMDB."
+    "settings.aboutTmdb": "Los datos de películas son proporcionados por The Movie Database (TMDB). Este producto utiliza la API de TMDB pero no está respaldado ni certificado por TMDB.",
+    "settings.aboutAi": "Construido íntegramente por agentes de IA que nunca duermen, nunca se quejan y accidentalmente sobreescriben los archivos incorrectos aproximadamente una vez por sesión — siempre con las mejores intenciones."
   },
   "pt": {
     "nav.collection": "Coleção",
@@ -4756,7 +4761,8 @@
     "digital.playOn": "Reproduzir em {0}",
     "settings.menuAbout": "Sobre",
     "settings.aboutTitle": "Sobre o DiscVault",
-    "settings.aboutTmdb": "Os dados de filmes são fornecidos por The Movie Database (TMDB). Este produto utiliza a API do TMDB mas não é endossado nem certificado pelo TMDB."
+    "settings.aboutTmdb": "Os dados de filmes são fornecidos por The Movie Database (TMDB). Este produto utiliza a API do TMDB mas não é endossado nem certificado pelo TMDB.",
+    "settings.aboutAi": "Construído inteiramente por agentes de IA que nunca dormem, nunca reclamam e acidentalmente sobrescrevem os ficheiros errados cerca de uma vez por sessão — sempre com as melhores intenções."
   },
   "it": {
     "nav.collection": "Collezione",
@@ -4893,6 +4899,7 @@
     "settings.menuAbout": "Informazioni",
     "settings.aboutTitle": "Info su DiscVault",
     "settings.aboutTmdb": "I dati sui film sono forniti da The Movie Database (TMDB). Questo prodotto utilizza l’API TMDB ma non è approvato o certificato da TMDB.",
+    "settings.aboutAi": "Realizzato interamente da agenti IA che non dormono mai, non si lamentano mai e accidentalmente sovrascrivono i file sbagliati circa una volta per sessione — sempre con le migliori intenzioni.",
     "settings.groupMgmtTitle": "📦 Vaults, Box Sets & Collections",
     "settings.groupMgmtDesc": "Gestisci tutti i gruppi. Puoi rinominarli o eliminarli, anche senza film assegnati.",
     "settings.groupMgmtEmpty": "Nessun gruppo trovato.",
