@@ -1527,6 +1527,20 @@
     border-color: var(--accent);
   }
 
+  /* Responsive pills: on mobile filmography wraps below the other two */
+  @media (max-width: 560px) {
+    .person-film-pill-bar {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .person-film-pill-tabs {
+      flex: 1 1 100%;
+    }
+    .person-film-pill-tabs .person-film-pill:last-child {
+      flex-basis: 100%;
+    }
+  }
+
   /* ── Detail pages (film & persoon) ── */
 
   /* Full-viewport blurred page background */
