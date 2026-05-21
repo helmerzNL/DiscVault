@@ -1,10 +1,11 @@
+import AuthenticationServices
 import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject private var appState: AppStateManager
     @Environment(APIClient.self) private var apiClient
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
 
-    @State private var passkeyAuthenticator = PasskeyAuthenticator()
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showServerSetup = false
@@ -80,7 +81,7 @@ struct LoginView: View {
                 .background(.white.opacity(0.07))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            Text("Use the passkey registered with your DiscVault account.")
+            Text("Continue to your DiscVault server to sign in with your passkey.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.64))
                 .multilineTextAlignment(.center)
@@ -121,7 +122,7 @@ struct LoginView: View {
                     Image(systemName: "key.fill")
                 }
 
-                Text(isLoading ? "Waiting for passkey" : "Sign in with Passkey")
+                Text(isLoading ? "Opening sign in" : "Sign in with Passkey")
                     .font(.headline)
             }
             .foregroundStyle(.black)
@@ -167,9 +168,15 @@ struct LoginView: View {
         defer { isLoading = false }
 
         do {
-            let options = try await apiClient.getPasskeyLoginOptions()
-            let credential = try await passkeyAuthenticator.requestAssertion(options: options)
-            let response = try await apiClient.verifyPasskeyLogin(credential: credential)
+            let callbackScheme = "discvault"
+            let loginURL = try apiClient.mobileAuthStartURL(callbackScheme: callbackScheme)
+            let callbackURL = try await webAuthenticationSession.authenticate(
+                using: loginURL,
+                callbackURLScheme: callbackScheme,
+                preferredBrowserSession: .shared
+            )
+            let code = try mobileAuthCode(from: callbackURL)
+            let response = try await apiClient.exchangeMobileAuthCode(code)
             if let username = response.username {
                 KeychainService.save(username, for: KeychainService.username)
             }
@@ -177,6 +184,22 @@ struct LoginView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func mobileAuthCode(from callbackURL: URL) throws -> String {
+        guard let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false) else {
+            throw APIError.invalidURL
+        }
+
+        if let error = components.queryItems?.first(where: { $0.name == "error" })?.value {
+            throw APIError.serverError(error)
+        }
+
+        guard let code = components.queryItems?.first(where: { $0.name == "code" })?.value, !code.isEmpty else {
+            throw APIError.serverError("The server did not return a mobile sign-in code.")
+        }
+
+        return code
     }
 }
 

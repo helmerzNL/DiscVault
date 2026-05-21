@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9691C0452FBF235D0000CC96 /* PasskeyAuthenticator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C0442FBF235D0000CC96 /* PasskeyAuthenticator.swift */; };
 		BB010000000000000000BB01 /* DiscVaultApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA010000000000000000AA01 /* DiscVaultApp.swift */; };
 		BB020000000000000000BB02 /* AppStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA020000000000000000AA02 /* AppStateManager.swift */; };
 		BB030000000000000000BB03 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA030000000000000000AA03 /* ContentView.swift */; };
@@ -35,7 +34,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		9691C0442FBF235D0000CC96 /* PasskeyAuthenticator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasskeyAuthenticator.swift; sourceTree = "<group>"; };
 		AA000000000000000000AA00 /* DiscVault.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DiscVault.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA010000000000000000AA01 /* DiscVaultApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscVaultApp.swift; sourceTree = "<group>"; };
 		AA020000000000000000AA02 /* AppStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateManager.swift; sourceTree = "<group>"; };
@@ -114,7 +112,6 @@
 			children = (
 				AA080000000000000000AA08 /* APIClient.swift */,
 				AA090000000000000000AA09 /* KeychainService.swift */,
-				9691C0442FBF235D0000CC96 /* PasskeyAuthenticator.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -305,7 +302,6 @@
 				BB060000000000000000BB06 /* Group.swift in Sources */,
 				BB070000000000000000BB07 /* WatchlistItem.swift in Sources */,
 				BB080000000000000000BB08 /* APIClient.swift in Sources */,
-				9691C0452FBF235D0000CC96 /* PasskeyAuthenticator.swift in Sources */,
 				BB090000000000000000BB09 /* KeychainService.swift in Sources */,
 				BB0A0000000000000000BB0A /* AuthViewModel.swift in Sources */,
 				BB0B0000000000000000BB0B /* CollectionViewModel.swift in Sources */,

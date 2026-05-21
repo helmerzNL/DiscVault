@@ -30,44 +30,13 @@ struct AuthTokens: Codable {
     }
 }
 
-// MARK: - Passkey Auth
+// MARK: - Mobile Auth
 
-struct PasskeyLoginOptionsResponse: Decodable {
-    let options: PasskeyLoginOptions
+struct MobileAuthExchangeRequest: Encodable {
+    let code: String
 }
 
-struct PasskeyLoginOptions: Decodable {
-    let challenge: String
-    let rpId: String
-    let allowCredentials: [PasskeyAllowedCredential]?
-    let userVerification: String?
-}
-
-struct PasskeyAllowedCredential: Decodable {
-    let type: String
-    let id: String
-}
-
-struct PasskeyAssertionCredential: Encodable {
-    let id: String
-    let rawId: String
-    let response: PasskeyAssertionResponse
-    let type: String
-    let authenticatorAttachment: String?
-}
-
-struct PasskeyAssertionResponse: Encodable {
-    let authenticatorData: String
-    let clientDataJSON: String
-    let signature: String
-    let userHandle: String?
-}
-
-struct PasskeyLoginVerificationRequest: Encodable {
-    let credential: PasskeyAssertionCredential
-}
-
-struct PasskeyAuthResponse: Codable {
+struct MobileAuthResponse: Codable {
     let status: String?
     let token: String
     let username: String?

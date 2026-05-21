@@ -66,29 +66,40 @@ final class APIClient {
         return tokens
     }
 
-    func getPasskeyLoginOptions() async throws -> PasskeyLoginOptions {
-        let response: PasskeyLoginOptionsResponse = try await request(
-            "/api/auth/login/options",
-            method: "POST",
-            body: EmptyRequestBody(),
-            skipAuth: true
-        )
-        return response.options
+    func mobileAuthStartURL(callbackScheme: String) throws -> URL {
+        guard var components = URLComponents(string: baseURL), !baseURL.isEmpty else {
+            throw APIError.invalidURL
+        }
+
+        let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.path = basePath.isEmpty ? "/api/auth/mobile/start" : "/\(basePath)/api/auth/mobile/start"
+        components.queryItems = [
+            URLQueryItem(name: "callback_scheme", value: callbackScheme)
+        ]
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+        return url
     }
 
-    func verifyPasskeyLogin(credential: PasskeyAssertionCredential) async throws -> PasskeyAuthResponse {
-        let response: PasskeyAuthResponse = try await request(
-            "/api/auth/login/verify",
+    func exchangeMobileAuthCode(_ code: String) async throws -> MobileAuthResponse {
+        let response: MobileAuthResponse = try await request(
+            "/api/auth/mobile/exchange",
             method: "POST",
-            body: PasskeyLoginVerificationRequest(credential: credential),
+            body: MobileAuthExchangeRequest(code: code),
             skipAuth: true
         )
-        accessToken = response.token
+        storeAuthToken(response.token)
+        return response
+    }
+
+    private func storeAuthToken(_ token: String) {
+        accessToken = token
         refreshTokenValue = nil
         isAuthenticated = true
-        KeychainService.save(response.token, for: KeychainService.accessToken)
+        KeychainService.save(token, for: KeychainService.accessToken)
         KeychainService.delete(for: KeychainService.refreshToken)
-        return response
     }
 
     func refreshToken() async throws {
