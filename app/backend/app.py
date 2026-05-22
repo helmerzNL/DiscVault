@@ -2166,7 +2166,7 @@ def _looks_like_box_set_title(title: str) -> bool:
     markers = (
         "box set", "boxset", "collection", "trilogy", "quadrilogy", "anthology",
         "complete", "movie set", "film set", "movie collection", "film collection",
-        "limited edition set", "collector's set", "ultimate set",
+        "limited edition set", "collector's set", "ultimate set", "bundle",
     )
     return any(m in low for m in markers) or bool(re.search(r"\b\d+\s*(movie|film|disc)\b", low))
 
@@ -2204,18 +2204,48 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
         r"(?:this|the)\s+blu-ray\s+bundle\s+includes\s+the\s+following\s+titles",
         re.I,
     )
-    bundle_text = dsoup.find(string=bundle_anchor)
+    stop_section = re.compile(r"\b(similar|related|reviews?|forum|news|deals)\b", re.I)
+    bundle_text = dsoup.find(string=lambda s: bool(s and bundle_anchor.search(str(s))))
     if bundle_text:
         parent = bundle_text.parent
         if parent:
             add_candidates_from_node(parent)
-            for sibling in parent.find_next_siblings(limit=12):
-                sibling_text = sibling.get_text(" ", strip=True)
-                if re.search(r"\b(similar|related|reviews?|forum|news|deals)\b", sibling_text, re.I):
+            scanned_nodes = 0
+            for node in parent.next_elements:
+                scanned_nodes += 1
+                if scanned_nodes > 1500:
                     break
-                add_candidates_from_node(sibling)
+                node_text = node.get_text(" ", strip=True) if hasattr(node, "get_text") else str(node).strip()
+                if len(candidates) > 0 and stop_section.search(node_text):
+                    break
+                if getattr(node, "name", None) == "a":
+                    href = node.get("href") or ""
+                    if "blu-ray.com/movies/" in href or href.startswith("/movies/"):
+                        text = node.get_text(" ", strip=True)
+                        ym = re.search(r"\((\d{4})\)", text)
+                        add_candidate(text, ym.group(1) if ym else "")
                 if len(candidates) >= 30:
                     break
+        if candidates:
+            return candidates[:30]
+
+    page_text = dsoup.get_text("\n", strip=True)
+    bundle_match = bundle_anchor.search(page_text)
+    if bundle_match:
+        block = page_text[bundle_match.end():]
+        stop_match = stop_section.search(block)
+        if stop_match:
+            block = block[:stop_match.start()]
+        for line in block.splitlines()[:80]:
+            line = line.strip()
+            if not line or len(line) < 2:
+                continue
+            if re.search(r"\b(specs?|details?|audio|video|subtitles?|review|blu-ray\.com)\b", line, re.I):
+                continue
+            ym = re.search(r"\((\d{4})\)", line)
+            add_candidate(line, ym.group(1) if ym else "")
+            if len(candidates) >= 30:
+                break
         if candidates:
             return candidates[:30]
 
@@ -2232,7 +2262,6 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
             year = ym.group(1)
         add_candidate(text, year)
 
-    page_text = dsoup.get_text("\n", strip=True)
     for m in re.finditer(r"(?:Includes|Contains|Films|Movies)\s*:?\s*\n+([^\n]+(?:\n+[^\n]+){0,8})", page_text, re.I):
         block = m.group(1)
         for part in re.split(r"\s*(?:,|;|\u2022|\||/|\n)\s*", block):
@@ -2420,13 +2449,21 @@ def _bluray_parse_movie_page(detail_url: str) -> dict | None:
         "subtitles": subs_text,
     }
     members = _extract_bluray_box_set_members(dsoup, title)
-    if members and _looks_like_box_set_title(title):
+    is_box_set_page = _looks_like_box_set_title(title)
+    if len(members) >= 2 and is_box_set_page:
         out["box_set_proposal"] = {
             "title": re.sub(r"\s+(4K Ultra HD|4K UHD|Blu-ray|DVD)\b.*$", "", title, flags=re.I).strip() or title,
             "source": "Blu-ray.com",
             "detail_url": detail_url,
             "movies": members,
         }
+    elif is_box_set_page:
+        add_log(
+            "lookup",
+            f"Blu-ray.com box-set page found but no member list extracted: \"{title}\"",
+            f"URL: {detail_url}; Member candidates found: {len(members)}",
+            "warn",
+        )
     return {k: v for k, v in out.items() if v}
 
 
