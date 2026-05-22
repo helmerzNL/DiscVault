@@ -2064,6 +2064,13 @@
           <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egBadgeLabel">Badge label</label>
           <input type="text" id="egBadgeLabel" placeholder="bijv. Trilogy, 4K Set..." maxlength="20" style="margin-top:4px;" data-i18n-placeholder="edition.egBadgeLabelPlaceholder">
         </div>
+        <div class="input-group" id="egGroupTypeSection" style="margin-bottom:12px;">
+          <label style="font-size:0.8rem; font-weight:600;">Type</label>
+          <select id="egGroupType" style="margin-top:4px;" onchange="updateEgTypeDependentFields()">
+            <option value="vault">Vault</option>
+            <option value="boxset">Box Set</option>
+          </select>
+        </div>
         <div class="input-group" style="margin-bottom:12px;">
           <label style="font-size:0.8rem; font-weight:600;" data-i18n="edition.egParentGroup">Samenvoegen onder box set</label>
           <input type="text" id="egParentGroupSearch" placeholder="Zoek box set..." autocomplete="off"

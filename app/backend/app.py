@@ -7495,6 +7495,114 @@ def create_edition_group():
     return jsonify(dict(row)), 201
 
 
+def _convert_edition_group_type(conn, group_id, target_type):
+    """Convert a legacy edition_group between vault and box-set containers.
+
+    The conversion is intentionally idempotent. If the target container row
+    already exists with the same id, memberships are merged with INSERT OR
+    IGNORE and metadata is refreshed from edition_groups.
+    """
+    if target_type not in ("vault", "boxset"):
+        return
+    eg = conn.execute("SELECT * FROM edition_groups WHERE id=?", (group_id,)).fetchone()
+    if not eg:
+        return
+
+    movie_ids = set()
+    for sql in (
+        "SELECT movie_id FROM vault_movies WHERE vault_id=?",
+        "SELECT movie_id FROM box_set_movies WHERE box_set_id=?",
+        "SELECT id AS movie_id FROM movies WHERE edition_group_id=?",
+        "SELECT id AS movie_id FROM movies WHERE super_group_id=?",
+        "SELECT m.id AS movie_id FROM movies m JOIN edition_groups child ON child.id=m.edition_group_id WHERE child.parent_group_id=?",
+    ):
+        for r in conn.execute(sql, (group_id,)).fetchall():
+            movie_ids.add(int(r["movie_id"]))
+
+    collection_ids = {
+        int(r["collection_id"]) for r in conn.execute(
+            "SELECT collection_id FROM collection_items WHERE item_type IN ('vault', 'box_set') AND item_id=?",
+            (group_id,)
+        ).fetchall()
+    }
+    if eg["collection_id"]:
+        collection_ids.add(int(eg["collection_id"]))
+
+    meta = (
+        group_id, eg["title"], eg["tmdb_id"], eg["imdb_id"], eg["year"],
+        eg["primary_movie_id"], eg["badge_label"], eg["backdrop"],
+        eg["description"], eg["poster_file"], group_id, eg["created_at"],
+    )
+    target_table = "box_sets" if target_type == "boxset" else "vaults"
+    source_table = "vaults" if target_type == "boxset" else "box_sets"
+    target_items = "box_set_movies" if target_type == "boxset" else "vault_movies"
+    source_items = "vault_movies" if target_type == "boxset" else "box_set_movies"
+    id_column = "box_set_id" if target_type == "boxset" else "vault_id"
+    source_id_column = "vault_id" if target_type == "boxset" else "box_set_id"
+    item_type = "box_set" if target_type == "boxset" else "vault"
+
+    conn.execute(f"""
+        INSERT OR IGNORE INTO {target_table}
+            (id, title, tmdb_id, imdb_id, year, primary_movie_id, badge_label,
+             backdrop, description, poster_file, legacy_edition_group_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, meta)
+    conn.execute(f"""
+        UPDATE {target_table}
+        SET title=?, tmdb_id=?, imdb_id=?, year=?, primary_movie_id=?,
+            badge_label=?, backdrop=?, description=?, poster_file=?,
+            legacy_edition_group_id=?
+        WHERE id=?
+    """, (
+        eg["title"], eg["tmdb_id"], eg["imdb_id"], eg["year"],
+        eg["primary_movie_id"], eg["badge_label"], eg["backdrop"],
+        eg["description"], eg["poster_file"], group_id, group_id,
+    ))
+
+    for mid in movie_ids:
+        conn.execute(
+            f"INSERT OR IGNORE INTO {target_items} ({id_column}, movie_id) VALUES (?, ?)",
+            (group_id, mid)
+        )
+
+    conn.execute(f"DELETE FROM {source_items} WHERE {source_id_column}=?", (group_id,))
+    conn.execute(f"DELETE FROM {source_table} WHERE id=?", (group_id,))
+    conn.execute(
+        "DELETE FROM collection_items WHERE item_type IN ('vault', 'box_set') AND item_id=?",
+        (group_id,)
+    )
+    for cid in collection_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, ?, ?)",
+            (cid, item_type, group_id)
+        )
+
+    if target_type == "boxset":
+        if movie_ids:
+            placeholders = ",".join("?" * len(movie_ids))
+            conn.execute(
+                f"UPDATE movies SET edition_group_id=NULL, super_group_id=? WHERE id IN ({placeholders})",
+                [group_id] + list(movie_ids)
+            )
+        conn.execute(
+            "UPDATE edition_groups SET group_type='boxset', parent_group_id=NULL WHERE id=?",
+            (group_id,)
+        )
+        conn.execute("UPDATE edition_groups SET parent_group_id=NULL WHERE parent_group_id=?", (group_id,))
+    else:
+        if movie_ids:
+            placeholders = ",".join("?" * len(movie_ids))
+            conn.execute(
+                f"UPDATE movies SET edition_group_id=?, super_group_id=NULL WHERE id IN ({placeholders})",
+                [group_id] + list(movie_ids)
+            )
+        conn.execute(
+            "UPDATE edition_groups SET group_type='vault', parent_group_id=NULL WHERE id=?",
+            (group_id,)
+        )
+        conn.execute("UPDATE edition_groups SET parent_group_id=NULL WHERE parent_group_id=?", (group_id,))
+
+
 @app.route("/api/edition-groups/<int:group_id>", methods=["GET"])
 def get_edition_group(group_id):
     conn = get_db()
@@ -7573,12 +7681,16 @@ def update_edition_group(group_id):
         fields["backdrop"] = data.get("backdrop")
     if "description" in data:
         fields["description"] = data.get("description")
-    if fields:
+    target_group_type = data.get("group_type") if data.get("group_type") in ("vault", "boxset") else None
+    if fields or target_group_type:
+        if target_group_type:
+            fields["group_type"] = target_group_type
         set_clause = ", ".join(f"{k}=?" for k in fields)
-        conn.execute(
-            f"UPDATE edition_groups SET {set_clause} WHERE id=?",
-            list(fields.values()) + [group_id]
-        )
+        if fields:
+            conn.execute(
+                f"UPDATE edition_groups SET {set_clause} WHERE id=?",
+                list(fields.values()) + [group_id]
+            )
         shared = {k: v for k, v in fields.items() if k in (
             "title", "primary_movie_id", "tmdb_id", "imdb_id", "year",
             "badge_label", "backdrop", "description"
@@ -7587,6 +7699,8 @@ def update_edition_group(group_id):
             shared_clause = ", ".join(f"{k}=?" for k in shared)
             conn.execute(f"UPDATE vaults SET {shared_clause} WHERE id=?", list(shared.values()) + [group_id])
             conn.execute(f"UPDATE box_sets SET {shared_clause} WHERE id=?", list(shared.values()) + [group_id])
+        if target_group_type:
+            _convert_edition_group_type(conn, group_id, target_group_type)
         if "collection_id" in fields:
             conn.execute(
                 "DELETE FROM collection_items WHERE item_type IN ('vault', 'box_set') AND item_id=?",
