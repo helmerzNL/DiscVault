@@ -403,6 +403,7 @@ function displayBoxSetProposal(proposal, barcode, detectedFormat) {
     source: proposal.source || 'Blu-ray.com',
     detail_url: proposal.detail_url || '',
     movies,
+    selected_indices: movies.map((_, idx) => idx),
     saved_indices: []
   };
 
@@ -412,18 +413,52 @@ function displayBoxSetProposal(proposal, barcode, detectedFormat) {
   const btn = document.getElementById('btnSaveBoxSetProposal');
   if (!nameEl || !listEl || !panel || !btn) return;
 
-  nameEl.textContent = `${currentBoxSetProposal.box_set_title} · ${movies.length} films gevonden`;
+  nameEl.textContent = '';
   listEl.innerHTML = movies.map((m, idx) => `
-    <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); font-size:0.88rem;">
-      <span style="width:24px; color:var(--text-muted); text-align:right;">${idx + 1}</span>
-      <strong style="flex:1; min-width:0;">${_escapeHtml(m.title)}</strong>
+    <div class="boxset-member-row">
+      <input class="boxset-member-check" type="checkbox" id="scanBoxSetMovieSelect${idx}" checked onchange="toggleBoxSetProposalMovie(${idx}, this.checked)" aria-label="${_escapeHtml(m.title)}">
+      <span class="boxset-member-index">${idx + 1}</span>
+      <strong class="boxset-member-title">${_escapeHtml(m.title)}</strong>
       ${m.year ? `<span class="tag">${_escapeHtml(m.year)}</span>` : ''}
-      <button class="btn btn-secondary" id="scanBoxSetMovieBtn${idx}" onclick="saveBoxSetProposalMovie(${idx})" style="padding:6px 10px;">Opslaan</button>
+      <button class="btn btn-secondary boxset-member-save" id="scanBoxSetMovieBtn${idx}" onclick="saveBoxSetProposalMovie(${idx})">Opslaan</button>
     </div>
   `).join('');
   btn.disabled = false;
   btn.textContent = t('scan.boxSetProposalSave');
   panel.style.display = 'block';
+  updateBoxSetProposalSelection();
+}
+
+function updateBoxSetProposalSelection() {
+  if (!currentBoxSetProposal) return;
+  const selectedCount = currentBoxSetProposal.selected_indices
+    .filter(idx => !currentBoxSetProposal.saved_indices.includes(idx)).length;
+  const nameEl = document.getElementById('boxSetProposalName');
+  if (nameEl) {
+    nameEl.textContent = `${currentBoxSetProposal.box_set_title} · ${selectedCount} films gevonden`;
+  }
+  const saveAllBtn = document.getElementById('btnSaveBoxSetProposal');
+  if (saveAllBtn) {
+    saveAllBtn.disabled = selectedCount === 0;
+  }
+  currentBoxSetProposal.movies.forEach((_, idx) => {
+    const rowBtn = document.getElementById(`scanBoxSetMovieBtn${idx}`);
+    if (rowBtn && !currentBoxSetProposal.saved_indices.includes(idx)) {
+      rowBtn.disabled = !currentBoxSetProposal.selected_indices.includes(idx);
+    }
+  });
+}
+
+function toggleBoxSetProposalMovie(index, checked) {
+  if (!currentBoxSetProposal) return;
+  if (checked) {
+    if (!currentBoxSetProposal.selected_indices.includes(index)) {
+      currentBoxSetProposal.selected_indices.push(index);
+    }
+  } else {
+    currentBoxSetProposal.selected_indices = currentBoxSetProposal.selected_indices.filter(idx => idx !== index);
+  }
+  updateBoxSetProposalSelection();
 }
 
 async function _saveBoxSetProposalMovies(indices) {
@@ -454,8 +489,15 @@ async function _saveBoxSetProposalMovies(indices) {
     if (rowBtn) {
       rowBtn.disabled = true;
       rowBtn.textContent = 'Opgeslagen';
+      rowBtn.classList.add('is-saved');
+    }
+    const rowCheck = document.getElementById(`scanBoxSetMovieSelect${idx}`);
+    if (rowCheck) {
+      rowCheck.checked = true;
+      rowCheck.disabled = true;
     }
   });
+  updateBoxSetProposalSelection();
   if (typeof loadStats === 'function') loadStats();
   if (typeof loadCollection === 'function') loadCollection();
   return d;
@@ -487,7 +529,7 @@ async function saveBoxSetProposal() {
     btn.innerHTML = '<span class="spinner"></span> ' + t('scan.boxSetProposalSaving');
   }
   try {
-    const indices = currentBoxSetProposal.movies.map((_, idx) => idx);
+    const indices = currentBoxSetProposal.selected_indices.slice();
     const d = await _saveBoxSetProposalMovies(indices);
     showStatus('scanStatus', t('scan.boxSetProposalSaved', d.box_set.title, d.movies.length), 'success');
     document.getElementById('movieResult').style.display = 'none';

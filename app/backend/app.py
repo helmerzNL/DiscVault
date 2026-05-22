@@ -2193,6 +2193,18 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
             return False
         return bool(cell.select('[id^="automatic_"], a[onclick*="voteSimilar"]'))
 
+    def is_bundle_tile(a):
+        if not a or getattr(a, "name", None) != "a":
+            return False
+        if not is_movie_link(a) or is_similar_tile(a):
+            return False
+        if not a.get("title") or not a.get("data-productid") or not a.get("data-globalparentid"):
+            return False
+        if "hoverlink" not in (a.get("class") or []):
+            return False
+        img = a.find("img", class_="cover")
+        return bool(img)
+
     def add_candidate(raw_title, year=""):
         clean = _clean_bluray_member_title(raw_title)
         if not clean or len(clean) < 2:
@@ -2206,92 +2218,35 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
             return
         candidates.append({"title": clean, "year": year or ""})
 
-    def add_candidates_from_node(node):
-        before_count = len(candidates)
-        for a in node.select('a[href*="/movies/"]'):
-            text = link_title(a)
-            if not text or not is_movie_link(a) or is_similar_tile(a):
-                continue
-            if re.search(r"\b(review|forum|deals|news|trailer)\b", text, re.I):
-                continue
-            add_candidate(text, link_year(text))
-        return len(candidates) - before_count
-
-    # Blu-ray.com bundle pages often render member films as cover tiles. The
-    # anchor text is empty; the real title lives in the title attribute.
-    tile_links = [
-        a for a in dsoup.select('a.hoverlink[data-globalparentid][data-productid][href*="/movies/"]')
-        if link_title(a) and is_movie_link(a) and not is_similar_tile(a)
-    ]
-    if len(tile_links) >= 2:
-        for a in tile_links:
-            text = link_title(a)
-            add_candidate(text, link_year(text))
-        if len(candidates) >= 2:
-            return candidates[:30]
-
     bundle_anchor = re.compile(
         r"(?:this|the)\s+blu-ray\s+bundle\s+includes\s+the\s+following\s+titles",
         re.I,
     )
-    stop_section = re.compile(r"\b(similar|related|reviews?|forum|news|deals)\b", re.I)
-    bundle_text = dsoup.find(string=lambda s: bool(s and bundle_anchor.search(str(s))))
-    if bundle_text:
-        parent = bundle_text.parent
-        if parent:
-            add_candidates_from_node(parent)
-            scanned_nodes = 0
-            for node in parent.next_elements:
-                scanned_nodes += 1
-                if scanned_nodes > 1500:
-                    break
-                node_text = node.get_text(" ", strip=True) if hasattr(node, "get_text") else str(node).strip()
-                if len(candidates) > 0 and stop_section.search(node_text):
-                    break
-                if getattr(node, "name", None) == "a":
-                    if is_movie_link(node) and not is_similar_tile(node):
-                        text = link_title(node)
-                        add_candidate(text, link_year(text))
-                if len(candidates) >= 30:
-                    break
-        if candidates:
-            return candidates[:30]
+    movie_info = dsoup.find(id="movie_info")
+    search_root = movie_info or dsoup
+    bundle_text = search_root.find(string=lambda s: bool(s and bundle_anchor.search(str(s))))
+    if not bundle_text:
+        return []
 
-    page_text = dsoup.get_text("\n", strip=True)
-    bundle_match = bundle_anchor.search(page_text)
-    if bundle_match:
-        block = page_text[bundle_match.end():]
-        stop_match = stop_section.search(block)
-        if stop_match:
-            block = block[:stop_match.start()]
-        for line in block.splitlines()[:80]:
-            line = line.strip()
-            if not line or len(line) < 2:
-                continue
-            if re.search(r"\b(specs?|details?|audio|video|subtitles?|review|blu-ray\.com)\b", line, re.I):
-                continue
-            ym = re.search(r"\((\d{4})\)", line)
-            add_candidate(line, ym.group(1) if ym else "")
-            if len(candidates) >= 30:
+    in_bundle_members = False
+    empty_steps_after_members = 0
+    for node in search_root.descendants:
+        if not in_bundle_members:
+            if node == bundle_text:
+                in_bundle_members = True
+            continue
+        if getattr(node, "name", None) == "a" and is_bundle_tile(node):
+            text = link_title(node)
+            add_candidate(text, link_year(text))
+            empty_steps_after_members = 0
+            continue
+        if candidates:
+            if getattr(node, "name", None) == "br":
+                empty_steps_after_members += 1
+            elif str(node).strip():
+                empty_steps_after_members += 1
+            if empty_steps_after_members > 80:
                 break
-        if candidates:
-            return candidates[:30]
-
-    for a in dsoup.select('a[href*="/movies/"]'):
-        text = link_title(a)
-        if not text or not is_movie_link(a) or is_similar_tile(a):
-            continue
-        if re.search(r"\b(review|forum|deals|news|trailer)\b", text, re.I):
-            continue
-        add_candidate(text, link_year(text))
-
-    for m in re.finditer(r"(?:Includes|Contains|Films|Movies)\s*:?\s*\n+([^\n]+(?:\n+[^\n]+){0,8})", page_text, re.I):
-        block = m.group(1)
-        for part in re.split(r"\s*(?:,|;|\u2022|\||/|\n)\s*", block):
-            if part:
-                ym = re.search(r"\((\d{4})\)", part)
-                add_candidate(part, ym.group(1) if ym else "")
-
     return candidates[:30]
 
 
