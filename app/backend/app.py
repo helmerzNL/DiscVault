@@ -7518,6 +7518,18 @@ def _asset_checksum(path):
         return ""
 
 
+def _absolute_api_url(path_or_url):
+    if not path_or_url:
+        return ""
+    value = str(path_or_url)
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    try:
+        return request.url_root.rstrip("/") + "/" + value.lstrip("/")
+    except RuntimeError:
+        return value
+
+
 def _asset_manifest_entry(kind, entity, entity_id, value, updated_at="", revision=0):
     if not value:
         return None
@@ -7536,10 +7548,14 @@ def _asset_manifest_entry(kind, entity, entity_id, value, updated_at="", revisio
         "kind": kind,
         "entity": entity,
         "entity_id": entity_id,
+        "entityId": entity_id,
         "url": url,
+        "absolute_url": _absolute_api_url(url),
+        "absoluteUrl": _absolute_api_url(url),
         "checksum": checksum,
         "etag": etag,
         "updated_at": updated_at or "",
+        "updatedAt": updated_at or "",
         "revision": int(revision or 0),
     }
 
@@ -7659,17 +7675,34 @@ def _sync_dataset(conn, since_revision=None):
     return {
         "movies": movies,
         "edition_groups": edition_groups,
+        "editionGroups": edition_groups,
         "collections": collections,
         "groups": groups,
         "watchlist": watchlist,
+        "watchlistItems": watchlist,
         "watch_history": watch_history,
+        "watchHistory": watch_history,
         "people": people,
         "movie_people": movie_people,
+        "moviePeople": movie_people,
         "container_memberships": {
             "vault_movies": vault_movies,
             "box_set_movies": box_set_movies,
             "collection_items": collection_items,
             "movie_groups": movie_groups,
+        },
+        "containerMemberships": {
+            "vaultMovies": vault_movies,
+            "boxSetMovies": box_set_movies,
+            "collectionItems": collection_items,
+            "movieGroups": movie_groups,
+        },
+        "containers": {
+            "editionGroups": edition_groups,
+            "collections": collections,
+            "vaultMovies": vault_movies,
+            "boxSetMovies": box_set_movies,
+            "collectionItems": collection_items,
         },
     }
 
@@ -7678,28 +7711,70 @@ def _sync_dataset(conn, since_revision=None):
 def sync_bootstrap():
     conn = get_db()
     data = _sync_dataset(conn)
-    data["server_revision"] = _current_sync_revision(conn)
-    data["asset_manifest"] = _sync_asset_manifest(conn, _visible_movie_ids(conn))
+    revision = _current_sync_revision(conn)
+    assets = _sync_asset_manifest(conn, _visible_movie_ids(conn))
+    data["server_revision"] = revision
+    data["serverRevision"] = revision
+    data["asset_manifest"] = assets
+    data["assetManifest"] = assets
     conn.close()
     return jsonify(data)
 
 
-@app.route("/api/sync/delta", methods=["GET"])
-def sync_delta():
-    try:
-        since = int(request.args.get("since_revision", "0"))
-    except ValueError:
-        return jsonify({"error": "since_revision must be an integer"}), 400
+def _sync_delta_response(since):
     conn = get_db()
     data = _sync_dataset(conn, since)
     data["tombstones"] = _dicts(conn.execute(
         "SELECT entity, entity_id, deleted_at, revision FROM sync_tombstones WHERE revision>? ORDER BY revision",
         (since,),
     ).fetchall())
-    data["server_revision"] = _current_sync_revision(conn)
-    data["asset_manifest"] = [a for a in _sync_asset_manifest(conn, _visible_movie_ids(conn)) if int(a.get("revision") or 0) > since]
+    revision = _current_sync_revision(conn)
+    assets = [a for a in _sync_asset_manifest(conn, _visible_movie_ids(conn)) if int(a.get("revision") or 0) > since]
+    data["server_revision"] = revision
+    data["serverRevision"] = revision
+    data["fromRevision"] = since
+    data["toRevision"] = revision
+    data["asset_manifest"] = assets
+    data["assetManifest"] = assets
+    data["assetUpdates"] = assets
+    data["upserts"] = {
+        "movies": data.get("movies", []),
+        "editionGroups": data.get("editionGroups", []),
+        "collections": data.get("collections", []),
+        "groups": data.get("groups", []),
+        "watchlistItems": data.get("watchlistItems", []),
+        "watchHistory": data.get("watchHistory", []),
+        "people": data.get("people", []),
+        "moviePeople": data.get("moviePeople", []),
+        "containerMemberships": data.get("containerMemberships", {}),
+    }
+    data["deletes"] = data["tombstones"]
     conn.close()
     return jsonify(data)
+
+
+def _parse_since_revision_arg():
+    raw = request.args.get("since_revision", request.args.get("sinceRevision", "0"))
+    try:
+        return int(raw)
+    except ValueError:
+        return jsonify({"error": "since_revision must be an integer"}), 400
+
+
+@app.route("/api/sync/delta", methods=["GET"])
+def sync_delta():
+    since = _parse_since_revision_arg()
+    if not isinstance(since, int):
+        return since
+    return _sync_delta_response(since)
+
+
+@app.route("/api/sync/changes", methods=["GET"])
+def sync_changes():
+    since = _parse_since_revision_arg()
+    if not isinstance(since, int):
+        return since
+    return _sync_delta_response(since)
 
 
 def _entity_revision(conn, entity, entity_id):
@@ -7711,7 +7786,7 @@ def _entity_revision(conn, entity, entity_id):
 
 
 def _conflict_if_stale(conn, op, entity, entity_id):
-    base = op.get("base_revision")
+    base = op.get("base_revision", op.get("baseRevision"))
     if base is None or entity_id in (None, ""):
         return None
     current = _entity_revision(conn, entity, entity_id)
@@ -7725,7 +7800,7 @@ def _conflict_if_stale(conn, op, entity, entity_id):
 def _apply_sync_operation(conn, op):
     typ = op.get("type") or ""
     payload = op.get("payload") or {}
-    entity_id = op.get("entity_id")
+    entity_id = op.get("entity_id", op.get("entityId"))
     now = datetime.utcnow().isoformat()
     uid = _get_current_user_id()
 
@@ -7852,16 +7927,15 @@ def _apply_sync_operation(conn, op):
     return {"status": "failed", "error": f"Unsupported operation type: {typ}"}
 
 
-@app.route("/api/sync/operations", methods=["POST"])
-def sync_operations():
+def _sync_operations_response():
     data = request.json or {}
-    operations = data.get("operations") or ([] if not data else [data])
-    client_id = data.get("client_id") or request.headers.get("X-DiscVault-Client") or "unknown"
+    operations = data.get("operations") or data.get("mutations") or ([] if not data else [data])
+    client_id = data.get("client_id") or data.get("clientId") or request.headers.get("X-DiscVault-Client") or "unknown"
     conn = get_db()
     results = []
     for op in operations:
-        key = op.get("idempotency_key")
-        op_client_id = op.get("client_id") or client_id
+        key = op.get("idempotency_key") or op.get("idempotencyKey")
+        op_client_id = op.get("client_id") or op.get("clientId") or client_id
         if not key:
             results.append({"status": "failed", "error": "idempotency_key is required"})
             continue
@@ -7882,13 +7956,23 @@ def sync_operations():
             result = {"status": "failed", "error": str(ex)}
         conn.execute(
             "INSERT OR IGNORE INTO sync_operations (idempotency_key, client_id, status, entity, entity_id, result_json, created_at) VALUES (?,?,?,?,?,?,?)",
-            (key, op_client_id, result.get("status", "failed"), op.get("entity"), str(result.get("entity_id") or op.get("entity_id") or ""), json.dumps(result), datetime.utcnow().isoformat()),
+            (key, op_client_id, result.get("status", "failed"), op.get("entity"), str(result.get("entity_id") or result.get("entityId") or op.get("entity_id") or op.get("entityId") or ""), json.dumps(result), datetime.utcnow().isoformat()),
         )
         conn.commit()
         results.append(result)
     server_revision = _current_sync_revision(conn)
     conn.close()
-    return jsonify({"server_revision": server_revision, "results": results})
+    return jsonify({"server_revision": server_revision, "serverRevision": server_revision, "results": results})
+
+
+@app.route("/api/sync/operations", methods=["POST"])
+def sync_operations():
+    return _sync_operations_response()
+
+
+@app.route("/api/sync/mutations", methods=["POST"])
+def sync_mutations():
+    return _sync_operations_response()
 
 
 # ---------------------------------------------------------------------------
