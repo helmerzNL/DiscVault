@@ -3265,6 +3265,10 @@ function hideAddBoxSetProposal() {
   if (panel) panel.style.display = 'none';
 }
 
+function _addBoxSetMemberPosterSrc(movie) {
+  return (movie && (movie.poster_url || movie.poster || movie.cover_url || movie.poster_file)) || '';
+}
+
 function displayAddBoxSetProposal(proposal, barcode = '') {
   const movies = (proposal && proposal.movies ? proposal.movies : []).filter(m => m && m.title).slice(0, 50);
   if (!movies.length) {
@@ -3293,6 +3297,7 @@ function displayAddBoxSetProposal(proposal, barcode = '') {
     <div class="boxset-member-row">
       <input class="boxset-member-check" type="checkbox" id="addBoxSetMovieSelect${idx}" checked onchange="toggleAddBoxSetProposalMovie(${idx}, this.checked)" aria-label="${_escapeAddHtml(m.title)}">
       <span class="boxset-member-index">${idx + 1}</span>
+      <span class="boxset-member-cover">${_addBoxSetMemberPosterSrc(m) ? `<img src="${_escapeAddHtml(_addBoxSetMemberPosterSrc(m))}" alt="">` : '🎬'}</span>
       <strong class="boxset-member-title">${_escapeAddHtml(m.title)}</strong>
       ${m.year ? `<span class="tag">${_escapeAddHtml(m.year)}</span>` : ''}
       <button class="btn btn-secondary boxset-member-save" id="addBoxSetMovieBtn${idx}" onclick="saveAddBoxSetProposalMovie(${idx})">Opslaan</button>
