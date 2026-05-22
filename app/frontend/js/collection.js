@@ -3753,15 +3753,15 @@ async function loadGroupMgmtList(filter) {
       const badgeColor = item.type === 'collection' ? '#2ecc71'
         : item.type === 'boxset' ? 'var(--accent2)' : 'var(--accent)';
       return `
-        <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+        <div class="group-mgmt-item">
           <span style="font-size:0.72rem; padding:2px 8px; border-radius:4px; background:${badgeColor}22; color:${badgeColor}; font-weight:600; white-space:nowrap;">${typeBadge}</span>
+          ${canManage && item.src === 'eg' ? `<div class="group-type-control" role="group" aria-label="Containertype wijzigen">
+            <button type="button" class="${item.type === 'vault' ? 'active' : ''}" onclick="changeGroupMgmtType(${item.id}, 'vault')" title="Wijzig naar Vault">Vault</button>
+            <button type="button" class="${item.type === 'boxset' ? 'active' : ''}" onclick="changeGroupMgmtType(${item.id}, 'boxset')" title="Wijzig naar Box Set">Box Set</button>
+          </div>` : ''}
           <input type="text" value="${(item.title || '').replace(/"/g, '&quot;')}" style="flex:1; font-size:0.85rem; background:transparent; border:1px solid transparent; padding:4px 8px; border-radius:4px; color:var(--text);"
                  ${canManage ? `onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'" onchange="renameGroupMgmt('${item.src}', ${item.id}, this.value)"` : 'readonly'}
           >
-          ${canManage && item.src === 'eg' ? `<select onchange="changeGroupMgmtType(${item.id}, this.value)" style="width:110px; font-size:0.78rem; padding:4px 8px;">
-            <option value="vault" ${item.type === 'vault' ? 'selected' : ''}>Vault</option>
-            <option value="boxset" ${item.type === 'boxset' ? 'selected' : ''}>Box Set</option>
-          </select>` : ''}
           <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">${item.memberCount} film${item.memberCount !== 1 ? 's' : ''}</span>
           ${canManage ? `<button type="button" onclick="deleteGroupMgmt('${item.src}', ${item.id}, '${(item.title || '').replace(/'/g, "\\'")}')"
                   style="background:none; border:none; cursor:pointer; color:var(--danger); font-size:1rem; padding:4px;" title="Verwijderen">🗑</button>` : ''}
