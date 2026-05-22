@@ -338,9 +338,158 @@ def _init_container_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_items_item ON collection_items(item_type, item_id)")
 
 
+def _log_container_event(conn, message, detail="", level="info"):
+    """Write a container log using the current DB connection."""
+    try:
+        conn.execute(
+            "INSERT INTO logs (timestamp, level, category, message, detail) VALUES (?,?,?,?,?)",
+            (local_now_iso(), level, "containers", message, detail or ""),
+        )
+    except Exception:
+        pass
+
+
+def _container_schema_counts(conn):
+    return {
+        "vaults": conn.execute("SELECT COUNT(*) FROM vaults").fetchone()[0],
+        "vault_movies": conn.execute("SELECT COUNT(*) FROM vault_movies").fetchone()[0],
+        "box_sets": conn.execute("SELECT COUNT(*) FROM box_sets").fetchone()[0],
+        "box_set_movies": conn.execute("SELECT COUNT(*) FROM box_set_movies").fetchone()[0],
+        "collections": conn.execute("SELECT COUNT(*) FROM collections").fetchone()[0],
+        "collection_items": conn.execute("SELECT COUNT(*) FROM collection_items").fetchone()[0],
+    }
+
+
+def _validate_container_schema(conn):
+    checks = [
+        ("missing vault movie links", """
+            SELECT COUNT(*)
+            FROM movies m
+            JOIN vaults v ON v.id = m.edition_group_id
+            WHERE m.edition_group_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM vault_movies vm
+                  WHERE vm.vault_id = m.edition_group_id AND vm.movie_id = m.id
+              )
+        """),
+        ("missing box-set movie links", """
+            SELECT COUNT(*)
+            FROM movies m
+            JOIN box_sets bs ON bs.id = m.super_group_id
+            WHERE m.super_group_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM box_set_movies bsm
+                  WHERE bsm.box_set_id = m.super_group_id AND bsm.movie_id = m.id
+              )
+        """),
+        ("missing loose collection movie links", """
+            SELECT COUNT(*)
+            FROM movies m
+            JOIN collections c ON c.id = m.collection_id
+            WHERE m.collection_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM collection_items ci
+                  WHERE ci.collection_id = m.collection_id
+                    AND ci.item_type = 'movie'
+                    AND ci.item_id = m.id
+              )
+        """),
+        ("missing vault collection links", """
+            SELECT COUNT(*)
+            FROM edition_groups eg
+            JOIN vaults v ON v.legacy_edition_group_id = eg.id
+            JOIN collections c ON c.id = eg.collection_id
+            WHERE eg.collection_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM collection_items ci
+                  WHERE ci.collection_id = eg.collection_id
+                    AND ci.item_type = 'vault'
+                    AND ci.item_id = v.id
+              )
+        """),
+        ("missing box-set collection links", """
+            SELECT COUNT(*)
+            FROM edition_groups eg
+            JOIN box_sets bs ON bs.legacy_edition_group_id = eg.id
+            JOIN collections c ON c.id = eg.collection_id
+            WHERE eg.collection_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM collection_items ci
+                  WHERE ci.collection_id = eg.collection_id
+                    AND ci.item_type = 'box_set'
+                    AND ci.item_id = bs.id
+              )
+        """),
+        ("orphan vault memberships", """
+            SELECT COUNT(*)
+            FROM vault_movies vm
+            LEFT JOIN vaults v ON v.id = vm.vault_id
+            LEFT JOIN movies m ON m.id = vm.movie_id
+            WHERE v.id IS NULL OR m.id IS NULL
+        """),
+        ("orphan box-set memberships", """
+            SELECT COUNT(*)
+            FROM box_set_movies bsm
+            LEFT JOIN box_sets bs ON bs.id = bsm.box_set_id
+            LEFT JOIN movies m ON m.id = bsm.movie_id
+            WHERE bs.id IS NULL OR m.id IS NULL
+        """),
+        ("orphan collection items", """
+            SELECT COUNT(*)
+            FROM collection_items ci
+            LEFT JOIN collections c ON c.id = ci.collection_id
+            WHERE c.id IS NULL
+               OR (ci.item_type = 'movie' AND NOT EXISTS (SELECT 1 FROM movies m WHERE m.id = ci.item_id))
+               OR (ci.item_type = 'vault' AND NOT EXISTS (SELECT 1 FROM vaults v WHERE v.id = ci.item_id))
+               OR (ci.item_type = 'box_set' AND NOT EXISTS (SELECT 1 FROM box_sets bs WHERE bs.id = ci.item_id))
+        """),
+        ("dual vault/box-set rows", """
+            SELECT COUNT(*)
+            FROM vaults v
+            JOIN box_sets bs ON bs.id = v.id
+        """),
+        ("dual collection container items", """
+            SELECT COUNT(*)
+            FROM collection_items vci
+            JOIN collection_items bsci
+              ON bsci.collection_id = vci.collection_id
+             AND bsci.item_id = vci.item_id
+             AND bsci.item_type = 'box_set'
+            WHERE vci.item_type = 'vault'
+        """),
+    ]
+    issues = []
+    for label, sql in checks:
+        count = conn.execute(sql).fetchone()[0]
+        if count:
+            issues.append(f"{label}: {count}")
+    return issues
+
+
+def _log_container_validation(conn, context):
+    counts = _container_schema_counts(conn)
+    count_detail = ", ".join(f"{k}: {v}" for k, v in counts.items())
+    issues = _validate_container_schema(conn)
+    if issues:
+        _log_container_event(
+            conn,
+            f"Container schema validation warning after {context}",
+            f"{'; '.join(issues)}. Counts: {count_detail}",
+            "warn",
+        )
+    else:
+        _log_container_event(
+            conn,
+            f"Container schema validation passed after {context}",
+            f"Counts: {count_detail}",
+            "success",
+        )
+
+
 def _migrate_legacy_containers(conn):
     """Backfill the explicit container tables from the historical schema."""
     now = datetime.utcnow().isoformat()
+    changes_before = conn.total_changes
 
     # A legacy edition_group is a box set when it was marked as such, has child
     # groups, or has loose movies linked through movies.super_group_id.
@@ -353,6 +502,23 @@ def _migrate_legacy_containers(conn):
                OR EXISTS (SELECT 1 FROM movies m WHERE m.super_group_id = eg.id)
         """).fetchall()
     }
+    edition_group_ids = {r[0] for r in conn.execute("SELECT id FROM edition_groups").fetchall()}
+    vault_ids = edition_group_ids - boxset_ids
+
+    def _delete_stale_container_rows(ids, table, item_table, id_column, item_type):
+        if not ids:
+            return
+        placeholders = ",".join("?" * len(ids))
+        id_list = list(ids)
+        conn.execute(f"DELETE FROM {item_table} WHERE {id_column} IN ({placeholders})", id_list)
+        conn.execute(f"DELETE FROM {table} WHERE id IN ({placeholders})", id_list)
+        conn.execute(
+            f"DELETE FROM collection_items WHERE item_type=? AND item_id IN ({placeholders})",
+            [item_type] + id_list,
+        )
+
+    _delete_stale_container_rows(boxset_ids, "vaults", "vault_movies", "vault_id", "vault")
+    _delete_stale_container_rows(vault_ids, "box_sets", "box_set_movies", "box_set_id", "box_set")
 
     for r in conn.execute("SELECT * FROM edition_groups").fetchall():
         table = "box_sets" if r[0] in boxset_ids else "vaults"
@@ -419,6 +585,16 @@ def _migrate_legacy_containers(conn):
         JOIN collections c ON c.id = eg.collection_id
         WHERE eg.collection_id IS NOT NULL
     """)
+    changes_applied = conn.total_changes - changes_before
+    counts = _container_schema_counts(conn)
+    count_detail = ", ".join(f"{k}: {v}" for k, v in counts.items())
+    _log_container_event(
+        conn,
+        "Legacy containers migrated to normalized schema",
+        f"Changes applied: {changes_applied}. Counts: {count_detail}",
+        "success" if changes_applied else "info",
+    )
+    _log_container_validation(conn, "startup migration")
 
 
 def init_db():
@@ -2880,6 +3056,20 @@ def add_movie():
                 "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, 'movie', ?)",
                 (int(row["collection_id"]), movie_id)
             )
+        container_links = []
+        if row.get("edition_group_id"):
+            container_links.append(f"vault_id={row['edition_group_id']}")
+        if row.get("super_group_id"):
+            container_links.append(f"box_set_id={row['super_group_id']}")
+        if row.get("collection_id"):
+            container_links.append(f"collection_id={row['collection_id']}")
+        if container_links:
+            _log_container_event(
+                conn,
+                "Movie created with container links",
+                f"Movie ID: {movie_id}; Title: {data['title']}; {', '.join(container_links)}",
+                "success",
+            )
         conn.commit()
 
         # Sync cast/crew if tmdb_id is available
@@ -3032,6 +3222,17 @@ def update_movie(movie_id):
     )
     if container_changed:
         _inherit_groups_from_container_siblings(conn, movie_id)
+        changed_links = [
+            f"{k}={updates.get(k)}"
+            for k in container_fields
+            if k in updates
+        ]
+        _log_container_event(
+            conn,
+            "Movie container links updated",
+            f"Movie ID: {movie_id}; {', '.join(changed_links)}",
+            "info",
+        )
     conn.commit()
     movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     conn.close()
@@ -6734,6 +6935,12 @@ def bulk_assign_collection():
             (int(col_id), int(mid))
         )
         conn.execute("UPDATE movies SET collection_id=? WHERE id=?", (col_id, int(mid)))
+    _log_container_event(
+        conn,
+        "Movies assigned to collection",
+        f"Collection ID: {col_id}; Movie count: {len(movie_ids)}",
+        "success",
+    )
     conn.commit()
     for mid in movie_ids:
         _inherit_groups_from_container_siblings(conn, int(mid))
@@ -6760,6 +6967,12 @@ def bulk_assign_boxset():
             (int(sg_id), int(mid))
         )
         conn.execute("UPDATE movies SET super_group_id=? WHERE id=?", (int(sg_id), int(mid)))
+    _log_container_event(
+        conn,
+        "Movies assigned to box set",
+        f"Box Set ID: {sg_id}; Movie count: {len(movie_ids)}",
+        "success",
+    )
     conn.commit()
     for mid in movie_ids:
         _inherit_groups_from_container_siblings(conn, int(mid))
@@ -7310,6 +7523,8 @@ def create_collection():
     conn.commit()
     cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     row = conn.execute("SELECT * FROM collections WHERE id=?", (cid,)).fetchone()
+    _log_container_event(conn, "Collection created", f"ID: {cid}; Title: {title}", "success")
+    conn.commit()
     conn.close()
     return jsonify(dict(row)), 201
 
@@ -7409,6 +7624,12 @@ def update_collection(col_id):
             f"UPDATE collections SET {set_clause} WHERE id=?",
             list(fields.values()) + [col_id]
         )
+        _log_container_event(
+            conn,
+            "Collection updated",
+            f"ID: {col_id}; Fields: {', '.join(fields.keys())}; Title: {fields.get('title') or row['title']}",
+            "info",
+        )
         conn.commit()
     updated = conn.execute("SELECT * FROM collections WHERE id=?", (col_id,)).fetchone()
     conn.close()
@@ -7420,11 +7641,13 @@ def delete_collection(col_id):
     err = _require_admin()
     if err: return err
     conn = get_db()
+    row = conn.execute("SELECT title FROM collections WHERE id=?", (col_id,)).fetchone()
     # Unlink all members
     conn.execute("DELETE FROM collection_items WHERE collection_id=?", (col_id,))
     conn.execute("UPDATE edition_groups SET collection_id=NULL WHERE collection_id=?", (col_id,))
     conn.execute("UPDATE movies SET collection_id=NULL WHERE collection_id=?", (col_id,))
     conn.execute("DELETE FROM collections WHERE id=?", (col_id,))
+    _log_container_event(conn, "Collection deleted", f"ID: {col_id}; Title: {(row['title'] if row else '?')}", "warn")
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -7490,6 +7713,13 @@ def create_edition_group():
         )
     conn.commit()
     row = conn.execute("SELECT * FROM edition_groups WHERE id=?", (gid,)).fetchone()
+    _log_container_event(
+        conn,
+        f"{'Box Set' if group_type == 'boxset' else 'Vault'} created",
+        f"ID: {gid}; Title: {title}; Normalized table: {'box_sets' if group_type == 'boxset' else 'vaults'}",
+        "success",
+    )
+    conn.commit()
     conn.close()
     return jsonify(dict(row)), 201
 
@@ -7700,6 +7930,13 @@ def update_edition_group(group_id):
             conn.execute(f"UPDATE box_sets SET {shared_clause} WHERE id=?", list(shared.values()) + [group_id])
         if target_group_type:
             _convert_edition_group_type(conn, group_id, target_group_type)
+            _log_container_event(
+                conn,
+                "Container type converted",
+                f"ID: {group_id}; Title: {fields.get('title') or row['title']}; Target type: {'Box Set' if target_group_type == 'boxset' else 'Vault'}",
+                "success",
+            )
+            _log_container_validation(conn, "container type conversion")
         if "collection_id" in fields:
             conn.execute(
                 "DELETE FROM collection_items WHERE item_type IN ('vault', 'box_set') AND item_id=?",
@@ -7723,6 +7960,13 @@ def update_edition_group(group_id):
                     INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id)
                     SELECT ?, movie_id FROM vault_movies WHERE vault_id=?
                 """, (int(fields["parent_group_id"]), group_id))
+        if fields and not target_group_type:
+            _log_container_event(
+                conn,
+                "Container updated",
+                f"ID: {group_id}; Title: {fields.get('title') or row['title']}; Fields: {', '.join(fields.keys())}",
+                "info",
+            )
         conn.commit()
     updated = conn.execute("SELECT * FROM edition_groups WHERE id=?", (group_id,)).fetchone()
     conn.close()
@@ -7735,6 +7979,7 @@ def delete_edition_group(group_id):
     if err: return err
     conn = get_db()
     group_meta = conn.execute("SELECT parent_group_id FROM edition_groups WHERE id=?", (group_id,)).fetchone()
+    group_row = conn.execute("SELECT title, group_type FROM edition_groups WHERE id=?", (group_id,)).fetchone()
     if group_meta and group_meta["parent_group_id"]:
         conn.execute(
             "DELETE FROM box_set_movies WHERE box_set_id=? AND movie_id IN (SELECT movie_id FROM vault_movies WHERE vault_id=?)",
@@ -7749,6 +7994,12 @@ def delete_edition_group(group_id):
     conn.execute("UPDATE movies SET super_group_id=NULL WHERE super_group_id=?", (group_id,))
     conn.execute("UPDATE edition_groups SET parent_group_id=NULL WHERE parent_group_id=?", (group_id,))
     conn.execute("DELETE FROM edition_groups WHERE id=?", (group_id,))
+    _log_container_event(
+        conn,
+        f"{'Box Set' if group_row and group_row['group_type'] == 'boxset' else 'Vault'} deleted",
+        f"ID: {group_id}; Title: {(group_row['title'] if group_row else '?')}",
+        "warn",
+    )
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -7919,6 +8170,12 @@ def add_edition_group_member(group_id):
                     "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
                     (int(group_meta["parent_group_id"]), int(mid))
                 )
+    _log_container_event(
+        conn,
+        f"Movies added to {'box set' if group_meta and group_meta['group_type'] == 'boxset' else 'vault'}",
+        f"Container ID: {group_id}; Movie count: {len(movie_ids)}",
+        "success",
+    )
     conn.commit()
     # New members inherit the vault's existing group memberships.
     for mid in movie_ids:
@@ -7957,6 +8214,12 @@ def remove_edition_group_member(group_id, movie_id):
     conn.execute(
         "UPDATE movies SET super_group_id=NULL WHERE id=? AND super_group_id=?",
         (movie_id, group_id)
+    )
+    _log_container_event(
+        conn,
+        f"Movie removed from {'box set' if group_meta and group_meta['group_type'] == 'boxset' else 'vault'}",
+        f"Container ID: {group_id}; Movie ID: {movie_id}",
+        "warn",
     )
     conn.commit()
     conn.close()
