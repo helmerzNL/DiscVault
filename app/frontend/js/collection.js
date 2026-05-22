@@ -3588,6 +3588,12 @@ async function _lookupBarcodeForAdd(barcode) {
     if (finalData.status === 'exists') {
       showStatus('addStatus', t('js.alreadyInCollection', finalData.movie.title), 'success'); return;
     }
+    if (finalData.status === 'box_set_exists') {
+      showStatus('addStatus', t('js.alreadyInCollection', finalData.box_set?.title || barcode), 'success'); return;
+    }
+    if (finalData.status === 'vault_exists') {
+      showStatus('addStatus', t('js.alreadyInCollection', finalData.vault?.title || barcode), 'success'); return;
+    }
     if (finalData.status === 'not_found') {
       showStatus('addStatus', t('js.movieNotFound', barcode), 'error'); return;
     }

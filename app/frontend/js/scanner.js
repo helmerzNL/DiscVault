@@ -336,6 +336,21 @@ async function doLookup(barcode) {
       showStatus('scanStatus', t('js.alreadyInCollection', finalData.movie.title), 'success');
       _detectedFormat = finalData.detected_format || '';
       displayMovieResult(finalData.movie, barcode, true, _detectedFormat);
+    } else if (finalData.status === 'box_set_exists' || finalData.status === 'vault_exists') {
+      const isVault = finalData.status === 'vault_exists';
+      const container = isVault ? finalData.vault : finalData.box_set;
+      const title = container?.title || barcode;
+      const label = isVault ? 'Vault' : 'Box-set';
+      showStatus('scanStatus', t('js.alreadyInCollection', title), 'success');
+      currentBarcode = barcode;
+      currentMovieData = { title, barcode, format: label };
+      document.getElementById('resultTitle').textContent = title;
+      const tags = document.getElementById('resultTags');
+      tags.innerHTML = `<span class="tag format">${label}</span>`;
+      document.getElementById('resultPoster').innerHTML = '<div class="no-poster">📦</div>';
+      document.getElementById('movieResult').style.display = 'flex';
+      document.getElementById('noResult').style.display = 'none';
+      document.getElementById('btnSave').style.display = 'none';
     } else if (finalData.status === 'found') {
       _detectedFormat = finalData.detected_format
         || _detectFormatFromTitle(finalData.raw_title || stepRawTitle)
