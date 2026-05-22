@@ -2155,6 +2155,8 @@ def _extract_hdr_tokens(text: str) -> str:
 
 def _clean_bluray_member_title(title: str) -> str:
     title = re.sub(r"\s+", " ", title or "").strip()
+    title = re.sub(r"\s+(4K|Blu-ray|DVD|Ultra HD)\s+\(\d{4}\)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+\(\d{4}\)\s*$", "", title).strip()
     title = re.sub(r"\s+(4K Ultra HD|4K UHD|Ultra HD|Blu-ray|DVD|Digital|Review)\b.*$", "", title, flags=re.I).strip()
     title = re.sub(r"\s+\((4K|Blu-ray|DVD|Ultra HD|Limited Edition|Collector'?s Edition)[^)]+\)\s*$", "", title, flags=re.I).strip()
     title = re.sub(r"\s*[\-|–|:]\s*(4K|Blu-ray|DVD|Ultra HD).*$", "", title, flags=re.I).strip()
@@ -2174,6 +2176,17 @@ def _looks_like_box_set_title(title: str) -> bool:
 def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
     candidates = []
 
+    def link_title(a):
+        return (a.get_text(" ", strip=True) or (a.get("title") or "").strip()).strip()
+
+    def link_year(text):
+        ym = re.search(r"\((\d{4})\)", text or "")
+        return ym.group(1) if ym else ""
+
+    def is_movie_link(a):
+        href = a.get("href") or ""
+        return "blu-ray.com/movies/" in href or href.startswith("/movies/")
+
     def add_candidate(raw_title, year=""):
         clean = _clean_bluray_member_title(raw_title)
         if not clean or len(clean) < 2:
@@ -2190,15 +2203,26 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
     def add_candidates_from_node(node):
         before_count = len(candidates)
         for a in node.select('a[href*="/movies/"]'):
-            text = a.get_text(" ", strip=True)
-            href = a.get("href") or ""
-            if not text or ("blu-ray.com/movies/" not in href and not href.startswith("/movies/")):
+            text = link_title(a)
+            if not text or not is_movie_link(a):
                 continue
             if re.search(r"\b(review|forum|deals|news|trailer)\b", text, re.I):
                 continue
-            ym = re.search(r"\((\d{4})\)", text)
-            add_candidate(text, ym.group(1) if ym else "")
+            add_candidate(text, link_year(text))
         return len(candidates) - before_count
+
+    # Blu-ray.com bundle pages often render member films as cover tiles. The
+    # anchor text is empty; the real title lives in the title attribute.
+    tile_links = [
+        a for a in dsoup.select('a.hoverlink[data-globalparentid][data-productid][href*="/movies/"]')
+        if link_title(a) and is_movie_link(a)
+    ]
+    if len(tile_links) >= 2:
+        for a in tile_links:
+            text = link_title(a)
+            add_candidate(text, link_year(text))
+        if len(candidates) >= 2:
+            return candidates[:30]
 
     bundle_anchor = re.compile(
         r"(?:this|the)\s+blu-ray\s+bundle\s+includes\s+the\s+following\s+titles",
@@ -2219,11 +2243,9 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
                 if len(candidates) > 0 and stop_section.search(node_text):
                     break
                 if getattr(node, "name", None) == "a":
-                    href = node.get("href") or ""
-                    if "blu-ray.com/movies/" in href or href.startswith("/movies/"):
-                        text = node.get_text(" ", strip=True)
-                        ym = re.search(r"\((\d{4})\)", text)
-                        add_candidate(text, ym.group(1) if ym else "")
+                    if is_movie_link(node):
+                        text = link_title(node)
+                        add_candidate(text, link_year(text))
                 if len(candidates) >= 30:
                     break
         if candidates:
@@ -2250,17 +2272,12 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
             return candidates[:30]
 
     for a in dsoup.select('a[href*="/movies/"]'):
-        text = a.get_text(" ", strip=True)
-        href = a.get("href") or ""
-        if not text or ("blu-ray.com/movies/" not in href and not href.startswith("/movies/")):
+        text = link_title(a)
+        if not text or not is_movie_link(a):
             continue
         if re.search(r"\b(review|forum|deals|news|trailer)\b", text, re.I):
             continue
-        year = ""
-        ym = re.search(r"\((\d{4})\)", text)
-        if ym:
-            year = ym.group(1)
-        add_candidate(text, year)
+        add_candidate(text, link_year(text))
 
     for m in re.finditer(r"(?:Includes|Contains|Films|Movies)\s*:?\s*\n+([^\n]+(?:\n+[^\n]+){0,8})", page_text, re.I):
         block = m.group(1)
