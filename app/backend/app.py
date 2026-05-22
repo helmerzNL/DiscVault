@@ -2183,6 +2183,14 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
         ym = re.search(r"\((\d{4})\)", text or "")
         return ym.group(1) if ym else ""
 
+    def absolute_bluray_url(url):
+        url = (url or "").strip()
+        if url.startswith("//"):
+            return "https:" + url
+        if url.startswith("/"):
+            return "https://www.blu-ray.com" + url
+        return url
+
     def is_movie_link(a):
         href = a.get("href") or ""
         return "blu-ray.com/movies/" in href or href.startswith("/movies/")
@@ -2209,7 +2217,19 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
         m = re.search(rf'\b{re.escape(attr)}\s*=\s*([\'"])(.*?)\1', tag_html, re.I | re.S)
         return m.group(2) if m else ""
 
-    def add_candidate(raw_title, year=""):
+    def image_src_from_node(a):
+        img = a.find("img", class_="cover")
+        if not img:
+            img = a.find("img")
+        return absolute_bluray_url(img.get("src") if img else "")
+
+    def image_src_from_html(tag_html):
+        img_match = re.search(r"<img\b[^>]*\bclass\s*=\s*([\"'])[^\"']*\bcover\b[^\"']*\1[^>]*>", tag_html, re.I | re.S)
+        if not img_match:
+            img_match = re.search(r"<img\b[^>]*>", tag_html, re.I | re.S)
+        return absolute_bluray_url(attr_from_tag(img_match.group(0), "src") if img_match else "")
+
+    def add_candidate(raw_title, year="", poster="", source_url=""):
         clean = _clean_bluray_member_title(raw_title)
         if not clean or len(clean) < 2:
             return
@@ -2220,7 +2240,17 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
             return
         if any(existing["title"].lower() == low for existing in candidates):
             return
-        candidates.append({"title": clean, "year": year or ""})
+        item = {"title": clean, "year": year or ""}
+        poster = absolute_bluray_url(poster)
+        source_url = absolute_bluray_url(source_url)
+        if poster:
+            item["poster"] = poster
+            item["poster_url"] = poster
+            item["cover_url"] = poster
+        if source_url:
+            item["source_url"] = source_url
+            item["bluray_url"] = source_url
+        candidates.append(item)
 
     bundle_anchor = re.compile(
         r"(?:this|the)\s+blu-ray\s+bundle\s+includes\s+the\s+following\s+titles",
@@ -2237,7 +2267,7 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
         if not is_bundle_tile(node):
             continue
         text = link_title(node)
-        add_candidate(text, link_year(text))
+        add_candidate(text, link_year(text), image_src_from_node(node), node.get("href") or "")
     if candidates:
         return candidates[:30]
 
@@ -2265,7 +2295,7 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
             continue
         if "class=\"cover\"" not in tag_html and "class='cover'" not in tag_html:
             continue
-        add_candidate(raw_title, link_year(raw_title))
+        add_candidate(raw_title, link_year(raw_title), image_src_from_html(tag_html), href)
     return candidates[:30]
 
 
@@ -3461,6 +3491,8 @@ def _movie_payload_from_box_set_member(member, fallback_format, box_set_title):
     row["year"] = row.get("year") or year
     row["format"] = row.get("format") or fallback_format or "4K UHD"
     row["box_set"] = box_set_title
+    if not row.get("poster"):
+        row["poster"] = member.get("poster") or member.get("poster_url") or member.get("cover_url") or ""
     return row
 
 
