@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v109";
+const SW_VERSION = "discvault-sw-v110";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -162,7 +162,7 @@ self.addEventListener("fetch", event => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/index.html"))
+      fetch(new Request(request, { cache: 'reload' })).catch(() => caches.match("/index.html"))
     );
     return;
   }

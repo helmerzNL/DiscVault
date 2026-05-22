@@ -379,8 +379,11 @@ async function saveNotifPref(key, value) {
 }
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' }).catch(() => {});
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' });
+      await registration.update();
+    } catch(e) { /* service worker updates are best-effort */ }
   });
   // Handle messages from the service worker.
   navigator.serviceWorker.addEventListener('message', event => {
