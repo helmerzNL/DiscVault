@@ -2395,13 +2395,14 @@ def list_movies():
             gid_list = list(grouped.keys())
             gplaceholders = ",".join("?" * len(gid_list))
             eg_rows_raw = conn.execute(
-                f"SELECT id, primary_movie_id, title, badge_label, parent_group_id, collection_id, poster_file, backdrop FROM edition_groups WHERE id IN ({gplaceholders})",
+                f"SELECT id, primary_movie_id, title, badge_label, parent_group_id, collection_id, poster_file, backdrop, group_type FROM edition_groups WHERE id IN ({gplaceholders})",
                 gid_list
             ).fetchall()
             eg_rows = {r["id"]: {"primary_id": r["primary_movie_id"], "group_title": r["title"],
                                   "badge_label": r["badge_label"], "parent_group_id": r["parent_group_id"],
                                   "collection_id": r["collection_id"],
-                                  "poster_file": r["poster_file"], "backdrop": r["backdrop"]} for r in eg_rows_raw}
+                                  "poster_file": r["poster_file"], "backdrop": r["backdrop"],
+                                  "group_type": r["group_type"]} for r in eg_rows_raw}
         collapsed = []
         for gid, members in grouped.items():
             eg_info  = eg_rows.get(gid) or {}
@@ -2456,7 +2457,7 @@ def list_movies():
         if all_sg_ids:
             par_eg = {}
             for r in conn.execute(
-                f"SELECT id, title, badge_label, poster_file, backdrop FROM edition_groups WHERE id IN ({','.join('?'*len(all_sg_ids))})",
+                f"SELECT id, title, badge_label, poster_file, backdrop, collection_id FROM edition_groups WHERE id IN ({','.join('?'*len(all_sg_ids))})",
                 list(all_sg_ids)
             ).fetchall():
                 par_eg[r["id"]] = dict(r)
@@ -2511,6 +2512,10 @@ def list_movies():
         # Sources of collection_id:
         #   - edition_groups.collection_id  → Vault / Box Set belongs to a Collection
         #   - movies.collection_id          → loose movie belongs to a Collection
+        item_collection_map = {}
+        for r in conn.execute("SELECT collection_id, item_type, item_id FROM collection_items").fetchall():
+            item_collection_map[(r["item_type"], r["item_id"])] = r["collection_id"]
+
         col_children = {}   # collection_id -> list of items (cards / movies)
         final_movies = []
         for item in movies:
@@ -2519,24 +2524,26 @@ def list_movies():
             if item.get("_is_super_group"):
                 par_gid = item.get("_parent_group_id")
                 if par_gid:
-                    cid = (eg_rows.get(par_gid) or {}).get("collection_id")
+                    cid = item_collection_map.get(("box_set", par_gid)) or (eg_rows.get(par_gid) or {}).get("collection_id")
                     if not cid:
                         # check the parent EG we fetched earlier (par_eg dict)
-                        cid_row = conn.execute("SELECT collection_id FROM edition_groups WHERE id=?", (par_gid,)).fetchone()
-                        if cid_row:
-                            cid = cid_row["collection_id"]
+                        cid = (par_eg.get(par_gid) or {}).get("collection_id")
+                        if not cid:
+                            cid_row = conn.execute("SELECT collection_id FROM edition_groups WHERE id=?", (par_gid,)).fetchone()
+                            if cid_row:
+                                cid = cid_row["collection_id"]
             # Vault (edition group card, not super group)
             elif item.get("_is_group"):
                 gid = item.get("edition_group_id")
                 if gid:
-                    cid = (eg_rows.get(gid) or {}).get("collection_id")
+                    cid = item_collection_map.get(("vault", gid)) or (eg_rows.get(gid) or {}).get("collection_id")
                     if not cid:
                         cid_row = conn.execute("SELECT collection_id FROM edition_groups WHERE id=?", (gid,)).fetchone()
                         if cid_row:
                             cid = cid_row["collection_id"]
             # Loose movie
             else:
-                cid = item.get("collection_id")
+                cid = item_collection_map.get(("movie", item.get("id"))) or item.get("collection_id")
             if cid:
                 col_children.setdefault(cid, []).append(item)
             else:
@@ -7431,31 +7438,23 @@ def delete_collection(col_id):
 def list_edition_groups():
     q = (request.args.get("q") or "").strip()
     conn = get_db()
+    group_sql = """
+            SELECT eg.*,
+                   COALESCE((SELECT COUNT(*) FROM vault_movies vm WHERE vm.vault_id = eg.id), 0) AS member_count,
+                   COALESCE((SELECT COUNT(*) FROM edition_groups eg2 WHERE eg2.parent_group_id = eg.id), 0) AS child_group_count,
+                   COALESCE((SELECT COUNT(*) FROM box_set_movies bsm WHERE bsm.box_set_id = eg.id), 0) AS loose_movie_count,
+                   COALESCE((
+                       SELECT COUNT(DISTINCT vm2.movie_id)
+                       FROM edition_groups eg3
+                       JOIN vault_movies vm2 ON vm2.vault_id = eg3.id
+                       WHERE eg3.parent_group_id = eg.id
+                   ), 0) AS child_member_count
+            FROM edition_groups eg
+    """
     if q:
-        rows = conn.execute("""
-            SELECT eg.*,
-                   COUNT(DISTINCT m.id) AS member_count,
-                   (SELECT COUNT(*) FROM edition_groups eg2 WHERE eg2.parent_group_id = eg.id) AS child_group_count,
-                   (SELECT COUNT(*) FROM movies m2 WHERE m2.super_group_id = eg.id) AS loose_movie_count,
-                   (SELECT COUNT(*) FROM movies m3 JOIN edition_groups eg3 ON m3.edition_group_id = eg3.id WHERE eg3.parent_group_id = eg.id) AS child_member_count
-            FROM edition_groups eg
-            LEFT JOIN movies m ON m.edition_group_id = eg.id
-            WHERE eg.title LIKE ?
-            GROUP BY eg.id
-            ORDER BY eg.title ASC
-        """, (f"%{q}%",)).fetchall()
+        rows = conn.execute(group_sql + " WHERE eg.title LIKE ? ORDER BY eg.title ASC", (f"%{q}%",)).fetchall()
     else:
-        rows = conn.execute("""
-            SELECT eg.*,
-                   COUNT(DISTINCT m.id) AS member_count,
-                   (SELECT COUNT(*) FROM edition_groups eg2 WHERE eg2.parent_group_id = eg.id) AS child_group_count,
-                   (SELECT COUNT(*) FROM movies m2 WHERE m2.super_group_id = eg.id) AS loose_movie_count,
-                   (SELECT COUNT(*) FROM movies m3 JOIN edition_groups eg3 ON m3.edition_group_id = eg3.id WHERE eg3.parent_group_id = eg.id) AS child_member_count
-            FROM edition_groups eg
-            LEFT JOIN movies m ON m.edition_group_id = eg.id
-            GROUP BY eg.id
-            ORDER BY eg.title ASC
-        """).fetchall()
+        rows = conn.execute(group_sql + " ORDER BY eg.title ASC").fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
