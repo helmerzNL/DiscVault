@@ -275,6 +275,7 @@ def _init_container_tables(conn):
         CREATE TABLE IF NOT EXISTS vaults (
             id                      INTEGER PRIMARY KEY AUTOINCREMENT,
             title                   TEXT NOT NULL,
+            barcode                 TEXT,
             tmdb_id                 TEXT,
             imdb_id                 TEXT,
             year                    TEXT,
@@ -301,6 +302,7 @@ def _init_container_tables(conn):
         CREATE TABLE IF NOT EXISTS box_sets (
             id                      INTEGER PRIMARY KEY AUTOINCREMENT,
             title                   TEXT NOT NULL,
+            barcode                 TEXT,
             tmdb_id                 TEXT,
             imdb_id                 TEXT,
             year                    TEXT,
@@ -336,6 +338,14 @@ def _init_container_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_vault_movies_movie ON vault_movies(movie_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_box_set_movies_movie ON box_set_movies(movie_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_items_item ON collection_items(item_type, item_id)")
+    vault_cols = {row[1] for row in conn.execute("PRAGMA table_info(vaults)")}
+    if "barcode" not in vault_cols:
+        conn.execute("ALTER TABLE vaults ADD COLUMN barcode TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_vaults_barcode ON vaults(barcode)")
+    box_set_cols = {row[1] for row in conn.execute("PRAGMA table_info(box_sets)")}
+    if "barcode" not in box_set_cols:
+        conn.execute("ALTER TABLE box_sets ADD COLUMN barcode TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_box_sets_barcode ON box_sets(barcode)")
 
 
 def _log_container_event(conn, message, detail="", level="info"):
@@ -3531,9 +3541,14 @@ def create_box_set_from_proposal():
             )
             box_set_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
             conn.execute(
-                "INSERT OR IGNORE INTO box_sets (id, title, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?)",
-                (box_set_id, box_set_title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
+                "INSERT OR IGNORE INTO box_sets (id, title, barcode, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                (box_set_id, box_set_title, barcode or "", data.get("tmdb_id") or "", data.get("imdb_id") or "",
                  data.get("year") or "", box_set_id, now)
+            )
+        if barcode:
+            conn.execute(
+                "UPDATE box_sets SET barcode=COALESCE(NULLIF(barcode, ''), ?) WHERE id=?",
+                (barcode, box_set_id),
             )
 
         cols = [c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]
@@ -4571,12 +4586,44 @@ def lookup(barcode):
         yield emit(1, "Local DB", "searching")
         conn = get_db()
         existing = conn.execute("SELECT * FROM movies WHERE barcode = ?", (barcode,)).fetchone()
+        existing_box_set = conn.execute(
+            """
+            SELECT bs.*, eg.group_type, eg.poster_file AS legacy_poster_file
+            FROM box_sets bs
+            LEFT JOIN edition_groups eg ON eg.id = bs.id
+            WHERE bs.barcode=?
+            """,
+            (barcode,),
+        ).fetchone()
+        existing_vault = conn.execute(
+            """
+            SELECT v.*, eg.group_type, eg.poster_file AS legacy_poster_file
+            FROM vaults v
+            LEFT JOIN edition_groups eg ON eg.id = v.id
+            WHERE v.barcode=?
+            """,
+            (barcode,),
+        ).fetchone()
         conn.close()
         if existing:
             _trace_add(attempts, "Local DB", "hit", f"barcode={barcode}")
             add_log("lookup", f"Barcode {barcode} al in collectie", f"Backends: {_trace_summary(attempts)}", "info")
             yield emit(1, "Local DB", "hit")
             yield json.dumps({"type": "done", "status": "exists", "movie": dict(existing)}) + "\n"
+            return
+        if existing_box_set:
+            box_set = dict(existing_box_set)
+            _trace_add(attempts, "Local DB", "hit", f"box_set_barcode={barcode}")
+            add_log("lookup", f"Barcode {barcode} al als box-set in collectie", f"Box Set: {box_set.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
+            yield emit(1, "Local DB", "hit", f"box-set: {box_set.get('title','')}")
+            yield json.dumps({"type": "done", "status": "box_set_exists", "box_set": box_set, "barcode": barcode}) + "\n"
+            return
+        if existing_vault:
+            vault = dict(existing_vault)
+            _trace_add(attempts, "Local DB", "hit", f"vault_barcode={barcode}")
+            add_log("lookup", f"Barcode {barcode} al als vault in collectie", f"Vault: {vault.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
+            yield emit(1, "Local DB", "hit", f"vault: {vault.get('title','')}")
+            yield json.dumps({"type": "done", "status": "vault_exists", "vault": vault, "container": vault, "container_type": "vault", "barcode": barcode}) + "\n"
             return
         yield emit(1, "Local DB", "miss")
         _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
@@ -4694,11 +4741,39 @@ def _lookup_sync(barcode):
         existing = conn.execute(
             "SELECT * FROM movies WHERE barcode = ?", (barcode,)
         ).fetchone()
+        existing_box_set = conn.execute(
+            """
+            SELECT bs.*, eg.group_type, eg.poster_file AS legacy_poster_file
+            FROM box_sets bs
+            LEFT JOIN edition_groups eg ON eg.id = bs.id
+            WHERE bs.barcode=?
+            """,
+            (barcode,),
+        ).fetchone()
+        existing_vault = conn.execute(
+            """
+            SELECT v.*, eg.group_type, eg.poster_file AS legacy_poster_file
+            FROM vaults v
+            LEFT JOIN edition_groups eg ON eg.id = v.id
+            WHERE v.barcode=?
+            """,
+            (barcode,),
+        ).fetchone()
         conn.close()
         if existing:
             _trace_add(attempts, "Local DB", "hit", f"barcode={barcode}")
             add_log("lookup", f"Barcode {barcode} al in collectie", f"Backends: {_trace_summary(attempts)}", "info")
             return jsonify({"status": "exists", "movie": dict(existing)})
+        if existing_box_set:
+            box_set = dict(existing_box_set)
+            _trace_add(attempts, "Local DB", "hit", f"box_set_barcode={barcode}")
+            add_log("lookup", f"Barcode {barcode} al als box-set in collectie", f"Box Set: {box_set.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
+            return jsonify({"status": "box_set_exists", "box_set": box_set, "barcode": barcode})
+        if existing_vault:
+            vault = dict(existing_vault)
+            _trace_add(attempts, "Local DB", "hit", f"vault_barcode={barcode}")
+            add_log("lookup", f"Barcode {barcode} al als vault in collectie", f"Vault: {vault.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
+            return jsonify({"status": "vault_exists", "vault": vault, "container": vault, "container_type": "vault", "barcode": barcode})
         _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
         raw_title = None
         try:
@@ -8278,11 +8353,6 @@ def _convert_edition_group_type(conn, group_id, target_type):
     if eg["collection_id"]:
         collection_ids.add(int(eg["collection_id"]))
 
-    meta = (
-        group_id, eg["title"], eg["tmdb_id"], eg["imdb_id"], eg["year"],
-        eg["primary_movie_id"], eg["badge_label"], eg["backdrop"],
-        eg["description"], eg["poster_file"], group_id, eg["created_at"],
-    )
     target_table = "box_sets" if target_type == "boxset" else "vaults"
     source_table = "vaults" if target_type == "boxset" else "box_sets"
     target_items = "box_set_movies" if target_type == "boxset" else "vault_movies"
@@ -8290,23 +8360,34 @@ def _convert_edition_group_type(conn, group_id, target_type):
     id_column = "box_set_id" if target_type == "boxset" else "vault_id"
     source_id_column = "vault_id" if target_type == "boxset" else "box_set_id"
     item_type = "box_set" if target_type == "boxset" else "vault"
+    source_barcode = ""
+    source_row = conn.execute(f"SELECT barcode FROM {source_table} WHERE id=?", (group_id,)).fetchone()
+    if source_row:
+        source_barcode = (source_row["barcode"] or "").strip()
+    if not source_barcode:
+        target_row = conn.execute(f"SELECT barcode FROM {target_table} WHERE id=?", (group_id,)).fetchone()
+        if target_row:
+            source_barcode = (target_row["barcode"] or "").strip()
 
     conn.execute(f"""
         INSERT OR IGNORE INTO {target_table}
-            (id, title, tmdb_id, imdb_id, year, primary_movie_id, badge_label,
+            (id, title, barcode, tmdb_id, imdb_id, year, primary_movie_id, badge_label,
              backdrop, description, poster_file, legacy_edition_group_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, meta)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (group_id, eg["title"], source_barcode, eg["tmdb_id"], eg["imdb_id"], eg["year"],
+          eg["primary_movie_id"], eg["badge_label"], eg["backdrop"], eg["description"],
+          eg["poster_file"], group_id, eg["created_at"]))
     conn.execute(f"""
         UPDATE {target_table}
         SET title=?, tmdb_id=?, imdb_id=?, year=?, primary_movie_id=?,
             badge_label=?, backdrop=?, description=?, poster_file=?,
-            legacy_edition_group_id=?
+            legacy_edition_group_id=?,
+            barcode=CASE WHEN ? != '' THEN ? ELSE barcode END
         WHERE id=?
     """, (
         eg["title"], eg["tmdb_id"], eg["imdb_id"], eg["year"],
         eg["primary_movie_id"], eg["badge_label"], eg["backdrop"],
-        eg["description"], eg["poster_file"], group_id, group_id,
+        eg["description"], eg["poster_file"], group_id, source_barcode, source_barcode, group_id,
     ))
 
     for mid in movie_ids:
