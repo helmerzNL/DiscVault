@@ -15,6 +15,12 @@ frontend and iOS app.
 - [ ] Step 4: Split containers into a dedicated module/service.
 - [ ] Step 5: Split movies/import/lookup after the smaller domains are stable.
 
+## Container Schema Reference
+
+The normalized Vault / Box Set / Collection database model and the temporary
+legacy compatibility rules are documented in `CONTAINER_SCHEMA.md`. Use that
+file as the reference when splitting container code or migrating the iOS app.
+
 ## Step 3 Validation Notes
 
 - Keep endpoint paths and JSON response shapes unchanged.
