@@ -219,7 +219,7 @@
       <button class="btn btn-secondary" onclick="deselectAll()" data-i18n="bulk.deselect">Deselecteer</button>
       <button class="btn btn-secondary" style="color:#4caf50; border-color:rgba(76,175,80,.4);" onclick="bulkAddToWatchlist()" data-i18n="bulk.watchlist">🔖 Watchlist</button>
       <button class="btn btn-secondary" style="color:var(--accent); border-color:rgba(232,197,71,.4);" onclick="showBulkGroupAssign()" data-i18n="bulk.assignGroup">📁 Groep toewijzen</button>
-      <button class="btn btn-secondary" style="color:#9b59b6; border-color:rgba(155,89,182,.4);" onclick="showBulkContainerAssign()" data-i18n="bulk.assignContainer">📦 Vault / Collectie</button>
+      <button class="btn btn-secondary" style="color:#9b59b6; border-color:rgba(155,89,182,.4);" onclick="showBulkContainerAssign()" data-i18n="bulk.assignContainer">📦 Containers</button>
       <button class="btn btn-secondary" style="color:var(--accent2); border-color:rgba(124,106,247,.4);" onclick="bulkRefresh()" data-i18n="bulk.refresh">
         ↺ Bijwerken via TMDb/OMDb
       </button>
@@ -237,7 +237,10 @@
       </div>
       <!-- Bulk container assignment panel (Vault / Box-Set / Collection) -->
       <div id="bulkContainerPanel" style="display:none; flex-basis:100%; padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-        <div style="font-weight:500; font-size:0.9rem; margin-bottom:10px;" data-i18n="bulk.selectContainer">Kies een Vault, Box-Set of Collectie:</div>
+        <div style="font-weight:500; font-size:0.9rem; margin-bottom:6px;" data-i18n="bulk.selectContainer">Kies een Vault, Box Set of Collection:</div>
+        <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px; line-height:1.5;" data-i18n="bulk.containerHelp">
+          Vaults en Box Sets bevatten films. Collections koppelen de selectie als losse films; collections kunnen daarnaast ook Vaults en Box Sets bevatten.
+        </div>
         <select id="bulkContainerSelect" class="form-control" style="width:100%; max-width:480px; margin-bottom:12px; padding:6px 10px; font-size:0.84rem; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text);">
           <option value="">--</option>        </select>
         <div style="display:flex; gap:8px;">
@@ -1807,7 +1810,7 @@
           <input type="hidden" id="editEditionGroupId">
         </div>
         <div class="input-group full collectors-only">
-          <label data-i18n="edit.superGroup">Box Set (losse film)</label>
+          <label data-i18n="edit.superGroup">Box Set</label>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak box set..."
                    oninput="searchSuperGroup(this.value)" autocomplete="off" style="flex:1; min-width:160px;" data-i18n-placeholder="edit.superGroupPlaceholder">
@@ -1818,7 +1821,7 @@
           </div>
           <div id="editSuperGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
           <input type="hidden" id="editSuperGroupId">
-          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.superGroupHelp">Gebruik dit alleen als deze film losse staat (geen vault) maar wel onderdeel is van een box set.</div>
+          <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.superGroupHelp">Koppel deze film direct aan een Box Set. Vaults en Box Sets bevatten alleen films.</div>
         </div>
         <div class="input-group full collectors-only">
           <label data-i18n="edit.collection">Collection (losse film)</label>
@@ -1833,6 +1836,10 @@
           <div id="editCollectionDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
           <input type="hidden" id="editCollectionId">
           <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.collectionHelp">Voeg deze film toe aan een collection die vaults, box sets en losse films groepeert.</div>
+        </div>
+        <div class="input-group full collectors-only" id="editContainerSummaryWrap" style="display:none;">
+          <label data-i18n="edit.containerSummary">Huidige containerstructuur</label>
+          <div id="editContainerSummary" style="font-size:0.8rem; color:var(--text-muted); line-height:1.5;"></div>
         </div>
       </div><!-- /editTabEdition -->
 

@@ -486,6 +486,64 @@ def _log_container_validation(conn, context):
         )
 
 
+def _movie_container_summary(conn, movie_id):
+    vaults = [dict(r) for r in conn.execute("""
+        SELECT v.id, v.title, v.badge_label
+        FROM vault_movies vm
+        JOIN vaults v ON v.id = vm.vault_id
+        WHERE vm.movie_id=?
+        ORDER BY v.title ASC
+    """, (movie_id,)).fetchall()]
+    box_sets = [dict(r) for r in conn.execute("""
+        SELECT bs.id, bs.title, bs.badge_label
+        FROM box_set_movies bsm
+        JOIN box_sets bs ON bs.id = bsm.box_set_id
+        WHERE bsm.movie_id=?
+        ORDER BY bs.title ASC
+    """, (movie_id,)).fetchall()]
+    direct_collections = [dict(r) for r in conn.execute("""
+        SELECT c.id, c.title, c.badge_label
+        FROM collection_items ci
+        JOIN collections c ON c.id = ci.collection_id
+        WHERE ci.item_type='movie' AND ci.item_id=?
+        ORDER BY c.title ASC
+    """, (movie_id,)).fetchall()]
+
+    via_collections = []
+    source_keys = set()
+    for v in vaults:
+        for r in conn.execute("""
+            SELECT c.id, c.title, c.badge_label, 'vault' AS via_type, ? AS via_id, ? AS via_title
+            FROM collection_items ci
+            JOIN collections c ON c.id = ci.collection_id
+            WHERE ci.item_type='vault' AND ci.item_id=?
+            ORDER BY c.title ASC
+        """, (v["id"], v["title"], v["id"])).fetchall():
+            key = (r["id"], r["via_type"], r["via_id"])
+            if key not in source_keys:
+                source_keys.add(key)
+                via_collections.append(dict(r))
+    for bs in box_sets:
+        for r in conn.execute("""
+            SELECT c.id, c.title, c.badge_label, 'box_set' AS via_type, ? AS via_id, ? AS via_title
+            FROM collection_items ci
+            JOIN collections c ON c.id = ci.collection_id
+            WHERE ci.item_type='box_set' AND ci.item_id=?
+            ORDER BY c.title ASC
+        """, (bs["id"], bs["title"], bs["id"])).fetchall():
+            key = (r["id"], r["via_type"], r["via_id"])
+            if key not in source_keys:
+                source_keys.add(key)
+                via_collections.append(dict(r))
+
+    return {
+        "vaults": vaults,
+        "box_sets": box_sets,
+        "collections_direct": direct_collections,
+        "collections_via_containers": via_collections,
+    }
+
+
 def _migrate_legacy_containers(conn):
     """Backfill the explicit container tables from the historical schema."""
     now = datetime.utcnow().isoformat()
@@ -2776,10 +2834,13 @@ def list_movies():
 def get_movie(movie_id):
     conn  = get_db()
     movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+    containers = _movie_container_summary(conn, movie_id) if movie else None
     conn.close()
     if not movie:
         return jsonify({"error": "Not found"}), 404
-    return jsonify(dict(movie))
+    data = dict(movie)
+    data["_containers"] = containers
+    return jsonify(data)
 
 
 @app.route("/api/movies/<int:movie_id>/cast", methods=["GET"])
