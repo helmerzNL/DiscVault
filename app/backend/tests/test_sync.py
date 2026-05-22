@@ -48,12 +48,24 @@ class SyncIntegrationTests(unittest.TestCase):
         return response.get_json()["movie"]
 
     def test_bootstrap_delta_and_movie_tombstone(self):
-        before = self._json(self.client.get("/api/sync/bootstrap"))["server_revision"]
+        bootstrap = self._json(self.client.get("/api/sync/bootstrap"))
+        before = bootstrap["server_revision"]
+        self.assertEqual(bootstrap["serverRevision"], before)
+        self.assertIn("assetManifest", bootstrap)
+        self.assertIn("containers", bootstrap)
         movie = self._create_movie()
 
         delta = self._json(self.client.get(f"/api/sync/delta?since_revision={before}"))
         self.assertGreater(delta["server_revision"], before)
         self.assertIn(movie["id"], {m["id"] for m in delta["movies"]})
+
+        changes = self._json(self.client.get(f"/api/sync/changes?sinceRevision={before}"))
+        self.assertEqual(changes["server_revision"], delta["server_revision"])
+        self.assertEqual(changes["toRevision"], delta["server_revision"])
+        self.assertIn("upserts", changes)
+        self.assertIn("deletes", changes)
+        self.assertIn("assetUpdates", changes)
+        self.assertIn(movie["id"], {m["id"] for m in changes["movies"]})
 
         update = self.client.put(f"/api/movies/{movie['id']}", json={"title": movie["title"] + " Updated"})
         self.assertEqual(update.status_code, 200, update.get_data(as_text=True))
@@ -90,6 +102,17 @@ class SyncIntegrationTests(unittest.TestCase):
         duplicate = self._json(self.client.post("/api/sync/operations", json=payload))
         self.assertEqual(duplicate["results"][0]["status"], "duplicate")
 
+        mutation_duplicate = self._json(self.client.post("/api/sync/mutations", json={
+            "clientId": payload["client_id"],
+            "mutations": [{
+                "idempotencyKey": key,
+                "type": "movie.create",
+                "entity": "movie",
+                "payload": payload["operations"][0]["payload"],
+            }],
+        }))
+        self.assertEqual(mutation_duplicate["results"][0]["status"], "duplicate")
+
         current = self._json(self.client.get(f"/api/movies/{movie_id}"))
         conflict = self._json(self.client.post("/api/sync/operations", json={
             "client_id": "ios-test",
@@ -97,8 +120,8 @@ class SyncIntegrationTests(unittest.TestCase):
                 "idempotency_key": f"op-{uuid.uuid4().hex}",
                 "type": "movie.update",
                 "entity": "movie",
-                "entity_id": movie_id,
-                "base_revision": max(0, int(current["sync_revision"]) - 1),
+                "entityId": movie_id,
+                "baseRevision": max(0, int(current["sync_revision"]) - 1),
                 "payload": {"title": "Should Conflict"},
             }],
         }))
