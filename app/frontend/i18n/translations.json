@@ -796,7 +796,8 @@
     "rbac.roleDesc.video_viewer": "Alleen leesrechten. Geen bewerkopties, geen groepen aanmaken, geen metadata vernieuwen.",
     "rbac.roleDesc.membergroup": "Kan zelf groepen aanmaken en beheren om films te delen met andere leden.",
     "rbac.roleDesc.digitale_libraries_viewer": "Kan Jellyfin en Plex informatie bij films bekijken voor toegewezen groepen.",
-    "digital.playOn": "Afspelen op {0}"
+    "digital.playOn": "Afspelen op {0}",
+    "logs.catContainers": "▣ Containers"
   },
   "en": {
     "nav.collection": "Collection",
@@ -1588,7 +1589,8 @@
     "rbac.roleDesc.video_viewer": "Read-only access. No edit options, no group creation, no metadata refresh.",
     "rbac.roleDesc.membergroup": "Can create and manage groups to share movies with other members.",
     "rbac.roleDesc.digitale_libraries_viewer": "Can view Jellyfin and Plex information for movies in assigned groups.",
-    "digital.playOn": "Play on {0}"
+    "digital.playOn": "Play on {0}",
+    "logs.catContainers": "▣ Containers"
   },
   "fr": {
     "nav.collection": "Collection",
@@ -2382,7 +2384,8 @@
     "settings.menuAbout": "À propos",
     "settings.aboutTitle": "À propos de DiscVault",
     "settings.aboutTmdb": "Les données de films sont fournies par The Movie Database (TMDB). Ce produit utilise l’API TMDB mais n’est pas approuvé ni certifié par TMDB.",
-    "settings.aboutAi": "Entièrement conçu par des agents IA qui ne dorment jamais, ne se plaignent jamais et écrasent accidentellement les mauvais fichiers environ une fois par session — toujours avec les meilleures intentions."
+    "settings.aboutAi": "Entièrement conçu par des agents IA qui ne dorment jamais, ne se plaignent jamais et écrasent accidentellement les mauvais fichiers environ une fois par session — toujours avec les meilleures intentions.",
+    "logs.catContainers": "▣ Conteneurs"
   },
   "de": {
     "nav.collection": "Sammlung",
@@ -3175,7 +3178,8 @@
     "settings.menuAbout": "Über",
     "settings.aboutTitle": "Über DiscVault",
     "settings.aboutTmdb": "Filmdaten werden von The Movie Database (TMDB) bereitgestellt. Dieses Produkt nutzt die TMDB-API, wird jedoch nicht von TMDB unterstützt oder zertifiziert.",
-    "settings.aboutAi": "Vollständig von KI-Agenten entwickelt, die niemals schlafen, niemals klagen und ungefähr einmal pro Sitzung die falschen Dateien überschreiben — immer in bester Absicht."
+    "settings.aboutAi": "Vollständig von KI-Agenten entwickelt, die niemals schlafen, niemals klagen und ungefähr einmal pro Sitzung die falschen Dateien überschreiben — immer in bester Absicht.",
+    "logs.catContainers": "▣ Container"
   },
   "es": {
     "nav.collection": "Colección",
@@ -3968,7 +3972,8 @@
     "settings.menuAbout": "Acerca de",
     "settings.aboutTitle": "Acerca de DiscVault",
     "settings.aboutTmdb": "Los datos de películas son proporcionados por The Movie Database (TMDB). Este producto utiliza la API de TMDB pero no está respaldado ni certificado por TMDB.",
-    "settings.aboutAi": "Construido íntegramente por agentes de IA que nunca duermen, nunca se quejan y accidentalmente sobreescriben los archivos incorrectos aproximadamente una vez por sesión — siempre con las mejores intenciones."
+    "settings.aboutAi": "Construido íntegramente por agentes de IA que nunca duermen, nunca se quejan y accidentalmente sobreescriben los archivos incorrectos aproximadamente una vez por sesión — siempre con las mejores intenciones.",
+    "logs.catContainers": "▣ Contenedores"
   },
   "pt": {
     "nav.collection": "Coleção",
@@ -4762,7 +4767,8 @@
     "settings.menuAbout": "Sobre",
     "settings.aboutTitle": "Sobre o DiscVault",
     "settings.aboutTmdb": "Os dados de filmes são fornecidos por The Movie Database (TMDB). Este produto utiliza a API do TMDB mas não é endossado nem certificado pelo TMDB.",
-    "settings.aboutAi": "Construído inteiramente por agentes de IA que nunca dormem, nunca reclamam e acidentalmente sobrescrevem os ficheiros errados cerca de uma vez por sessão — sempre com as melhores intenções."
+    "settings.aboutAi": "Construído inteiramente por agentes de IA que nunca dormem, nunca reclamam e acidentalmente sobrescrevem os ficheiros errados cerca de uma vez por sessão — sempre com as melhores intenções.",
+    "logs.catContainers": "▣ Contentores"
   },
   "it": {
     "nav.collection": "Collezione",
@@ -5556,6 +5562,7 @@
     "rbac.roleDesc.video_viewer": "Accesso in sola lettura. Nessuna opzione di modifica, nessuna creazione di gruppi, nessun aggiornamento dei metadati.",
     "rbac.roleDesc.membergroup": "Può creare e gestire gruppi per condividere film con altri membri.",
     "rbac.roleDesc.digitale_libraries_viewer": "Può visualizzare le informazioni di Jellyfin e Plex per i film nei gruppi assegnati.",
-    "digital.playOn": "Riproduci su {0}"
+    "digital.playOn": "Riproduci su {0}",
+    "logs.catContainers": "▣ Contenitori"
   }
 }
