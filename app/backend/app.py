@@ -348,6 +348,170 @@ def _init_container_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_box_sets_barcode ON box_sets(barcode)")
 
 
+SYNC_TABLES = {
+    "movies": ("{alias}.id", "movie"),
+    "edition_groups": ("{alias}.id", "edition_group"),
+    "box_sets": ("{alias}.id", "box_set"),
+    "vaults": ("{alias}.id", "vault"),
+    "collections": ("{alias}.id", "collection"),
+    "groups": ("{alias}.id", "group"),
+    "watchlist": ("{alias}.id", "watchlist"),
+    "watch_history": ("{alias}.id", "watch_history"),
+    "people": ("{alias}.id", "person"),
+    "movie_people": ("{alias}.id", "movie_person"),
+    "vault_movies": ("{alias}.vault_id || ':' || {alias}.movie_id", "vault_movie"),
+    "box_set_movies": ("{alias}.box_set_id || ':' || {alias}.movie_id", "box_set_movie"),
+    "collection_items": ("{alias}.collection_id || ':' || {alias}.item_type || ':' || {alias}.item_id", "collection_item"),
+    "movie_groups": ("{alias}.movie_id || ':' || {alias}.group_id", "movie_group"),
+}
+
+
+def _table_columns(conn, table):
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _add_column_if_missing(conn, table, column, definition):
+    cols = _table_columns(conn, table)
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _init_sync_tables(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sync_state (
+            id       INTEGER PRIMARY KEY CHECK (id = 1),
+            revision INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    conn.execute("INSERT OR IGNORE INTO sync_state (id, revision) VALUES (1, 0)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sync_changes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            revision   INTEGER NOT NULL,
+            entity     TEXT NOT NULL,
+            entity_id  TEXT NOT NULL,
+            op         TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sync_tombstones (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            revision   INTEGER NOT NULL,
+            entity     TEXT NOT NULL,
+            entity_id  TEXT NOT NULL,
+            deleted_at TEXT NOT NULL,
+            UNIQUE(entity, entity_id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sync_operations (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            idempotency_key TEXT NOT NULL,
+            client_id       TEXT NOT NULL,
+            status          TEXT NOT NULL,
+            entity          TEXT,
+            entity_id       TEXT,
+            result_json     TEXT,
+            created_at      TEXT NOT NULL,
+            UNIQUE(client_id, idempotency_key)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sync_changes_revision ON sync_changes(revision)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sync_tombstones_revision ON sync_tombstones(revision)")
+
+    for table in SYNC_TABLES:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone()
+        if not exists:
+            continue
+        _add_column_if_missing(conn, table, "updated_at", "TEXT")
+        _add_column_if_missing(conn, table, "sync_revision", "INTEGER NOT NULL DEFAULT 0")
+
+    for table, (id_expr, entity) in SYNC_TABLES.items():
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone()
+        if not exists:
+            continue
+        new_id_expr = id_expr.format(alias="NEW")
+        old_id_expr = id_expr.format(alias="OLD")
+        conn.execute(f"DROP TRIGGER IF EXISTS sync_{table}_ai")
+        conn.execute(f"DROP TRIGGER IF EXISTS sync_{table}_au")
+        conn.execute(f"DROP TRIGGER IF EXISTS sync_{table}_bd")
+        conn.execute(f"""
+            CREATE TRIGGER sync_{table}_ai
+            AFTER INSERT ON {table}
+            BEGIN
+                UPDATE sync_state SET revision = revision + 1 WHERE id = 1;
+                UPDATE {table}
+                   SET sync_revision = (SELECT revision FROM sync_state WHERE id = 1),
+                       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 WHERE rowid = NEW.rowid;
+                INSERT INTO sync_changes (revision, entity, entity_id, op, updated_at)
+                VALUES ((SELECT revision FROM sync_state WHERE id = 1), '{entity}', {new_id_expr} || '', 'upsert', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+            END
+        """)
+        conn.execute(f"""
+            CREATE TRIGGER sync_{table}_au
+            AFTER UPDATE ON {table}
+            WHEN OLD.sync_revision = NEW.sync_revision
+            BEGIN
+                UPDATE sync_state SET revision = revision + 1 WHERE id = 1;
+                UPDATE {table}
+                   SET sync_revision = (SELECT revision FROM sync_state WHERE id = 1),
+                       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 WHERE rowid = NEW.rowid;
+                INSERT INTO sync_changes (revision, entity, entity_id, op, updated_at)
+                VALUES ((SELECT revision FROM sync_state WHERE id = 1), '{entity}', {new_id_expr} || '', 'upsert', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+            END
+        """)
+        conn.execute(f"""
+            CREATE TRIGGER sync_{table}_bd
+            BEFORE DELETE ON {table}
+            BEGIN
+                UPDATE sync_state SET revision = revision + 1 WHERE id = 1;
+                INSERT INTO sync_changes (revision, entity, entity_id, op, updated_at)
+                VALUES ((SELECT revision FROM sync_state WHERE id = 1), '{entity}', {old_id_expr} || '', 'delete', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+                INSERT INTO sync_tombstones (revision, entity, entity_id, deleted_at)
+                VALUES ((SELECT revision FROM sync_state WHERE id = 1), '{entity}', {old_id_expr} || '', strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+                ON CONFLICT(entity, entity_id) DO UPDATE SET
+                    revision=excluded.revision,
+                    deleted_at=excluded.deleted_at;
+            END
+        """)
+
+    existing_count = 0
+    for table in SYNC_TABLES:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone()
+        if exists:
+            existing_count += conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    if existing_count and _current_sync_revision(conn) == 0:
+        now = datetime.utcnow().isoformat()
+        conn.execute("UPDATE sync_state SET revision=1 WHERE id=1")
+        for table in SYNC_TABLES:
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            ).fetchone()
+            if exists:
+                conn.execute(
+                    f"UPDATE {table} SET sync_revision=1, updated_at=COALESCE(updated_at, ?)",
+                    (now,),
+                )
+
+
+def _current_sync_revision(conn):
+    row = conn.execute("SELECT revision FROM sync_state WHERE id=1").fetchone()
+    return int(row[0] if row and not hasattr(row, "keys") else row["revision"]) if row else 0
+
+
 def _log_container_event(conn, message, detail="", level="info"):
     """Write a container log using the current DB connection."""
     try:
@@ -1267,6 +1431,8 @@ def init_db():
             FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
         )
     """)
+
+    _init_sync_tables(conn)
 
     conn.commit()
     conn.close()
@@ -7306,6 +7472,423 @@ def decline_invite(invite_id):
     conn.commit()
     conn.close()
     return jsonify({"status": "declined"})
+
+
+# ---------------------------------------------------------------------------
+# Native mobile sync
+# ---------------------------------------------------------------------------
+
+SYNC_ENTITY_TABLES = {
+    "movie": "movies",
+    "edition_group": "edition_groups",
+    "box_set": "box_sets",
+    "vault": "vaults",
+    "collection": "collections",
+    "group": "groups",
+    "watchlist": "watchlist",
+    "watch_history": "watch_history",
+    "person": "people",
+    "movie_person": "movie_people",
+}
+
+
+def _dicts(rows):
+    return [dict(r) for r in rows]
+
+
+def _visible_movie_ids(conn):
+    owner_clause, params = _movie_owner_filter()
+    rows = conn.execute(f"SELECT movies.id FROM movies WHERE 1=1{owner_clause}", params).fetchall()
+    return [int(r["id"]) for r in rows]
+
+
+def _visible_movies(conn):
+    owner_clause, params = _movie_owner_filter()
+    return _dicts(conn.execute(f"SELECT * FROM movies WHERE 1=1{owner_clause} ORDER BY id", params).fetchall())
+
+
+def _asset_checksum(path):
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 128), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return ""
+
+
+def _asset_manifest_entry(kind, entity, entity_id, value, updated_at="", revision=0):
+    if not value:
+        return None
+    url = value
+    file_path = ""
+    if kind in ("movie_poster", "container_poster", "person_profile"):
+        base = PROFILE_DIR if kind == "person_profile" else POSTER_DIR
+        file_path = os.path.join(base, os.path.basename(value))
+        route = "profiles" if kind == "person_profile" else "posters"
+        url = f"/api/{route}/{os.path.basename(value)}"
+    elif isinstance(value, str) and value.startswith("/api/posters/"):
+        file_path = os.path.join(POSTER_DIR, os.path.basename(value))
+    checksum = _asset_checksum(file_path) if file_path else ""
+    etag = checksum or hashlib.sha256(str(value).encode()).hexdigest()
+    return {
+        "kind": kind,
+        "entity": entity,
+        "entity_id": entity_id,
+        "url": url,
+        "checksum": checksum,
+        "etag": etag,
+        "updated_at": updated_at or "",
+        "revision": int(revision or 0),
+    }
+
+
+def _sync_asset_manifest(conn, movie_ids=None):
+    assets = []
+    movie_filter = ""
+    params = []
+    if movie_ids is not None:
+        if not movie_ids:
+            return []
+        movie_filter = f" WHERE id IN ({','.join('?' * len(movie_ids))})"
+        params = movie_ids
+    for m in conn.execute(f"SELECT id, poster_file, backdrop, updated_at, sync_revision FROM movies{movie_filter}", params).fetchall():
+        for entry in (
+            _asset_manifest_entry("movie_poster", "movie", m["id"], m["poster_file"], m["updated_at"], m["sync_revision"]),
+            _asset_manifest_entry("movie_backdrop", "movie", m["id"], m["backdrop"], m["updated_at"], m["sync_revision"]),
+        ):
+            if entry:
+                assets.append(entry)
+    for table, entity, id_col in (("edition_groups", "edition_group", "id"), ("collections", "collection", "id"), ("vaults", "vault", "id"), ("box_sets", "box_set", "id")):
+        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+        if not exists:
+            continue
+        cols = _table_columns(conn, table)
+        if "poster_file" not in cols and "backdrop" not in cols:
+            continue
+        for r in conn.execute(f"SELECT {id_col} AS id, poster_file, backdrop, updated_at, sync_revision FROM {table}").fetchall():
+            for entry in (
+                _asset_manifest_entry("container_poster", entity, r["id"], r["poster_file"], r["updated_at"], r["sync_revision"]),
+                _asset_manifest_entry("container_backdrop", entity, r["id"], r["backdrop"], r["updated_at"], r["sync_revision"]),
+            ):
+                if entry:
+                    assets.append(entry)
+    people_sql = "SELECT id, photo_file, updated_at, sync_revision FROM people"
+    for p in conn.execute(people_sql).fetchall():
+        entry = _asset_manifest_entry("person_profile", "person", p["id"], p["photo_file"], p["updated_at"], p["sync_revision"])
+        if entry:
+            assets.append(entry)
+    return assets
+
+
+def _sync_dataset(conn, since_revision=None):
+    movie_ids = _visible_movie_ids(conn)
+    movie_placeholders = ",".join("?" * len(movie_ids)) if movie_ids else ""
+    rev_clause = " AND sync_revision > ?" if since_revision is not None else ""
+    rev_params = [since_revision] if since_revision is not None else []
+
+    movies = _visible_movies(conn)
+    if since_revision is not None:
+        movies = [m for m in movies if int(m.get("sync_revision") or 0) > since_revision]
+
+    if movie_ids:
+        edition_groups = _dicts(conn.execute(f"""
+            SELECT DISTINCT eg.*
+            FROM edition_groups eg
+            LEFT JOIN vault_movies vm ON vm.vault_id=eg.id
+            LEFT JOIN box_set_movies bsm ON bsm.box_set_id=eg.id
+            WHERE (vm.movie_id IN ({movie_placeholders}) OR bsm.movie_id IN ({movie_placeholders}) OR eg.primary_movie_id IN ({movie_placeholders})){rev_clause}
+            ORDER BY eg.id
+        """, movie_ids + movie_ids + movie_ids + rev_params).fetchall())
+        collections = _dicts(conn.execute(f"""
+            SELECT DISTINCT c.*
+            FROM collections c
+            LEFT JOIN collection_items ci ON ci.collection_id=c.id
+            WHERE (
+                  (ci.item_type='movie' AND ci.item_id IN ({movie_placeholders}))
+               OR (ci.item_type='vault' AND ci.item_id IN (SELECT vault_id FROM vault_movies WHERE movie_id IN ({movie_placeholders})))
+               OR (ci.item_type='box_set' AND ci.item_id IN (SELECT box_set_id FROM box_set_movies WHERE movie_id IN ({movie_placeholders})))
+            ){rev_clause}
+            ORDER BY c.id
+        """, movie_ids + movie_ids + movie_ids + rev_params).fetchall())
+        people = _dicts(conn.execute(f"""
+            SELECT DISTINCT p.*
+            FROM people p
+            JOIN movie_people mp ON mp.person_id=p.id
+            WHERE mp.movie_id IN ({movie_placeholders}){rev_clause}
+            ORDER BY p.id
+        """, movie_ids + rev_params).fetchall())
+        movie_people = _dicts(conn.execute(f"SELECT * FROM movie_people WHERE movie_id IN ({movie_placeholders}){rev_clause} ORDER BY id", movie_ids + rev_params).fetchall())
+        vault_movies = _dicts(conn.execute(f"SELECT * FROM vault_movies WHERE movie_id IN ({movie_placeholders}){rev_clause}", movie_ids + rev_params).fetchall())
+        box_set_movies = _dicts(conn.execute(f"SELECT * FROM box_set_movies WHERE movie_id IN ({movie_placeholders}){rev_clause}", movie_ids + rev_params).fetchall())
+        movie_groups = _dicts(conn.execute(f"SELECT * FROM movie_groups WHERE movie_id IN ({movie_placeholders}){rev_clause}", movie_ids + rev_params).fetchall())
+    else:
+        edition_groups = collections = people = movie_people = vault_movies = box_set_movies = movie_groups = []
+
+    uid = _get_current_user_id() or "__global__"
+    groups = _dicts(conn.execute(f"""
+        SELECT DISTINCT g.*
+        FROM groups g
+        LEFT JOIN user_groups ug ON ug.group_id=g.id
+        LEFT JOIN movie_groups mg ON mg.group_id=g.id
+        WHERE (?='__global__' OR ug.user_id=? OR mg.movie_id IN ({movie_placeholders or 'NULL'})){rev_clause}
+        ORDER BY g.id
+    """, [uid, uid] + movie_ids + rev_params).fetchall())
+    watchlist = _dicts(conn.execute(
+        f"SELECT * FROM watchlist WHERE user_id=?{rev_clause} ORDER BY id",
+        [uid] + rev_params,
+    ).fetchall())
+    watch_history = _dicts(conn.execute(
+        f"SELECT * FROM watch_history WHERE user_id=?{rev_clause} ORDER BY id",
+        [uid] + rev_params,
+    ).fetchall())
+    if movie_ids:
+        collection_items = _dicts(conn.execute(f"""
+            SELECT *
+            FROM collection_items
+            WHERE (
+                  (item_type='movie' AND item_id IN ({movie_placeholders}))
+               OR (item_type='vault' AND item_id IN (SELECT vault_id FROM vault_movies WHERE movie_id IN ({movie_placeholders})))
+               OR (item_type='box_set' AND item_id IN (SELECT box_set_id FROM box_set_movies WHERE movie_id IN ({movie_placeholders})))
+            ){rev_clause}
+        """, movie_ids + movie_ids + movie_ids + rev_params).fetchall())
+    else:
+        collection_items = []
+
+    return {
+        "movies": movies,
+        "edition_groups": edition_groups,
+        "collections": collections,
+        "groups": groups,
+        "watchlist": watchlist,
+        "watch_history": watch_history,
+        "people": people,
+        "movie_people": movie_people,
+        "container_memberships": {
+            "vault_movies": vault_movies,
+            "box_set_movies": box_set_movies,
+            "collection_items": collection_items,
+            "movie_groups": movie_groups,
+        },
+    }
+
+
+@app.route("/api/sync/bootstrap", methods=["GET"])
+def sync_bootstrap():
+    conn = get_db()
+    data = _sync_dataset(conn)
+    data["server_revision"] = _current_sync_revision(conn)
+    data["asset_manifest"] = _sync_asset_manifest(conn, _visible_movie_ids(conn))
+    conn.close()
+    return jsonify(data)
+
+
+@app.route("/api/sync/delta", methods=["GET"])
+def sync_delta():
+    try:
+        since = int(request.args.get("since_revision", "0"))
+    except ValueError:
+        return jsonify({"error": "since_revision must be an integer"}), 400
+    conn = get_db()
+    data = _sync_dataset(conn, since)
+    data["tombstones"] = _dicts(conn.execute(
+        "SELECT entity, entity_id, deleted_at, revision FROM sync_tombstones WHERE revision>? ORDER BY revision",
+        (since,),
+    ).fetchall())
+    data["server_revision"] = _current_sync_revision(conn)
+    data["asset_manifest"] = [a for a in _sync_asset_manifest(conn, _visible_movie_ids(conn)) if int(a.get("revision") or 0) > since]
+    conn.close()
+    return jsonify(data)
+
+
+def _entity_revision(conn, entity, entity_id):
+    table = SYNC_ENTITY_TABLES.get(entity)
+    if not table:
+        return 0
+    row = conn.execute(f"SELECT sync_revision FROM {table} WHERE id=?", (entity_id,)).fetchone()
+    return int(row["sync_revision"] or 0) if row else 0
+
+
+def _conflict_if_stale(conn, op, entity, entity_id):
+    base = op.get("base_revision")
+    if base is None or entity_id in (None, ""):
+        return None
+    current = _entity_revision(conn, entity, entity_id)
+    if current and int(base or 0) < current:
+        table = SYNC_ENTITY_TABLES.get(entity)
+        row = conn.execute(f"SELECT * FROM {table} WHERE id=?", (entity_id,)).fetchone() if table else None
+        return {"status": "conflict", "current_revision": current, "current": dict(row) if row else None}
+    return None
+
+
+def _apply_sync_operation(conn, op):
+    typ = op.get("type") or ""
+    payload = op.get("payload") or {}
+    entity_id = op.get("entity_id")
+    now = datetime.utcnow().isoformat()
+    uid = _get_current_user_id()
+
+    if typ == "movie.create":
+        row = {k: payload.get(k, "") for k, _ in SCHEMA_COLUMNS}
+        row["barcode"] = row.get("barcode") or f"MOBILE-{op.get('client_id','client')}-{int(datetime.utcnow().timestamp() * 1000)}"
+        row["added_at"] = row.get("added_at") or now
+        cols = [c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]
+        row["owner_id"] = uid
+        conn.execute(
+            f"INSERT INTO movies ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
+            [row.get(c, "") for c in cols],
+        )
+        new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        return {"status": "applied", "entity": "movie", "entity_id": new_id}
+
+    if typ == "movie.update":
+        conflict = _conflict_if_stale(conn, op, "movie", entity_id)
+        if conflict:
+            return conflict
+        allowed = {k: payload[k] for k in ([c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]) if k in payload}
+        if not allowed:
+            return {"status": "applied", "entity": "movie", "entity_id": entity_id}
+        conn.execute(
+            f"UPDATE movies SET {', '.join(f'{k}=?' for k in allowed)} WHERE id=?",
+            list(allowed.values()) + [entity_id],
+        )
+        return {"status": "applied", "entity": "movie", "entity_id": entity_id}
+
+    if typ == "movie.delete":
+        conflict = _conflict_if_stale(conn, op, "movie", entity_id)
+        if conflict:
+            return conflict
+        conn.execute("DELETE FROM movies WHERE id=?", (entity_id,))
+        return {"status": "applied", "entity": "movie", "entity_id": entity_id}
+
+    if typ == "movie.assign_container":
+        conflict = _conflict_if_stale(conn, op, "movie", entity_id)
+        if conflict:
+            return conflict
+        conn.execute("DELETE FROM vault_movies WHERE movie_id=?", (entity_id,))
+        conn.execute("DELETE FROM box_set_movies WHERE movie_id=?", (entity_id,))
+        conn.execute("DELETE FROM collection_items WHERE item_type='movie' AND item_id=?", (entity_id,))
+        vault_ids = [int(v) for v in payload.get("vault_ids") or []]
+        box_set_ids = [int(v) for v in payload.get("box_set_ids") or []]
+        collection_ids = [int(v) for v in payload.get("collection_ids") or []]
+        for vid in vault_ids:
+            conn.execute("INSERT OR IGNORE INTO vault_movies (vault_id, movie_id) VALUES (?,?)", (vid, entity_id))
+        for bid in box_set_ids:
+            conn.execute("INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?,?)", (bid, entity_id))
+        for cid in collection_ids:
+            conn.execute("INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, 'movie', ?)", (cid, entity_id))
+        conn.execute(
+            "UPDATE movies SET edition_group_id=?, super_group_id=?, collection_id=? WHERE id=?",
+            (vault_ids[0] if vault_ids else None, box_set_ids[0] if box_set_ids else None, collection_ids[0] if collection_ids else None, entity_id),
+        )
+        return {"status": "applied", "entity": "movie", "entity_id": entity_id}
+
+    if typ == "movie.watchlist.add":
+        movie_id = int(entity_id or payload.get("movie_id"))
+        conn.execute("INSERT OR IGNORE INTO watchlist (user_id, movie_id, added_at) VALUES (?,?,?)", (uid or "__global__", movie_id, now))
+        return {"status": "applied", "entity": "watchlist", "entity_id": movie_id}
+
+    if typ == "movie.watchlist.remove":
+        movie_id = int(entity_id or payload.get("movie_id"))
+        conn.execute("DELETE FROM watchlist WHERE user_id=? AND movie_id=?", (uid or "__global__", movie_id))
+        return {"status": "applied", "entity": "watchlist", "entity_id": movie_id}
+
+    if typ == "movie.mark_watched":
+        movie_id = int(entity_id or payload.get("movie_id"))
+        conn.execute(
+            "INSERT INTO watch_history (user_id, movie_id, watched_at, created_at) VALUES (?,?,?,?)",
+            (uid or "__global__", movie_id, payload.get("watched_at") or now, now),
+        )
+        return {"status": "applied", "entity": "watch_history", "entity_id": movie_id}
+
+    if typ in ("edition_group.update", "edition_group.convert_type"):
+        conflict = _conflict_if_stale(conn, op, "edition_group", entity_id)
+        if conflict:
+            return conflict
+        if typ == "edition_group.convert_type":
+            _convert_edition_group_type(conn, int(entity_id), "boxset" if payload.get("group_type") == "boxset" else "vault")
+        fields = {k: payload[k] for k in ("title", "tmdb_id", "imdb_id", "year", "primary_movie_id", "badge_label", "parent_group_id", "collection_id", "backdrop", "description", "poster_file", "group_type") if k in payload}
+        if fields:
+            conn.execute(f"UPDATE edition_groups SET {', '.join(f'{k}=?' for k in fields)} WHERE id=?", list(fields.values()) + [entity_id])
+        return {"status": "applied", "entity": "edition_group", "entity_id": entity_id}
+
+    if typ == "collection.update":
+        conflict = _conflict_if_stale(conn, op, "collection", entity_id)
+        if conflict:
+            return conflict
+        fields = {k: payload[k] for k in ("title", "badge_label", "backdrop", "description", "poster_file") if k in payload}
+        if fields:
+            conn.execute(f"UPDATE collections SET {', '.join(f'{k}=?' for k in fields)} WHERE id=?", list(fields.values()) + [entity_id])
+        return {"status": "applied", "entity": "collection", "entity_id": entity_id}
+
+    if typ == "box_set_proposal.create":
+        title = (payload.get("box_set_title") or payload.get("title") or "").strip()
+        if not title:
+            return {"status": "failed", "error": "box_set_title is required"}
+        conn.execute(
+            "INSERT INTO edition_groups (title, tmdb_id, imdb_id, year, created_at, group_type) VALUES (?,?,?,?,?, 'boxset')",
+            (title, payload.get("tmdb_id") or "", payload.get("imdb_id") or "", payload.get("year") or "", now),
+        )
+        gid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT OR IGNORE INTO box_sets (id, title, barcode, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (gid, title, payload.get("barcode") or "", payload.get("tmdb_id") or "", payload.get("imdb_id") or "", payload.get("year") or "", gid, now),
+        )
+        return {"status": "applied", "entity": "box_set", "entity_id": gid}
+
+    if typ in ("poster.upload", "backdrop.upload"):
+        entity = op.get("entity")
+        table = SYNC_ENTITY_TABLES.get(entity)
+        if not table or not entity_id:
+            return {"status": "failed", "error": "entity/entity_id required"}
+        column = "poster_file" if typ == "poster.upload" else "backdrop"
+        value = payload.get(column) or payload.get("url") or payload.get("file")
+        if not value:
+            return {"status": "failed", "error": "asset value required"}
+        conn.execute(f"UPDATE {table} SET {column}=? WHERE id=?", (value, entity_id))
+        return {"status": "applied", "entity": entity, "entity_id": entity_id}
+
+    return {"status": "failed", "error": f"Unsupported operation type: {typ}"}
+
+
+@app.route("/api/sync/operations", methods=["POST"])
+def sync_operations():
+    data = request.json or {}
+    operations = data.get("operations") or ([] if not data else [data])
+    client_id = data.get("client_id") or request.headers.get("X-DiscVault-Client") or "unknown"
+    conn = get_db()
+    results = []
+    for op in operations:
+        key = op.get("idempotency_key")
+        op_client_id = op.get("client_id") or client_id
+        if not key:
+            results.append({"status": "failed", "error": "idempotency_key is required"})
+            continue
+        existing = conn.execute(
+            "SELECT result_json FROM sync_operations WHERE client_id=? AND idempotency_key=?",
+            (op_client_id, key),
+        ).fetchone()
+        if existing:
+            prior = json.loads(existing["result_json"] or "{}")
+            prior["status"] = "duplicate"
+            results.append(prior)
+            continue
+        try:
+            result = _apply_sync_operation(conn, {**op, "client_id": op_client_id})
+            conn.commit()
+        except Exception as ex:
+            conn.rollback()
+            result = {"status": "failed", "error": str(ex)}
+        conn.execute(
+            "INSERT OR IGNORE INTO sync_operations (idempotency_key, client_id, status, entity, entity_id, result_json, created_at) VALUES (?,?,?,?,?,?,?)",
+            (key, op_client_id, result.get("status", "failed"), op.get("entity"), str(result.get("entity_id") or op.get("entity_id") or ""), json.dumps(result), datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+        results.append(result)
+    server_revision = _current_sync_revision(conn)
+    conn.close()
+    return jsonify({"server_revision": server_revision, "results": results})
 
 
 # ---------------------------------------------------------------------------
