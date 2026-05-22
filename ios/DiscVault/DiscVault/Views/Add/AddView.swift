@@ -31,7 +31,12 @@ struct AddView: View {
             .fullScreenCover(isPresented: $showScanner) {
                 BarcodeScannerView { barcode in
                     showScanner = false
-                    Task { await lookupBarcode(barcode) }
+                    Task { await addScannedBarcode(barcode) }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .barcodeScanned)) { note in
+                if let barcode = note.userInfo?["barcode"] as? String {
+                    Task { await addScannedBarcode(barcode) }
                 }
             }
         }
@@ -106,19 +111,19 @@ struct AddView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
                             Button {
-                                Task { await lookupBarcode(draft.barcode) }
+                                Task { await addScannedBarcode(draft.barcode) }
                             } label: {
-                                if isLookingUp {
+                                if isLookingUp || isSaving {
                                     ProgressView().tint(.white)
                                 } else {
-                                    Image(systemName: "magnifyingglass")
+                                    Image(systemName: "arrow.right")
                                         .foregroundStyle(.white)
                                 }
                             }
                             .frame(width: 44, height: 44)
                             .background(Color.blue)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .disabled(draft.barcode.trimmingCharacters(in: .whitespacesAndNewlines).count < 6 || isLookingUp)
+                            .disabled(draft.barcode.trimmingCharacters(in: .whitespacesAndNewlines).count < 6 || isLookingUp || isSaving)
                         }
                     }
                 }
@@ -163,14 +168,29 @@ struct AddView: View {
                         AddTextField(title: languageManager.text("edit.year"), text: $draft.year, systemImage: "calendar")
                         AddTextField(title: languageManager.text("edit.runtime"), text: $draft.runtime, systemImage: "clock")
                     }
+                    AddTextField(title: languageManager.text("edit.edition"), text: $draft.edition, systemImage: "rectangle.stack")
+                    HStack(spacing: 10) {
+                        AddTextField(title: languageManager.text("edit.editionType"), text: $draft.editionType, systemImage: "tag")
+                        AddTextField(title: languageManager.text("edit.packaging"), text: $draft.packaging, systemImage: "shippingbox")
+                    }
+                    AddTextField(title: languageManager.text("edit.customEditionLabel"), text: $draft.customEditionLabel, systemImage: "seal")
+                    AddTextField(title: languageManager.text("edit.boxSet"), text: $draft.boxSet, systemImage: "shippingbox.fill")
+                    HStack(spacing: 10) {
+                        AddTextField(title: languageManager.text("edit.editionYear"), text: $draft.editionReleaseYear, systemImage: "calendar.badge.clock")
+                        AddTextField(title: languageManager.text("edit.editionDate"), text: $draft.editionReleaseDate, systemImage: "calendar")
+                    }
                     AddTextField(title: languageManager.text("edit.director"), text: $draft.director, systemImage: "megaphone")
                     AddTextField(title: languageManager.text("edit.actors"), text: $draft.actor, systemImage: "person.2")
                     AddTextField(title: languageManager.text("edit.genre"), text: $draft.genre, systemImage: "tag")
+                    AddTextField(title: languageManager.text("edit.studios"), text: $draft.studios, systemImage: "building.2")
+                    AddTextField(title: languageManager.text("edit.regions"), text: $draft.regions, systemImage: "globe.europe.africa")
+                    AddTextField(title: languageManager.text("edit.screenRatio"), text: $draft.screenRatios, systemImage: "rectangle.inset.filled")
                     AddTextField(title: languageManager.text("edit.hdr"), text: $draft.hdr, systemImage: "sparkles.tv")
                     AddTextField(title: languageManager.text("edit.language"), text: $draft.language, systemImage: "globe")
                     AddTextField(title: languageManager.text("edit.audioTracks"), text: $draft.audioTracks, systemImage: "speaker.wave.3")
                     AddTextField(title: languageManager.text("edit.subtitles"), text: $draft.subtitles, systemImage: "captions.bubble")
                     AddTextField(title: languageManager.text("edit.location"), text: $draft.location, systemImage: "mappin.and.ellipse")
+                    AddTextEditor(title: languageManager.text("edit.extras"), text: $draft.extras)
                     AddTextEditor(title: languageManager.text("edit.plot"), text: $draft.plot)
                     AddTextEditor(title: languageManager.text("edit.notes"), text: $draft.notes)
 
@@ -226,6 +246,12 @@ struct AddView: View {
         AddCard(title: "Movie Information", icon: "film.stack") {
             VStack(spacing: 12) {
                 AddInfoRow(icon: "film", title: draft.title, subtitle: [draft.year, draft.format].filter { !$0.isEmpty }.joined(separator: " · "))
+                if !draft.editionSummary.isEmpty {
+                    AddInfoRow(icon: "rectangle.stack", title: "Edition", subtitle: draft.editionSummary)
+                }
+                if !draft.boxSet.isEmpty {
+                    AddInfoRow(icon: "shippingbox.fill", title: languageManager.text("edit.boxSet"), subtitle: draft.boxSet)
+                }
                 if !draft.director.isEmpty {
                     AddInfoRow(icon: "megaphone", title: "Director", subtitle: draft.director)
                 }
@@ -283,6 +309,35 @@ struct AddView: View {
         isLookingUp = false
     }
 
+    private func addScannedBarcode(_ barcode: String) async {
+        let value = barcode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        isLookingUp = true
+        isSaving = true
+        statusMessage = AddStatusMessage(text: "Looking up barcode...", isError: false)
+        do {
+            let response = try await apiClient.lookupBarcodeForAdd(value)
+            guard response.status == "found", let movie = response.movie else {
+                handleLookupResponse(response, fallbackBarcode: value)
+                isLookingUp = false
+                isSaving = false
+                return
+            }
+
+            var payload = AddMovieDraft(lookupMovie: movie, barcode: value)
+            if payload.format.isEmpty, let detected = response.detectedFormat, !detected.isEmpty {
+                payload.format = detected
+            }
+            let savedMovie = try await apiClient.createMovie(normalizedPayload(payload))
+            draft = AddMovieDraft()
+            statusMessage = AddStatusMessage(text: "Movie added to your collection: \(savedMovie.title)", isError: false)
+        } catch {
+            statusMessage = AddStatusMessage(text: error.localizedDescription, isError: true)
+        }
+        isLookingUp = false
+        isSaving = false
+    }
+
     private func lookupTitle(_ title: String) async {
         let value = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
@@ -322,10 +377,7 @@ struct AddView: View {
         isSaving = true
         statusMessage = nil
         do {
-            var payload = draft
-            if payload.barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                payload.barcode = generatedBarcode(for: title)
-            }
+            let payload = normalizedPayload(draft, fallbackTitle: title)
             _ = try await apiClient.createMovie(payload)
             draft = AddMovieDraft()
             statusMessage = AddStatusMessage(text: "Movie added to your collection.", isError: false)
@@ -333,6 +385,22 @@ struct AddView: View {
             statusMessage = AddStatusMessage(text: error.localizedDescription, isError: true)
         }
         isSaving = false
+    }
+
+    private func normalizedPayload(_ draft: AddMovieDraft, fallbackTitle: String? = nil) -> AddMovieDraft {
+        var payload = draft
+        let title = fallbackTitle ?? payload.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if payload.barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload.barcode = generatedBarcode(for: title)
+        }
+        if payload.customEditionLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let label = [payload.edition, payload.editionType, payload.packaging]
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " · ")
+            payload.customEditionLabel = label
+        }
+        return payload
     }
 
     private func generatedBarcode(for title: String) -> String {
@@ -377,6 +445,15 @@ private struct AddStatusMessage: Identifiable {
     let id = UUID()
     let text: String
     let isError: Bool
+}
+
+private extension AddMovieDraft {
+    var editionSummary: String {
+        [edition, editionType, customEditionLabel, packaging]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
 }
 
 private enum AddTheme {

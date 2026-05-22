@@ -25,7 +25,19 @@ struct AddMovieDraft: Codable {
     var tmdbId = ""
     var location = ""
     var notes = ""
+    var edition = ""
+    var editionType = ""
+    var editionReleaseYear = ""
+    var editionReleaseDate = ""
+    var customEditionLabel = ""
+    var packaging = ""
+    var screenRatios = ""
+    var regions = ""
+    var extras = ""
+    var boxSet = ""
     var poster = ""
+    var editionGroupId: Int?
+    var collectionId: Int?
 
     enum CodingKeys: String, CodingKey {
         case barcode
@@ -52,7 +64,19 @@ struct AddMovieDraft: Codable {
         case tmdbId = "tmdb_id"
         case location
         case notes
+        case edition
+        case editionType = "edition_type"
+        case editionReleaseYear = "edition_release_year"
+        case editionReleaseDate = "edition_release_date"
+        case customEditionLabel = "custom_edition_label"
+        case packaging
+        case screenRatios = "screen_ratios"
+        case regions
+        case extras
+        case boxSet = "box_set"
         case poster
+        case editionGroupId = "edition_group_id"
+        case collectionId = "collection_id"
     }
 
     init() {}
@@ -83,6 +107,18 @@ struct AddMovieDraft: Codable {
             self.tmdbId = tmdbId.description
         }
         poster = lookupMovie.poster ?? ""
+        edition = lookupMovie.edition ?? ""
+        editionType = lookupMovie.editionType ?? ""
+        editionReleaseYear = lookupMovie.editionReleaseYear ?? ""
+        editionReleaseDate = lookupMovie.editionReleaseDate ?? ""
+        customEditionLabel = lookupMovie.customEditionLabel ?? ""
+        packaging = lookupMovie.packaging ?? ""
+        screenRatios = lookupMovie.screenRatios ?? ""
+        regions = lookupMovie.regions ?? ""
+        extras = lookupMovie.extras ?? ""
+        boxSet = lookupMovie.boxSet ?? ""
+        editionGroupId = lookupMovie.editionGroupId?.value
+        collectionId = lookupMovie.collectionId?.value
     }
 }
 
@@ -127,6 +163,18 @@ struct LookupMovie: Codable {
     let imdbUrl: String?
     let tmdbId: FlexibleInt?
     let poster: String?
+    let edition: String?
+    let editionType: String?
+    let editionReleaseYear: String?
+    let editionReleaseDate: String?
+    let customEditionLabel: String?
+    let packaging: String?
+    let screenRatios: String?
+    let regions: String?
+    let extras: String?
+    let boxSet: String?
+    let editionGroupId: FlexibleInt?
+    let collectionId: FlexibleInt?
 
     enum CodingKeys: String, CodingKey {
         case title
@@ -151,6 +199,18 @@ struct LookupMovie: Codable {
         case imdbUrl = "imdb_url"
         case tmdbId = "tmdb_id"
         case poster
+        case edition
+        case editionType = "edition_type"
+        case editionReleaseYear = "edition_release_year"
+        case editionReleaseDate = "edition_release_date"
+        case customEditionLabel = "custom_edition_label"
+        case packaging
+        case screenRatios = "screen_ratios"
+        case regions
+        case extras
+        case boxSet = "box_set"
+        case editionGroupId = "edition_group_id"
+        case collectionId = "collection_id"
     }
 }
 
