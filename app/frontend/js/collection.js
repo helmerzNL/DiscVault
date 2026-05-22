@@ -1595,7 +1595,6 @@ async function saveEditionGroupMeta() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ title, description })
     });
-    _editionGroupCache = [];
     await loadCollection();
     closeEditionGroupView();
     return;
@@ -1620,7 +1619,6 @@ async function saveEditionGroupMeta() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ title, description, badge_label, parent_group_id, collection_id, group_type })
   });
-  _editionGroupCache = [];
   await loadCollection();
   closeEditionGroupView();
 }
@@ -1632,7 +1630,6 @@ async function deleteEditionGroup() {
     const name = (document.getElementById('egGroupTitle') || {}).value || _currentCollection._group_title || '';
     if (!confirm(t('js.egDeleteConfirm', name))) return;
     await fetch(`${API}/collections/${colId}`, { method: 'DELETE' });
-    _editionGroupCache = [];
     await loadCollection();
     closeEditionGroupView();
     return;
@@ -1646,7 +1643,6 @@ async function deleteEditionGroup() {
   const name = (document.getElementById('egGroupTitle') || {}).value || (primary && primary._group_title) || '';
   if (!confirm(t('js.egDeleteConfirm', name))) return;
   await fetch(`${API}/edition-groups/${groupId}`, { method: 'DELETE' });
-  _editionGroupCache = [];
   await loadCollection();
   closeEditionGroupView();
 }
@@ -2911,9 +2907,79 @@ async function _populateGroupCheckboxes(currentGroupIds) {
   } catch(e) {}
 }
 
-function startEdit() {
-  const movie = allMovies.find(m => m.id === currentMovieId);
+function _checkedEditContainerIds(selector) {
+  return [...document.querySelectorAll(selector + ':checked')]
+    .map(cb => parseInt(cb.value, 10))
+    .filter(Number.isFinite);
+}
+
+function _editContainerSnapshot() {
+  return JSON.stringify({
+    vault_ids: _checkedEditContainerIds('.edit-vault-cb').sort((a, b) => a - b),
+    box_set_ids: _checkedEditContainerIds('.edit-boxset-cb').sort((a, b) => a - b),
+    collection_ids: _checkedEditContainerIds('.edit-collection-cb').sort((a, b) => a - b),
+  });
+}
+
+function _renderEditContainerChecks(targetId, items, checkedIds, className, emptyText) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  const checked = new Set((checkedIds || []).map(Number));
+  if (!items.length) {
+    target.innerHTML = `<span style="color:var(--text-muted); font-size:0.82rem;">${emptyText}</span>`;
+    return;
+  }
+  target.innerHTML = items.map(item => `
+    <label style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.82rem; white-space:nowrap;">
+      <input type="checkbox" class="${className}" value="${item.id}" ${checked.has(Number(item.id)) ? 'checked' : ''} onchange="_editDirty=true" style="accent-color:var(--accent); width:15px; height:15px;">
+      ${escHtml(item.title || ('#' + item.id))}
+    </label>
+  `).join('');
+}
+
+async function _populateEditContainerSelectors(movie) {
+  const containers = movie._containers || {};
+  const checkedVaultIds = (containers.vaults || []).map(v => v.id);
+  const checkedBoxSetIds = (containers.box_sets || []).map(bs => bs.id);
+  const checkedCollectionIds = (containers.collections_direct || []).map(c => c.id);
+
+  if (movie.edition_group_id && !checkedVaultIds.includes(movie.edition_group_id)) checkedVaultIds.push(movie.edition_group_id);
+  if (movie.super_group_id && !checkedBoxSetIds.includes(movie.super_group_id)) checkedBoxSetIds.push(movie.super_group_id);
+  if (movie.collection_id && !checkedCollectionIds.includes(movie.collection_id)) checkedCollectionIds.push(movie.collection_id);
+
+  try {
+    const [egRes, colRes] = await Promise.all([
+      fetch(`${API}/edition-groups`),
+      fetch(`${API}/collections`)
+    ]);
+    const egs = await egRes.json();
+    const cols = await colRes.json();
+    const vaults = egs.filter(g => !_isBoxSetGroup(g));
+    const boxSets = egs.filter(g => _isBoxSetGroup(g));
+    _renderEditContainerChecks('editVaultsContainer', vaults, checkedVaultIds, 'edit-vault-cb', t('js.noGroups'));
+    _renderEditContainerChecks('editBoxSetsContainer', boxSets, checkedBoxSetIds, 'edit-boxset-cb', t('js.noGroups'));
+    _renderEditContainerChecks('editCollectionsContainer', cols, checkedCollectionIds, 'edit-collection-cb', t('settings.groupMgmtEmpty', 'Geen groepen gevonden.'));
+  } catch (e) {
+    ['editVaultsContainer', 'editBoxSetsContainer', 'editCollectionsContainer'].forEach(id => {
+      const target = document.getElementById(id);
+      if (target) target.innerHTML = `<span style="color:var(--danger); font-size:0.82rem;">${t('js.groupsLoadError')}</span>`;
+    });
+  }
+}
+
+async function startEdit() {
+  let movie = allMovies.find(m => m.id === currentMovieId);
   if (!movie) return;
+  if (!movie._containers) {
+    try {
+      const r = await fetch(`${API}/movies/${currentMovieId}`);
+      if (r.ok) {
+        movie = await r.json();
+        const idx = allMovies.findIndex(m => m.id === currentMovieId);
+        if (idx >= 0) allMovies[idx] = { ...allMovies[idx], ...movie };
+      }
+    } catch (e) {}
+  }
 
   // Admin editing another user's movie → ask confirmation
   if (authEnabled && currentUserRole === 'admin' && movie.owner_id && movie.owner_id !== currentUserId) {
@@ -2936,70 +3002,7 @@ function startEdit() {
   // Populate group checkboxes
   _populateGroupCheckboxes(movie.group_ids || []);
   _renderEditContainerSummary(movie);
-
-  // Populate edition group field
-  const egId = movie.edition_group_id;
-  document.getElementById('editEditionGroupId').value = egId || '';
-  document.getElementById('editEditionGroupSearch').value = '';
-  const egDropdown = document.getElementById('editEditionGroupDropdown');
-  if (egDropdown) egDropdown.style.display = 'none';
-  const badge = document.getElementById('editEditionGroupBadge');
-  if (egId) {
-    // Look up group name from cache or fetch
-    const cached = _editionGroupCache.find(g => g.id === egId);
-    if (cached) {
-      document.getElementById('editEditionGroupName').textContent = cached.title;
-      badge.style.display = 'flex';
-    } else {
-      const _editingId = currentMovieId;
-      fetch(`${API}/edition-groups/${egId}`).then(r => r.json()).then(g => {
-        if (currentMovieId !== _editingId) return; // stale — user already opened another movie
-        document.getElementById('editEditionGroupName').textContent = g.title || '';
-        badge.style.display = 'flex';
-        _editionGroupCache.push(g); // cache it so next open is instant
-      }).catch(() => {});
-    }
-  } else {
-    badge.style.display = 'none';
-  }
-
-  // Populate super-group field
-  const sgId = movie.super_group_id;
-  const sgIdEl = document.getElementById('editSuperGroupId');
-  const sgSearch = document.getElementById('editSuperGroupSearch');
-  const sgBadge = document.getElementById('editSuperGroupBadge');
-  const sgDropdown = document.getElementById('editSuperGroupDropdown');
-  if (sgIdEl) sgIdEl.value = sgId || '';
-  if (sgSearch) sgSearch.value = '';
-  if (sgDropdown) sgDropdown.style.display = 'none';
-  if (sgId && sgBadge) {
-    fetch(`${API}/edition-groups/${sgId}`).then(r => r.ok ? r.json() : null).then(g => {
-      if (!g) return;
-      document.getElementById('editSuperGroupName').textContent = g.title || '';
-      sgBadge.style.display = 'flex';
-    }).catch(() => {});
-  } else if (sgBadge) {
-    sgBadge.style.display = 'none';
-  }
-
-  // Populate collection field
-  const colId = movie.collection_id;
-  const colIdEl = document.getElementById('editCollectionId');
-  const colSearch = document.getElementById('editCollectionSearch');
-  const colBadge = document.getElementById('editCollectionBadge');
-  const colDropdown = document.getElementById('editCollectionDropdown');
-  if (colIdEl) colIdEl.value = colId || '';
-  if (colSearch) colSearch.value = '';
-  if (colDropdown) colDropdown.style.display = 'none';
-  if (colId && colBadge) {
-    fetch(`${API}/collections/${colId}`).then(r => r.ok ? r.json() : null).then(c => {
-      if (!c) return;
-      document.getElementById('editCollectionName').textContent = c.title || '';
-      colBadge.style.display = 'flex';
-    }).catch(() => {});
-  } else if (colBadge) {
-    colBadge.style.display = 'none';
-  }
+  await _populateEditContainerSelectors(movie);
 
   document.getElementById('editStatus').className = 'status-msg';
   switchEditTab('general'); // initialize tab state before showing modal
@@ -3017,6 +3020,7 @@ function startEdit() {
     if (el) _editSnapshot[suffix] = el.value;
   }
   _editSnapshot._groups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
+  _editSnapshot._containers = _editContainerSnapshot();
   _editDirty = false;
 }
 
@@ -3031,6 +3035,7 @@ function _isEditDirty() {
   }
   const curGroups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
   if (curGroups !== (_editSnapshot._groups ?? '')) return true;
+  if (_editContainerSnapshot() !== (_editSnapshot._containers ?? '')) return true;
   return false;
 }
 
@@ -3055,29 +3060,15 @@ async function saveEdit() {
   }
   // Extra videos JSON
   payload.videos = _collectEditVideos();
-  // Edition group assignment
-  const egIdEl = document.getElementById('editEditionGroupId');
-  if (egIdEl) {
-    const egVal = egIdEl.value.trim();
-    payload.edition_group_id = egVal ? parseInt(egVal) : null;
-  }
-  // Super-group assignment
-  const sgIdEl = document.getElementById('editSuperGroupId');
-  if (sgIdEl) {
-    const sgVal = sgIdEl.value.trim();
-    payload.super_group_id = sgVal ? parseInt(sgVal) : null;
-  }
-  // Collection assignment
-  const colIdEl = document.getElementById('editCollectionId');
-  if (colIdEl) {
-    const colVal = colIdEl.value.trim();
-    payload.collection_id = colVal ? parseInt(colVal) : null;
-  }
+  const containerPayload = {
+    vault_ids: _checkedEditContainerIds('.edit-vault-cb'),
+    box_set_ids: _checkedEditContainerIds('.edit-boxset-cb'),
+    collection_ids: _checkedEditContainerIds('.edit-collection-cb'),
+  };
 
   // Collect selected group IDs from checkboxes
   const selectedGroupIds = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => parseInt(cb.value));
-  // Capture previous edition group for comparison after save
-  const _prevEgId = (allMovies.find(m => m.id === currentMovieId) || {}).edition_group_id ?? null;
+  const previousContainerSnapshot = _editSnapshot._containers ?? '';
 
   try {
     const r = await fetch(`${API}/movies/${currentMovieId}`, {
@@ -3087,6 +3078,20 @@ async function saveEdit() {
     });
     const d = await r.json();
     if (r.ok) {
+      let updatedContainers = null;
+      const cr = await fetch(`${API}/movies/${currentMovieId}/containers`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(containerPayload)
+      });
+      const cd = await cr.json();
+      if (!cr.ok) {
+        showStatus('editStatus', cd.error || t('js.saveError'), 'error');
+        btn.innerHTML = t('js.saveBtn');
+        btn.disabled = false;
+        return;
+      }
+      updatedContainers = cd.containers || null;
       // Update group assignments
       await fetch(`${API}/movies/${currentMovieId}/groups`, {
         method: 'PUT',
@@ -3098,7 +3103,7 @@ async function saveEdit() {
         showStatus('editStatus', t('js.queuedEdit'), 'info');
         // Update local cache so re-opening edit shows the queued values
         const idx = allMovies.findIndex(m => m.id === currentMovieId);
-        if (idx >= 0) allMovies[idx] = { ...allMovies[idx], ...payload, group_ids: selectedGroupIds };
+        if (idx >= 0) allMovies[idx] = { ...allMovies[idx], ...payload, ...cd.movie, _containers: updatedContainers, group_ids: selectedGroupIds };
         filterMovies();
         // Reset dirty state so cancel/back doesn't prompt about unsaved changes
         _editSnapshot = {};
@@ -3107,11 +3112,12 @@ async function saveEdit() {
           if (el) _editSnapshot[suffix] = el.value;
         }
         _editSnapshot._groups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
+        _editSnapshot._containers = _editContainerSnapshot();
         _editDirty = false;
       } else {
         // Update local cache
         const idx = allMovies.findIndex(m => m.id === currentMovieId);
-        if (idx >= 0) allMovies[idx] = { ...allMovies[idx], ...d };
+        if (idx >= 0) allMovies[idx] = { ...allMovies[idx], ...d, ...cd.movie, _containers: updatedContainers };
 
         showStatus('editStatus', t('js.saved'), 'success');
         // Stay in edit mode — update snapshot so fields are no longer dirty
@@ -3121,10 +3127,10 @@ async function saveEdit() {
           if (el) _editSnapshot[suffix] = el.value;
         }
         _editSnapshot._groups = [...document.querySelectorAll('.edit-group-cb:checked')].map(cb => cb.value).sort().join(',');
+        _editSnapshot._containers = _editContainerSnapshot();
         _editDirty = false;
-        _editionGroupCache = []; // Invalidate so next search fetches fresh member counts
-        // Reload full collection when edition group assignment changes in grouped view
-        if (groupEditionsEnabled && (payload.edition_group_id ?? null) !== _prevEgId) {
+        // Reload full collection when normalized container links changed in grouped view.
+        if (groupEditionsEnabled && _editSnapshot._containers !== previousContainerSnapshot) {
           loadCollection();
         } else {
           filterMovies();  // Update grid
@@ -3876,172 +3882,8 @@ function toggleEditionsDrawer(id) {
   drawer.style.display = 'block';
 }
 
-// Edition group autocomplete in edit modal
-let _editionGroupCache = [];
-
 function _isBoxSetGroup(g) {
   return g && (g.group_type === 'boxset' || (g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0);
-}
-
-async function searchEditionGroups(query) {
-  const dropdown = document.getElementById('editEditionGroupDropdown');
-  if (!query || query.length < 1) {
-    dropdown.style.display = 'none';
-    return;
-  }
-  if (!_editionGroupCache.length) {
-    try {
-      const r = await fetch(`${API}/edition-groups`);
-      _editionGroupCache = await r.json();
-    } catch(e) { _editionGroupCache = []; }
-  }
-  const q = query.toLowerCase();
-  const matches = _editionGroupCache.filter(g => !_isBoxSetGroup(g) && (g.title || '').toLowerCase().includes(q));
-  if (!matches.length) {
-    dropdown.innerHTML = `<div style="padding:10px 12px; font-size:0.82rem; color:var(--text-muted);">
-      <span style="cursor:pointer; color:var(--accent);" onclick="createEditionGroupFromSearch('${query.replace(/'/g,"\\'")}')">+ ${t('edit.editionGroupCreate')} "${query}"</span>
-    </div>`;
-  } else {
-    dropdown.innerHTML = matches.map(g => {
-      // Sum direct members + child vault members + loose box-set movies so
-      // box sets and nested groups show their full film count, not just the
-      // (often empty) direct edition_group_id link count.
-      const total = (g.member_count || 0) + (g.child_member_count || 0) + (g.loose_movie_count || 0);
-      return `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
-            onmousedown="selectEditionGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">
-        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">${total} ${t('edit.editionGroupMembers')}</span>
-       </div>`;
-    }).join('') + `<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent); cursor:pointer;"
-         onmousedown="createEditionGroupFromSearch('${query.replace(/'/g,"\\'")}')">+ ${t('edit.editionGroupCreate')} "${query}"</div>`;
-  }
-  dropdown.style.display = 'block';
-}
-
-function selectEditionGroup(id, name) {
-  document.getElementById('editEditionGroupId').value = id;
-  document.getElementById('editEditionGroupSearch').value = '';
-  document.getElementById('editEditionGroupDropdown').style.display = 'none';
-  const badge = document.getElementById('editEditionGroupBadge');
-  document.getElementById('editEditionGroupName').textContent = name;
-  badge.style.display = 'flex';
-}
-
-function unlinkEditionGroup() {
-  document.getElementById('editEditionGroupId').value = '';
-  document.getElementById('editEditionGroupSearch').value = '';
-  document.getElementById('editEditionGroupBadge').style.display = 'none';
-}
-
-async function createEditionGroupFromSearch(title) {
-  document.getElementById('editEditionGroupDropdown').style.display = 'none';
-  try {
-    const r = await fetch(`${API}/edition-groups`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, group_type: 'vault' })
-    });
-    const g = await r.json();
-    _editionGroupCache.push(g);
-    selectEditionGroup(g.id, g.title);
-  } catch(e) {}
-}
-
-async function searchSuperGroup(query) {
-  const dropdown = document.getElementById('editSuperGroupDropdown');
-  if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
-  try {
-    const r = await fetch(`${API}/edition-groups?q=${encodeURIComponent(query)}`);
-    const groups = await r.json();
-    const items = groups.filter(_isBoxSetGroup).slice(0, 8).map(g => {
-      // Box sets have no direct edition_group_id members; films live in child
-      // vaults (child_member_count) and loose box-set movies (loose_movie_count).
-      const total = (g.member_count || 0) + (g.child_member_count || 0) + (g.loose_movie_count || 0);
-      return `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
-            onmousedown="selectSuperGroup(${g.id}, '${(g.title||'').replace(/'/g,"\\'")}')">
-        ${g.title} <span style="color:var(--text-muted); font-size:0.76rem;">(${total})</span>
-       </div>`;
-    });
-    items.push(`<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:var(--accent2); cursor:pointer;"
-         onmousedown="createAndSelectSuperGroup('${query.replace(/'/g,"\\'")}')">+ ${t('edit.superGroupCreate', query)}</div>`);
-    dropdown.innerHTML = items.join('');
-    dropdown.style.display = 'block';
-  } catch(e) {}
-}
-
-async function createAndSelectSuperGroup(title) {
-  document.getElementById('editSuperGroupDropdown').style.display = 'none';
-  try {
-    const r = await fetch(`${API}/edition-groups`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ title, group_type: 'boxset' })
-    });
-    const g = await r.json();
-    selectSuperGroup(g.id, g.title);
-  } catch(e) {}
-}
-
-function selectSuperGroup(id, name) {
-  document.getElementById('editSuperGroupId').value = id;
-  document.getElementById('editSuperGroupSearch').value = '';
-  document.getElementById('editSuperGroupDropdown').style.display = 'none';
-  document.getElementById('editSuperGroupName').textContent = name;
-  document.getElementById('editSuperGroupBadge').style.display = 'flex';
-}
-
-function unlinkSuperGroup() {
-  document.getElementById('editSuperGroupId').value = '';
-  document.getElementById('editSuperGroupSearch').value = '';
-  document.getElementById('editSuperGroupBadge').style.display = 'none';
-}
-
-// ── Collection autocomplete in edit modal ──────────────────────────────────
-
-async function searchCollection(query) {
-  const dropdown = document.getElementById('editCollectionDropdown');
-  if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
-  try {
-    const r = await fetch(`${API}/collections?q=${encodeURIComponent(query)}`);
-    const cols = await r.json();
-    const items = cols.slice(0, 8).map(c => {
-      const total = (c.eg_movie_count || 0) + (c.loose_movie_count || 0) + (c.boxset_loose_count || 0);
-      return `<div style="padding:10px 12px; font-size:0.82rem; cursor:pointer; border-bottom:1px solid var(--border);"
-            onmousedown="selectCollection(${c.id}, '${(c.title||'').replace(/'/g,"\\'")}')">
-        ${c.title} <span style="color:var(--text-muted); font-size:0.76rem;">(${total})</span>
-       </div>`;
-    });
-    items.push(`<div style="padding:8px 12px; font-size:0.78rem; border-top:1px solid var(--border); color:#2ecc71; cursor:pointer;"
-         onmousedown="createAndSelectCollection('${query.replace(/'/g,"\\'")}')">+ ${t('edit.collectionCreate', query)}</div>`);
-    dropdown.innerHTML = items.join('');
-    dropdown.style.display = 'block';
-  } catch(e) {}
-}
-
-async function createAndSelectCollection(title) {
-  document.getElementById('editCollectionDropdown').style.display = 'none';
-  try {
-    const r = await fetch(`${API}/collections`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ title })
-    });
-    const c = await r.json();
-    selectCollection(c.id, c.title);
-  } catch(e) {}
-}
-
-function selectCollection(id, name) {
-  document.getElementById('editCollectionId').value = id;
-  document.getElementById('editCollectionSearch').value = '';
-  document.getElementById('editCollectionDropdown').style.display = 'none';
-  document.getElementById('editCollectionName').textContent = name;
-  document.getElementById('editCollectionBadge').style.display = 'flex';
-}
-
-function unlinkCollection() {
-  document.getElementById('editCollectionId').value = '';
-  document.getElementById('editCollectionSearch').value = '';
-  document.getElementById('editCollectionBadge').style.display = 'none';
 }
 
 // ── Group Management (admin panel) ───────────────────────────────────────────
@@ -4079,7 +3921,7 @@ async function loadGroupMgmtList(filter) {
 
         const totalMembers = (eg.member_count || 0) + (eg.loose_movie_count || 0) + (eg.child_member_count || 0);
         if (_gmFilter !== 'all' && _gmFilter !== type) continue;
-        items.push({ id: eg.id, title: eg.title, type, memberCount: totalMembers, src: 'eg' });
+        items.push({ id: eg.id, title: eg.title, barcode: eg.barcode || '', type, memberCount: totalMembers, src: 'eg' });
       }
     }
 
@@ -4115,6 +3957,10 @@ async function loadGroupMgmtList(filter) {
           <input type="text" value="${(item.title || '').replace(/"/g, '&quot;')}" style="flex:1; font-size:0.85rem; background:transparent; border:1px solid transparent; padding:4px 8px; border-radius:4px; color:var(--text);"
                  ${canManage ? `onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'" onchange="renameGroupMgmt('${item.src}', ${item.id}, this.value)"` : 'readonly'}
           >
+          ${item.src === 'eg' ? `<input type="text" value="${escHtml(item.barcode || '')}" placeholder="EAN" inputmode="numeric" aria-label="EAN barcode"
+                 style="width:150px; max-width:18vw; font-size:0.78rem; font-family:'DM Mono',monospace; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); padding:4px 8px; border-radius:4px; color:var(--text);"
+                 ${canManage ? `onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='rgba(255,255,255,0.08)'" onchange="updateGroupMgmtBarcode(${item.id}, this.value)"` : 'readonly'}
+          >` : ''}
           <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">${item.memberCount} film${item.memberCount !== 1 ? 's' : ''}</span>
           ${canManage ? `<button type="button" onclick="deleteGroupMgmt('${item.src}', ${item.id}, '${(item.title || '').replace(/'/g, "\\'")}')"
                   style="background:none; border:none; cursor:pointer; color:var(--danger); font-size:1rem; padding:4px;" title="Verwijderen">🗑</button>` : ''}
@@ -4140,9 +3986,16 @@ async function changeGroupMgmtType(id, groupType) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ group_type: groupType === 'boxset' ? 'boxset' : 'vault' })
   });
-  _editionGroupCache = [];
   await loadCollection();
   loadGroupMgmtList(_gmFilter);
+}
+
+async function updateGroupMgmtBarcode(id, barcode) {
+  await fetch(`${API}/edition-groups/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ barcode: (barcode || '').trim() })
+  });
 }
 
 async function deleteGroupMgmt(src, id, title) {

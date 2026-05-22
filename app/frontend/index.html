@@ -1822,43 +1822,16 @@
         </div>
         <div class="input-group full collectors-only">
           <label data-i18n="edit.editionGroup">Vault</label>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="editEditionGroupSearch" placeholder="Zoek of maak groep..." data-i18n-placeholder="edit.editionGroupPlaceholder"
-                   oninput="searchEditionGroups(this.value)" autocomplete="off" style="flex:1; min-width:160px;">
-            <span id="editEditionGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(232,197,71,.1); border:1px solid rgba(232,197,71,.3); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent);">
-              <span id="editEditionGroupName"></span>
-              <button type="button" onclick="unlinkEditionGroup()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
-            </span>
-          </div>
-          <div id="editEditionGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
-          <input type="hidden" id="editEditionGroupId">
+          <div id="editVaultsContainer" style="display:flex; flex-wrap:wrap; gap:8px; padding:4px 0;"></div>
         </div>
         <div class="input-group full collectors-only">
           <label data-i18n="edit.superGroup">Box Set</label>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="editSuperGroupSearch" placeholder="Zoek of maak box set..."
-                   oninput="searchSuperGroup(this.value)" autocomplete="off" style="flex:1; min-width:160px;" data-i18n-placeholder="edit.superGroupPlaceholder">
-            <span id="editSuperGroupBadge" style="display:none; align-items:center; gap:6px; background:rgba(124,106,247,.12); border:1px solid rgba(124,106,247,.35); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:var(--accent2);">
-              <span id="editSuperGroupName"></span>
-              <button type="button" onclick="unlinkSuperGroup()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
-            </span>
-          </div>
-          <div id="editSuperGroupDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
-          <input type="hidden" id="editSuperGroupId">
+          <div id="editBoxSetsContainer" style="display:flex; flex-wrap:wrap; gap:8px; padding:4px 0;"></div>
           <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.superGroupHelp">Koppel deze film direct aan een Box Set. Vaults en Box Sets bevatten alleen films.</div>
         </div>
         <div class="input-group full collectors-only">
           <label data-i18n="edit.collection">Collection (losse film)</label>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="editCollectionSearch" placeholder="Zoek of maak collection..."
-                   oninput="searchCollection(this.value)" autocomplete="off" style="flex:1; min-width:160px;" data-i18n-placeholder="edit.collectionPlaceholder">
-            <span id="editCollectionBadge" style="display:none; align-items:center; gap:6px; background:rgba(46,204,113,.12); border:1px solid rgba(46,204,113,.35); border-radius:8px; padding:4px 10px; font-size:0.8rem; color:#2ecc71;">
-              <span id="editCollectionName"></span>
-              <button type="button" onclick="unlinkCollection()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.9rem;padding:0;line-height:1;">✕</button>
-            </span>
-          </div>
-          <div id="editCollectionDropdown" style="display:none; position:relative; z-index:10; background:var(--surface2); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:160px; overflow-y:auto;"></div>
-          <input type="hidden" id="editCollectionId">
+          <div id="editCollectionsContainer" style="display:flex; flex-wrap:wrap; gap:8px; padding:4px 0;"></div>
           <div style="font-size:0.73rem; color:var(--text-muted); margin-top:4px;" data-i18n="edit.collectionHelp">Voeg deze film toe aan een collection die vaults, box sets en losse films groepeert.</div>
         </div>
         <div class="input-group full collectors-only" id="editContainerSummaryWrap" style="display:none;">

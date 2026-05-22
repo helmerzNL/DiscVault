@@ -3756,6 +3756,114 @@ def update_movie(movie_id):
     return jsonify(dict(movie))
 
 
+@app.route("/api/movies/<int:movie_id>/containers", methods=["PUT"])
+def update_movie_containers(movie_id):
+    data = request.json or {}
+    conn = get_db()
+    movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+    if not movie:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    if not _check_movie_owner(movie):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
+
+    def _ids(key):
+        out = []
+        for raw in data.get(key) or []:
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if value not in out:
+                out.append(value)
+        return out
+
+    vault_ids = _ids("vault_ids")
+    box_set_ids = _ids("box_set_ids")
+    collection_ids = _ids("collection_ids")
+
+    if vault_ids:
+        placeholders = ",".join("?" * len(vault_ids))
+        found = {
+            int(r["id"]) for r in conn.execute(
+                f"SELECT id FROM vaults WHERE id IN ({placeholders})",
+                vault_ids,
+            ).fetchall()
+        }
+        missing = [str(v) for v in vault_ids if v not in found]
+        if missing:
+            conn.close()
+            return jsonify({"error": f"Unknown vault id(s): {', '.join(missing)}"}), 400
+    if box_set_ids:
+        placeholders = ",".join("?" * len(box_set_ids))
+        found = {
+            int(r["id"]) for r in conn.execute(
+                f"SELECT id FROM box_sets WHERE id IN ({placeholders})",
+                box_set_ids,
+            ).fetchall()
+        }
+        missing = [str(v) for v in box_set_ids if v not in found]
+        if missing:
+            conn.close()
+            return jsonify({"error": f"Unknown box set id(s): {', '.join(missing)}"}), 400
+    if collection_ids:
+        placeholders = ",".join("?" * len(collection_ids))
+        found = {
+            int(r["id"]) for r in conn.execute(
+                f"SELECT id FROM collections WHERE id IN ({placeholders})",
+                collection_ids,
+            ).fetchall()
+        }
+        missing = [str(v) for v in collection_ids if v not in found]
+        if missing:
+            conn.close()
+            return jsonify({"error": f"Unknown collection id(s): {', '.join(missing)}"}), 400
+
+    conn.execute("DELETE FROM vault_movies WHERE movie_id=?", (movie_id,))
+    conn.execute("DELETE FROM box_set_movies WHERE movie_id=?", (movie_id,))
+    conn.execute("DELETE FROM collection_items WHERE item_type='movie' AND item_id=?", (movie_id,))
+
+    for vault_id in vault_ids:
+        _lock_edition_group_primary(conn, vault_id)
+        conn.execute(
+            "INSERT OR IGNORE INTO vault_movies (vault_id, movie_id) VALUES (?, ?)",
+            (vault_id, movie_id),
+        )
+    for box_set_id in box_set_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
+            (box_set_id, movie_id),
+        )
+    for collection_id in collection_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, 'movie', ?)",
+            (collection_id, movie_id),
+        )
+
+    conn.execute(
+        "UPDATE movies SET edition_group_id=?, super_group_id=?, collection_id=? WHERE id=?",
+        (
+            vault_ids[0] if vault_ids else None,
+            box_set_ids[0] if box_set_ids else None,
+            collection_ids[0] if collection_ids else None,
+            movie_id,
+        ),
+    )
+    _inherit_groups_from_container_siblings(conn, movie_id)
+    conn.commit()
+    updated = conn.execute("SELECT * FROM movies WHERE id=?", (movie_id,)).fetchone()
+    containers = _movie_container_summary(conn, movie_id)
+    conn.close()
+    add_log(
+        "containers",
+        "Movie normalized container links updated",
+        f"Movie ID: {movie_id}; Vaults: {len(vault_ids)}; Box Sets: {len(box_set_ids)}; Collections: {len(collection_ids)}",
+        "info",
+    )
+    return jsonify({"movie": dict(updated), "containers": containers})
+
+
 @app.route("/api/movies/<int:movie_id>/poster", methods=["POST"])
 def upload_movie_poster(movie_id):
     if "poster" not in request.files:
@@ -8259,6 +8367,7 @@ def list_edition_groups():
     conn = get_db()
     group_sql = """
             SELECT eg.*,
+                   COALESCE(bs.barcode, v.barcode, '') AS barcode,
                    COALESCE((SELECT COUNT(*) FROM vault_movies vm WHERE vm.vault_id = eg.id), 0) AS member_count,
                    COALESCE((SELECT COUNT(*) FROM edition_groups eg2 WHERE eg2.parent_group_id = eg.id), 0) AS child_group_count,
                    COALESCE((SELECT COUNT(*) FROM box_set_movies bsm WHERE bsm.box_set_id = eg.id), 0) AS loose_movie_count,
@@ -8269,6 +8378,8 @@ def list_edition_groups():
                        WHERE eg3.parent_group_id = eg.id
                    ), 0) AS child_member_count
             FROM edition_groups eg
+            LEFT JOIN vaults v ON v.id = eg.id
+            LEFT JOIN box_sets bs ON bs.id = eg.id
     """
     if q:
         rows = conn.execute(group_sql + " WHERE eg.title LIKE ? ORDER BY eg.title ASC", (f"%{q}%",)).fetchall()
@@ -8288,6 +8399,7 @@ def create_edition_group():
         return jsonify({"error": "title is required"}), 400
     conn = get_db()
     group_type = data.get("group_type") or "vault"
+    barcode = (data.get("barcode") or "").strip()
     if group_type not in ("vault", "boxset"):
         group_type = "vault"
     conn.execute(
@@ -8299,13 +8411,13 @@ def create_edition_group():
     gid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     if group_type == "boxset":
         conn.execute(
-            "INSERT OR IGNORE INTO box_sets (id, title, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?)",
-            (gid, title, data.get("tmdb_id") or "", data.get("imdb_id") or "", data.get("year") or "", gid, datetime.utcnow().isoformat())
+            "INSERT OR IGNORE INTO box_sets (id, title, barcode, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (gid, title, barcode, data.get("tmdb_id") or "", data.get("imdb_id") or "", data.get("year") or "", gid, datetime.utcnow().isoformat())
         )
     else:
         conn.execute(
-            "INSERT OR IGNORE INTO vaults (id, title, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?)",
-            (gid, title, data.get("tmdb_id") or "", data.get("imdb_id") or "", data.get("year") or "", gid, datetime.utcnow().isoformat())
+            "INSERT OR IGNORE INTO vaults (id, title, barcode, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (gid, title, barcode, data.get("tmdb_id") or "", data.get("imdb_id") or "", data.get("year") or "", gid, datetime.utcnow().isoformat())
         )
     conn.commit()
     row = conn.execute("SELECT * FROM edition_groups WHERE id=?", (gid,)).fetchone()
@@ -8473,8 +8585,19 @@ def get_edition_group(group_id):
             " WHERE super_group_id=? ORDER BY title ASC",
             (group_id,)
         ).fetchall()
+    barcode_row = conn.execute(
+        """
+        SELECT COALESCE(bs.barcode, v.barcode, '') AS barcode
+        FROM edition_groups eg
+        LEFT JOIN vaults v ON v.id = eg.id
+        LEFT JOIN box_sets bs ON bs.id = eg.id
+        WHERE eg.id=?
+        """,
+        (group_id,),
+    ).fetchone()
     conn.close()
     result = dict(row)
+    result["barcode"] = barcode_row["barcode"] if barcode_row else ""
     result["members"] = [dict(m) for m in members]
     result["loose_movies"] = [dict(m) for m in loose]
     result["child_groups"] = [dict(g) for g in child_groups]
@@ -8512,8 +8635,9 @@ def update_edition_group(group_id):
         fields["backdrop"] = data.get("backdrop")
     if "description" in data:
         fields["description"] = data.get("description")
+    barcode_update = (data.get("barcode") or "").strip() if "barcode" in data else None
     target_group_type = data.get("group_type") if data.get("group_type") in ("vault", "boxset") else None
-    if fields or target_group_type:
+    if fields or target_group_type or barcode_update is not None:
         if target_group_type:
             fields["group_type"] = target_group_type
         set_clause = ", ".join(f"{k}=?" for k in fields)
@@ -8539,6 +8663,28 @@ def update_edition_group(group_id):
                 "success",
             )
             _log_container_validation(conn, "container type conversion")
+        if barcode_update is not None:
+            active_type = target_group_type or row["group_type"] or "vault"
+            target_table = "box_sets" if active_type == "boxset" else "vaults"
+            barcode_cursor = conn.execute(f"UPDATE {target_table} SET barcode=? WHERE id=?", (barcode_update, group_id))
+            if barcode_cursor.rowcount == 0:
+                now = datetime.utcnow().isoformat()
+                if active_type == "boxset":
+                    conn.execute(
+                        "INSERT OR IGNORE INTO box_sets (id, title, barcode, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                        (group_id, fields.get("title") or row["title"], barcode_update, row["tmdb_id"] or "", row["imdb_id"] or "", row["year"] or "", group_id, now),
+                    )
+                else:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO vaults (id, title, barcode, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                        (group_id, fields.get("title") or row["title"], barcode_update, row["tmdb_id"] or "", row["imdb_id"] or "", row["year"] or "", group_id, now),
+                    )
+            _log_container_event(
+                conn,
+                "Container barcode updated",
+                f"ID: {group_id}; Title: {fields.get('title') or row['title']}; Barcode: {barcode_update or '-'}",
+                "info",
+            )
         if "collection_id" in fields:
             old_collection_id = row["collection_id"] if "collection_id" in row.keys() else None
             conn.execute(
@@ -8584,7 +8730,16 @@ def update_edition_group(group_id):
                 "info",
             )
         conn.commit()
-    updated = conn.execute("SELECT * FROM edition_groups WHERE id=?", (group_id,)).fetchone()
+    updated = conn.execute(
+        """
+        SELECT eg.*, COALESCE(bs.barcode, v.barcode, '') AS barcode
+        FROM edition_groups eg
+        LEFT JOIN vaults v ON v.id = eg.id
+        LEFT JOIN box_sets bs ON bs.id = eg.id
+        WHERE eg.id=?
+        """,
+        (group_id,),
+    ).fetchone()
     conn.close()
     return jsonify(dict(updated))
 
