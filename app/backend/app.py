@@ -2243,6 +2243,34 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
     return candidates[:30]
 
 
+def _log_bluray_box_set_proposal(barcode, proposal):
+    movies = (proposal or {}).get("movies") or []
+    if len(movies) < 2:
+        return
+    titles = []
+    for movie in movies:
+        if not isinstance(movie, dict):
+            continue
+        title = (movie.get("title") or "").strip()
+        if not title:
+            continue
+        year = (movie.get("year") or "").strip()
+        titles.append(f"{title} ({year})" if year else title)
+    if not titles:
+        return
+    box_set_title = (proposal.get("title") or "Unknown box set").strip()
+    detail = (
+        f"Barcode: {barcode}; Box Set: {box_set_title}; "
+        f"Movies found ({len(titles)}): {', '.join(titles)}"
+    )
+    add_log(
+        "lookup",
+        f"Blu-ray.com box-set found: \"{box_set_title}\" ({len(titles)} movies)",
+        detail,
+        "success",
+    )
+
+
 def _bluray_find_first_movie_url(query: str) -> str | None:
     """Search Blu-ray.com via their quicksearch AJAX endpoint and return the
     first movie detail URL, or None if nothing was found."""
@@ -4522,11 +4550,13 @@ def lookup(barcode):
             else:
                 _trace_add(attempts, "Blu-ray.com", "skipped", "spec enrichment uit")
 
+            box_set_proposal = (bluray_info or {}).get("box_set_proposal") if bluray_info else None
+            _log_bluray_box_set_proposal(barcode, box_set_proposal)
             add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
                     f"Backends: {_trace_summary(attempts)}", "success")
             yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
                               "tmdb_candidates": tmdb_candidates,
-                              "box_set_proposal": (bluray_info or {}).get("box_set_proposal") if bluray_info else None,
+                              "box_set_proposal": box_set_proposal,
                               "raw_title": raw_title or "",
                               "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
         else:
@@ -4620,6 +4650,8 @@ def _lookup_sync(barcode):
                     movie_info["content_ratings"] = json.dumps(cr, ensure_ascii=False)
                     if not movie_info.get("audience_rating") and cr.get("US"):
                         movie_info["audience_rating"] = cr["US"]
+            box_set_proposal = (bluray_info or {}).get("box_set_proposal") if bluray_info else None
+            _log_bluray_box_set_proposal(barcode, box_set_proposal)
             add_log(
                 "lookup",
                 f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
@@ -4627,7 +4659,7 @@ def _lookup_sync(barcode):
                 "success"
             )
             return jsonify({"status": "found", "movie": movie_info, "barcode": barcode,
-                            "box_set_proposal": (bluray_info or {}).get("box_set_proposal") if bluray_info else None,
+                            "box_set_proposal": box_set_proposal,
                             "detected_format": _detect_format_from_upc(raw_title or "")})
         add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
         return jsonify({"status": "not_found", "barcode": barcode, "raw_title": raw_title,
