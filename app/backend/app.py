@@ -2224,29 +2224,16 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
     )
     movie_info = dsoup.find(id="movie_info")
     search_root = movie_info or dsoup
-    bundle_text = search_root.find(string=lambda s: bool(s and bundle_anchor.search(str(s))))
-    if not bundle_text:
+    if not bundle_anchor.search(search_root.get_text(" ", strip=True)):
         return []
 
-    in_bundle_members = False
-    empty_steps_after_members = 0
-    for node in search_root.descendants:
-        if not in_bundle_members:
-            if node == bundle_text:
-                in_bundle_members = True
+    # Only the member tiles inside #movie_info belong to the bundle. Page
+    # navigation, genres and similar-movie blocks can also use /movies/ links.
+    for node in search_root.select('a.hoverlink[data-globalparentid][data-productid][href*="/movies/"]'):
+        if not is_bundle_tile(node):
             continue
-        if getattr(node, "name", None) == "a" and is_bundle_tile(node):
-            text = link_title(node)
-            add_candidate(text, link_year(text))
-            empty_steps_after_members = 0
-            continue
-        if candidates:
-            if getattr(node, "name", None) == "br":
-                empty_steps_after_members += 1
-            elif str(node).strip():
-                empty_steps_after_members += 1
-            if empty_steps_after_members > 80:
-                break
+        text = link_title(node)
+        add_candidate(text, link_year(text))
     return candidates[:30]
 
 
