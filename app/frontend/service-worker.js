@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v108";
+const SW_VERSION = "discvault-sw-v109";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;

@@ -157,6 +157,18 @@
           </div>
         </div>
 
+        <div id="boxSetProposal" style="display:none; margin-top:16px; padding:14px; border:1px solid var(--border); border-radius:8px; background:var(--surface2);">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;" data-i18n="scan.boxSetProposalTitle">Box-set gevonden</div>
+              <div id="boxSetProposalName" style="margin-top:4px; color:var(--text-muted); font-size:0.88rem;"></div>
+            </div>
+            <button class="btn btn-success" onclick="saveBoxSetProposal()" id="btnSaveBoxSetProposal" data-i18n="scan.boxSetProposalSave">Box-set + films aanmaken</button>
+          </div>
+          <div style="margin-top:10px; color:var(--text-muted); font-size:0.86rem;" data-i18n="scan.boxSetProposalDesc">Blu-ray.com lijkt een box-set te beschrijven. Maak de gevonden films los aan en koppel ze direct aan deze box-set.</div>
+          <div id="boxSetProposalList" style="margin-top:12px; display:grid; gap:6px;"></div>
+        </div>
+
         <div id="noResult" style="text-align:center; padding: 40px 0; color: var(--text-muted); font-size: 0.9rem;">
           <span data-i18n="scan.noResult">Scan een barcode of voer hem handmatig in</span>
         </div>

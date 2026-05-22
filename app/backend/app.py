@@ -544,6 +544,79 @@ def _movie_container_summary(conn, movie_id):
     }
 
 
+def _movie_ids_for_container(conn, item_type, item_id):
+    if item_type == "box_set":
+        rows = conn.execute(
+            "SELECT movie_id FROM box_set_movies WHERE box_set_id=?",
+            (item_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT movie_id FROM vault_movies WHERE vault_id=?",
+            (item_id,),
+        ).fetchall()
+    return [int(r["movie_id"]) for r in rows]
+
+
+def _movie_has_normalized_collection_path(conn, movie_id, collection_id):
+    if not collection_id:
+        return False
+    if conn.execute(
+        "SELECT 1 FROM collection_items WHERE collection_id=? AND item_type='movie' AND item_id=?",
+        (collection_id, movie_id),
+    ).fetchone():
+        return True
+    if conn.execute("""
+        SELECT 1
+        FROM collection_items ci
+        JOIN vault_movies vm ON vm.vault_id = ci.item_id
+        WHERE ci.collection_id=? AND ci.item_type='vault' AND vm.movie_id=?
+    """, (collection_id, movie_id)).fetchone():
+        return True
+    if conn.execute("""
+        SELECT 1
+        FROM collection_items ci
+        JOIN box_set_movies bsm ON bsm.box_set_id = ci.item_id
+        WHERE ci.collection_id=? AND ci.item_type='box_set' AND bsm.movie_id=?
+    """, (collection_id, movie_id)).fetchone():
+        return True
+    return False
+
+
+def _sync_container_member_collection_legacy(conn, item_type, item_id, old_collection_id, new_collection_id):
+    """Mirror container collection changes to legacy movies.collection_id.
+
+    The normalized collection_items table remains the source of truth. This
+    keeps older clients and per-movie detail views aligned while avoiding
+    clearing a movie that still reaches the same collection through another
+    direct, vault or box-set membership.
+    """
+    movie_ids = _movie_ids_for_container(conn, item_type, item_id)
+    if not movie_ids:
+        return 0
+    changed = 0
+    if old_collection_id and old_collection_id != new_collection_id:
+        for mid in movie_ids:
+            current = conn.execute(
+                "SELECT collection_id FROM movies WHERE id=?",
+                (mid,),
+            ).fetchone()
+            if current and current["collection_id"] == old_collection_id:
+                if not _movie_has_normalized_collection_path(conn, mid, old_collection_id):
+                    conn.execute("UPDATE movies SET collection_id=NULL WHERE id=?", (mid,))
+                    changed += 1
+    if new_collection_id:
+        for mid in movie_ids:
+            current = conn.execute(
+                "SELECT collection_id FROM movies WHERE id=?",
+                (mid,),
+            ).fetchone()
+            if current and current["collection_id"] != new_collection_id:
+                conn.execute("UPDATE movies SET collection_id=? WHERE id=?", (new_collection_id, mid))
+                changed += 1
+    return changed
+
+
 def _migrate_legacy_containers(conn):
     """Backfill the explicit container tables from the historical schema."""
     now = datetime.utcnow().isoformat()
@@ -2080,6 +2153,96 @@ def _extract_hdr_tokens(text: str) -> str:
     return ", ".join(tokens)
 
 
+def _clean_bluray_member_title(title: str) -> str:
+    title = re.sub(r"\s+", " ", title or "").strip()
+    title = re.sub(r"\s+(4K Ultra HD|4K UHD|Ultra HD|Blu-ray|DVD|Digital|Review)\b.*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+\((4K|Blu-ray|DVD|Ultra HD|Limited Edition|Collector'?s Edition)[^)]+\)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s*[\-|–|:]\s*(4K|Blu-ray|DVD|Ultra HD).*$", "", title, flags=re.I).strip()
+    return title.strip(" -–:|")
+
+
+def _looks_like_box_set_title(title: str) -> bool:
+    low = (title or "").lower()
+    markers = (
+        "box set", "boxset", "collection", "trilogy", "quadrilogy", "anthology",
+        "complete", "movie set", "film set", "movie collection", "film collection",
+        "limited edition set", "collector's set", "ultimate set",
+    )
+    return any(m in low for m in markers) or bool(re.search(r"\b\d+\s*(movie|film|disc)\b", low))
+
+
+def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
+    candidates = []
+
+    def add_candidate(raw_title, year=""):
+        clean = _clean_bluray_member_title(raw_title)
+        if not clean or len(clean) < 2:
+            return
+        low = clean.lower()
+        if low in {"review", "blu-ray", "4k", "dvd", "digital"}:
+            return
+        if _clean_bluray_member_title(box_set_title).lower() == low:
+            return
+        if any(existing["title"].lower() == low for existing in candidates):
+            return
+        candidates.append({"title": clean, "year": year or ""})
+
+    def add_candidates_from_node(node):
+        before_count = len(candidates)
+        for a in node.select('a[href*="/movies/"]'):
+            text = a.get_text(" ", strip=True)
+            href = a.get("href") or ""
+            if not text or ("blu-ray.com/movies/" not in href and not href.startswith("/movies/")):
+                continue
+            if re.search(r"\b(review|forum|deals|news|trailer)\b", text, re.I):
+                continue
+            ym = re.search(r"\((\d{4})\)", text)
+            add_candidate(text, ym.group(1) if ym else "")
+        return len(candidates) - before_count
+
+    bundle_anchor = re.compile(
+        r"(?:this|the)\s+blu-ray\s+bundle\s+includes\s+the\s+following\s+titles",
+        re.I,
+    )
+    bundle_text = dsoup.find(string=bundle_anchor)
+    if bundle_text:
+        parent = bundle_text.parent
+        if parent:
+            add_candidates_from_node(parent)
+            for sibling in parent.find_next_siblings(limit=12):
+                sibling_text = sibling.get_text(" ", strip=True)
+                if re.search(r"\b(similar|related|reviews?|forum|news|deals)\b", sibling_text, re.I):
+                    break
+                add_candidates_from_node(sibling)
+                if len(candidates) >= 30:
+                    break
+        if candidates:
+            return candidates[:30]
+
+    for a in dsoup.select('a[href*="/movies/"]'):
+        text = a.get_text(" ", strip=True)
+        href = a.get("href") or ""
+        if not text or ("blu-ray.com/movies/" not in href and not href.startswith("/movies/")):
+            continue
+        if re.search(r"\b(review|forum|deals|news|trailer)\b", text, re.I):
+            continue
+        year = ""
+        ym = re.search(r"\((\d{4})\)", text)
+        if ym:
+            year = ym.group(1)
+        add_candidate(text, year)
+
+    page_text = dsoup.get_text("\n", strip=True)
+    for m in re.finditer(r"(?:Includes|Contains|Films|Movies)\s*:?\s*\n+([^\n]+(?:\n+[^\n]+){0,8})", page_text, re.I):
+        block = m.group(1)
+        for part in re.split(r"\s*(?:,|;|\u2022|\||/|\n)\s*", block):
+            if part:
+                ym = re.search(r"\((\d{4})\)", part)
+                add_candidate(part, ym.group(1) if ym else "")
+
+    return candidates[:30]
+
+
 def _bluray_find_first_movie_url(query: str) -> str | None:
     """Search Blu-ray.com via their quicksearch AJAX endpoint and return the
     first movie detail URL, or None if nothing was found."""
@@ -2228,6 +2391,14 @@ def _bluray_parse_movie_page(detail_url: str) -> dict | None:
         "audio_tracks": audio_text,
         "subtitles": subs_text,
     }
+    members = _extract_bluray_box_set_members(dsoup, title)
+    if members and _looks_like_box_set_title(title):
+        out["box_set_proposal"] = {
+            "title": re.sub(r"\s+(4K Ultra HD|4K UHD|Blu-ray|DVD)\b.*$", "", title, flags=re.I).strip() or title,
+            "source": "Blu-ray.com",
+            "detail_url": detail_url,
+            "movies": members,
+        }
     return {k: v for k, v in out.items() if v}
 
 
@@ -3175,6 +3346,127 @@ def add_movie():
         conn.close()
         add_log("add", f"Duplicaat barcode: {data['barcode']}", f"Titel: {data['title']}", "warn")
         return jsonify({"error": "Barcode already exists"}), 409
+
+
+def _unique_box_set_member_barcode(conn, base_barcode, index):
+    clean = re.sub(r"[^A-Za-z0-9]", "", base_barcode or "")
+    if not clean:
+        clean = f"BOXSET{int(datetime.utcnow().timestamp() * 1000)}"
+    candidate = f"{clean}-BOX-{index:02d}"
+    if not conn.execute("SELECT 1 FROM movies WHERE barcode=?", (candidate,)).fetchone():
+        return candidate
+    candidate = f"{clean}-BOX-{index:02d}-{int(datetime.utcnow().timestamp() * 1000) % 1000000}"
+    if not conn.execute("SELECT 1 FROM movies WHERE barcode=?", (candidate,)).fetchone():
+        return candidate
+    return f"{clean}-BOX-{index:02d}-{uuid.uuid4().hex[:8].upper()}"
+
+
+def _movie_payload_from_box_set_member(member, fallback_format, box_set_title):
+    title = (member.get("title") or "").strip()
+    year = (member.get("year") or "").strip()
+    movie_info = None
+    try:
+        movie_info = lookup_movie_tmdb(title, year)
+    except Exception:
+        movie_info = None
+    if not movie_info:
+        try:
+            movie_info = lookup_movie_omdb(title=title)
+        except Exception:
+            movie_info = None
+    row = {col: "" for col, _ in SCHEMA_COLUMNS}
+    if movie_info:
+        for col, _ in SCHEMA_COLUMNS:
+            row[col] = movie_info.get(col, "") if movie_info.get(col, "") is not None else ""
+        if isinstance(movie_info.get("_content_ratings"), dict):
+            row["content_ratings"] = json.dumps(movie_info["_content_ratings"], ensure_ascii=False)
+    row["title"] = row.get("title") or title
+    row["year"] = row.get("year") or year
+    row["format"] = row.get("format") or fallback_format or "4K UHD"
+    row["box_set"] = box_set_title
+    return row
+
+
+@app.route("/api/box-set-proposals", methods=["POST"])
+def create_box_set_from_proposal():
+    data = request.json or {}
+    box_set_title = (data.get("box_set_title") or data.get("title") or "").strip()
+    members = data.get("movies") or []
+    if not box_set_title:
+        return jsonify({"error": "box_set_title is required"}), 400
+    if not isinstance(members, list) or not members:
+        return jsonify({"error": "movies are required"}), 400
+
+    conn = get_db()
+    created_movies = []
+    now = datetime.utcnow().isoformat()
+    owner_id = _get_current_user_id()
+    fallback_format = data.get("format") or "4K UHD"
+    barcode = data.get("barcode") or ""
+    try:
+        conn.execute(
+            "INSERT INTO edition_groups (title, tmdb_id, imdb_id, year, created_at, group_type) VALUES (?,?,?,?,?,?)",
+            (box_set_title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
+             data.get("year") or "", now, "boxset")
+        )
+        box_set_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT OR IGNORE INTO box_sets (id, title, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?)",
+            (box_set_id, box_set_title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
+             data.get("year") or "", box_set_id, now)
+        )
+
+        cols = [c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]
+        colstr = ", ".join(cols)
+        places = ", ".join(f":{c}" for c in cols)
+        for idx, member in enumerate(members[:50], start=1):
+            if not isinstance(member, dict):
+                continue
+            title = (member.get("title") or "").strip()
+            if not title:
+                continue
+            row = _movie_payload_from_box_set_member(member, fallback_format, box_set_title)
+            row["barcode"] = _unique_box_set_member_barcode(conn, barcode, idx)
+            row["title"] = row["title"] or title
+            row["super_group_id"] = box_set_id
+            row["added_at"] = datetime.utcnow().isoformat()
+            row["owner_id"] = owner_id
+            if not row.get("poster_file") and row.get("poster"):
+                row["poster_file"] = download_poster(row["poster"]) or ""
+            conn.execute(f"INSERT INTO movies ({colstr}) VALUES ({places})", row)
+            movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id, sort_order) VALUES (?,?,?)",
+                (box_set_id, movie_id, idx)
+            )
+            created_movies.append({**row, "id": movie_id})
+
+        if not created_movies:
+            conn.rollback()
+            return jsonify({"error": "No valid movie titles found in proposal"}), 400
+
+        conn.execute(
+            "UPDATE edition_groups SET primary_movie_id=? WHERE id=?",
+            (created_movies[0]["id"], box_set_id)
+        )
+        _log_container_event(
+            conn,
+            "Box Set created from Blu-ray.com proposal",
+            f"Box Set ID: {box_set_id}; Title: {box_set_title}; Movies created: {len(created_movies)}; Source barcode: {barcode or '-'}",
+            "success",
+        )
+        conn.commit()
+        box_set = conn.execute("SELECT * FROM edition_groups WHERE id=?", (box_set_id,)).fetchone()
+        return jsonify({
+            "ok": True,
+            "box_set": dict(box_set) if box_set else {"id": box_set_id, "title": box_set_title},
+            "movies": created_movies,
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
 
 @app.route("/api/movies/<int:movie_id>", methods=["PUT"])
@@ -4191,6 +4483,7 @@ def lookup(barcode):
             _trace_add(attempts, "UPCItemDB", "partial", "title-only fallback")
 
         # 4. Blu-ray.com barcode fallback
+        bluray_info = None
         if not movie_info and _is_bluray_scrape_enabled():
             yield emit(5, "Blu-ray.com", "searching", f"barcode={barcode}")
             bluray_info = lookup_movie_bluray_by_barcode(barcode)
@@ -4204,6 +4497,12 @@ def lookup(barcode):
                 movie_info["hdr"] = bluray_info.get("hdr", "")
                 movie_info["audio_tracks"] = bluray_info.get("audio_tracks", "")
                 movie_info["subtitles"] = bluray_info.get("subtitles", "")
+        elif movie_info and _is_bluray_scrape_enabled():
+            try:
+                bluray_info = lookup_movie_bluray_by_barcode(barcode)
+                _trace_add(attempts, "Blu-ray.com", "hit" if bluray_info else "miss", f"barcode={barcode}")
+            except Exception as ex:
+                _trace_add(attempts, "Blu-ray.com", "error", f"barcode={barcode}", str(ex))
         elif not movie_info:
             _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
 
@@ -4227,6 +4526,7 @@ def lookup(barcode):
                     f"Backends: {_trace_summary(attempts)}", "success")
             yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
                               "tmdb_candidates": tmdb_candidates,
+                              "box_set_proposal": (bluray_info or {}).get("box_set_proposal") if bluray_info else None,
                               "raw_title": raw_title or "",
                               "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
         else:
@@ -4281,6 +4581,7 @@ def _lookup_sync(barcode):
             movie_info = {f: "" for f in ALL_FIELDS}
             movie_info["title"] = raw_title
             _trace_add(attempts, "UPCItemDB", "partial", "title-only fallback")
+        bluray_info = None
         if not movie_info and _is_bluray_scrape_enabled():
             bluray_info = lookup_movie_bluray_by_barcode(barcode)
             _trace_add(attempts, "Blu-ray.com", "hit" if bluray_info else "miss", f"barcode={barcode}")
@@ -4292,6 +4593,12 @@ def _lookup_sync(barcode):
                 movie_info["hdr"] = bluray_info.get("hdr", "")
                 movie_info["audio_tracks"] = bluray_info.get("audio_tracks", "")
                 movie_info["subtitles"] = bluray_info.get("subtitles", "")
+        elif movie_info and _is_bluray_scrape_enabled():
+            try:
+                bluray_info = lookup_movie_bluray_by_barcode(barcode)
+                _trace_add(attempts, "Blu-ray.com", "hit" if bluray_info else "miss", f"barcode={barcode}")
+            except Exception as ex:
+                _trace_add(attempts, "Blu-ray.com", "error", f"barcode={barcode}", str(ex))
         elif not movie_info:
             _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
         if movie_info:
@@ -4320,6 +4627,7 @@ def _lookup_sync(barcode):
                 "success"
             )
             return jsonify({"status": "found", "movie": movie_info, "barcode": barcode,
+                            "box_set_proposal": (bluray_info or {}).get("box_set_proposal") if bluray_info else None,
                             "detected_format": _detect_format_from_upc(raw_title or "")})
         add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
         return jsonify({"status": "not_found", "barcode": barcode, "raw_title": raw_title,
@@ -7999,16 +8307,30 @@ def update_edition_group(group_id):
             )
             _log_container_validation(conn, "container type conversion")
         if "collection_id" in fields:
+            old_collection_id = row["collection_id"] if "collection_id" in row.keys() else None
             conn.execute(
                 "DELETE FROM collection_items WHERE item_type IN ('vault', 'box_set') AND item_id=?",
                 (group_id,)
             )
+            item_type = "box_set" if conn.execute("SELECT 1 FROM box_sets WHERE id=?", (group_id,)).fetchone() else "vault"
             if fields["collection_id"]:
-                item_type = "box_set" if conn.execute("SELECT 1 FROM box_sets WHERE id=?", (group_id,)).fetchone() else "vault"
                 conn.execute(
                     "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, ?, ?)",
                     (int(fields["collection_id"]), item_type, group_id)
                 )
+            member_updates = _sync_container_member_collection_legacy(
+                conn,
+                item_type,
+                group_id,
+                old_collection_id,
+                fields["collection_id"],
+            )
+            _log_container_event(
+                conn,
+                "Container collection membership synchronized",
+                f"Container ID: {group_id}; Type: {item_type}; Old collection: {old_collection_id or '-'}; New collection: {fields['collection_id'] or '-'}; Member movies updated: {member_updates}",
+                "info",
+            )
         if "parent_group_id" in fields:
             old_parent_group_id = row["parent_group_id"] if "parent_group_id" in row.keys() else None
             if old_parent_group_id:

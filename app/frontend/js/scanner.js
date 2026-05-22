@@ -3,6 +3,7 @@ let _usingNative = false;
 let _nativeStream = null;
 let _nativeTimer = null;
 let _detectedFormat = '';   // format detected from UPC/EAN title, persists across candidate selection
+let currentBoxSetProposal = null;
 
 function _supportsNativeDetector() {
   return typeof BarcodeDetector !== 'undefined';
@@ -293,6 +294,7 @@ async function doLookup(barcode) {
   document.getElementById('movieResult').style.display = 'none';
   document.getElementById('noResult').style.display = 'none';
   document.getElementById('tmdbCandidates').style.display = 'none';
+  hideBoxSetProposal();
 
   try {
     const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
@@ -341,6 +343,9 @@ async function doLookup(barcode) {
       const fmtLabel = _detectedFormat ? ` · ${_detectedFormat}` : '';
       showStatus('scanStatus', t('js.movieFound') + fmtLabel, 'success');
       displayMovieResult(finalData.movie, barcode, false, _detectedFormat);
+      if (finalData.box_set_proposal && finalData.box_set_proposal.movies && finalData.box_set_proposal.movies.length) {
+        displayBoxSetProposal(finalData.box_set_proposal, barcode, _detectedFormat);
+      }
       if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
         displayTmdbCandidates(finalData.tmdb_candidates, barcode);
       }
@@ -369,8 +374,88 @@ async function doLookup(barcode) {
   }
 }
 
+function _escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
+function hideBoxSetProposal() {
+  currentBoxSetProposal = null;
+  const panel = document.getElementById('boxSetProposal');
+  if (panel) panel.style.display = 'none';
+}
+
+function displayBoxSetProposal(proposal, barcode, detectedFormat) {
+  const movies = (proposal.movies || []).filter(m => m && m.title).slice(0, 50);
+  if (!movies.length) {
+    hideBoxSetProposal();
+    return;
+  }
+  currentBoxSetProposal = {
+    box_set_title: proposal.title || proposal.name || currentMovieData.title || `Box Set ${barcode}`,
+    barcode,
+    format: detectedFormat || currentMovieData.format || '4K UHD',
+    source: proposal.source || 'Blu-ray.com',
+    detail_url: proposal.detail_url || '',
+    movies
+  };
+
+  const nameEl = document.getElementById('boxSetProposalName');
+  const listEl = document.getElementById('boxSetProposalList');
+  const panel = document.getElementById('boxSetProposal');
+  const btn = document.getElementById('btnSaveBoxSetProposal');
+  if (!nameEl || !listEl || !panel || !btn) return;
+
+  nameEl.textContent = currentBoxSetProposal.box_set_title;
+  listEl.innerHTML = movies.map((m, idx) => `
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); font-size:0.88rem;">
+      <span style="width:24px; color:var(--text-muted); text-align:right;">${idx + 1}</span>
+      <strong style="flex:1; min-width:0;">${_escapeHtml(m.title)}</strong>
+      ${m.year ? `<span class="tag">${_escapeHtml(m.year)}</span>` : ''}
+    </div>
+  `).join('');
+  btn.disabled = false;
+  btn.textContent = t('scan.boxSetProposalSave');
+  panel.style.display = 'block';
+}
+
+async function saveBoxSetProposal() {
+  if (!currentBoxSetProposal) return;
+  const btn = document.getElementById('btnSaveBoxSetProposal');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> ' + t('scan.boxSetProposalSaving');
+  }
+  try {
+    const r = await fetch(`${API}/box-set-proposals`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentBoxSetProposal)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || t('js.saveFailed'));
+    showStatus('scanStatus', t('scan.boxSetProposalSaved', d.box_set.title, d.movies.length), 'success');
+    document.getElementById('movieResult').style.display = 'none';
+    document.getElementById('noResult').style.display = 'block';
+    hideBoxSetProposal();
+    if (typeof loadStats === 'function') loadStats();
+    if (typeof loadCollection === 'function') loadCollection();
+  } catch(e) {
+    showStatus('scanStatus', t('js.error', e.message), 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = t('scan.boxSetProposalSave');
+    }
+  }
+}
+
 function displayTmdbCandidates(candidates, barcode) {
-  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const esc = _escapeHtml;
   const safeBarcode = String(barcode).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   document.getElementById('tmdbCandidateList').innerHTML = candidates.map(c => `
     <div class="tmdb-candidate-card" onclick="selectTmdbCandidate('${c.tmdb_id}','${safeBarcode}')">
@@ -578,4 +663,3 @@ function supplementMovie() {
     }
   }
 }
-
