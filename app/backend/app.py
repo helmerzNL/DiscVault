@@ -22,7 +22,6 @@ from urllib.parse import quote_plus, quote
 from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g, stream_with_context, redirect
 from flask_cors import CORS
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from PIL import Image, ImageOps, UnidentifiedImageError
 from bs4 import BeautifulSoup
 from cryptography.fernet import Fernet
@@ -33,76 +32,35 @@ from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.x509 import load_der_x509_certificate
 from cryptography.hazmat.primitives.asymmetric.ec import SECP256R1, EllipticCurvePublicNumbers
 
-app = Flask(__name__)
-CORS(app, supports_credentials=True)
-
-DB_PATH    = os.environ.get("DB_PATH",    "/data/discvault.db")
-POSTER_DIR = os.environ.get("POSTER_DIR", "/data/posters")
-PROFILE_DIR = os.environ.get("PROFILE_DIR", "/data/profiles")
-BACKUP_DIR = os.environ.get("BACKUP_DIR", "/data/backups")
-AVATAR_DIR = os.environ.get("AVATAR_DIR", "/data/avatars")
-_OMDB_API_KEY_ENV = os.environ.get("OMDB_API_KEY", "")
-_TMDB_API_KEY_ENV = os.environ.get("TMDB_API_KEY", "")
-
-class _LiveKey:
-    """String-like object that reads API key from DB on every access, falling back
-    to the env-var value supplied at startup. Lets OMDB_API_KEY / TMDB_API_KEY
-    work transparently whether the key was set via .env or the settings UI."""
-    def __init__(self, db_setting: str, env_fallback: str):
-        self._db_setting  = db_setting
-        self._env_fallback = env_fallback
-    def _resolve(self) -> str:
-        try:
-            with sqlite3.connect(DB_PATH) as _c:
-                row = _c.execute("SELECT value FROM settings WHERE key=?", (self._db_setting,)).fetchone()
-            if row and row[0]:
-                return row[0].strip()
-        except Exception:
-            pass
-        return self._env_fallback
-    def __bool__(self):        return bool(self._resolve())
-    def __str__(self):         return self._resolve()
-    def __repr__(self):        return repr(self._resolve())
-    def __format__(self, fmt): return format(self._resolve(), fmt)
-    def __eq__(self, other):   return self._resolve() == other
-    def __hash__(self):        return hash(self._resolve())
-
-OMDB_API_KEY = _LiveKey("omdb_api_key", _OMDB_API_KEY_ENV)
-TMDB_API_KEY = _LiveKey("tmdb_api_key", _TMDB_API_KEY_ENV)
-# DiscVault supported languages — used for multilingual TMDb title/plot lookups
-TMDB_LANGUAGES = [("nl", "nl-NL"), ("fr", "fr-FR"), ("de", "de-DE"), ("es", "es-ES"), ("pt", "pt-PT"), ("it", "it-IT")]
-RATING_COUNTRIES = {"US", "GB", "CA", "NL", "FR", "DE", "ES", "PT", "IT"}
-MCP_API_KEY   = os.environ.get("MCP_API_KEY", "")
-JWT_SECRET    = os.environ.get("JWT_SECRET", secrets.token_hex(32))
-RP_ID         = os.environ.get("RP_ID", "localhost")
-RP_NAME       = os.environ.get("RP_NAME", "DiscVault")
-# RP_ORIGINS accepts a comma-separated list of allowed origins, e.g.:
-#   RP_ORIGINS=https://discvault.eu,https://discvault.nl
-# Legacy single-value RP_ORIGIN is also supported.
-_rp_origins_raw = os.environ.get("RP_ORIGINS") or os.environ.get("RP_ORIGIN", "http://localhost:6080")
-RP_ORIGINS    = [o.strip().rstrip("/") for o in _rp_origins_raw.split(",") if o.strip()]
-RP_ORIGIN     = RP_ORIGINS[0]  # primary origin (used in registration)
-OMDB_ENABLED_DEFAULT = os.environ.get("OMDB_ENABLED", "true").strip().lower() == "true"
-TMDB_ENABLED_DEFAULT = os.environ.get("TMDB_ENABLED", "true").strip().lower() == "true"
-BLURAY_SCRAPE_ENABLED_DEFAULT = os.environ.get("BLURAY_SCRAPE_ENABLED", "false").strip().lower() == "true"
-BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT = os.environ.get("BLURAYDISCDE_SCRAPE_ENABLED", "false").strip().lower() == "true"
-APP_TZ = os.environ.get("TZ", "Europe/Amsterdam").strip() or "Europe/Amsterdam"
+try:
+    from .config import (
+        AVATAR_DIR, BACKUP_DIR, BLURAY_SCRAPE_ENABLED_DEFAULT,
+        BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT, DB_PATH, JWT_SECRET, MCP_API_KEY,
+        OMDB_API_KEY, OMDB_ENABLED_DEFAULT, POSTER_DIR, PROFILE_DIR,
+        RATING_COUNTRIES, RP_ID, RP_NAME, RP_ORIGIN, RP_ORIGINS, TMDB_API_KEY,
+        TMDB_ENABLED_DEFAULT, TMDB_LANGUAGES, local_now, local_now_iso,
+    )
+    from .db import get_db
+    from .logging_utils import add_log
+except ImportError:  # pragma: no cover - supports running app.py directly
+    from config import (
+        AVATAR_DIR, BACKUP_DIR, BLURAY_SCRAPE_ENABLED_DEFAULT,
+        BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT, DB_PATH, JWT_SECRET, MCP_API_KEY,
+        OMDB_API_KEY, OMDB_ENABLED_DEFAULT, POSTER_DIR, PROFILE_DIR,
+        RATING_COUNTRIES, RP_ID, RP_NAME, RP_ORIGIN, RP_ORIGINS, TMDB_API_KEY,
+        TMDB_ENABLED_DEFAULT, TMDB_LANGUAGES, local_now, local_now_iso,
+    )
+    from db import get_db
+    from logging_utils import add_log
 
 
-def local_now() -> datetime:
-    """Return timezone-aware local datetime using TZ from environment.
-
-    Falls back to system local time when TZ is invalid.
-    """
-    try:
-        return datetime.now(ZoneInfo(APP_TZ))
-    except Exception:
-        return datetime.now().astimezone()
+def _make_flask_app():
+    flask_app = Flask(__name__)
+    CORS(flask_app, supports_credentials=True)
+    return flask_app
 
 
-def local_now_iso() -> str:
-    """ISO-8601 local timestamp with offset for persisted logs."""
-    return local_now().isoformat(timespec="seconds")
+app = _make_flask_app()
 
 def _set_import_cancel(import_id: str, value: bool):
     if not import_id:
@@ -294,6 +252,163 @@ SCHEMA_COLUMNS = [
 
 # Fields allowed in INSERT/UPDATE (everything except id and added_at handling)
 ALL_FIELDS = [col for col, _ in SCHEMA_COLUMNS if col not in ("barcode", "added_at")]
+
+
+def _init_container_tables(conn):
+    """Create the explicit container model used by vaults, box sets and collections.
+
+    Legacy edition_groups/movie columns are still kept for older clients, but
+    these tables are the normalized shape: vaults and box sets contain movies;
+    collections contain movies, vaults and box sets.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vaults (
+            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+            title                   TEXT NOT NULL,
+            tmdb_id                 TEXT,
+            imdb_id                 TEXT,
+            year                    TEXT,
+            primary_movie_id        INTEGER,
+            badge_label             TEXT,
+            backdrop                TEXT,
+            description             TEXT,
+            poster_file             TEXT,
+            legacy_edition_group_id INTEGER UNIQUE,
+            created_at              TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vault_movies (
+            vault_id   INTEGER NOT NULL,
+            movie_id   INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (vault_id, movie_id),
+            FOREIGN KEY (vault_id) REFERENCES vaults(id) ON DELETE CASCADE,
+            FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS box_sets (
+            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+            title                   TEXT NOT NULL,
+            tmdb_id                 TEXT,
+            imdb_id                 TEXT,
+            year                    TEXT,
+            primary_movie_id        INTEGER,
+            badge_label             TEXT,
+            backdrop                TEXT,
+            description             TEXT,
+            poster_file             TEXT,
+            legacy_edition_group_id INTEGER UNIQUE,
+            created_at              TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS box_set_movies (
+            box_set_id INTEGER NOT NULL,
+            movie_id    INTEGER NOT NULL,
+            sort_order  INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (box_set_id, movie_id),
+            FOREIGN KEY (box_set_id) REFERENCES box_sets(id) ON DELETE CASCADE,
+            FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS collection_items (
+            collection_id INTEGER NOT NULL,
+            item_type     TEXT NOT NULL CHECK(item_type IN ('movie', 'vault', 'box_set')),
+            item_id       INTEGER NOT NULL,
+            sort_order    INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (collection_id, item_type, item_id),
+            FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_vault_movies_movie ON vault_movies(movie_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_box_set_movies_movie ON box_set_movies(movie_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_items_item ON collection_items(item_type, item_id)")
+
+
+def _migrate_legacy_containers(conn):
+    """Backfill the explicit container tables from the historical schema."""
+    now = datetime.utcnow().isoformat()
+
+    # A legacy edition_group is a box set when it was marked as such, has child
+    # groups, or has loose movies linked through movies.super_group_id.
+    boxset_ids = {
+        r[0] for r in conn.execute("""
+            SELECT eg.id
+            FROM edition_groups eg
+            WHERE COALESCE(eg.group_type, 'vault') = 'boxset'
+               OR EXISTS (SELECT 1 FROM edition_groups child WHERE child.parent_group_id = eg.id)
+               OR EXISTS (SELECT 1 FROM movies m WHERE m.super_group_id = eg.id)
+        """).fetchall()
+    }
+
+    for r in conn.execute("SELECT * FROM edition_groups").fetchall():
+        table = "box_sets" if r[0] in boxset_ids else "vaults"
+        conn.execute(f"""
+            INSERT OR IGNORE INTO {table}
+                (id, title, tmdb_id, imdb_id, year, primary_movie_id, badge_label,
+                 backdrop, description, poster_file, legacy_edition_group_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            r[0], r[3], r[1], r[2], r[4], r[5],
+            r[7] if len(r) > 7 else None,
+            r[10] if len(r) > 10 else None,
+            r[11] if len(r) > 11 else None,
+            r[12] if len(r) > 12 else None,
+            r[0], r[6] or now,
+        ))
+
+    conn.execute("""
+        INSERT OR IGNORE INTO vault_movies (vault_id, movie_id)
+        SELECT v.id, m.id
+        FROM vaults v
+        JOIN movies m ON m.edition_group_id = v.legacy_edition_group_id
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id)
+        SELECT bs.id, m.id
+        FROM box_sets bs
+        JOIN movies m ON m.super_group_id = bs.legacy_edition_group_id
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id)
+        SELECT bs.id, m.id
+        FROM box_sets bs
+        JOIN movies m ON m.edition_group_id = bs.legacy_edition_group_id
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id)
+        SELECT bs.id, m.id
+        FROM box_sets bs
+        JOIN edition_groups child ON child.parent_group_id = bs.legacy_edition_group_id
+        JOIN movies m ON m.edition_group_id = child.id
+    """)
+
+    conn.execute("""
+        INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id)
+        SELECT m.collection_id, 'movie', m.id
+        FROM movies m
+        JOIN collections c ON c.id = m.collection_id
+        WHERE m.collection_id IS NOT NULL
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id)
+        SELECT eg.collection_id, 'vault', v.id
+        FROM edition_groups eg
+        JOIN vaults v ON v.legacy_edition_group_id = eg.id
+        JOIN collections c ON c.id = eg.collection_id
+        WHERE eg.collection_id IS NOT NULL
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id)
+        SELECT eg.collection_id, 'box_set', bs.id
+        FROM edition_groups eg
+        JOIN box_sets bs ON bs.legacy_edition_group_id = eg.id
+        JOIN collections c ON c.id = eg.collection_id
+        WHERE eg.collection_id IS NOT NULL
+    """)
 
 
 def init_db():
@@ -738,6 +853,9 @@ def init_db():
     if "poster_file" not in col_cols:
         conn.execute("ALTER TABLE collections ADD COLUMN poster_file TEXT")
 
+    _init_container_tables(conn)
+    _migrate_legacy_containers(conn)
+
     # Digital library sources (Plex / Jellyfin)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS digital_library_sources (
@@ -884,12 +1002,6 @@ def seed_default_roles():
     conn.close()
 
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 seed_default_roles()
 
 
@@ -914,28 +1026,6 @@ def _merge_video_updates(movie, info, updates):
     if new_trailer:
         updates["trailer_url"] = new_trailer
     updates["videos"] = json.dumps(merged) if merged else ""
-
-
-# ---------------------------------------------------------------------------
-# Logging helper
-# ---------------------------------------------------------------------------
-
-def add_log(category: str, message: str, detail: str = "", level: str = "info",
-            user_id: str = None):
-    """Write a structured log entry to the database.
-    Levels: info, warn, error, success
-    Categories: import, refresh, lookup, add, delete, scan, api, general, mcp
-    """
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute(
-            "INSERT INTO logs (timestamp, level, category, message, detail, user_id) VALUES (?,?,?,?,?,?)",
-            (local_now_iso(), level, category, message, detail or "", user_id)
-        )
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass  # Never let logging break the app
 
 
 # ---------------------------------------------------------------------------
@@ -2758,6 +2848,22 @@ def add_movie():
             "SELECT * FROM movies WHERE barcode = ?", (data["barcode"],)
         ).fetchone()
         movie_id = movie["id"]
+        if row.get("edition_group_id"):
+            conn.execute(
+                "INSERT OR IGNORE INTO vault_movies (vault_id, movie_id) VALUES (?, ?)",
+                (int(row["edition_group_id"]), movie_id)
+            )
+        if row.get("super_group_id"):
+            conn.execute(
+                "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
+                (int(row["super_group_id"]), movie_id)
+            )
+        if row.get("collection_id"):
+            conn.execute(
+                "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, 'movie', ?)",
+                (int(row["collection_id"]), movie_id)
+            )
+        conn.commit()
 
         # Sync cast/crew if tmdb_id is available
         tmdb_id = data.get("tmdb_id") or (movie["tmdb_id"] if movie else "")
@@ -2867,6 +2973,39 @@ def update_movie(movie_id):
         f"UPDATE movies SET {set_clause} WHERE id = ?",
         list(updates.values()) + [movie_id]
     )
+    if "edition_group_id" in updates:
+        if existing.get("edition_group_id"):
+            conn.execute(
+                "DELETE FROM vault_movies WHERE vault_id=? AND movie_id=?",
+                (int(existing["edition_group_id"]), movie_id)
+            )
+        if updates.get("edition_group_id"):
+            conn.execute(
+                "INSERT OR IGNORE INTO vault_movies (vault_id, movie_id) VALUES (?, ?)",
+                (int(updates["edition_group_id"]), movie_id)
+            )
+    if "super_group_id" in updates:
+        if existing.get("super_group_id"):
+            conn.execute(
+                "DELETE FROM box_set_movies WHERE box_set_id=? AND movie_id=?",
+                (int(existing["super_group_id"]), movie_id)
+            )
+        if updates.get("super_group_id"):
+            conn.execute(
+                "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
+                (int(updates["super_group_id"]), movie_id)
+            )
+    if "collection_id" in updates:
+        if existing.get("collection_id"):
+            conn.execute(
+                "DELETE FROM collection_items WHERE collection_id=? AND item_type='movie' AND item_id=?",
+                (int(existing["collection_id"]), movie_id)
+            )
+        if updates.get("collection_id"):
+            conn.execute(
+                "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, 'movie', ?)",
+                (int(updates["collection_id"]), movie_id)
+            )
     # If any container linkage changed, copy the container's existing group
     # memberships onto this movie so it joins the set in lock-step.
     container_fields = ("edition_group_id", "super_group_id", "collection_id")
@@ -4556,6 +4695,54 @@ def _get_container_sibling_ids(conn, movie_id):
     ).fetchone()
     if not row:
         return sibling_ids
+
+    # New normalized memberships.
+    vault_ids = [r["vault_id"] for r in conn.execute(
+        "SELECT vault_id FROM vault_movies WHERE movie_id=?", (movie_id,)
+    ).fetchall()]
+    box_set_ids = [r["box_set_id"] for r in conn.execute(
+        "SELECT box_set_id FROM box_set_movies WHERE movie_id=?", (movie_id,)
+    ).fetchall()]
+    for vid in vault_ids:
+        for r in conn.execute("SELECT movie_id FROM vault_movies WHERE vault_id=?", (vid,)).fetchall():
+            sibling_ids.add(r["movie_id"])
+    for bid in box_set_ids:
+        for r in conn.execute("SELECT movie_id FROM box_set_movies WHERE box_set_id=?", (bid,)).fetchall():
+            sibling_ids.add(r["movie_id"])
+
+    collection_ids = {
+        r["collection_id"] for r in conn.execute(
+            "SELECT collection_id FROM collection_items WHERE item_type='movie' AND item_id=?",
+            (movie_id,)
+        ).fetchall()
+    }
+    if vault_ids:
+        placeholders = ",".join("?" * len(vault_ids))
+        collection_ids.update(r["collection_id"] for r in conn.execute(
+            f"SELECT collection_id FROM collection_items WHERE item_type='vault' AND item_id IN ({placeholders})",
+            vault_ids
+        ).fetchall())
+    if box_set_ids:
+        placeholders = ",".join("?" * len(box_set_ids))
+        collection_ids.update(r["collection_id"] for r in conn.execute(
+            f"SELECT collection_id FROM collection_items WHERE item_type='box_set' AND item_id IN ({placeholders})",
+            box_set_ids
+        ).fetchall())
+
+    for cid in collection_ids:
+        for r in conn.execute(
+            "SELECT item_type, item_id FROM collection_items WHERE collection_id=?",
+            (cid,)
+        ).fetchall():
+            if r["item_type"] == "movie":
+                sibling_ids.add(r["item_id"])
+            elif r["item_type"] == "vault":
+                for vm in conn.execute("SELECT movie_id FROM vault_movies WHERE vault_id=?", (r["item_id"],)).fetchall():
+                    sibling_ids.add(vm["movie_id"])
+            elif r["item_type"] == "box_set":
+                for bm in conn.execute("SELECT movie_id FROM box_set_movies WHERE box_set_id=?", (r["item_id"],)).fetchall():
+                    sibling_ids.add(bm["movie_id"])
+
     eg_id = row["edition_group_id"]
     sg_id = row["super_group_id"]
     col_id = row["collection_id"]
@@ -6525,6 +6712,10 @@ def bulk_assign_collection():
         conn.close()
         return jsonify({"error": "Collection not found"}), 404
     for mid in movie_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, 'movie', ?)",
+            (int(col_id), int(mid))
+        )
         conn.execute("UPDATE movies SET collection_id=? WHERE id=?", (col_id, int(mid)))
     conn.commit()
     for mid in movie_ids:
@@ -6543,10 +6734,14 @@ def bulk_assign_boxset():
     if not movie_ids or not sg_id:
         return jsonify({"error": "movie_ids and super_group_id required"}), 400
     conn = get_db()
-    if not conn.execute("SELECT 1 FROM edition_groups WHERE id=?", (sg_id,)).fetchone():
+    if not conn.execute("SELECT 1 FROM box_sets WHERE id=? UNION SELECT 1 FROM edition_groups WHERE id=?", (sg_id, sg_id)).fetchone():
         conn.close()
         return jsonify({"error": "Box-Set not found"}), 404
     for mid in movie_ids:
+        conn.execute(
+            "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
+            (int(sg_id), int(mid))
+        )
         conn.execute("UPDATE movies SET super_group_id=? WHERE id=?", (int(sg_id), int(mid)))
     conn.commit()
     for mid in movie_ids:
@@ -7493,17 +7688,16 @@ def list_collections():
     conn = get_db()
     col_sql = """
             SELECT c.*,
-                   (SELECT COUNT(*) FROM edition_groups eg WHERE eg.collection_id = c.id) AS group_count,
-                   (SELECT COUNT(*) FROM movies m WHERE m.collection_id = c.id) AS loose_movie_count,
-                   (SELECT COUNT(*) FROM movies m WHERE m.edition_group_id IN (
-                       SELECT id FROM edition_groups WHERE collection_id = c.id
-                       UNION ALL
-                       SELECT eg2.id FROM edition_groups eg2
-                       WHERE eg2.parent_group_id IN (SELECT id FROM edition_groups WHERE collection_id = c.id)
-                   )) AS eg_movie_count,
-                   (SELECT COUNT(*) FROM movies m WHERE m.super_group_id IN (
-                       SELECT id FROM edition_groups WHERE collection_id = c.id
-                   )) AS boxset_loose_count
+                   (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id AND ci.item_type IN ('vault', 'box_set')) AS group_count,
+                   (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id AND ci.item_type = 'movie') AS loose_movie_count,
+                   (SELECT COUNT(DISTINCT vm.movie_id)
+                      FROM collection_items ci
+                      JOIN vault_movies vm ON vm.vault_id = ci.item_id
+                     WHERE ci.collection_id = c.id AND ci.item_type = 'vault') AS eg_movie_count,
+                   (SELECT COUNT(DISTINCT bsm.movie_id)
+                      FROM collection_items ci
+                      JOIN box_set_movies bsm ON bsm.box_set_id = ci.item_id
+                     WHERE ci.collection_id = c.id AND ci.item_type = 'box_set') AS boxset_loose_count
             FROM collections c
     """
     if q:
@@ -7541,35 +7735,60 @@ def get_collection(col_id):
     if not row:
         conn.close()
         return jsonify({"error": "Not found"}), 404
-    # Member edition_groups
+    # Member containers. Kept under the edition_groups key for the existing UI.
     egs = conn.execute(
-        "SELECT id, title, badge_label, parent_group_id FROM edition_groups WHERE collection_id=? ORDER BY title ASC",
-        (col_id,)
+        """
+        SELECT v.id, v.title, v.badge_label, NULL AS parent_group_id, 'vault' AS group_type
+        FROM collection_items ci
+        JOIN vaults v ON v.id = ci.item_id
+        WHERE ci.collection_id=? AND ci.item_type='vault'
+        UNION ALL
+        SELECT bs.id, bs.title, bs.badge_label, NULL AS parent_group_id, 'boxset' AS group_type
+        FROM collection_items ci
+        JOIN box_sets bs ON bs.id = ci.item_id
+        WHERE ci.collection_id=? AND ci.item_type='box_set'
+        ORDER BY title ASC
+        """,
+        (col_id, col_id)
     ).fetchall()
     # Loose movies directly linked to this collection
     loose = conn.execute(
-        "SELECT id, title, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies WHERE collection_id=? ORDER BY title ASC",
+        """
+        SELECT m.id, m.title, m.year, m.poster_file, m.poster, m.backdrop, m.backdrops, m.trailer_url, m.videos
+        FROM collection_items ci
+        JOIN movies m ON m.id = ci.item_id
+        WHERE ci.collection_id=? AND ci.item_type='movie'
+        ORDER BY m.title ASC
+        """,
         (col_id,)
     ).fetchall()
-    # Also gather backdrops from all movies linked via edition_groups
-    eg_ids = [eg["id"] for eg in egs]
-    eg_movies = []
-    if eg_ids:
-        placeholders = ",".join("?" * len(eg_ids))
-        # Include movies in:
-        #  - direct edition_groups of this collection
-        #  - child vaults whose parent_group_id is one of those edition_groups
-        #  - loose box-set movies linked via super_group_id
-        eg_movies = conn.execute(
-            f"SELECT DISTINCT id, title, year, poster_file, poster, backdrop, backdrops, trailer_url, videos"
-            f" FROM movies"
-            f" WHERE edition_group_id IN ({placeholders})"
-            f"    OR edition_group_id IN ("
-            f"        SELECT id FROM edition_groups WHERE parent_group_id IN ({placeholders})"
-            f"    )"
-            f"    OR super_group_id IN ({placeholders})"
-            f" ORDER BY title ASC",
-            eg_ids + eg_ids + eg_ids
+    # Also gather backdrops from all movies linked via vaults and box sets.
+    eg_movies = conn.execute(
+        """
+        SELECT DISTINCT m.id, m.title, m.year, m.poster_file, m.poster, m.backdrop, m.backdrops, m.trailer_url, m.videos
+        FROM collection_items ci
+        JOIN vault_movies vm ON ci.item_type='vault' AND vm.vault_id = ci.item_id
+        JOIN movies m ON m.id = vm.movie_id
+        WHERE ci.collection_id=?
+        UNION
+        SELECT DISTINCT m.id, m.title, m.year, m.poster_file, m.poster, m.backdrop, m.backdrops, m.trailer_url, m.videos
+        FROM collection_items ci
+        JOIN box_set_movies bsm ON ci.item_type='box_set' AND bsm.box_set_id = ci.item_id
+        JOIN movies m ON m.id = bsm.movie_id
+        WHERE ci.collection_id=?
+        ORDER BY title ASC
+        """,
+        (col_id, col_id)
+    ).fetchall()
+    if not egs and not loose and not eg_movies:
+        # Fallback for databases that have not been backfilled for any reason.
+        egs = conn.execute(
+            "SELECT id, title, badge_label, parent_group_id FROM edition_groups WHERE collection_id=? ORDER BY title ASC",
+            (col_id,)
+        ).fetchall()
+        loose = conn.execute(
+            "SELECT id, title, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies WHERE collection_id=? ORDER BY title ASC",
+            (col_id,)
         ).fetchall()
     conn.close()
     result = dict(row)
@@ -7616,6 +7835,7 @@ def delete_collection(col_id):
     if err: return err
     conn = get_db()
     # Unlink all members
+    conn.execute("DELETE FROM collection_items WHERE collection_id=?", (col_id,))
     conn.execute("UPDATE edition_groups SET collection_id=NULL WHERE collection_id=?", (col_id,))
     conn.execute("UPDATE movies SET collection_id=NULL WHERE collection_id=?", (col_id,))
     conn.execute("DELETE FROM collections WHERE id=?", (col_id,))
@@ -7680,6 +7900,17 @@ def create_edition_group():
     )
     conn.commit()
     gid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    if group_type == "boxset":
+        conn.execute(
+            "INSERT OR IGNORE INTO box_sets (id, title, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?)",
+            (gid, title, data.get("tmdb_id") or "", data.get("imdb_id") or "", data.get("year") or "", gid, datetime.utcnow().isoformat())
+        )
+    else:
+        conn.execute(
+            "INSERT OR IGNORE INTO vaults (id, title, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?)",
+            (gid, title, data.get("tmdb_id") or "", data.get("imdb_id") or "", data.get("year") or "", gid, datetime.utcnow().isoformat())
+        )
+    conn.commit()
     row = conn.execute("SELECT * FROM edition_groups WHERE id=?", (gid,)).fetchone()
     conn.close()
     return jsonify(dict(row)), 201
@@ -7693,19 +7924,37 @@ def get_edition_group(group_id):
         conn.close()
         return jsonify({"error": "Not found"}), 404
     members = conn.execute(
-        "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies"
-        " WHERE edition_group_id=? ORDER BY format ASC",
+        """
+        SELECT m.id, m.title, m.edition_type, m.format, m.year, m.poster_file, m.poster, m.backdrop, m.backdrops, m.trailer_url, m.videos
+        FROM vault_movies vm
+        JOIN movies m ON m.id = vm.movie_id
+        WHERE vm.vault_id=?
+        ORDER BY vm.sort_order ASC, m.format ASC
+        """,
         (group_id,)
     ).fetchall()
     loose = conn.execute(
-        "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies"
-        " WHERE super_group_id=? ORDER BY title ASC",
+        """
+        SELECT m.id, m.title, m.edition_type, m.format, m.year, m.poster_file, m.poster, m.backdrop, m.backdrops, m.trailer_url, m.videos
+        FROM box_set_movies bsm
+        JOIN movies m ON m.id = bsm.movie_id
+        WHERE bsm.box_set_id=?
+        ORDER BY bsm.sort_order ASC, m.title ASC
+        """,
         (group_id,)
     ).fetchall()
-    child_groups = conn.execute(
-        "SELECT id, title, badge_label FROM edition_groups WHERE parent_group_id=? ORDER BY title ASC",
-        (group_id,)
-    ).fetchall()
+    child_groups = []
+    if not members and not loose:
+        members = conn.execute(
+            "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies"
+            " WHERE edition_group_id=? ORDER BY format ASC",
+            (group_id,)
+        ).fetchall()
+        loose = conn.execute(
+            "SELECT id, title, edition_type, format, year, poster_file, poster, backdrop, backdrops, trailer_url, videos FROM movies"
+            " WHERE super_group_id=? ORDER BY title ASC",
+            (group_id,)
+        ).fetchall()
     conn.close()
     result = dict(row)
     result["members"] = [dict(m) for m in members]
@@ -7751,6 +8000,37 @@ def update_edition_group(group_id):
             f"UPDATE edition_groups SET {set_clause} WHERE id=?",
             list(fields.values()) + [group_id]
         )
+        shared = {k: v for k, v in fields.items() if k in (
+            "title", "primary_movie_id", "tmdb_id", "imdb_id", "year",
+            "badge_label", "backdrop", "description"
+        )}
+        if shared:
+            shared_clause = ", ".join(f"{k}=?" for k in shared)
+            conn.execute(f"UPDATE vaults SET {shared_clause} WHERE id=?", list(shared.values()) + [group_id])
+            conn.execute(f"UPDATE box_sets SET {shared_clause} WHERE id=?", list(shared.values()) + [group_id])
+        if "collection_id" in fields:
+            conn.execute(
+                "DELETE FROM collection_items WHERE item_type IN ('vault', 'box_set') AND item_id=?",
+                (group_id,)
+            )
+            if fields["collection_id"]:
+                item_type = "box_set" if conn.execute("SELECT 1 FROM box_sets WHERE id=?", (group_id,)).fetchone() else "vault"
+                conn.execute(
+                    "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, ?, ?)",
+                    (int(fields["collection_id"]), item_type, group_id)
+                )
+        if "parent_group_id" in fields:
+            old_parent_group_id = row["parent_group_id"] if "parent_group_id" in row.keys() else None
+            if old_parent_group_id:
+                conn.execute(
+                    "DELETE FROM box_set_movies WHERE box_set_id=? AND movie_id IN (SELECT movie_id FROM vault_movies WHERE vault_id=?)",
+                    (old_parent_group_id, group_id)
+                )
+            if fields["parent_group_id"]:
+                conn.execute("""
+                    INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id)
+                    SELECT ?, movie_id FROM vault_movies WHERE vault_id=?
+                """, (int(fields["parent_group_id"]), group_id))
         conn.commit()
     updated = conn.execute("SELECT * FROM edition_groups WHERE id=?", (group_id,)).fetchone()
     conn.close()
@@ -7762,7 +8042,20 @@ def delete_edition_group(group_id):
     err = _require_admin()
     if err: return err
     conn = get_db()
+    group_meta = conn.execute("SELECT parent_group_id FROM edition_groups WHERE id=?", (group_id,)).fetchone()
+    if group_meta and group_meta["parent_group_id"]:
+        conn.execute(
+            "DELETE FROM box_set_movies WHERE box_set_id=? AND movie_id IN (SELECT movie_id FROM vault_movies WHERE vault_id=?)",
+            (int(group_meta["parent_group_id"]), group_id)
+        )
+    conn.execute("DELETE FROM vault_movies WHERE vault_id=?", (group_id,))
+    conn.execute("DELETE FROM box_set_movies WHERE box_set_id=?", (group_id,))
+    conn.execute("DELETE FROM collection_items WHERE item_type IN ('vault', 'box_set') AND item_id=?", (group_id,))
+    conn.execute("DELETE FROM vaults WHERE id=?", (group_id,))
+    conn.execute("DELETE FROM box_sets WHERE id=?", (group_id,))
     conn.execute("UPDATE movies SET edition_group_id=NULL WHERE edition_group_id=?", (group_id,))
+    conn.execute("UPDATE movies SET super_group_id=NULL WHERE super_group_id=?", (group_id,))
+    conn.execute("UPDATE edition_groups SET parent_group_id=NULL WHERE parent_group_id=?", (group_id,))
     conn.execute("DELETE FROM edition_groups WHERE id=?", (group_id,))
     conn.commit()
     conn.close()
@@ -7912,8 +8205,28 @@ def add_edition_group_member(group_id):
     # Pin the current representative before adding new members so the
     # vault keeps showing its existing poster.
     _lock_edition_group_primary(conn, group_id)
+    group_meta = conn.execute(
+        "SELECT parent_group_id, group_type FROM edition_groups WHERE id=?",
+        (group_id,)
+    ).fetchone()
     for mid in movie_ids:
-        conn.execute("UPDATE movies SET edition_group_id=? WHERE id=?", (group_id, mid))
+        if group_meta and group_meta["group_type"] == "boxset":
+            conn.execute(
+                "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
+                (group_id, int(mid))
+            )
+            conn.execute("UPDATE movies SET super_group_id=? WHERE id=?", (group_id, mid))
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO vault_movies (vault_id, movie_id) VALUES (?, ?)",
+                (group_id, int(mid))
+            )
+            conn.execute("UPDATE movies SET edition_group_id=? WHERE id=?", (group_id, mid))
+            if group_meta and group_meta["parent_group_id"]:
+                conn.execute(
+                    "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
+                    (int(group_meta["parent_group_id"]), int(mid))
+                )
     conn.commit()
     # New members inherit the vault's existing group memberships.
     for mid in movie_ids:
@@ -7928,8 +8241,29 @@ def remove_edition_group_member(group_id, movie_id):
     err = _require_admin()
     if err: return err
     conn = get_db()
+    group_meta = conn.execute(
+        "SELECT parent_group_id, group_type FROM edition_groups WHERE id=?",
+        (group_id,)
+    ).fetchone()
+    conn.execute(
+        "DELETE FROM vault_movies WHERE vault_id=? AND movie_id=?",
+        (group_id, movie_id)
+    )
+    conn.execute(
+        "DELETE FROM box_set_movies WHERE box_set_id=? AND movie_id=?",
+        (group_id, movie_id)
+    )
+    if group_meta and group_meta["parent_group_id"]:
+        conn.execute(
+            "DELETE FROM box_set_movies WHERE box_set_id=? AND movie_id=?",
+            (int(group_meta["parent_group_id"]), movie_id)
+        )
     conn.execute(
         "UPDATE movies SET edition_group_id=NULL WHERE id=? AND edition_group_id=?",
+        (movie_id, group_id)
+    )
+    conn.execute(
+        "UPDATE movies SET super_group_id=NULL WHERE id=? AND super_group_id=?",
         (movie_id, group_id)
     )
     conn.commit()
@@ -8355,6 +8689,15 @@ def collection_compare():
         "physical_only": physical_only,
         "digital_only": digital_only,
     })
+
+
+def create_app():
+    """Return the configured Flask app.
+
+    Routes are still registered in this module for now; this gives WSGI/tests a
+    stable factory entrypoint while we continue extracting domains into modules.
+    """
+    return app
 
 
 if __name__ == "__main__":
