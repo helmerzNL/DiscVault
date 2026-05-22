@@ -56,6 +56,9 @@ struct ServerSetupView: View {
                 }
             }
         }
+        .onAppear {
+            serverURL = appState.serverURL
+        }
     }
 
     private var isTesting: Bool {
@@ -312,12 +315,10 @@ struct ServerSetupView: View {
     }
 
     private func saveAndContinue() {
-        KeychainService.save(serverURL, for: KeychainService.serverURL)
+        appState.updateServerURL(serverURL)
         if isEditMode {
-            appState.serverURL = serverURL
             dismiss()
         } else {
-            appState.serverURL = serverURL
             appState.phase = .login
         }
     }

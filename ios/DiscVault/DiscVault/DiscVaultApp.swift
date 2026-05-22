@@ -3,12 +3,15 @@ import SwiftUI
 @main
 struct DiscVaultApp: App {
     @StateObject private var appState = AppStateManager()
+    @State private var languageManager = AppLanguageManager()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(appState)
                 .environment(appState.apiClient)
+                .environment(languageManager)
+                .environment(\.locale, languageManager.locale)
                 .preferredColorScheme(.dark)
         }
     }

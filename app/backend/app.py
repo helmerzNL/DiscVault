@@ -5719,6 +5719,7 @@ ALLOWED_PREF_KEYS = {
     "lang", "rating_country", "collectors_mode", "group_editions",
     "digital_badges", "digital_badge_filter",
     "show_local_title", "show_search_button", "show_auto_videos",
+    "detailed_actor",
 }
 
 @app.route("/api/auth/preferences", methods=["GET"])

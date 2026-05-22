@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9691C0482FBF8EB30000CC96 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C0472FBF8EB30000CC96 /* SettingsView.swift */; };
+		9691C04A2FBF8EEE0000CC96 /* SettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C0492FBF8EEE0000CC96 /* SettingsModels.swift */; };
+		9691C04C2FBF90C20000CC96 /* AddMovieModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C04B2FBF90C20000CC96 /* AddMovieModels.swift */; };
+		9691C04F2FBF91340000CC96 /* AddView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C04E2FBF91340000CC96 /* AddView.swift */; };
+		9691C0512FBF913A0000CC96 /* AppLanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C0502FBF913A0000CC96 /* AppLanguageManager.swift */; };
+		9691C0532FBF92FE0000CC96 /* AdminModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C0522FBF92FE0000CC96 /* AdminModels.swift */; };
+		9691C0552FBF94310000CC96 /* NativeTranslations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C0542FBF94310000CC96 /* NativeTranslations.swift */; };
+		9691C0572FBFA28B0000CC96 /* Person.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C0562FBFA28B0000CC96 /* Person.swift */; };
+		9691C0592FBFA2BE0000CC96 /* PersonDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9691C0582FBFA2BE0000CC96 /* PersonDetailView.swift */; };
 		BB010000000000000000BB01 /* DiscVaultApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA010000000000000000AA01 /* DiscVaultApp.swift */; };
 		BB020000000000000000BB02 /* AppStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA020000000000000000AA02 /* AppStateManager.swift */; };
 		BB030000000000000000BB03 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA030000000000000000AA03 /* ContentView.swift */; };
@@ -34,6 +43,15 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		9691C0472FBF8EB30000CC96 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		9691C0492FBF8EEE0000CC96 /* SettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsModels.swift; sourceTree = "<group>"; };
+		9691C04B2FBF90C20000CC96 /* AddMovieModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddMovieModels.swift; sourceTree = "<group>"; };
+		9691C04E2FBF91340000CC96 /* AddView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddView.swift; sourceTree = "<group>"; };
+		9691C0502FBF913A0000CC96 /* AppLanguageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageManager.swift; sourceTree = "<group>"; };
+		9691C0522FBF92FE0000CC96 /* AdminModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminModels.swift; sourceTree = "<group>"; };
+		9691C0542FBF94310000CC96 /* NativeTranslations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTranslations.swift; sourceTree = "<group>"; };
+		9691C0562FBFA28B0000CC96 /* Person.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Person.swift; sourceTree = "<group>"; };
+		9691C0582FBFA2BE0000CC96 /* PersonDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonDetailView.swift; sourceTree = "<group>"; };
 		AA000000000000000000AA00 /* DiscVault.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DiscVault.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA010000000000000000AA01 /* DiscVaultApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscVaultApp.swift; sourceTree = "<group>"; };
 		AA020000000000000000AA02 /* AppStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateManager.swift; sourceTree = "<group>"; };
@@ -73,6 +91,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9691C0462FBF8EB30000CC96 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				9691C0472FBF8EB30000CC96 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		9691C04D2FBF91340000CC96 /* Add */ = {
+			isa = PBXGroup;
+			children = (
+				9691C04E2FBF91340000CC96 /* AddView.swift */,
+			);
+			path = Add;
+			sourceTree = "<group>";
+		};
 		GG000000000000000000GG00 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -92,6 +126,8 @@
 				GG040000000000000000GG04 /* ViewModels */,
 				GG050000000000000000GG05 /* Views */,
 				GG0E0000000000000000GG0E /* Resources */,
+				9691C0502FBF913A0000CC96 /* AppLanguageManager.swift */,
+				9691C0542FBF94310000CC96 /* NativeTranslations.swift */,
 			);
 			path = DiscVault;
 			sourceTree = "<group>";
@@ -103,6 +139,10 @@
 				AA050000000000000000AA05 /* User.swift */,
 				AA060000000000000000AA06 /* Group.swift */,
 				AA070000000000000000AA07 /* WatchlistItem.swift */,
+				9691C0492FBF8EEE0000CC96 /* SettingsModels.swift */,
+				9691C04B2FBF90C20000CC96 /* AddMovieModels.swift */,
+				9691C0522FBF92FE0000CC96 /* AdminModels.swift */,
+				9691C0562FBFA28B0000CC96 /* Person.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -137,6 +177,8 @@
 				GG0B0000000000000000GG0B /* Profile */,
 				GG0C0000000000000000GG0C /* Onboarding */,
 				GG0D0000000000000000GG0D /* Admin */,
+				9691C0462FBF8EB30000CC96 /* Settings */,
+				9691C04D2FBF91340000CC96 /* Add */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -155,6 +197,7 @@
 				AA0E0000000000000000AA0E /* MovieCardView.swift */,
 				AA0F0000000000000000AA0F /* CollectionView.swift */,
 				AA100000000000000000AA10 /* MovieDetailView.swift */,
+				9691C0582FBFA2BE0000CC96 /* PersonDetailView.swift */,
 			);
 			path = Collection;
 			sourceTree = "<group>";
@@ -296,19 +339,27 @@
 			files = (
 				BB010000000000000000BB01 /* DiscVaultApp.swift in Sources */,
 				BB020000000000000000BB02 /* AppStateManager.swift in Sources */,
+				9691C04F2FBF91340000CC96 /* AddView.swift in Sources */,
 				BB030000000000000000BB03 /* ContentView.swift in Sources */,
+				9691C0552FBF94310000CC96 /* NativeTranslations.swift in Sources */,
 				BB040000000000000000BB04 /* Movie.swift in Sources */,
 				BB050000000000000000BB05 /* User.swift in Sources */,
 				BB060000000000000000BB06 /* Group.swift in Sources */,
 				BB070000000000000000BB07 /* WatchlistItem.swift in Sources */,
 				BB080000000000000000BB08 /* APIClient.swift in Sources */,
 				BB090000000000000000BB09 /* KeychainService.swift in Sources */,
+				9691C0572FBFA28B0000CC96 /* Person.swift in Sources */,
+				9691C04A2FBF8EEE0000CC96 /* SettingsModels.swift in Sources */,
+				9691C0482FBF8EB30000CC96 /* SettingsView.swift in Sources */,
 				BB0A0000000000000000BB0A /* AuthViewModel.swift in Sources */,
 				BB0B0000000000000000BB0B /* CollectionViewModel.swift in Sources */,
 				BB0C0000000000000000BB0C /* MovieDetailViewModel.swift in Sources */,
+				9691C04C2FBF90C20000CC96 /* AddMovieModels.swift in Sources */,
 				BB0D0000000000000000BB0D /* LoginView.swift in Sources */,
 				BB0E0000000000000000BB0E /* MovieCardView.swift in Sources */,
 				BB0F0000000000000000BB0F /* CollectionView.swift in Sources */,
+				9691C0512FBF913A0000CC96 /* AppLanguageManager.swift in Sources */,
+				9691C0592FBFA2BE0000CC96 /* PersonDetailView.swift in Sources */,
 				BB100000000000000000BB10 /* MovieDetailView.swift in Sources */,
 				BB110000000000000000BB11 /* BarcodeScannerView.swift in Sources */,
 				BB120000000000000000BB12 /* SearchView.swift in Sources */,
@@ -317,6 +368,7 @@
 				BB150000000000000000BB15 /* WelcomeView.swift in Sources */,
 				BB160000000000000000BB16 /* ServerSetupView.swift in Sources */,
 				BB170000000000000000BB17 /* AdminSettingsView.swift in Sources */,
+				9691C0532FBF92FE0000CC96 /* AdminModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -451,6 +503,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = QJL4M2TMLM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = DiscVault/Resources/Info.plist;
@@ -481,6 +534,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = QJL4M2TMLM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = DiscVault/Resources/Info.plist;

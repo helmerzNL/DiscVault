@@ -1,4 +1,5 @@
 import AuthenticationServices
+import SafariServices
 import SwiftUI
 
 struct LoginView: View {
@@ -9,6 +10,7 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showServerSetup = false
+    @State private var showInviteRegistration = false
 
     var body: some View {
         ZStack {
@@ -33,6 +35,12 @@ struct LoginView: View {
         .sheet(isPresented: $showServerSetup) {
             NavigationStack {
                 ServerSetupView(isEditMode: true)
+            }
+        }
+        .sheet(isPresented: $showInviteRegistration) {
+            if let url = inviteRegistrationURL {
+                LoginSafariView(url: url)
+                    .ignoresSafeArea()
             }
         }
     }
@@ -101,6 +109,7 @@ struct LoginView: View {
             }
 
             signInButton
+            inviteRegistrationButton
         }
         .padding(24)
         .background(.white.opacity(0.06))
@@ -135,6 +144,25 @@ struct LoginView: View {
         .padding(.top, 2)
     }
 
+    private var inviteRegistrationButton: some View {
+        Button {
+            showInviteRegistration = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.badge.plus")
+                Text("Register with invite code")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundStyle(.white.opacity(0.78))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(.white.opacity(0.07))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .disabled(appState.serverURL.isEmpty)
+    }
+
     private var serverRow: some View {
         Button {
             showServerSetup = true
@@ -153,6 +181,14 @@ struct LoginView: View {
                     .foregroundStyle(.white.opacity(0.28))
             }
         }
+    }
+
+    private var inviteRegistrationURL: URL? {
+        guard var components = URLComponents(string: appState.serverURL), !appState.serverURL.isEmpty else {
+            return nil
+        }
+        components.path = "/"
+        return components.url
     }
 
     // MARK: - Actions
@@ -201,6 +237,20 @@ struct LoginView: View {
 
         return code
     }
+}
+
+private struct LoginSafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.dismissButtonStyle = .done
+        controller.preferredBarTintColor = UIColor(red: 0.06, green: 0.06, blue: 0.14, alpha: 1.0)
+        controller.preferredControlTintColor = UIColor(red: 0.91, green: 0.77, blue: 0.28, alpha: 1.0)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 #Preview {
