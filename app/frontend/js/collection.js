@@ -967,8 +967,13 @@ function _populateEgManageSection(movieCard, groupData) {
   if (descEl) descEl.value = gd.description || '';
   const elBl = document.getElementById('egBadgeLabel');
   if (elBl) elBl.value = (gd.badge_label || (movieCard && movieCard._group_badge_label)) || '';
+  const typeEl = document.getElementById('egGroupType');
+  const currentType = (_currentSuperGroup || gd.group_type === 'boxset') ? 'boxset' : 'vault';
+  if (typeEl) typeEl.value = currentType;
 
   // Hide fields not applicable to collections
+  const typeSection = document.getElementById('egGroupTypeSection');
+  if (typeSection) typeSection.style.display = isCollection ? 'none' : '';
   const pgSection = document.getElementById('egParentGroupId');
   if (pgSection) pgSection.closest('.input-group').style.display = isCollection ? 'none' : '';
   const blSection = elBl;
@@ -1036,6 +1041,23 @@ function _populateEgManageSection(movieCard, groupData) {
     } else if (colBadge) {
       colBadge.style.display = 'none';
     }
+    updateEgTypeDependentFields();
+  }
+}
+
+function updateEgTypeDependentFields() {
+  const type = (document.getElementById('egGroupType') || {}).value || 'vault';
+  const parentInput = document.getElementById('egParentGroupId');
+  const parentGroup = parentInput && parentInput.closest('.input-group');
+  const parentBadge = document.getElementById('egParentGroupBadge');
+  const parentSearch = document.getElementById('egParentGroupSearch');
+  if (!parentGroup) return;
+  const isBoxSet = type === 'boxset';
+  parentGroup.style.display = isBoxSet ? 'none' : '';
+  if (isBoxSet) {
+    if (parentInput) parentInput.value = '';
+    if (parentSearch) parentSearch.value = '';
+    if (parentBadge) parentBadge.style.display = 'none';
   }
 }
 
@@ -1513,14 +1535,15 @@ async function saveEditionGroupMeta() {
   const title         = (document.getElementById('egGroupTitle') || {}).value || null;
   const description   = (document.getElementById('egGroupDescription') || {}).value || null;
   const badge_label   = (document.getElementById('egBadgeLabel') || {}).value || null;
+  const group_type    = (document.getElementById('egGroupType') || {}).value === 'boxset' ? 'boxset' : 'vault';
   const parent_raw    = (document.getElementById('egParentGroupId') || {}).value;
-  const parent_group_id = parent_raw ? parseInt(parent_raw) : null;
+  const parent_group_id = group_type === 'boxset' ? null : (parent_raw ? parseInt(parent_raw) : null);
   const col_raw       = (document.getElementById('egCollectionId') || {}).value;
   const collection_id = col_raw ? parseInt(col_raw) : null;
   await fetch(`${API}/edition-groups/${groupId}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ title, description, badge_label, parent_group_id, collection_id })
+    body: JSON.stringify({ title, description, badge_label, parent_group_id, collection_id, group_type })
   });
   _editionGroupCache = [];
   await loadCollection();
@@ -3735,6 +3758,10 @@ async function loadGroupMgmtList(filter) {
           <input type="text" value="${(item.title || '').replace(/"/g, '&quot;')}" style="flex:1; font-size:0.85rem; background:transparent; border:1px solid transparent; padding:4px 8px; border-radius:4px; color:var(--text);"
                  ${canManage ? `onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'" onchange="renameGroupMgmt('${item.src}', ${item.id}, this.value)"` : 'readonly'}
           >
+          ${canManage && item.src === 'eg' ? `<select onchange="changeGroupMgmtType(${item.id}, this.value)" style="width:110px; font-size:0.78rem; padding:4px 8px;">
+            <option value="vault" ${item.type === 'vault' ? 'selected' : ''}>Vault</option>
+            <option value="boxset" ${item.type === 'boxset' ? 'selected' : ''}>Box Set</option>
+          </select>` : ''}
           <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">${item.memberCount} film${item.memberCount !== 1 ? 's' : ''}</span>
           ${canManage ? `<button type="button" onclick="deleteGroupMgmt('${item.src}', ${item.id}, '${(item.title || '').replace(/'/g, "\\'")}')"
                   style="background:none; border:none; cursor:pointer; color:var(--danger); font-size:1rem; padding:4px;" title="Verwijderen">🗑</button>` : ''}
@@ -3752,6 +3779,17 @@ async function renameGroupMgmt(src, id, newTitle) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title: newTitle })
   });
+}
+
+async function changeGroupMgmtType(id, groupType) {
+  await fetch(`${API}/edition-groups/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group_type: groupType === 'boxset' ? 'boxset' : 'vault' })
+  });
+  _editionGroupCache = [];
+  await loadCollection();
+  loadGroupMgmtList(_gmFilter);
 }
 
 async function deleteGroupMgmt(src, id, title) {
