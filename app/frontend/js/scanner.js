@@ -402,7 +402,8 @@ function displayBoxSetProposal(proposal, barcode, detectedFormat) {
     format: detectedFormat || currentMovieData.format || '4K UHD',
     source: proposal.source || 'Blu-ray.com',
     detail_url: proposal.detail_url || '',
-    movies
+    movies,
+    saved_indices: []
   };
 
   const nameEl = document.getElementById('boxSetProposalName');
@@ -411,17 +412,71 @@ function displayBoxSetProposal(proposal, barcode, detectedFormat) {
   const btn = document.getElementById('btnSaveBoxSetProposal');
   if (!nameEl || !listEl || !panel || !btn) return;
 
-  nameEl.textContent = currentBoxSetProposal.box_set_title;
+  nameEl.textContent = `${currentBoxSetProposal.box_set_title} · ${movies.length} films gevonden`;
   listEl.innerHTML = movies.map((m, idx) => `
     <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); font-size:0.88rem;">
       <span style="width:24px; color:var(--text-muted); text-align:right;">${idx + 1}</span>
       <strong style="flex:1; min-width:0;">${_escapeHtml(m.title)}</strong>
       ${m.year ? `<span class="tag">${_escapeHtml(m.year)}</span>` : ''}
+      <button class="btn btn-secondary" id="scanBoxSetMovieBtn${idx}" onclick="saveBoxSetProposalMovie(${idx})" style="padding:6px 10px;">Opslaan</button>
     </div>
   `).join('');
   btn.disabled = false;
   btn.textContent = t('scan.boxSetProposalSave');
   panel.style.display = 'block';
+}
+
+async function _saveBoxSetProposalMovies(indices) {
+  if (!currentBoxSetProposal) return;
+  const movies = indices
+    .filter(idx => !currentBoxSetProposal.saved_indices.includes(idx))
+    .map(idx => currentBoxSetProposal.movies[idx])
+    .filter(Boolean);
+  if (!movies.length) return;
+  const payload = {
+    ...currentBoxSetProposal,
+    movies,
+    box_set_id: currentBoxSetProposal.box_set_id || null
+  };
+  const r = await fetch(`${API}/box-set-proposals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || t('js.saveFailed'));
+  currentBoxSetProposal.box_set_id = d.box_set.id;
+  indices.forEach(idx => {
+    if (!currentBoxSetProposal.saved_indices.includes(idx)) {
+      currentBoxSetProposal.saved_indices.push(idx);
+    }
+    const rowBtn = document.getElementById(`scanBoxSetMovieBtn${idx}`);
+    if (rowBtn) {
+      rowBtn.disabled = true;
+      rowBtn.textContent = 'Opgeslagen';
+    }
+  });
+  if (typeof loadStats === 'function') loadStats();
+  if (typeof loadCollection === 'function') loadCollection();
+  return d;
+}
+
+async function saveBoxSetProposalMovie(index) {
+  const btn = document.getElementById(`scanBoxSetMovieBtn${index}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+  }
+  try {
+    const d = await _saveBoxSetProposalMovies([index]);
+    showStatus('scanStatus', t('scan.boxSetProposalSaved', d.box_set.title, d.movies.length), 'success');
+  } catch(e) {
+    showStatus('scanStatus', t('js.error', e.message), 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Opslaan';
+    }
+  }
 }
 
 async function saveBoxSetProposal() {
@@ -432,19 +487,12 @@ async function saveBoxSetProposal() {
     btn.innerHTML = '<span class="spinner"></span> ' + t('scan.boxSetProposalSaving');
   }
   try {
-    const r = await fetch(`${API}/box-set-proposals`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(currentBoxSetProposal)
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || t('js.saveFailed'));
+    const indices = currentBoxSetProposal.movies.map((_, idx) => idx);
+    const d = await _saveBoxSetProposalMovies(indices);
     showStatus('scanStatus', t('scan.boxSetProposalSaved', d.box_set.title, d.movies.length), 'success');
     document.getElementById('movieResult').style.display = 'none';
     document.getElementById('noResult').style.display = 'block';
     hideBoxSetProposal();
-    if (typeof loadStats === 'function') loadStats();
-    if (typeof loadCollection === 'function') loadCollection();
   } catch(e) {
     showStatus('scanStatus', t('js.error', e.message), 'error');
     if (btn) {

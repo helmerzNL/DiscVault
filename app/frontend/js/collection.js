@@ -3247,11 +3247,158 @@ async function uploadCustomCover() {
 }
 
 // ── Manual Add ────────────────────────────────────────────────────────────────
+let currentAddBoxSetProposal = null;
+
+function _escapeAddHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
+function hideAddBoxSetProposal() {
+  currentAddBoxSetProposal = null;
+  const panel = document.getElementById('addBoxSetProposal');
+  if (panel) panel.style.display = 'none';
+}
+
+function displayAddBoxSetProposal(proposal, barcode = '') {
+  const movies = (proposal && proposal.movies ? proposal.movies : []).filter(m => m && m.title).slice(0, 50);
+  if (!movies.length) {
+    hideAddBoxSetProposal();
+    return false;
+  }
+  currentAddBoxSetProposal = {
+    box_set_title: proposal.title || document.getElementById('addTitle').value.trim() || `Box Set ${barcode}`,
+    barcode,
+    format: document.getElementById('addFormat').value || '4K UHD',
+    source: proposal.source || 'Blu-ray.com',
+    detail_url: proposal.detail_url || '',
+    movies,
+    saved_indices: []
+  };
+
+  const nameEl = document.getElementById('addBoxSetProposalName');
+  const listEl = document.getElementById('addBoxSetProposalList');
+  const panel = document.getElementById('addBoxSetProposal');
+  const btn = document.getElementById('btnSaveAddBoxSetProposal');
+  if (!nameEl || !listEl || !panel || !btn) return false;
+
+  nameEl.textContent = `${currentAddBoxSetProposal.box_set_title} · ${movies.length} films gevonden`;
+  listEl.innerHTML = movies.map((m, idx) => `
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); font-size:0.88rem;">
+      <span style="width:24px; color:var(--text-muted); text-align:right;">${idx + 1}</span>
+      <strong style="flex:1; min-width:0;">${_escapeAddHtml(m.title)}</strong>
+      ${m.year ? `<span class="tag">${_escapeAddHtml(m.year)}</span>` : ''}
+      <button class="btn btn-secondary" id="addBoxSetMovieBtn${idx}" onclick="saveAddBoxSetProposalMovie(${idx})" style="padding:6px 10px;">Opslaan</button>
+    </div>
+  `).join('');
+  btn.disabled = false;
+  btn.textContent = t('scan.boxSetProposalSave');
+  panel.style.display = 'block';
+  return true;
+}
+
+async function lookupAddBoxSetProposal(movie, barcode = '') {
+  const title = (movie && (movie.title || movie.original_title)) || document.getElementById('addTitle').value.trim();
+  const year = (movie && movie.year) || document.getElementById('addYear').value.trim();
+  if (!title && !barcode) return null;
+  const params = new URLSearchParams();
+  if (title) params.set('title', title);
+  if (year) params.set('year', year);
+  if (barcode) params.set('barcode', barcode);
+  try {
+    const r = await fetch(`${API}/box-set-proposals/lookup?${params.toString()}`);
+    const d = await r.json();
+    if (r.ok && d.status === 'found' && d.box_set_proposal) return d.box_set_proposal;
+  } catch(e) { /* best-effort enrichment */ }
+  return null;
+}
+
+async function _saveAddBoxSetProposalMovies(indices) {
+  if (!currentAddBoxSetProposal) return;
+  const movies = indices
+    .filter(idx => !currentAddBoxSetProposal.saved_indices.includes(idx))
+    .map(idx => currentAddBoxSetProposal.movies[idx])
+    .filter(Boolean);
+  if (!movies.length) return null;
+  const payload = {
+    ...currentAddBoxSetProposal,
+    movies,
+    box_set_id: currentAddBoxSetProposal.box_set_id || null
+  };
+  const r = await fetch(`${API}/box-set-proposals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || t('js.saveFailed'));
+  currentAddBoxSetProposal.box_set_id = d.box_set.id;
+  indices.forEach(idx => {
+    if (!currentAddBoxSetProposal.saved_indices.includes(idx)) {
+      currentAddBoxSetProposal.saved_indices.push(idx);
+    }
+    const rowBtn = document.getElementById(`addBoxSetMovieBtn${idx}`);
+    if (rowBtn) {
+      rowBtn.disabled = true;
+      rowBtn.textContent = 'Opgeslagen';
+    }
+  });
+  if (typeof loadStats === 'function') loadStats();
+  if (typeof loadCollection === 'function') loadCollection();
+  return d;
+}
+
+async function saveAddBoxSetProposalMovie(index) {
+  const btn = document.getElementById(`addBoxSetMovieBtn${index}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+  }
+  try {
+    const d = await _saveAddBoxSetProposalMovies([index]);
+    showStatus('addStatus', t('scan.boxSetProposalSaved', d.box_set.title, d.movies.length), 'success');
+  } catch(e) {
+    showStatus('addStatus', t('js.error', e.message), 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Opslaan';
+    }
+  }
+}
+
+async function saveAddBoxSetProposal() {
+  if (!currentAddBoxSetProposal) return;
+  const btn = document.getElementById('btnSaveAddBoxSetProposal');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> ' + t('scan.boxSetProposalSaving');
+  }
+  try {
+    const indices = currentAddBoxSetProposal.movies.map((_, idx) => idx);
+    const d = await _saveAddBoxSetProposalMovies(indices);
+    showStatus('addStatus', t('scan.boxSetProposalSaved', d.box_set.title, d.movies.length), 'success');
+    hideAddBoxSetProposal();
+    clearManualForm();
+  } catch(e) {
+    showStatus('addStatus', t('js.error', e.message), 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = t('scan.boxSetProposalSave');
+    }
+  }
+}
+
 async function autoFillFromTitle() {
   const title = document.getElementById('addTitle').value.trim();
   if (!title) return;
   showStatus('addStatus', t('js.searchingMovie'), 'info');
   document.getElementById('addTmdbCandidates').style.display = 'none';
+  hideAddBoxSetProposal();
   try {
     const r = await fetch(`${API}/tmdb_candidates?title=${encodeURIComponent(title)}`);
     const d = await r.json();
@@ -3289,6 +3436,7 @@ function _showAddCandidates(candidates) {
 async function _selectAddCandidate(tmdbId) {
   document.getElementById('addTmdbCandidates').style.display = 'none';
   const existingBarcode = document.getElementById('addBarcode').value.trim();
+  hideAddBoxSetProposal();
   showStatus('addStatus', t('js.lookingUp'), 'info');
   try {
     const r = await fetch(`${API}/tmdb_movie/${tmdbId}`);
@@ -3298,6 +3446,11 @@ async function _selectAddCandidate(tmdbId) {
       return;
     }
     _fillAddFields(d.movie);
+    const proposal = await lookupAddBoxSetProposal(d.movie, existingBarcode);
+    if (proposal && displayAddBoxSetProposal(proposal, existingBarcode)) {
+      showStatus('addStatus', t('js.infoFound', d.movie.title), 'success');
+      return;
+    }
     if (existingBarcode) {
       // Barcode was already entered: auto-save directly
       await _doSaveManual(existingBarcode, d.movie.title);
@@ -3311,12 +3464,15 @@ async function _selectAddCandidate(tmdbId) {
 }
 
 async function _fillAddFormFromTmdbId(tmdbId) {
+  hideAddBoxSetProposal();
   showStatus('addStatus', t('js.lookingUp'), 'info');
   try {
     const r = await fetch(`${API}/tmdb_movie/${tmdbId}`);
     const d = await r.json();
     if (r.ok && d.movie) {
       _fillAddFields(d.movie);
+      const proposal = await lookupAddBoxSetProposal(d.movie);
+      if (proposal) displayAddBoxSetProposal(proposal);
       showStatus('addStatus', t('js.infoFound', d.movie.title), 'success');
     } else {
       showStatus('addStatus', d.error || t('js.backendError', r.status), 'error');
@@ -3359,6 +3515,7 @@ function _fillAddFields(movie) {
 async function _lookupBarcodeForAdd(barcode) {
   showStatus('addStatus', t('js.lookingUp'), 'info');
   document.getElementById('addTmdbCandidates').style.display = 'none';
+  hideAddBoxSetProposal();
   try {
     const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
     const reader = r.body.getReader();
@@ -3390,6 +3547,10 @@ async function _lookupBarcodeForAdd(barcode) {
     const movie = finalData.movie;
     if (finalData.detected_format && !movie.format) movie.format = finalData.detected_format;
     _fillAddFields(movie);
+    if (finalData.box_set_proposal && displayAddBoxSetProposal(finalData.box_set_proposal, barcode)) {
+      showStatus('addStatus', t('js.infoFound', movie.title), 'success');
+      return;
+    }
     if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
       _showAddCandidates(finalData.tmdb_candidates);
       showStatus('addStatus', '', '');
@@ -3479,6 +3640,7 @@ function clearManualForm() {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('addTmdbCandidates').style.display = 'none';
+  hideAddBoxSetProposal();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

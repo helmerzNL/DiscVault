@@ -2187,6 +2187,12 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
         href = a.get("href") or ""
         return "blu-ray.com/movies/" in href or href.startswith("/movies/")
 
+    def is_similar_tile(a):
+        cell = a.find_parent("td")
+        if not cell:
+            return False
+        return bool(cell.select('[id^="automatic_"], a[onclick*="voteSimilar"]'))
+
     def add_candidate(raw_title, year=""):
         clean = _clean_bluray_member_title(raw_title)
         if not clean or len(clean) < 2:
@@ -2204,7 +2210,7 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
         before_count = len(candidates)
         for a in node.select('a[href*="/movies/"]'):
             text = link_title(a)
-            if not text or not is_movie_link(a):
+            if not text or not is_movie_link(a) or is_similar_tile(a):
                 continue
             if re.search(r"\b(review|forum|deals|news|trailer)\b", text, re.I):
                 continue
@@ -2215,7 +2221,7 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
     # anchor text is empty; the real title lives in the title attribute.
     tile_links = [
         a for a in dsoup.select('a.hoverlink[data-globalparentid][data-productid][href*="/movies/"]')
-        if link_title(a) and is_movie_link(a)
+        if link_title(a) and is_movie_link(a) and not is_similar_tile(a)
     ]
     if len(tile_links) >= 2:
         for a in tile_links:
@@ -2243,7 +2249,7 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
                 if len(candidates) > 0 and stop_section.search(node_text):
                     break
                 if getattr(node, "name", None) == "a":
-                    if is_movie_link(node):
+                    if is_movie_link(node) and not is_similar_tile(node):
                         text = link_title(node)
                         add_candidate(text, link_year(text))
                 if len(candidates) >= 30:
@@ -2273,7 +2279,7 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
 
     for a in dsoup.select('a[href*="/movies/"]'):
         text = link_title(a)
-        if not text or not is_movie_link(a):
+        if not text or not is_movie_link(a) or is_similar_tile(a):
             continue
         if re.search(r"\b(review|forum|deals|news|trailer)\b", text, re.I):
             continue
@@ -2545,6 +2551,21 @@ def lookup_movie_bluray_by_barcode(barcode: str) -> dict | None:
         return parsed
     except Exception:
         return None
+
+
+def lookup_bluray_box_set_proposal_by_title(title: str, year: str = "") -> dict | None:
+    if not _is_bluray_scrape_enabled() or not title:
+        return None
+    try:
+        detail_href = _bluray_find_first_movie_url(f"{title} {year}".strip())
+        if not detail_href:
+            return None
+        parsed = _bluray_parse_movie_page(detail_href)
+        if parsed and parsed.get("box_set_proposal"):
+            return parsed["box_set_proposal"]
+    except Exception:
+        return None
+    return None
 
 
 def _bluraydiscde_find_first_movie_url(query: str) -> str | None:
@@ -3485,22 +3506,37 @@ def create_box_set_from_proposal():
     owner_id = _get_current_user_id()
     fallback_format = data.get("format") or "4K UHD"
     barcode = data.get("barcode") or ""
+    box_set_id = data.get("box_set_id")
     try:
-        conn.execute(
-            "INSERT INTO edition_groups (title, tmdb_id, imdb_id, year, created_at, group_type) VALUES (?,?,?,?,?,?)",
-            (box_set_title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
-             data.get("year") or "", now, "boxset")
-        )
-        box_set_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        conn.execute(
-            "INSERT OR IGNORE INTO box_sets (id, title, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?)",
-            (box_set_id, box_set_title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
-             data.get("year") or "", box_set_id, now)
-        )
+        if box_set_id:
+            box_set_id = int(box_set_id)
+            existing_box_set = conn.execute(
+                "SELECT id, title FROM edition_groups WHERE id=? AND group_type='boxset'",
+                (box_set_id,),
+            ).fetchone()
+            if not existing_box_set:
+                return jsonify({"error": "box_set_id does not reference an existing box set"}), 400
+            box_set_title = existing_box_set["title"] or box_set_title
+        else:
+            conn.execute(
+                "INSERT INTO edition_groups (title, tmdb_id, imdb_id, year, created_at, group_type) VALUES (?,?,?,?,?,?)",
+                (box_set_title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
+                 data.get("year") or "", now, "boxset")
+            )
+            box_set_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT OR IGNORE INTO box_sets (id, title, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?)",
+                (box_set_id, box_set_title, data.get("tmdb_id") or "", data.get("imdb_id") or "",
+                 data.get("year") or "", box_set_id, now)
+            )
 
         cols = [c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]
         colstr = ", ".join(cols)
         places = ", ".join(f":{c}" for c in cols)
+        current_sort_order = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), 0) FROM box_set_movies WHERE box_set_id=?",
+            (box_set_id,),
+        ).fetchone()[0]
         for idx, member in enumerate(members[:50], start=1):
             if not isinstance(member, dict):
                 continue
@@ -3519,7 +3555,7 @@ def create_box_set_from_proposal():
             movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
             conn.execute(
                 "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id, sort_order) VALUES (?,?,?)",
-                (box_set_id, movie_id, idx)
+                (box_set_id, movie_id, current_sort_order + idx)
             )
             created_movies.append({**row, "id": movie_id})
 
@@ -3527,10 +3563,12 @@ def create_box_set_from_proposal():
             conn.rollback()
             return jsonify({"error": "No valid movie titles found in proposal"}), 400
 
-        conn.execute(
-            "UPDATE edition_groups SET primary_movie_id=? WHERE id=?",
-            (created_movies[0]["id"], box_set_id)
-        )
+        primary = conn.execute("SELECT primary_movie_id FROM edition_groups WHERE id=?", (box_set_id,)).fetchone()
+        if primary and not primary["primary_movie_id"]:
+            conn.execute(
+                "UPDATE edition_groups SET primary_movie_id=? WHERE id=?",
+                (created_movies[0]["id"], box_set_id)
+            )
         _log_container_event(
             conn,
             "Box Set created from Blu-ray.com proposal",
@@ -3549,6 +3587,28 @@ def create_box_set_from_proposal():
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
+
+
+@app.route("/api/box-set-proposals/lookup")
+def lookup_box_set_proposal():
+    title = (request.args.get("title") or "").strip()
+    year = (request.args.get("year") or "").strip()
+    barcode = (request.args.get("barcode") or "").strip()
+    if not title and not barcode:
+        return jsonify({"error": "title or barcode is required"}), 400
+    try:
+        proposal = None
+        if barcode:
+            info = lookup_movie_bluray_by_barcode(barcode)
+            proposal = (info or {}).get("box_set_proposal")
+        if not proposal and title:
+            proposal = lookup_bluray_box_set_proposal_by_title(title, year)
+        if proposal:
+            _log_bluray_box_set_proposal(barcode or title, proposal)
+            return jsonify({"status": "found", "box_set_proposal": proposal})
+        return jsonify({"status": "not_found"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/movies/<int:movie_id>", methods=["PUT"])
