@@ -2205,6 +2205,10 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
         img = a.find("img", class_="cover")
         return bool(img)
 
+    def attr_from_tag(tag_html, attr):
+        m = re.search(rf'\b{re.escape(attr)}\s*=\s*([\'"])(.*?)\1', tag_html, re.I | re.S)
+        return m.group(2) if m else ""
+
     def add_candidate(raw_title, year=""):
         clean = _clean_bluray_member_title(raw_title)
         if not clean or len(clean) < 2:
@@ -2234,6 +2238,34 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
             continue
         text = link_title(node)
         add_candidate(text, link_year(text))
+    if candidates:
+        return candidates[:30]
+
+    # Fallback for pages where BeautifulSoup's selector misses the inline tile
+    # markup. Work from the HTML string after the bundle sentence only.
+    root_html = str(search_root)
+    bundle_html_match = bundle_anchor.search(root_html)
+    if not bundle_html_match:
+        return []
+    member_html = root_html[bundle_html_match.end():]
+    for stop in (r"\bSimilar\b", r"\bCustomers who bought\b", r"\bRelated\b"):
+        stop_match = re.search(stop, member_html, re.I)
+        if stop_match:
+            member_html = member_html[:stop_match.start()]
+            break
+    for m in re.finditer(r"<a\b[^>]*>.*?</a>", member_html, re.I | re.S):
+        tag_html = m.group(0)
+        if "hoverlink" not in tag_html or "data-globalparentid" not in tag_html or "data-productid" not in tag_html:
+            continue
+        href = attr_from_tag(tag_html, "href")
+        raw_title = attr_from_tag(tag_html, "title")
+        if "/movies/" not in href or not raw_title:
+            continue
+        if "voteSimilar" in tag_html or re.search(r'id\s*=\s*["\']automatic_', tag_html, re.I):
+            continue
+        if "class=\"cover\"" not in tag_html and "class='cover'" not in tag_html:
+            continue
+        add_candidate(raw_title, link_year(raw_title))
     return candidates[:30]
 
 
