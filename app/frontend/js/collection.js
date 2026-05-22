@@ -420,21 +420,21 @@ async function showBulkContainerAssign() {
     const cols = await colR.json();
     if (!Array.isArray(egs))  throw new Error('Edition-groups response is not an array');
     if (!Array.isArray(cols)) throw new Error('Collections response is not an array');
-    const vaults  = egs.filter(g => g.group_type !== 'boxset' && !((g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0));
-    const boxsets = egs.filter(g => g.group_type === 'boxset' ||  (g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0);
-    let html = `<option value="">-- Kies een container --</option>`;
+    const vaults  = egs.filter(g => !_isBoxSetGroup(g));
+    const boxsets = egs.filter(_isBoxSetGroup);
+    let html = `<option value="">${t('bulk.containerPlaceholder', '-- Kies een container --')}</option>`;
     if (vaults.length) {
       html += `<optgroup label="Vault">`;
       vaults.forEach(g => { html += `<option value="vault:${g.id}">${escHtml(g.title)}</option>`; });
       html += `</optgroup>`;
     }
     if (boxsets.length) {
-      html += `<optgroup label="Box-Set">`;
+      html += `<optgroup label="Box Set">`;
       boxsets.forEach(g => { html += `<option value="boxset:${g.id}">${escHtml(g.title)}</option>`; });
       html += `</optgroup>`;
     }
     if (cols.length) {
-      html += `<optgroup label="Collectie">`;
+      html += `<optgroup label="${t('bulk.directCollectionGroup', 'Collection (directe films)')}">`;
       cols.forEach(c => { html += `<option value="col:${c.id}">${escHtml(c.title)}</option>`; });
       html += `</optgroup>`;
     }
@@ -782,6 +782,81 @@ function openBoxSetFromCollection(parentGroupId) {
   _egViewStack.push({ type: 'collection', movie: _currentCollection });
   // Open it as a super group view
   openSuperGroupView(bs);
+}
+
+async function openVaultById(groupId, fallbackMovieId) {
+  try {
+    const r = await fetch(`${API}/edition-groups/${groupId}`);
+    if (!r.ok) return;
+    const g = await r.json();
+    const members = g.members || [];
+    const primaryId = (members[0] && members[0].id) || fallbackMovieId || groupId;
+    openEditionGroupView(primaryId, {
+      id: primaryId,
+      title: g.title,
+      edition_group_id: groupId,
+      _group_title: g.title,
+      editions: members,
+      editions_count: members.length,
+      _container_poster_file: g.poster_file || '',
+      backdrop: g.backdrop || '',
+      description: g.description || '',
+    });
+  } catch(e) {}
+}
+
+async function openBoxSetById(groupId) {
+  try {
+    const r = await fetch(`${API}/edition-groups/${groupId}`);
+    if (!r.ok) return;
+    const g = await r.json();
+    const looseMovies = g.loose_movies || g.members || [];
+    openSuperGroupView({
+      id: (g.loose_movies && g.loose_movies[0] && g.loose_movies[0].id) || groupId,
+      _is_super_group: true,
+      _parent_group_id: groupId,
+      _group_title: g.title,
+      title: g.title,
+      editions_count: looseMovies.length,
+      _loose_movies: looseMovies,
+      _sub_groups: g.child_groups || [],
+      _container_poster_file: g.poster_file || '',
+      backdrop: g.backdrop || '',
+      description: g.description || '',
+    });
+  } catch(e) {}
+}
+
+async function openCollectionById(collectionId) {
+  try {
+    const r = await fetch(`${API}/collections/${collectionId}`);
+    if (!r.ok) return;
+    const c = await r.json();
+    const vaults = (c.edition_groups || []).filter(g => g.group_type !== 'boxset');
+    const boxSets = (c.edition_groups || []).filter(g => g.group_type === 'boxset');
+    openCollectionView({
+      id: collectionId,
+      _is_collection: true,
+      _collection_id: collectionId,
+      _group_title: c.title,
+      title: c.title,
+      _vaults: vaults.map(v => ({
+        ...v,
+        id: (c.eg_movies || []).find(m => m.edition_group_id === v.id)?.id || v.id,
+        edition_group_id: v.id,
+        _group_title: v.title,
+      })),
+      _box_sets: boxSets.map(bs => ({
+        ...bs,
+        _parent_group_id: bs.id,
+        _group_title: bs.title,
+      })),
+      _loose_movies: c.loose_movies || [],
+      backdrop: c.backdrop || '',
+      description: c.description || '',
+      _container_poster_file: c.poster_file || '',
+    });
+  } catch(e) {}
 }
 
 function openVaultFromCollection(movieId) {
@@ -1628,6 +1703,18 @@ async function openMovieDetail(id, skipGroupRedirect) {
       allMovies.push(movie);
     } catch { return; }
   }
+  if (!movie._containers && !movie._is_collection && !movie._is_super_group && !movie._is_group) {
+    try {
+      const r = await fetch(`${API}/movies/${id}`);
+      if (r.ok) {
+        const fresh = await r.json();
+        movie = { ...movie, ...fresh };
+        const idx = allMovies.findIndex(m => m.id === id);
+        if (idx >= 0) allMovies[idx] = { ...allMovies[idx], ...fresh };
+        else allMovies.push(movie);
+      }
+    } catch {}
+  }
 
   // Redirect grouped editions to the stack view when group_editions mode is active
   if (!skipGroupRedirect && !movie._isNested) {
@@ -1742,8 +1829,10 @@ async function openMovieDetail(id, skipGroupRedirect) {
     val ? `<div class="detail-item${full?' full':''}"><label>${label}</label><span>${val}</span></div>` : '';
   const link = (label, href, text) =>
     href ? `<div class="detail-item"><label>${label}</label><span><a href="${href}" target="_blank" style="color:var(--accent)">${text} ↗</a></span></div>` : '';
+  const containerSummary = _renderMovieContainerSummary(movie);
 
   d.innerHTML = [
+    row(t('detail.containers', 'Containers'), containerSummary, true),
     row(t('d.genre'),          movie.genre, true),
     row(t('d.origTitle'),movie.original_title),
     row(t('d.country'),           movie.country),
@@ -2197,6 +2286,50 @@ async function loadMovieCast(movieId) {
 
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _renderMovieContainerSummary(movie) {
+  const containers = movie._containers || {};
+  const vaults = containers.vaults || [];
+  const boxSets = containers.box_sets || [];
+  const directCollections = containers.collections_direct || [];
+  const viaCollections = containers.collections_via_containers || [];
+  const chip = (label, value, color, onclick) => `
+    <button type="button" onclick="${onclick}" style="display:inline-flex;align-items:center;gap:5px;margin:0 6px 6px 0;padding:4px 8px;border:1px solid ${color}66;border-radius:6px;background:${color}18;color:${color};font-size:0.78rem;cursor:pointer;">
+      <strong style="font-size:0.7rem;">${label}</strong> ${escHtml(value)}
+    </button>`;
+  const parts = [];
+  vaults.forEach(v => parts.push(chip('Vault', v.title || `#${v.id}`, '#e8c547', `openVaultById(${v.id}, ${movie.id})`)));
+  boxSets.forEach(bs => parts.push(chip('Box Set', bs.title || `#${bs.id}`, '#7c6af7', `openBoxSetById(${bs.id})`)));
+  directCollections.forEach(c => parts.push(chip('Collection', c.title || `#${c.id}`, '#2ecc71', `openCollectionById(${c.id})`)));
+  viaCollections.forEach(c => {
+    const via = c.via_type === 'box_set' ? 'via Box Set' : 'via Vault';
+    parts.push(chip(via, `${c.title || '#' + c.id} (${c.via_title || ''})`, '#78d69d', `openCollectionById(${c.id})`));
+  });
+  if (!parts.length) return '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:0;">${parts.join('')}</div>`;
+}
+
+function _renderEditContainerSummary(movie) {
+  const wrap = document.getElementById('editContainerSummaryWrap');
+  const target = document.getElementById('editContainerSummary');
+  if (!wrap || !target) return;
+  const containers = movie._containers || {};
+  const vaults = containers.vaults || [];
+  const boxSets = containers.box_sets || [];
+  const directCollections = containers.collections_direct || [];
+  const viaCollections = containers.collections_via_containers || [];
+  const lines = [];
+  if (vaults.length) lines.push(`<strong style="color:var(--accent);">Vault</strong>: ${vaults.map(v => escHtml(v.title || '#' + v.id)).join(', ')}`);
+  if (boxSets.length) lines.push(`<strong style="color:var(--accent2);">Box Set</strong>: ${boxSets.map(bs => escHtml(bs.title || '#' + bs.id)).join(', ')}`);
+  if (directCollections.length) lines.push(`<strong style="color:#2ecc71;">Directe Collection</strong>: ${directCollections.map(c => escHtml(c.title || '#' + c.id)).join(', ')}`);
+  if (viaCollections.length) {
+    lines.push(`<strong style="color:#78d69d;">Collection via container</strong>: ${viaCollections.map(c => `${escHtml(c.title || '#' + c.id)} via ${c.via_type === 'box_set' ? 'Box Set' : 'Vault'} ${escHtml(c.via_title || '')}`).join(', ')}`);
+  }
+  target.innerHTML = lines.length
+    ? lines.map(line => `<div>${line}</div>`).join('')
+    : t('edit.containerSummaryEmpty', 'Deze film is nog niet gekoppeld aan een Vault, Box Set of Collection.');
+  wrap.style.display = '';
 }
 
 async function openPersonDetail(personId) {
@@ -2802,6 +2935,7 @@ function startEdit() {
 
   // Populate group checkboxes
   _populateGroupCheckboxes(movie.group_ids || []);
+  _renderEditContainerSummary(movie);
 
   // Populate edition group field
   const egId = movie.edition_group_id;
@@ -3530,6 +3664,10 @@ function toggleEditionsDrawer(id) {
 // Edition group autocomplete in edit modal
 let _editionGroupCache = [];
 
+function _isBoxSetGroup(g) {
+  return g && (g.group_type === 'boxset' || (g.child_group_count || 0) > 0 || (g.loose_movie_count || 0) > 0);
+}
+
 async function searchEditionGroups(query) {
   const dropdown = document.getElementById('editEditionGroupDropdown');
   if (!query || query.length < 1) {
@@ -3543,7 +3681,7 @@ async function searchEditionGroups(query) {
     } catch(e) { _editionGroupCache = []; }
   }
   const q = query.toLowerCase();
-  const matches = _editionGroupCache.filter(g => (g.title || '').toLowerCase().includes(q));
+  const matches = _editionGroupCache.filter(g => !_isBoxSetGroup(g) && (g.title || '').toLowerCase().includes(q));
   if (!matches.length) {
     dropdown.innerHTML = `<div style="padding:10px 12px; font-size:0.82rem; color:var(--text-muted);">
       <span style="cursor:pointer; color:var(--accent);" onclick="createEditionGroupFromSearch('${query.replace(/'/g,"\\'")}')">+ ${t('edit.editionGroupCreate')} "${query}"</span>
@@ -3585,7 +3723,7 @@ async function createEditionGroupFromSearch(title) {
     const r = await fetch(`${API}/edition-groups`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title })
+      body: JSON.stringify({ title, group_type: 'vault' })
     });
     const g = await r.json();
     _editionGroupCache.push(g);
@@ -3599,7 +3737,7 @@ async function searchSuperGroup(query) {
   try {
     const r = await fetch(`${API}/edition-groups?q=${encodeURIComponent(query)}`);
     const groups = await r.json();
-    const items = groups.slice(0, 8).map(g => {
+    const items = groups.filter(_isBoxSetGroup).slice(0, 8).map(g => {
       // Box sets have no direct edition_group_id members; films live in child
       // vaults (child_member_count) and loose box-set movies (loose_movie_count).
       const total = (g.member_count || 0) + (g.child_member_count || 0) + (g.loose_movie_count || 0);
