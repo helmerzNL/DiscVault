@@ -1197,6 +1197,38 @@
               </div>
             </div>
 
+            <!-- MovieVault -->
+            <div style="display:flex; align-items:center; gap:8px; font-size:0.88rem; color:var(--text); margin-bottom:6px;">
+              <span data-i18n="settings.movievaultDesc">MovieVault — gedeelde catalogus voor films en box-sets</span>
+              <span id="movievaultKeyBadge" style="display:none; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; margin-left:4px;"></span>
+            </div>
+            <div id="movievaultKeyBlock" style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input type="url" id="movievaultUrlInput" autocomplete="off" data-i18n-placeholder="settings.movievaultUrlPlaceholder" placeholder="https://search.discvault.eu"
+                  style="flex:1 1 240px; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <input type="url" id="movievaultContributionUrlInput" autocomplete="off" data-i18n-placeholder="settings.movievaultContributionUrlPlaceholder" placeholder="https://movies.discvault.eu"
+                  style="flex:1 1 240px; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <input type="password" id="movievaultKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderMovievault" placeholder="Plak je MovieVault API token hier..."
+                  style="flex:1 1 220px; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <button type="button" onclick="toggleKeyVisibility('movievault')" title="Toon/verberg key" style="padding:6px 10px; font-size:0.85rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--text);">👁</button>
+                <button class="btn btn-primary" onclick="saveApiKey('movievault')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
+                <button type="button" id="movievaultKeyClearBtn" onclick="clearApiKey('movievault')" style="display:none; padding:6px 10px; font-size:0.8rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--danger);">🗑</button>
+              </div>
+              <div style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; line-height:1.55;" data-i18n-html="settings.movievaultKeyHelp">
+                Stel de MovieVault base URL in om de gedeelde catalogus als eerste bron te gebruiken. De API key is optioneel wanneer MovieVault publieke leesrechten toestaat.
+              </div>
+              <label style="display:flex; align-items:center; gap:8px; font-size:0.78rem; cursor:pointer; color:var(--text); margin-top:10px;">
+                <input type="checkbox" id="movievaultContributionToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+                <span data-i18n="settings.movievaultContributionDesc">Ontbrekende metadata delen met MovieVault</span>
+              </label>
+              <select id="movievaultSharingModeSelect" onchange="saveSourceSettings()"
+                style="margin-top:8px; width:100%; padding:7px 10px; font-size:0.8rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <option value="opt_in">opt_in</option>
+                <option value="opt_out">opt_out</option>
+                <option value="disabled">disabled</option>
+              </select>
+            </div>
+
             <!-- Scrapers -->
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="sourceBlurayToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
@@ -1208,6 +1240,14 @@
             </label>
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.sourceHelp">
               De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiële API.
+            </div>
+            <div style="margin-top:14px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+              <label for="metadataSourceOrderInput" style="display:block; font-size:0.78rem; font-weight:600; color:var(--text); margin-bottom:6px;" data-i18n="settings.sourceOrderLabel">Bronvolgorde</label>
+              <input type="text" id="metadataSourceOrderInput" autocomplete="off" data-i18n-placeholder="settings.sourceOrderPlaceholder" placeholder="movievault,tmdb,omdb,bluray_com"
+                style="width:100%; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:7px; line-height:1.5;" data-i18n="settings.sourceOrderHelp">
+                DiscVault probeert bronnen van links naar rechts. Standaard: MovieVault, TMDb, OMDb, Blu-ray.com.
+              </div>
             </div>
             <div id="sourceSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
           </div>

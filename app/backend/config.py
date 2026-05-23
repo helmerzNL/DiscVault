@@ -13,6 +13,15 @@ AVATAR_DIR = os.environ.get("AVATAR_DIR", "/data/avatars")
 
 _OMDB_API_KEY_ENV = os.environ.get("OMDB_API_KEY", "")
 _TMDB_API_KEY_ENV = os.environ.get("TMDB_API_KEY", "")
+_MOVIEVAULT_API_TOKEN_ENV = os.environ.get(
+    "MOVIEVAULT_API_TOKEN", os.environ.get("MOVIEVAULT_API_KEY", "")
+)
+_MOVIEVAULT_SEARCH_URL_ENV = os.environ.get(
+    "MOVIEVAULT_SEARCH_URL", os.environ.get("MOVIEVAULT_BASE_URL", "")
+)
+_MOVIEVAULT_INGEST_URL_ENV = os.environ.get("MOVIEVAULT_INGEST_URL", "")
+_MOVIEVAULT_CONTRIBUTION_URL_ENV = os.environ.get("MOVIEVAULT_CONTRIBUTION_URL", "")
+_MOVIEVAULT_SHARING_MODE_ENV = os.environ.get("MOVIEVAULT_SHARING_MODE", "opt_in")
 
 
 class LiveKey:
@@ -55,6 +64,17 @@ class LiveKey:
 
 OMDB_API_KEY = LiveKey("omdb_api_key", _OMDB_API_KEY_ENV)
 TMDB_API_KEY = LiveKey("tmdb_api_key", _TMDB_API_KEY_ENV)
+MOVIEVAULT_API_TOKEN = LiveKey("movievault_api_token", _MOVIEVAULT_API_TOKEN_ENV)
+MOVIEVAULT_API_KEY = LiveKey("movievault_api_key", "")
+MOVIEVAULT_SEARCH_URL = LiveKey("movievault_search_url", _MOVIEVAULT_SEARCH_URL_ENV)
+MOVIEVAULT_BASE_URL = LiveKey("movievault_base_url", "")
+MOVIEVAULT_INGEST_URL = LiveKey("movievault_ingest_url", _MOVIEVAULT_INGEST_URL_ENV)
+MOVIEVAULT_CONTRIBUTION_URL = LiveKey(
+    "movievault_contribution_url", _MOVIEVAULT_CONTRIBUTION_URL_ENV
+)
+MOVIEVAULT_SHARING_MODE = LiveKey(
+    "movievault_sharing_mode", _MOVIEVAULT_SHARING_MODE_ENV
+)
 
 TMDB_LANGUAGES = [
     ("nl", "nl-NL"),
@@ -84,6 +104,13 @@ BLURAY_SCRAPE_ENABLED_DEFAULT = (
 )
 BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT = (
     os.environ.get("BLURAYDISCDE_SCRAPE_ENABLED", "false").strip().lower() == "true"
+)
+MOVIEVAULT_CONTRIBUTION_ENABLED_DEFAULT = (
+    os.environ.get("MOVIEVAULT_CONTRIBUTION_ENABLED", "true").strip().lower() == "true"
+)
+METADATA_SOURCE_ORDER_DEFAULT = os.environ.get(
+    "METADATA_SOURCE_ORDER",
+    "movievault,tmdb,omdb,bluray_com,bluray_disc_de",
 )
 APP_TZ = os.environ.get("TZ", "Europe/Amsterdam").strip() or "Europe/Amsterdam"
 

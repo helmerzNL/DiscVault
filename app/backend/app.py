@@ -36,7 +36,11 @@ try:
     from .config import (
         AVATAR_DIR, BACKUP_DIR, BLURAY_SCRAPE_ENABLED_DEFAULT,
         BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT, DB_PATH, JWT_SECRET, MCP_API_KEY,
-        OMDB_API_KEY, OMDB_ENABLED_DEFAULT, POSTER_DIR, PROFILE_DIR,
+        METADATA_SOURCE_ORDER_DEFAULT, MOVIEVAULT_API_KEY,
+        MOVIEVAULT_API_TOKEN, MOVIEVAULT_BASE_URL,
+        MOVIEVAULT_CONTRIBUTION_ENABLED_DEFAULT, MOVIEVAULT_CONTRIBUTION_URL,
+        MOVIEVAULT_INGEST_URL, MOVIEVAULT_SEARCH_URL,
+        MOVIEVAULT_SHARING_MODE, OMDB_API_KEY, OMDB_ENABLED_DEFAULT, POSTER_DIR, PROFILE_DIR,
         RATING_COUNTRIES, RP_ID, RP_NAME, RP_ORIGIN, RP_ORIGINS, TMDB_API_KEY,
         TMDB_ENABLED_DEFAULT, TMDB_LANGUAGES, local_now, local_now_iso,
     )
@@ -51,7 +55,11 @@ except ImportError:  # pragma: no cover - supports running app.py directly
     from config import (
         AVATAR_DIR, BACKUP_DIR, BLURAY_SCRAPE_ENABLED_DEFAULT,
         BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT, DB_PATH, JWT_SECRET, MCP_API_KEY,
-        OMDB_API_KEY, OMDB_ENABLED_DEFAULT, POSTER_DIR, PROFILE_DIR,
+        METADATA_SOURCE_ORDER_DEFAULT, MOVIEVAULT_API_KEY,
+        MOVIEVAULT_API_TOKEN, MOVIEVAULT_BASE_URL,
+        MOVIEVAULT_CONTRIBUTION_ENABLED_DEFAULT, MOVIEVAULT_CONTRIBUTION_URL,
+        MOVIEVAULT_INGEST_URL, MOVIEVAULT_SEARCH_URL,
+        MOVIEVAULT_SHARING_MODE, OMDB_API_KEY, OMDB_ENABLED_DEFAULT, POSTER_DIR, PROFILE_DIR,
         RATING_COUNTRIES, RP_ID, RP_NAME, RP_ORIGIN, RP_ORIGINS, TMDB_API_KEY,
         TMDB_ENABLED_DEFAULT, TMDB_LANGUAGES, local_now, local_now_iso,
     )
@@ -1360,15 +1368,19 @@ def init_db():
         ("tmdb_enabled", TMDB_ENABLED_DEFAULT),
         ("bluray_scrape_enabled", BLURAY_SCRAPE_ENABLED_DEFAULT),
         ("bluraydiscde_scrape_enabled", BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT),
+        ("movievault_contribution_enabled", MOVIEVAULT_CONTRIBUTION_ENABLED_DEFAULT),
+        ("movievault_sharing_mode", str(MOVIEVAULT_SHARING_MODE) or "opt_in"),
+        ("metadata_source_order", METADATA_SOURCE_ORDER_DEFAULT),
         ("mcp_enabled", True),
         ("debug_enabled", False),
         ("show_local_title", True),
     ]:
         existing = conn.execute("SELECT value FROM settings WHERE key=?", (skey,)).fetchone()
         if not existing:
+            value = ("true" if sdefault else "false") if isinstance(sdefault, bool) else str(sdefault)
             conn.execute(
                 "INSERT INTO settings (key, value) VALUES (?, ?)",
-                (skey, "true" if sdefault else "false")
+                (skey, value)
             )
 
     # Migrate: add any missing columns to existing DB
@@ -2359,6 +2371,386 @@ def lookup_by_barcode_upcitemdb(barcode: str):
     except Exception:
         pass
     return None
+
+
+def _movievault_base_url() -> str:
+    return (str(MOVIEVAULT_SEARCH_URL).strip() or str(MOVIEVAULT_BASE_URL).strip()).rstrip("/")
+
+
+def _movievault_ingest_url() -> str:
+    return str(MOVIEVAULT_INGEST_URL).strip().rstrip("/")
+
+
+def _movievault_api_token() -> str:
+    return str(MOVIEVAULT_API_TOKEN).strip() or str(MOVIEVAULT_API_KEY).strip()
+
+
+def _movievault_sharing_mode() -> str:
+    mode = str(MOVIEVAULT_SHARING_MODE).strip().lower() or "opt_in"
+    if mode not in {"opt_in", "opt_out", "disabled"}:
+        return "opt_in"
+    return mode
+
+
+def _movievault_contribution_url() -> str:
+    raw = str(MOVIEVAULT_CONTRIBUTION_URL).strip()
+    if raw.startswith(("http://", "https://")):
+        return raw
+    base = _movievault_ingest_url()
+    if not raw and base:
+        raw = "/api/v1/contributions"
+    if raw.startswith("/") and base:
+        return f"{base}{raw}"
+    return raw
+
+
+def _movievault_headers(include_auth: bool = False) -> dict:
+    headers = {"Accept": "application/json"}
+    api_token = _movievault_api_token()
+    if include_auth and api_token:
+        headers["Authorization"] = f"Bearer {api_token}"
+    return headers
+
+
+def _movievault_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        parts = []
+        for item in value:
+            if isinstance(item, dict):
+                parts.append(str(item.get("name") or item.get("title") or item.get("value") or "").strip())
+            else:
+                parts.append(str(item).strip())
+        return ", ".join(p for p in parts if p)
+    if isinstance(value, dict):
+        return str(value.get("name") or value.get("title") or value.get("value") or "").strip()
+    return str(value).strip()
+
+
+def _movievault_first(data, *keys):
+    if not isinstance(data, dict):
+        return ""
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, "", [], {}):
+            return value
+    return ""
+
+
+def _movievault_image_url(value) -> str:
+    if isinstance(value, dict):
+        value = (
+            value.get("absoluteUrl")
+            or value.get("absolute_url")
+            or value.get("url")
+            or value.get("path")
+            or ""
+        )
+    value = _movievault_text(value)
+    if not value:
+        return ""
+    if value.startswith(("http://", "https://", "/api/images/", "/api/posters/", "/api/profiles/")):
+        return value
+    base = _movievault_base_url()
+    if value.startswith("/"):
+        return f"{base}{value}" if base else value
+    return value
+
+
+def _movievault_first_payload(data):
+    if not data:
+        return None
+    if isinstance(data, dict):
+        if data.get("status") == "not_found":
+            return None
+        for key in ("movie", "item", "result", "data"):
+            value = data.get(key)
+            if isinstance(value, dict):
+                return value
+        for key in ("movies", "items", "results"):
+            value = data.get(key)
+            if isinstance(value, list) and value:
+                return value[0]
+        return data
+    if isinstance(data, list) and data:
+        return data[0]
+    return None
+
+
+def _movievault_member_list(data):
+    if not isinstance(data, dict):
+        return []
+    for key in ("movies", "members", "items", "titles", "boxSetMovies", "box_set_movies"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+    nested = data.get("box_set") or data.get("boxSet") or data.get("boxSetProposal")
+    if isinstance(nested, dict):
+        return _movievault_member_list(nested)
+    return []
+
+
+def _movievault_get(path: str, params: dict | None = None):
+    base = _movievault_base_url()
+    if not base:
+        return None
+    try:
+        url = f"{base}{path if path.startswith('/') else '/' + path}"
+        r = requests.get(url, params=params or {}, headers=_movievault_headers(), timeout=8)
+        if r.status_code == 404:
+            return None
+        if r.status_code in (401, 403, 429):
+            raise RuntimeError(f"MovieVault HTTP {r.status_code}")
+        if r.status_code >= 400:
+            return None
+        return r.json()
+    except Exception:
+        return None
+
+
+def _movievault_contribution_payload(movie_info: dict, sources: str, context: dict | None = None) -> dict:
+    context = context or {}
+    source_movie = dict(movie_info or {})
+    if (
+        isinstance(source_movie.get("_content_ratings"), dict)
+        and source_movie["_content_ratings"]
+        and not source_movie.get("content_ratings")
+    ):
+        source_movie["content_ratings"] = json.dumps(source_movie["_content_ratings"], ensure_ascii=False)
+    safe_map = {
+        "barcode": "barcode",
+        "title": "title",
+        "original_title": "originalTitle",
+        "sort_title": "sortTitle",
+        "year": "year",
+        "release_date": "releaseDate",
+        "format": "format",
+        "edition": "edition",
+        "country": "country",
+        "language": "language",
+        "tmdb_id": "tmdbId",
+        "imdb_id": "imdbId",
+        "runtime": "runtime",
+        "hdr": "hdr",
+        "audio_tracks": "audioTracks",
+        "subtitles": "subtitles",
+        "regions": "regions",
+        "screen_ratios": "screenRatios",
+        "distributor": "distributor",
+        "studios": "studios",
+        "genre": "genre",
+        "plot": "overview",
+        "title_nl": "title_nl",
+        "title_de": "title_de",
+        "title_fr": "title_fr",
+        "title_es": "title_es",
+        "title_pt": "title_pt",
+        "title_it": "title_it",
+        "plot_nl": "overview_nl",
+        "plot_de": "overview_de",
+        "plot_fr": "overview_fr",
+        "plot_es": "overview_es",
+        "plot_pt": "overview_pt",
+        "plot_it": "overview_it",
+        "poster": "posterUrl",
+        "backdrop": "backdropUrl",
+    }
+    movie = {}
+    for src_key, dst_key in safe_map.items():
+        value = source_movie.get(src_key)
+        if value not in (None, "", [], {}):
+            movie[dst_key] = value
+    identity = "|".join([
+        str(movie.get("tmdbId") or ""),
+        str(movie.get("imdbId") or ""),
+        str(movie.get("title") or "").strip().lower(),
+        str(movie.get("year") or ""),
+        str(context.get("barcode") or movie.get("barcode") or ""),
+    ])
+    idem = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    return {
+        "idempotencyKey": idem,
+        "sourceClient": "discvault",
+        "sourceVersion": "3.4.x",
+        "sharingMode": _movievault_sharing_mode(),
+        "entityType": "movie",
+        "payload": movie,
+    }
+
+
+def _submit_movievault_contribution(movie_info: dict | None, sources: str, context: dict | None = None) -> bool:
+    url = _movievault_contribution_url()
+    if not _is_movievault_contribution_enabled() or _movievault_sharing_mode() == "disabled":
+        return False
+    if not url or not movie_info or not movie_info.get("title"):
+        return False
+    try:
+        payload = _movievault_contribution_payload(movie_info, sources, context)
+        r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
+        if 200 <= r.status_code < 300:
+            add_log("movievault", f"Metadata gedeeld met MovieVault: \"{movie_info.get('title')}\"", f"Bronnen: {sources}", "info")
+            return True
+        add_log("movievault", f"MovieVault bijdrage geweigerd: \"{movie_info.get('title')}\"", f"HTTP {r.status_code}: {r.text[:160]}", "warn")
+    except Exception as ex:
+        add_log("movievault", f"MovieVault bijdrage mislukt: \"{movie_info.get('title', '?')}\"", str(ex), "warn")
+    return False
+
+
+def _normalize_movievault_movie(data: dict | None):
+    if not isinstance(data, dict):
+        return None
+    movie = (
+        _movievault_first_payload(data)
+        if any(k in data for k in ("movie", "item", "result", "data", "movies", "items", "results"))
+        else data
+    )
+    if not isinstance(movie, dict):
+        return None
+    title = _movievault_text(_movievault_first(movie, "title", "name", "originalTitle", "original_title"))
+    if not title:
+        return None
+    poster = _movievault_image_url(_movievault_first(movie, "poster", "posterUrl", "poster_url", "posterFile", "poster_file", "image"))
+    backdrop = _movievault_image_url(_movievault_first(movie, "backdrop", "backdropUrl", "backdrop_url"))
+    backdrops_value = _movievault_first(movie, "backdrops", "backdropUrls", "backdrop_urls")
+    if isinstance(backdrops_value, list):
+        backdrops = json.dumps([_movievault_image_url(v) for v in backdrops_value if _movievault_image_url(v)], ensure_ascii=False)
+    else:
+        backdrops = _movievault_text(backdrops_value)
+    content_ratings = _movievault_first(movie, "contentRatings", "content_ratings", "certifications")
+    if isinstance(content_ratings, dict):
+        content_ratings = json.dumps(content_ratings, ensure_ascii=False)
+    return {
+        "title": title,
+        "sort_title": _movievault_text(_movievault_first(movie, "sortTitle", "sort_title")),
+        "original_title": _movievault_text(_movievault_first(movie, "originalTitle", "original_title")),
+        "year": _parse_year(_movievault_first(movie, "year", "releaseYear", "release_year", "releaseDate", "release_date")),
+        "release_date": _movievault_text(_movievault_first(movie, "releaseDate", "release_date")),
+        "edition": _movievault_text(_movievault_first(movie, "edition")),
+        "country": _movievault_text(_movievault_first(movie, "country", "countries")),
+        "language": _movievault_text(_movievault_first(movie, "language", "languages")),
+        "director": _movievault_text(_movievault_first(movie, "director", "directors")),
+        "actor": _movievault_text(_movievault_first(movie, "actor", "actors", "cast")),
+        "producer": _movievault_text(_movievault_first(movie, "producer", "producers")),
+        "studios": _movievault_text(_movievault_first(movie, "studios", "studio", "productionCompanies", "production_companies")),
+        "genre": _movievault_text(_movievault_first(movie, "genre", "genres")),
+        "audience_rating": _movievault_text(_movievault_first(movie, "audienceRating", "audience_rating", "certification")),
+        "content_ratings": _movievault_text(content_ratings),
+        "format": _movievault_text(_movievault_first(movie, "format", "mediaType", "media_type")),
+        "runtime": re.sub(r"[^\d]", "", _movievault_text(_movievault_first(movie, "runtime", "duration"))),
+        "hdr": _movievault_text(_movievault_first(movie, "hdr", "hdrFormat", "hdr_format")),
+        "packaging": _movievault_text(_movievault_first(movie, "packaging")),
+        "screen_ratios": _movievault_text(_movievault_first(movie, "screenRatios", "screen_ratios", "aspectRatio", "aspect_ratio")),
+        "audio_tracks": _movievault_text(_movievault_first(movie, "audioTracks", "audio_tracks", "audio")),
+        "subtitles": _movievault_text(_movievault_first(movie, "subtitles")),
+        "regions": _movievault_text(_movievault_first(movie, "regions", "region")),
+        "plot": _movievault_text(_movievault_first(movie, "plot", "overview", "description", "synopsis")),
+        "extras": _movievault_text(_movievault_first(movie, "extras", "specialFeatures", "special_features")),
+        "imdb_id": _movievault_text(_movievault_first(movie, "imdbId", "imdb_id")),
+        "tmdb_id": _movievault_text(_movievault_first(movie, "tmdbId", "tmdb_id")),
+        "poster": poster,
+        "backdrop": backdrop,
+        "backdrops": backdrops,
+        "trailer_url": _movievault_text(_movievault_first(movie, "trailerUrl", "trailer_url")),
+        "videos": _movievault_text(_movievault_first(movie, "videos")),
+        "distributor": _movievault_text(_movievault_first(movie, "distributor", "label", "publisher")),
+        "_movievault_id": _movievault_text(_movievault_first(movie, "id", "movieId", "movie_id")),
+    }
+
+
+def _normalize_movievault_box_set(data: dict | None):
+    if not isinstance(data, dict):
+        return None
+    payload = _movievault_first_payload(data)
+    if not isinstance(payload, dict):
+        return None
+    if not _movievault_member_list(payload):
+        nested = payload.get("box_set") or payload.get("boxSet") or payload.get("boxSetProposal") or payload.get("box_set_proposal")
+        if isinstance(nested, dict):
+            payload = nested
+    title = _movievault_text(_movievault_first(payload, "title", "name", "boxSetTitle", "box_set_title"))
+    members = []
+    seen = set()
+    for item in _movievault_member_list(payload):
+        if not isinstance(item, dict):
+            continue
+        clean = _movievault_text(_movievault_first(item, "title", "name"))
+        if not clean:
+            continue
+        year = _parse_year(_movievault_first(item, "year", "releaseYear", "release_year", "releaseDate", "release_date")) or ""
+        key = (clean.lower(), str(year))
+        if key in seen:
+            continue
+        seen.add(key)
+        members.append({
+            "title": clean,
+            "year": year,
+            "poster": _movievault_image_url(_movievault_first(item, "poster", "posterUrl", "poster_url", "posterFile", "poster_file", "image")),
+            "tmdb_id": _movievault_text(_movievault_first(item, "tmdbId", "tmdb_id")),
+            "imdb_id": _movievault_text(_movievault_first(item, "imdbId", "imdb_id")),
+            "sort_order": _movievault_text(_movievault_first(item, "sortOrder", "sort_order")),
+        })
+    if not title or len(members) < 2:
+        return None
+    return {
+        "source": "movievault",
+        "name": title,
+        "barcode": _movievault_text(_movievault_first(payload, "barcode", "ean", "upc")),
+        "year_range": _movievault_text(_movievault_first(payload, "yearRange", "year_range")),
+        "poster": _movievault_image_url(_movievault_first(payload, "poster", "posterUrl", "poster_url", "image")),
+        "movies": members,
+    }
+
+
+def _movievault_movie_with_boxset(movie_data, box_set_data=None):
+    movie = _normalize_movievault_movie(movie_data)
+    box_source = box_set_data
+    if not box_source and isinstance(movie_data, dict):
+        box_source = (
+            movie_data.get("box_set")
+            or movie_data.get("boxSet")
+            or movie_data.get("boxSetProposal")
+            or movie_data.get("box_set_proposal")
+        )
+    proposal = _normalize_movievault_box_set(box_source or movie_data)
+    if movie and proposal:
+        movie["box_set_proposal"] = proposal
+    return movie
+
+
+def lookup_movievault_by_barcode(barcode: str):
+    if not _is_movievault_enabled() or not barcode:
+        return None
+    data = _movievault_get(f"/api/v1/barcodes/{quote(str(barcode))}")
+    return _movievault_movie_with_boxset(data)
+
+
+def lookup_movievault_movie(title: str = "", year: str = "", barcode: str = ""):
+    if not _is_movievault_enabled():
+        return None
+    if barcode:
+        by_barcode = lookup_movievault_by_barcode(barcode)
+        if by_barcode:
+            return by_barcode
+    params = {"q": title}
+    if year:
+        params["year"] = year
+    data = _movievault_get("/api/v1/movies", params=params)
+    return _movievault_movie_with_boxset(data)
+
+
+def lookup_movievault_box_set_proposal(title: str = "", year: str = "", barcode: str = ""):
+    if not _is_movievault_enabled():
+        return None
+    params = {}
+    if title:
+        params["q"] = title
+    if year:
+        params["year"] = year
+    if barcode:
+        params["barcode"] = barcode
+    data = _movievault_get("/api/v1/box-sets", params=params)
+    return _normalize_movievault_box_set(data)
 
 
 def lookup_movie_omdb(title=None, imdb_id=None):
@@ -4408,8 +4800,13 @@ def lookup_box_set_proposal():
     try:
         proposal = None
         if barcode:
+            info = lookup_movievault_by_barcode(barcode)
+            proposal = (info or {}).get("box_set_proposal")
+        if not proposal and barcode:
             info = lookup_movie_bluray_by_barcode(barcode)
             proposal = (info or {}).get("box_set_proposal")
+        if not proposal and title:
+            proposal = lookup_movievault_box_set_proposal(title, year, barcode)
         if not proposal and title:
             proposal = lookup_bluray_box_set_proposal_by_title(title, year)
         if proposal:
@@ -4735,70 +5132,17 @@ def refresh_single(movie_id):
     imdb_id        = movie.get("imdb_id", "")
 
     try:
-        info = None
-        omdb_info = None
-        source_parts = []
         attempts = []
         tmdb_id_known = movie.get("tmdb_id", "")
-
-        # 1. TMDb — primary source (multilingual titles/plots, backdrops, trailer)
-        if not TMDB_API_KEY:
-            _trace_add(attempts, "TMDb", "skipped", f"title={search_title}", "TMDB_API_KEY niet geconfigureerd")
-        else:
-          try:
-            if tmdb_id_known:
-                info = lookup_movie_tmdb_by_id(tmdb_id_known)
-                _trace_add(attempts, "TMDb", "hit" if info else "miss", f"tmdb_id={tmdb_id_known}")
-            if not info:
-                info = lookup_movie_tmdb(search_title, year)
-                _trace_add(attempts, "TMDb", "hit" if info else "miss", f"title={search_title}, year={year}")
-            if not info and original_title and original_title != title:
-                info = lookup_movie_tmdb(title, year)
-                _trace_add(attempts, "TMDb", "hit" if info else "miss", f"fallback title={title}, year={year}")
-            if info:
-                source_parts.append("TMDb")
-          except Exception as ex:
-            _trace_add(attempts, "TMDb", "error", f"title={search_title}", str(ex))
-
-        # 2. OMDb — supplementary: fills imdb_id, rating, and any fields TMDb missed
-        if OMDB_API_KEY:
-            try:
-                if imdb_id:
-                    omdb_info = lookup_movie_omdb(imdb_id=imdb_id)
-                    _trace_add(attempts, "OMDb", "hit" if omdb_info else "miss", f"imdb_id={imdb_id}")
-                if not omdb_info:
-                    omdb_info = lookup_movie_omdb(title=search_title)
-                    _trace_add(attempts, "OMDb", "hit" if omdb_info else "miss", f"title={search_title}")
-                if omdb_info:
-                    source_parts.append("OMDb")
-            except Exception as ex:
-                _trace_add(attempts, "OMDb", "error", f"title={search_title}", str(ex))
-        elif imdb_id:
-            _trace_add(attempts, "OMDb", "skipped", f"imdb_id={imdb_id}", "OMDB_API_KEY ontbreekt")
-
-        # Merge: fill any missing fields from OMDb into TMDb result
-        if info and omdb_info:
-            for k, v in omdb_info.items():
-                if v and not info.get(k):
-                    info[k] = v
-        elif not info:
-            info = omdb_info
-
-        source = " + ".join(source_parts) if source_parts else ""
-        if info and _is_bluray_scrape_enabled():
-            specs, bluray_attempts = lookup_movie_bluray_specs_traced(
-                info.get("title") or search_title,
-                info.get("year") or year,
-                movie.get("barcode") or ""
-            )
-            for a in bluray_attempts:
-                _trace_add(attempts, "Blu-ray.com", a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
-            before = dict(info)
-            info = _merge_disc_specs(info, specs)
-            if specs and info != before:
-                source = f"{source} + Blu-ray.com"
-        elif info:
-            _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
+        info, source = _merge_metadata_by_order(
+            search_title,
+            year,
+            barcode=movie.get("barcode", ""),
+            imdb_id=imdb_id,
+            tmdb_id=tmdb_id_known,
+            fallback_title=title if original_title and original_title != title else "",
+            attempts=attempts,
+        )
         if not info:
             conn.close()
             add_log("refresh", f"Geen resultaat voor \"{search_title}\"", f"Backends: {_trace_summary(attempts)}", "warn")
@@ -5253,66 +5597,16 @@ def bulk_refresh():
         year           = movie.get("year", "")
         imdb_id        = movie.get("imdb_id", "")
         try:
-            info = None
-            source = ""
             attempts = []
-            if imdb_id and OMDB_API_KEY:
-                try:
-                    info = lookup_movie_omdb(imdb_id=imdb_id)
-                    _trace_add(attempts, "OMDb", "hit" if info else "miss", f"imdb_id={imdb_id}")
-                except Exception as ex:
-                    _trace_add(attempts, "OMDb", "error", f"imdb_id={imdb_id}", str(ex))
-                if info:
-                    source = f"OMDb (imdb_id={imdb_id})"
-            elif imdb_id and not OMDB_API_KEY:
-                _trace_add(attempts, "OMDb", "skipped", f"imdb_id={imdb_id}", "OMDB_API_KEY ontbreekt")
-            if not info:
-                if not TMDB_API_KEY:
-                    _trace_add(attempts, "TMDb", "skipped", f"title={search_title}", "TMDB_API_KEY niet geconfigureerd")
-                else:
-                    try:
-                        info = lookup_movie_tmdb(search_title, year)
-                        _trace_add(attempts, "TMDb", "hit" if info else "miss", f"title={search_title}, year={year}")
-                    except Exception as ex:
-                        _trace_add(attempts, "TMDb", "error", f"title={search_title}, year={year}", str(ex))
-                    if info:
-                        source = f"TMDb (titel=\"{search_title}\", jaar={year})"
-            if not info:
-                try:
-                    info = lookup_movie_omdb(title=search_title)
-                    _trace_add(attempts, "OMDb", "hit" if info else "miss", f"title={search_title}")
-                except Exception as ex:
-                    _trace_add(attempts, "OMDb", "error", f"title={search_title}", str(ex))
-                if info:
-                    source = f"OMDb (titel=\"{search_title}\")"
-            if not info and original_title and original_title != title:
-                try:
-                    info = lookup_movie_tmdb(title, year)
-                    _trace_add(attempts, "TMDb", "hit" if info else "miss", f"fallback title={title}, year={year}")
-                except Exception as ex:
-                    _trace_add(attempts, "TMDb", "error", f"fallback title={title}, year={year}", str(ex))
-                if not info:
-                    try:
-                        info = lookup_movie_omdb(title=title)
-                        _trace_add(attempts, "OMDb", "hit" if info else "miss", f"fallback title={title}")
-                    except Exception as ex:
-                        _trace_add(attempts, "OMDb", "error", f"fallback title={title}", str(ex))
-                if info:
-                    source = f"TMDb/OMDb fallback (titel=\"{title}\")"
-            if info and _is_bluray_scrape_enabled():
-                specs, bluray_attempts = lookup_movie_bluray_specs_traced(
-                    info.get("title") or search_title,
-                    info.get("year") or year,
-                    movie.get("barcode") or ""
-                )
-                for a in bluray_attempts:
-                    _trace_add(attempts, "Blu-ray.com", a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
-                before = dict(info)
-                info = _merge_disc_specs(info, specs)
-                if specs and info != before:
-                    source = f"{source} + Blu-ray.com"
-            elif info:
-                _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
+            info, source = _merge_metadata_by_order(
+                search_title,
+                year,
+                barcode=movie.get("barcode") or "",
+                imdb_id=imdb_id,
+                tmdb_id=movie.get("tmdb_id") or "",
+                fallback_title=title if original_title and original_title != title else "",
+                attempts=attempts,
+            )
             if not info:
                 add_log("refresh", f"Geen resultaat voor \"{search_title}\" ({year})",
                         f"Backends: {_trace_summary(attempts)}", "warn")
@@ -5535,23 +5829,34 @@ def lookup(barcode):
         yield emit(1, "Local DB", "miss")
         _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
 
-        # 2. UPCItemDB
-        raw_title = None
-        yield emit(2, "UPCItemDB", "searching")
+        movievault_info = None
+        yield emit(2, "MovieVault", "searching", f"barcode={barcode}")
         try:
-            raw_title = lookup_by_barcode_upcitemdb(barcode)
-            _trace_add(attempts, "UPCItemDB", "hit" if raw_title else "miss", f"barcode={barcode}")
-            yield emit(2, "UPCItemDB", "hit" if raw_title else "miss", raw_title or "")
-        except Exception:
-            _trace_add(attempts, "UPCItemDB", "error", f"barcode={barcode}")
-            yield emit(2, "UPCItemDB", "error")
+            movievault_info = lookup_movievault_by_barcode(barcode)
+            _trace_add(attempts, "MovieVault", "hit" if movievault_info else "miss", f"barcode={barcode}")
+            yield emit(2, "MovieVault", "hit" if movievault_info else "miss")
+        except Exception as ex:
+            _trace_add(attempts, "MovieVault", "error", f"barcode={barcode}", str(ex))
+            yield emit(2, "MovieVault", "error")
 
-        # 3. TMDb / OMDb
-        movie_info = None
+        # 3. UPCItemDB
+        raw_title = None
+        if not movievault_info:
+            yield emit(3, "UPCItemDB", "searching")
+            try:
+                raw_title = lookup_by_barcode_upcitemdb(barcode)
+                _trace_add(attempts, "UPCItemDB", "hit" if raw_title else "miss", f"barcode={barcode}")
+                yield emit(3, "UPCItemDB", "hit" if raw_title else "miss", raw_title or "")
+            except Exception:
+                _trace_add(attempts, "UPCItemDB", "error", f"barcode={barcode}")
+                yield emit(3, "UPCItemDB", "error")
+
+        # 4. TMDb / OMDb
+        movie_info = movievault_info
         if raw_title:
             for candidate in _title_candidates_from_upc(raw_title):
                 if not movie_info:
-                    yield emit(3, "TMDb", "searching", candidate)
+                    yield emit(4, "TMDb", "searching", candidate)
                     try:
                         _cands = _tmdb_search_top5(candidate)
                         if _cands:
@@ -5563,19 +5868,19 @@ def lookup(barcode):
                                 if movie_info and len(valid_cands) > 1:
                                     tmdb_candidates = valid_cands
                         _trace_add(attempts, "TMDb", "hit" if movie_info else "miss", f"title={candidate}")
-                        yield emit(3, "TMDb", "hit" if movie_info else "miss", candidate)
+                        yield emit(4, "TMDb", "hit" if movie_info else "miss", candidate)
                     except Exception as ex:
                         _trace_add(attempts, "TMDb", "error", f"title={candidate}", str(ex))
-                        yield emit(3, "TMDb", "error", candidate)
+                        yield emit(4, "TMDb", "error", candidate)
                 if not movie_info:
-                    yield emit(4, "OMDb", "searching", candidate)
+                    yield emit(5, "OMDb", "searching", candidate)
                     try:
                         movie_info = lookup_movie_omdb(title=candidate)
                         _trace_add(attempts, "OMDb", "hit" if movie_info else "miss", f"title={candidate}")
-                        yield emit(4, "OMDb", "hit" if movie_info else "miss", candidate)
+                        yield emit(5, "OMDb", "hit" if movie_info else "miss", candidate)
                     except Exception as ex:
                         _trace_add(attempts, "OMDb", "error", f"title={candidate}", str(ex))
-                        yield emit(4, "OMDb", "error", candidate)
+                        yield emit(5, "OMDb", "error", candidate)
                 if movie_info:
                     break
 
@@ -5584,13 +5889,13 @@ def lookup(barcode):
             movie_info["title"] = raw_title
             _trace_add(attempts, "UPCItemDB", "partial", "title-only fallback")
 
-        # 4. Blu-ray.com barcode fallback
+        # 5. Blu-ray.com barcode fallback
         bluray_info = None
         if not movie_info and _is_bluray_scrape_enabled():
-            yield emit(5, "Blu-ray.com", "searching", f"barcode={barcode}")
+            yield emit(6, "Blu-ray.com", "searching", f"barcode={barcode}")
             bluray_info = lookup_movie_bluray_by_barcode(barcode)
             _trace_add(attempts, "Blu-ray.com", "hit" if bluray_info else "miss", f"barcode={barcode}")
-            yield emit(5, "Blu-ray.com", "hit" if bluray_info else "miss")
+            yield emit(6, "Blu-ray.com", "hit" if bluray_info else "miss")
             if bluray_info:
                 movie_info = {f: "" for f in ALL_FIELDS}
                 movie_info["title"] = bluray_info.get("title", "") or f"Barcode {barcode}"
@@ -5608,10 +5913,10 @@ def lookup(barcode):
         elif not movie_info:
             _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
 
-        # 5. Blu-ray.com spec enrichment
+        # 6. Blu-ray.com spec enrichment
         if movie_info:
             if _is_bluray_scrape_enabled():
-                yield emit(6, "Blu-ray.com specs", "searching")
+                yield emit(7, "Blu-ray.com specs", "searching")
                 specs, bluray_attempts = lookup_movie_bluray_specs_traced(
                     movie_info.get("title") or raw_title,
                     movie_info.get("year") or "",
@@ -5620,12 +5925,14 @@ def lookup(barcode):
                 for a in bluray_attempts:
                     _trace_add(attempts, "Blu-ray.com", a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
                 movie_info = _merge_disc_specs(movie_info, specs)
-                yield emit(6, "Blu-ray.com specs", "hit" if specs else "miss")
+                yield emit(7, "Blu-ray.com specs", "hit" if specs else "miss")
             else:
                 _trace_add(attempts, "Blu-ray.com", "skipped", "spec enrichment uit")
 
-            box_set_proposal = (bluray_info or {}).get("box_set_proposal") if bluray_info else None
+            box_set_proposal = (movievault_info or {}).get("box_set_proposal") or ((bluray_info or {}).get("box_set_proposal") if bluray_info else None)
             _log_bluray_box_set_proposal(barcode, box_set_proposal)
+            if not movievault_info:
+                _submit_movievault_contribution(movie_info, "Barcode lookup", {"barcode": barcode, "rawTitle": raw_title or ""})
             add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
                     f"Backends: {_trace_summary(attempts)}", "success")
             yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
@@ -5682,13 +5989,20 @@ def _lookup_sync(barcode):
             add_log("lookup", f"Barcode {barcode} al als vault in collectie", f"Vault: {vault.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
             return jsonify({"status": "vault_exists", "vault": vault, "container": vault, "container_type": "vault", "barcode": barcode})
         _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
-        raw_title = None
+        movievault_info = None
         try:
-            raw_title = lookup_by_barcode_upcitemdb(barcode)
-            _trace_add(attempts, "UPCItemDB", "hit" if raw_title else "miss", f"barcode={barcode}")
-        except Exception:
-            _trace_add(attempts, "UPCItemDB", "error", f"barcode={barcode}")
-        movie_info = None
+            movievault_info = lookup_movievault_by_barcode(barcode)
+            _trace_add(attempts, "MovieVault", "hit" if movievault_info else "miss", f"barcode={barcode}")
+        except Exception as ex:
+            _trace_add(attempts, "MovieVault", "error", f"barcode={barcode}", str(ex))
+        raw_title = None
+        if not movievault_info:
+            try:
+                raw_title = lookup_by_barcode_upcitemdb(barcode)
+                _trace_add(attempts, "UPCItemDB", "hit" if raw_title else "miss", f"barcode={barcode}")
+            except Exception:
+                _trace_add(attempts, "UPCItemDB", "error", f"barcode={barcode}")
+        movie_info = movievault_info
         if raw_title:
             for candidate in _title_candidates_from_upc(raw_title):
                 if not movie_info:
@@ -5752,8 +6066,10 @@ def _lookup_sync(barcode):
                     movie_info["content_ratings"] = json.dumps(cr, ensure_ascii=False)
                     if not movie_info.get("audience_rating") and cr.get("US"):
                         movie_info["audience_rating"] = cr["US"]
-            box_set_proposal = (bluray_info or {}).get("box_set_proposal") if bluray_info else None
+            box_set_proposal = (movievault_info or {}).get("box_set_proposal") or ((bluray_info or {}).get("box_set_proposal") if bluray_info else None)
             _log_bluray_box_set_proposal(barcode, box_set_proposal)
+            if not movievault_info:
+                _submit_movievault_contribution(movie_info, "Barcode lookup", {"barcode": barcode, "rawTitle": raw_title or ""})
             add_log(
                 "lookup",
                 f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
@@ -5779,22 +6095,12 @@ def search_title():
         return jsonify({"error": "No title provided"}), 400
     try:
         attempts = []
-        movie_info = lookup_movie_tmdb(title, year)
-        _trace_add(attempts, "TMDb", "hit" if movie_info else "miss", f"title={title}, year={year}")
-        if not movie_info:
-            movie_info = lookup_movie_omdb(title=title)
-            _trace_add(attempts, "OMDb", "hit" if movie_info else "miss", f"title={title}")
-        if movie_info and _is_bluray_scrape_enabled():
-            specs, bluray_attempts = lookup_movie_bluray_specs_traced(
-                movie_info.get("title") or title,
-                movie_info.get("year") or year,
-                ""
-            )
-            for a in bluray_attempts:
-                _trace_add(attempts, "Blu-ray.com", a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
-            movie_info = _merge_disc_specs(movie_info, specs)
-        elif movie_info:
-            _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
+        movie_info, _source = _merge_metadata_by_order(
+            title,
+            year,
+            attempts=attempts,
+            stop_after_first=False,
+        )
         if movie_info:
             add_log("lookup", f"Titel-zoekactie gevonden: \"{movie_info.get('title') or title}\"", f"Backends: {_trace_summary(attempts)}", "success")
             # Finalise content ratings
@@ -5962,6 +6268,20 @@ def enrich_from_api(row: dict) -> dict:
         for field in fillable_fields:
             if is_missing(field) and info.get(field):
                 row[field] = info[field]
+
+    try:
+        info, _source = _merge_metadata_by_order(
+            search_title,
+            year,
+            barcode=row.get("barcode") or "",
+            imdb_id=imdb_id,
+            tmdb_id=row.get("tmdb_id") or "",
+            fallback_title=row.get("title") or "",
+            stop_after_first=False,
+        )
+        fill_missing_from(info)
+    except Exception:
+        pass
 
     # Source 1: OMDb by imdb_id if available
     if imdb_id and OMDB_API_KEY:
@@ -6653,12 +6973,205 @@ def _is_tmdb_enabled() -> bool:
     return _is_source_enabled("tmdb_enabled", TMDB_ENABLED_DEFAULT)
 
 
+def _is_movievault_enabled() -> bool:
+    return bool(_movievault_base_url())
+
+
+def _is_movievault_contribution_enabled() -> bool:
+    return _is_source_enabled(
+        "movievault_contribution_enabled",
+        MOVIEVAULT_CONTRIBUTION_ENABLED_DEFAULT,
+    )
+
+
 def _is_bluray_scrape_enabled() -> bool:
     return _is_source_enabled("bluray_scrape_enabled", BLURAY_SCRAPE_ENABLED_DEFAULT)
 
 
 def _is_bluraydiscde_scrape_enabled() -> bool:
     return _is_source_enabled("bluraydiscde_scrape_enabled", BLURAYDISCDE_SCRAPE_ENABLED_DEFAULT)
+
+
+METADATA_SOURCE_LABELS = {
+    "movievault": "MovieVault",
+    "tmdb": "TMDb",
+    "omdb": "OMDb",
+    "bluray_com": "Blu-ray.com",
+    "bluray_disc_de": "bluray-disc.de",
+}
+
+
+def _setting_value(key: str, default: str = "") -> str:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        conn.close()
+        if row and row[0] is not None:
+            return str(row[0])
+    except Exception:
+        pass
+    return default
+
+
+def _metadata_source_order() -> list[str]:
+    raw = _setting_value("metadata_source_order", METADATA_SOURCE_ORDER_DEFAULT)
+    requested = [x.strip().lower() for x in str(raw).replace(";", ",").split(",")]
+    valid = list(METADATA_SOURCE_LABELS.keys())
+    order = []
+    for source in requested:
+        if source in valid and source not in order:
+            order.append(source)
+    for source in valid:
+        if source not in order:
+            order.append(source)
+    return order
+
+
+def _metadata_source_order_string() -> str:
+    return ",".join(_metadata_source_order())
+
+
+def _metadata_source_enabled(source: str) -> bool:
+    if source == "movievault":
+        return _is_movievault_enabled()
+    if source == "tmdb":
+        return _is_tmdb_enabled()
+    if source == "omdb":
+        return _is_omdb_enabled()
+    if source == "bluray_com":
+        return _is_bluray_scrape_enabled()
+    if source == "bluray_disc_de":
+        return _is_bluraydiscde_scrape_enabled()
+    return False
+
+
+def _merge_metadata_by_order(
+    title: str,
+    year: str = "",
+    barcode: str = "",
+    imdb_id: str = "",
+    tmdb_id: str = "",
+    fallback_title: str = "",
+    attempts: list | None = None,
+    stop_after_first: bool = False,
+    contribute_to_movievault: bool = True,
+) -> tuple[dict | None, str]:
+    """Fetch metadata in configured order and fill missing fields from later sources."""
+    attempts = attempts if attempts is not None else []
+    info = {}
+    used_sources = []
+    movievault_attempted = False
+    movievault_hit = False
+    primary_title = (title or "").strip()
+    fallback_title = (fallback_title or "").strip()
+
+    def merge_from(data: dict | None, source_label: str):
+        nonlocal info
+        if not data:
+            return False
+        if not info:
+            info = dict(data)
+        else:
+            for key, value in data.items():
+                if value and not info.get(key):
+                    info[key] = value
+        used_sources.append(source_label)
+        return True
+
+    for source in _metadata_source_order():
+        label = METADATA_SOURCE_LABELS[source]
+        data = None
+        if not _metadata_source_enabled(source):
+            _trace_add(attempts, label, "skipped", "source uitgeschakeld of niet geconfigureerd")
+            continue
+        try:
+            if source == "movievault":
+                movievault_attempted = True
+                data = lookup_movievault_movie(primary_title, year, barcode)
+                if not data and fallback_title and fallback_title != primary_title:
+                    data = lookup_movievault_movie(fallback_title, year, barcode)
+                _trace_add(attempts, label, "hit" if data else "miss", f"title={primary_title}, year={year}, barcode={barcode}")
+                if data:
+                    movievault_hit = True
+            elif source == "tmdb":
+                if tmdb_id:
+                    data = lookup_movie_tmdb_by_id(tmdb_id)
+                    _trace_add(attempts, label, "hit" if data else "miss", f"tmdb_id={tmdb_id}")
+                if not data:
+                    data = lookup_movie_tmdb(primary_title, year)
+                    _trace_add(attempts, label, "hit" if data else "miss", f"title={primary_title}, year={year}")
+                if not data and fallback_title and fallback_title != primary_title:
+                    data = lookup_movie_tmdb(fallback_title, year)
+                    _trace_add(attempts, label, "hit" if data else "miss", f"fallback title={fallback_title}, year={year}")
+            elif source == "omdb":
+                if imdb_id:
+                    data = lookup_movie_omdb(imdb_id=imdb_id)
+                    _trace_add(attempts, label, "hit" if data else "miss", f"imdb_id={imdb_id}")
+                if not data:
+                    data = lookup_movie_omdb(title=primary_title)
+                    _trace_add(attempts, label, "hit" if data else "miss", f"title={primary_title}")
+                if not data and fallback_title and fallback_title != primary_title:
+                    data = lookup_movie_omdb(title=fallback_title)
+                    _trace_add(attempts, label, "hit" if data else "miss", f"fallback title={fallback_title}")
+            elif source == "bluray_com":
+                base = {}
+                if barcode:
+                    by_barcode = lookup_movie_bluray_by_barcode(barcode)
+                    _trace_add(attempts, label, "hit" if by_barcode else "miss", f"barcode={barcode}")
+                    if by_barcode:
+                        base.update({
+                            "title": by_barcode.get("title", "") or primary_title,
+                            "year": by_barcode.get("year", "") or year,
+                            "poster": by_barcode.get("poster", ""),
+                            "hdr": by_barcode.get("hdr", ""),
+                            "audio_tracks": by_barcode.get("audio_tracks", ""),
+                            "subtitles": by_barcode.get("subtitles", ""),
+                        })
+                specs, source_attempts = lookup_movie_bluray_specs_traced(
+                    base.get("title") or primary_title,
+                    base.get("year") or year,
+                    barcode,
+                )
+                for a in source_attempts:
+                    _trace_add(attempts, label, a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
+                data = _merge_disc_specs(base or {"title": primary_title, "year": year}, specs)
+                if not specs and not base:
+                    data = None
+            elif source == "bluray_disc_de":
+                specs, source_attempts = lookup_movie_bluraydiscde_specs_traced(primary_title, year, barcode)
+                for a in source_attempts:
+                    _trace_add(attempts, label, a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
+                data = _merge_disc_specs({"title": primary_title, "year": year}, specs) if specs else None
+                if specs and specs.get("poster") and data and not data.get("poster"):
+                    data["poster"] = specs.get("poster")
+        except Exception as ex:
+            _trace_add(attempts, label, "error", f"title={primary_title}", str(ex))
+            data = None
+
+        if merge_from(data, label) and stop_after_first:
+            break
+
+    source_label = " + ".join(dict.fromkeys(used_sources))
+    if (
+        contribute_to_movievault
+        and info
+        and movievault_attempted
+        and not movievault_hit
+        and any(src != "MovieVault" for src in used_sources)
+    ):
+        _submit_movievault_contribution(
+            info,
+            source_label,
+            {
+                "title": primary_title,
+                "year": year,
+                "barcode": barcode,
+                "imdbId": imdb_id,
+                "tmdbId": tmdb_id,
+                "fallbackTitle": fallback_title,
+            },
+        )
+    return (info or None), source_label
 
 
 def _is_registration_enabled() -> bool:
