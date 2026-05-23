@@ -347,10 +347,15 @@ async function doLookup(barcode) {
       document.getElementById('resultTitle').textContent = title;
       const tags = document.getElementById('resultTags');
       tags.innerHTML = `<span class="tag format">${label}</span>`;
-      document.getElementById('resultPoster').innerHTML = '<div class="no-poster">📦</div>';
+      const poster = document.getElementById('resultPoster');
+      poster.classList.remove('is-clickable');
+      poster.onclick = null;
+      poster.title = '';
+      poster.innerHTML = '<div class="no-poster">📦</div>';
       document.getElementById('movieResult').style.display = 'flex';
       document.getElementById('noResult').style.display = 'none';
       document.getElementById('btnSave').style.display = 'none';
+      resetScanSupplementButton();
     } else if (finalData.status === 'found') {
       _detectedFormat = finalData.detected_format
         || _detectFormatFromTitle(finalData.raw_title || stepRawTitle)
@@ -378,10 +383,15 @@ async function doLookup(barcode) {
       const tags = document.getElementById('resultTags');
       tags.innerHTML = '';
       if (_detectedFormat) tags.innerHTML += `<span class="tag format">${_detectedFormat}</span>`;
-      document.getElementById('resultPoster').innerHTML = '<div class="no-poster">🎬</div>';
+      const poster = document.getElementById('resultPoster');
+      poster.classList.remove('is-clickable');
+      poster.onclick = null;
+      poster.title = '';
+      poster.innerHTML = '<div class="no-poster">🎬</div>';
       document.getElementById('movieResult').style.display = 'flex';
       document.getElementById('noResult').style.display = 'none';
       document.getElementById('btnSave').style.display = 'none';
+      resetScanSupplementButton();
     }
   } catch(e) {
     showStatus('scanStatus', t('js.connectionError', e.message), 'error');
@@ -704,6 +714,9 @@ function displayMovieResult(movie, barcode, alreadyInCollection, detectedFormat)
 
   const src = posterSrc(movie);
   const poster = document.getElementById('resultPoster');
+  poster.classList.toggle('is-clickable', !!(alreadyInCollection && movie.id));
+  poster.onclick = alreadyInCollection && movie.id ? () => openScannedMovieDetail(movie.id) : null;
+  poster.title = alreadyInCollection && movie.id ? t('scan.view') : '';
   if (src) {
     poster.innerHTML = `<img src="${src}" onerror="this.parentElement.innerHTML='<div class=\\'no-poster\\'>🎬</div>'">`;
   } else {
@@ -716,7 +729,36 @@ function displayMovieResult(movie, barcode, alreadyInCollection, detectedFormat)
   const btnSave = document.getElementById('btnSave');
   btnSave.style.display = alreadyInCollection ? 'none' : '';
   btnSave.disabled = false;
-  if (!alreadyInCollection) btnSave.innerHTML = '💾 Opslaan';
+  if (!alreadyInCollection) btnSave.innerHTML = t('scan.save');
+
+  const btnSupplement = document.getElementById('btnSupplement');
+  if (btnSupplement) {
+    btnSupplement.style.display = '';
+    btnSupplement.disabled = false;
+    if (alreadyInCollection && movie.id) {
+      btnSupplement.innerHTML = t('scan.view');
+      btnSupplement.onclick = () => openScannedMovieDetail(movie.id);
+    } else {
+      btnSupplement.innerHTML = t('scan.supplement');
+      btnSupplement.onclick = supplementMovie;
+    }
+  }
+}
+
+function openScannedMovieDetail(movieId) {
+  if (!movieId) return;
+  if (typeof openMovieDetail === 'function') {
+    openMovieDetail(movieId);
+  }
+}
+
+function resetScanSupplementButton() {
+  const btnSupplement = document.getElementById('btnSupplement');
+  if (!btnSupplement) return;
+  btnSupplement.style.display = '';
+  btnSupplement.disabled = false;
+  btnSupplement.innerHTML = t('scan.supplement');
+  btnSupplement.onclick = supplementMovie;
 }
 
 async function saveMovie() {

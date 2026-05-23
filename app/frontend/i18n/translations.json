@@ -808,7 +808,8 @@
     "detail.containers": "Containers",
     "bulk.containerHelp": "Vaults en Box Sets bevatten films. Collections koppelen de selectie als losse films; collections kunnen daarnaast ook Vaults en Box Sets bevatten.",
     "bulk.containerPlaceholder": "-- Kies een container --",
-    "bulk.directCollectionGroup": "Collection (directe films)"
+    "bulk.directCollectionGroup": "Collection (directe films)",
+    "scan.view": "Bekijken"
   },
   "en": {
     "nav.collection": "Collection",
@@ -1614,7 +1615,8 @@
     "bulk.selectContainer": "Choose a Vault, Box Set or Collection:",
     "bulk.containerHelp": "Vaults and Box Sets contain movies. Collections link the selection as loose movies; collections can also contain Vaults and Box Sets.",
     "bulk.containerPlaceholder": "-- Choose a container --",
-    "bulk.directCollectionGroup": "Collection (direct movies)"
+    "bulk.directCollectionGroup": "Collection (direct movies)",
+    "scan.view": "View"
   },
   "fr": {
     "nav.collection": "Collection",
@@ -2422,7 +2424,8 @@
     "bulk.selectContainer": "Choisissez un Vault, Box Set ou Collection :",
     "bulk.containerHelp": "Les Vaults et Box Sets contiennent des films. Les Collections lient la sélection comme films libres ; elles peuvent aussi contenir des Vaults et Box Sets.",
     "bulk.containerPlaceholder": "-- Choisir un conteneur --",
-    "bulk.directCollectionGroup": "Collection (films directs)"
+    "bulk.directCollectionGroup": "Collection (films directs)",
+    "scan.view": "Voir"
   },
   "de": {
     "nav.collection": "Sammlung",
@@ -3229,7 +3232,8 @@
     "bulk.selectContainer": "Vault, Box Set oder Collection wählen:",
     "bulk.containerHelp": "Vaults und Box Sets enthalten Filme. Collections verknüpfen die Auswahl als einzelne Filme; Collections können zusätzlich Vaults und Box Sets enthalten.",
     "bulk.containerPlaceholder": "-- Container wählen --",
-    "bulk.directCollectionGroup": "Collection (direkte Filme)"
+    "bulk.directCollectionGroup": "Collection (direkte Filme)",
+    "scan.view": "Ansehen"
   },
   "es": {
     "nav.collection": "Colección",
@@ -4036,7 +4040,8 @@
     "bulk.selectContainer": "Elige un Vault, Box Set o Collection:",
     "bulk.containerHelp": "Los Vaults y Box Sets contienen películas. Las Collections vinculan la selección como películas sueltas; también pueden contener Vaults y Box Sets.",
     "bulk.containerPlaceholder": "-- Elegir contenedor --",
-    "bulk.directCollectionGroup": "Collection (películas directas)"
+    "bulk.directCollectionGroup": "Collection (películas directas)",
+    "scan.view": "Ver"
   },
   "pt": {
     "nav.collection": "Coleção",
@@ -4844,7 +4849,8 @@
     "bulk.selectContainer": "Escolha um Vault, Box Set ou Collection:",
     "bulk.containerHelp": "Vaults e Box Sets contêm filmes. Collections associam a seleção como filmes soltos; também podem conter Vaults e Box Sets.",
     "bulk.containerPlaceholder": "-- Escolher contentor --",
-    "bulk.directCollectionGroup": "Collection (filmes diretos)"
+    "bulk.directCollectionGroup": "Collection (filmes diretos)",
+    "scan.view": "Ver"
   },
   "it": {
     "nav.collection": "Collezione",
@@ -5652,6 +5658,7 @@
     "bulk.selectContainer": "Scegli un Vault, Box Set o Collection:",
     "bulk.containerHelp": "Vault e Box Set contengono film. Le Collection collegano la selezione come film singoli; possono contenere anche Vault e Box Set.",
     "bulk.containerPlaceholder": "-- Scegli un contenitore --",
-    "bulk.directCollectionGroup": "Collection (film diretti)"
+    "bulk.directCollectionGroup": "Collection (film diretti)",
+    "scan.view": "Visualizza"
   }
 }
