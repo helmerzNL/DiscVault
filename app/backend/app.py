@@ -2438,6 +2438,7 @@ def _movievault_headers(include_auth: bool = False) -> dict:
     api_token = _movievault_api_token()
     if include_auth and api_token:
         headers["Authorization"] = f"Bearer {api_token}"
+        headers["Content-Type"] = "application/json"
     return headers
 
 
@@ -2461,6 +2462,248 @@ def _movievault_config_log_detail(extra: str = "") -> str:
     if extra:
         parts.append(extra)
     return "; ".join(parts)
+
+
+MOVIEVAULT_TEMPLATE_CACHE_KEY = "movievault_contribution_template_cache"
+MOVIEVAULT_TEMPLATE_FETCHED_AT_KEY = "movievault_contribution_template_fetched_at"
+MOVIEVAULT_TEMPLATE_VERSION_KEY = "movievault_contribution_template_version"
+MOVIEVAULT_TEMPLATE_MAX_AGE_SECONDS = 24 * 60 * 60
+
+
+def _movievault_fallback_contribution_template() -> dict:
+    localized = {"type": "string", "localized": True}
+    return {
+        "version": "bundled-2026-05-23.1",
+        "entityTypes": ["movie", "release", "box_set", "person"],
+        "localizedFieldPattern": "<field>_<iso-639-1-language>",
+        "templates": {
+            "movie": {
+                "entityType": "movie",
+                "required": ["title"],
+                "fields": {
+                    "barcode": {"type": "string"},
+                    "title": localized,
+                    "originalTitle": localized,
+                    "sortTitle": {"type": "string"},
+                    "year": {"type": "integer"},
+                    "releaseDate": {"type": "date"},
+                    "tmdbId": {"type": "integer"},
+                    "imdbId": {"type": "string"},
+                    "overview": localized,
+                    "runtime": {"type": "integer"},
+                    "people": {"type": "array"},
+                    "format": {"type": "string"},
+                    "edition": localized,
+                    "country": {"type": "string"},
+                    "language": {"type": "string"},
+                    "hdr": {"type": "string"},
+                    "audioTracks": {"type": "array"},
+                    "subtitles": {"type": "array"},
+                    "regions": {"type": "array"},
+                    "screenRatios": {"type": "string"},
+                    "distributor": {"type": "string"},
+                    "studios": {"type": "string"},
+                    "genre": {"type": "string"},
+                    "posterUrl": {"type": "string"},
+                    "backdropUrl": {"type": "string"},
+                },
+            },
+            "release": {
+                "entityType": "release",
+                "required": ["barcode", "title"],
+                "fields": {
+                    "barcode": {"type": "string"},
+                    "title": localized,
+                    "country": {"type": "string"},
+                    "language": {"type": "string"},
+                    "format": {"type": "string"},
+                    "edition": localized,
+                    "distributor": {"type": "string"},
+                    "hdr": {"type": "string"},
+                    "audioTracks": {"type": "array"},
+                    "subtitles": {"type": "array"},
+                    "regions": {"type": "array"},
+                    "screenRatios": {"type": "string"},
+                },
+            },
+            "box_set": {
+                "entityType": "box_set",
+                "required": ["title"],
+                "fields": {
+                    "barcode": {"type": "string"},
+                    "title": localized,
+                    "tmdbId": {"type": "integer"},
+                    "imdbId": {"type": "string"},
+                    "format": {"type": "string"},
+                    "country": {"type": "string"},
+                    "language": {"type": "string"},
+                    "yearRange": {"type": "string"},
+                    "description": localized,
+                    "members": {"type": "array"},
+                },
+            },
+            "person": {
+                "entityType": "person",
+                "required": ["name"],
+                "fields": {
+                    "name": {"type": "string"},
+                    "tmdbId": {"type": "integer"},
+                    "biography": localized,
+                    "birthday": {"type": "date"},
+                    "deathday": {"type": "date"},
+                    "placeOfBirth": {"type": "string"},
+                    "knownFor": {"type": "string"},
+                },
+            },
+        },
+        "notes": ["Bundled DiscVault fallback template"],
+    }
+
+
+def _movievault_template_cache() -> tuple[dict | None, str, float]:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cache_row = conn.execute(
+                "SELECT value FROM settings WHERE key=?", (MOVIEVAULT_TEMPLATE_CACHE_KEY,)
+            ).fetchone()
+            version_row = conn.execute(
+                "SELECT value FROM settings WHERE key=?", (MOVIEVAULT_TEMPLATE_VERSION_KEY,)
+            ).fetchone()
+            fetched_row = conn.execute(
+                "SELECT value FROM settings WHERE key=?", (MOVIEVAULT_TEMPLATE_FETCHED_AT_KEY,)
+            ).fetchone()
+        if not cache_row or not cache_row[0]:
+            return None, "", 0.0
+        template = json.loads(cache_row[0])
+        version = str((version_row[0] if version_row else "") or template.get("version") or "")
+        fetched_at = float((fetched_row[0] if fetched_row else "") or 0)
+        return template, version, fetched_at
+    except Exception:
+        return None, "", 0.0
+
+
+def _movievault_store_template_cache(template: dict):
+    version = str(template.get("version") or "")
+    now = str(time.time())
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (MOVIEVAULT_TEMPLATE_CACHE_KEY, json.dumps(template, ensure_ascii=False)),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (MOVIEVAULT_TEMPLATE_VERSION_KEY, version),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (MOVIEVAULT_TEMPLATE_FETCHED_AT_KEY, now),
+            )
+            conn.commit()
+    except Exception as ex:
+        _movievault_log("warn", "MovieVault template cache opslaan mislukt", str(ex))
+
+
+def _movievault_fetch_contribution_template() -> dict | None:
+    base = _movievault_ingest_url()
+    if not base:
+        return None
+    url = f"{base}/api/v1/contribution-template"
+    r = requests.get(url, headers={"Accept": "application/json"}, timeout=8)
+    if r.status_code == 404:
+        _movievault_log("info", "MovieVault contribution template niet gevonden", f"GET {url}; HTTP 404")
+        return None
+    if r.status_code >= 400:
+        _movievault_log("warn", "MovieVault contribution template ophalen mislukt", f"GET {url}; HTTP {r.status_code}; response={r.text[:160]}")
+        return None
+    data = r.json()
+    if not isinstance(data, dict) or not isinstance(data.get("templates"), dict):
+        _movievault_log("warn", "MovieVault contribution template ongeldig", f"GET {url}; response={str(data)[:160]}")
+        return None
+    _movievault_store_template_cache(data)
+    _movievault_log("info", "MovieVault contribution template bijgewerkt", f"Version: {data.get('version') or '-'}")
+    return data
+
+
+def _movievault_contribution_template(entity_type: str, force: bool = False) -> tuple[dict, str, str]:
+    cached, cached_version, fetched_at = _movievault_template_cache()
+    if cached and not force and time.time() - fetched_at < MOVIEVAULT_TEMPLATE_MAX_AGE_SECONDS:
+        templates = cached.get("templates") if isinstance(cached, dict) else {}
+        template = templates.get(entity_type) if isinstance(templates, dict) else None
+        if isinstance(template, dict):
+            return template, str(cached.get("version") or cached_version or ""), "cache"
+
+    live = None
+    try:
+        live = _movievault_fetch_contribution_template()
+    except Exception as ex:
+        _movievault_log("warn", "MovieVault contribution template ophalen fout", str(ex))
+    if live:
+        template = (live.get("templates") or {}).get(entity_type)
+        if isinstance(template, dict):
+            return template, str(live.get("version") or ""), "live"
+
+    if cached:
+        template = (cached.get("templates") or {}).get(entity_type)
+        if isinstance(template, dict):
+            return template, str(cached.get("version") or cached_version or ""), "stale-cache"
+
+    fallback = _movievault_fallback_contribution_template()
+    return fallback["templates"][entity_type], fallback["version"], "fallback"
+
+
+def _movievault_field_supported(field: str, fields: dict) -> bool:
+    if field in fields:
+        return True
+    if "_" not in field:
+        return False
+    base, locale = field.rsplit("_", 1)
+    if not re.fullmatch(r"[a-z]{2}", locale or ""):
+        return False
+    spec = fields.get(base)
+    return isinstance(spec, dict) and bool(spec.get("localized"))
+
+
+def _movievault_field_spec(field: str, fields: dict) -> dict:
+    if field in fields and isinstance(fields[field], dict):
+        return fields[field]
+    if "_" in field:
+        base, locale = field.rsplit("_", 1)
+        if re.fullmatch(r"[a-z]{2}", locale or "") and isinstance(fields.get(base), dict):
+            return fields[base]
+    return {}
+
+
+def _movievault_normalize_template_value(value, spec: dict):
+    if value in (None, "", [], {}):
+        return None
+    field_type = str((spec or {}).get("type") or "").lower()
+    if field_type == "integer":
+        try:
+            return int(value)
+        except Exception:
+            match = re.search(r"-?\d+", str(value))
+            return int(match.group(0)) if match else None
+    if field_type == "array" and isinstance(value, str):
+        return [part.strip() for part in re.split(r"[,;\n]+", value) if part.strip()]
+    return value
+
+
+def _movievault_filter_payload_for_template(payload: dict, entity_type: str, force_template: bool = False) -> tuple[dict, str, str, list[str]]:
+    template, version, source = _movievault_contribution_template(entity_type, force=force_template)
+    fields = template.get("fields") if isinstance(template.get("fields"), dict) else {}
+    filtered = {}
+    for key, value in (payload or {}).items():
+        if not _movievault_field_supported(key, fields):
+            continue
+        normalized = _movievault_normalize_template_value(value, _movievault_field_spec(key, fields))
+        if normalized not in (None, "", [], {}):
+            filtered[key] = normalized
+    missing = [
+        field for field in (template.get("required") or [])
+        if filtered.get(field) in (None, "", [], {})
+    ]
+    return filtered, version, source, missing
 
 
 def _movievault_text(value) -> str:
@@ -2611,7 +2854,12 @@ def _movievault_get(path: str, params: dict | None = None):
         return None
 
 
-def _movievault_contribution_payload(movie_info: dict, sources: str, context: dict | None = None) -> dict:
+def _movievault_contribution_payload(
+    movie_info: dict,
+    sources: str,
+    context: dict | None = None,
+    force_template: bool = False,
+) -> tuple[dict | None, str, str, list[str]]:
     context = context or {}
     source_movie = dict(movie_info or {})
     if (
@@ -2663,6 +2911,11 @@ def _movievault_contribution_payload(movie_info: dict, sources: str, context: di
         value = source_movie.get(src_key)
         if value not in (None, "", [], {}):
             movie[dst_key] = value
+    movie, template_version, template_source, missing_required = _movievault_filter_payload_for_template(
+        movie, "movie", force_template=force_template
+    )
+    if missing_required:
+        return None, template_version, template_source, missing_required
     identity = "|".join([
         str(movie.get("tmdbId") or ""),
         str(movie.get("imdbId") or ""),
@@ -2670,7 +2923,8 @@ def _movievault_contribution_payload(movie_info: dict, sources: str, context: di
         str(movie.get("year") or ""),
         str(context.get("barcode") or movie.get("barcode") or ""),
     ])
-    idem = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    payload_fingerprint = json.dumps(movie, ensure_ascii=False, sort_keys=True, default=str)
+    idem = hashlib.sha256(f"{identity}|{payload_fingerprint}".encode("utf-8")).hexdigest()
     return {
         "idempotencyKey": idem,
         "sourceClient": "discvault",
@@ -2678,7 +2932,7 @@ def _movievault_contribution_payload(movie_info: dict, sources: str, context: di
         "sharingMode": _movievault_sharing_mode(),
         "entityType": "movie",
         "payload": movie,
-    }
+    }, template_version, template_source, []
 
 
 def _submit_movievault_contribution(movie_info: dict | None, sources: str, context: dict | None = None) -> bool:
@@ -2701,18 +2955,72 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
         )
         return False
     try:
-        payload = _movievault_contribution_payload(movie_info, sources, context)
+        payload, template_version, template_source, missing_required = _movievault_contribution_payload(
+            movie_info, sources, context
+        )
+        if not payload:
+            _movievault_log(
+                "warn",
+                "MovieVault bijdrage overgeslagen",
+                _movievault_config_log_detail(
+                    f"Template: {template_version or '-'} ({template_source}); "
+                    f"Verplichte velden ontbreken: {', '.join(missing_required) or '-'}; "
+                    f"title={title or '?'}; sources={sources}"
+                ),
+            )
+            return False
         _movievault_log(
             "info",
             f"MovieVault bijdrage versturen: \"{movie_info.get('title')}\"",
             _movievault_config_log_detail(
-                f"Endpoint: {url}; Bronnen: {sources}; Idempotency: {payload.get('idempotencyKey')}"
+                f"Endpoint: {url}; Bronnen: {sources}; Template: {template_version or '-'} ({template_source}); "
+                f"Idempotency: {payload.get('idempotencyKey')}"
             ),
         )
         r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
         if 200 <= r.status_code < 300:
-            add_log("movievault", f"Metadata gedeeld met MovieVault: \"{movie_info.get('title')}\"", f"Bronnen: {sources}", "info")
+            add_log(
+                "movievault",
+                f"Metadata gedeeld met MovieVault: \"{movie_info.get('title')}\"",
+                f"Bronnen: {sources}; Template: {template_version or '-'} ({template_source})",
+                "info",
+            )
             return True
+        validation_error = False
+        if r.status_code == 400:
+            try:
+                validation_error = (r.json() or {}).get("error") == "validation_error"
+            except Exception:
+                validation_error = "validation_error" in (r.text or "")
+        if validation_error:
+            _movievault_log(
+                "warn",
+                f"MovieVault validatiefout, template wordt vernieuwd: \"{movie_info.get('title')}\"",
+                f"HTTP 400: {r.text[:160]}",
+            )
+            payload, template_version, template_source, missing_required = _movievault_contribution_payload(
+                movie_info, sources, context, force_template=True
+            )
+            if not payload:
+                _movievault_log(
+                    "warn",
+                    "MovieVault bijdrage overgeslagen na template refresh",
+                    _movievault_config_log_detail(
+                        f"Template: {template_version or '-'} ({template_source}); "
+                        f"Verplichte velden ontbreken: {', '.join(missing_required) or '-'}; "
+                        f"title={title or '?'}; sources={sources}"
+                    ),
+                )
+                return False
+            r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
+            if 200 <= r.status_code < 300:
+                add_log(
+                    "movievault",
+                    f"Metadata gedeeld met MovieVault na template refresh: \"{movie_info.get('title')}\"",
+                    f"Bronnen: {sources}; Template: {template_version or '-'} ({template_source})",
+                    "info",
+                )
+                return True
         add_log("movievault", f"MovieVault bijdrage geweigerd: \"{movie_info.get('title')}\"", f"HTTP {r.status_code}: {r.text[:160]}", "warn")
     except Exception as ex:
         add_log("movievault", f"MovieVault bijdrage mislukt: \"{movie_info.get('title', '?')}\"", str(ex), "warn")
@@ -6071,6 +6379,7 @@ def lookup(barcode):
 
         # 6. Blu-ray.com spec enrichment
         if movie_info:
+            specs = None
             if _is_bluray_scrape_enabled():
                 yield emit(7, "Blu-ray.com specs", "searching")
                 specs, bluray_attempts = lookup_movie_bluray_specs_traced(
@@ -6087,8 +6396,19 @@ def lookup(barcode):
 
             box_set_proposal = (movievault_info or {}).get("box_set_proposal") or ((bluray_info or {}).get("box_set_proposal") if bluray_info else None)
             _log_bluray_box_set_proposal(barcode, box_set_proposal)
-            if not movievault_info:
-                _submit_movievault_contribution(movie_info, "Barcode lookup", {"barcode": barcode, "rawTitle": raw_title or ""})
+            if not movievault_info or bluray_info or specs:
+                contribution_sources = "Barcode lookup"
+                if movievault_info and (bluray_info or specs):
+                    contribution_sources = "MovieVault + Blu-ray.com enrichment"
+                _submit_movievault_contribution(
+                    movie_info,
+                    contribution_sources,
+                    {
+                        "barcode": barcode,
+                        "rawTitle": raw_title or "",
+                        "movieVaultHit": bool(movievault_info),
+                    },
+                )
             add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
                     f"Backends: {_trace_summary(attempts)}", "success")
             yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
@@ -6204,6 +6524,7 @@ def _lookup_sync(barcode):
         elif not movie_info:
             _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
         if movie_info:
+            specs = None
             if _is_bluray_scrape_enabled():
                 specs, bluray_attempts = lookup_movie_bluray_specs_traced(
                     movie_info.get("title") or raw_title,
@@ -6224,8 +6545,19 @@ def _lookup_sync(barcode):
                         movie_info["audience_rating"] = cr["US"]
             box_set_proposal = (movievault_info or {}).get("box_set_proposal") or ((bluray_info or {}).get("box_set_proposal") if bluray_info else None)
             _log_bluray_box_set_proposal(barcode, box_set_proposal)
-            if not movievault_info:
-                _submit_movievault_contribution(movie_info, "Barcode lookup", {"barcode": barcode, "rawTitle": raw_title or ""})
+            if not movievault_info or bluray_info or specs:
+                contribution_sources = "Barcode lookup"
+                if movievault_info and (bluray_info or specs):
+                    contribution_sources = "MovieVault + Blu-ray.com enrichment"
+                _submit_movievault_contribution(
+                    movie_info,
+                    contribution_sources,
+                    {
+                        "barcode": barcode,
+                        "rawTitle": raw_title or "",
+                        "movieVaultHit": bool(movievault_info),
+                    },
+                )
             add_log(
                 "lookup",
                 f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
@@ -7312,7 +7644,6 @@ def _merge_metadata_by_order(
         contribute_to_movievault
         and info
         and movievault_attempted
-        and not movievault_hit
         and any(src != "MovieVault" for src in used_sources)
     ):
         _submit_movievault_contribution(
