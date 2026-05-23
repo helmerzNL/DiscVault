@@ -332,7 +332,7 @@ async function doLookup(barcode) {
       return;
     }
 
-    if (finalData.status === 'exists') {
+    if (finalData.status === 'movie_exists' || finalData.status === 'exists') {
       showStatus('scanStatus', t('js.alreadyInCollection', finalData.movie.title), 'success');
       _detectedFormat = finalData.detected_format || '';
       displayMovieResult(finalData.movie, barcode, true, _detectedFormat);

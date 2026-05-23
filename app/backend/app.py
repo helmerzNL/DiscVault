@@ -3535,7 +3535,7 @@ def list_movies():
     params = list(owner_params)
     if q:
         sql += (""" AND (
-                   movies.title LIKE ? OR movies.original_title LIKE ? OR movies.director LIKE ?
+                   movies.barcode LIKE ? OR movies.title LIKE ? OR movies.original_title LIKE ? OR movies.director LIKE ?
                 OR movies.actor LIKE ? OR movies.genre LIKE ? OR movies.distributor LIKE ? OR movies.box_set LIKE ?
                 OR EXISTS (
                     SELECT 1
@@ -3545,7 +3545,7 @@ def list_movies():
                       AND (p.name LIKE ? OR mp.character LIKE ? OR mp.job LIKE ? OR mp.role LIKE ?)
                 )
         )""")
-        params += [f"%{q}%"] * 11
+        params += [f"%{q}%"] * 12
     if fmt:
         sql += " AND format = ?"
         params.append(fmt)
@@ -5516,7 +5516,7 @@ def lookup(barcode):
             _trace_add(attempts, "Local DB", "hit", f"barcode={barcode}")
             add_log("lookup", f"Barcode {barcode} al in collectie", f"Backends: {_trace_summary(attempts)}", "info")
             yield emit(1, "Local DB", "hit")
-            yield json.dumps({"type": "done", "status": "exists", "movie": dict(existing)}) + "\n"
+            yield json.dumps({"type": "done", "status": "movie_exists", "movie": dict(existing), "barcode": barcode}) + "\n"
             return
         if existing_box_set:
             box_set = dict(existing_box_set)
@@ -5670,7 +5670,7 @@ def _lookup_sync(barcode):
         if existing:
             _trace_add(attempts, "Local DB", "hit", f"barcode={barcode}")
             add_log("lookup", f"Barcode {barcode} al in collectie", f"Backends: {_trace_summary(attempts)}", "info")
-            return jsonify({"status": "exists", "movie": dict(existing)})
+            return jsonify({"status": "movie_exists", "movie": dict(existing), "barcode": barcode})
         if existing_box_set:
             box_set = dict(existing_box_set)
             _trace_add(attempts, "Local DB", "hit", f"box_set_barcode={barcode}")

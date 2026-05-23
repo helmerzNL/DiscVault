@@ -79,6 +79,7 @@ function movieMatchesSearch(m, q) {
     ? m.searchPeople.join(' ')
     : (m.search_people || '');
   return [
+    m.barcode,
     m.title,
     m.original_title,
     m.director,
@@ -3651,7 +3652,7 @@ async function _lookupBarcodeForAdd(barcode) {
     if (!finalData || finalData.error) {
       showStatus('addStatus', finalData?.error || t('js.backendError', ''), 'error'); return;
     }
-    if (finalData.status === 'exists') {
+    if (finalData.status === 'movie_exists' || finalData.status === 'exists') {
       showStatus('addStatus', t('js.alreadyInCollection', finalData.movie.title), 'success'); return;
     }
     if (finalData.status === 'box_set_exists') {
