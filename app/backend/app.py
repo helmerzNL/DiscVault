@@ -1664,10 +1664,42 @@ def download_poster(url: str, asset_kind="poster"):
         return None
 
 
+def _normalize_asset_file_value(value, kind):
+    value = (value or "").strip()
+    if not value:
+        return value
+    if value.startswith("http://") or value.startswith("https://"):
+        if kind == "profile":
+            return download_profile_photo(value) or value
+        return download_poster(value, asset_kind="poster") or value
+    safe_name = os.path.basename(value.replace("\\", "/"))
+    if safe_name:
+        ensure_asset_variant(safe_name, kind)
+        return safe_name
+    return value
+
+
+def _asset_variant_created_for_local_value(value, kind):
+    value = (value or "").strip()
+    if not value or value.startswith(("http://", "https://")):
+        return False
+    safe_name = os.path.basename(value.replace("\\", "/"))
+    if not safe_name:
+        return False
+    variant_path = _asset_variant_path(safe_name, kind)
+    existed = os.path.isfile(variant_path)
+    variant_name = ensure_asset_variant(safe_name, kind)
+    return bool(variant_name and not existed)
+
+
 def localize_backdrop(backdrop_url):
     value = (backdrop_url or "").strip()
     if not value or value.startswith("/api/posters/") or value.startswith("/api/images/"):
-        if value.startswith("/api/posters/") or value.startswith("/api/images/"):
+        if value.startswith("/api/posters/"):
+            filename = os.path.basename(value)
+            ensure_asset_variant(filename, "backdrop")
+            return f"/api/images/{filename}"
+        if value.startswith("/api/images/"):
             ensure_asset_variant(os.path.basename(value), "backdrop")
         return value
     if value.startswith("http://") or value.startswith("https://"):
@@ -1686,6 +1718,86 @@ def prepare_local_image_variants(row_or_updates):
     if row_or_updates.get("backdrop"):
         row_or_updates["backdrop"] = localize_backdrop(row_or_updates.get("backdrop"))
     return row_or_updates
+
+
+def _log_asset_sync_event(conn, message, detail="", level="info"):
+    try:
+        conn.execute(
+            "INSERT INTO logs (timestamp, level, category, message, detail) VALUES (?,?,?,?,?)",
+            (local_now_iso(), level, "assets", message, detail or ""),
+        )
+    except Exception:
+        pass
+
+
+def _normalize_existing_asset_records(conn):
+    """Make legacy image references usable through the sync asset manifest."""
+    changed = 0
+    checked = 0
+    unresolved = 0
+
+    def _update_row(table, row_id, updates):
+        nonlocal changed
+        if not updates:
+            return
+        conn.execute(
+            f"UPDATE {table} SET {', '.join(f'{col}=?' for col in updates)} WHERE id=?",
+            list(updates.values()) + [row_id],
+        )
+        changed += 1
+
+    for table in ("movies", "edition_groups", "collections", "vaults", "box_sets"):
+        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+        if not exists:
+            continue
+        cols = _table_columns(conn, table)
+        if "poster_file" not in cols and "backdrop" not in cols:
+            continue
+        select_cols = ["id"]
+        if "poster_file" in cols:
+            select_cols.append("poster_file")
+        if "backdrop" in cols:
+            select_cols.append("backdrop")
+        for row in conn.execute(f"SELECT {', '.join(select_cols)} FROM {table}").fetchall():
+            checked += 1
+            updates = {}
+            if "poster_file" in cols and row["poster_file"]:
+                variant_created = _asset_variant_created_for_local_value(row["poster_file"], "poster")
+                normalized = _normalize_asset_file_value(row["poster_file"], "poster")
+                if normalized != row["poster_file"] or variant_created:
+                    updates["poster_file"] = normalized
+                if normalized.startswith(("http://", "https://")):
+                    unresolved += 1
+            if "backdrop" in cols and row["backdrop"]:
+                variant_created = _asset_variant_created_for_local_value(row["backdrop"], "backdrop")
+                normalized = localize_backdrop(row["backdrop"])
+                if normalized != row["backdrop"] or variant_created:
+                    updates["backdrop"] = normalized
+                if normalized.startswith(("http://", "https://")):
+                    unresolved += 1
+            _update_row(table, row["id"], updates)
+
+    exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='people'").fetchone()
+    if exists and "photo_file" in _table_columns(conn, "people"):
+        for row in conn.execute("SELECT id, photo_file FROM people").fetchall():
+            checked += 1
+            if not row["photo_file"]:
+                continue
+            variant_created = _asset_variant_created_for_local_value(row["photo_file"], "profile")
+            normalized = _normalize_asset_file_value(row["photo_file"], "profile")
+            if normalized != row["photo_file"] or variant_created:
+                _update_row("people", row["id"], {"photo_file": normalized})
+            if normalized.startswith(("http://", "https://")):
+                unresolved += 1
+
+    if changed or unresolved:
+        level = "warn" if unresolved else ("success" if changed else "info")
+        _log_asset_sync_event(
+            conn,
+            "Image assets normalized for offline sync",
+            f"Rows checked: {checked}. Rows updated: {changed}. External assets still unresolved: {unresolved}.",
+            level,
+        )
 
 
 def save_uploaded_poster(file_storage):
@@ -7747,10 +7859,13 @@ def _asset_manifest_entry(kind, entity, entity_id, value, updated_at="", revisio
     url = value
     file_path = ""
     if kind in ("movie_poster", "container_poster", "person_profile"):
-        base = PROFILE_DIR if kind == "person_profile" else POSTER_DIR
-        file_path = os.path.join(base, os.path.basename(value))
-        route = "images/profiles" if kind == "person_profile" else "images"
-        url = f"/api/{route}/{os.path.basename(value)}"
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            url = value
+        else:
+            base = PROFILE_DIR if kind == "person_profile" else POSTER_DIR
+            file_path = os.path.join(base, os.path.basename(value))
+            route = "images/profiles" if kind == "person_profile" else "images"
+            url = f"/api/{route}/{os.path.basename(value)}"
     elif isinstance(value, str) and (value.startswith("/api/posters/") or value.startswith("/api/images/")):
         file_path = os.path.join(POSTER_DIR, os.path.basename(value))
     checksum = _asset_checksum(file_path) if file_path else ""
@@ -7932,6 +8047,8 @@ def _sync_dataset(conn, since_revision=None):
 @app.route("/api/sync/bootstrap", methods=["GET"])
 def sync_bootstrap():
     conn = get_db()
+    _normalize_existing_asset_records(conn)
+    conn.commit()
     data = _sync_dataset(conn)
     revision = _current_sync_revision(conn)
     assets = _sync_asset_manifest(conn, _visible_movie_ids(conn))
@@ -7945,6 +8062,8 @@ def sync_bootstrap():
 
 def _sync_delta_response(since):
     conn = get_db()
+    _normalize_existing_asset_records(conn)
+    conn.commit()
     data = _sync_dataset(conn, since)
     data["tombstones"] = _dicts(conn.execute(
         "SELECT entity, entity_id, deleted_at, revision FROM sync_tombstones WHERE revision>? ORDER BY revision",
