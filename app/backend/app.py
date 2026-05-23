@@ -2419,6 +2419,19 @@ def _movievault_log(level: str, message: str, detail: str = ""):
         pass
 
 
+def _movievault_config_log_detail(extra: str = "") -> str:
+    parts = [
+        f"Search URL: {_movievault_base_url() or '-'}",
+        f"Ingest URL: {_movievault_ingest_url() or '-'}",
+        f"Contribution endpoint: {_movievault_contribution_url() or '-'}",
+        f"Token configured: {'yes' if _movievault_api_token() else 'no'}",
+        f"Sharing mode: {_movievault_sharing_mode()}",
+    ]
+    if extra:
+        parts.append(extra)
+    return "; ".join(parts)
+
+
 def _movievault_text(value) -> str:
     if value is None:
         return ""
@@ -2644,14 +2657,16 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
         _movievault_log(
             "info",
             "MovieVault bijdrage overgeslagen",
-            f"Delen staat uit; title={title or '?'}; sources={sources}",
+            _movievault_config_log_detail(f"Delen staat uit; title={title or '?'}; sources={sources}"),
         )
         return False
     if not url or not movie_info or not movie_info.get("title"):
         _movievault_log(
             "info",
             "MovieVault bijdrage overgeslagen",
-            f"Ingest URL of titel ontbreekt; title={title or '?'}; sources={sources}",
+            _movievault_config_log_detail(
+                f"Ingest URL of titel ontbreekt; title={title or '?'}; sources={sources}"
+            ),
         )
         return False
     try:
@@ -2659,7 +2674,9 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
         _movievault_log(
             "info",
             f"MovieVault bijdrage versturen: \"{movie_info.get('title')}\"",
-            f"Endpoint: {url}; Bronnen: {sources}; Sharing mode: {payload.get('sharingMode')}; Idempotency: {payload.get('idempotencyKey')}",
+            _movievault_config_log_detail(
+                f"Endpoint: {url}; Bronnen: {sources}; Idempotency: {payload.get('idempotencyKey')}"
+            ),
         )
         r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
         if 200 <= r.status_code < 300:
