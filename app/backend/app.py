@@ -2373,12 +2373,31 @@ def lookup_by_barcode_upcitemdb(barcode: str):
     return None
 
 
+def _movievault_setting_first(keys, default: str = "") -> str:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            for key in keys:
+                row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+                if row and row[0] and str(row[0]).strip():
+                    return str(row[0]).strip()
+    except Exception:
+        pass
+    return default
+
+
 def _movievault_base_url() -> str:
-    return (str(MOVIEVAULT_SEARCH_URL).strip() or str(MOVIEVAULT_BASE_URL).strip()).rstrip("/")
+    fallback = str(MOVIEVAULT_SEARCH_URL).strip() or str(MOVIEVAULT_BASE_URL).strip()
+    return _movievault_setting_first(
+        ("movievault_search_url", "movievault_base_url", "movievault_url"),
+        fallback,
+    ).rstrip("/")
 
 
 def _movievault_ingest_url() -> str:
-    return str(MOVIEVAULT_INGEST_URL).strip().rstrip("/")
+    return _movievault_setting_first(
+        ("movievault_ingest_url", "movievault_contribution_url"),
+        str(MOVIEVAULT_INGEST_URL).strip(),
+    ).rstrip("/")
 
 
 def _movievault_api_token() -> str:
@@ -2393,7 +2412,10 @@ def _movievault_sharing_mode() -> str:
 
 
 def _movievault_contribution_url() -> str:
-    raw = str(MOVIEVAULT_CONTRIBUTION_URL).strip()
+    raw = _movievault_setting_first(
+        ("movievault_contribution_url",),
+        str(MOVIEVAULT_CONTRIBUTION_URL).strip(),
+    )
     if raw.startswith(("http://", "https://")):
         return raw
     base = _movievault_ingest_url()
