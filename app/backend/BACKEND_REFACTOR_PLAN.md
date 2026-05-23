@@ -21,6 +21,14 @@ The normalized Vault / Box Set / Collection database model and the temporary
 legacy compatibility rules are documented in `CONTAINER_SCHEMA.md`. Use that
 file as the reference when splitting container code or migrating the iOS app.
 
+## Mobile API Contract
+
+Native mobile response rules for iOS and future Android clients are documented
+in `MOBILE_API_CONTRACT.md`. Keep this contract in sync when changing sync
+responses, filmography responses, image URLs, asset manifests or normalized
+container payloads. Changes should remain additive for PWA compatibility unless
+a coordinated frontend migration explicitly removes a legacy field.
+
 ## Step 3 Validation Notes
 
 - Keep endpoint paths and JSON response shapes unchanged.

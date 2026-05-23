@@ -3740,44 +3740,104 @@ def get_person_filmography(person_id):
             return jsonify({"cast": [], "crew": [], "tmdb_available": False})
         data = r.json()
         collection = conn.execute(
-            "SELECT id, tmdb_id, format FROM movies WHERE tmdb_id IS NOT NULL"
+            "SELECT id, tmdb_id, collection_id, format, poster_file, poster FROM movies WHERE tmdb_id IS NOT NULL"
         ).fetchall()
         digital = conn.execute(
-            """SELECT dli.tmdb_id, dls.type AS source_type
+            """SELECT dli.id, dli.tmdb_id, dls.type AS source_type
                FROM digital_library_items dli
                JOIN digital_library_sources dls ON dls.id = dli.source_id
                WHERE dli.tmdb_id IS NOT NULL AND dli.media_type='movie'"""
         ).fetchall()
         conn.close()
-        tmdb_to_col = {m["tmdb_id"]: {"id": m["id"], "format": m["format"]} for m in collection}
+        tmdb_to_col = {
+            str(m["tmdb_id"]): {
+                "movie_id": m["id"],
+                "collection_id": m["collection_id"],
+                "format": m["format"],
+                "poster_file": m["poster_file"],
+                "poster": m["poster"],
+            }
+            for m in collection
+        }
         # Map tmdb_id → preferred source_type (plex > jellyfin)
         digital_map = {}
         for d in digital:
             tid = str(d["tmdb_id"])
             existing = digital_map.get(tid)
             if not existing or d["source_type"] == "plex":
-                digital_map[tid] = d["source_type"]
+                digital_map[tid] = {"id": d["id"], "source_type": d["source_type"]}
+
+        def _filmography_poster(entry, col):
+            poster_path = entry.get("poster_path") or ""
+            if col and col.get("poster_file"):
+                return _absolute_api_url(f"/api/images/{os.path.basename(col['poster_file'])}")
+            if poster_path:
+                return f"https://image.tmdb.org/t/p/w185{poster_path}"
+            if col and col.get("poster"):
+                return _absolute_api_url(col["poster"])
+            return ""
 
         def enrich(entry):
             tmdb_mid = entry.get("id")
-            col = tmdb_to_col.get(tmdb_mid)
-            in_digital = str(tmdb_mid) in digital_map if tmdb_mid else False
-            digital_source = digital_map.get(str(tmdb_mid)) if tmdb_mid else None
+            tmdb_key = str(tmdb_mid) if tmdb_mid is not None else ""
+            col = tmdb_to_col.get(tmdb_key)
+            digital = digital_map.get(tmdb_key) if tmdb_key else None
+            in_digital = digital is not None
+            digital_source = digital.get("source_type") if digital else None
+            poster_path = entry.get("poster_path") or ""
+            poster_url = _filmography_poster(entry, col)
             year = (entry.get("release_date") or entry.get("first_air_date") or "")[:4]
+            movie_id = col["movie_id"] if col else None
+            collection_id = col["collection_id"] if col else None
+            digital_id = digital.get("id") if digital else None
+            title = entry.get("title") or entry.get("name") or ""
             return {
                 "tmdb_id": tmdb_mid,
-                "title": entry.get("title") or entry.get("name") or "",
+                "tmdbId": tmdb_mid,
+                "movie_id": movie_id,
+                "movieId": movie_id,
+                "collection_id": collection_id,
+                "collectionId": collection_id,
+                "digital_id": digital_id,
+                "digitalId": digital_id,
+                "title": title,
                 "year": year,
-                "poster": (f"https://image.tmdb.org/t/p/w185{entry['poster_path']}"
-                           if entry.get("poster_path") else ""),
+                "poster": poster_url,
+                "poster_url": poster_url,
+                "posterUrl": poster_url,
+                "poster_path": poster_path,
+                "posterPath": poster_path,
                 "vote_average": round(entry.get("vote_average") or 0, 1),
+                "voteAverage": round(entry.get("vote_average") or 0, 1),
                 "character": entry.get("character") or "",
                 "job": entry.get("job") or "",
                 "in_collection": col is not None,
-                "collection_id": col["id"] if col else None,
+                "inCollection": col is not None,
                 "collection_format": col["format"] if col else None,
+                "collectionFormat": col["format"] if col else None,
                 "in_digital": in_digital,
+                "inDigital": in_digital,
                 "digital_source": digital_source,
+                "digitalSource": digital_source,
+                "movie": {
+                    "tmdb_id": tmdb_mid,
+                    "tmdbId": tmdb_mid,
+                    "movie_id": movie_id,
+                    "movieId": movie_id,
+                    "collection_id": collection_id,
+                    "collectionId": collection_id,
+                    "title": title,
+                    "year": year,
+                    "poster": poster_url,
+                    "poster_url": poster_url,
+                    "posterUrl": poster_url,
+                    "poster_path": poster_path,
+                    "posterPath": poster_path,
+                    "in_collection": col is not None,
+                    "inCollection": col is not None,
+                    "in_digital": in_digital,
+                    "inDigital": in_digital,
+                },
             }
 
         cast = [enrich(e) for e in data.get("cast", []) if e.get("media_type") == "movie"]
