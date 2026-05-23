@@ -17,9 +17,12 @@ _MOVIEVAULT_API_TOKEN_ENV = os.environ.get(
     "MOVIEVAULT_API_TOKEN", os.environ.get("MOVIEVAULT_API_KEY", "")
 )
 _MOVIEVAULT_SEARCH_URL_ENV = os.environ.get(
-    "MOVIEVAULT_SEARCH_URL", os.environ.get("MOVIEVAULT_BASE_URL", "")
+    "MOVIEVAULT_SEARCH_URL",
+    os.environ.get("MOVIEVAULT_BASE_URL", "https://search.discvault.eu"),
 )
-_MOVIEVAULT_INGEST_URL_ENV = os.environ.get("MOVIEVAULT_INGEST_URL", "")
+_MOVIEVAULT_INGEST_URL_ENV = os.environ.get(
+    "MOVIEVAULT_INGEST_URL", "https://movies.discvault.eu"
+)
 _MOVIEVAULT_CONTRIBUTION_URL_ENV = os.environ.get("MOVIEVAULT_CONTRIBUTION_URL", "")
 _MOVIEVAULT_SHARING_MODE_ENV = os.environ.get("MOVIEVAULT_SHARING_MODE", "opt_in")
 
