@@ -62,6 +62,7 @@ async function loadUserPrefsFromServer() {
 
 async function loadSettings() {
   const isAdmin = !authEnabled || currentUserRole === 'admin';
+  mountMetadataSourcesCard();
   // Hide admin-only sidebar button and section for non-admins
   const collBtn = document.getElementById('settingsBtnCollectionmgmt');
   const collSection = document.getElementById('settingsSubCollectionmgmt');
@@ -76,12 +77,20 @@ async function loadSettings() {
   loadDbStats();
   loadAuthSettings();
   loadQueueSettings();
+  loadSourceSettings();
   loadApiKeySettings();
   loadDebugSettings(); // also initialises showLocalTitleToggle
   loadLanguagePicker();
   loadCollectorsModeSetting();
   loadGroupEditionsSetting();
   loadDigitalSources();
+}
+
+function mountMetadataSourcesCard() {
+  const card = document.getElementById('metadataSourcesCard');
+  const target = document.getElementById('settingsSubGeneral');
+  if (!card || !target || card.parentElement === target) return;
+  target.appendChild(card);
 }
 
 // ── Settings submenu switching ───────────────────────────────────────────────
