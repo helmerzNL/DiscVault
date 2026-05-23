@@ -106,8 +106,10 @@ When the movie exists in a connected digital library:
   `https://app.plex.tv/desktop/...` URL because the older `plex://` custom
   scheme is not reliable across clients
 - `digital_native_url` and `digitalNativeUrl` may contain a platform-specific
-  native URL. For Plex this is currently a best-effort `plex://...` URL. Native
-  apps should treat it as optional and always fall back to `digitalWebUrl`.
+  native URL. For Plex this follows the documented
+  `plex://play/?metadataKey=/library/metadata/<ratingKey>&server=<machineId>`
+  format. Native apps should treat it as optional and always fall back to
+  `digitalWebUrl`.
 - `web_url` / `webUrl` and `app_url` / `appUrl` are aliases for the same link
   targets
 - `digital` may contain the same link data as a nested object with `webUrl`,
@@ -184,15 +186,15 @@ Example:
   "digitalWebUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
   "digital_app_url": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
   "digitalAppUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
-  "digital_native_url": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123",
-  "digitalNativeUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digital_native_url": "plex://play/?metadataKey=%2Flibrary%2Fmetadata%2F123&server=machine",
+  "digitalNativeUrl": "plex://play/?metadataKey=%2Flibrary%2Fmetadata%2F123&server=machine",
   "digital": {
     "digitalId": 3,
     "sourceType": "plex",
     "externalId": "123",
     "webUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
     "appUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
-    "nativeUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123"
+    "nativeUrl": "plex://play/?metadataKey=%2Flibrary%2Fmetadata%2F123&server=machine"
   },
   "movie": {
     "tmdbId": 987654,
@@ -201,7 +203,7 @@ Example:
     "posterUrl": "https://discvault.example/api/images/poster.jpg",
     "digitalWebUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
     "digitalAppUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
-    "digitalNativeUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123"
+    "digitalNativeUrl": "plex://play/?metadataKey=%2Flibrary%2Fmetadata%2F123&server=machine"
   }
 }
 ```
