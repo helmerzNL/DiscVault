@@ -66,15 +66,29 @@ def register_settings_routes(
             pass
         return default
 
+    def _first_setting(keys, default: str = "") -> str:
+        for key in keys:
+            value = _setting_value(key, "")
+            if value and value.strip():
+                return value.strip()
+        return default
+
     def _bool_setting(key: str, default: bool) -> bool:
         value = _setting_value(key, "true" if default else "false")
         return str(value).strip().lower() == "true"
 
     def _movievault_search_url() -> str:
-        return (str(MOVIEVAULT_SEARCH_URL).strip() or str(MOVIEVAULT_BASE_URL).strip()).rstrip("/")
+        fallback = str(MOVIEVAULT_SEARCH_URL).strip() or str(MOVIEVAULT_BASE_URL).strip()
+        return _first_setting(
+            ("movievault_search_url", "movievault_base_url", "movievault_url"),
+            fallback,
+        ).rstrip("/")
 
     def _movievault_ingest_url() -> str:
-        return str(MOVIEVAULT_INGEST_URL).strip().rstrip("/")
+        return _first_setting(
+            ("movievault_ingest_url", "movievault_contribution_url"),
+            str(MOVIEVAULT_INGEST_URL).strip(),
+        ).rstrip("/")
 
     def _movievault_api_token() -> str:
         return str(MOVIEVAULT_API_TOKEN).strip() or str(MOVIEVAULT_API_KEY).strip()
@@ -205,7 +219,10 @@ def register_settings_routes(
         movievault_token = _movievault_api_token()
         movievault_search = _movievault_search_url()
         movievault_ingest = _movievault_ingest_url()
-        movievault_contribution = str(MOVIEVAULT_CONTRIBUTION_URL).strip()
+        movievault_contribution = _first_setting(
+            ("movievault_contribution_url",),
+            str(MOVIEVAULT_CONTRIBUTION_URL).strip(),
+        )
         return jsonify({
             "tmdb_key_set": bool(tmdb),
             "omdb_key_set": bool(omdb),
@@ -269,17 +286,26 @@ def register_settings_routes(
             else:
                 conn.execute("DELETE FROM settings WHERE key IN (?, ?)", ("movievault_api_token", "movievault_api_key"))
                 add_log("settings", "MovieVault API token verwijderd uit database", level="info")
-        if any(k in data for k in ("movievault_search_url", "movievault_base_url")):
-            val = str(data.get("movievault_search_url", data.get("movievault_base_url", ""))).strip().rstrip("/")
+        if any(k in data for k in ("movievault_search_url", "movievault_base_url", "movievault_url")):
+            val = str(
+                data.get(
+                    "movievault_search_url",
+                    data.get("movievault_base_url", data.get("movievault_url", "")),
+                )
+            ).strip().rstrip("/")
             if val:
                 conn.execute(
                     "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                     ("movievault_search_url", val),
                 )
                 conn.execute("DELETE FROM settings WHERE key=?", ("movievault_base_url",))
+                conn.execute("DELETE FROM settings WHERE key=?", ("movievault_url",))
                 add_log("settings", f"MovieVault search URL opgeslagen: {val}", level="info")
             else:
-                conn.execute("DELETE FROM settings WHERE key IN (?, ?)", ("movievault_search_url", "movievault_base_url"))
+                conn.execute(
+                    "DELETE FROM settings WHERE key IN (?, ?, ?)",
+                    ("movievault_search_url", "movievault_base_url", "movievault_url"),
+                )
                 add_log("settings", "MovieVault search URL verwijderd uit database", level="info")
         if any(k in data for k in ("movievault_ingest_url", "movievault_contribution_url")):
             val = str(data.get("movievault_ingest_url", data.get("movievault_contribution_url", ""))).strip().rstrip("/")
