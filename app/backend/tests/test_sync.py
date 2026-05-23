@@ -200,6 +200,89 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertGreater(asset["width"], 0)
         self.assertGreater(asset["height"], 0)
 
+    def test_person_filmography_includes_ios_movie_identifiers_and_posters(self):
+        from PIL import Image
+
+        filename = f"filmography-{uuid.uuid4().hex}.jpg"
+        image_path = os.path.join(os.environ["POSTER_DIR"], filename)
+        Image.new("RGB", (600, 900), color=(80, 30, 20)).save(image_path, "JPEG")
+
+        tmdb_movie_id = 987654
+        conn = self.backend.get_db()
+        conn.execute(
+            "INSERT INTO people (tmdb_id, name) VALUES (?, ?)",
+            ("12345", "Filmography Person"),
+        )
+        person_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            """INSERT INTO movies
+               (barcode, title, format, tmdb_id, collection_id, poster_file, added_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                f"SYNCFILM-{uuid.uuid4().hex[:10].upper()}",
+                "Collected Filmography Movie",
+                "4K UHD",
+                str(tmdb_movie_id),
+                321,
+                filename,
+                "2026-05-23T00:00:00",
+            ),
+        )
+        movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO digital_library_sources (name, type, base_url, last_synced) VALUES (?, ?, ?, ?)",
+            ("Plex Test", "plex", "http://plex.local", "2026-05-23T00:00:00"),
+        )
+        source_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            """INSERT INTO digital_library_items
+               (source_id, external_id, title, year, tmdb_id, media_type, synced_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (source_id, "plex-1", "Collected Filmography Movie", "2026", str(tmdb_movie_id), "movie", "2026-05-23T00:00:00"),
+        )
+        digital_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+        conn.close()
+
+        original_key = self.backend.TMDB_API_KEY
+        original_get = self.backend.requests.get
+
+        class FakeResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "cast": [{
+                        "id": tmdb_movie_id,
+                        "media_type": "movie",
+                        "title": "Collected Filmography Movie",
+                        "release_date": "2026-05-23",
+                        "poster_path": "/tmdb-poster.jpg",
+                        "vote_average": 8.25,
+                        "character": "Lead",
+                    }],
+                    "crew": [],
+                }
+
+        try:
+            self.backend.TMDB_API_KEY = "test-key"
+            self.backend.requests.get = lambda *args, **kwargs: FakeResponse()
+            payload = self._json(self.client.get(f"/api/people/{person_id}/filmography"))
+        finally:
+            self.backend.TMDB_API_KEY = original_key
+            self.backend.requests.get = original_get
+
+        item = payload["cast"][0]
+        self.assertEqual(item["tmdbId"], tmdb_movie_id)
+        self.assertEqual(item["movieId"], movie_id)
+        self.assertEqual(item["collectionId"], 321)
+        self.assertEqual(item["digitalId"], digital_id)
+        self.assertTrue(item["posterUrl"].startswith("http://localhost/api/images/"))
+        self.assertEqual(item["poster_path"], "/tmdb-poster.jpg")
+        self.assertEqual(item["movie"]["tmdbId"], tmdb_movie_id)
+        self.assertEqual(item["movie"]["movieId"], movie_id)
+        self.assertEqual(item["movie"]["posterUrl"], item["posterUrl"])
+
 
 if __name__ == "__main__":
     unittest.main()
