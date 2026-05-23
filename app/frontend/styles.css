@@ -956,6 +956,8 @@
   }
 
   .movie-poster img { width: 100%; height: 100%; object-fit: cover; }
+  .movie-poster.is-clickable { cursor: pointer; }
+  .movie-poster.is-clickable:hover { border-color: var(--accent); }
   .movie-poster .no-poster {
     width: 100%; height: 100%;
     display: flex;
