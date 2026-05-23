@@ -67,6 +67,69 @@ The backend normalizes legacy image records during sync responses:
 - missing offline variants are generated when possible
 - external backdrops are downloaded locally when possible
 - unresolved external images remain available as URLs and are logged
+- alternative movie backdrops from `movies.backdrops` are included as separate
+  `kind: "backdrop"` asset entries with the same movie `entityId`; mobile
+  clients should key assets by `url` / `absoluteUrl`, not by `entityId` alone
+
+## Offline Sync Cast And Crew
+
+`GET /api/sync/bootstrap` and `GET /api/sync/delta` include cast and crew
+grouped per movie.
+
+Preferred field:
+
+- `movieCast`
+
+Compatibility aliases:
+
+- `movie_cast`
+- `castByMovie`
+- `cast_by_movie`
+
+Each group contains:
+
+- `movieId`
+- `cast`
+
+`cast` contains both actors and crew. Actors use `role: "actor"` when possible.
+Crew members use `role: "crew"` and should include `job`.
+
+Example:
+
+```json
+{
+  "movieCast": [
+    {
+      "movieId": 123,
+      "cast": [
+        {
+          "personId": 456,
+          "name": "Will Smith",
+          "role": "actor",
+          "character": "Deadshot",
+          "job": null,
+          "photoUrl": "https://discvault.example/api/images/profiles/will.jpg",
+          "photoFile": "will.jpg",
+          "tmdbId": 2888
+        },
+        {
+          "personId": 789,
+          "name": "David Ayer",
+          "role": "crew",
+          "character": null,
+          "job": "Director",
+          "photoUrl": "https://discvault.example/api/images/profiles/david.jpg",
+          "photoFile": "david.jpg",
+          "tmdbId": 1234
+        }
+      ]
+    }
+  ]
+}
+```
+
+The corresponding person profile images are also included in `assetManifest`
+as `kind: "profile"` entries.
 
 ## Filmography Contract
 

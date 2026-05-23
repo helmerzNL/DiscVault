@@ -68,17 +68,27 @@ function getCurrentMovies() {
     const matchesGroup   = !activeGroup ||
       (activeGroup === '_mine' ? (m.owner_id === currentUserId) : (m.group_ids || []).includes(parseInt(activeGroup)));
     const matchesEdition = !activeEditionFilter || (m.edition_group_id != null || m._is_super_group || m._is_collection);
-    const matchesQuery   = !q ||
-      (m.title || '').toLowerCase().includes(q) ||
-      (m.original_title || '').toLowerCase().includes(q) ||
-      (m.director || '').toLowerCase().includes(q) ||
-      (m.actor || '').toLowerCase().includes(q) ||
-      (m.genre || '').toLowerCase().includes(q) ||
-      (m.box_set || '').toLowerCase().includes(q) ||
-      (m.studios || '').toLowerCase().includes(q) ||
-      (m.distributor || '').toLowerCase().includes(q);
+    const matchesQuery   = movieMatchesSearch(m, q);
     return matchesFormat && matchesGroup && matchesEdition && matchesQuery;
   });
+}
+
+function movieMatchesSearch(m, q) {
+  if (!q) return true;
+  const people = Array.isArray(m.searchPeople)
+    ? m.searchPeople.join(' ')
+    : (m.search_people || '');
+  return [
+    m.title,
+    m.original_title,
+    m.director,
+    m.actor,
+    m.genre,
+    m.box_set,
+    m.studios,
+    m.distributor,
+    people,
+  ].some(value => (value || '').toString().toLowerCase().includes(q));
 }
 
 function canEditMovie(m) {
@@ -201,15 +211,16 @@ function renderGrid(movies) {
         userDigitalGroups.includes(parseInt(activeGroup));
       if (groupOk) {
         const match = (compareData.physical_and_digital || []).find(e => e.movie && e.movie.id === m.id);
-        if (match && match.digital_matches && match.digital_matches.length) {
+        const matches = _digitalMatches(match);
+        if (matches.length) {
           const filtered = digitalBadgeFilter === 'all'
-            ? match.digital_matches
-            : match.digital_matches.filter(x => x.source_type === digitalBadgeFilter);
+            ? matches
+            : matches.filter(x => x.sourceType === digitalBadgeFilter);
           // Deduplicate by source_type so we get one badge per platform
-          const types = [...new Set(filtered.map(x => x.source_type))];
+          const types = [...new Set(filtered.map(x => x.sourceType))];
           if (types.length) {
             const badges = types.map(st => {
-              const names = filtered.filter(x => x.source_type === st).map(x => x.source_name).join(', ');
+              const names = filtered.filter(x => x.sourceType === st).map(x => x.sourceName).join(', ');
               const logo = st === 'plex'
                 ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="#E5A00D"><path d="M3.987 8.409c-.96 0-1.587.28-2.12.933v-.72H0v8.88s.038.018.127.037c.138.03.821.187 1.331-.249.441-.377.542-.814.542-1.318v-1.283c.533.573 1.147.813 2 .813 1.84 0 3.253-1.493 3.253-3.48 0-2.12-1.36-3.613-3.266-3.613Zm16.748 5.595.406.591c.391.614.894.906 1.492.908.621-.012 1.064-.562 1.226-.755 0 0-.307-.27-.686-.72-.517-.614-1.214-1.755-1.24-1.803l-1.198 1.779Zm-3.205-1.955c0-2.08-1.52-3.64-3.52-3.64s-3.467 1.587-3.467 3.573a3.48 3.48 0 0 0 3.507 3.52c1.413 0 2.626-.84 3.253-2.293h-2.04l-.093.093c-.427.4-.72.533-1.227.533-.787 0-1.373-.506-1.453-1.266h4.986c.04-.214.054-.307.054-.52Zm-7.671-.219c0 .769.11 1.701.868 2.722l.056.069c-.306.526-.742.88-1.248.88-.399 0-.814-.211-1.138-.579a2.177 2.177 0 0 1-.538-1.441V6.409H9.86l-.001 5.421Zm9.283 3.46h-2.39l2.247-3.332-2.247-3.335h2.39l2.248 3.335-2.248 3.332Zm1.593-1.286Zm-17.162-.342c-.933 0-1.68-.773-1.68-1.72s.76-1.666 1.68-1.666c.92 0 1.68.733 1.68 1.68 0 .946-.733 1.706-1.68 1.706Zm18.361-1.974L24 8.622h-2.391l-.87 1.293 1.195 1.773Zm-9.404-.466c.16-.706.72-1.133 1.493-1.133.773 0 1.373.467 1.507 1.133h-3Z"/></svg>'
                 : '<svg viewBox="0 0 24 24" width="14" height="14" fill="#00A4DC"><path d="M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0C25.384 18.573 15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189.518 1.04 7.348 1.027 7.86 0 .511-1.027-2.874-7.19-3.93-7.19z"/></svg>';
@@ -255,16 +266,7 @@ function getSearchMovies() {
   const input = document.getElementById('searchPageInput');
   const q = input ? input.value.toLowerCase().trim() : '';
   if (!q) return [];
-  return allMovies.filter(m =>
-    (m.title || '').toLowerCase().includes(q) ||
-    (m.original_title || '').toLowerCase().includes(q) ||
-    (m.director || '').toLowerCase().includes(q) ||
-    (m.actor || '').toLowerCase().includes(q) ||
-    (m.genre || '').toLowerCase().includes(q) ||
-    (m.box_set || '').toLowerCase().includes(q) ||
-    (m.studios || '').toLowerCase().includes(q) ||
-    (m.distributor || '').toLowerCase().includes(q)
-  );
+  return allMovies.filter(m => movieMatchesSearch(m, q));
 }
 
 function renderSearchGrid(movies) {
@@ -1167,7 +1169,7 @@ function _refreshContainerImagePreviews(gd) {
   const pf = (gd && gd.poster_file) ? gd.poster_file : '';
   if (posterPrev) {
     if (pf) {
-      posterPrev.style.backgroundImage = `url('${API}/posters/${pf}')`;
+      posterPrev.style.backgroundImage = `url('${apiImageUrl(pf, 'poster')}')`;
       posterPrev.textContent = '';
     } else {
       posterPrev.style.backgroundImage = '';
@@ -1180,7 +1182,7 @@ function _refreshContainerImagePreviews(gd) {
   const egPosterEl = document.getElementById('egPoster');
   if (egPosterEl) {
     if (pf) {
-      const url = /^https?:\/\//i.test(pf) ? pf : `${API}/posters/${encodeURIComponent(pf.split(/[/\\]/).pop())}`;
+      const url = apiImageUrl(pf, 'poster');
       egPosterEl.innerHTML = `<img src="${url}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📦</div>'">`;
     }
   }
@@ -1188,7 +1190,7 @@ function _refreshContainerImagePreviews(gd) {
   const bg = (gd && gd.backdrop) ? gd.backdrop : '';
   if (bgPrev) {
     if (bg) {
-      bgPrev.style.backgroundImage = `url('${bg}')`;
+      bgPrev.style.backgroundImage = `url('${backdropSrc(bg)}')`;
       bgPrev.textContent = '';
     } else {
       bgPrev.style.backgroundImage = '';
@@ -1228,7 +1230,7 @@ async function uploadContainerPoster(inputEl) {
     const result = await r.json().catch(() => ({}));
     const pf = result.poster_file;
     if (pf) {
-      const imgUrl = `/api/posters/${encodeURIComponent(pf)}`;
+      const imgUrl = apiImageUrl(result.posterUrl || result.poster_url || pf, 'poster');
       const posterEl = document.getElementById('egPoster');
       if (posterEl) posterEl.innerHTML = `<img src="${imgUrl}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📦</div>'">`;
       const prev = document.getElementById('egContainerPosterPreview');
@@ -1269,7 +1271,7 @@ async function uploadContainerBackdrop(inputEl) {
     }
     // Directly update the hero section from the upload response.
     const result = await r.json().catch(() => ({}));
-    const bd = result.backdrop;
+    const bd = backdropSrc(result.backdropUrl || result.backdrop_url || result.backdrop);
     if (bd) {
       _applyEgBackdrop(bd, null);
       const prev = document.getElementById('egContainerBackdropPreview');
@@ -1316,11 +1318,13 @@ function _applyEgBackdrop(backdropUrl, movieCard) {
   const heroWrap = document.getElementById('egHeroWrap');
   const heroImg = document.getElementById('egHeroImg');
   const bgBlur = document.getElementById('egDetailBg');
+  backdropUrl = backdropSrc(backdropUrl);
   if (!backdropUrl) {
     // Fallback: try first member's backdrop
-    const members = movieCard.editions || movieCard._sub_groups || movieCard._loose_movies || [];
+    const members = (movieCard && (movieCard.editions || movieCard._sub_groups || movieCard._loose_movies)) || [];
     for (const m of members) {
-      if (m.backdrop) { backdropUrl = m.backdrop; break; }
+      const memberBackdrop = backdropSrc(m);
+      if (memberBackdrop) { backdropUrl = memberBackdrop; break; }
     }
   }
   if (backdropUrl) {
@@ -1415,17 +1419,22 @@ function _loadCollectionMedia(imgContainer, vidContainer, colId) {
 
 function _renderMediaGrid(container, allMembers, currentBackdrop, type, groupId) {
   let html = '';
+  const activeBackdrop = backdropSrc(currentBackdrop);
   allMembers.forEach(m => {
     let backdrops = [];
     try { backdrops = m.backdrops ? JSON.parse(m.backdrops) : []; } catch(e) {}
-    if (!backdrops.length && m.backdrop) backdrops = [m.backdrop];
+    backdrops = backdrops.map(url => backdropSrc(url)).filter(Boolean);
+    if (!backdrops.length) {
+      const primaryBackdrop = backdropSrc(m);
+      if (primaryBackdrop) backdrops = [primaryBackdrop];
+    }
     if (!backdrops.length) return;
 
     html += `<div style="margin-bottom:20px;">
       <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">${m.title || ''} ${m.year ? '(' + m.year + ')' : ''}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
         ${backdrops.map(url => {
-          const isActive = url === currentBackdrop;
+          const isActive = url === activeBackdrop;
           return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setGroupBackdrop('${type}', ${groupId}, '${url.replace(/'/g, "\\'")}')">
             <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
             ${isActive ? '<div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;">Backdrop</div>' : ''}
@@ -1478,19 +1487,20 @@ function _renderVideosGrid(container, allMembers) {
 }
 
 async function setGroupBackdrop(type, groupId, url) {
+  const normalizedUrl = backdropSrc(url);
   const endpoint = type === 'col'
     ? `${API}/collections/${groupId}`
     : `${API}/edition-groups/${groupId}`;
   await fetch(endpoint, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ backdrop: url })
+    body: JSON.stringify({ backdrop: normalizedUrl })
   });
   // Apply immediately
   const movieCard = _currentCollection || _currentSuperGroup || allMovies.find(m => m.id === _currentEditionGroupPrimaryId);
-  _applyEgBackdrop(url, movieCard || {});
-  if (type === 'col' && _currentCollectionData) _currentCollectionData.backdrop = url;
-  if (type === 'eg' && _currentEgGroupData) _currentEgGroupData.backdrop = url;
+  _applyEgBackdrop(normalizedUrl, movieCard || {});
+  if (type === 'col' && _currentCollectionData) _currentCollectionData.backdrop = normalizedUrl;
+  if (type === 'eg' && _currentEgGroupData) _currentEgGroupData.backdrop = normalizedUrl;
   // Reload media tab to update active indicator
   loadEgMedia();
 }
@@ -1785,7 +1795,7 @@ async function openMovieDetail(id, skipGroupRedirect) {
   const bg   = document.getElementById('movieDetailBg');
   const hero = document.getElementById('detailHeroImg');
   const heroWrap = document.querySelector('.detail-hero-wrap');
-  const backdropUrl = movie.backdrop || '';
+  const backdropUrl = backdropSrc(movie);
   const blurSrc = backdropUrl || src || '';  // fallback: poster as blurred bg
 
   // Page background blur — use backdrop if available, else poster as ambience
@@ -1942,7 +1952,7 @@ async function openMovieDetail(id, skipGroupRedirect) {
       ? (compareData.physical_and_digital || []).find(e => e.movie && e.movie.id === id)
       : null;
     const _matches = _entry
-      ? (_entry.digital_matches || []).filter(dm => dm.web_url || dm.app_url)
+      ? _digitalMatches(_entry).filter(dm => dm.webUrl || dm.appUrl || dm.nativeUrl)
       : [];
     if (_matches.length) {
       _dlBtns.innerHTML = _matches.map(_renderDigitalPlayBtn).join('');
@@ -2034,17 +2044,18 @@ function _openDigital(appUrl, webUrl, event) {
 }
 
 function _renderDigitalPlayBtn(match) {
-  const isPlex     = match.source_type === 'plex';
-  const isJellyfin = match.source_type === 'jellyfin';
+  const normalized = _normalizeDigitalMatch(match);
+  const isPlex     = normalized.sourceType === 'plex';
+  const isJellyfin = normalized.sourceType === 'jellyfin';
   const bg   = isPlex ? '#E5A00D' : (isJellyfin ? '#00A4DC' : '#555');
   const fg   = isPlex ? '#1a1a1a' : '#fff';
   const path = isPlex ? _PLEX_SVG_PATH : (isJellyfin ? _JELLYFIN_SVG_PATH : '');
   const icon = path
     ? `<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" style="flex-shrink:0" xmlns="http://www.w3.org/2000/svg"><path d="${path}"/></svg>`
     : '▶';
-  const safeName = (match.source_name || (isPlex ? 'Plex' : 'Jellyfin')).replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const webUrl   = (match.web_url  || '').replace(/"/g,'&quot;');
-  const appUrl   = (match.app_url  || '').replace(/"/g,'&quot;');
+  const safeName = (normalized.sourceName || (isPlex ? 'Plex' : 'Jellyfin')).replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const webUrl   = (normalized.webUrl || '').replace(/"/g,'&quot;');
+  const appUrl   = (normalized.appUrl || normalized.nativeUrl || '').replace(/"/g,'&quot;');
   const label = (t('digital.playOn') || 'Play on {0}').replace('{0}', safeName);
   // href = web URL (right-click "open in new tab" still works);
   // onclick tries native app first, falls back to web after 1.5 s
@@ -2055,6 +2066,21 @@ function _renderDigitalPlayBtn(match) {
            font-weight:600;line-height:1;transition:opacity 0.15s;"
     onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
     title="${label}">${icon}<span>${label}</span></a>`;
+}
+
+function _normalizeDigitalMatch(match) {
+  const digital = match && match.digital ? match.digital : {};
+  return {
+    sourceType: match?.sourceType || match?.source_type || digital.sourceType || digital.source_type || '',
+    sourceName: match?.sourceName || match?.source_name || digital.sourceName || digital.source_name || '',
+    webUrl: match?.webUrl || match?.web_url || match?.digitalWebUrl || match?.digital_web_url || digital.webUrl || digital.web_url || '',
+    appUrl: match?.appUrl || match?.app_url || match?.digitalAppUrl || match?.digital_app_url || digital.appUrl || digital.app_url || '',
+    nativeUrl: match?.nativeUrl || match?.native_url || match?.digitalNativeUrl || match?.digital_native_url || digital.nativeUrl || digital.native_url || '',
+  };
+}
+
+function _digitalMatches(entry) {
+  return (entry?.digitalMatches || entry?.digital_matches || []).map(_normalizeDigitalMatch);
 }
 
 // Alias kept for any legacy inline calls
@@ -2096,7 +2122,11 @@ function loadMovieMedia() {
   // Backdrops
   let backdrops = [];
   try { backdrops = movie.backdrops ? JSON.parse(movie.backdrops) : []; } catch(e) {}
-  if (!backdrops.length && movie.backdrop) backdrops = [movie.backdrop];
+  backdrops = backdrops.map(url => backdropSrc(url)).filter(Boolean);
+  if (!backdrops.length) {
+    const primaryBackdrop = backdropSrc(movie);
+    if (primaryBackdrop) backdrops = [primaryBackdrop];
+  }
 
   // Trailer
   const trailerUrl = movie.trailer_url || '';
@@ -2110,7 +2140,7 @@ function loadMovieMedia() {
   const imgContainer = document.getElementById('mediaImagesContent');
   if (imgContainer) {
     if (backdrops.length > 0) {
-      const currentBackdrop = movie.backdrop || '';
+      const currentBackdrop = backdropSrc(movie);
       imgContainer.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
         ${backdrops.map(url => {
           const isActive = url === currentBackdrop;
@@ -2182,14 +2212,15 @@ function _ytThumbHtml(key) {
 }
 
 async function setMovieBackdrop(movieId, url) {
+  const normalizedUrl = backdropSrc(url);
   await fetch(`${API}/movies/${movieId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ backdrop: url })
+    body: JSON.stringify({ backdrop: normalizedUrl })
   });
   // Update local cache and apply immediately
   const movie = allMovies.find(m => m.id === movieId);
-  if (movie) movie.backdrop = url;
+  if (movie) movie.backdrop = normalizedUrl;
   // Update hero/bg on the detail page
   const hero = document.getElementById('detailHeroImg');
   const bg = document.getElementById('movieDetailBg');
@@ -2197,17 +2228,17 @@ async function setMovieBackdrop(movieId, url) {
   if (heroWrap) heroWrap.classList.remove('no-backdrop');
   if (hero) {
     hero.classList.remove('loaded');
-    hero.style.backgroundImage = `url('${url}')`;
+    hero.style.backgroundImage = `url('${normalizedUrl}')`;
     const img = new Image();
     img.onload = () => hero.classList.add('loaded');
-    img.src = url;
+    img.src = normalizedUrl;
   }
   if (bg) {
     bg.classList.remove('loaded');
-    bg.style.backgroundImage = `url('${url}')`;
+    bg.style.backgroundImage = `url('${normalizedUrl}')`;
     const img = new Image();
     img.onload = () => bg.classList.add('loaded');
-    img.src = url;
+    img.src = normalizedUrl;
   }
   // Reload media tab to update active indicator
   loadMovieMedia();
@@ -2242,8 +2273,8 @@ async function loadMovieCast(movieId) {
       html += `<div class="crew-section-title">${t('d.actors')} (${actors.length})</div>`;
       html += '<div class="cast-grid">';
       actors.forEach(a => {
-        const photoSrc = a.photo_url || (a.photo_file ? `${API}/profiles/${a.photo_file}?v=${encodeURIComponent(a.photo_file)}` : '');
-        const photo = a.photo_file
+        const photoSrc = profileSrc(a);
+        const photo = photoSrc
           ? `<img class="cast-photo" src="${photoSrc}" onerror="this.outerHTML='<div class=\\'cast-photo-placeholder\\'>👤</div>'">`
           : '<div class="cast-photo-placeholder">👤</div>';
         const charName = a.character ? `<div class="cast-role">${t('person.as')} ${escHtml(a.character)}</div>` : '';
@@ -2259,8 +2290,8 @@ async function loadMovieCast(movieId) {
       html += `<div class="crew-section-title">${escHtml(job)} (${members.length})</div>`;
       html += '<div class="cast-grid">';
       members.forEach(c => {
-        const photoSrc = c.photo_url || (c.photo_file ? `${API}/profiles/${c.photo_file}?v=${encodeURIComponent(c.photo_file)}` : '');
-        const photo = c.photo_file
+        const photoSrc = profileSrc(c);
+        const photo = photoSrc
           ? `<img class="cast-photo" src="${photoSrc}" onerror="this.outerHTML='<div class=\\'cast-photo-placeholder\\'>👤</div>'">`
           : '<div class="cast-photo-placeholder">👤</div>';
         html += `<div class="cast-card" onclick="openPersonDetail(${c.person_id})">
@@ -2354,10 +2385,10 @@ async function openPersonDetail(personId) {
     const p = await r.json();
     document.getElementById('personName').textContent = p.name || '';
     // Photo
-    if (p.photo_file) {
-      const photoSrc = p.photo_url || `${API}/profiles/${p.photo_file}?v=${encodeURIComponent(p.photo_file)}`;
+    const personPhotoSrc = profileSrc(p);
+    if (personPhotoSrc) {
       document.getElementById('personPhoto').innerHTML =
-        `<img class="person-photo-large" src="${photoSrc}" onerror="this.outerHTML='<div class=\\'person-photo-placeholder-large\\'>👤</div>'">`; 
+        `<img class="person-photo-large" src="${personPhotoSrc}" onerror="this.outerHTML='<div class=\\'person-photo-placeholder-large\\'>👤</div>'">`;
     }
     // Meta info
     let meta = [];
@@ -2396,7 +2427,7 @@ async function openPersonDetail(personId) {
     let collectionHtml = '';
     if (movies.length) {
       movies.forEach(m => {
-        const src = m.poster_file ? `${API}/posters/${m.poster_file}` : (m.poster || '');
+        const src = posterSrc(m) || '';
         const posterImg = src
           ? `<img class="person-film-poster" src="${src}" onerror="this.style.display='none'">`
           : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
@@ -2493,7 +2524,7 @@ async function _loadPersonFilmography(personId) {
     });
     _personRatingMap = ratingMap;
     // Update pill counts
-    const digitalCount = (data.cast || []).filter(m => m.in_digital).length;
+    const digitalCount = (data.cast || []).filter(_filmographyInDigital).length;
     const elD = document.getElementById('personTabCountDigital');
     const elF = document.getElementById('personTabCountFilmography');
     if (elD) elD.textContent = digitalCount;
@@ -2524,6 +2555,26 @@ function _sortFilmography(sort) {
   else if (active === 'filmography' && _personFilmographyData) _renderFilmographyGrid(_personFilmographyData, sort);
 }
 
+function _filmographyLocalMovieId(m) {
+  return m.movieId || m.movie_id || m.collectionId || m.collection_id || (m.movie && (m.movie.movieId || m.movie.movie_id || m.movie.collectionId || m.movie.collection_id));
+}
+
+function _filmographyInCollection(m) {
+  return !!(m.inCollection || m.in_collection || (m.movie && (m.movie.inCollection || m.movie.in_collection)));
+}
+
+function _filmographyInDigital(m) {
+  return !!(m.inDigital || m.in_digital || (m.movie && (m.movie.inDigital || m.movie.in_digital)));
+}
+
+function _filmographyFormat(m) {
+  return m.collectionFormat || m.collection_format || (m.movie && (m.movie.collectionFormat || m.movie.collection_format)) || '';
+}
+
+function _filmographyDigitalSource(m) {
+  return m.digitalSource || m.digital_source || (m.digital && (m.digital.sourceType || m.digital.source_type)) || (m.movie && (m.movie.digitalSource || m.movie.digital_source)) || '';
+}
+
 function _renderCollectionGrid(movies, sort, ratingMap) {
   const grid = document.getElementById('personCollectionGrid');
   if (!grid) return;
@@ -2542,7 +2593,7 @@ function _renderCollectionGrid(movies, sort, ratingMap) {
   }
   let html = '';
   sorted.forEach(m => {
-    const src = m.poster_file ? `${API}/posters/${m.poster_file}` : (m.poster || '');
+    const src = posterSrc(m) || '';
     const posterImg = src
       ? `<img class="person-film-poster" src="${src}" onerror="this.style.display='none'">`
       : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
@@ -2563,7 +2614,7 @@ function _renderCollectionGrid(movies, sort, ratingMap) {
 function _renderDigitalGrid(data, sort) {
   const grid = document.getElementById('personDigitalGrid');
   if (!grid) return;
-  let movies = (data.cast || []).filter(m => m.in_digital);
+  let movies = (data.cast || []).filter(_filmographyInDigital);
   if (sort === 'newest') movies.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
   else if (sort === 'oldest') movies.sort((a, b) => (a.year || '9999').localeCompare(b.year || '9999'));
   else if (sort === 'az') movies.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
@@ -2574,16 +2625,19 @@ function _renderDigitalGrid(data, sort) {
   }
   let html = '';
   movies.forEach(m => {
-    const onclick = m.in_collection ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${m.collection_id})"` : '';
-    const cursor = m.in_collection ? '' : 'cursor:default;';
-    const poster = m.poster
-      ? `<img class="person-film-poster" src="${escHtml(m.poster)}" onerror="this.style.display='none'" loading="lazy">`
+    const localMovieId = _filmographyLocalMovieId(m);
+    const hasCollectionLink = _filmographyInCollection(m) && localMovieId;
+    const onclick = hasCollectionLink ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${localMovieId})"` : '';
+    const cursor = hasCollectionLink ? '' : 'cursor:default;';
+    const src = posterSrc(m);
+    const poster = src
+      ? `<img class="person-film-poster" src="${escHtml(src)}" onerror="this.style.display='none'" loading="lazy">`
       : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">\uD83C\uDFAC</div>`;
-    const logo = m.digital_source === 'plex'
+    const logo = _filmographyDigitalSource(m) === 'plex'
       ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="#E5A00D"><path d="M3.987 8.409c-.96 0-1.587.28-2.12.933v-.72H0v8.88s.038.018.127.037c.138.03.821.187 1.331-.249.441-.377.542-.814.542-1.318v-1.283c.533.573 1.147.813 2 .813 1.84 0 3.253-1.493 3.253-3.48 0-2.12-1.36-3.613-3.266-3.613Zm16.748 5.595.406.591c.391.614.894.906 1.492.908.621-.012 1.064-.562 1.226-.755 0 0-.307-.27-.686-.72-.517-.614-1.214-1.755-1.24-1.803l-1.198 1.779Zm-3.205-1.955c0-2.08-1.52-3.64-3.52-3.64s-3.467 1.587-3.467 3.573a3.48 3.48 0 0 0 3.507 3.52c1.413 0 2.626-.84 3.253-2.293h-2.04l-.093.093c-.427.4-.72.533-1.227.533-.787 0-1.373-.506-1.453-1.266h4.986c.04-.214.054-.307.054-.52Zm-7.671-.219c0 .769.11 1.701.868 2.722l.056.069c-.306.526-.742.88-1.248.88-.399 0-.814-.211-1.138-.579a2.177 2.177 0 0 1-.538-1.441V6.409H9.86l-.001 5.421Zm9.283 3.46h-2.39l2.247-3.332-2.247-3.335h2.39l2.248 3.335-2.248 3.332Zm1.593-1.286Zm-17.162-.342c-.933 0-1.68-.773-1.68-1.72s.76-1.666 1.68-1.666c.92 0 1.68.733 1.68 1.68 0 .946-.733 1.706-1.68 1.706Zm18.361-1.974L24 8.622h-2.391l-.87 1.293 1.195 1.773Zm-9.404-.466c.16-.706.72-1.133 1.493-1.133.773 0 1.373.467 1.507 1.133h-3Z"/></svg>'
       : '<svg viewBox="0 0 24 24" width="12" height="12" fill="#00A4DC"><path d="M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0C25.384 18.573 15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189.518 1.04 7.348 1.027 7.86 0 .511-1.027-2.874-7.19-3.93-7.19z"/></svg>';
     const sourceBadge = `<div class="person-film-format-badge" style="background:rgba(20,20,28,0.82);display:flex;align-items:center;justify-content:center;padding:3px 5px;">${logo}</div>`;
-    const formatBadge = m.in_collection && m.collection_format ? `<div class="person-film-format-badge">${escHtml(m.collection_format)}</div>` : '';
+    const formatBadge = _filmographyInCollection(m) && _filmographyFormat(m) ? `<div class="person-film-format-badge">${escHtml(_filmographyFormat(m))}</div>` : '';
     const rating = m.vote_average > 0 ? `<div class="person-film-rating">\u2B50 ${m.vote_average.toFixed(1)}</div>` : '';
     const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>` : '';
     html += `<div class="person-film-card" style="${cursor}" ${onclick}>`;
@@ -2598,7 +2652,7 @@ function _renderDigitalGrid(data, sort) {
 function _renderDigitalGrid(data, sort) {
   const grid = document.getElementById('personDigitalGrid');
   if (!grid) return;
-  let movies = (data.cast || []).filter(m => m.in_digital);
+  let movies = (data.cast || []).filter(_filmographyInDigital);
   if (sort === 'newest') movies.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
   else if (sort === 'oldest') movies.sort((a, b) => (a.year || '9999').localeCompare(b.year || '9999'));
   else if (sort === 'az') movies.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
@@ -2609,16 +2663,20 @@ function _renderDigitalGrid(data, sort) {
   }
   let html = '';
   movies.forEach(m => {
-    const onclick = m.in_collection ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${m.collection_id})"` : '';
-    const cursor = m.in_collection ? '' : 'cursor:default;';
-    const poster = m.poster
-      ? `<img class="person-film-poster" src="${escHtml(m.poster)}" onerror="this.style.display='none'" loading="lazy">`
+    const localMovieId = _filmographyLocalMovieId(m);
+    const hasCollectionLink = _filmographyInCollection(m) && localMovieId;
+    const onclick = hasCollectionLink ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${localMovieId})"` : '';
+    const cursor = hasCollectionLink ? '' : 'cursor:default;';
+    const src = posterSrc(m);
+    const poster = src
+      ? `<img class="person-film-poster" src="${escHtml(src)}" onerror="this.style.display='none'" loading="lazy">`
       : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
-    const logo = m.digital_source === 'plex'
+    const digitalSource = _filmographyDigitalSource(m);
+    const logo = digitalSource === 'plex'
       ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="#E5A00D"><path d="M3.987 8.409c-.96 0-1.587.28-2.12.933v-.72H0v8.88s.038.018.127.037c.138.03.821.187 1.331-.249.441-.377.542-.814.542-1.318v-1.283c.533.573 1.147.813 2 .813 1.84 0 3.253-1.493 3.253-3.48 0-2.12-1.36-3.613-3.266-3.613Zm16.748 5.595.406.591c.391.614.894.906 1.492.908.621-.012 1.064-.562 1.226-.755 0 0-.307-.27-.686-.72-.517-.614-1.214-1.755-1.24-1.803l-1.198 1.779Zm-3.205-1.955c0-2.08-1.52-3.64-3.52-3.64s-3.467 1.587-3.467 3.573a3.48 3.48 0 0 0 3.507 3.52c1.413 0 2.626-.84 3.253-2.293h-2.04l-.093.093c-.427.4-.72.533-1.227.533-.787 0-1.373-.506-1.453-1.266h4.986c.04-.214.054-.307.054-.52Zm-7.671-.219c0 .769.11 1.701.868 2.722l.056.069c-.306.526-.742.88-1.248.88-.399 0-.814-.211-1.138-.579a2.177 2.177 0 0 1-.538-1.441V6.409H9.86l-.001 5.421Zm9.283 3.46h-2.39l2.247-3.332-2.247-3.335h2.39l2.248 3.335-2.248 3.332Zm1.593-1.286Zm-17.162-.342c-.933 0-1.68-.773-1.68-1.72s.76-1.666 1.68-1.666c.92 0 1.68.733 1.68 1.68 0 .946-.733 1.706-1.68 1.706Zm18.361-1.974L24 8.622h-2.391l-.87 1.293 1.195 1.773Zm-9.404-.466c.16-.706.72-1.133 1.493-1.133.773 0 1.373.467 1.507 1.133h-3Z"/></svg>'
       : '<svg viewBox="0 0 24 24" width="12" height="12" fill="#00A4DC"><path d="M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0C25.384 18.573 15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189.518 1.04 7.348 1.027 7.86 0 .511-1.027-2.874-7.19-3.93-7.19z"/></svg>';
     const sourceBadge = `<div class="person-film-format-badge" style="background:rgba(20,20,28,0.82);display:flex;align-items:center;justify-content:center;padding:3px 5px;">${logo}</div>`;
-    const formatBadge = m.in_collection && m.collection_format ? `<div class="person-film-format-badge">${escHtml(m.collection_format)}</div>` : '';
+    const formatBadge = _filmographyInCollection(m) && _filmographyFormat(m) ? `<div class="person-film-format-badge">${escHtml(_filmographyFormat(m))}</div>` : '';
     const rating = m.vote_average > 0 ? `<div class="person-film-rating">⭐ ${m.vote_average.toFixed(1)}</div>` : '';
     const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>` : '';
     html += `<div class="person-film-card" style="${cursor}" ${onclick}>`;
@@ -2645,22 +2703,24 @@ function _renderFilmographyGrid(data, sort) {
   }
   let html = '';
   movies.forEach(m => {
-    const owned = m.in_collection || m.in_digital;
-    const onclick = m.in_collection ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${m.collection_id})"` : '';
+    const owned = _filmographyInCollection(m) || _filmographyInDigital(m);
+    const localMovieId = _filmographyLocalMovieId(m);
+    const onclick = _filmographyInCollection(m) && localMovieId ? `onclick="_detailReturnTab='person-detail';openMovieDetail(${localMovieId})"` : '';
     const dim = owned ? '' : 'opacity:0.45;';
-    const cursor = m.in_collection ? '' : 'cursor:default;';
-    const poster = m.poster
-      ? `<img class="person-film-poster" src="${escHtml(m.poster)}" onerror="this.style.display='none'" loading="lazy">`
+    const cursor = _filmographyInCollection(m) && localMovieId ? '' : 'cursor:default;';
+    const src = posterSrc(m);
+    const poster = src
+      ? `<img class="person-film-poster" src="${escHtml(src)}" onerror="this.style.display='none'" loading="lazy">`
       : `<div class="person-film-poster" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--text-muted)">🎬</div>`;
-    const formatBadge = m.in_collection && m.collection_format
-      ? `<div class="person-film-format-badge">${escHtml(m.collection_format)}</div>`
-      : (m.in_digital ? (() => {
-          const logo = m.digital_source === 'plex'
+    const formatBadge = _filmographyInCollection(m) && _filmographyFormat(m)
+      ? `<div class="person-film-format-badge">${escHtml(_filmographyFormat(m))}</div>`
+      : (_filmographyInDigital(m) ? (() => {
+          const logo = _filmographyDigitalSource(m) === 'plex'
             ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="#E5A00D"><path d="M3.987 8.409c-.96 0-1.587.28-2.12.933v-.72H0v8.88s.038.018.127.037c.138.03.821.187 1.331-.249.441-.377.542-.814.542-1.318v-1.283c.533.573 1.147.813 2 .813 1.84 0 3.253-1.493 3.253-3.48 0-2.12-1.36-3.613-3.266-3.613Zm16.748 5.595.406.591c.391.614.894.906 1.492.908.621-.012 1.064-.562 1.226-.755 0 0-.307-.27-.686-.72-.517-.614-1.214-1.755-1.24-1.803l-1.198 1.779Zm-3.205-1.955c0-2.08-1.52-3.64-3.52-3.64s-3.467 1.587-3.467 3.573a3.48 3.48 0 0 0 3.507 3.52c1.413 0 2.626-.84 3.253-2.293h-2.04l-.093.093c-.427.4-.72.533-1.227.533-.787 0-1.373-.506-1.453-1.266h4.986c.04-.214.054-.307.054-.52Zm-7.671-.219c0 .769.11 1.701.868 2.722l.056.069c-.306.526-.742.88-1.248.88-.399 0-.814-.211-1.138-.579a2.177 2.177 0 0 1-.538-1.441V6.409H9.86l-.001 5.421Zm9.283 3.46h-2.39l2.247-3.332-2.247-3.335h2.39l2.248 3.335-2.248 3.332Zm1.593-1.286Zm-17.162-.342c-.933 0-1.68-.773-1.68-1.72s.76-1.666 1.68-1.666c.92 0 1.68.733 1.68 1.68 0 .946-.733 1.706-1.68 1.706Zm18.361-1.974L24 8.622h-2.391l-.87 1.293 1.195 1.773Zm-9.404-.466c.16-.706.72-1.133 1.493-1.133.773 0 1.373.467 1.507 1.133h-3Z"/></svg>'
             : '<svg viewBox="0 0 24 24" width="12" height="12" fill="#00A4DC"><path d="M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0C25.384 18.573 15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189.518 1.04 7.348 1.027 7.86 0 .511-1.027-2.874-7.19-3.93-7.19z"/></svg>';
           return `<div class="person-film-format-badge" style="background:rgba(20,20,28,0.82);display:flex;align-items:center;justify-content:center;padding:3px 5px;">${logo}</div>`;
         })() : '');
-    const ownedDot = owned ? `<div class="person-film-owned-dot"${m.in_digital && !m.in_collection ? ' style="background:var(--info,#3a8fd1)"' : ''}></div>` : '';
+    const ownedDot = owned ? `<div class="person-film-owned-dot"${_filmographyInDigital(m) && !_filmographyInCollection(m) ? ' style="background:var(--info,#3a8fd1)"' : ''}></div>` : '';
     const rating = m.vote_average > 0 ? `<div class="person-film-rating">⭐ ${m.vote_average.toFixed(1)}</div>` : '';
     const role = m.character ? `<div class="person-film-year">${t('person.as')} ${escHtml(m.character)}</div>` : '';
     html += `<div class="person-film-card" style="${dim}${cursor}" ${onclick}>`;
@@ -3272,7 +3332,7 @@ function hideAddBoxSetProposal() {
 }
 
 function _addBoxSetMemberPosterSrc(movie) {
-  return (movie && (movie.poster_url || movie.poster || movie.cover_url || movie.poster_file)) || '';
+  return posterSrc(movie) || '';
 }
 
 function displayAddBoxSetProposal(proposal, barcode = '') {
@@ -4072,8 +4132,8 @@ function renderCompareTab(tab) {
       const m   = entry.movie;
       const src = posterSrc(m);
       const img = src ? `<img src="${src}" loading="lazy">` : '<div class="no-img">🎬</div>';
-      const sources = (entry.digital_matches || []).map(x =>
-        `<span style="font-size:0.72rem; background:rgba(${x.source_type==='plex'?'232,197,71':'124,106,247'},.15); color:var(--${x.source_type==='plex'?'accent':'accent2'}); border:1px solid rgba(${x.source_type==='plex'?'232,197,71':'124,106,247'},.3); border-radius:4px; padding:1px 6px;">${x.source_name}</span>`
+      const sources = _digitalMatches(entry).map(x =>
+        `<span style="font-size:0.72rem; background:rgba(${x.sourceType==='plex'?'232,197,71':'124,106,247'},.15); color:var(--${x.sourceType==='plex'?'accent':'accent2'}); border:1px solid rgba(${x.sourceType==='plex'?'232,197,71':'124,106,247'},.3); border-radius:4px; padding:1px 6px;">${x.sourceName}</span>`
       ).join(' ');
       return `<div class="movie-card" data-id="${m.id}" onclick="openMovieDetail(${m.id})">
         <div class="movie-card-poster">${img}<div class="movie-card-format">${m.format||'4K'}</div></div>
@@ -4106,14 +4166,16 @@ function renderCompareTab(tab) {
       return;
     }
     cont.innerHTML = `<div style="display:flex; flex-direction:column; gap:8px;">` +
-      items.map(item =>
-        `<div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
+      items.map(item => {
+        const sourceType = item.sourceType || item.source_type || '';
+        const sourceName = item.sourceName || item.source_name || '';
+        return `<div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
           <div style="flex:1; min-width:0;">
             <div style="font-weight:500; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
             <div style="font-size:0.78rem; color:var(--text-muted);">${item.year||'—'}</div>
           </div>
-          <span style="font-size:0.72rem; background:rgba(${item.source_type==='plex'?'232,197,71':'124,106,247'},.15); color:var(--${item.source_type==='plex'?'accent':'accent2'}); border:1px solid rgba(${item.source_type==='plex'?'232,197,71':'124,106,247'},.3); border-radius:4px; padding:2px 8px; flex-shrink:0;">${item.source_name}</span>
-        </div>`
-      ).join('') + `</div>`;
+          <span style="font-size:0.72rem; background:rgba(${sourceType==='plex'?'232,197,71':'124,106,247'},.15); color:var(--${sourceType==='plex'?'accent':'accent2'}); border:1px solid rgba(${sourceType==='plex'?'232,197,71':'124,106,247'},.3); border-radius:4px; padding:2px 8px; flex-shrink:0;">${sourceName}</span>
+        </div>`;
+      }).join('') + `</div>`;
   }
 }
