@@ -3353,6 +3353,78 @@ def _submit_movievault_people_contributions(
     return submitted
 
 
+def _movievault_box_set_source_from_proposal(
+    proposal: dict | None,
+    barcode: str = "",
+    movie_info: dict | None = None,
+) -> dict:
+    if not isinstance(proposal, dict):
+        return {}
+    movies = proposal.get("movies") or proposal.get("members") or []
+    if not isinstance(movies, list) or len(movies) < 2:
+        return {}
+    movie_info = movie_info or {}
+    member_payload = []
+    years = []
+    for index, movie in enumerate(movies, start=1):
+        if not isinstance(movie, dict):
+            continue
+        title = (movie.get("title") or movie.get("name") or "").strip()
+        if not title:
+            continue
+        year = _parse_year(movie.get("year") or movie.get("releaseYear") or movie.get("release_date") or "")
+        if year:
+            years.append(year)
+        sort_order = movie.get("sortOrder") or movie.get("sort_order") or index
+        member = {
+            "title": title,
+            "year": year or "",
+            "tmdbId": movie.get("tmdbId") or movie.get("tmdb_id") or "",
+            "imdbId": movie.get("imdbId") or movie.get("imdb_id") or "",
+            "sortOrder": sort_order,
+        }
+        member_payload.append({k: v for k, v in member.items() if v not in (None, "", [], {})})
+    if len(member_payload) < 2:
+        return {}
+    years = sorted(set(y for y in years if y))
+    year_range = proposal.get("year_range") or proposal.get("yearRange") or ""
+    if not year_range and years:
+        year_range = str(years[0]) if years[0] == years[-1] else f"{years[0]}-{years[-1]}"
+    return {
+        "barcode": barcode or proposal.get("barcode") or movie_info.get("barcode") or "",
+        "title": proposal.get("title") or proposal.get("name") or movie_info.get("title") or "",
+        "tmdb_id": proposal.get("tmdb_id") or proposal.get("tmdbId") or movie_info.get("tmdb_id") or "",
+        "imdb_id": proposal.get("imdb_id") or proposal.get("imdbId") or movie_info.get("imdb_id") or "",
+        "format": proposal.get("format") or movie_info.get("format") or "",
+        "country": proposal.get("country") or movie_info.get("country") or "",
+        "language": proposal.get("language") or movie_info.get("language") or "",
+        "year_range": year_range,
+        "description": proposal.get("description") or movie_info.get("plot") or "",
+        "members": member_payload,
+    }
+
+
+def _submit_movievault_box_set_proposal_contribution(
+    proposal: dict | None,
+    barcode: str,
+    movie_info: dict | None,
+    sources: str,
+    context: dict | None = None,
+) -> bool:
+    source = _movievault_box_set_source_from_proposal(proposal, barcode, movie_info)
+    if not source:
+        return False
+    box_context = dict(context or {})
+    box_context.update(
+        {
+            "localEntityType": "box_set",
+            "localEntityId": barcode or source.get("title") or "-",
+            "barcode": barcode or source.get("barcode") or "",
+        }
+    )
+    return _submit_movievault_entity_contribution("box_set", source, sources, box_context)
+
+
 def _submit_movievault_contribution(movie_info: dict | None, sources: str, context: dict | None = None) -> bool:
     context = context or {}
     if not movie_info:
@@ -6824,15 +6896,25 @@ def lookup(barcode):
                 contribution_sources = "Barcode lookup"
                 if movievault_info and (bluray_info or specs):
                     contribution_sources = "MovieVault + Blu-ray.com enrichment"
-                _submit_movievault_contribution(
-                    movie_info,
-                    contribution_sources,
-                    {
-                        "barcode": barcode,
-                        "rawTitle": raw_title or "",
-                        "movieVaultHit": bool(movievault_info),
-                    },
-                )
+                contribution_context = {
+                    "barcode": barcode,
+                    "rawTitle": raw_title or "",
+                    "movieVaultHit": bool(movievault_info),
+                }
+                if _movievault_box_set_source_from_proposal(box_set_proposal, barcode, movie_info):
+                    _submit_movievault_box_set_proposal_contribution(
+                        box_set_proposal,
+                        barcode,
+                        movie_info,
+                        contribution_sources,
+                        contribution_context,
+                    )
+                else:
+                    _submit_movievault_contribution(
+                        movie_info,
+                        contribution_sources,
+                        contribution_context,
+                    )
             add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
                     f"Backends: {_trace_summary(attempts)}", "success")
             yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
@@ -6973,15 +7055,25 @@ def _lookup_sync(barcode):
                 contribution_sources = "Barcode lookup"
                 if movievault_info and (bluray_info or specs):
                     contribution_sources = "MovieVault + Blu-ray.com enrichment"
-                _submit_movievault_contribution(
-                    movie_info,
-                    contribution_sources,
-                    {
-                        "barcode": barcode,
-                        "rawTitle": raw_title or "",
-                        "movieVaultHit": bool(movievault_info),
-                    },
-                )
+                contribution_context = {
+                    "barcode": barcode,
+                    "rawTitle": raw_title or "",
+                    "movieVaultHit": bool(movievault_info),
+                }
+                if _movievault_box_set_source_from_proposal(box_set_proposal, barcode, movie_info):
+                    _submit_movievault_box_set_proposal_contribution(
+                        box_set_proposal,
+                        barcode,
+                        movie_info,
+                        contribution_sources,
+                        contribution_context,
+                    )
+                else:
+                    _submit_movievault_contribution(
+                        movie_info,
+                        contribution_sources,
+                        contribution_context,
+                    )
             add_log(
                 "lookup",
                 f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
