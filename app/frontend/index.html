@@ -221,7 +221,7 @@
     </div>
 
     <div id="collectionSearchBar" class="search-box" style="margin-bottom:10px;">
-      <input type="text" id="searchInput" oninput="filterMovies()" data-i18n-placeholder="collection.searchPlaceholder" placeholder="Zoek op titel, acteur, regisseur, genre...">
+      <input type="text" id="searchInput" oninput="filterMovies()" data-i18n-placeholder="collection.searchPlaceholder" placeholder="Zoek op barcode, titel, acteur, regisseur, genre...">
     </div>
 
     <!-- Bulk action toolbar (visible in select mode) -->
@@ -283,7 +283,7 @@
   <div class="panel" id="panel-search">
     <div class="collection-controls">
       <div class="search-box">
-        <input type="text" id="searchPageInput" placeholder="Zoek op titel, acteur, regisseur, genre..." data-i18n-placeholder="collection.searchPlaceholder" oninput="filterSearchMovies()">
+        <input type="text" id="searchPageInput" placeholder="Zoek op barcode, titel, acteur, regisseur, genre..." data-i18n-placeholder="collection.searchPlaceholder" oninput="filterSearchMovies()">
       </div>
     </div>
     <div id="searchMoviesGrid" class="movies-grid"></div>
@@ -801,7 +801,7 @@
               <span data-i18n="settings.showSearchButton">Zoekbalk in collectie</span>
             </label>
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5; margin-bottom:20px;" data-i18n="settings.showSearchButtonDesc">
-              Toont een zoekbalk bovenaan de collectiepagina om snel op titel, acteur, regisseur of genre te filteren.
+              Toont een zoekbalk bovenaan de collectiepagina om snel op barcode, titel, acteur, regisseur of genre te filteren.
             </div>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
               <input type="checkbox" id="showLocalTitleToggle" onchange="saveDisplaySettings()" style="accent-color:var(--accent); width:16px; height:16px;">

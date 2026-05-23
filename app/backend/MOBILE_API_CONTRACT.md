@@ -20,6 +20,80 @@ legacy field.
 - Image URLs returned to mobile clients should be absolute URLs whenever they
   point to backend-hosted assets.
 
+## Barcode Lookup Contract
+
+`GET /api/lookup/<barcode>` returns a single JSON response. The PWA scanner may
+use `GET /api/lookup/<barcode>?stream=1`, which returns newline-delimited JSON
+progress events and ends with a final `type: "done"` object. The final object
+uses the same status values as the non-streaming endpoint.
+
+When the scanned barcode already exists locally:
+
+- loose physical movies return `status: "movie_exists"` with `movie` and
+  `barcode`
+- box sets return `status: "box_set_exists"` with `box_set` and `barcode`
+- vaults return `status: "vault_exists"` with `vault`, `container`,
+  `container_type: "vault"` and `barcode`
+
+Example loose movie response:
+
+```json
+{
+  "status": "movie_exists",
+  "movie": {
+    "id": 42,
+    "title": "Example Movie",
+    "barcode": "5051890315526"
+  },
+  "barcode": "5051890315526"
+}
+```
+
+Example streaming final event:
+
+```json
+{
+  "type": "done",
+  "status": "movie_exists",
+  "movie": {
+    "id": 42,
+    "title": "Example Movie",
+    "barcode": "5051890315526"
+  },
+  "barcode": "5051890315526"
+}
+```
+
+Older backend builds used `status: "exists"` for existing loose movies. Clients
+may keep accepting `exists` as a fallback, but new clients should prefer
+`movie_exists`.
+
+## Movie Search Contract
+
+`GET /api/movies?q=<query>` is the shared collection search endpoint for PWA and
+mobile clients.
+
+Search should match user-visible collection entities by:
+
+- movie title and original title
+- barcode / EAN
+- director
+- actor and crew names
+- actor character names
+- crew jobs
+- genre, distributor, studio and legacy box-set text fields
+
+Barcode / EAN search must cover:
+
+- loose physical movies via `movies.barcode`
+- box-set container cards via `box_sets.barcode`
+- vault container cards via `vaults.barcode`
+
+When container cards are included in movie list responses, they should expose a
+top-level `barcode` field when the corresponding box-set or vault has one. PWA
+and mobile clients may use that `barcode` field for local filtering when the
+full movie list is already loaded.
+
 ## Image Contract
 
 The backend owns the canonical image routes.

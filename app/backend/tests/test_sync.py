@@ -495,6 +495,34 @@ class SyncIntegrationTests(unittest.TestCase):
         by_job = self._json(self.client.get("/api/movies?q=Director"))
         self.assertIn(movie_id, {movie["id"] for movie in by_job})
 
+    def test_barcode_lookup_reports_existing_movie_status(self):
+        movie = self._create_movie("Existing Barcode Movie")
+
+        lookup = self._json(self.client.get(f"/api/lookup/{movie['barcode']}"))
+        self.assertEqual(lookup["status"], "movie_exists")
+        self.assertEqual(lookup["barcode"], movie["barcode"])
+        self.assertEqual(lookup["movie"]["id"], movie["id"])
+
+        stream_response = self.client.get(f"/api/lookup/{movie['barcode']}?stream=1")
+        self.assertEqual(stream_response.status_code, 200, stream_response.get_data(as_text=True))
+        done = None
+        for line in stream_response.get_data(as_text=True).splitlines():
+            if not line.strip():
+                continue
+            item = self.backend.json.loads(line)
+            if item.get("type") == "done":
+                done = item
+        self.assertIsNotNone(done)
+        self.assertEqual(done["status"], "movie_exists")
+        self.assertEqual(done["barcode"], movie["barcode"])
+        self.assertEqual(done["movie"]["id"], movie["id"])
+
+    def test_movie_search_matches_barcode(self):
+        movie = self._create_movie("Search By Barcode Movie")
+
+        result = self._json(self.client.get(f"/api/movies?q={movie['barcode']}"))
+        self.assertIn(movie["id"], {item["id"] for item in result})
+
 
 if __name__ == "__main__":
     unittest.main()
