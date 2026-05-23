@@ -138,7 +138,7 @@ def _make_digital_urls(item) -> dict:
             key_enc  = key_path.replace("/", "%2F")
             web_url = f"https://app.plex.tv/desktop/#!/server/{machine_id}/details?key={key_enc}"
             app_url = web_url
-            native_url = f"plex://{machine_id}/details?key={key_enc}"
+            native_url = f"plex://play/?metadataKey={key_enc}&server={machine_id}"
         else:
             web_url = f"{base_url}/web/index.html" if base_url else ""
             app_url = web_url

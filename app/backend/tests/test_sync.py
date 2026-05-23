@@ -280,7 +280,7 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(item["digitalSource"], "plex")
         self.assertEqual(item["digitalWebUrl"], "https://app.plex.tv/desktop/#!/server/plex-machine/details?key=%2Flibrary%2Fmetadata%2Fplex-1")
         self.assertEqual(item["digitalAppUrl"], item["digitalWebUrl"])
-        self.assertEqual(item["digitalNativeUrl"], "plex://plex-machine/details?key=%2Flibrary%2Fmetadata%2Fplex-1")
+        self.assertEqual(item["digitalNativeUrl"], "plex://play/?metadataKey=%2Flibrary%2Fmetadata%2Fplex-1&server=plex-machine")
         self.assertEqual(item["digital"]["webUrl"], item["digitalWebUrl"])
         self.assertEqual(item["digital"]["nativeUrl"], item["digitalNativeUrl"])
         self.assertEqual(item["movie"]["digitalWebUrl"], item["digitalWebUrl"])
@@ -329,7 +329,7 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(detail["digitalSources"], ["plex"])
         self.assertEqual(detail["digitalMatches"][0]["webUrl"], "https://app.plex.tv/desktop/#!/server/plex-machine/details?key=%2Flibrary%2Fmetadata%2Fplex-2")
         self.assertEqual(detail["digitalMatches"][0]["appUrl"], detail["digitalMatches"][0]["webUrl"])
-        self.assertEqual(detail["digitalMatches"][0]["nativeUrl"], "plex://plex-machine/details?key=%2Flibrary%2Fmetadata%2Fplex-2")
+        self.assertEqual(detail["digitalMatches"][0]["nativeUrl"], "plex://play/?metadataKey=%2Flibrary%2Fmetadata%2Fplex-2&server=plex-machine")
 
         movies = self._json(self.client.get("/api/movies"))
         listed = next(m for m in movies if m["id"] == movie_id)
