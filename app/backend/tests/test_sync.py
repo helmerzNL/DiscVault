@@ -163,6 +163,43 @@ class SyncIntegrationTests(unittest.TestCase):
             {(r["collection_id"], r["item_type"], r["item_id"]) for r in memberships["collection_items"]},
         )
 
+    def test_bootstrap_normalizes_legacy_image_routes_for_offline_manifest(self):
+        from PIL import Image
+
+        filename = f"legacy-{uuid.uuid4().hex}.jpg"
+        image_path = os.path.join(os.environ["POSTER_DIR"], filename)
+        Image.new("RGB", (1800, 1000), color=(20, 40, 80)).save(image_path, "JPEG")
+
+        conn = self.backend.get_db()
+        conn.execute(
+            "INSERT INTO movies (barcode, title, format, backdrop, added_at) VALUES (?, ?, ?, ?, ?)",
+            (
+                f"SYNCIMG-{uuid.uuid4().hex[:10].upper()}",
+                f"Legacy Image {uuid.uuid4().hex[:8]}",
+                "4K UHD",
+                f"/api/posters/{filename}",
+                "2026-05-23T00:00:00",
+            ),
+        )
+        movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+        conn.close()
+
+        bootstrap = self._json(self.client.get("/api/sync/bootstrap"))
+        conn = self.backend.get_db()
+        row = conn.execute("SELECT backdrop FROM movies WHERE id=?", (movie_id,)).fetchone()
+        conn.close()
+        self.assertEqual(row["backdrop"], f"/api/images/{filename}")
+
+        asset = next(
+            a for a in bootstrap["assetManifest"]
+            if a["entity"] == "movie" and a["entityId"] == movie_id and a["kind"] == "backdrop"
+        )
+        self.assertEqual(asset["url"], f"/api/images/{filename}")
+        self.assertIn("/api/images/offline/backdrop/", asset["offlineUrl"])
+        self.assertGreater(asset["width"], 0)
+        self.assertGreater(asset["height"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
