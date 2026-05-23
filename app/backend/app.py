@@ -2412,6 +2412,13 @@ def _movievault_headers(include_auth: bool = False) -> dict:
     return headers
 
 
+def _movievault_log(level: str, message: str, detail: str = ""):
+    try:
+        add_log("movievault", message, detail, level)
+    except Exception:
+        pass
+
+
 def _movievault_text(value) -> str:
     if value is None:
         return ""
@@ -2491,6 +2498,36 @@ def _movievault_member_list(data):
     return []
 
 
+def _movievault_lookup_summary(data) -> str:
+    if isinstance(data, dict):
+        status = data.get("status")
+        nested_movie = data.get("movie") if isinstance(data.get("movie"), dict) else {}
+        title = (
+            data.get("title")
+            or data.get("name")
+            or nested_movie.get("title")
+            or ""
+        )
+        item_type = data.get("type") or data.get("entityType") or data.get("entity_type") or ""
+        members = _movievault_member_list(data)
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        parts = []
+        if status:
+            parts.append(f"status={status}")
+        if item_type:
+            parts.append(f"type={item_type}")
+        if title:
+            parts.append(f"title={title}")
+        if members:
+            parts.append(f"members={len(members)}")
+        elif items:
+            parts.append(f"items={len(items)}")
+        return "; ".join(parts)
+    if isinstance(data, list):
+        return f"items={len(data)}"
+    return ""
+
+
 def _movievault_get(path: str, params: dict | None = None):
     base = _movievault_base_url()
     if not base:
@@ -2498,14 +2535,35 @@ def _movievault_get(path: str, params: dict | None = None):
     try:
         url = f"{base}{path if path.startswith('/') else '/' + path}"
         r = requests.get(url, params=params or {}, headers=_movievault_headers(), timeout=8)
+        detail = f"GET {path}; params={params or {}}; HTTP {r.status_code}"
         if r.status_code == 404:
+            _movievault_log("info", "MovieVault lookup route/resource niet gevonden", detail)
             return None
         if r.status_code in (401, 403, 429):
+            _movievault_log("warn", "MovieVault lookup configuratie/rate-limit probleem", detail)
             raise RuntimeError(f"MovieVault HTTP {r.status_code}")
         if r.status_code >= 400:
+            _movievault_log("warn", "MovieVault lookup mislukt", f"{detail}; response={r.text[:160]}")
             return None
-        return r.json()
-    except Exception:
+        data = r.json()
+        summary = _movievault_lookup_summary(data)
+        miss = (
+            isinstance(data, dict)
+            and (
+                data.get("status") == "not_found"
+                or data.get("items") == []
+                or data.get("results") == []
+                or data.get("movies") == []
+            )
+        )
+        _movievault_log(
+            "info",
+            "MovieVault lookup geen resultaat" if miss else "MovieVault lookup resultaat",
+            f"{detail}; {summary}".strip("; "),
+        )
+        return data
+    except Exception as ex:
+        _movievault_log("warn", "MovieVault lookup fout", f"{path}; params={params or {}}; {ex}")
         return None
 
 
@@ -2581,12 +2639,28 @@ def _movievault_contribution_payload(movie_info: dict, sources: str, context: di
 
 def _submit_movievault_contribution(movie_info: dict | None, sources: str, context: dict | None = None) -> bool:
     url = _movievault_contribution_url()
+    title = (movie_info or {}).get("title") if movie_info else ""
     if not _is_movievault_contribution_enabled() or _movievault_sharing_mode() == "disabled":
+        _movievault_log(
+            "info",
+            "MovieVault bijdrage overgeslagen",
+            f"Delen staat uit; title={title or '?'}; sources={sources}",
+        )
         return False
     if not url or not movie_info or not movie_info.get("title"):
+        _movievault_log(
+            "info",
+            "MovieVault bijdrage overgeslagen",
+            f"Ingest URL of titel ontbreekt; title={title or '?'}; sources={sources}",
+        )
         return False
     try:
         payload = _movievault_contribution_payload(movie_info, sources, context)
+        _movievault_log(
+            "info",
+            f"MovieVault bijdrage versturen: \"{movie_info.get('title')}\"",
+            f"Endpoint: {url}; Bronnen: {sources}; Sharing mode: {payload.get('sharingMode')}; Idempotency: {payload.get('idempotencyKey')}",
+        )
         r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
         if 200 <= r.status_code < 300:
             add_log("movievault", f"Metadata gedeeld met MovieVault: \"{movie_info.get('title')}\"", f"Bronnen: {sources}", "info")
@@ -2722,7 +2796,24 @@ def lookup_movievault_by_barcode(barcode: str):
     if not _is_movievault_enabled() or not barcode:
         return None
     data = _movievault_get(f"/api/v1/barcodes/{quote(str(barcode))}")
-    return _movievault_movie_with_boxset(data)
+    result = _movievault_movie_with_boxset(data)
+    proposal = (result or {}).get("box_set_proposal") if result else None
+    if proposal:
+        names = ", ".join(
+            m.get("title", "") for m in proposal.get("movies", [])[:12] if isinstance(m, dict)
+        )
+        _movievault_log(
+            "success",
+            f"MovieVault box-set gevonden: \"{proposal.get('name', '?')}\"",
+            f"Barcode: {barcode}; Films: {len(proposal.get('movies', []))}; {names}",
+        )
+    elif result:
+        _movievault_log(
+            "success",
+            f"MovieVault film gevonden: \"{result.get('title', '?')}\"",
+            f"Barcode: {barcode}; TMDb: {result.get('tmdb_id', '')}; IMDb: {result.get('imdb_id', '')}",
+        )
+    return result
 
 
 def lookup_movievault_movie(title: str = "", year: str = "", barcode: str = ""):
@@ -2736,7 +2827,14 @@ def lookup_movievault_movie(title: str = "", year: str = "", barcode: str = ""):
     if year:
         params["year"] = year
     data = _movievault_get("/api/v1/movies", params=params)
-    return _movievault_movie_with_boxset(data)
+    result = _movievault_movie_with_boxset(data)
+    if result:
+        _movievault_log(
+            "success",
+            f"MovieVault film gevonden: \"{result.get('title', '?')}\"",
+            f"Query: {title}; Jaar: {year}; TMDb: {result.get('tmdb_id', '')}; IMDb: {result.get('imdb_id', '')}",
+        )
+    return result
 
 
 def lookup_movievault_box_set_proposal(title: str = "", year: str = "", barcode: str = ""):
@@ -2750,7 +2848,17 @@ def lookup_movievault_box_set_proposal(title: str = "", year: str = "", barcode:
     if barcode:
         params["barcode"] = barcode
     data = _movievault_get("/api/v1/box-sets", params=params)
-    return _normalize_movievault_box_set(data)
+    proposal = _normalize_movievault_box_set(data)
+    if proposal:
+        names = ", ".join(
+            m.get("title", "") for m in proposal.get("movies", [])[:12] if isinstance(m, dict)
+        )
+        _movievault_log(
+            "success",
+            f"MovieVault box-set voorstel gevonden: \"{proposal.get('name', '?')}\"",
+            f"Query: {title}; Barcode: {barcode}; Films: {len(proposal.get('movies', []))}; {names}",
+        )
+    return proposal
 
 
 def lookup_movie_omdb(title=None, imdb_id=None):
