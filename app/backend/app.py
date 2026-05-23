@@ -2404,6 +2404,13 @@ def _movievault_api_token() -> str:
     return str(MOVIEVAULT_API_TOKEN).strip() or str(MOVIEVAULT_API_KEY).strip()
 
 
+def _movievault_mask_token(token: str | None) -> str:
+    token = str(token or "").strip()
+    if not token:
+        return "-"
+    return f"*****{token[-6:]}"
+
+
 def _movievault_sharing_mode() -> str:
     mode = str(MOVIEVAULT_SHARING_MODE).strip().lower() or "opt_in"
     if mode not in {"opt_in", "opt_out", "disabled"}:
@@ -2442,11 +2449,13 @@ def _movievault_log(level: str, message: str, detail: str = ""):
 
 
 def _movievault_config_log_detail(extra: str = "") -> str:
+    api_token = _movievault_api_token()
     parts = [
         f"Search URL: {_movievault_base_url() or '-'}",
         f"Ingest URL: {_movievault_ingest_url() or '-'}",
         f"Contribution endpoint: {_movievault_contribution_url() or '-'}",
-        f"Token configured: {'yes' if _movievault_api_token() else 'no'}",
+        f"API token: {_movievault_mask_token(api_token)}",
+        f"Token configured: {'yes' if api_token else 'no'}",
         f"Sharing mode: {_movievault_sharing_mode()}",
     ]
     if extra:
