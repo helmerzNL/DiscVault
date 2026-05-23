@@ -284,6 +284,74 @@ DiscVault idempotency currently fingerprints the public entity identity plus the
 filtered payload. Exact retries remain idempotent, while a later richer payload
 can be submitted as a new contribution.
 
+## Refresh Contribution Flow
+
+DiscVault must consider MovieVault contributions after every action where public
+metadata is created, refreshed or enriched:
+
+- individual movie refresh,
+- bulk metadata refresh,
+- barcode scan/import,
+- manual metadata save,
+- fallback-provider enrichment after a MovieVault hit,
+- box-set proposal creation,
+- cast/crew/person metadata refresh when public person data is available.
+
+Private-only changes such as notes, shelf/location, purchase fields, watch state,
+watchlist or personal ratings must not be submitted.
+
+The contribution payload must be built from the post-refresh merged public state:
+
+- after `metadata_source_order` has been applied,
+- after local DiscVault metadata has been saved or is ready to save,
+- after fallback providers have filled missing public fields,
+- after the MovieVault contribution template has been applied as an allowlist.
+
+DiscVault may send multiple contributions for one local movie:
+
+- `entityType: "movie"` for the public film metadata,
+- `entityType: "release"` for physical release/barcode/spec metadata,
+- `entityType: "box_set"` for normalized `box_sets` plus `box_set_movies`,
+- `entityType: "person"` for public cast/crew person metadata when available.
+
+For refreshes with physical release data, DiscVault should send a `release`
+contribution when `barcode` and `title` are available. If film metadata is also
+available, DiscVault should also send a separate `movie` contribution.
+
+For MovieVault hits enriched by fallback providers, DiscVault should submit the
+merged public metadata back to MovieVault. A title-only movie contribution is only
+acceptable when no extra public metadata exists, the template rejects all extra
+fields, or the mapping cannot translate the available fields. In that case
+DiscVault logs a warning: `MovieVault contribution is title-only after refresh`.
+
+### Refresh Logging
+
+DiscVault logs every contribution attempt with:
+
+- local entity type and local id,
+- MovieVault entity type,
+- template version,
+- template source: `live`, `cache`, `stale-cache` or `fallback`,
+- field count before and after template filtering,
+- field names after filtering,
+- filtered-out fields,
+- source fields that had no value,
+- idempotency key prefix,
+- endpoint URL,
+- HTTP status,
+- MovieVault response body on failure.
+
+### Refresh Idempotency
+
+DiscVault idempotency keys follow this shape:
+
+```text
+<entityType>:<public identity>:<templateVersion>:<sha256(filteredPayload)>
+```
+
+The fingerprint contains only public, filtered payload fields. It must not include
+local private data, API tokens, logs or timestamps without metadata meaning.
+
 ## Error Handling
 
 - `400 validation_error`: log, force-refresh contribution template, rebuild the

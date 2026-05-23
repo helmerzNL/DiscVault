@@ -2524,6 +2524,8 @@ def _movievault_fallback_contribution_template() -> dict:
                     "subtitles": {"type": "array"},
                     "regions": {"type": "array"},
                     "screenRatios": {"type": "string"},
+                    "posterUrl": {"type": "string"},
+                    "backdropUrl": {"type": "string"},
                 },
             },
             "box_set": {
@@ -2854,43 +2856,32 @@ def _movievault_get(path: str, params: dict | None = None):
         return None
 
 
-def _movievault_contribution_payload(
-    movie_info: dict,
-    sources: str,
-    context: dict | None = None,
-    force_template: bool = False,
-) -> tuple[dict | None, str, str, list[str]]:
-    context = context or {}
-    source_movie = dict(movie_info or {})
-    if (
-        isinstance(source_movie.get("_content_ratings"), dict)
-        and source_movie["_content_ratings"]
-        and not source_movie.get("content_ratings")
-    ):
-        source_movie["content_ratings"] = json.dumps(source_movie["_content_ratings"], ensure_ascii=False)
-    safe_map = {
+MOVIEVAULT_ENTITY_FIELD_MAPS = {
+    "movie": {
         "barcode": "barcode",
         "title": "title",
         "original_title": "originalTitle",
         "sort_title": "sortTitle",
         "year": "year",
         "release_date": "releaseDate",
+        "tmdb_id": "tmdbId",
+        "imdb_id": "imdbId",
+        "runtime": "runtime",
+        "plot": "overview",
+        "genre": "genre",
+        "studios": "studios",
+        "poster": "posterUrl",
+        "backdrop": "backdropUrl",
         "format": "format",
         "edition": "edition",
         "country": "country",
         "language": "language",
-        "tmdb_id": "tmdbId",
-        "imdb_id": "imdbId",
-        "runtime": "runtime",
         "hdr": "hdr",
         "audio_tracks": "audioTracks",
         "subtitles": "subtitles",
         "regions": "regions",
         "screen_ratios": "screenRatios",
         "distributor": "distributor",
-        "studios": "studios",
-        "genre": "genre",
-        "plot": "overview",
         "title_nl": "title_nl",
         "title_de": "title_de",
         "title_fr": "title_fr",
@@ -2903,41 +2894,315 @@ def _movievault_contribution_payload(
         "plot_es": "overview_es",
         "plot_pt": "overview_pt",
         "plot_it": "overview_it",
+        "people": "people",
+    },
+    "release": {
+        "barcode": "barcode",
+        "title": "title",
+        "country": "country",
+        "language": "language",
+        "format": "format",
+        "edition": "edition",
+        "distributor": "distributor",
+        "hdr": "hdr",
+        "audio_tracks": "audioTracks",
+        "subtitles": "subtitles",
+        "regions": "regions",
+        "screen_ratios": "screenRatios",
         "poster": "posterUrl",
         "backdrop": "backdropUrl",
-    }
-    movie = {}
-    for src_key, dst_key in safe_map.items():
-        value = source_movie.get(src_key)
+        "title_nl": "title_nl",
+        "title_de": "title_de",
+        "title_fr": "title_fr",
+        "title_es": "title_es",
+        "title_pt": "title_pt",
+        "title_it": "title_it",
+    },
+    "box_set": {
+        "barcode": "barcode",
+        "title": "title",
+        "box_set_title": "title",
+        "name": "title",
+        "tmdb_id": "tmdbId",
+        "tmdbId": "tmdbId",
+        "imdb_id": "imdbId",
+        "imdbId": "imdbId",
+        "format": "format",
+        "country": "country",
+        "language": "language",
+        "year": "yearRange",
+        "year_range": "yearRange",
+        "yearRange": "yearRange",
+        "description": "description",
+        "members": "members",
+        "movies": "members",
+        "title_nl": "title_nl",
+        "description_nl": "description_nl",
+    },
+    "person": {
+        "name": "name",
+        "tmdb_id": "tmdbId",
+        "tmdbId": "tmdbId",
+        "profile": "profileUrl",
+        "profile_url": "profileUrl",
+        "photo_url": "profileUrl",
+        "photoUrl": "profileUrl",
+        "biography": "biography",
+        "birthday": "birthday",
+        "deathday": "deathday",
+        "place_of_birth": "placeOfBirth",
+        "placeOfBirth": "placeOfBirth",
+        "known_for": "knownFor",
+        "knownFor": "knownFor",
+    },
+}
+
+
+def _movievault_public_source(source: dict | None) -> dict:
+    source = dict(source or {})
+    if (
+        isinstance(source.get("_content_ratings"), dict)
+        and source["_content_ratings"]
+        and not source.get("content_ratings")
+    ):
+        source["content_ratings"] = json.dumps(source["_content_ratings"], ensure_ascii=False)
+    if "_cast_crew" in source and "people" not in source:
+        source["people"] = _movievault_people_from_cast_crew(source.get("_cast_crew"))
+    return source
+
+
+def _movievault_people_from_cast_crew(cast_crew) -> list[dict]:
+    people = []
+    if not isinstance(cast_crew, list):
+        return people
+    for entry in cast_crew:
+        if not isinstance(entry, dict) or not entry.get("name"):
+            continue
+        item = {
+            "name": entry.get("name"),
+            "role": entry.get("role") or "cast",
+            "sortOrder": entry.get("sort_order", entry.get("sortOrder")),
+        }
+        for src_key, dst_key in (
+            ("tmdb_id", "tmdbId"),
+            ("tmdbId", "tmdbId"),
+            ("profile", "profileUrl"),
+            ("profile_url", "profileUrl"),
+            ("photo_url", "profileUrl"),
+            ("photoUrl", "profileUrl"),
+            ("character", "character"),
+            ("job", "job"),
+        ):
+            value = entry.get(src_key)
+            if value not in (None, "", [], {}):
+                item[dst_key] = value
+        people.append({k: v for k, v in item.items() if v not in (None, "", [], {})})
+    return people
+
+
+def _movievault_people_for_movie(conn, movie_id: int) -> list[dict]:
+    try:
+        rows = conn.execute(
+            """
+            SELECT p.name, p.tmdb_id, mp.role, mp.character, mp.job, mp.sort_order
+            FROM movie_people mp
+            JOIN people p ON p.id = mp.person_id
+            WHERE mp.movie_id=?
+            ORDER BY COALESCE(mp.sort_order, 999999), p.name
+            """,
+            (movie_id,),
+        ).fetchall()
+    except Exception:
+        return []
+    people = []
+    for row in rows:
+        item = {
+            "name": row["name"],
+            "tmdbId": row["tmdb_id"],
+            "role": row["role"],
+            "character": row["character"],
+            "job": row["job"],
+            "sortOrder": row["sort_order"],
+        }
+        people.append({k: v for k, v in item.items() if v not in (None, "", [], {})})
+    return people
+
+
+def _movievault_movie_contribution_state(
+    conn,
+    movie_id: int,
+    original: dict | None = None,
+    merged: dict | None = None,
+    updates: dict | None = None,
+) -> dict:
+    state = dict(original or {})
+    try:
+        row = conn.execute("SELECT * FROM movies WHERE id=?", (movie_id,)).fetchone()
+        if row:
+            state.update(dict(row))
+    except Exception:
+        pass
+    for source in (merged or {}, updates or {}):
+        for key, value in source.items():
+            if key.startswith("_"):
+                continue
+            if value not in (None, "", [], {}):
+                state[key] = value
+    people = _movievault_people_for_movie(conn, movie_id)
+    if not people and merged:
+        people = _movievault_people_from_cast_crew(merged.get("_cast_crew"))
+    if people:
+        state["people"] = people
+    return state
+
+
+def _movievault_has_public_contribution_change(changes: dict | None) -> bool:
+    if not changes:
+        return False
+    public_keys = set()
+    for mapping in MOVIEVAULT_ENTITY_FIELD_MAPS.values():
+        public_keys.update(mapping.keys())
+    return any(key in public_keys for key in changes)
+
+
+def _movievault_raw_payload(source: dict, entity_type: str) -> dict:
+    raw = {}
+    field_map = MOVIEVAULT_ENTITY_FIELD_MAPS.get(entity_type, {})
+    for src_key, dst_key in field_map.items():
+        value = source.get(src_key)
         if value not in (None, "", [], {}):
-            movie[dst_key] = value
-    movie, template_version, template_source, missing_required = _movievault_filter_payload_for_template(
-        movie, "movie", force_template=force_template
-    )
-    if missing_required:
-        return None, template_version, template_source, missing_required
-    identity = "|".join([
-        str(movie.get("tmdbId") or ""),
-        str(movie.get("imdbId") or ""),
-        str(movie.get("title") or "").strip().lower(),
-        str(movie.get("year") or ""),
-        str(context.get("barcode") or movie.get("barcode") or ""),
+            raw[dst_key] = value
+    return raw
+
+
+def _movievault_missing_source_fields(source: dict, entity_type: str, template_fields: dict, raw_payload: dict) -> list[str]:
+    reverse = {}
+    for src_key, dst_key in MOVIEVAULT_ENTITY_FIELD_MAPS.get(entity_type, {}).items():
+        reverse.setdefault(dst_key, []).append(src_key)
+    missing = []
+    for field in template_fields:
+        if field in raw_payload:
+            continue
+        source_keys = reverse.get(field)
+        if not source_keys:
+            continue
+        if not any(source.get(k) not in (None, "", [], {}) for k in source_keys):
+            missing.append(field)
+    return missing
+
+
+def _movievault_entity_identity(entity_type: str, filtered_payload: dict, context: dict) -> str:
+    if entity_type == "release":
+        return str(filtered_payload.get("barcode") or context.get("barcode") or "").strip()
+    if entity_type == "box_set":
+        return str(
+            filtered_payload.get("barcode")
+            or context.get("barcode")
+            or context.get("localEntityId")
+            or filtered_payload.get("title")
+            or ""
+        ).strip()
+    if entity_type == "person":
+        return str(filtered_payload.get("tmdbId") or filtered_payload.get("name") or "").strip().lower()
+    return "|".join([
+        str(context.get("localEntityId") or ""),
+        str(filtered_payload.get("tmdbId") or ""),
+        str(filtered_payload.get("imdbId") or ""),
+        str(filtered_payload.get("title") or "").strip().lower(),
+        str(filtered_payload.get("year") or ""),
+        str(filtered_payload.get("barcode") or context.get("barcode") or ""),
     ])
-    payload_fingerprint = json.dumps(movie, ensure_ascii=False, sort_keys=True, default=str)
-    idem = hashlib.sha256(f"{identity}|{payload_fingerprint}".encode("utf-8")).hexdigest()
+
+
+def _movievault_contribution_payload(
+    entity_type: str,
+    source_data: dict,
+    sources: str,
+    context: dict | None = None,
+    force_template: bool = False,
+) -> tuple[dict | None, dict]:
+    context = context or {}
+    source_data = _movievault_public_source(source_data)
+    raw_payload = _movievault_raw_payload(source_data, entity_type)
+    template, template_version, template_source = _movievault_contribution_template(entity_type, force=force_template)
+    template_fields = template.get("fields") if isinstance(template.get("fields"), dict) else {}
+    filtered_payload, _, _, missing_required = _movievault_filter_payload_for_template(
+        raw_payload, entity_type, force_template=force_template
+    )
+    filtered_fields = sorted(filtered_payload.keys())
+    raw_fields = sorted(raw_payload.keys())
+    filtered_out = [field for field in raw_fields if field not in filtered_payload]
+    missing_source = _movievault_missing_source_fields(source_data, entity_type, template_fields, raw_payload)
+    payload_fingerprint = hashlib.sha256(
+        json.dumps(filtered_payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    identity = _movievault_entity_identity(entity_type, filtered_payload, context)
+    identity = identity or str(context.get("localEntityId") or context.get("barcode") or "unknown")
+    idem = f"{entity_type}:{identity}:{template_version or 'unknown'}:{payload_fingerprint}"
+    stats = {
+        "entity_type": entity_type,
+        "template_version": template_version,
+        "template_source": template_source,
+        "raw_count": len(raw_payload),
+        "filtered_count": len(filtered_payload),
+        "raw_fields": raw_fields,
+        "filtered_fields": filtered_fields,
+        "filtered_out": filtered_out,
+        "missing_source_fields": sorted(missing_source),
+        "missing_required": missing_required,
+        "idempotency_key": idem,
+        "idempotency_prefix": idem[:24],
+        "local_entity_type": context.get("localEntityType") or entity_type,
+        "local_entity_id": context.get("localEntityId") or "-",
+        "sources": sources,
+    }
+    if missing_required:
+        return None, stats
     return {
         "idempotencyKey": idem,
         "sourceClient": "discvault",
         "sourceVersion": "3.4.x",
         "sharingMode": _movievault_sharing_mode(),
-        "entityType": "movie",
-        "payload": movie,
-    }, template_version, template_source, []
+        "entityType": entity_type,
+        "payload": filtered_payload,
+    }, stats
 
 
-def _submit_movievault_contribution(movie_info: dict | None, sources: str, context: dict | None = None) -> bool:
+def _movievault_stats_detail(stats: dict, endpoint: str = "", http_status: str = "", response_body: str = "") -> str:
+    parts = [
+        f"Local entity: {stats.get('local_entity_type')}:{stats.get('local_entity_id')}",
+        f"MovieVault entity: {stats.get('entity_type')}",
+        f"Template: {stats.get('template_version') or '-'} ({stats.get('template_source') or '-'})",
+        f"Fields before/after: {stats.get('raw_count', 0)}/{stats.get('filtered_count', 0)}",
+        f"Fields: {', '.join(stats.get('filtered_fields') or []) or '-'}",
+        f"Filtered out: {', '.join(stats.get('filtered_out') or []) or '-'}",
+        f"Missing source fields: {', '.join((stats.get('missing_source_fields') or [])[:24]) or '-'}",
+        f"Idempotency: {stats.get('idempotency_prefix') or '-'}",
+    ]
+    if endpoint:
+        parts.append(f"Endpoint: {endpoint}")
+    if http_status:
+        parts.append(f"HTTP status: {http_status}")
+    if response_body:
+        parts.append(f"Response: {response_body[:240]}")
+    return "; ".join(parts)
+
+
+def _movievault_is_title_only(entity_type: str, payload: dict) -> bool:
+    if entity_type != "movie":
+        return False
+    return sorted((payload or {}).keys()) == ["title"]
+
+
+def _submit_movievault_entity_contribution(
+    entity_type: str,
+    source_data: dict | None,
+    sources: str,
+    context: dict | None = None,
+    force_template: bool = False,
+) -> bool:
     url = _movievault_contribution_url()
-    title = (movie_info or {}).get("title") if movie_info else ""
+    title = (source_data or {}).get("title") if source_data else ""
     if not _is_movievault_contribution_enabled() or _movievault_sharing_mode() == "disabled":
         _movievault_log(
             "info",
@@ -2945,44 +3210,45 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
             _movievault_config_log_detail(f"Delen staat uit; title={title or '?'}; sources={sources}"),
         )
         return False
-    if not url or not movie_info or not movie_info.get("title"):
+    if not url or not source_data:
         _movievault_log(
             "info",
             "MovieVault bijdrage overgeslagen",
             _movievault_config_log_detail(
-                f"Ingest URL of titel ontbreekt; title={title or '?'}; sources={sources}"
+                f"Ingest URL of payload ontbreekt; entity={entity_type}; title={title or '?'}; sources={sources}"
             ),
         )
         return False
     try:
-        payload, template_version, template_source, missing_required = _movievault_contribution_payload(
-            movie_info, sources, context
-        )
+        payload, stats = _movievault_contribution_payload(entity_type, source_data, sources, context, force_template)
         if not payload:
             _movievault_log(
                 "warn",
                 "MovieVault bijdrage overgeslagen",
                 _movievault_config_log_detail(
-                    f"Template: {template_version or '-'} ({template_source}); "
-                    f"Verplichte velden ontbreken: {', '.join(missing_required) or '-'}; "
+                    _movievault_stats_detail(stats)
+                    + f"; Verplichte velden ontbreken: {', '.join(stats.get('missing_required') or []) or '-'}; "
                     f"title={title or '?'}; sources={sources}"
                 ),
             )
             return False
+        if _movievault_is_title_only(entity_type, payload.get("payload") or {}):
+            _movievault_log(
+                "warn",
+                "MovieVault contribution is title-only after refresh",
+                _movievault_config_log_detail(_movievault_stats_detail(stats)),
+            )
         _movievault_log(
             "info",
-            f"MovieVault bijdrage versturen: \"{movie_info.get('title')}\"",
-            _movievault_config_log_detail(
-                f"Endpoint: {url}; Bronnen: {sources}; Template: {template_version or '-'} ({template_source}); "
-                f"Idempotency: {payload.get('idempotencyKey')}"
-            ),
+            f"MovieVault bijdrage versturen: \"{title or entity_type}\"",
+            _movievault_config_log_detail(_movievault_stats_detail(stats, endpoint=url)),
         )
         r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
         if 200 <= r.status_code < 300:
             add_log(
                 "movievault",
-                f"Metadata gedeeld met MovieVault: \"{movie_info.get('title')}\"",
-                f"Bronnen: {sources}; Template: {template_version or '-'} ({template_source})",
+                f"Metadata gedeeld met MovieVault: \"{title or entity_type}\"",
+                _movievault_stats_detail(stats, endpoint=url, http_status=str(r.status_code)),
                 "info",
             )
             return True
@@ -2995,36 +3261,109 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
         if validation_error:
             _movievault_log(
                 "warn",
-                f"MovieVault validatiefout, template wordt vernieuwd: \"{movie_info.get('title')}\"",
-                f"HTTP 400: {r.text[:160]}",
+                f"MovieVault validatiefout, template wordt vernieuwd: \"{title or entity_type}\"",
+                _movievault_stats_detail(stats, endpoint=url, http_status="400", response_body=r.text),
             )
-            payload, template_version, template_source, missing_required = _movievault_contribution_payload(
-                movie_info, sources, context, force_template=True
-            )
+            payload, stats = _movievault_contribution_payload(entity_type, source_data, sources, context, True)
             if not payload:
                 _movievault_log(
                     "warn",
                     "MovieVault bijdrage overgeslagen na template refresh",
                     _movievault_config_log_detail(
-                        f"Template: {template_version or '-'} ({template_source}); "
-                        f"Verplichte velden ontbreken: {', '.join(missing_required) or '-'}; "
+                        _movievault_stats_detail(stats)
+                        + f"; Verplichte velden ontbreken: {', '.join(stats.get('missing_required') or []) or '-'}; "
                         f"title={title or '?'}; sources={sources}"
                     ),
                 )
                 return False
+            if _movievault_is_title_only(entity_type, payload.get("payload") or {}):
+                _movievault_log(
+                    "warn",
+                    "MovieVault contribution is title-only after refresh",
+                    _movievault_config_log_detail(_movievault_stats_detail(stats)),
+                )
             r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
             if 200 <= r.status_code < 300:
                 add_log(
                     "movievault",
-                    f"Metadata gedeeld met MovieVault na template refresh: \"{movie_info.get('title')}\"",
-                    f"Bronnen: {sources}; Template: {template_version or '-'} ({template_source})",
+                    f"Metadata gedeeld met MovieVault na template refresh: \"{title or entity_type}\"",
+                    _movievault_stats_detail(stats, endpoint=url, http_status=str(r.status_code)),
                     "info",
                 )
                 return True
-        add_log("movievault", f"MovieVault bijdrage geweigerd: \"{movie_info.get('title')}\"", f"HTTP {r.status_code}: {r.text[:160]}", "warn")
+        add_log(
+            "movievault",
+            f"MovieVault bijdrage geweigerd: \"{title or entity_type}\"",
+            _movievault_stats_detail(stats, endpoint=url, http_status=str(r.status_code), response_body=r.text),
+            "warn",
+        )
     except Exception as ex:
-        add_log("movievault", f"MovieVault bijdrage mislukt: \"{movie_info.get('title', '?')}\"", str(ex), "warn")
+        add_log("movievault", f"MovieVault bijdrage mislukt: \"{title or entity_type}\"", str(ex), "warn")
     return False
+
+
+def _movievault_person_has_contributable_metadata(person: dict | None) -> bool:
+    if not isinstance(person, dict) or not person.get("name"):
+        return False
+    public_keys = (
+        "tmdbId",
+        "tmdb_id",
+        "profileUrl",
+        "profile_url",
+        "photoUrl",
+        "photo_url",
+        "biography",
+        "birthday",
+        "deathday",
+        "placeOfBirth",
+        "place_of_birth",
+        "knownFor",
+        "known_for",
+    )
+    return any(person.get(key) not in (None, "", [], {}) for key in public_keys)
+
+
+def _submit_movievault_people_contributions(
+    movie_info: dict | None,
+    sources: str,
+    context: dict | None = None,
+) -> bool:
+    source = _movievault_public_source(movie_info)
+    people = source.get("people")
+    if not isinstance(people, list):
+        return False
+    submitted = False
+    for index, person in enumerate(people[:25], start=1):
+        if not _movievault_person_has_contributable_metadata(person):
+            continue
+        person_context = dict(context or {})
+        person_context.update(
+            {
+                "localEntityType": "person",
+                "localEntityId": person.get("tmdbId")
+                or person.get("tmdb_id")
+                or person.get("name")
+                or index,
+            }
+        )
+        submitted = (
+            _submit_movievault_entity_contribution("person", person, sources, person_context)
+            or submitted
+        )
+    return submitted
+
+
+def _submit_movievault_contribution(movie_info: dict | None, sources: str, context: dict | None = None) -> bool:
+    context = context or {}
+    if not movie_info:
+        return False
+    submitted = _submit_movievault_entity_contribution("movie", movie_info, sources, context)
+    source = _movievault_public_source(movie_info)
+    release_candidate = _movievault_raw_payload(source, "release")
+    if release_candidate.get("barcode") and release_candidate.get("title"):
+        submitted = _submit_movievault_entity_contribution("release", movie_info, sources, context) or submitted
+    submitted = _submit_movievault_people_contributions(movie_info, sources, context) or submitted
+    return submitted
 
 
 def _normalize_movievault_movie(data: dict | None):
@@ -5242,6 +5581,38 @@ def create_box_set_from_proposal():
         )
         conn.commit()
         box_set = conn.execute("SELECT * FROM edition_groups WHERE id=?", (box_set_id,)).fetchone()
+        box_set_contribution = {
+            "title": box_set_title,
+            "barcode": barcode or "",
+            "tmdb_id": data.get("tmdb_id") or "",
+            "imdb_id": data.get("imdb_id") or "",
+            "year_range": data.get("year_range") or data.get("yearRange") or data.get("year") or "",
+            "format": fallback_format,
+            "country": data.get("country") or "",
+            "language": data.get("language") or "",
+            "description": data.get("description") or "",
+            "members": [
+                {
+                    "title": movie.get("title") or "",
+                    "year": _parse_year(movie.get("year") or ""),
+                    "tmdbId": movie.get("tmdb_id") or "",
+                    "imdbId": movie.get("imdb_id") or "",
+                    "sortOrder": idx,
+                }
+                for idx, movie in enumerate(created_movies, start=1)
+                if movie.get("title")
+            ],
+        }
+        _submit_movievault_entity_contribution(
+            "box_set",
+            box_set_contribution,
+            "Box-set proposal create",
+            {
+                "localEntityType": "box_set",
+                "localEntityId": box_set_id,
+                "barcode": barcode or "",
+            },
+        )
         return jsonify({
             "ok": True,
             "box_set": dict(box_set) if box_set else {"id": box_set_id, "title": box_set_title},
@@ -5400,8 +5771,19 @@ def update_movie(movie_id):
         )
     conn.commit()
     movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+    movie_state = _movievault_movie_contribution_state(conn, movie_id, existing, updates, updates)
     conn.close()
     add_log("refresh", f'Manual update: "{(movie["title"] if movie else existing.get("title","?"))}"', f"Backends: {_trace_summary(attempts)}", "info")
+    if _movievault_has_public_contribution_change(updates):
+        _submit_movievault_contribution(
+            movie_state,
+            "Manual metadata save",
+            {
+                "localEntityType": "movie",
+                "localEntityId": movie_id,
+                "barcode": movie_state.get("barcode") or "",
+            },
+        )
     return jsonify(dict(movie))
 
 
@@ -5606,6 +5988,7 @@ def refresh_single(movie_id):
             tmdb_id=tmdb_id_known,
             fallback_title=title if original_title and original_title != title else "",
             attempts=attempts,
+            contribute_to_movievault=False,
         )
         if not info:
             conn.close()
@@ -5653,6 +6036,7 @@ def refresh_single(movie_id):
             _sync_movie_cast_crew(conn, movie_id, cast_crew, download_photos=fetch_posters)
 
         conn.commit()
+        movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
         conn.close()
 
         fields_updated = list(updates.keys())
@@ -5662,6 +6046,15 @@ def refresh_single(movie_id):
             f"Bijgewerkt: \"{title}\"",
             f"Bron: {source}. Velden: {', '.join(fields_updated)}. Backends: {_trace_summary(attempts)}",
             "success"
+        )
+        _submit_movievault_contribution(
+            movie_state,
+            f"Individual refresh: {source}",
+            {
+                "localEntityType": "movie",
+                "localEntityId": movie_id,
+                "barcode": movie_state.get("barcode") or "",
+            },
         )
         return jsonify({
             "status": "updated", "title": title, "source": source,
@@ -5849,6 +6242,7 @@ def sync_single_all_backends(movie_id):
             _sync_movie_cast_crew(conn, movie_id, cast_crew, download_photos=fetch_posters)
 
         conn.commit()
+        movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
         conn.close()
 
         fields_updated = list(updates.keys())
@@ -5859,6 +6253,15 @@ def sync_single_all_backends(movie_id):
             f'Sync all sources: "{title}"',
             f"Sources: {source_label}. Fields: {', '.join(fields_updated)}. Backends: {_trace_summary(attempts)}",
             "success"
+        )
+        _submit_movievault_contribution(
+            movie_state,
+            f"Sync all sources: {source_label}",
+            {
+                "localEntityType": "movie",
+                "localEntityId": movie_id,
+                "barcode": movie_state.get("barcode") or "",
+            },
         )
         return jsonify({
             "status": "updated",
@@ -5985,11 +6388,21 @@ def sync_single_source(movie_id):
             sc = ", ".join(f"{k} = ?" for k in updates)
             conn.execute(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id])
         conn.commit()
+        movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
         conn.close()
 
         fields_updated = list(updates.keys())
         has_poster = "poster_file" in updates and updates.get("poster_file")
         add_log("refresh", f"Sync bron: \"{title}\"", f"Bron: {source_label}. Velden: {', '.join(fields_updated)}. Backends: {_trace_summary(attempts)}", "success")
+        _submit_movievault_contribution(
+            movie_state,
+            f"Sync source: {source_label}",
+            {
+                "localEntityType": "movie",
+                "localEntityId": movie_id,
+                "barcode": movie_state.get("barcode") or "",
+            },
+        )
         return jsonify({"status": "updated", "title": title, "source": source_label, "fields": fields_updated, "has_poster": bool(has_poster)})
     except Exception as e:
         conn.close()
@@ -6070,6 +6483,7 @@ def bulk_refresh():
                 tmdb_id=movie.get("tmdb_id") or "",
                 fallback_title=title if original_title and original_title != title else "",
                 attempts=attempts,
+                contribute_to_movievault=False,
             )
             if not info:
                 add_log("refresh", f"Geen resultaat voor \"{search_title}\" ({year})",
@@ -6134,8 +6548,18 @@ def bulk_refresh():
 
             fields_str = ", ".join(updates.keys()) if updates else "(geen wijzigingen)"
             conn.commit()
+            movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
             add_log("refresh", f"Bijgewerkt: \"{title}\"",
                     f"Bron: {source}. Velden: {fields_str}. Backends: {_trace_summary(attempts)}", "success")
+            _submit_movievault_contribution(
+                movie_state,
+                f"Bulk refresh: {source}",
+                {
+                    "localEntityType": "movie",
+                    "localEntityId": movie_id,
+                    "barcode": movie_state.get("barcode") or "",
+                },
+            )
             return "updated", title, None
         except Exception as e:
             conn.commit()
