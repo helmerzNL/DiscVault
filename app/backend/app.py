@@ -154,6 +154,109 @@ def _make_digital_urls(item) -> dict:
     return {"web_url": "", "app_url": ""}
 
 
+def _digital_match_payload(item, include_links=False):
+    payload = {
+        "digital_id": item.get("id"),
+        "digitalId": item.get("id"),
+        "source_id": item.get("source_id"),
+        "sourceId": item.get("source_id"),
+        "source_name": item.get("source_name"),
+        "sourceName": item.get("source_name"),
+        "source_type": item.get("source_type"),
+        "sourceType": item.get("source_type"),
+        "external_id": item.get("external_id"),
+        "externalId": item.get("external_id"),
+        "title": item.get("title"),
+        "year": item.get("year"),
+        "tmdb_id": item.get("tmdb_id"),
+        "tmdbId": item.get("tmdb_id"),
+        "imdb_id": item.get("imdb_id"),
+        "imdbId": item.get("imdb_id"),
+    }
+    if include_links:
+        urls = _make_digital_urls(item)
+        payload.update({
+            "web_url": urls.get("web_url", ""),
+            "webUrl": urls.get("web_url", ""),
+            "app_url": urls.get("app_url", ""),
+            "appUrl": urls.get("app_url", ""),
+        })
+    return payload
+
+
+def _digital_indexes(conn):
+    rows = conn.execute(
+        "SELECT dli.*, dls.name AS source_name, dls.type AS source_type,"
+        " dls.base_url AS base_url, dls.machine_id AS machine_id"
+        " FROM digital_library_items dli"
+        " JOIN digital_library_sources dls ON dls.id = dli.source_id"
+        " WHERE dls.enabled=1"
+    ).fetchall()
+    by_tmdb = {}
+    by_imdb = {}
+    by_title_year = {}
+    for row in rows:
+        item = dict(row)
+        if item.get("tmdb_id"):
+            by_tmdb.setdefault(str(item["tmdb_id"]), []).append(item)
+        if item.get("imdb_id"):
+            by_imdb.setdefault(str(item["imdb_id"]), []).append(item)
+        key = f"{(item.get('title') or '').lower().strip()}|{str(item.get('year') or '').strip()}"
+        by_title_year.setdefault(key, []).append(item)
+    return {"tmdb": by_tmdb, "imdb": by_imdb, "title_year": by_title_year}
+
+
+def _digital_matches_for_movie(movie, indexes):
+    if not movie:
+        return []
+    if movie.get("tmdb_id"):
+        matches = indexes["tmdb"].get(str(movie["tmdb_id"]), [])
+        if matches:
+            return matches
+    if movie.get("imdb_id"):
+        matches = indexes["imdb"].get(str(movie["imdb_id"]), [])
+        if matches:
+            return matches
+    key = f"{(movie.get('original_title') or movie.get('title') or '').lower().strip()}|{str(movie.get('year') or '').strip()}"
+    return indexes["title_year"].get(key, [])
+
+
+def _enrich_movie_with_digital(movie, indexes, include_links=False):
+    matches = _digital_matches_for_movie(movie, indexes)
+    deduped = []
+    seen_sources = set()
+    for match in matches:
+        source_key = match.get("source_id") or match.get("source_name")
+        if source_key in seen_sources:
+            continue
+        seen_sources.add(source_key)
+        deduped.append(match)
+    sources = [m.get("source_type") for m in deduped if m.get("source_type")]
+    digital_ids = [m.get("id") for m in deduped if m.get("id") is not None]
+    movie["in_digital"] = bool(deduped)
+    movie["inDigital"] = bool(deduped)
+    movie["digital_sources"] = sources
+    movie["digitalSources"] = sources
+    movie["digital_ids"] = digital_ids
+    movie["digitalIds"] = digital_ids
+    movie["digital_matches_count"] = len(deduped)
+    movie["digitalMatchesCount"] = len(deduped)
+    if include_links:
+        digital_matches = [_digital_match_payload(m, include_links=True) for m in deduped]
+        movie["digital_matches"] = digital_matches
+        movie["digitalMatches"] = digital_matches
+    return movie
+
+
+def _enrich_movies_with_digital(movies, conn, include_links=False):
+    if not movies:
+        return movies
+    indexes = _digital_indexes(conn)
+    for movie in movies:
+        _enrich_movie_with_digital(movie, indexes, include_links=include_links)
+    return movies
+
+
 def _encrypt_token(token: str) -> str:
     if not token:
         return ""
@@ -3347,6 +3450,7 @@ def list_movies():
     rows = conn.execute(sql, params).fetchall()
     # Enrich with group ids
     movies = [dict(r) for r in rows]
+    _enrich_movies_with_digital(movies, conn, include_links=False)
     if movies:
         movie_ids = [m["id"] for m in movies]
         placeholders = ",".join("?" * len(movie_ids))
@@ -3598,11 +3702,13 @@ def get_movie(movie_id):
     conn  = get_db()
     movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     containers = _movie_container_summary(conn, movie_id) if movie else None
-    conn.close()
     if not movie:
+        conn.close()
         return jsonify({"error": "Not found"}), 404
     data = dict(movie)
+    _enrich_movie_with_digital(data, _digital_indexes(conn), include_links=True)
     data["_containers"] = containers
+    conn.close()
     return jsonify(data)
 
 
@@ -3743,7 +3849,9 @@ def get_person_filmography(person_id):
             "SELECT id, tmdb_id, collection_id, format, poster_file, poster FROM movies WHERE tmdb_id IS NOT NULL"
         ).fetchall()
         digital = conn.execute(
-            """SELECT dli.id, dli.tmdb_id, dls.type AS source_type
+            """SELECT dli.id, dli.source_id, dli.external_id, dli.tmdb_id,
+                      dls.name AS source_name, dls.type AS source_type,
+                      dls.base_url AS base_url, dls.machine_id AS machine_id
                FROM digital_library_items dli
                JOIN digital_library_sources dls ON dls.id = dli.source_id
                WHERE dli.tmdb_id IS NOT NULL AND dli.media_type='movie'"""
@@ -3765,7 +3873,9 @@ def get_person_filmography(person_id):
             tid = str(d["tmdb_id"])
             existing = digital_map.get(tid)
             if not existing or d["source_type"] == "plex":
-                digital_map[tid] = {"id": d["id"], "source_type": d["source_type"]}
+                dd = dict(d)
+                dd.update(_make_digital_urls(dd))
+                digital_map[tid] = dd
 
         def _filmography_poster(entry, col):
             poster_path = entry.get("poster_path") or ""
@@ -3784,6 +3894,10 @@ def get_person_filmography(person_id):
             digital = digital_map.get(tmdb_key) if tmdb_key else None
             in_digital = digital is not None
             digital_source = digital.get("source_type") if digital else None
+            digital_source_name = digital.get("source_name") if digital else None
+            digital_web_url = digital.get("web_url") if digital else ""
+            digital_app_url = digital.get("app_url") if digital else ""
+            digital_external_id = digital.get("external_id") if digital else None
             poster_path = entry.get("poster_path") or ""
             poster_url = _filmography_poster(entry, col)
             year = (entry.get("release_date") or entry.get("first_air_date") or "")[:4]
@@ -3819,6 +3933,28 @@ def get_person_filmography(person_id):
                 "inDigital": in_digital,
                 "digital_source": digital_source,
                 "digitalSource": digital_source,
+                "digital_source_name": digital_source_name,
+                "digitalSourceName": digital_source_name,
+                "digital_external_id": digital_external_id,
+                "digitalExternalId": digital_external_id,
+                "digital_web_url": digital_web_url,
+                "digitalWebUrl": digital_web_url,
+                "digital_app_url": digital_app_url,
+                "digitalAppUrl": digital_app_url,
+                "web_url": digital_web_url,
+                "webUrl": digital_web_url,
+                "app_url": digital_app_url,
+                "appUrl": digital_app_url,
+                "digital": {
+                    "id": digital_id,
+                    "digitalId": digital_id,
+                    "sourceId": digital.get("source_id") if digital else None,
+                    "sourceName": digital_source_name,
+                    "sourceType": digital_source,
+                    "externalId": digital_external_id,
+                    "webUrl": digital_web_url,
+                    "appUrl": digital_app_url,
+                } if digital else None,
                 "movie": {
                     "tmdb_id": tmdb_mid,
                     "tmdbId": tmdb_mid,
@@ -3837,6 +3973,10 @@ def get_person_filmography(person_id):
                     "inCollection": col is not None,
                     "in_digital": in_digital,
                     "inDigital": in_digital,
+                    "digitalId": digital_id,
+                    "digitalSource": digital_source,
+                    "digitalWebUrl": digital_web_url,
+                    "digitalAppUrl": digital_app_url,
                 },
             }
 
@@ -7887,7 +8027,8 @@ def _visible_movie_ids(conn):
 
 def _visible_movies(conn):
     owner_clause, params = _movie_owner_filter()
-    return _dicts(conn.execute(f"SELECT * FROM movies WHERE 1=1{owner_clause} ORDER BY id", params).fetchall())
+    movies = _dicts(conn.execute(f"SELECT * FROM movies WHERE 1=1{owner_clause} ORDER BY id", params).fetchall())
+    return _enrich_movies_with_digital(movies, conn, include_links=False)
 
 
 def _asset_checksum(path):

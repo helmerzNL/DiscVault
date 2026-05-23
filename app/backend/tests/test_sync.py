@@ -230,8 +230,8 @@ class SyncIntegrationTests(unittest.TestCase):
         )
         movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.execute(
-            "INSERT INTO digital_library_sources (name, type, base_url, last_synced) VALUES (?, ?, ?, ?)",
-            ("Plex Test", "plex", "http://plex.local", "2026-05-23T00:00:00"),
+            "INSERT INTO digital_library_sources (name, type, base_url, last_synced, machine_id) VALUES (?, ?, ?, ?, ?)",
+            ("Plex Test", "plex", "http://plex.local", "2026-05-23T00:00:00", "plex-machine"),
         )
         source_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.execute(
@@ -277,11 +277,67 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(item["movieId"], movie_id)
         self.assertEqual(item["collectionId"], 321)
         self.assertEqual(item["digitalId"], digital_id)
+        self.assertEqual(item["digitalSource"], "plex")
+        self.assertEqual(item["digitalWebUrl"], "http://plex.local/web/index.html#!/server/plex-machine/details?key=%2Flibrary%2Fmetadata%2Fplex-1")
+        self.assertEqual(item["digitalAppUrl"], "plex://plex-machine/details?key=%2Flibrary%2Fmetadata%2Fplex-1")
+        self.assertEqual(item["digital"]["webUrl"], item["digitalWebUrl"])
+        self.assertEqual(item["movie"]["digitalWebUrl"], item["digitalWebUrl"])
         self.assertTrue(item["posterUrl"].startswith("http://localhost/api/images/"))
         self.assertEqual(item["poster_path"], "/tmdb-poster.jpg")
         self.assertEqual(item["movie"]["tmdbId"], tmdb_movie_id)
         self.assertEqual(item["movie"]["movieId"], movie_id)
         self.assertEqual(item["movie"]["posterUrl"], item["posterUrl"])
+
+    def test_movie_endpoints_include_digital_availability_and_detail_links(self):
+        tmdb_movie_id = 456789
+        conn = self.backend.get_db()
+        conn.execute(
+            """INSERT INTO movies (barcode, title, original_title, year, format, tmdb_id, added_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                f"SYNCDIG-{uuid.uuid4().hex[:10].upper()}",
+                "Digital Linked Movie",
+                "Digital Linked Movie",
+                "2026",
+                "4K UHD",
+                str(tmdb_movie_id),
+                "2026-05-23T00:00:00",
+            ),
+        )
+        movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO digital_library_sources (name, type, base_url, last_synced, machine_id) VALUES (?, ?, ?, ?, ?)",
+            ("Plex Test", "plex", "http://plex.local", "2026-05-23T00:00:00", "plex-machine"),
+        )
+        source_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            """INSERT INTO digital_library_items
+               (source_id, external_id, title, year, tmdb_id, media_type, synced_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (source_id, "plex-2", "Digital Linked Movie", "2026", str(tmdb_movie_id), "movie", "2026-05-23T00:00:00"),
+        )
+        digital_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+        conn.close()
+
+        detail = self._json(self.client.get(f"/api/movies/{movie_id}"))
+        self.assertTrue(detail["inDigital"])
+        self.assertEqual(detail["digitalIds"], [digital_id])
+        self.assertEqual(detail["digitalSources"], ["plex"])
+        self.assertEqual(detail["digitalMatches"][0]["webUrl"], "http://plex.local/web/index.html#!/server/plex-machine/details?key=%2Flibrary%2Fmetadata%2Fplex-2")
+        self.assertEqual(detail["digitalMatches"][0]["appUrl"], "plex://plex-machine/details?key=%2Flibrary%2Fmetadata%2Fplex-2")
+
+        movies = self._json(self.client.get("/api/movies"))
+        listed = next(m for m in movies if m["id"] == movie_id)
+        self.assertTrue(listed["inDigital"])
+        self.assertEqual(listed["digitalIds"], [digital_id])
+        self.assertEqual(listed["digitalMatchesCount"], 1)
+        self.assertNotIn("digitalMatches", listed)
+
+        bootstrap = self._json(self.client.get("/api/sync/bootstrap"))
+        synced = next(m for m in bootstrap["movies"] if m["id"] == movie_id)
+        self.assertTrue(synced["inDigital"])
+        self.assertEqual(synced["digitalSources"], ["plex"])
 
 
 if __name__ == "__main__":

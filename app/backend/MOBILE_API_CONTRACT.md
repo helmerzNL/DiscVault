@@ -99,6 +99,14 @@ When the movie exists in a connected digital library:
 - `digital_id` and `digitalId` should contain the local digital item id
 - `digital_source` and `digitalSource` should contain the source type, for
   example `plex` or `jellyfin`
+- `digital_web_url` and `digitalWebUrl` should contain the browser/web URL for
+  opening the item in Plex or Jellyfin
+- `digital_app_url` and `digitalAppUrl` should contain a native app URL when
+  available; currently this is populated for Plex deep links
+- `web_url` / `webUrl` and `app_url` / `appUrl` are aliases for the same link
+  targets
+- `digital` may contain the same link data as a nested object with `webUrl`,
+  `appUrl`, `sourceType`, `sourceName`, `externalId` and `digitalId`
 
 When no local poster is available:
 
@@ -108,6 +116,36 @@ When no local poster is available:
 Each filmography item also includes a nested `movie` object with the same core
 fields. Native apps may prefer this nested object to avoid mixing role metadata
 such as `character` or `job` with movie identity fields.
+
+## Movie Digital Availability Contract
+
+Movie responses are enriched from `digital_library_items` at response time.
+Digital links are not stored directly on physical `movies` rows.
+
+`GET /api/movies` and sync movie payloads include lightweight availability:
+
+- `in_digital` and `inDigital`
+- `digital_sources` and `digitalSources`
+- `digital_ids` and `digitalIds`
+- `digital_matches_count` and `digitalMatchesCount`
+
+`GET /api/movies/<movie_id>` includes the same lightweight fields plus full
+links:
+
+- `digital_matches` and `digitalMatches`
+- each match contains `webUrl`, `appUrl`, `sourceType`, `sourceName`,
+  `externalId`, `digitalId`, `tmdbId` and `imdbId`
+
+Digital matching order:
+
+1. `tmdb_id`
+2. `imdb_id`
+3. normalized `title + year`
+
+Plex links are built from `digital_library_sources.base_url`,
+`digital_library_sources.machine_id` and `digital_library_items.external_id`.
+Jellyfin links are built from `digital_library_sources.base_url` and
+`digital_library_items.external_id`.
 
 Example:
 
@@ -134,11 +172,24 @@ Example:
   "inDigital": true,
   "digital_source": "plex",
   "digitalSource": "plex",
+  "digital_web_url": "https://plex.example/web/index.html#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digitalWebUrl": "https://plex.example/web/index.html#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digital_app_url": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digitalAppUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digital": {
+    "digitalId": 3,
+    "sourceType": "plex",
+    "externalId": "123",
+    "webUrl": "https://plex.example/web/index.html#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+    "appUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123"
+  },
   "movie": {
     "tmdbId": 987654,
     "movieId": 42,
     "collectionId": 7,
-    "posterUrl": "https://discvault.example/api/images/poster.jpg"
+    "posterUrl": "https://discvault.example/api/images/poster.jpg",
+    "digitalWebUrl": "https://plex.example/web/index.html#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+    "digitalAppUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123"
   }
 }
 ```
