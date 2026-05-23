@@ -405,8 +405,60 @@ function hideBoxSetProposal() {
   if (panel) panel.style.display = 'none';
 }
 
+function apiImageUrl(value, kind = 'image') {
+  const raw = String(value || '').trim();
+  if (!raw || raw === 'N/A') return '';
+  if (/^https?:\/\//i.test(raw) || /^data:/i.test(raw)) return raw;
+  if (raw.startsWith('/api/images/')) return raw;
+  if (raw.startsWith('/api/posters/offline/')) {
+    const fileName = raw.split('/').pop();
+    return fileName ? `${API}/images/offline/poster/${encodeURIComponent(fileName)}` : raw;
+  }
+  if (raw.startsWith('/api/posters/')) {
+    const fileName = raw.split('/').pop();
+    return fileName ? `${API}/images/${encodeURIComponent(fileName)}` : raw;
+  }
+  if (raw.startsWith('/api/profiles/offline/')) {
+    const fileName = raw.split('/').pop();
+    return fileName ? `${API}/images/profiles/offline/profile/${encodeURIComponent(fileName)}` : raw;
+  }
+  if (raw.startsWith('/api/profiles/')) {
+    const fileName = raw.split('/').pop();
+    return fileName ? `${API}/images/profiles/${encodeURIComponent(fileName)}` : raw;
+  }
+  if (raw.startsWith('/api/')) return raw;
+  if (raw.startsWith('/') && kind === 'tmdbPoster') {
+    return `https://image.tmdb.org/t/p/w342${raw}`;
+  }
+  const fileName = raw.split(/[/\\]/).pop();
+  if (!fileName) return raw;
+  if (kind === 'profile') return `${API}/images/profiles/${encodeURIComponent(fileName)}`;
+  if (kind === 'posterOffline') return `${API}/images/offline/poster/${encodeURIComponent(fileName)}`;
+  if (kind === 'backdropOffline') return `${API}/images/offline/backdrop/${encodeURIComponent(fileName)}`;
+  return `${API}/images/${encodeURIComponent(fileName)}`;
+}
+
+function firstImageUrl(values, kind = 'image') {
+  for (const value of values) {
+    const url = apiImageUrl(value, kind);
+    if (url) return url;
+  }
+  return '';
+}
+
+function profileSrc(person) {
+  if (!person) return '';
+  return firstImageUrl([
+    person.photoUrl,
+    person.photo_url,
+    person.profileUrl,
+    person.profile_url,
+    person.photo,
+  ], 'profile') || apiImageUrl(person.photoFile || person.photo_file, 'profile');
+}
+
 function _boxSetMemberPosterSrc(movie) {
-  return (movie && (movie.poster_url || movie.poster || movie.cover_url || movie.poster_file)) || '';
+  return posterSrc(movie) || '';
 }
 
 function displayBoxSetProposal(proposal, barcode, detectedFormat) {
@@ -602,20 +654,35 @@ async function selectTmdbCandidate(tmdbId, barcode) {
 
 // Returns the best available poster URL for a movie object
 function posterSrc(m) {
+  if (!m) return null;
   // Container cards (vault / box-set / collection) store their own uploaded
   // poster in _container_poster_file so the primary film's poster_file is
   // never overwritten.  Use _container_poster_file first for those cards.
-  const pf = m._container_poster_file || m.poster_file;
-  if (pf) {
-    const raw = String(pf).trim();
-    if (raw) {
-      if (/^https?:\/\//i.test(raw)) return raw;
-      const fileName = raw.split(/[/\\]/).pop();
-      if (fileName) return `/api/posters/${encodeURIComponent(fileName)}`;
-    }
-  }
-  if (m.poster && m.poster !== 'N/A') return m.poster;
+  const containerPoster = apiImageUrl(m._container_poster_file, 'poster');
+  if (containerPoster) return containerPoster;
+  const responsePoster = firstImageUrl([
+    m.posterUrl,
+    m.poster_url,
+    m.coverUrl,
+    m.cover_url,
+    m.poster,
+  ], 'poster');
+  if (responsePoster) return responsePoster;
+  const filePoster = apiImageUrl(m.posterFile || m.poster_file, 'poster');
+  if (filePoster) return filePoster;
+  const tmdbPoster = apiImageUrl(m.posterPath || m.poster_path, 'tmdbPoster');
+  if (tmdbPoster) return tmdbPoster;
   return null;
+}
+
+function backdropSrc(valueOrMovie) {
+  if (!valueOrMovie) return '';
+  if (typeof valueOrMovie === 'string') return apiImageUrl(valueOrMovie, 'backdrop');
+  return firstImageUrl([
+    valueOrMovie.backdropUrl,
+    valueOrMovie.backdrop_url,
+    valueOrMovie.backdrop,
+  ], 'backdrop');
 }
 
 function displayMovieResult(movie, barcode, alreadyInCollection, detectedFormat) {

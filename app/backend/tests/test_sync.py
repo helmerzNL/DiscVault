@@ -343,6 +343,158 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertTrue(synced["inDigital"])
         self.assertEqual(synced["digitalSources"], ["plex"])
 
+    def test_sync_includes_movie_cast_and_alternative_backdrop_assets(self):
+        from PIL import Image
+
+        primary_backdrop = f"primary-{uuid.uuid4().hex}.jpg"
+        alt_legacy = f"alt-legacy-{uuid.uuid4().hex}.jpg"
+        alt_image = f"alt-image-{uuid.uuid4().hex}.jpg"
+        profile_file = f"profile-{uuid.uuid4().hex}.jpg"
+        for filename, size in (
+            (primary_backdrop, (1800, 1000)),
+            (alt_legacy, (1600, 900)),
+            (alt_image, (1500, 900)),
+            (profile_file, (400, 600)),
+        ):
+            directory = os.environ["PROFILE_DIR"] if filename == profile_file else os.environ["POSTER_DIR"]
+            Image.new("RGB", size, color=(30, 70, 110)).save(os.path.join(directory, filename), "JPEG")
+
+        conn = self.backend.get_db()
+        conn.execute(
+            """INSERT INTO movies (barcode, title, format, backdrop, backdrops, added_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                f"SYNCCAST-{uuid.uuid4().hex[:10].upper()}",
+                "Offline Cast Movie",
+                "4K UHD",
+                f"/api/images/{primary_backdrop}",
+                f"[\"/api/posters/{alt_legacy}\", \"/api/images/{alt_image}\"]",
+                "2026-05-23T00:00:00",
+            ),
+        )
+        movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO people (tmdb_id, name, photo_file) VALUES (?, ?, ?)",
+            ("2888", "Will Smith", profile_file),
+        )
+        actor_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO people (tmdb_id, name) VALUES (?, ?)",
+            ("1234", "David Ayer"),
+        )
+        crew_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO movie_people (movie_id, person_id, role, character, sort_order) VALUES (?, ?, ?, ?, ?)",
+            (movie_id, actor_id, "actor", "Deadshot", 1),
+        )
+        conn.execute(
+            "INSERT INTO movie_people (movie_id, person_id, role, job, sort_order) VALUES (?, ?, ?, ?, ?)",
+            (movie_id, crew_id, "crew", "Director", 2),
+        )
+        conn.commit()
+        before = self.backend._current_sync_revision(conn)
+        conn.close()
+
+        bootstrap = self._json(self.client.get("/api/sync/bootstrap"))
+        movie_cast = next(item for item in bootstrap["movieCast"] if item["movieId"] == movie_id)
+        self.assertEqual(movie_cast["movieID"], movie_id)
+        self.assertEqual({member["name"] for member in movie_cast["cast"]}, {"Will Smith", "David Ayer"})
+        actor = next(member for member in movie_cast["cast"] if member["name"] == "Will Smith")
+        self.assertEqual(actor["personId"], actor_id)
+        self.assertEqual(actor["role"], "actor")
+        self.assertEqual(actor["character"], "Deadshot")
+        self.assertEqual(actor["photoFile"], profile_file)
+        self.assertTrue(actor["photoUrl"].endswith(f"/api/images/profiles/{profile_file}"))
+        crew = next(member for member in movie_cast["cast"] if member["name"] == "David Ayer")
+        self.assertEqual(crew["role"], "crew")
+        self.assertEqual(crew["job"], "Director")
+
+        conn = self.backend.get_db()
+        movie_row = conn.execute("SELECT backdrops FROM movies WHERE id=?", (movie_id,)).fetchone()
+        conn.close()
+        self.assertIn("/api/images/", movie_row["backdrops"])
+        self.assertNotIn("/api/posters/", movie_row["backdrops"])
+
+        movie_backdrops = [
+            asset for asset in bootstrap["assetManifest"]
+            if asset["entity"] == "movie" and asset["entityId"] == movie_id and asset["kind"] == "backdrop"
+        ]
+        self.assertGreaterEqual(len(movie_backdrops), 3)
+        self.assertTrue(all("/api/images/offline/backdrop/" in asset["offlineUrl"] for asset in movie_backdrops))
+        profile_asset = next(
+            asset for asset in bootstrap["assetManifest"]
+            if asset["entity"] == "person" and asset["entityId"] == actor_id and asset["kind"] == "profile"
+        )
+        self.assertIn("/api/images/profiles/offline/profile/", profile_asset["offlineUrl"])
+
+        delta = self._json(self.client.get(f"/api/sync/delta?since_revision={before - 1}"))
+        self.assertIn(movie_id, {item["movieId"] for item in delta["movieCast"]})
+        self.assertIn("movieCast", delta["upserts"])
+
+        since_existing_profile = bootstrap["serverRevision"]
+        conn = self.backend.get_db()
+        conn.execute(
+            "INSERT INTO movies (barcode, title, format, added_at) VALUES (?, ?, ?, ?)",
+            (
+                f"SYNCCAST2-{uuid.uuid4().hex[:10].upper()}",
+                "Second Offline Cast Movie",
+                "4K UHD",
+                "2026-05-23T00:00:00",
+            ),
+        )
+        second_movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO movie_people (movie_id, person_id, role, character, sort_order) VALUES (?, ?, ?, ?, ?)",
+            (second_movie_id, actor_id, "actor", "Cameo", 1),
+        )
+        conn.commit()
+        conn.close()
+
+        delta_existing_profile = self._json(self.client.get(f"/api/sync/delta?since_revision={since_existing_profile}"))
+        self.assertIn(second_movie_id, {item["movieId"] for item in delta_existing_profile["movieCast"]})
+        self.assertTrue(any(
+            asset["entity"] == "person" and asset["entityId"] == actor_id and asset["kind"] == "profile"
+            for asset in delta_existing_profile["assetManifest"]
+        ))
+
+    def test_movie_search_matches_normalized_cast_and_crew(self):
+        conn = self.backend.get_db()
+        conn.execute(
+            "INSERT INTO movies (barcode, title, format, added_at) VALUES (?, ?, ?, ?)",
+            (
+                f"SYNCSEARCH-{uuid.uuid4().hex[:10].upper()}",
+                "Searchable Cast Movie",
+                "4K UHD",
+                "2026-05-23T00:00:00",
+            ),
+        )
+        movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        actor_tmdb_id = str(800000000 + int(uuid.uuid4().hex[:6], 16))
+        crew_tmdb_id = str(810000000 + int(uuid.uuid4().hex[:6], 16))
+        conn.execute("INSERT INTO people (tmdb_id, name) VALUES (?, ?)", (actor_tmdb_id, "Will Smith"))
+        actor_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("INSERT INTO people (tmdb_id, name) VALUES (?, ?)", (crew_tmdb_id, "David Ayer"))
+        crew_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO movie_people (movie_id, person_id, role, character, sort_order) VALUES (?, ?, ?, ?, ?)",
+            (movie_id, actor_id, "actor", "Deadshot", 1),
+        )
+        conn.execute(
+            "INSERT INTO movie_people (movie_id, person_id, role, job, sort_order) VALUES (?, ?, ?, ?, ?)",
+            (movie_id, crew_id, "crew", "Director", 2),
+        )
+        conn.commit()
+        conn.close()
+
+        by_actor = self._json(self.client.get("/api/movies?q=Will%20Smith"))
+        self.assertIn(movie_id, {movie["id"] for movie in by_actor})
+        matched = next(movie for movie in by_actor if movie["id"] == movie_id)
+        self.assertIn("Will Smith", matched["searchPeople"])
+        self.assertIn("Deadshot", matched["searchPeople"])
+
+        by_job = self._json(self.client.get("/api/movies?q=Director"))
+        self.assertIn(movie_id, {movie["id"] for movie in by_job})
+
 
 if __name__ == "__main__":
     unittest.main()

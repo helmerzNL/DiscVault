@@ -260,6 +260,41 @@ def _enrich_movies_with_digital(movies, conn, include_links=False):
     return movies
 
 
+def _enrich_movies_with_people_search(movies, conn):
+    if not movies:
+        return movies
+    movie_ids = [m.get("id") for m in movies if m.get("id") is not None]
+    if not movie_ids:
+        return movies
+    placeholders = ",".join("?" * len(movie_ids))
+    rows = conn.execute(f"""
+        SELECT mp.movie_id, p.name, mp.role, mp.character, mp.job
+        FROM movie_people mp
+        JOIN people p ON p.id = mp.person_id
+        WHERE mp.movie_id IN ({placeholders})
+        ORDER BY mp.movie_id, mp.sort_order, p.name
+    """, movie_ids).fetchall()
+    by_movie = {}
+    for row in rows:
+        values = [
+            row["name"] or "",
+            row["role"] or "",
+            row["character"] or "",
+            row["job"] or "",
+        ]
+        by_movie.setdefault(row["movie_id"], []).extend(v for v in values if v)
+    for movie in movies:
+        values = []
+        seen = set()
+        for value in by_movie.get(movie.get("id"), []):
+            if value not in seen:
+                seen.add(value)
+                values.append(value)
+        movie["search_people"] = " ".join(values)
+        movie["searchPeople"] = values
+    return movies
+
+
 def _encrypt_token(token: str) -> str:
     if not token:
         return ""
@@ -1815,6 +1850,49 @@ def localize_backdrop(backdrop_url):
     return value
 
 
+def _parse_backdrop_values(raw):
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        values = raw
+    else:
+        text = str(raw).strip()
+        if not text:
+            return []
+        try:
+            decoded = json.loads(text)
+            values = decoded if isinstance(decoded, list) else [decoded]
+        except Exception:
+            values = [text]
+    out = []
+    seen = set()
+    for value in values:
+        if not value:
+            continue
+        item = str(value).strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def localize_backdrops(backdrops_value):
+    values = _parse_backdrop_values(backdrops_value)
+    if not values:
+        return backdrops_value
+    localized = []
+    changed = False
+    for value in values:
+        local_value = localize_backdrop(value)
+        localized.append(local_value)
+        if local_value != value:
+            changed = True
+    if not changed:
+        return backdrops_value
+    return json.dumps(localized)
+
+
 def prepare_local_image_variants(row_or_updates):
     if not row_or_updates:
         return row_or_updates
@@ -1823,6 +1901,8 @@ def prepare_local_image_variants(row_or_updates):
         ensure_asset_variant(poster_file, "poster")
     if row_or_updates.get("backdrop"):
         row_or_updates["backdrop"] = localize_backdrop(row_or_updates.get("backdrop"))
+    if row_or_updates.get("backdrops"):
+        row_or_updates["backdrops"] = localize_backdrops(row_or_updates.get("backdrops"))
     return row_or_updates
 
 
@@ -1857,13 +1937,15 @@ def _normalize_existing_asset_records(conn):
         if not exists:
             continue
         cols = _table_columns(conn, table)
-        if "poster_file" not in cols and "backdrop" not in cols:
+        if "poster_file" not in cols and "backdrop" not in cols and "backdrops" not in cols:
             continue
         select_cols = ["id"]
         if "poster_file" in cols:
             select_cols.append("poster_file")
         if "backdrop" in cols:
             select_cols.append("backdrop")
+        if "backdrops" in cols:
+            select_cols.append("backdrops")
         for row in conn.execute(f"SELECT {', '.join(select_cols)} FROM {table}").fetchall():
             checked += 1
             updates = {}
@@ -1881,6 +1963,15 @@ def _normalize_existing_asset_records(conn):
                     updates["backdrop"] = normalized
                 if normalized.startswith(("http://", "https://")):
                     unresolved += 1
+            if "backdrops" in cols and row["backdrops"]:
+                normalized = localize_backdrops(row["backdrops"])
+                if normalized != row["backdrops"]:
+                    updates["backdrops"] = normalized
+                for backdrop_value in _parse_backdrop_values(normalized):
+                    if _asset_variant_created_for_local_value(backdrop_value, "backdrop"):
+                        updates["backdrops"] = normalized
+                    if backdrop_value.startswith(("http://", "https://")):
+                        unresolved += 1
             _update_row(table, row["id"], updates)
 
     exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='people'").fetchone()
@@ -3443,9 +3534,18 @@ def list_movies():
            " WHERE 1=1" + owner_clause)
     params = list(owner_params)
     if q:
-        sql += (" AND (title LIKE ? OR original_title LIKE ? OR director LIKE ?"
-                " OR actor LIKE ? OR genre LIKE ? OR distributor LIKE ? OR box_set LIKE ?)")
-        params += [f"%{q}%"] * 7
+        sql += (""" AND (
+                   movies.title LIKE ? OR movies.original_title LIKE ? OR movies.director LIKE ?
+                OR movies.actor LIKE ? OR movies.genre LIKE ? OR movies.distributor LIKE ? OR movies.box_set LIKE ?
+                OR EXISTS (
+                    SELECT 1
+                    FROM movie_people mp
+                    JOIN people p ON p.id = mp.person_id
+                    WHERE mp.movie_id = movies.id
+                      AND (p.name LIKE ? OR mp.character LIKE ? OR mp.job LIKE ? OR mp.role LIKE ?)
+                )
+        )""")
+        params += [f"%{q}%"] * 11
     if fmt:
         sql += " AND format = ?"
         params.append(fmt)
@@ -3453,6 +3553,7 @@ def list_movies():
     rows = conn.execute(sql, params).fetchall()
     # Enrich with group ids
     movies = [dict(r) for r in rows]
+    _enrich_movies_with_people_search(movies, conn)
     _enrich_movies_with_digital(movies, conn, include_links=False)
     if movies:
         movie_ids = [m["id"] for m in movies]
@@ -8038,6 +8139,7 @@ def _visible_movie_ids(conn):
 def _visible_movies(conn):
     owner_clause, params = _movie_owner_filter()
     movies = _dicts(conn.execute(f"SELECT * FROM movies WHERE 1=1{owner_clause} ORDER BY id", params).fetchall())
+    _enrich_movies_with_people_search(movies, conn)
     return _enrich_movies_with_digital(movies, conn, include_links=False)
 
 
@@ -8113,11 +8215,19 @@ def _sync_asset_manifest(conn, movie_ids=None):
             return []
         movie_filter = f" WHERE id IN ({','.join('?' * len(movie_ids))})"
         params = movie_ids
-    for m in conn.execute(f"SELECT id, poster_file, backdrop, updated_at, sync_revision FROM movies{movie_filter}", params).fetchall():
+    for m in conn.execute(f"SELECT id, poster_file, backdrop, backdrops, updated_at, sync_revision FROM movies{movie_filter}", params).fetchall():
         for entry in (
             _asset_manifest_entry("movie_poster", "movie", m["id"], m["poster_file"], m["updated_at"], m["sync_revision"]),
             _asset_manifest_entry("movie_backdrop", "movie", m["id"], m["backdrop"], m["updated_at"], m["sync_revision"]),
         ):
+            if entry:
+                assets.append(entry)
+        seen_backdrops = {m["backdrop"]} if m["backdrop"] else set()
+        for backdrop_value in _parse_backdrop_values(m["backdrops"]):
+            if backdrop_value in seen_backdrops:
+                continue
+            seen_backdrops.add(backdrop_value)
+            entry = _asset_manifest_entry("movie_backdrop", "movie", m["id"], backdrop_value, m["updated_at"], m["sync_revision"])
             if entry:
                 assets.append(entry)
     for table, entity, id_col in (("edition_groups", "edition_group", "id"), ("collections", "collection", "id"), ("vaults", "vault", "id"), ("box_sets", "box_set", "id")):
@@ -8140,6 +8250,109 @@ def _sync_asset_manifest(conn, movie_ids=None):
         if entry:
             assets.append(entry)
     return assets
+
+
+def _dedupe_asset_manifest(assets):
+    deduped = []
+    seen = set()
+    for asset in assets:
+        key = (
+            asset.get("kind"),
+            asset.get("entity"),
+            asset.get("entityId", asset.get("entity_id")),
+            asset.get("url"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(asset)
+    return deduped
+
+
+def _profile_assets_for_people(conn, person_ids):
+    ids = sorted({int(pid) for pid in person_ids if pid is not None})
+    if not ids:
+        return []
+    rows = conn.execute(
+        f"SELECT id, photo_file, updated_at, sync_revision FROM people WHERE id IN ({','.join('?' * len(ids))})",
+        ids,
+    ).fetchall()
+    assets = []
+    for row in rows:
+        entry = _asset_manifest_entry("person_profile", "person", row["id"], row["photo_file"], row["updated_at"], row["sync_revision"])
+        if entry:
+            assets.append(entry)
+    return assets
+
+
+def _sync_movie_cast(conn, movie_ids=None, since_revision=None):
+    if movie_ids is not None and not movie_ids:
+        return []
+    movie_filter = ""
+    params = []
+    if movie_ids is not None:
+        movie_filter = f" AND mp.movie_id IN ({','.join('?' * len(movie_ids))})"
+        params.extend(movie_ids)
+
+    affected_filter = ""
+    if since_revision is not None:
+        affected_filter = """
+          AND mp.movie_id IN (
+              SELECT DISTINCT mp2.movie_id
+              FROM movie_people mp2
+              JOIN people p2 ON p2.id = mp2.person_id
+              JOIN movies m2 ON m2.id = mp2.movie_id
+              WHERE mp2.sync_revision > ?
+                 OR p2.sync_revision > ?
+                 OR m2.sync_revision > ?
+          )
+        """
+        params.extend([since_revision, since_revision, since_revision])
+
+    rows = conn.execute(f"""
+        SELECT mp.movie_id, mp.person_id, mp.role, mp.character, mp.job, mp.sort_order,
+               p.tmdb_id, p.name, p.photo_file
+        FROM movie_people mp
+        JOIN people p ON p.id = mp.person_id
+        WHERE 1=1{movie_filter}{affected_filter}
+        ORDER BY mp.movie_id, mp.role, mp.sort_order, p.name
+    """, params).fetchall()
+
+    grouped = {}
+    for row in rows:
+        movie_id = row["movie_id"]
+        photo_file = os.path.basename(str(row["photo_file"] or "").replace("\\", "/")) if row["photo_file"] else ""
+        raw_role = (row["role"] or "").strip().lower()
+        role = "crew" if raw_role == "crew" or row["job"] else (raw_role or "actor")
+        member = {
+            "person_id": row["person_id"],
+            "personId": row["person_id"],
+            "id": row["person_id"],
+            "name": row["name"] or "",
+            "role": role,
+            "character": row["character"],
+            "job": row["job"],
+            "photo_file": photo_file,
+            "photoFile": photo_file,
+            "photo_url": _absolute_api_url(f"/api/images/profiles/{photo_file}") if photo_file else "",
+            "photoUrl": _absolute_api_url(f"/api/images/profiles/{photo_file}") if photo_file else "",
+            "tmdb_id": row["tmdb_id"],
+            "tmdbId": row["tmdb_id"],
+            "sort_order": row["sort_order"],
+            "sortOrder": row["sort_order"],
+        }
+        grouped.setdefault(movie_id, []).append(member)
+
+    return [
+        {
+            "movie_id": movie_id,
+            "movieId": movie_id,
+            "movieID": movie_id,
+            "id": movie_id,
+            "cast": members,
+        }
+        for movie_id, members in grouped.items()
+    ]
 
 
 def _sync_dataset(conn, since_revision=None):
@@ -8219,6 +8432,7 @@ def _sync_dataset(conn, since_revision=None):
         """, movie_ids + movie_ids + movie_ids + rev_params).fetchall())
     else:
         collection_items = []
+    movie_cast = _sync_movie_cast(conn, movie_ids, since_revision)
 
     return {
         "movies": movies,
@@ -8233,6 +8447,10 @@ def _sync_dataset(conn, since_revision=None):
         "people": people,
         "movie_people": movie_people,
         "moviePeople": movie_people,
+        "movie_cast": movie_cast,
+        "movieCast": movie_cast,
+        "cast_by_movie": movie_cast,
+        "castByMovie": movie_cast,
         "container_memberships": {
             "vault_movies": vault_movies,
             "box_set_movies": box_set_movies,
@@ -8262,7 +8480,7 @@ def sync_bootstrap():
     conn.commit()
     data = _sync_dataset(conn)
     revision = _current_sync_revision(conn)
-    assets = _sync_asset_manifest(conn, _visible_movie_ids(conn))
+    assets = _dedupe_asset_manifest(_sync_asset_manifest(conn, _visible_movie_ids(conn)))
     data["server_revision"] = revision
     data["serverRevision"] = revision
     data["asset_manifest"] = assets
@@ -8282,6 +8500,12 @@ def _sync_delta_response(since):
     ).fetchall())
     revision = _current_sync_revision(conn)
     assets = [a for a in _sync_asset_manifest(conn, _visible_movie_ids(conn)) if int(a.get("revision") or 0) > since]
+    cast_person_ids = [
+        member.get("personId", member.get("person_id"))
+        for movie_cast in data.get("movieCast", [])
+        for member in movie_cast.get("cast", [])
+    ]
+    assets = _dedupe_asset_manifest(assets + _profile_assets_for_people(conn, cast_person_ids))
     data["server_revision"] = revision
     data["serverRevision"] = revision
     data["fromRevision"] = since
@@ -8298,6 +8522,7 @@ def _sync_delta_response(since):
         "watchHistory": data.get("watchHistory", []),
         "people": data.get("people", []),
         "moviePeople": data.get("moviePeople", []),
+        "movieCast": data.get("movieCast", []),
         "containerMemberships": data.get("containerMemberships", {}),
     }
     data["deletes"] = data["tombstones"]
