@@ -1525,7 +1525,122 @@ def _merge_video_updates(movie, info, updates):
 # Poster helpers
 # ---------------------------------------------------------------------------
 
-def download_poster(url: str):
+ASSET_VARIANT_SPECS = {
+    "poster": (600, 900, 86),
+    "backdrop": (1280, 720, 84),
+    "profile": (400, 400, 86),
+}
+
+
+def _asset_variant_dir(kind):
+    base = PROFILE_DIR if kind == "profile" else POSTER_DIR
+    path = os.path.join(base, "_variants", kind)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _asset_variant_filename(filename):
+    stem = os.path.splitext(os.path.basename(filename or ""))[0]
+    return f"{stem}.jpg" if stem else ""
+
+
+def _asset_variant_path(filename, kind):
+    variant_name = _asset_variant_filename(filename)
+    return os.path.join(_asset_variant_dir(kind), variant_name) if variant_name else ""
+
+
+def _generate_image_variant(source_path, filename, kind):
+    if kind not in ASSET_VARIANT_SPECS or not source_path or not os.path.isfile(source_path):
+        return None
+    variant_path = _asset_variant_path(filename, kind)
+    if not variant_path:
+        return None
+    try:
+        max_w, max_h, quality = ASSET_VARIANT_SPECS[kind]
+        with Image.open(source_path) as img:
+            img = ImageOps.exif_transpose(img)
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            elif img.mode == "L":
+                img = img.convert("RGB")
+            img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+            img.save(variant_path, format="JPEG", quality=quality, optimize=True)
+        return os.path.basename(variant_path)
+    except Exception:
+        return None
+
+
+def ensure_asset_variant(filename, kind):
+    safe_name = os.path.basename(str(filename or "").replace("\\", "/"))
+    if not safe_name:
+        return None
+    base = PROFILE_DIR if kind == "profile" else POSTER_DIR
+    source_path = os.path.join(base, safe_name)
+    variant_path = _asset_variant_path(safe_name, kind)
+    if not os.path.isfile(source_path):
+        return None
+    if os.path.isfile(variant_path):
+        try:
+            if os.path.getmtime(variant_path) >= os.path.getmtime(source_path):
+                return os.path.basename(variant_path)
+        except Exception:
+            return os.path.basename(variant_path)
+    return _generate_image_variant(source_path, safe_name, kind)
+
+
+def _asset_variant_meta(filename, kind):
+    variant_name = ensure_asset_variant(filename, kind)
+    if not variant_name:
+        return {}
+    variant_path = _asset_variant_path(filename, kind)
+    width = height = bytes_size = 0
+    try:
+        bytes_size = os.path.getsize(variant_path)
+        with Image.open(variant_path) as img:
+            width, height = img.size
+    except Exception:
+        pass
+    route = "images/profiles" if kind == "profile" else "images"
+    return {
+        "variant": "offline",
+        "variant_file": variant_name,
+        "variantFile": variant_name,
+        "offline_url": f"/api/{route}/offline/{kind}/{variant_name}",
+        "offlineUrl": _absolute_api_url(f"/api/{route}/offline/{kind}/{variant_name}"),
+        "width": width,
+        "height": height,
+        "bytes": bytes_size,
+    }
+
+
+def _remove_asset_variants(filename, kinds=("poster", "backdrop")):
+    safe_name = os.path.basename(str(filename or "").replace("\\", "/"))
+    if not safe_name:
+        return
+    for kind in kinds:
+        try:
+            variant_path = _asset_variant_path(safe_name, kind)
+            if variant_path and os.path.isfile(variant_path):
+                os.remove(variant_path)
+        except Exception:
+            pass
+
+
+def _save_image_original_and_variant(img, kind):
+    img = ImageOps.exif_transpose(img)
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    elif img.mode == "L":
+        img = img.convert("RGB")
+    filename = uuid.uuid4().hex + ".jpg"
+    base = PROFILE_DIR if kind == "profile" else POSTER_DIR
+    out_path = os.path.join(base, filename)
+    img.save(out_path, format="JPEG", quality=92, optimize=True)
+    _generate_image_variant(out_path, filename, kind)
+    return filename
+
+
+def download_poster(url: str, asset_kind="poster"):
     if not url or url == "N/A":
         return None
     try:
@@ -1539,12 +1654,38 @@ def download_poster(url: str):
         elif "webp" in ct:
             ext = ".webp"
         filename = uuid.uuid4().hex + ext
-        with open(os.path.join(POSTER_DIR, filename), "wb") as f:
+        out_path = os.path.join(POSTER_DIR, filename)
+        with open(out_path, "wb") as f:
             for chunk in resp.iter_content(8192):
                 f.write(chunk)
+        ensure_asset_variant(filename, "backdrop" if asset_kind == "backdrop" else "poster")
         return filename
     except Exception:
         return None
+
+
+def localize_backdrop(backdrop_url):
+    value = (backdrop_url or "").strip()
+    if not value or value.startswith("/api/posters/") or value.startswith("/api/images/"):
+        if value.startswith("/api/posters/") or value.startswith("/api/images/"):
+            ensure_asset_variant(os.path.basename(value), "backdrop")
+        return value
+    if value.startswith("http://") or value.startswith("https://"):
+        filename = download_poster(value, asset_kind="backdrop")
+        if filename:
+            return f"/api/images/{filename}"
+    return value
+
+
+def prepare_local_image_variants(row_or_updates):
+    if not row_or_updates:
+        return row_or_updates
+    poster_file = row_or_updates.get("poster_file")
+    if poster_file:
+        ensure_asset_variant(poster_file, "poster")
+    if row_or_updates.get("backdrop"):
+        row_or_updates["backdrop"] = localize_backdrop(row_or_updates.get("backdrop"))
+    return row_or_updates
 
 
 def save_uploaded_poster(file_storage):
@@ -1560,12 +1701,7 @@ def save_uploaded_poster(file_storage):
         elif img.mode == "L":
             img = img.convert("RGB")
 
-        # Resize to a sane poster size while preserving aspect ratio.
-        img.thumbnail((900, 1400), Image.Resampling.LANCZOS)
-
-        filename = uuid.uuid4().hex + ".jpg"
-        out_path = os.path.join(POSTER_DIR, filename)
-        img.save(out_path, format="JPEG", quality=88, optimize=True)
+        filename = _save_image_original_and_variant(img, "poster")
         return filename, None
     except UnidentifiedImageError:
         return None, "Bestand is geen geldige afbeelding"
@@ -1575,8 +1711,8 @@ def save_uploaded_poster(file_storage):
 
 def save_uploaded_backdrop(file_storage):
     """Save an uploaded backdrop image. Stored in the poster directory and
-    served via /api/posters/<filename>. Resized to a max 1920x1080 box while
-    preserving aspect ratio."""
+    served via /api/images/<filename>. The original is preserved; offline
+    variants are generated separately."""
     if not file_storage or not file_storage.filename:
         return None, "Geen bestand geupload"
     try:
@@ -1587,10 +1723,7 @@ def save_uploaded_backdrop(file_storage):
             img = img.convert("RGB")
         elif img.mode == "L":
             img = img.convert("RGB")
-        img.thumbnail((1920, 1080), Image.Resampling.LANCZOS)
-        filename = uuid.uuid4().hex + ".jpg"
-        out_path = os.path.join(POSTER_DIR, filename)
-        img.save(out_path, format="JPEG", quality=85, optimize=True)
+        filename = _save_image_original_and_variant(img, "backdrop")
         return filename, None
     except UnidentifiedImageError:
         return None, "Bestand is geen geldige afbeelding"
@@ -1598,25 +1731,56 @@ def save_uploaded_backdrop(file_storage):
         return None, f"Upload mislukt: {str(e)}"
 
 
-@app.route("/api/posters/<path:filename>")
-def serve_poster(filename):
+def _serve_image_file(filename):
     raw = (filename or "").strip()
     safe_name = os.path.basename(raw)
     if not safe_name:
-        return jsonify({"error": "Poster not found"}), 404
+        return jsonify({"error": "Image not found"}), 404
 
-    # Primary: serve by basename from configured poster directory.
     if os.path.isfile(os.path.join(POSTER_DIR, safe_name)):
         return send_from_directory(POSTER_DIR, safe_name)
 
-    # Legacy compatibility: DB might contain full path.
     if os.path.isfile(raw):
         real_poster_dir = os.path.realpath(POSTER_DIR)
         real_raw = os.path.realpath(raw)
         if real_raw == real_poster_dir or real_raw.startswith(real_poster_dir + os.sep):
             return send_file(real_raw)
 
-    return jsonify({"error": "Poster not found"}), 404
+    return jsonify({"error": "Image not found"}), 404
+
+
+@app.route("/api/images/<path:filename>")
+def serve_image(filename):
+    return _serve_image_file(filename)
+
+
+@app.route("/api/posters/<path:filename>")
+def serve_poster(filename):
+    return _serve_image_file(filename)
+
+
+def _serve_offline_image_variant(kind, filename):
+    if kind not in ("poster", "backdrop"):
+        return jsonify({"error": "Variant not found"}), 404
+    safe_name = os.path.basename((filename or "").strip())
+    if not safe_name:
+        return jsonify({"error": "Variant not found"}), 404
+    variant_path = os.path.join(_asset_variant_dir(kind), safe_name)
+    if os.path.isfile(variant_path):
+        resp = send_from_directory(_asset_variant_dir(kind), safe_name)
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return resp
+    return jsonify({"error": "Variant not found"}), 404
+
+
+@app.route("/api/images/offline/<kind>/<path:filename>")
+def serve_offline_image_variant(kind, filename):
+    return _serve_offline_image_variant(kind, filename)
+
+
+@app.route("/api/posters/offline/<kind>/<path:filename>")
+def serve_offline_poster_variant(kind, filename):
+    return _serve_offline_image_variant(kind, filename)
 
 
 def download_profile_photo(url: str):
@@ -1628,9 +1792,11 @@ def download_profile_photo(url: str):
         if resp.status_code != 200:
             return None
         filename = uuid.uuid4().hex + ".jpg"
-        with open(os.path.join(PROFILE_DIR, filename), "wb") as f:
+        out_path = os.path.join(PROFILE_DIR, filename)
+        with open(out_path, "wb") as f:
             for chunk in resp.iter_content(8192):
                 f.write(chunk)
+        ensure_asset_variant(filename, "profile")
         return filename
     except Exception:
         return None
@@ -1659,7 +1825,7 @@ def _make_signed_profile_url(photo_file: str | None, ttl_seconds: int = 3600) ->
         return None
     exp = int(time.time()) + max(60, int(ttl_seconds))
     sig = _profile_signature(safe_name, exp)
-    return f"/api/profiles/{quote(safe_name)}?exp={exp}&sig={sig}"
+    return f"/api/images/profiles/{quote(safe_name)}?exp={exp}&sig={sig}"
 
 
 def _is_valid_profile_request_signature(filename: str) -> bool:
@@ -1677,8 +1843,7 @@ def _is_valid_profile_request_signature(filename: str) -> bool:
     return hmac.compare_digest(expected, sig)
 
 
-@app.route("/api/profiles/<path:filename>")
-def serve_profile(filename):
+def _serve_profile_image(filename):
     raw = (filename or "").strip()
     # Accept plain filename, full path, or Windows-style path separators.
     safe_name = os.path.basename(raw.replace("\\", "/"))
@@ -1697,6 +1862,38 @@ def serve_profile(filename):
         resp.headers["Expires"] = "0"
         return resp
     return jsonify({"error": "Profile not found"}), 404
+
+
+@app.route("/api/images/profiles/<path:filename>")
+def serve_profile_image(filename):
+    return _serve_profile_image(filename)
+
+
+@app.route("/api/profiles/<path:filename>")
+def serve_profile(filename):
+    return _serve_profile_image(filename)
+
+
+def _serve_offline_profile_variant(filename):
+    safe_name = os.path.basename((filename or "").strip())
+    if not safe_name:
+        return jsonify({"error": "Profile variant not found"}), 404
+    variant_path = os.path.join(_asset_variant_dir("profile"), safe_name)
+    if os.path.isfile(variant_path):
+        resp = send_from_directory(_asset_variant_dir("profile"), safe_name)
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return resp
+    return jsonify({"error": "Profile variant not found"}), 404
+
+
+@app.route("/api/images/profiles/offline/profile/<path:filename>")
+def serve_offline_profile_image_variant(filename):
+    return _serve_offline_profile_variant(filename)
+
+
+@app.route("/api/profiles/offline/profile/<path:filename>")
+def serve_offline_profile_variant(filename):
+    return _serve_offline_profile_variant(filename)
 
 
 # ---------------------------------------------------------------------------
@@ -3519,9 +3716,9 @@ def debug_person_photo(person_id):
         "profile_dir": PROFILE_DIR,
         "expected_disk_path": disk_path,
         "exists_on_disk": exists_on_disk,
-        "frontend_url": f"/api/profiles/{safe_photo_file}" if safe_photo_file else "",
+        "frontend_url": f"/api/images/profiles/{safe_photo_file}" if safe_photo_file else "",
         "frontend_url_signed": _make_signed_profile_url(safe_photo_file),
-        "frontend_url_cache_busted": f"/api/profiles/{safe_photo_file}?v={safe_photo_file}" if safe_photo_file else "",
+        "frontend_url_cache_busted": f"/api/images/profiles/{safe_photo_file}?v={safe_photo_file}" if safe_photo_file else "",
     })
 
 
@@ -3544,6 +3741,7 @@ def add_movie():
         row["poster_file"] = poster_file
         row["format"]      = data.get("format", "4K UHD")
         row["added_at"]    = datetime.utcnow().isoformat()
+        prepare_local_image_variants(row)
         # Set owner to current user (or None when auth disabled)
         owner_id = _get_current_user_id()
         cols   = [c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]
@@ -3738,6 +3936,7 @@ def create_box_set_from_proposal():
             row["owner_id"] = owner_id
             if not row.get("poster_file") and row.get("poster"):
                 row["poster_file"] = download_poster(row["poster"]) or ""
+            prepare_local_image_variants(row)
             conn.execute(f"INSERT INTO movies ({colstr}) VALUES ({places})", row)
             movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
             conn.execute(
@@ -4051,6 +4250,7 @@ def upload_movie_poster(movie_id):
 
     old_file = (movie["poster_file"] or "").strip()
     if old_file:
+        _remove_asset_variants(old_file, ("poster",))
         try:
             os.remove(os.path.join(POSTER_DIR, os.path.basename(old_file)))
         except OSError:
@@ -4077,6 +4277,7 @@ def bulk_delete():
         if not row or not _check_movie_owner(row):
             continue
         if row and row["poster_file"]:
+            _remove_asset_variants(row["poster_file"], ("poster",))
             try:
                 os.remove(os.path.join(POSTER_DIR, row["poster_file"]))
             except OSError:
@@ -4195,6 +4396,7 @@ def refresh_single(movie_id):
         new_poster_url = info.get("poster", "")
         if new_poster_url and new_poster_url != movie.get("poster"):
             if movie.get("poster_file"):
+                _remove_asset_variants(movie["poster_file"], ("poster",))
                 try: os.remove(os.path.join(POSTER_DIR, movie["poster_file"]))
                 except OSError: pass
             updates["poster"] = new_poster_url
@@ -4206,6 +4408,7 @@ def refresh_single(movie_id):
             if nf: updates["poster_file"] = nf
 
         if updates:
+            prepare_local_image_variants(updates)
             sc = ", ".join(f"{k} = ?" for k in updates)
             conn.execute(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id])
 
@@ -4386,6 +4589,7 @@ def sync_single_all_backends(movie_id):
         new_poster_url = info.get("poster", "")
         if new_poster_url and new_poster_url != movie.get("poster"):
             if movie.get("poster_file"):
+                _remove_asset_variants(movie["poster_file"], ("poster",))
                 try:
                     os.remove(os.path.join(POSTER_DIR, movie["poster_file"]))
                 except OSError:
@@ -4400,6 +4604,7 @@ def sync_single_all_backends(movie_id):
                 updates["poster_file"] = nf
 
         if updates:
+            prepare_local_image_variants(updates)
             sc = ", ".join(f"{k} = ?" for k in updates)
             conn.execute(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id])
 
@@ -4534,6 +4739,7 @@ def sync_single_source(movie_id):
         new_poster_url = info.get("poster", "")
         if new_poster_url and new_poster_url != movie.get("poster"):
             if movie.get("poster_file"):
+                _remove_asset_variants(movie["poster_file"], ("poster",))
                 try:
                     os.remove(os.path.join(POSTER_DIR, movie["poster_file"]))
                 except OSError:
@@ -4544,6 +4750,7 @@ def sync_single_source(movie_id):
                 updates["poster_file"] = nf or ""
 
         if updates:
+            prepare_local_image_variants(updates)
             sc = ", ".join(f"{k} = ?" for k in updates)
             conn.execute(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id])
         conn.commit()
@@ -4707,6 +4914,7 @@ def bulk_refresh():
             new_poster_url = info.get("poster", "")
             if new_poster_url and new_poster_url != movie.get("poster"):
                 if movie.get("poster_file"):
+                    _remove_asset_variants(movie["poster_file"], ("poster",))
                     try:
                         os.remove(os.path.join(POSTER_DIR, movie["poster_file"]))
                     except OSError:
@@ -4728,6 +4936,7 @@ def bulk_refresh():
                     updates["poster_file"] = new_file
 
             if updates:
+                prepare_local_image_variants(updates)
                 set_clause = ", ".join(f"{k} = ?" for k in updates)
                 conn.execute(
                     f"UPDATE movies SET {set_clause} WHERE id = ?",
@@ -4827,6 +5036,7 @@ def delete_movie(movie_id):
         return jsonify({"error": "Not your movie"}), 403
     title = row["title"]
     if row["poster_file"]:
+        _remove_asset_variants(row["poster_file"], ("poster",))
         try:
             os.remove(os.path.join(POSTER_DIR, row["poster_file"]))
         except OSError:
@@ -5467,6 +5677,7 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id:
         updates = {k: v for k, v in fields.items()
                    if k not in ("barcode", "added_at") and v}
         if updates:
+            prepare_local_image_variants(updates)
             set_clause = ", ".join(f"{k} = ?" for k in updates)
             conn.execute(
                 f"UPDATE movies SET {set_clause} WHERE barcode = ?",
@@ -6061,7 +6272,7 @@ def auth_required(f):
     return decorated
 
 # Public routes that never need auth
-PUBLIC_PREFIXES = ["/api/auth/", "/api/health", "/api/posters/", "/api/profiles/", "/api/avatars/", "/api/debug/"]
+PUBLIC_PREFIXES = ["/api/auth/", "/api/health", "/api/images/", "/api/posters/", "/api/profiles/", "/api/avatars/", "/api/debug/"]
 
 @app.before_request
 def check_auth():
@@ -7538,14 +7749,18 @@ def _asset_manifest_entry(kind, entity, entity_id, value, updated_at="", revisio
     if kind in ("movie_poster", "container_poster", "person_profile"):
         base = PROFILE_DIR if kind == "person_profile" else POSTER_DIR
         file_path = os.path.join(base, os.path.basename(value))
-        route = "profiles" if kind == "person_profile" else "posters"
+        route = "images/profiles" if kind == "person_profile" else "images"
         url = f"/api/{route}/{os.path.basename(value)}"
-    elif isinstance(value, str) and value.startswith("/api/posters/"):
+    elif isinstance(value, str) and (value.startswith("/api/posters/") or value.startswith("/api/images/")):
         file_path = os.path.join(POSTER_DIR, os.path.basename(value))
     checksum = _asset_checksum(file_path) if file_path else ""
     etag = checksum or hashlib.sha256(str(value).encode()).hexdigest()
-    return {
-        "kind": kind,
+    public_kind = "profile" if kind == "person_profile" else ("backdrop" if "backdrop" in kind else "poster")
+    variant_kind = "profile" if public_kind == "profile" else public_kind
+    entry = {
+        "kind": public_kind,
+        "legacy_kind": kind,
+        "legacyKind": kind,
         "entity": entity,
         "entity_id": entity_id,
         "entityId": entity_id,
@@ -7558,6 +7773,9 @@ def _asset_manifest_entry(kind, entity, entity_id, value, updated_at="", revisio
         "updatedAt": updated_at or "",
         "revision": int(revision or 0),
     }
+    if file_path:
+        entry.update(_asset_variant_meta(os.path.basename(value), variant_kind))
+    return entry
 
 
 def _sync_asset_manifest(conn, movie_ids=None):
@@ -7602,6 +7820,10 @@ def _sync_dataset(conn, since_revision=None):
     movie_ids = _visible_movie_ids(conn)
     movie_placeholders = ",".join("?" * len(movie_ids)) if movie_ids else ""
     rev_clause = " AND sync_revision > ?" if since_revision is not None else ""
+    eg_rev_clause = " AND eg.sync_revision > ?" if since_revision is not None else ""
+    c_rev_clause = " AND c.sync_revision > ?" if since_revision is not None else ""
+    p_rev_clause = " AND p.sync_revision > ?" if since_revision is not None else ""
+    g_rev_clause = " AND g.sync_revision > ?" if since_revision is not None else ""
     rev_params = [since_revision] if since_revision is not None else []
 
     movies = _visible_movies(conn)
@@ -7614,7 +7836,7 @@ def _sync_dataset(conn, since_revision=None):
             FROM edition_groups eg
             LEFT JOIN vault_movies vm ON vm.vault_id=eg.id
             LEFT JOIN box_set_movies bsm ON bsm.box_set_id=eg.id
-            WHERE (vm.movie_id IN ({movie_placeholders}) OR bsm.movie_id IN ({movie_placeholders}) OR eg.primary_movie_id IN ({movie_placeholders})){rev_clause}
+            WHERE (vm.movie_id IN ({movie_placeholders}) OR bsm.movie_id IN ({movie_placeholders}) OR eg.primary_movie_id IN ({movie_placeholders})){eg_rev_clause}
             ORDER BY eg.id
         """, movie_ids + movie_ids + movie_ids + rev_params).fetchall())
         collections = _dicts(conn.execute(f"""
@@ -7625,14 +7847,14 @@ def _sync_dataset(conn, since_revision=None):
                   (ci.item_type='movie' AND ci.item_id IN ({movie_placeholders}))
                OR (ci.item_type='vault' AND ci.item_id IN (SELECT vault_id FROM vault_movies WHERE movie_id IN ({movie_placeholders})))
                OR (ci.item_type='box_set' AND ci.item_id IN (SELECT box_set_id FROM box_set_movies WHERE movie_id IN ({movie_placeholders})))
-            ){rev_clause}
+            ){c_rev_clause}
             ORDER BY c.id
         """, movie_ids + movie_ids + movie_ids + rev_params).fetchall())
         people = _dicts(conn.execute(f"""
             SELECT DISTINCT p.*
             FROM people p
             JOIN movie_people mp ON mp.person_id=p.id
-            WHERE mp.movie_id IN ({movie_placeholders}){rev_clause}
+            WHERE mp.movie_id IN ({movie_placeholders}){p_rev_clause}
             ORDER BY p.id
         """, movie_ids + rev_params).fetchall())
         movie_people = _dicts(conn.execute(f"SELECT * FROM movie_people WHERE movie_id IN ({movie_placeholders}){rev_clause} ORDER BY id", movie_ids + rev_params).fetchall())
@@ -7648,7 +7870,7 @@ def _sync_dataset(conn, since_revision=None):
         FROM groups g
         LEFT JOIN user_groups ug ON ug.group_id=g.id
         LEFT JOIN movie_groups mg ON mg.group_id=g.id
-        WHERE (?='__global__' OR ug.user_id=? OR mg.movie_id IN ({movie_placeholders or 'NULL'})){rev_clause}
+        WHERE (?='__global__' OR ug.user_id=? OR mg.movie_id IN ({movie_placeholders or 'NULL'})){g_rev_clause}
         ORDER BY g.id
     """, [uid, uid] + movie_ids + rev_params).fetchall())
     watchlist = _dicts(conn.execute(
@@ -7808,6 +8030,7 @@ def _apply_sync_operation(conn, op):
         row = {k: payload.get(k, "") for k, _ in SCHEMA_COLUMNS}
         row["barcode"] = row.get("barcode") or f"MOBILE-{op.get('client_id','client')}-{int(datetime.utcnow().timestamp() * 1000)}"
         row["added_at"] = row.get("added_at") or now
+        prepare_local_image_variants(row)
         cols = [c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]
         row["owner_id"] = uid
         conn.execute(
@@ -7824,6 +8047,7 @@ def _apply_sync_operation(conn, op):
         allowed = {k: payload[k] for k in ([c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]) if k in payload}
         if not allowed:
             return {"status": "applied", "entity": "movie", "entity_id": entity_id}
+        prepare_local_image_variants(allowed)
         conn.execute(
             f"UPDATE movies SET {', '.join(f'{k}=?' for k in allowed)} WHERE id=?",
             list(allowed.values()) + [entity_id],
@@ -7884,6 +8108,7 @@ def _apply_sync_operation(conn, op):
         if typ == "edition_group.convert_type":
             _convert_edition_group_type(conn, int(entity_id), "boxset" if payload.get("group_type") == "boxset" else "vault")
         fields = {k: payload[k] for k in ("title", "tmdb_id", "imdb_id", "year", "primary_movie_id", "badge_label", "parent_group_id", "collection_id", "backdrop", "description", "poster_file", "group_type") if k in payload}
+        prepare_local_image_variants(fields)
         if fields:
             conn.execute(f"UPDATE edition_groups SET {', '.join(f'{k}=?' for k in fields)} WHERE id=?", list(fields.values()) + [entity_id])
         return {"status": "applied", "entity": "edition_group", "entity_id": entity_id}
@@ -7893,6 +8118,7 @@ def _apply_sync_operation(conn, op):
         if conflict:
             return conflict
         fields = {k: payload[k] for k in ("title", "badge_label", "backdrop", "description", "poster_file") if k in payload}
+        prepare_local_image_variants(fields)
         if fields:
             conn.execute(f"UPDATE collections SET {', '.join(f'{k}=?' for k in fields)} WHERE id=?", list(fields.values()) + [entity_id])
         return {"status": "applied", "entity": "collection", "entity_id": entity_id}
@@ -7921,6 +8147,10 @@ def _apply_sync_operation(conn, op):
         value = payload.get(column) or payload.get("url") or payload.get("file")
         if not value:
             return {"status": "failed", "error": "asset value required"}
+        if column == "poster_file":
+            ensure_asset_variant(value, "poster")
+        else:
+            value = localize_backdrop(value)
         conn.execute(f"UPDATE {table} SET {column}=? WHERE id=?", (value, entity_id))
         return {"status": "applied", "entity": entity, "entity_id": entity_id}
 
@@ -9451,6 +9681,7 @@ def _container_image_replace(conn, table, row_id, column, new_filename):
         return False
     old = (row[column] or "").strip() if row[column] else ""
     if old and not old.startswith(("http://", "https://")):
+        _remove_asset_variants(old, ("backdrop",) if column == "backdrop" else ("poster",))
         try:
             os.remove(os.path.join(POSTER_DIR, os.path.basename(old)))
         except OSError:
@@ -9507,7 +9738,7 @@ def upload_edition_group_backdrop(group_id):
     if err:
         conn.close()
         return jsonify({"error": err}), 400
-    url = f"/api/posters/{new_file}"
+    url = f"/api/images/{new_file}"
     _container_image_replace(conn, "edition_groups", group_id, "backdrop", url)
     conn.commit()
     conn.close()
@@ -9562,7 +9793,7 @@ def upload_collection_backdrop(col_id):
     if err:
         conn.close()
         return jsonify({"error": err}), 400
-    url = f"/api/posters/{new_file}"
+    url = f"/api/images/{new_file}"
     _container_image_replace(conn, "collections", col_id, "backdrop", url)
     conn.commit()
     conn.close()
