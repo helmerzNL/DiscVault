@@ -101,12 +101,18 @@ When the movie exists in a connected digital library:
   example `plex` or `jellyfin`
 - `digital_web_url` and `digitalWebUrl` should contain the browser/web URL for
   opening the item in Plex or Jellyfin
-- `digital_app_url` and `digitalAppUrl` should contain a native app URL when
-  available; currently this is populated for Plex deep links
+- `digital_app_url` and `digitalAppUrl` should contain the preferred open URL
+  for native clients; for Plex this currently matches the hosted
+  `https://app.plex.tv/desktop/...` URL because the older `plex://` custom
+  scheme is not reliable across clients
+- `digital_native_url` and `digitalNativeUrl` may contain a platform-specific
+  native URL. For Plex this is currently a best-effort `plex://...` URL. Native
+  apps should treat it as optional and always fall back to `digitalWebUrl`.
 - `web_url` / `webUrl` and `app_url` / `appUrl` are aliases for the same link
   targets
 - `digital` may contain the same link data as a nested object with `webUrl`,
-  `appUrl`, `sourceType`, `sourceName`, `externalId` and `digitalId`
+  `appUrl`, `nativeUrl`, `sourceType`, `sourceName`, `externalId` and
+  `digitalId`
 
 When no local poster is available:
 
@@ -142,8 +148,10 @@ Digital matching order:
 2. `imdb_id`
 3. normalized `title + year`
 
-Plex links are built from `digital_library_sources.base_url`,
-`digital_library_sources.machine_id` and `digital_library_items.external_id`.
+Plex links are built with the hosted Plex app URL:
+`https://app.plex.tv/desktop/#!/server/<machine_id>/details?key=<metadata_key>`.
+The backend uses `digital_library_sources.machine_id` and
+`digital_library_items.external_id` to build this URL.
 Jellyfin links are built from `digital_library_sources.base_url` and
 `digital_library_items.external_id`.
 
@@ -172,24 +180,28 @@ Example:
   "inDigital": true,
   "digital_source": "plex",
   "digitalSource": "plex",
-  "digital_web_url": "https://plex.example/web/index.html#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
-  "digitalWebUrl": "https://plex.example/web/index.html#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
-  "digital_app_url": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123",
-  "digitalAppUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digital_web_url": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digitalWebUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digital_app_url": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digitalAppUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digital_native_url": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123",
+  "digitalNativeUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123",
   "digital": {
     "digitalId": 3,
     "sourceType": "plex",
     "externalId": "123",
-    "webUrl": "https://plex.example/web/index.html#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
-    "appUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123"
+    "webUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+    "appUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+    "nativeUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123"
   },
   "movie": {
     "tmdbId": 987654,
     "movieId": 42,
     "collectionId": 7,
     "posterUrl": "https://discvault.example/api/images/poster.jpg",
-    "digitalWebUrl": "https://plex.example/web/index.html#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
-    "digitalAppUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123"
+    "digitalWebUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+    "digitalAppUrl": "https://app.plex.tv/desktop/#!/server/machine/details?key=%2Flibrary%2Fmetadata%2F123",
+    "digitalNativeUrl": "plex://machine/details?key=%2Flibrary%2Fmetadata%2F123"
   }
 }
 ```

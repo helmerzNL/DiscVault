@@ -124,8 +124,8 @@ def _get_fernet() -> Fernet:
 
 def _make_digital_urls(item) -> dict:
     """Return {'web_url': str, 'app_url': str} for a digital library item.
-    web_url  — browser fallback (Plex local web / Jellyfin web)
-    app_url  — native-app URI scheme (plex:// for Plex; empty for Jellyfin)
+    web_url  — browser fallback (Plex hosted web / Jellyfin web)
+    app_url  — preferred app/open URL when available
     """
     source_type = item.get("source_type", "")
     base_url    = (item.get("base_url") or "").rstrip("/")
@@ -136,22 +136,23 @@ def _make_digital_urls(item) -> dict:
         if machine_id and ext_id:
             key_path = f"/library/metadata/{ext_id}"
             key_enc  = key_path.replace("/", "%2F")
-            web_url  = f"{base_url}/web/index.html#!/server/{machine_id}/details?key={key_enc}" if base_url else ""
-            # plex:// URI: machineId as hostname so iOS routes correctly to the server
-            app_url  = f"plex://{machine_id}/details?key={key_enc}"
+            web_url = f"https://app.plex.tv/desktop/#!/server/{machine_id}/details?key={key_enc}"
+            app_url = web_url
+            native_url = f"plex://{machine_id}/details?key={key_enc}"
         else:
             web_url = f"{base_url}/web/index.html" if base_url else ""
-            app_url = ""
-        return {"web_url": web_url, "app_url": app_url}
+            app_url = web_url
+            native_url = ""
+        return {"web_url": web_url, "app_url": app_url, "native_url": native_url}
 
     elif source_type == "jellyfin":
         if base_url and ext_id:
             web_url = f"{base_url}/web/index.html#!/details?id={ext_id}"
         else:
             web_url = f"{base_url}/web/index.html" if base_url else ""
-        return {"web_url": web_url, "app_url": ""}
+        return {"web_url": web_url, "app_url": "", "native_url": ""}
 
-    return {"web_url": "", "app_url": ""}
+    return {"web_url": "", "app_url": "", "native_url": ""}
 
 
 def _digital_match_payload(item, include_links=False):
@@ -180,6 +181,8 @@ def _digital_match_payload(item, include_links=False):
             "webUrl": urls.get("web_url", ""),
             "app_url": urls.get("app_url", ""),
             "appUrl": urls.get("app_url", ""),
+            "native_url": urls.get("native_url", ""),
+            "nativeUrl": urls.get("native_url", ""),
         })
     return payload
 
@@ -3897,6 +3900,7 @@ def get_person_filmography(person_id):
             digital_source_name = digital.get("source_name") if digital else None
             digital_web_url = digital.get("web_url") if digital else ""
             digital_app_url = digital.get("app_url") if digital else ""
+            digital_native_url = digital.get("native_url") if digital else ""
             digital_external_id = digital.get("external_id") if digital else None
             poster_path = entry.get("poster_path") or ""
             poster_url = _filmography_poster(entry, col)
@@ -3941,6 +3945,10 @@ def get_person_filmography(person_id):
                 "digitalWebUrl": digital_web_url,
                 "digital_app_url": digital_app_url,
                 "digitalAppUrl": digital_app_url,
+                "digital_native_url": digital_native_url,
+                "digitalNativeUrl": digital_native_url,
+                "native_url": digital_native_url,
+                "nativeUrl": digital_native_url,
                 "web_url": digital_web_url,
                 "webUrl": digital_web_url,
                 "app_url": digital_app_url,
@@ -3954,6 +3962,7 @@ def get_person_filmography(person_id):
                     "externalId": digital_external_id,
                     "webUrl": digital_web_url,
                     "appUrl": digital_app_url,
+                    "nativeUrl": digital_native_url,
                 } if digital else None,
                 "movie": {
                     "tmdb_id": tmdb_mid,
@@ -3977,6 +3986,7 @@ def get_person_filmography(person_id):
                     "digitalSource": digital_source,
                     "digitalWebUrl": digital_web_url,
                     "digitalAppUrl": digital_app_url,
+                    "digitalNativeUrl": digital_native_url,
                 },
             }
 
