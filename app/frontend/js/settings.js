@@ -150,14 +150,21 @@ async function loadSourceSettings() {
     const d = await r.json();
     const elOmdb = document.getElementById('sourceOmdbToggle');
     const elTmdb = document.getElementById('sourceTmdbToggle');
+    const elMovieVaultContribution = document.getElementById('movievaultContributionToggle');
     const el = document.getElementById('sourceBlurayToggle');
     const el2 = document.getElementById('sourceBlurayDiscDeToggle');
     if (elOmdb) { elOmdb.checked = !!d.omdb_enabled; elOmdb.disabled = !d.omdb_key_set; }
     if (elTmdb) { elTmdb.checked = !!d.tmdb_enabled; elTmdb.disabled = !d.tmdb_key_set; }
+    if (elMovieVaultContribution) elMovieVaultContribution.checked = d.movievault_contribution_enabled !== false;
     if (el)  el.checked  = !!d.bluray_scrape_enabled;
     if (el2) el2.checked = !!d.bluraydiscde_scrape_enabled;
+    const orderInput = document.getElementById('metadataSourceOrderInput');
+    if (orderInput) orderInput.value = d.metadata_source_order_value || (Array.isArray(d.metadata_source_order) ? d.metadata_source_order.join(',') : '');
+    const sharingModeSelect = document.getElementById('movievaultSharingModeSelect');
+    if (sharingModeSelect) sharingModeSelect.value = d.movievault_sharing_mode || (d.movievault_contribution_enabled === false ? 'disabled' : 'opt_in');
     _applyApiKeyBadge('omdb', d.omdb_key_set);
     _applyApiKeyBadge('tmdb', d.tmdb_key_set);
+    _applyApiKeyBadge('movievault', d.movievault_url_set);
   } catch(e) {}
 }
 
@@ -180,6 +187,7 @@ async function loadApiKeySettings() {
     const d = await r.json();
     _applyApiKeyBadge('omdb', d.omdb_key_set);
     _applyApiKeyBadge('tmdb', d.tmdb_key_set);
+    _applyApiKeyBadge('movievault', d.movievault_url_set);
     const elOmdb = document.getElementById('sourceOmdbToggle');
     const elTmdb = document.getElementById('sourceTmdbToggle');
     if (elOmdb) elOmdb.disabled = !d.omdb_key_set;
@@ -187,6 +195,11 @@ async function loadApiKeySettings() {
     // Pre-fill inputs with current stored value so user can verify/correct
     _fillKeyInput('omdb', d.omdb_key, d.omdb_key_set);
     _fillKeyInput('tmdb', d.tmdb_key, d.tmdb_key_set);
+    _fillKeyInput('movievault', d.movievault_api_token || d.movievault_key, d.movievault_token_set || d.movievault_key_set);
+    const mvUrl = document.getElementById('movievaultUrlInput');
+    if (mvUrl) mvUrl.value = d.movievault_search_url || d.movievault_base_url || '';
+    const mvContributionUrl = document.getElementById('movievaultContributionUrlInput');
+    if (mvContributionUrl) mvContributionUrl.value = d.movievault_ingest_url || d.movievault_contribution_url || '';
   } catch(e) {}
 }
 
@@ -223,13 +236,21 @@ async function clearApiKey(service) {
 
 async function saveApiKey(service) {
   const input = document.getElementById(`${service}KeyInput`);
-  if (!input) return;
-  const key = input.value.trim();
+  const key = input ? input.value.trim() : '';
   try {
+    const body = { [`${service}_key`]: key };
+    if (service === 'movievault') {
+      body.movievault_api_token = key;
+      delete body.movievault_key;
+      const urlInput = document.getElementById('movievaultUrlInput');
+      body.movievault_search_url = (urlInput?.value || '').trim();
+      const contributionUrlInput = document.getElementById('movievaultContributionUrlInput');
+      body.movievault_ingest_url = (contributionUrlInput?.value || '').trim();
+    }
     const r = await fetch(`${API}/settings/api-keys`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ [`${service}_key`]: key })
+      body: JSON.stringify(body)
     });
     const d = await r.json();
     if (!r.ok) { showStatus('sourceSettingsStatus', d.error || t('js.saveFailed'), 'error'); return; }
@@ -244,13 +265,22 @@ async function saveApiKey(service) {
 async function saveSourceSettings() {
   const elOmdb = document.getElementById('sourceOmdbToggle');
   const elTmdb = document.getElementById('sourceTmdbToggle');
+  const elMovieVaultContribution = document.getElementById('movievaultContributionToggle');
   const el = document.getElementById('sourceBlurayToggle');
   const el2 = document.getElementById('sourceBlurayDiscDeToggle');
+  const orderInput = document.getElementById('metadataSourceOrderInput');
+  const sharingModeSelect = document.getElementById('movievaultSharingModeSelect');
+  const sharingMode = elMovieVaultContribution && !elMovieVaultContribution.checked
+    ? 'disabled'
+    : (sharingModeSelect?.value || 'opt_in');
   const body = {
     omdb_enabled: !!(elOmdb && elOmdb.checked),
     tmdb_enabled: !!(elTmdb && elTmdb.checked),
+    movievault_contribution_enabled: sharingMode !== 'disabled' && (elMovieVaultContribution ? !!elMovieVaultContribution.checked : true),
+    movievault_sharing_mode: sharingMode,
     bluray_scrape_enabled: !!(el && el.checked),
     bluraydiscde_scrape_enabled: !!(el2 && el2.checked),
+    metadata_source_order: (orderInput?.value || '').trim(),
   };
   try {
     const r = await fetch(`${API}/settings/sources`, {
@@ -961,4 +991,3 @@ async function syncDigitalSource(id) {
     if (statusEl) statusEl.textContent = t('js.error', e.message);
   }
 }
-
