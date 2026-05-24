@@ -44,7 +44,7 @@ try:
         RATING_COUNTRIES, RP_ID, RP_NAME, RP_ORIGIN, RP_ORIGINS, TMDB_API_KEY,
         TMDB_ENABLED_DEFAULT, TMDB_LANGUAGES, local_now, local_now_iso,
     )
-    from .db import get_db
+    from .db import connect_db, enable_wal, get_db
     from .logging_utils import add_log
     from .movievault_client import (
         get_movievault_api_token as _movievault_client_api_token,
@@ -68,7 +68,7 @@ except ImportError:  # pragma: no cover - supports running app.py directly
         RATING_COUNTRIES, RP_ID, RP_NAME, RP_ORIGIN, RP_ORIGINS, TMDB_API_KEY,
         TMDB_ENABLED_DEFAULT, TMDB_LANGUAGES, local_now, local_now_iso,
     )
-    from db import get_db
+    from db import connect_db, enable_wal, get_db
     from logging_utils import add_log
     from movievault_client import (
         get_movievault_api_token as _movievault_client_api_token,
@@ -93,7 +93,7 @@ app = _make_flask_app()
 def _set_import_cancel(import_id: str, value: bool):
     if not import_id:
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect_db()
     conn.execute(
         """
         INSERT INTO import_controls (import_id, cancel_requested, updated_at)
@@ -111,7 +111,7 @@ def _set_import_cancel(import_id: str, value: bool):
 def _is_import_cancelled(import_id: str) -> bool:
     if not import_id:
         return False
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect_db()
     row = conn.execute(
         "SELECT cancel_requested FROM import_controls WHERE import_id = ?",
         (import_id,)
@@ -123,7 +123,7 @@ def _is_import_cancelled(import_id: str) -> bool:
 def _clear_import_cancel(import_id: str):
     if not import_id:
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect_db()
     conn.execute("DELETE FROM import_controls WHERE import_id = ?", (import_id,))
     conn.commit()
     conn.close()
@@ -1141,7 +1141,8 @@ def init_db():
     os.makedirs(PROFILE_DIR, exist_ok=True)
     os.makedirs(BACKUP_DIR, exist_ok=True)
     os.makedirs(AVATAR_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect_db()
+    enable_wal(conn)
 
     # Build CREATE TABLE with all columns
     col_defs = ",\n            ".join(
@@ -2464,7 +2465,7 @@ def lookup_by_barcode_upcitemdb(barcode: str):
 
 def _movievault_setting_first(keys, default: str = "") -> str:
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with connect_db() as conn:
             for key in keys:
                 row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
                 if row and row[0] and str(row[0]).strip():
@@ -2796,7 +2797,7 @@ def _movievault_fallback_contribution_template() -> dict:
 
 def _movievault_template_cache() -> tuple[dict | None, str, float]:
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with connect_db() as conn:
             cache_row = conn.execute(
                 "SELECT value FROM settings WHERE key=?", (MOVIEVAULT_TEMPLATE_CACHE_KEY,)
             ).fetchone()
@@ -2820,7 +2821,7 @@ def _movievault_store_template_cache(template: dict):
     version = str(template.get("version") or "")
     now = str(time.time())
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with connect_db() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                 (MOVIEVAULT_TEMPLATE_CACHE_KEY, json.dumps(template, ensure_ascii=False)),
@@ -7880,7 +7881,7 @@ def cancel_import(import_id):
 
 # In-DB challenge store (works across Gunicorn workers)
 def _store_challenge(key: str, challenge: bytes):
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect_db()
     conn.execute("CREATE TABLE IF NOT EXISTS challenges (key TEXT PRIMARY KEY, challenge BLOB, created_at REAL)")
     # Clean up challenges older than 5 minutes
     conn.execute("DELETE FROM challenges WHERE created_at < ?", (time.time() - 300,))
@@ -7890,7 +7891,7 @@ def _store_challenge(key: str, challenge: bytes):
     conn.close()
 
 def _pop_challenge(key: str) -> bytes | None:
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect_db()
     conn.execute("CREATE TABLE IF NOT EXISTS challenges (key TEXT PRIMARY KEY, challenge BLOB, created_at REAL)")
     row = conn.execute("SELECT challenge FROM challenges WHERE key = ?", (key,)).fetchone()
     if row:
@@ -7902,7 +7903,7 @@ def _pop_challenge(key: str) -> bytes | None:
     return None
 
 def _is_auth_enabled() -> bool:
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect_db()
     row = conn.execute("SELECT value FROM settings WHERE key='auth_enabled'").fetchone()
     conn.close()
     return row and row[0] == "true"
@@ -8186,7 +8187,7 @@ def _lock_edition_group_primary(conn, group_id):
 
 
 def _is_source_enabled(key: str, default: bool) -> bool:
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect_db()
     row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
     conn.close()
     if row is None:
@@ -8235,7 +8236,7 @@ METADATA_SOURCE_LABELS = {
 
 def _setting_value(key: str, default: str = "") -> str:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect_db()
         row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
         conn.close()
         if row and row[0] is not None:
@@ -11272,7 +11273,7 @@ def reset_database():
     if confirm != "RESET":
         return jsonify({"error": "Bevestig met {\"confirm\": \"RESET\"}"}), 400
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect_db()
         conn.execute("DELETE FROM movies")
         conn.execute("DELETE FROM movie_people")
         conn.execute("DELETE FROM people")
@@ -12339,7 +12340,7 @@ def _run_plex_sync(source_id: int):
     """Background thread: fetch all movie items from Plex and upsert into digital_library_items."""
     _sync_jobs[source_id] = {"status": "running", "progress": 0, "total": 0, "error": ""}
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect_db()
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM digital_library_sources WHERE id=?", (source_id,)).fetchone()
         if not row:
@@ -12446,7 +12447,7 @@ def _run_jellyfin_sync(source_id: int):
     """Background thread: fetch all movie items from Jellyfin and upsert into digital_library_items."""
     _sync_jobs[source_id] = {"status": "running", "progress": 0, "total": 0, "error": ""}
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect_db()
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM digital_library_sources WHERE id=?", (source_id,)).fetchone()
         if not row:
