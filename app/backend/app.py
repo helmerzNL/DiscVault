@@ -3015,6 +3015,26 @@ def _movievault_first_payload(data):
     return None
 
 
+def _movievault_payload_items(data) -> list:
+    if not data:
+        return []
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict) or data.get("status") == "not_found":
+        return []
+    for key in ("movies", "items", "results"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    for key in ("movie", "item", "result", "data"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if isinstance(value, dict):
+            return [value]
+    return [data]
+
+
 def _movievault_member_list(data):
     if not isinstance(data, dict):
         return []
@@ -3940,7 +3960,7 @@ def _normalize_movievault_movie(data: dict | None):
         "trailer_url": _movievault_text(_movievault_first(movie, "trailerUrl", "trailer_url")),
         "videos": _movievault_text(_movievault_first(movie, "videos")),
         "distributor": _movievault_text(_movievault_first(movie, "distributor", "label", "publisher")),
-        "_movievault_id": _movievault_text(_movievault_first(movie, "id", "movieId", "movie_id")),
+        "_movievault_id": _movievault_text(_movievault_first(movie, "movieVaultId", "movievaultId", "movievault_id", "id", "movieId", "movie_id")),
     }
 
 
@@ -4048,6 +4068,34 @@ def lookup_movievault_movie(title: str = "", year: str = "", barcode: str = ""):
             f"Query: {title}; Year: {year}; TMDb: {result.get('tmdb_id', '')}; IMDb: {result.get('imdb_id', '')}",
         )
     return result
+
+
+def search_movievault_movie_candidates(title: str = "", year: str = "") -> list[dict]:
+    if not _is_movievault_enabled() or not title:
+        return []
+    params = {"q": title}
+    if year:
+        params["year"] = year
+    data = _movievault_get("/api/v1/movies", params=params)
+    candidates = []
+    for item in _movievault_payload_items(data):
+        movie = _normalize_movievault_movie(item)
+        if not movie:
+            continue
+        candidates.append({
+            "provider": "movievault",
+            "provider_label": "MovieVault",
+            "id": movie.get("_movievault_id") or movie.get("tmdb_id") or movie.get("imdb_id") or movie.get("title") or "",
+            "movievault_id": movie.get("_movievault_id") or "",
+            "tmdb_id": movie.get("tmdb_id") or "",
+            "imdb_id": movie.get("imdb_id") or "",
+            "title": movie.get("title") or "",
+            "year": movie.get("year") or "",
+            "overview": (movie.get("plot") or "")[:180],
+            "poster": movie.get("poster_url") or movie.get("poster") or "",
+            "movie": movie,
+        })
+    return candidates[:8]
 
 
 def lookup_movievault_box_set_proposal(title: str = "", year: str = "", barcode: str = ""):
@@ -4266,6 +4314,36 @@ def lookup_movie_tmdb(title, year=""):
     return None
 
 
+def search_movie_omdb_candidates(title: str = "", year: str = "") -> list[dict]:
+    if not OMDB_API_KEY or not _is_omdb_enabled() or not title:
+        return []
+    try:
+        params = f"s={requests.utils.quote(title)}&type=movie&apikey={OMDB_API_KEY}"
+        if year:
+            params += f"&y={requests.utils.quote(str(year))}"
+        r = requests.get(f"http://www.omdbapi.com/?{params}", timeout=4)
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        if data.get("Response") != "True":
+            return []
+        candidates = []
+        for item in (data.get("Search") or [])[:8]:
+            candidates.append({
+                "provider": "omdb",
+                "provider_label": "OMDb",
+                "id": item.get("imdbID", ""),
+                "imdb_id": item.get("imdbID", ""),
+                "title": item.get("Title", ""),
+                "year": _parse_year(item.get("Year", "")),
+                "overview": "",
+                "poster": "" if item.get("Poster") == "N/A" else item.get("Poster", ""),
+            })
+        return candidates
+    except Exception:
+        return []
+
+
 def _tmdb_search_top5(title, year=""):
     """Search TMDb and return up to 5 candidates for disambiguation."""
     if not TMDB_API_KEY or not _is_tmdb_enabled():
@@ -4275,13 +4353,16 @@ def _tmdb_search_top5(title, year=""):
         if year:
             params += f"&year={year}"
         r = requests.get(
-            f"https://api.themoviedb.org/3/search/movie?{params}", timeout=6
+            f"https://api.themoviedb.org/3/search/movie?{params}", timeout=4
         )
         if r.status_code != 200:
             return []
         candidates = []
         for res in r.json().get("results", [])[:5]:
             candidates.append({
+                "provider":     "tmdb",
+                "provider_label": "TMDb",
+                "id":           str(res.get("id", "")),
                 "tmdb_id":      str(res.get("id", "")),
                 "title":        res.get("title", ""),
                 "year":         (res.get("release_date", "") or "")[:4],
@@ -4293,6 +4374,67 @@ def _tmdb_search_top5(title, year=""):
         return candidates
     except Exception:
         return []
+
+
+def _metadata_candidate_key(candidate: dict) -> str:
+    provider = str(candidate.get("provider") or "").lower()
+    tmdb_id = str(candidate.get("tmdb_id") or "").strip()
+    imdb_id = str(candidate.get("imdb_id") or "").strip().lower()
+    title = str(candidate.get("title") or "").strip().lower()
+    year = str(candidate.get("year") or "").strip()
+    if tmdb_id:
+        return f"tmdb:{tmdb_id}"
+    if imdb_id:
+        return f"imdb:{imdb_id}"
+    return f"{provider}:{title}:{year}"
+
+
+def _metadata_candidates_by_order(title: str, year: str = "") -> list[dict]:
+    candidates = []
+    seen = set()
+
+    def add_many(items):
+        for item in items or []:
+            if not isinstance(item, dict) or not item.get("title"):
+                continue
+            key = _metadata_candidate_key(item)
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(item)
+
+    for source in _metadata_source_order():
+        if not _metadata_source_enabled(source):
+            continue
+        if source == "movievault":
+            items = search_movievault_movie_candidates(title, year)
+            if year and len(items) <= 1:
+                items = search_movievault_movie_candidates(title, "")
+            add_many(items)
+        elif source == "tmdb":
+            items = _tmdb_search_top5(title, year)
+            if year and len(items) <= 1:
+                items = _tmdb_search_top5(title, "")
+            add_many(items)
+        elif source == "omdb":
+            items = search_movie_omdb_candidates(title, year)
+            if year and len(items) <= 1:
+                items = search_movie_omdb_candidates(title, "")
+            add_many(items)
+        elif source == "bluray_com":
+            items = search_movie_bluray_candidates(title, year)
+            if year and len(items) <= 1:
+                items = search_movie_bluray_candidates(title, "")
+            add_many(items)
+    return candidates[:12]
+
+
+def _metadata_candidate_provider_summary(candidates: list[dict]) -> str:
+    counts = {}
+    for candidate in candidates or []:
+        label = candidate.get("provider_label") or candidate.get("provider") or "Metadata"
+        counts[label] = counts.get(label, 0) + 1
+    return ", ".join(f"{label}: {count}" for label, count in counts.items()) or "-"
 
 
 def lookup_movie_tmdb_by_id(tmdb_id):
@@ -4815,6 +4957,79 @@ def _bluray_find_first_movie_url(query: str) -> str | None:
     except Exception:
         pass
     return None
+
+
+def search_movie_bluray_candidates(title: str = "", year: str = "") -> list[dict]:
+    if not _is_bluray_scrape_enabled() or not title:
+        return []
+    query = f"{title} {year}".strip()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": "https://www.blu-ray.com/",
+    }
+    urls = []
+
+    def add_url(value):
+        value = (value or "").strip().strip("'\"")
+        if value.startswith("/"):
+            value = "https://www.blu-ray.com" + value
+        if "blu-ray.com/movies/" in value and value not in urls:
+            urls.append(value)
+
+    try:
+        response = requests.post(
+            "https://www.blu-ray.com/search/quicksearch.php",
+            data={"section": "bluraymovies", "userid": "-1", "country": "US", "keyword": query},
+            headers=headers,
+            timeout=4,
+        )
+        if response.status_code == 200:
+            match = re.search(r"var\s+urls\s*=\s*new\s+Array\(([^)]+)\)", response.text)
+            if match:
+                for item in match.group(1).split(","):
+                    add_url(item)
+    except Exception:
+        pass
+
+    if not urls:
+        try:
+            search_url = (
+                "https://www.blu-ray.com/search/?quicksearch=1"
+                "&quicksearch_country=all&section=bluraymovies&quicksearch_keyword="
+                + quote_plus(query)
+            )
+            response = requests.get(search_url, headers=headers, timeout=4)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, "html.parser")
+                for link in soup.select('a[href*="/movies/"]'):
+                    add_url(link.get("href") or "")
+                    if len(urls) >= 8:
+                        break
+        except Exception:
+            pass
+
+    candidates = []
+    for url in urls[:8]:
+        match = re.search(r"/movies/([^/]+)/(\d+)", url)
+        if not match:
+            continue
+        title_from_url = re.sub(r"[-_]+", " ", match.group(1)).strip()
+        title_from_url = _clean_bluray_member_title(title_from_url)
+        if not title_from_url:
+            continue
+        candidates.append({
+            "provider": "bluray_com",
+            "provider_label": "Blu-ray.com",
+            "id": match.group(2),
+            "title": title_from_url,
+            "year": "",
+            "overview": "",
+            "poster": "",
+            "source_url": url,
+        })
+    return candidates
 
 
 def _bluray_parse_movie_page(detail_url: str) -> dict | None:
@@ -6237,7 +6452,7 @@ def _lookup_box_set_proposal_by_order(title: str = "", year: str = "", barcode: 
 
 def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dict | None, str, dict | None, list, str]:
     raw_title = ""
-    tmdb_candidates = []
+    metadata_candidates = []
     try:
         raw_title = lookup_by_barcode_upcitemdb(barcode) or ""
         _trace_add(attempts, "UPCItemDB", "hit" if raw_title else "miss", f"barcode={barcode}", "title hint")
@@ -6270,11 +6485,13 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
         _trace_add(attempts, "UPCItemDB", "partial", "title-only fallback")
 
     if not info:
-        return None, source, None, tmdb_candidates, raw_title
+        return None, source, None, metadata_candidates, raw_title
 
     info = _finalize_metadata_info(info)
     box_set_proposal = (info or {}).get("box_set_proposal")
     _log_box_set_proposal(barcode, box_set_proposal)
+    if lookup_title:
+        metadata_candidates = _metadata_candidates_by_order(lookup_title, "")
 
     source_label = source or "Barcode lookup"
     source_parts = {part.strip() for part in source_label.split("+") if part.strip()}
@@ -6300,7 +6517,7 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
                 contribution_context,
             )
 
-    return info, source_label, box_set_proposal, tmdb_candidates, raw_title
+    return info, source_label, box_set_proposal, metadata_candidates, raw_title
 
 
 @app.route("/api/movies/<int:movie_id>", methods=["PUT"])
@@ -7322,13 +7539,14 @@ def lookup(barcode):
         _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
 
         yield emit(2, "Metadata Sources", "searching", _metadata_source_order_log())
-        movie_info, _source, box_set_proposal, tmdb_candidates, raw_title = _lookup_metadata_for_barcode(barcode, attempts)
+        movie_info, _source, box_set_proposal, metadata_candidates, raw_title = _lookup_metadata_for_barcode(barcode, attempts)
         if movie_info:
             yield emit(2, "Metadata Sources", "hit", _source)
             add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
                     f"Backends: {_trace_summary(attempts)}", "success")
             yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
-                              "tmdb_candidates": tmdb_candidates,
+                              "metadata_candidates": metadata_candidates,
+                              "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
                               "box_set_proposal": box_set_proposal,
                               "raw_title": raw_title or "",
                               "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
@@ -7382,7 +7600,7 @@ def _lookup_sync(barcode):
             add_log("lookup", f"Barcode {barcode} al als vault in collectie", f"Vault: {vault.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
             return jsonify({"status": "vault_exists", "vault": vault, "container": vault, "container_type": "vault", "barcode": barcode})
         _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
-        movie_info, _source, box_set_proposal, _tmdb_candidates, raw_title = _lookup_metadata_for_barcode(barcode, attempts)
+        movie_info, _source, box_set_proposal, metadata_candidates, raw_title = _lookup_metadata_for_barcode(barcode, attempts)
         if movie_info:
             add_log(
                 "lookup",
@@ -7392,6 +7610,8 @@ def _lookup_sync(barcode):
             )
             return jsonify({"status": "found", "movie": movie_info, "barcode": barcode,
                             "box_set_proposal": box_set_proposal,
+                            "metadata_candidates": metadata_candidates,
+                            "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
                             "detected_format": _detect_format_from_upc(raw_title or "")})
         add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
         return jsonify({"status": "not_found", "barcode": barcode, "raw_title": raw_title,
@@ -7409,7 +7629,20 @@ def search_title():
         return jsonify({"error": "No title provided"}), 400
     try:
         attempts = []
-        movie_info, _source = _merge_metadata_by_order(
+        metadata_candidates = _metadata_candidates_by_order(title, year)
+        if len(metadata_candidates) > 1:
+            add_log(
+                "lookup",
+                f"Titel-zoekactie kandidaten gevonden: \"{title}\"",
+                f"Candidates: {len(metadata_candidates)}; Providers: {_metadata_candidate_provider_summary(metadata_candidates)}; Metadata source order: {_metadata_source_order_log()}",
+                "success",
+            )
+            return jsonify({
+                "status": "candidates",
+                "metadata_candidates": metadata_candidates,
+                "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
+            })
+        movie_info, source = _merge_metadata_by_order(
             title,
             year,
             attempts=attempts,
@@ -7417,8 +7650,16 @@ def search_title():
         )
         if movie_info:
             movie_info = _finalize_metadata_info(movie_info)
+            if not metadata_candidates:
+                metadata_candidates = _metadata_candidates_by_order(title, year)
             add_log("lookup", f"Titel-zoekactie gevonden: \"{movie_info.get('title') or title}\"", f"Backends: {_trace_summary(attempts)}", "success")
-            return jsonify({"status": "found", "movie": movie_info})
+            return jsonify({
+                "status": "found",
+                "movie": movie_info,
+                "source": source,
+                "metadata_candidates": metadata_candidates,
+                "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
+            })
         add_log("lookup", f"Titel-zoekactie geen resultaat: \"{title}\"", f"Backends: {_trace_summary(attempts)}", "warn")
         return jsonify({"status": "not_found"})
     except Exception as e:

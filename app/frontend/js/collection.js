@@ -3317,6 +3317,7 @@ async function uploadCustomCover() {
 let currentAddBoxSetProposal = null;
 let addTitleLookupResolvedTitle = '';
 let addBarcodeLookupResolvedBarcode = '';
+let addMetadataCandidateMap = {};
 
 function _escapeAddHtml(value) {
   return String(value || '').replace(/[&<>"']/g, ch => ({
@@ -3566,6 +3567,12 @@ async function autoFillFromTitle() {
       showStatus('addStatus', d.error || t('js.backendError', r.status), 'error');
       return;
     }
+    if (d.status === 'candidates' && Array.isArray(d.metadata_candidates) && d.metadata_candidates.length) {
+      _showAddCandidates(d.metadata_candidates);
+      addTitleLookupResolvedTitle = '';
+      showStatus('addStatus', '', '');
+      return;
+    }
     if (d.status !== 'found' || !d.movie) {
       showStatus('addStatus', t('js.noInfoFound'), 'error');
       return;
@@ -3573,6 +3580,11 @@ async function autoFillFromTitle() {
     _fillAddFields(d.movie);
     const proposal = await lookupAddBoxSetProposal(d.movie);
     if (proposal) displayAddBoxSetProposal(proposal);
+    else if (Array.isArray(d.metadata_candidates) && d.metadata_candidates.length > 1) {
+      _showAddCandidates(d.metadata_candidates);
+    } else if (Array.isArray(d.tmdb_candidates) && d.tmdb_candidates.length > 1) {
+      _showAddCandidates(d.tmdb_candidates);
+    }
     addTitleLookupResolvedTitle = document.getElementById('addTitle').value.trim();
     showStatus('addStatus', t('js.infoFound', d.movie.title || title), 'success');
   } catch(e) {
@@ -3580,7 +3592,7 @@ async function autoFillFromTitle() {
   }
 }
 
-function _showAddCandidates(candidates) {
+function _showAddCandidatesLegacy(candidates) {
   const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   hideAddBoxSetProposal();
   document.getElementById('addCandidateList').innerHTML = candidates.map(c => `
@@ -3598,7 +3610,7 @@ function _showAddCandidates(candidates) {
   document.getElementById('addTmdbCandidates').style.display = 'block';
 }
 
-async function _selectAddCandidate(tmdbId) {
+async function _selectAddCandidateTmdbLegacy(tmdbId) {
   document.getElementById('addTmdbCandidates').style.display = 'none';
   const existingBarcode = document.getElementById('addBarcode').value.trim();
   hideAddBoxSetProposal();
@@ -3623,6 +3635,76 @@ async function _selectAddCandidate(tmdbId) {
       return;
     }
     showStatus('addStatus', t('js.infoFound', d.movie.title), 'success');
+  } catch(e) {
+    showStatus('addStatus', t('js.error', e.message), 'error');
+  }
+}
+
+function _showAddCandidates(candidates) {
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  addMetadataCandidateMap = {};
+  hideAddBoxSetProposal();
+  document.getElementById('addCandidateList').innerHTML = (candidates || []).map((c, idx) => {
+    const key = `candidate-${idx}`;
+    const provider = c.provider_label || c.provider || 'Metadata';
+    addMetadataCandidateMap[key] = c;
+    return `
+    <div class="tmdb-candidate-card" onclick="_selectAddCandidate('${key}')">
+      <div class="tmdb-candidate-poster">
+        ${c.poster ? `<img src="${esc(c.poster)}" loading="lazy" alt="">` : '<div class="no-poster">Movie</div>'}
+        <span class="metadata-provider-badge">${esc(provider)}</span>
+      </div>
+      <div class="tmdb-candidate-info">
+        <strong>${esc(c.title)}${c.year ? ` <span class="tag">${esc(c.year)}</span>` : ''}</strong>
+        ${c.vote_average ? `<div class="tmdb-candidate-vote">Rating ${Number(c.vote_average).toFixed(1)}</div>` : ''}
+        <p>${esc(c.overview)}</p>
+      </div>
+    </div>
+  `;
+  }).join('');
+  document.getElementById('addTmdbCandidates').style.display = 'block';
+}
+
+async function _selectAddCandidate(candidateKey) {
+  document.getElementById('addTmdbCandidates').style.display = 'none';
+  const existingBarcode = document.getElementById('addBarcode').value.trim();
+  hideAddBoxSetProposal();
+  showStatus('addStatus', t('js.lookingUp'), 'info');
+  try {
+    const candidate = addMetadataCandidateMap[candidateKey] || {};
+    let movie = candidate.movie || null;
+    if (!movie && candidate.tmdb_id) {
+      const r = await fetch(`${API}/tmdb_movie/${candidate.tmdb_id}`);
+      const d = await r.json();
+      if (!r.ok || !d.movie) {
+        showStatus('addStatus', d.error || t('js.backendError', r.status), 'error');
+        return;
+      }
+      movie = d.movie;
+    }
+    if (!movie) {
+      movie = {
+        title: candidate.title || '',
+        year: candidate.year || '',
+        plot: candidate.overview || '',
+        poster: candidate.poster || '',
+        tmdb_id: candidate.tmdb_id || '',
+        imdb_id: candidate.imdb_id || ''
+      };
+    }
+    _fillAddFields(movie);
+    if (existingBarcode) {
+      addBarcodeLookupResolvedBarcode = existingBarcode;
+      addTitleLookupResolvedTitle = '';
+    } else {
+      addTitleLookupResolvedTitle = document.getElementById('addTitle').value.trim();
+    }
+    const proposal = await lookupAddBoxSetProposal(movie, existingBarcode);
+    if (proposal && displayAddBoxSetProposal(proposal, existingBarcode)) {
+      showStatus('addStatus', t('js.infoFound', movie.title), 'success');
+      return;
+    }
+    showStatus('addStatus', t('js.infoFound', movie.title), 'success');
   } catch(e) {
     showStatus('addStatus', t('js.error', e.message), 'error');
   }
@@ -3725,7 +3807,10 @@ async function _lookupBarcodeForAdd(barcode) {
       showStatus('addStatus', t('js.infoFound', movie.title), 'success');
       return;
     }
-    if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
+    if (finalData.metadata_candidates && finalData.metadata_candidates.length > 1) {
+      _showAddCandidates(finalData.metadata_candidates);
+      showStatus('addStatus', '', '');
+    } else if (finalData.tmdb_candidates && finalData.tmdb_candidates.length > 1) {
       _showAddCandidates(finalData.tmdb_candidates);
       showStatus('addStatus', '', '');
     } else {
