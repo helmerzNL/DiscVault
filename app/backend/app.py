@@ -2698,7 +2698,9 @@ def _movievault_id_label(value: str | None, http_status: str | int | None = None
 MOVIEVAULT_TEMPLATE_CACHE_KEY = "movievault_contribution_template_cache"
 MOVIEVAULT_TEMPLATE_FETCHED_AT_KEY = "movievault_contribution_template_fetched_at"
 MOVIEVAULT_TEMPLATE_VERSION_KEY = "movievault_contribution_template_version"
+MOVIEVAULT_TEMPLATE_VERSION_CHECKED_AT_KEY = "movievault_contribution_template_version_checked_at"
 MOVIEVAULT_TEMPLATE_MAX_AGE_SECONDS = 24 * 60 * 60
+MOVIEVAULT_TEMPLATE_VERSION_CHECK_INTERVAL_SECONDS = 15 * 60
 
 
 def _movievault_fallback_contribution_template() -> dict:
@@ -2834,16 +2836,45 @@ def _movievault_store_template_cache(template: dict):
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                 (MOVIEVAULT_TEMPLATE_FETCHED_AT_KEY, now),
             )
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (MOVIEVAULT_TEMPLATE_VERSION_CHECKED_AT_KEY, now),
+            )
             conn.commit()
     except Exception as ex:
         _movievault_log("warn", "MovieVault template cache save failed", str(ex))
 
 
-def _movievault_fetch_contribution_template() -> dict | None:
+def _movievault_template_version_checked_at() -> float:
+    try:
+        with connect_db() as conn:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key=?",
+                (MOVIEVAULT_TEMPLATE_VERSION_CHECKED_AT_KEY,),
+            ).fetchone()
+        return float((row[0] if row else "") or 0)
+    except Exception:
+        return 0.0
+
+
+def _movievault_store_template_version_checked_at():
+    try:
+        with connect_db() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (MOVIEVAULT_TEMPLATE_VERSION_CHECKED_AT_KEY, str(time.time())),
+            )
+            conn.commit()
+    except Exception as ex:
+        _movievault_log("warn", "MovieVault template version check save failed", str(ex))
+
+
+def _movievault_fetch_contribution_template(previous_version: str = "") -> dict | None:
     base = _movievault_ingest_url()
     if not base:
         return None
     url = f"{base}/api/v1/contribution-template"
+    _movievault_store_template_version_checked_at()
     r = movievault_request("GET", url, include_auth=False, timeout=8)
     if r.status_code == 404:
         _movievault_log("info", "MovieVault contribution template not found", f"GET {url}; HTTP 404")
@@ -2856,7 +2887,15 @@ def _movievault_fetch_contribution_template() -> dict | None:
         _movievault_log("warn", "MovieVault contribution template invalid", f"GET {url}; response={str(data)[:160]}")
         return None
     _movievault_store_template_cache(data)
-    _movievault_log("info", "MovieVault contribution template updated", f"Version: {data.get('version') or '-'}")
+    version = str(data.get("version") or "")
+    if previous_version and version == previous_version:
+        _movievault_log("info", "MovieVault contribution template checked", f"Version unchanged: {version or '-'}")
+    else:
+        _movievault_log(
+            "info",
+            "MovieVault contribution template updated",
+            f"Version: {version or '-'}; previous: {previous_version or '-'}",
+        )
     return data
 
 
@@ -2866,11 +2905,23 @@ def _movievault_contribution_template(entity_type: str, force: bool = False) -> 
         templates = cached.get("templates") if isinstance(cached, dict) else {}
         template = templates.get(entity_type) if isinstance(templates, dict) else None
         if isinstance(template, dict):
+            checked_at = _movievault_template_version_checked_at()
+            if time.time() - checked_at >= MOVIEVAULT_TEMPLATE_VERSION_CHECK_INTERVAL_SECONDS:
+                try:
+                    live = _movievault_fetch_contribution_template(
+                        str(cached.get("version") or cached_version or "")
+                    )
+                    live_template = (live.get("templates") or {}).get(entity_type) if live else None
+                    if isinstance(live_template, dict):
+                        return live_template, str(live.get("version") or ""), "live-check"
+                except Exception as ex:
+                    _movievault_log("warn", "MovieVault contribution template version check error", str(ex))
             return template, str(cached.get("version") or cached_version or ""), "cache"
 
     live = None
     try:
-        live = _movievault_fetch_contribution_template()
+        previous_version = str(cached.get("version") or cached_version or "") if cached else ""
+        live = _movievault_fetch_contribution_template(previous_version)
     except Exception as ex:
         _movievault_log("warn", "MovieVault contribution template fetch error", str(ex))
     if live:

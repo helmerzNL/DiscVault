@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 import uuid
 
@@ -109,6 +110,89 @@ class SyncIntegrationTests(unittest.TestCase):
             ),
             backdrop_urls,
         )
+
+    def test_movievault_template_version_check_refreshes_fresh_cache_when_due(self):
+        original_request = self.backend.movievault_request
+        now = time.time()
+        template_v1 = {
+            "version": "v1",
+            "templates": {
+                "movie": {
+                    "entityType": "movie",
+                    "required": ["title"],
+                    "fields": {"title": {"type": "string"}},
+                }
+            },
+        }
+        template_v2 = {
+            "version": "v2",
+            "templates": {
+                "movie": {
+                    "entityType": "movie",
+                    "required": ["title"],
+                    "fields": {
+                        "title": {"type": "string"},
+                        "posterUrl": {"type": "string"},
+                    },
+                }
+            },
+        }
+
+        class FakeResponse:
+            def __init__(self, data):
+                self.status_code = 200
+                self.text = json.dumps(data)
+                self._data = data
+
+            def json(self):
+                return self._data
+
+        calls = []
+
+        def fake_request(method, url, include_auth=False, timeout=None, **kwargs):
+            calls.append((method, url, include_auth, timeout))
+            return FakeResponse(template_v2)
+
+        try:
+            with self.backend.connect_db() as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    (self.backend.MOVIEVAULT_TEMPLATE_CACHE_KEY, json.dumps(template_v1)),
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    (self.backend.MOVIEVAULT_TEMPLATE_VERSION_KEY, "v1"),
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    (self.backend.MOVIEVAULT_TEMPLATE_FETCHED_AT_KEY, str(now)),
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    (
+                        self.backend.MOVIEVAULT_TEMPLATE_VERSION_CHECKED_AT_KEY,
+                        str(now - self.backend.MOVIEVAULT_TEMPLATE_VERSION_CHECK_INTERVAL_SECONDS - 1),
+                    ),
+                )
+                conn.commit()
+
+            self.backend.movievault_request = fake_request
+            template, version, source = self.backend._movievault_contribution_template("movie")
+
+            self.assertEqual(version, "v2")
+            self.assertEqual(source, "live-check")
+            self.assertIn("posterUrl", template["fields"])
+            self.assertEqual(len(calls), 1)
+
+            calls.clear()
+            template, version, source = self.backend._movievault_contribution_template("movie")
+
+            self.assertEqual(version, "v2")
+            self.assertEqual(source, "cache")
+            self.assertIn("posterUrl", template["fields"])
+            self.assertEqual(calls, [])
+        finally:
+            self.backend.movievault_request = original_request
 
     def _create_box_set(self, title=None):
         title = title or f"Box Set {uuid.uuid4().hex[:8]}"
