@@ -6318,19 +6318,49 @@ def add_movie():
                 "success",
             )
         conn.commit()
+        movie_dict = dict(movie)
+        conn.close()
+        conn = None
 
-        # Sync cast/crew if tmdb_id is available
-        tmdb_id = data.get("tmdb_id") or (movie["tmdb_id"] if movie else "")
-        if tmdb_id and TMDB_API_KEY:
+        # Keep the add route responsive: never hold the write connection while
+        # fetching TMDb data or profile images.
+        cast_crew = data.get("_cast_crew") if isinstance(data.get("_cast_crew"), list) else None
+        tmdb_id = data.get("tmdb_id") or movie_dict.get("tmdb_id", "")
+        if not cast_crew and tmdb_id and TMDB_API_KEY:
             try:
                 cast_crew = _fetch_tmdb_cast_crew(tmdb_id)
-                if cast_crew:
-                    _sync_movie_cast_crew(conn, movie_id, cast_crew, download_photos=True)
-                    conn.commit()
             except Exception:
-                pass
+                cast_crew = None
+        if cast_crew:
+            sync_conn = None
+            try:
+                sync_conn = get_db()
+                if _check_movie_owner(sync_conn.execute("SELECT * FROM movies WHERE id=?", (movie_id,)).fetchone()):
+                    _sync_movie_cast_crew(sync_conn, movie_id, cast_crew, download_photos=False)
+                    sync_conn.commit()
+            except Exception:
+                try:
+                    if sync_conn:
+                        sync_conn.rollback()
+                except Exception:
+                    pass
+            finally:
+                if sync_conn:
+                    sync_conn.close()
 
-        conn.close()
+        refresh_conn = None
+        try:
+            refresh_conn = get_db()
+            refreshed = refresh_conn.execute(
+                "SELECT * FROM movies WHERE id = ?", (movie_id,)
+            ).fetchone()
+            if refreshed:
+                movie_dict = dict(refreshed)
+        except Exception:
+            pass
+        finally:
+            if refresh_conn:
+                refresh_conn.close()
         add_log(
             "add",
             f"Film toegevoegd: {data['title']}",
@@ -6340,32 +6370,48 @@ def add_movie():
 
         # Check for duplicate TMDb ID to suggest edition grouping
         hint = None
-        tmdb_id_new = dict(movie).get("tmdb_id", "")
+        tmdb_id_new = movie_dict.get("tmdb_id", "")
         if tmdb_id_new:
-            dup_conn = get_db()
-            dups = dup_conn.execute(
-                "SELECT id, title, edition_type, format, edition_group_id FROM movies"
-                " WHERE tmdb_id = ? AND id != ?",
-                (tmdb_id_new, movie["id"])
-            ).fetchall()
-            dup_conn.close()
-            if dups:
-                hint = {
-                    "existing_movies": [
-                        {"id": d["id"], "title": d["title"], "edition_type": d["edition_type"] or "standard",
-                         "format": d["format"], "edition_group_id": d["edition_group_id"]}
-                        for d in dups
-                    ]
-                }
-                # Suggest existing group if one of the dupes is already in a group
-                existing_gid = next((d["edition_group_id"] for d in dups if d["edition_group_id"]), None)
-                hint["suggested_group_id"] = existing_gid
+            dup_conn = None
+            try:
+                dup_conn = get_db()
+                dups = dup_conn.execute(
+                    "SELECT id, title, edition_type, format, edition_group_id FROM movies"
+                    " WHERE tmdb_id = ? AND id != ?",
+                    (tmdb_id_new, movie_dict["id"])
+                ).fetchall()
+                if dups:
+                    hint = {
+                        "existing_movies": [
+                            {"id": d["id"], "title": d["title"], "edition_type": d["edition_type"] or "standard",
+                             "format": d["format"], "edition_group_id": d["edition_group_id"]}
+                            for d in dups
+                        ]
+                    }
+                    # Suggest existing group if one of the dupes is already in a group
+                    existing_gid = next((d["edition_group_id"] for d in dups if d["edition_group_id"]), None)
+                    hint["suggested_group_id"] = existing_gid
+            except Exception:
+                hint = None
+            finally:
+                if dup_conn:
+                    dup_conn.close()
 
-        return jsonify({"status": "added", "movie": dict(movie), "duplicate_tmdb_hint": hint}), 201
+        return jsonify({"status": "added", "movie": movie_dict, "duplicate_tmdb_hint": hint}), 201
     except sqlite3.IntegrityError:
-        conn.close()
+        if conn:
+            conn.close()
         add_log("add", f"Duplicaat barcode: {data['barcode']}", f"Titel: {data['title']}", "warn")
         return jsonify({"error": "Barcode already exists"}), 409
+    except Exception as ex:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            conn.close()
+        add_log("add", f"Fout bij toevoegen: {data.get('title', '?')}", str(ex), "error")
+        return jsonify({"error": str(ex)}), 500
 
 
 def _unique_box_set_member_barcode(conn, base_barcode, index):
