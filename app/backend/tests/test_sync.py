@@ -737,6 +737,32 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(done["barcode"], movie["barcode"])
         self.assertEqual(done["movie"]["id"], movie["id"])
 
+    def test_barcode_lookup_stream_returns_json_error_on_exception(self):
+        original_lookup = self.backend._lookup_metadata_for_barcode
+
+        def failing_lookup(*args, **kwargs):
+            raise RuntimeError("lookup boom")
+
+        try:
+            self.backend._lookup_metadata_for_barcode = failing_lookup
+            response = self.client.get("/api/lookup/STREAM-ERROR?stream=1")
+        finally:
+            self.backend._lookup_metadata_for_barcode = original_lookup
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        body = response.get_data(as_text=True)
+        self.assertNotIn("<!doctype", body.lower())
+        done = None
+        for line in body.splitlines():
+            if not line.strip():
+                continue
+            item = self.backend.json.loads(line)
+            if item.get("type") == "done":
+                done = item
+        self.assertIsNotNone(done)
+        self.assertEqual(done["status"], "error")
+        self.assertIn("lookup boom", done["error"])
+
     def test_movie_search_matches_barcode(self):
         movie = self._create_movie("Search By Barcode Movie")
 

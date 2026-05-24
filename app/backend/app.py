@@ -7753,71 +7753,81 @@ def lookup(barcode):
         def emit(step, source, status, detail=""):
             return json.dumps({"type": "step", "step": step, "source": source, "status": status, "detail": detail}) + "\n"
 
-        attempts = []
-        tmdb_candidates = []
-        # 1. Local DB
-        yield emit(1, "Local DB", "searching")
-        conn = get_db()
-        existing = conn.execute("SELECT * FROM movies WHERE barcode = ?", (barcode,)).fetchone()
-        existing_box_set = conn.execute(
-            """
-            SELECT bs.*, eg.group_type, eg.poster_file AS legacy_poster_file
-            FROM box_sets bs
-            LEFT JOIN edition_groups eg ON eg.id = bs.id
-            WHERE bs.barcode=?
-            """,
-            (barcode,),
-        ).fetchone()
-        existing_vault = conn.execute(
-            """
-            SELECT v.*, eg.group_type, eg.poster_file AS legacy_poster_file
-            FROM vaults v
-            LEFT JOIN edition_groups eg ON eg.id = v.id
-            WHERE v.barcode=?
-            """,
-            (barcode,),
-        ).fetchone()
-        conn.close()
-        if existing:
-            _trace_add(attempts, "Local DB", "hit", f"barcode={barcode}")
-            add_log("lookup", f"Barcode {barcode} al in collectie", f"Backends: {_trace_summary(attempts)}", "info")
-            yield emit(1, "Local DB", "hit")
-            yield json.dumps({"type": "done", "status": "movie_exists", "movie": dict(existing), "barcode": barcode}) + "\n"
-            return
-        if existing_box_set:
-            box_set = dict(existing_box_set)
-            _trace_add(attempts, "Local DB", "hit", f"box_set_barcode={barcode}")
-            add_log("lookup", f"Barcode {barcode} al als box-set in collectie", f"Box Set: {box_set.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
-            yield emit(1, "Local DB", "hit", f"box-set: {box_set.get('title','')}")
-            yield json.dumps({"type": "done", "status": "box_set_exists", "box_set": box_set, "barcode": barcode}) + "\n"
-            return
-        if existing_vault:
-            vault = dict(existing_vault)
-            _trace_add(attempts, "Local DB", "hit", f"vault_barcode={barcode}")
-            add_log("lookup", f"Barcode {barcode} al als vault in collectie", f"Vault: {vault.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
-            yield emit(1, "Local DB", "hit", f"vault: {vault.get('title','')}")
-            yield json.dumps({"type": "done", "status": "vault_exists", "vault": vault, "container": vault, "container_type": "vault", "barcode": barcode}) + "\n"
-            return
-        yield emit(1, "Local DB", "miss")
-        _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
+        conn = None
+        try:
+            attempts = []
+            # 1. Local DB
+            yield emit(1, "Local DB", "searching")
+            conn = get_db()
+            existing = conn.execute("SELECT * FROM movies WHERE barcode = ?", (barcode,)).fetchone()
+            existing_box_set = conn.execute(
+                """
+                SELECT bs.*, eg.group_type, eg.poster_file AS legacy_poster_file
+                FROM box_sets bs
+                LEFT JOIN edition_groups eg ON eg.id = bs.id
+                WHERE bs.barcode=?
+                """,
+                (barcode,),
+            ).fetchone()
+            existing_vault = conn.execute(
+                """
+                SELECT v.*, eg.group_type, eg.poster_file AS legacy_poster_file
+                FROM vaults v
+                LEFT JOIN edition_groups eg ON eg.id = v.id
+                WHERE v.barcode=?
+                """,
+                (barcode,),
+            ).fetchone()
+            conn.close()
+            conn = None
+            if existing:
+                _trace_add(attempts, "Local DB", "hit", f"barcode={barcode}")
+                add_log("lookup", f"Barcode {barcode} al in collectie", f"Backends: {_trace_summary(attempts)}", "info")
+                yield emit(1, "Local DB", "hit")
+                yield json.dumps({"type": "done", "status": "movie_exists", "movie": dict(existing), "barcode": barcode}) + "\n"
+                return
+            if existing_box_set:
+                box_set = dict(existing_box_set)
+                _trace_add(attempts, "Local DB", "hit", f"box_set_barcode={barcode}")
+                add_log("lookup", f"Barcode {barcode} al als box-set in collectie", f"Box Set: {box_set.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
+                yield emit(1, "Local DB", "hit", f"box-set: {box_set.get('title','')}")
+                yield json.dumps({"type": "done", "status": "box_set_exists", "box_set": box_set, "barcode": barcode}) + "\n"
+                return
+            if existing_vault:
+                vault = dict(existing_vault)
+                _trace_add(attempts, "Local DB", "hit", f"vault_barcode={barcode}")
+                add_log("lookup", f"Barcode {barcode} al als vault in collectie", f"Vault: {vault.get('title','?')}; Backends: {_trace_summary(attempts)}", "info")
+                yield emit(1, "Local DB", "hit", f"vault: {vault.get('title','')}")
+                yield json.dumps({"type": "done", "status": "vault_exists", "vault": vault, "container": vault, "container_type": "vault", "barcode": barcode}) + "\n"
+                return
+            yield emit(1, "Local DB", "miss")
+            _trace_add(attempts, "Local DB", "miss", f"barcode={barcode}")
 
-        yield emit(2, "Metadata Sources", "searching", _metadata_source_order_log())
-        movie_info, _source, box_set_proposal, metadata_candidates, raw_title = _lookup_metadata_for_barcode(barcode, attempts)
-        if movie_info:
-            yield emit(2, "Metadata Sources", "hit", _source)
-            add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
-                    f"Backends: {_trace_summary(attempts)}", "success")
-            yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
-                              "metadata_candidates": metadata_candidates,
-                              "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
-                              "box_set_proposal": box_set_proposal,
-                              "raw_title": raw_title or "",
-                              "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
-        else:
-            yield emit(2, "Metadata Sources", "miss", _metadata_source_order_log())
-            add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
-            yield json.dumps({"type": "done", "status": "not_found", "barcode": barcode, "raw_title": raw_title,
-                              "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
+            yield emit(2, "Metadata Sources", "searching", _metadata_source_order_log())
+            movie_info, _source, box_set_proposal, metadata_candidates, raw_title = _lookup_metadata_for_barcode(barcode, attempts)
+            if movie_info:
+                yield emit(2, "Metadata Sources", "hit", _source)
+                add_log("lookup", f"Barcode {barcode} gevonden: \"{movie_info.get('title','?')}\"",
+                        f"Backends: {_trace_summary(attempts)}", "success")
+                yield json.dumps({"type": "done", "status": "found", "movie": movie_info, "barcode": barcode,
+                                  "metadata_candidates": metadata_candidates,
+                                  "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
+                                  "box_set_proposal": box_set_proposal,
+                                  "raw_title": raw_title or "",
+                                  "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
+            else:
+                yield emit(2, "Metadata Sources", "miss", _metadata_source_order_log())
+                add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
+                yield json.dumps({"type": "done", "status": "not_found", "barcode": barcode, "raw_title": raw_title,
+                                  "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
+        except Exception as e:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            add_log("lookup", f"Fout bij opzoeken barcode {barcode}", str(e), "error")
+            yield json.dumps({"type": "done", "status": "error", "error": str(e), "barcode": barcode}) + "\n"
 
     return Response(stream_lookup(), mimetype="application/x-ndjson")
 

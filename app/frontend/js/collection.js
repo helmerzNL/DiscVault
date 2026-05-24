@@ -3764,23 +3764,13 @@ async function _lookupBarcodeForAdd(barcode) {
   hideAddBoxSetProposal();
   try {
     const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '', finalData = null;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n'); buf = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const msg = JSON.parse(line);
+    let finalData = null;
+    await readLookupNdjson(r, (msg) => {
         if (msg.type === 'step') {
           const icon = msg.status === 'searching' ? '<span class="spinner"></span>' : msg.status === 'hit' ? '✓' : '—';
           showStatus('addStatus', `${icon} ${msg.source}${msg.detail ? ': ' + msg.detail : ''}`, 'info');
         } else if (msg.type === 'done') { finalData = msg; }
-      }
-    }
+    });
     if (!finalData || finalData.error) {
       showStatus('addStatus', finalData?.error || t('js.backendError', ''), 'error'); return;
     }
