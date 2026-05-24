@@ -8,6 +8,7 @@ try:
         MOVIEVAULT_BASE_URL,
         MOVIEVAULT_CONTRIBUTION_ENABLED_DEFAULT,
         MOVIEVAULT_CONTRIBUTION_URL,
+        MOVIEVAULT_ENABLED_DEFAULT,
         MOVIEVAULT_INGEST_URL,
         MOVIEVAULT_SEARCH_URL,
         MOVIEVAULT_SHARING_MODE,
@@ -21,6 +22,8 @@ try:
     from ..movievault_client import (
         MovieVaultHandshakeError,
         MovieVaultInstanceRevoked,
+        disconnect_movievault_connection,
+        enable_movievault_connection,
         perform_handshake,
         get_movievault_api_token as _movievault_client_api_token,
         movievault_status,
@@ -33,6 +36,7 @@ except ImportError:  # pragma: no cover - supports running app.py directly
         MOVIEVAULT_BASE_URL,
         MOVIEVAULT_CONTRIBUTION_ENABLED_DEFAULT,
         MOVIEVAULT_CONTRIBUTION_URL,
+        MOVIEVAULT_ENABLED_DEFAULT,
         MOVIEVAULT_INGEST_URL,
         MOVIEVAULT_SEARCH_URL,
         MOVIEVAULT_SHARING_MODE,
@@ -46,6 +50,8 @@ except ImportError:  # pragma: no cover - supports running app.py directly
     from movievault_client import (
         MovieVaultHandshakeError,
         MovieVaultInstanceRevoked,
+        disconnect_movievault_connection,
+        enable_movievault_connection,
         perform_handshake,
         get_movievault_api_token as _movievault_client_api_token,
         movievault_status,
@@ -133,7 +139,7 @@ def register_settings_routes(
             "omdb_key_set": bool(OMDB_API_KEY),
             "tmdb_enabled": is_source_enabled("tmdb_enabled", TMDB_ENABLED_DEFAULT),
             "tmdb_key_set": bool(TMDB_API_KEY),
-            "movievault_enabled": True,
+            "movievault_enabled": _bool_setting("movievault_enabled", MOVIEVAULT_ENABLED_DEFAULT),
             "movievault_url_set": bool(_movievault_search_url()),
             "movievault_key_set": bool(_movievault_api_token()),
             "movievault_contribution_enabled": _bool_setting(
@@ -155,6 +161,7 @@ def register_settings_routes(
             return err
         data = request.json or {}
         source_keys = [
+            ("movievault_enabled", "MovieVault"),
             ("omdb_enabled", "OMDb"),
             ("tmdb_enabled", "TMDb"),
             ("bluray_scrape_enabled", "Blu-ray.com"),
@@ -162,8 +169,13 @@ def register_settings_routes(
         ]
         result = {}
         conn = get_db()
+        movievault_enabled_requested = None
         for key, label in source_keys:
+            if key not in data:
+                continue
             val = bool(data.get(key, False))
+            if key == "movievault_enabled":
+                movievault_enabled_requested = val
             conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                 (key, "true" if val else "false"),
@@ -191,7 +203,7 @@ def register_settings_routes(
             result["movievault_sharing_mode"] = sharing_mode
             add_log(
                 "settings",
-                f"MovieVault delen {'ingeschakeld' if contribution_enabled else 'uitgeschakeld'}",
+                f"MovieVault sharing {'enabled' if contribution_enabled else 'disabled'}",
                 f"Sharing mode: {sharing_mode}",
                 level="info",
             )
@@ -215,6 +227,12 @@ def register_settings_routes(
             result["metadata_source_order_value"] = order_value
         conn.commit()
         conn.close()
+        if movievault_enabled_requested is False:
+            disconnect_movievault_connection("metadata_source_disabled")
+            result.update(movievault_status())
+        elif movievault_enabled_requested is True:
+            enable_movievault_connection()
+            result.update(movievault_status())
         return jsonify(result)
 
     @app.route("/api/settings/api-keys", methods=["GET"])
@@ -265,19 +283,41 @@ def register_settings_routes(
         result["movievault_token_masked"] = mv_status.get("movievault_token_masked", "")
         return jsonify(result)
 
+    @app.route("/api/settings/movievault/status", methods=["GET"])
+    def get_movievault_integration_status():
+        err = require_admin()
+        if err:
+            return err
+        result = movievault_status()
+        result.update({
+            "movievault_enabled": _bool_setting("movievault_enabled", MOVIEVAULT_ENABLED_DEFAULT),
+            "movievault_url_set": bool(_movievault_search_url()),
+            "movievault_ingest_url_set": bool(_movievault_ingest_url()),
+            "movievault_contribution_url_set": bool(_first_setting(
+                ("movievault_contribution_url",),
+                str(MOVIEVAULT_CONTRIBUTION_URL).strip(),
+            )),
+            "movievault_sharing_mode": _movievault_sharing_mode(),
+        })
+        return jsonify(result)
+
     @app.route("/api/settings/movievault/reconnect", methods=["POST"])
     def reconnect_movievault_settings():
         err = require_admin()
         if err:
             return err
+        if not _bool_setting("movievault_enabled", MOVIEVAULT_ENABLED_DEFAULT):
+            result = {"error": "MovieVault integration is disabled"}
+            result.update(movievault_status())
+            return jsonify(result), 409
         try:
             perform_handshake()
-            add_log("settings", "MovieVault koppeling vernieuwd", level="info")
+            add_log("settings", "MovieVault connection refreshed", level="info")
             result = {"status": "ok"}
             result.update(movievault_status())
             return jsonify(result)
         except MovieVaultInstanceRevoked:
-            result = {"error": "MovieVault instance is ingetrokken"}
+            result = {"error": "MovieVault instance is revoked"}
             result.update(movievault_status())
             return jsonify(result), 403
         except MovieVaultHandshakeError as ex:
@@ -334,7 +374,7 @@ def register_settings_routes(
                         "movievault_last_handshake_at",
                     ),
                 )
-                add_log("settings", "MovieVault API token verwijderd uit database", level="info")
+                add_log("settings", "MovieVault API token removed from database", level="info")
         if any(k in data for k in ("movievault_search_url", "movievault_base_url", "movievault_url")):
             val = str(
                 data.get(
@@ -349,13 +389,13 @@ def register_settings_routes(
                 )
                 conn.execute("DELETE FROM settings WHERE key=?", ("movievault_base_url",))
                 conn.execute("DELETE FROM settings WHERE key=?", ("movievault_url",))
-                add_log("settings", f"MovieVault search URL opgeslagen: {val}", level="info")
+                add_log("settings", "MovieVault custom search endpoint saved", level="info")
             else:
                 conn.execute(
                     "DELETE FROM settings WHERE key IN (?, ?, ?)",
                     ("movievault_search_url", "movievault_base_url", "movievault_url"),
                 )
-                add_log("settings", "MovieVault search URL verwijderd uit database", level="info")
+                add_log("settings", "MovieVault custom search endpoint removed", level="info")
         if any(k in data for k in ("movievault_ingest_url", "movievault_contribution_url")):
             val = str(data.get("movievault_ingest_url", data.get("movievault_contribution_url", ""))).strip().rstrip("/")
             if val:
@@ -363,10 +403,10 @@ def register_settings_routes(
                     "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                     ("movievault_ingest_url", val),
                 )
-                add_log("settings", f"MovieVault ingest URL opgeslagen: {val}", level="info")
+                add_log("settings", "MovieVault custom ingest endpoint saved", level="info")
             else:
                 conn.execute("DELETE FROM settings WHERE key=?", ("movievault_ingest_url",))
-                add_log("settings", "MovieVault ingest URL verwijderd uit database", level="info")
+                add_log("settings", "MovieVault custom ingest endpoint removed", level="info")
         if "movievault_sharing_mode" in data:
             mode = str(data.get("movievault_sharing_mode") or "opt_in").strip().lower()
             if mode not in {"opt_in", "opt_out", "disabled"}:

@@ -186,6 +186,85 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         self.assertEqual(self.mv.get_movievault_api_token(), "mv_new")
         self.assertEqual(self.setting("movievault_api_token"), "")
 
+    def test_provisioned_token_takes_precedence_over_env_token(self):
+        os.environ["MOVIEVAULT_API_TOKEN"] = "mv_env_old"
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_api_token_enc", self.mv._encrypt_secret("mv_provisioned")),
+            )
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_link_status", "active"),
+            )
+            conn.commit()
+
+        requests_seen = []
+
+        def fake_request(method, url, headers=None, **kwargs):
+            requests_seen.append(headers.get("Authorization"))
+            return FakeResponse(200, {"ok": True})
+
+        def fake_post(*args, **kwargs):
+            self.fail("stored provisioned token should avoid recovery")
+
+        self.mv.requests.request = fake_request
+        self.mv.requests.post = fake_post
+
+        response = self.mv.movievault_request("GET", "https://search.example.test/api/v1/movies")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.mv.get_movievault_api_token(), "mv_provisioned")
+        self.assertEqual(requests_seen, ["Bearer mv_provisioned"])
+
+    def test_disabled_movievault_does_not_attach_token_or_recover(self):
+        os.environ["MOVIEVAULT_API_TOKEN"] = "mv_env_token"
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_enabled", "false"),
+            )
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_api_token_enc", self.mv._encrypt_secret("mv_stored_token")),
+            )
+            conn.commit()
+
+        requests_seen = []
+
+        def fake_request(method, url, headers=None, **kwargs):
+            requests_seen.append(headers.get("Authorization"))
+            return FakeResponse(401, {"error": "unauthorized"})
+
+        def fake_post(*args, **kwargs):
+            self.fail("disabled MovieVault should not recover a token")
+
+        self.mv.requests.request = fake_request
+        self.mv.requests.post = fake_post
+
+        response = self.mv.movievault_request("GET", "https://search.example.test/api/v1/movies")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(requests_seen, [None])
+        self.assertEqual(self.mv.get_movievault_api_token(), "")
+
+    def test_movievault_logs_show_api_path_not_full_endpoint(self):
+        self.mv._log(
+            "warn",
+            "MovieVault URL test",
+            "Endpoint: https://movies.example.test/api/v1/internal/discvault/bootstrap; "
+            "Search: https://search.example.test/api/v1/movies; token=mv_log_secret",
+        )
+
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute("SELECT detail FROM logs ORDER BY id DESC LIMIT 1").fetchone()
+
+        detail = row[0]
+        self.assertNotIn("https://movies.example.test", detail)
+        self.assertNotIn("https://search.example.test", detail)
+        self.assertIn("/api/v1/internal/discvault/bootstrap", detail)
+        self.assertIn("/api/v1/movies", detail)
+
     def test_instance_revoked_marks_link_and_removes_token(self):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
@@ -241,6 +320,75 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         self.assertNotEqual(data.get("movievault_token_masked"), "mv_secret_full_token")
         self.assertEqual(data.get("movievault_token_prefix"), "mv_sec")
         self.assertEqual(data.get("movievault_instance_id"), "dv_test_instance")
+
+        status = app.test_client().get("/api/settings/movievault/status").get_json()
+        self.assertEqual(status.get("movievault_token_prefix"), "mv_sec")
+        self.assertEqual(status.get("movievault_instance_id"), "dv_test_instance")
+
+    def test_disabling_movievault_source_disconnects_and_blocks_reconnect(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_enabled", "true"),
+            )
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_link_status", "active"),
+            )
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_api_token_enc", self.mv._encrypt_secret("mv_secret_token")),
+            )
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_token_prefix", "mv_secret"),
+            )
+            conn.commit()
+
+        try:
+            from flask import Flask
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("Flask dependency is not installed") from exc
+
+        def read_enabled(key, default=False):
+            with sqlite3.connect(self.db_path) as conn:
+                row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+            return default if row is None else str(row[0]).lower() == "true"
+
+        routes = importlib.import_module("app.backend.settings.routes")
+        app = Flask(__name__)
+        routes.register_settings_routes(
+            app,
+            require_admin=lambda: None,
+            is_source_enabled=read_enabled,
+            is_bluray_scrape_enabled=lambda: False,
+            is_bluraydiscde_scrape_enabled=lambda: False,
+            is_registration_enabled=lambda: False,
+        )
+
+        def fake_post(*args, **kwargs):
+            self.fail("reconnect should be blocked while MovieVault is disabled")
+
+        self.mv.requests.post = fake_post
+        client = app.test_client()
+        response = client.post("/api/settings/sources", json={
+            "movievault_enabled": False,
+            "omdb_enabled": True,
+            "tmdb_enabled": True,
+            "bluray_scrape_enabled": False,
+            "bluraydiscde_scrape_enabled": False,
+            "metadata_source_order": "movievault,tmdb,omdb,bluray_com,bluray_disc_de",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.setting("movievault_enabled"), "false")
+        self.assertEqual(self.setting("movievault_link_status"), "disabled")
+        self.assertEqual(self.setting("movievault_api_token_enc"), "")
+        self.assertEqual(self.mv.get_movievault_api_token(), "")
+
+        reconnect = client.post("/api/settings/movievault/reconnect")
+        self.assertEqual(reconnect.status_code, 409)
+        self.assertFalse(reconnect.get_json().get("movievault_enabled"))
 
 
 class MovieVaultZeroConfigTests(unittest.TestCase):

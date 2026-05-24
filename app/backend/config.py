@@ -109,6 +109,7 @@ RP_ORIGIN = RP_ORIGINS[0]
 
 OMDB_ENABLED_DEFAULT = os.environ.get("OMDB_ENABLED", "true").strip().lower() == "true"
 TMDB_ENABLED_DEFAULT = os.environ.get("TMDB_ENABLED", "true").strip().lower() == "true"
+MOVIEVAULT_ENABLED_DEFAULT = os.environ.get("MOVIEVAULT_ENABLED", "true").strip().lower() == "true"
 BLURAY_SCRAPE_ENABLED_DEFAULT = (
     os.environ.get("BLURAY_SCRAPE_ENABLED", "false").strip().lower() == "true"
 )

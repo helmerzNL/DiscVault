@@ -3,9 +3,11 @@ import hmac
 import json
 import os
 import base64
+import re
 import secrets
 import sqlite3
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import requests
 
@@ -16,6 +18,7 @@ try:
         MOVIEVAULT_API_KEY,
         MOVIEVAULT_API_TOKEN,
         MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET,
+        MOVIEVAULT_ENABLED_DEFAULT,
         MOVIEVAULT_INGEST_URL,
         RP_NAME,
     )
@@ -27,6 +30,7 @@ except ImportError:  # pragma: no cover - supports running app.py directly
         MOVIEVAULT_API_KEY,
         MOVIEVAULT_API_TOKEN,
         MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET,
+        MOVIEVAULT_ENABLED_DEFAULT,
         MOVIEVAULT_INGEST_URL,
         RP_NAME,
     )
@@ -86,11 +90,67 @@ def _delete_setting(key: str):
         conn.commit()
 
 
+def _bool_setting(key: str, default: bool) -> bool:
+    value = _setting_value(key, "true" if default else "false")
+    return str(value).strip().lower() == "true"
+
+
+def is_movievault_integration_enabled() -> bool:
+    return _bool_setting("movievault_enabled", MOVIEVAULT_ENABLED_DEFAULT)
+
+
 def _log(level: str, message: str, detail: str = ""):
     try:
-        add_log("movievault", message, detail, level)
+        add_log("movievault", message, _sanitize_log_detail(detail), level)
     except Exception:
         pass
+
+
+def _url_to_path(match) -> str:
+    return _path_only(match.group(0))
+
+
+def _path_only(value: str) -> str:
+    try:
+        parsed = urlparse(str(value or ""))
+        return parsed.path or "/"
+    except Exception:
+        return "/api"
+
+
+def _sanitize_log_detail(detail: str) -> str:
+    detail = str(detail or "")
+    if not detail:
+        return ""
+    detail = re.sub(r"https?://[^\s;,\)\]\"']+", _url_to_path, detail)
+    for token in (
+        _stored_movievault_api_token(),
+        os.environ.get("MOVIEVAULT_API_TOKEN", ""),
+        os.environ.get("MOVIEVAULT_API_KEY", ""),
+    ):
+        token = str(token or "").strip()
+        if token:
+            detail = detail.replace(token, "[redacted-token]")
+    return detail
+
+
+def _delete_token_settings():
+    for key in (API_TOKEN_KEY, API_TOKEN_ENC_KEY, TOKEN_PREFIX_KEY, TOKEN_SCOPES_KEY, LAST_HANDSHAKE_AT_KEY):
+        _delete_setting(key)
+
+
+def disconnect_movievault_connection(reason: str = "disabled"):
+    _set_setting(LINK_STATUS_KEY, "disabled")
+    _delete_token_settings()
+    instance_id = _setting_value(INSTANCE_ID_KEY, "").strip() or "-"
+    _log("info", "MovieVault connection disabled", f"instanceId={instance_id}; reason={reason}")
+
+
+def enable_movievault_connection():
+    if _setting_value(LINK_STATUS_KEY, "") == "disabled":
+        _set_setting(LINK_STATUS_KEY, "unlinked")
+        instance_id = _setting_value(INSTANCE_ID_KEY, "").strip() or "-"
+        _log("info", "MovieVault connection enabled", f"instanceId={instance_id}")
 
 
 def _ingest_url() -> str:
@@ -148,14 +208,21 @@ def _decrypt_secret(value: str) -> str:
 
 
 def _stored_movievault_api_token() -> str:
+    if not is_movievault_integration_enabled():
+        return ""
     if _setting_value(LINK_STATUS_KEY, "") == "revoked":
         return ""
+    encrypted = _setting_value(API_TOKEN_ENC_KEY, "").strip()
+    if encrypted:
+        decrypted = _decrypt_secret(encrypted)
+        if decrypted:
+            return decrypted
+    stored = _setting_value(API_TOKEN_KEY, "").strip() or _setting_value("movievault_api_key", "").strip()
+    if stored:
+        return stored
     env_token = os.environ.get("MOVIEVAULT_API_TOKEN", os.environ.get("MOVIEVAULT_API_KEY", "")).strip()
     if env_token:
         return env_token
-    encrypted = _setting_value(API_TOKEN_ENC_KEY, "").strip()
-    if encrypted:
-        return _decrypt_secret(encrypted)
     return str(MOVIEVAULT_API_TOKEN).strip() or str(MOVIEVAULT_API_KEY).strip()
 
 
@@ -310,11 +377,10 @@ def _store_token_response(data: dict, http_status: int) -> dict:
 
 def _mark_revoked():
     _set_setting(LINK_STATUS_KEY, "revoked")
-    for key in (API_TOKEN_KEY, API_TOKEN_ENC_KEY, TOKEN_PREFIX_KEY, TOKEN_SCOPES_KEY, LAST_HANDSHAKE_AT_KEY):
-        _delete_setting(key)
+    _delete_token_settings()
     _log(
         "warn",
-        "MovieVault koppeling ingetrokken",
+        "MovieVault connection revoked",
         f"authMethod={token_provider().name}; instanceId={get_or_create_instance_id()}; error=instance_revoked",
     )
 
@@ -362,7 +428,7 @@ class HmacHandshakeTokenProvider(MovieVaultTokenProvider):
         try:
             response = requests.post(url, data=raw_body.encode("utf-8"), headers=headers, timeout=8)
         except Exception as ex:
-            _log("warn", "MovieVault HMAC handshake mislukt", f"Endpoint: {url}; error={ex}")
+            _log("warn", "MovieVault HMAC handshake failed", f"path={HANDSHAKE_PATH}; error={ex}")
             raise MovieVaultHandshakeError(str(ex)) from ex
 
         if response.status_code == 403 and _response_error_code(response) == "instance_revoked":
@@ -374,7 +440,7 @@ class HmacHandshakeTokenProvider(MovieVaultTokenProvider):
             _set_setting(LINK_STATUS_KEY, "error")
             _log(
                 "warn",
-                "MovieVault HMAC handshake geweigerd",
+                "MovieVault HMAC handshake rejected",
                 (
                     f"instanceId={get_or_create_instance_id()}; instanceName={get_instance_name()}; "
                     f"requestedScopes={','.join(REQUESTED_SCOPES)}; httpStatus={response.status_code}; error={code}"
@@ -431,7 +497,7 @@ class BootstrapSignedTokenProvider(MovieVaultTokenProvider):
                 timeout=8,
             )
         except Exception as ex:
-            _log("warn", "MovieVault bootstrap mislukt", f"Endpoint: {url}; error={ex}")
+            _log("warn", "MovieVault bootstrap failed", f"path={BOOTSTRAP_PATH}; error={ex}")
             raise MovieVaultHandshakeError(str(ex)) from ex
 
         code = _response_error_code(response)
@@ -444,7 +510,7 @@ class BootstrapSignedTokenProvider(MovieVaultTokenProvider):
             _set_setting(LINK_STATUS_KEY, "error")
             _log(
                 "warn",
-                "MovieVault bootstrap geweigerd",
+                "MovieVault bootstrap rejected",
                 (
                     f"instanceId={get_or_create_instance_id()}; instanceName={get_instance_name()}; "
                     f"requestedScopes={','.join(REQUESTED_SCOPES)}; httpStatus={response.status_code}; "
@@ -494,7 +560,7 @@ class BootstrapSignedTokenProvider(MovieVaultTokenProvider):
         try:
             response = requests.post(url, data=raw_body.encode("utf-8"), headers=headers, timeout=8)
         except Exception as ex:
-            _log("warn", "MovieVault signed recovery mislukt", f"Endpoint: {url}; error={ex}")
+            _log("warn", "MovieVault signed recovery failed", f"path={HANDSHAKE_PATH}; error={ex}")
             raise MovieVaultHandshakeError(str(ex)) from ex
 
         code = _response_error_code(response)
@@ -505,7 +571,7 @@ class BootstrapSignedTokenProvider(MovieVaultTokenProvider):
             _set_setting(LINK_STATUS_KEY, "error")
             _log(
                 "warn",
-                "MovieVault signed recovery geweigerd",
+                "MovieVault signed recovery rejected",
                 (
                     f"instanceId={get_or_create_instance_id()}; instanceName={get_instance_name()}; "
                     f"requestedScopes={','.join(REQUESTED_SCOPES)}; httpStatus={response.status_code}; "
@@ -537,10 +603,14 @@ def token_provider() -> MovieVaultTokenProvider:
 
 
 def perform_handshake() -> dict:
+    if not is_movievault_integration_enabled():
+        raise MovieVaultHandshakeError("MovieVault integration is disabled")
     return token_provider().refresh_token()
 
 
 def _auth_token_for_request() -> str:
+    if not is_movievault_integration_enabled():
+        return ""
     return token_provider().ensure_token()
 
 
@@ -565,12 +635,13 @@ def movievault_request(
         include_auth
         and retry_on_unauthorized
         and response.status_code == 401
+        and is_movievault_integration_enabled()
         and token_provider().configured()
     ):
         _log(
             "warn",
-            "MovieVault token recovery gestart",
-            f"instanceId={get_or_create_instance_id()}; httpStatus=401; endpoint={url}",
+            "MovieVault token recovery started",
+            f"instanceId={get_or_create_instance_id()}; httpStatus=401; path={_path_only(url)}",
         )
         token_provider().refresh_token()
         headers["Authorization"] = f"Bearer {get_movievault_api_token()}"
@@ -589,6 +660,7 @@ def movievault_status() -> dict:
     token = get_movievault_api_token()
     return {
         "movievault_auth_method": token_provider().name,
+        "movievault_enabled": is_movievault_integration_enabled(),
         "movievault_instance_id": _setting_value(INSTANCE_ID_KEY, ""),
         "movievault_instance_name": _setting_value(INSTANCE_NAME_KEY, ""),
         "movievault_instance_key_id": _setting_value(INSTANCE_PUBLIC_KEY_ID_KEY, ""),
