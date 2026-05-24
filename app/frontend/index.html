@@ -200,8 +200,8 @@
       </nav>
       <div class="profile-content">
         <div class="profile-sub-section active" id="addSubScan"></div>
-        <div class="profile-sub-section" id="addSubManual"></div>
-        <div class="profile-sub-section" id="addSubImport"></div>
+        <div class="profile-sub-section" id="addSubManual" hidden></div>
+        <div class="profile-sub-section" id="addSubImport" hidden></div>
       </div>
     </div>
   </div>
@@ -321,38 +321,39 @@
         <div class="input-group">
           <label data-i18n="add.barcodeLabel">Barcode / Eigen ID</label>
           <input type="text" id="addBarcode" placeholder="Barcode of uniek ID" data-i18n-placeholder="add.barcodePlaceholder"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();submitManual();}">
+            oninput="handleAddBarcodeInput()"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();searchManualMetadata();}">
         </div>
         <div class="input-group">
           <label data-i18n="add.titleLabel">Titel</label>
           <div style="display:flex; gap:8px;">
-            <input type="text" id="addTitle" placeholder="Bijv. The Dark Knight" data-i18n-placeholder="add.titlePlaceholder">
-            <button class="btn btn-secondary" onclick="submitManual()" style="white-space:nowrap; padding:10px 14px;" data-i18n="add.autofill">🔍 Zoeken</button>
+            <input type="text" id="addTitle" placeholder="Bijv. The Dark Knight" data-i18n-placeholder="add.titlePlaceholder"
+              oninput="handleAddTitleInput()"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();searchManualMetadata();}">
+            <button class="btn btn-secondary" onclick="searchManualMetadata()" style="white-space:nowrap; padding:10px 14px;" data-i18n="add.autofill">🔍 Zoeken</button>
           </div>
         </div>
       </div>
 
+      <div id="addTmdbCandidates" style="display:none;" class="add-candidates-panel add-candidates-inline">
+        <div class="tmdb-candidates-header" data-i18n="scan.otherMatches">Andere overeenkomsten — kies de juiste film:</div>
+        <div id="addCandidateList" class="tmdb-candidate-list"></div>
+      </div>
+
+      <div id="addBoxSetProposal" class="boxset-proposal add-boxset-inline">
+        <div class="boxset-proposal-header">
+          <div>
+            <div class="boxset-proposal-title" data-i18n="scan.boxSetProposalTitle">Box-set gevonden</div>
+            <div id="addBoxSetProposalName" class="boxset-proposal-name"></div>
+          </div>
+          <button class="btn btn-success" onclick="saveAddBoxSetProposal()" id="btnSaveAddBoxSetProposal" data-i18n="scan.boxSetProposalSave">Box-set + films aanmaken</button>
+        </div>
+        <div class="boxset-proposal-desc" data-i18n="scan.boxSetProposalDesc">Blu-ray.com lijkt een box-set te beschrijven. Maak de gevonden films los aan en koppel ze direct aan deze box-set.</div>
+        <div id="addBoxSetProposalList" class="boxset-member-list"></div>
+      </div>
+
       <!-- Two-column layout: form (left) + candidates (right on desktop, above on mobile) -->
       <div class="add-main-layout">
-
-        <!-- Candidates panel — comes first in DOM so it appears above form on mobile -->
-        <div id="addTmdbCandidates" style="display:none;" class="add-candidates-panel">
-          <div class="tmdb-candidates-header" data-i18n="scan.otherMatches">Andere overeenkomsten — kies de juiste film:</div>
-          <div id="addCandidateList" class="tmdb-candidate-list"></div>
-        </div>
-
-        <div id="addBoxSetProposal" class="add-candidates-panel boxset-proposal">
-          <div class="boxset-proposal-header">
-            <div>
-              <div class="boxset-proposal-title" data-i18n="scan.boxSetProposalTitle">Box-set gevonden</div>
-              <div id="addBoxSetProposalName" class="boxset-proposal-name"></div>
-            </div>
-            <button class="btn btn-success" onclick="saveAddBoxSetProposal()" id="btnSaveAddBoxSetProposal" data-i18n="scan.boxSetProposalSave">Box-set + films aanmaken</button>
-          </div>
-          <div class="boxset-proposal-desc" data-i18n="scan.boxSetProposalDesc">Blu-ray.com lijkt een box-set te beschrijven. Maak de gevonden films los aan en koppel ze direct aan deze box-set.</div>
-          <div id="addBoxSetProposalList" class="boxset-member-list"></div>
-        </div>
-
         <!-- Film details form -->
         <div class="add-form-section">
           <div class="form-grid">
@@ -458,7 +459,7 @@
             </div>
           </div>
           <div class="btn-row">
-            <button class="btn btn-success" onclick="submitManual()" data-i18n="add.submit">💾 Toevoegen aan Collectie</button>
+            <button class="btn btn-success" id="addSubmitBtn" onclick="submitManual()" data-i18n="add.submit">💾 Toevoegen aan Collectie</button>
             <button class="btn btn-secondary" onclick="clearManualForm()" data-i18n="add.clear">✕ Wissen</button>
           </div>
         </div>

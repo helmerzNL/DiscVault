@@ -152,12 +152,13 @@ function reorganizeToevoegenPanels() {
     while (importSrc.firstChild) importDest.appendChild(importSrc.firstChild);
     importSrc.remove();
   }
+  switchToevoegen(currentToevoegenSub || 'scan', { skipReorganize: true });
 }
 
-function switchToevoegen(sub) {
+function switchToevoegen(sub, options = {}) {
   const map = { scan: 'addSubScan', manual: 'addSubManual', import: 'addSubImport' };
   const nextSub = map[sub] ? sub : 'scan';
-  reorganizeToevoegenPanels();
+  if (!options.skipReorganize) reorganizeToevoegenPanels();
   currentToevoegenSub = nextSub;
   document.querySelectorAll('[data-toevoegen-sub]').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-toevoegen-sub') === nextSub);
@@ -167,7 +168,8 @@ function switchToevoegen(sub) {
     if (!section) return;
     const active = key === nextSub;
     section.classList.toggle('active', active);
-    section.style.display = active ? '' : 'none';
+    section.hidden = !active;
+    section.style.display = active ? 'block' : 'none';
   });
 }
 

@@ -3315,6 +3315,8 @@ async function uploadCustomCover() {
 
 // ── Manual Add ────────────────────────────────────────────────────────────────
 let currentAddBoxSetProposal = null;
+let addTitleLookupResolvedTitle = '';
+let addBarcodeLookupResolvedBarcode = '';
 
 function _escapeAddHtml(value) {
   return String(value || '').replace(/[&<>"']/g, ch => ({
@@ -3330,6 +3332,45 @@ function hideAddBoxSetProposal() {
   currentAddBoxSetProposal = null;
   const panel = document.getElementById('addBoxSetProposal');
   if (panel) panel.style.display = 'none';
+  updateAddSubmitButtonState();
+}
+
+function updateAddSubmitButtonState() {
+  const btn = document.getElementById('addSubmitBtn');
+  if (!btn) return;
+  if (currentAddBoxSetProposal) {
+    btn.setAttribute('data-i18n', 'scan.boxSetProposalSave');
+    btn.textContent = t('scan.boxSetProposalSave');
+  } else {
+    btn.setAttribute('data-i18n', 'add.submit');
+    btn.textContent = t('add.submit');
+  }
+}
+
+function updateAddIdentityLock() {
+  const barcodeEl = document.getElementById('addBarcode');
+  const titleEl = document.getElementById('addTitle');
+  if (!barcodeEl || !titleEl) return;
+  const barcode = barcodeEl.value.trim();
+  const title = titleEl.value.trim();
+  const useBarcode = !!barcode;
+  const useTitle = !barcode && !!title;
+  barcodeEl.disabled = useTitle;
+  titleEl.disabled = useBarcode;
+  barcodeEl.classList.toggle('input-muted', useTitle);
+  titleEl.classList.toggle('input-muted', useBarcode);
+}
+
+function handleAddBarcodeInput() {
+  addBarcodeLookupResolvedBarcode = '';
+  addTitleLookupResolvedTitle = '';
+  updateAddIdentityLock();
+}
+
+function handleAddTitleInput() {
+  addBarcodeLookupResolvedBarcode = '';
+  addTitleLookupResolvedTitle = '';
+  updateAddIdentityLock();
 }
 
 function _addBoxSetMemberPosterSrc(movie) {
@@ -3359,6 +3400,7 @@ function displayAddBoxSetProposal(proposal, barcode = '') {
   const btn = document.getElementById('btnSaveAddBoxSetProposal');
   if (!nameEl || !listEl || !panel || !btn) return false;
 
+  document.getElementById('addTmdbCandidates').style.display = 'none';
   nameEl.textContent = '';
   listEl.innerHTML = movies.map((m, idx) => `
     <div class="boxset-member-row">
@@ -3374,6 +3416,7 @@ function displayAddBoxSetProposal(proposal, barcode = '') {
   btn.textContent = t('scan.boxSetProposalSave');
   panel.style.display = 'block';
   updateAddBoxSetProposalSelection();
+  updateAddSubmitButtonState();
   return true;
 }
 
@@ -3510,21 +3553,28 @@ async function saveAddBoxSetProposal() {
 async function autoFillFromTitle() {
   const title = document.getElementById('addTitle').value.trim();
   if (!title) return;
+  const year = document.getElementById('addYear').value.trim();
   showStatus('addStatus', t('js.searchingMovie'), 'info');
   document.getElementById('addTmdbCandidates').style.display = 'none';
   hideAddBoxSetProposal();
   try {
-    const r = await fetch(`${API}/tmdb_candidates?title=${encodeURIComponent(title)}`);
+    const params = new URLSearchParams({ q: title });
+    if (year) params.set('year', year);
+    const r = await fetch(`${API}/search_title?${params.toString()}`);
     const d = await r.json();
-    const cands = d.candidates || [];
-    if (cands.length === 0) {
-      showStatus('addStatus', t('js.noInfoFound'), 'error');
-    } else if (cands.length === 1) {
-      await _fillAddFormFromTmdbId(cands[0].tmdb_id);
-    } else {
-      _showAddCandidates(cands);
-      showStatus('addStatus', '', '');
+    if (!r.ok) {
+      showStatus('addStatus', d.error || t('js.backendError', r.status), 'error');
+      return;
     }
+    if (d.status !== 'found' || !d.movie) {
+      showStatus('addStatus', t('js.noInfoFound'), 'error');
+      return;
+    }
+    _fillAddFields(d.movie);
+    const proposal = await lookupAddBoxSetProposal(d.movie);
+    if (proposal) displayAddBoxSetProposal(proposal);
+    addTitleLookupResolvedTitle = document.getElementById('addTitle').value.trim();
+    showStatus('addStatus', t('js.infoFound', d.movie.title || title), 'success');
   } catch(e) {
     showStatus('addStatus', t('js.error', e.message), 'error');
   }
@@ -3532,6 +3582,7 @@ async function autoFillFromTitle() {
 
 function _showAddCandidates(candidates) {
   const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  hideAddBoxSetProposal();
   document.getElementById('addCandidateList').innerHTML = candidates.map(c => `
     <div class="tmdb-candidate-card" onclick="_selectAddCandidate('${c.tmdb_id}')">
       <div class="tmdb-candidate-poster">
@@ -3560,18 +3611,18 @@ async function _selectAddCandidate(tmdbId) {
       return;
     }
     _fillAddFields(d.movie);
+    if (existingBarcode) {
+      addBarcodeLookupResolvedBarcode = existingBarcode;
+      addTitleLookupResolvedTitle = '';
+    } else {
+      addTitleLookupResolvedTitle = document.getElementById('addTitle').value.trim();
+    }
     const proposal = await lookupAddBoxSetProposal(d.movie, existingBarcode);
     if (proposal && displayAddBoxSetProposal(proposal, existingBarcode)) {
       showStatus('addStatus', t('js.infoFound', d.movie.title), 'success');
       return;
     }
-    if (existingBarcode) {
-      // Barcode was already entered: auto-save directly
-      await _doSaveManual(existingBarcode, d.movie.title);
-    } else {
-      // Title-only flow: fill form, let user review and click submit
-      showStatus('addStatus', t('js.infoFound', d.movie.title), 'success');
-    }
+    showStatus('addStatus', t('js.infoFound', d.movie.title), 'success');
   } catch(e) {
     showStatus('addStatus', t('js.error', e.message), 'error');
   }
@@ -3624,6 +3675,7 @@ function _fillAddFields(movie) {
     document.getElementById('addTmdbIdVisible').value = tid;
     document.getElementById('addTmdbUrl').value       = 'https://www.themoviedb.org/movie/' + tid;
   }
+  updateAddIdentityLock();
 }
 
 async function _lookupBarcodeForAdd(barcode) {
@@ -3667,6 +3719,8 @@ async function _lookupBarcodeForAdd(barcode) {
     const movie = finalData.movie;
     if (finalData.detected_format && !movie.format) movie.format = finalData.detected_format;
     _fillAddFields(movie);
+    addBarcodeLookupResolvedBarcode = barcode;
+    addTitleLookupResolvedTitle = '';
     if (finalData.box_set_proposal && displayAddBoxSetProposal(finalData.box_set_proposal, barcode)) {
       showStatus('addStatus', t('js.infoFound', movie.title), 'success');
       return;
@@ -3683,19 +3737,23 @@ async function _lookupBarcodeForAdd(barcode) {
 }
 
 async function submitManual() {
+  if (currentAddBoxSetProposal) {
+    await saveAddBoxSetProposal();
+    return;
+  }
   const barcode = document.getElementById('addBarcode').value.trim();
   const title = document.getElementById('addTitle').value.trim();
   if (!barcode && !title) {
     showStatus('addStatus', t('js.barcodeOrTitleRequired'), 'error');
     return;
   }
-  // Barcode-only: look up barcode, fill form, then save
-  if (barcode && !title) {
+  // Barcode is always the identifier when present. Resolve it before saving.
+  if (barcode && addBarcodeLookupResolvedBarcode !== barcode) {
     await _lookupBarcodeForAdd(barcode);
     return;
   }
-  // Title-only without prior TMDb resolution: show candidates first
-  if (title && !barcode && !document.getElementById('addTmdbIdHidden').value.trim()) {
+  // Title-only without prior metadata resolution: resolve through configured sources first.
+  if (title && !barcode && !document.getElementById('addTmdbIdHidden').value.trim() && addTitleLookupResolvedTitle !== title) {
     await autoFillFromTitle();
     return;
   }
@@ -3703,6 +3761,20 @@ async function submitManual() {
   const effectiveBarcode = barcode ||
     'TITLE-' + title.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 30) + '-' + Date.now().toString().slice(-6);
   await _doSaveManual(effectiveBarcode, title);
+}
+
+async function searchManualMetadata() {
+  const barcode = document.getElementById('addBarcode').value.trim();
+  const title = document.getElementById('addTitle').value.trim();
+  if (!barcode && !title) {
+    showStatus('addStatus', t('js.barcodeOrTitleRequired'), 'error');
+    return;
+  }
+  if (barcode) {
+    await _lookupBarcodeForAdd(barcode);
+    return;
+  }
+  await autoFillFromTitle();
 }
 
 async function _doSaveManual(barcode, title) {
@@ -3761,6 +3833,9 @@ function clearManualForm() {
   });
   document.getElementById('addTmdbCandidates').style.display = 'none';
   hideAddBoxSetProposal();
+  addTitleLookupResolvedTitle = '';
+  addBarcodeLookupResolvedBarcode = '';
+  updateAddIdentityLock();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
