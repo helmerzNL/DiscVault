@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 
 
 DB_PATH = os.environ.get("DB_PATH", "/data/discvault.db")
+SQLITE_BUSY_TIMEOUT_MS = int(os.environ.get("SQLITE_BUSY_TIMEOUT_MS", "30000"))
+SQLITE_TIMEOUT_SECONDS = max(SQLITE_BUSY_TIMEOUT_MS / 1000.0, 1.0)
 POSTER_DIR = os.environ.get("POSTER_DIR", "/data/posters")
 PROFILE_DIR = os.environ.get("PROFILE_DIR", "/data/profiles")
 BACKUP_DIR = os.environ.get("BACKUP_DIR", "/data/backups")
@@ -39,7 +41,8 @@ class LiveKey:
 
     def _resolve(self) -> str:
         try:
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=SQLITE_TIMEOUT_SECONDS) as conn:
+                conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
                 row = conn.execute(
                     "SELECT value FROM settings WHERE key=?", (self._db_setting,)
                 ).fetchone()

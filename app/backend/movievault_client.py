@@ -5,7 +5,6 @@ import os
 import base64
 import re
 import secrets
-import sqlite3
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -13,7 +12,6 @@ import requests
 
 try:
     from .config import (
-        DB_PATH,
         JWT_SECRET,
         MOVIEVAULT_API_KEY,
         MOVIEVAULT_API_TOKEN,
@@ -22,10 +20,10 @@ try:
         MOVIEVAULT_INGEST_URL,
         RP_NAME,
     )
+    from .db import connect_db
     from .logging_utils import add_log
 except ImportError:  # pragma: no cover - supports running app.py directly
     from config import (
-        DB_PATH,
         JWT_SECRET,
         MOVIEVAULT_API_KEY,
         MOVIEVAULT_API_TOKEN,
@@ -34,6 +32,7 @@ except ImportError:  # pragma: no cover - supports running app.py directly
         MOVIEVAULT_INGEST_URL,
         RP_NAME,
     )
+    from db import connect_db
     from logging_utils import add_log
 
 
@@ -66,7 +65,7 @@ class MovieVaultInstanceRevoked(MovieVaultHandshakeError):
 
 def _setting_value(key: str, default: str = "") -> str:
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with connect_db() as conn:
             row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
         if row and row[0] is not None:
             return str(row[0])
@@ -76,7 +75,7 @@ def _setting_value(key: str, default: str = "") -> str:
 
 
 def _set_setting(key: str, value: str):
-    with sqlite3.connect(DB_PATH) as conn:
+    with connect_db() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             (key, value),
@@ -85,7 +84,7 @@ def _set_setting(key: str, value: str):
 
 
 def _delete_setting(key: str):
-    with sqlite3.connect(DB_PATH) as conn:
+    with connect_db() as conn:
         conn.execute("DELETE FROM settings WHERE key=?", (key,))
         conn.commit()
 
