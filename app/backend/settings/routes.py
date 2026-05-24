@@ -1,3 +1,5 @@
+import threading
+
 from flask import jsonify, request
 
 try:
@@ -25,7 +27,7 @@ try:
         disconnect_movievault_connection,
         enable_movievault_connection,
         perform_handshake,
-        get_movievault_api_token as _movievault_client_api_token,
+        get_stored_movievault_api_token as _movievault_client_api_token,
         movievault_status,
     )
 except ImportError:  # pragma: no cover - supports running app.py directly
@@ -53,9 +55,13 @@ except ImportError:  # pragma: no cover - supports running app.py directly
         disconnect_movievault_connection,
         enable_movievault_connection,
         perform_handshake,
-        get_movievault_api_token as _movievault_client_api_token,
+        get_stored_movievault_api_token as _movievault_client_api_token,
         movievault_status,
     )
+
+
+_movievault_reconnect_lock = threading.Lock()
+_movievault_reconnect_running = False
 
 
 def register_settings_routes(
@@ -130,6 +136,14 @@ def register_settings_routes(
             if source not in order:
                 order.append(source)
         return order
+
+    def _normalize_movievault_connecting_status():
+        if _setting_value("movievault_link_status", "") != "connecting":
+            return
+        with _movievault_reconnect_lock:
+            running = _movievault_reconnect_running
+        if not running:
+            _set_setting("movievault_link_status", "error")
 
     @app.route("/api/settings/sources", methods=["GET"])
     def get_source_settings():
@@ -238,6 +252,7 @@ def register_settings_routes(
         err = require_admin()
         if err:
             return err
+        _normalize_movievault_connecting_status()
 
         def _mask(k):
             k = str(k)
@@ -286,6 +301,7 @@ def register_settings_routes(
         err = require_admin()
         if err:
             return err
+        _normalize_movievault_connecting_status()
         result = movievault_status()
         result.update({
             "movievault_enabled": _bool_setting("movievault_enabled", MOVIEVAULT_ENABLED_DEFAULT),
@@ -301,6 +317,7 @@ def register_settings_routes(
 
     @app.route("/api/settings/movievault/reconnect", methods=["POST"])
     def reconnect_movievault_settings():
+        global _movievault_reconnect_running
         err = require_admin()
         if err:
             return err
@@ -308,24 +325,36 @@ def register_settings_routes(
             result = {"error": "MovieVault integration is disabled"}
             result.update(movievault_status())
             return jsonify(result), 409
-        try:
-            perform_handshake()
-            add_log("settings", "MovieVault connection refreshed", level="info")
-            result = {"status": "ok"}
-            result.update(movievault_status())
-            return jsonify(result)
-        except MovieVaultInstanceRevoked:
-            result = {"error": "MovieVault instance is revoked"}
-            result.update(movievault_status())
-            return jsonify(result), 403
-        except MovieVaultHandshakeError as ex:
-            result = {"error": str(ex)}
-            result.update(movievault_status())
-            return jsonify(result), 502
-        except Exception as ex:
-            result = {"error": str(ex)}
-            result.update(movievault_status())
-            return jsonify(result), 502
+
+        with _movievault_reconnect_lock:
+            if _movievault_reconnect_running:
+                result = {"status": "connecting"}
+                result.update(movievault_status())
+                return jsonify(result), 202
+            _movievault_reconnect_running = True
+        _set_setting("movievault_link_status", "connecting")
+
+        def _worker():
+            global _movievault_reconnect_running
+            try:
+                perform_handshake()
+                add_log("settings", "MovieVault connection refreshed", level="info")
+            except MovieVaultInstanceRevoked:
+                add_log("settings", "MovieVault connection revoked", level="warn")
+            except MovieVaultHandshakeError as ex:
+                _set_setting("movievault_link_status", "error")
+                add_log("settings", f"MovieVault connection failed: {ex}", level="warn")
+            except Exception as ex:
+                _set_setting("movievault_link_status", "error")
+                add_log("settings", f"MovieVault connection failed: {ex}", level="warn")
+            finally:
+                with _movievault_reconnect_lock:
+                    _movievault_reconnect_running = False
+
+        threading.Thread(target=_worker, name="MovieVaultReconnect", daemon=True).start()
+        result = {"status": "connecting"}
+        result.update(movievault_status())
+        return jsonify(result), 202
 
     @app.route("/api/settings/movievault/disconnect", methods=["POST"])
     def disconnect_movievault_settings():

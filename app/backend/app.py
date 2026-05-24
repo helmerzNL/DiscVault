@@ -1909,7 +1909,7 @@ def download_poster(url: str, asset_kind="poster"):
     if not url or url == "N/A":
         return None
     try:
-        resp = requests.get(url, timeout=10, stream=True)
+        resp = requests.get(url, timeout=6, stream=True)
         if resp.status_code != 200:
             return None
         ext = ".jpg"
@@ -2199,7 +2199,7 @@ def download_profile_photo(url: str):
     if not url or url == "N/A":
         return None
     try:
-        resp = requests.get(url, timeout=10, stream=True)
+        resp = requests.get(url, timeout=6, stream=True)
         if resp.status_code != 200:
             return None
         filename = uuid.uuid4().hex + ".jpg"
@@ -2449,10 +2449,45 @@ def _fetch_tmdb_ratings(tmdb_id):
         return {}
 
 
+def _tmdb_ratings_from_release_dates(release_dates: dict | None) -> dict:
+    ratings = {}
+    for entry in (release_dates or {}).get("results", []):
+        country = entry.get("iso_3166_1", "")
+        if country not in RATING_COUNTRIES:
+            continue
+        cert = ""
+        for rd in sorted(entry.get("release_dates", []), key=lambda x: 0 if x.get("type") == 3 else 1):
+            c = (rd.get("certification") or "").strip()
+            if c:
+                cert = c
+                break
+        if cert:
+            ratings[country] = cert
+    return ratings
+
+
+def _tmdb_apply_translations(result: dict, translations: dict | None):
+    items = (translations or {}).get("translations", [])
+    for lang_code, tmdb_lang in TMDB_LANGUAGES:
+        lang, _, country = tmdb_lang.partition("-")
+        exact = None
+        fallback = None
+        for item in items:
+            if item.get("iso_639_1") != lang:
+                continue
+            if item.get("iso_3166_1") == country:
+                exact = item
+                break
+            fallback = fallback or item
+        data = ((exact or fallback or {}).get("data") or {})
+        result[f"title_{lang_code}"] = data.get("title", "") or ""
+        result[f"plot_{lang_code}"] = data.get("overview", "") or ""
+
+
 def lookup_by_barcode_upcitemdb(barcode: str):
     try:
         r = requests.get(
-            f"https://api.upcitemdb.com/prod/trial/lookup?upc={barcode}", timeout=5
+            f"https://api.upcitemdb.com/prod/trial/lookup?upc={barcode}", timeout=3
         )
         if r.status_code == 200:
             items = r.json().get("items", [])
@@ -3135,7 +3170,7 @@ def _movievault_get(path: str, params: dict | None = None):
         return None
     try:
         url = f"{base}{path if path.startswith('/') else '/' + path}"
-        r = movievault_request("GET", url, params=params or {}, include_auth=True, timeout=8)
+        r = movievault_request("GET", url, params=params or {}, include_auth=True, timeout=5)
         detail = f"GET {path}; params={params or {}}; HTTP {r.status_code}"
         if r.status_code == 404:
             _movievault_log("info", "MovieVault lookup route/resource not found", detail)
@@ -4239,9 +4274,9 @@ def lookup_movie_tmdb(title, year=""):
         rd = requests.get(
             f"https://api.themoviedb.org/3/movie/{movie_id}"
             f"?api_key={TMDB_API_KEY}&language=en-US"
-            f"&append_to_response=credits,videos,images"
+            f"&append_to_response=credits,videos,images,translations,release_dates"
             f"&include_image_language=null%2Cen",
-            timeout=8
+            timeout=6
         )
         if rd.status_code != 200:
             if rd.status_code in (401, 403, 429):
@@ -4337,23 +4372,9 @@ def lookup_movie_tmdb(title, year=""):
             "_cast_crew":     cast_crew,
         }
 
-        # 3. Fetch translated title + plot for each DiscVault language
-        for lang_code, tmdb_lang in TMDB_LANGUAGES:
-            try:
-                rt = requests.get(
-                    f"https://api.themoviedb.org/3/movie/{movie_id}"
-                    f"?api_key={TMDB_API_KEY}&language={tmdb_lang}",
-                    timeout=5
-                )
-                if rt.status_code == 200:
-                    td = rt.json()
-                    result[f"title_{lang_code}"] = td.get("title", "") or ""
-                    result[f"plot_{lang_code}"]  = td.get("overview", "") or ""
-            except Exception:
-                pass
+        _tmdb_apply_translations(result, d.get("translations"))
 
-        # 4. Fetch content ratings per country
-        _cr = _fetch_tmdb_ratings(movie_id)
+        _cr = _tmdb_ratings_from_release_dates(d.get("release_dates"))
         if _cr:
             result["_content_ratings"] = _cr
             if not result.get("audience_rating") and _cr.get("US"):
@@ -4496,9 +4517,9 @@ def lookup_movie_tmdb_by_id(tmdb_id):
         rd = requests.get(
             f"https://api.themoviedb.org/3/movie/{tmdb_id}"
             f"?api_key={TMDB_API_KEY}&language=en-US"
-            f"&append_to_response=credits,videos,images"
+            f"&append_to_response=credits,videos,images,translations,release_dates"
             f"&include_image_language=null%2Cen",
-            timeout=8
+            timeout=6
         )
         if rd.status_code != 200:
             if rd.status_code in (401, 403, 429):
@@ -4583,22 +4604,9 @@ def lookup_movie_tmdb_by_id(tmdb_id):
             "language":       d.get("original_language", ""),
             "_cast_crew":     cast_crew,
         }
-        for lang_code, tmdb_lang in TMDB_LANGUAGES:
-            try:
-                rt = requests.get(
-                    f"https://api.themoviedb.org/3/movie/{tmdb_id}"
-                    f"?api_key={TMDB_API_KEY}&language={tmdb_lang}",
-                    timeout=5
-                )
-                if rt.status_code == 200:
-                    td = rt.json()
-                    result[f"title_{lang_code}"] = td.get("title", "") or ""
-                    result[f"plot_{lang_code}"]  = td.get("overview", "") or ""
-            except Exception:
-                pass
+        _tmdb_apply_translations(result, d.get("translations"))
 
-        # Fetch content ratings per country
-        _cr = _fetch_tmdb_ratings(tmdb_id)
+        _cr = _tmdb_ratings_from_release_dates(d.get("release_dates"))
         if _cr:
             result["_content_ratings"] = _cr
             if not result.get("audience_rating") and _cr.get("US"):
@@ -6984,6 +6992,8 @@ def refresh_single(movie_id):
     search_title   = original_title or title
     year           = movie.get("year", "")
     imdb_id        = movie.get("imdb_id", "")
+    conn.close()
+    conn = None
 
     try:
         attempts = []
@@ -6999,13 +7009,24 @@ def refresh_single(movie_id):
             contribute_to_movievault=False,
         )
         if not info:
-            conn.close()
             add_log("refresh", f"Geen resultaat voor \"{search_title}\"", f"Backends: {_trace_summary(attempts)}", "warn")
             return jsonify({"status": "skipped", "reason": "not_found_in_api", "title": title})
 
         info = _finalize_metadata_info(info)
         updates = {f: info[f] for f in METADATA_REFRESH_FIELDS if info.get(f)}
         _merge_video_updates(movie, info, updates)
+
+        conn = get_db()
+        current_row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+        if not current_row:
+            conn.close()
+            conn = None
+            return jsonify({"status": "skipped", "reason": "not_found"})
+        if not _check_movie_owner(current_row):
+            conn.close()
+            conn = None
+            return jsonify({"error": "Not your movie"}), 403
+        movie = dict(current_row)
 
         new_poster_url = info.get("poster", "")
         if new_poster_url and new_poster_url != movie.get("poster"):
@@ -7061,7 +7082,8 @@ def refresh_single(movie_id):
             "fields": fields_updated, "has_poster": bool(has_poster)
         })
     except Exception as e:
-        conn.close()
+        if conn:
+            conn.close()
         add_log("refresh", f"Fout bij \"{title}\"", str(e), "error")
         return jsonify({"status": "error", "title": title, "error": str(e)})
 
@@ -7085,6 +7107,8 @@ def sync_single_all_backends(movie_id):
     search_title = original_title or title
     year = movie.get("year", "")
     imdb_id = movie.get("imdb_id", "")
+    conn.close()
+    conn = None
 
     try:
         attempts = []
@@ -7100,13 +7124,24 @@ def sync_single_all_backends(movie_id):
         )
 
         if not info:
-            conn.close()
             add_log("refresh", f'Sync all sources: no result for "{search_title}"', f"Backends: {_trace_summary(attempts)}", "warn")
             return jsonify({"status": "skipped", "reason": "not_found_in_api", "title": title})
 
         source_label = source_label or "configured metadata sources"
         info = _finalize_metadata_info(info)
         updates = {f: info[f] for f in METADATA_REFRESH_FIELDS if info.get(f)}
+
+        conn = get_db()
+        current_row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+        if not current_row:
+            conn.close()
+            conn = None
+            return jsonify({"status": "skipped", "reason": "not_found"})
+        if not _check_movie_owner(current_row):
+            conn.close()
+            conn = None
+            return jsonify({"error": "Not your movie"}), 403
+        movie = dict(current_row)
 
         new_poster_url = info.get("poster", "")
         if new_poster_url and new_poster_url != movie.get("poster"):
@@ -7168,7 +7203,8 @@ def sync_single_all_backends(movie_id):
             "has_poster": bool(has_poster)
         })
     except Exception as e:
-        conn.close()
+        if conn:
+            conn.close()
         add_log("refresh", f'Error syncing all sources "{title}"', str(e), "error")
         return jsonify({"status": "error", "title": title, "error": str(e)})
 
@@ -7347,10 +7383,12 @@ def bulk_refresh():
         add_log("refresh", "OMDb API key niet geconfigureerd",
                 "TMDb wordt als primaire bron gebruikt. Stel een OMDb key in via Instellingen → Metadata Bronnen.", "warn")
 
-    def _process_movie(conn, movie_id, fetch_posters):
+    def _process_movie(movie_id, fetch_posters):
         """Process a single movie and return (status, title, error_detail)."""
+        conn = get_db()
         row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
         if not row or not _check_movie_owner(row):
+            conn.close()
             add_log("refresh", f"Film ID {movie_id} niet gevonden — overgeslagen", level="warn")
             return "skipped", f"ID {movie_id}", None
         movie = dict(row)
@@ -7359,6 +7397,8 @@ def bulk_refresh():
         search_title   = original_title or title
         year           = movie.get("year", "")
         imdb_id        = movie.get("imdb_id", "")
+        conn.close()
+        conn = None
         try:
             attempts = []
             info, source = _merge_metadata_by_order(
@@ -7379,6 +7419,13 @@ def bulk_refresh():
             info = _finalize_metadata_info(info)
             updates = {f: info[f] for f in METADATA_REFRESH_FIELDS if info.get(f)}
             _merge_video_updates(movie, info, updates)
+
+            conn = get_db()
+            current_row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+            if not current_row or not _check_movie_owner(current_row):
+                conn.close()
+                return "skipped", title, None
+            movie = dict(current_row)
 
             new_poster_url = info.get("poster", "")
             if new_poster_url and new_poster_url != movie.get("poster"):
@@ -7423,6 +7470,8 @@ def bulk_refresh():
             fields_str = ", ".join(updates.keys()) if updates else "(geen wijzigingen)"
             conn.commit()
             movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
+            conn.close()
+            conn = None
             add_log("refresh", f"Bijgewerkt: \"{title}\"",
                     f"Bron: {source}. Velden: {fields_str}. Backends: {_trace_summary(attempts)}", "success")
             _submit_movievault_contribution(
@@ -7436,19 +7485,19 @@ def bulk_refresh():
             )
             return "updated", title, None
         except Exception as e:
-            conn.commit()
+            if conn:
+                conn.close()
             add_log("refresh", f"Fout bij \"{title}\"", f"Exception: {str(e)}", "error")
             return "error", title, f"[{movie_id}] {title}: {str(e)}"
 
     # ── Streaming mode ────────────────────────────────────────────────────────
     if request.args.get("stream") == "1":
         def generate():
-            conn = get_db()
             updated = skipped = errors = 0
             error_details = []
             total = len(ids)
             for i, movie_id in enumerate(ids):
-                status, title, err = _process_movie(conn, movie_id, fetch_posters)
+                status, title, err = _process_movie(movie_id, fetch_posters)
                 if status == "updated":  updated += 1
                 elif status == "skipped": skipped += 1
                 else:
@@ -7461,8 +7510,6 @@ def bulk_refresh():
                     "title":   title,
                     "status":  status,
                 }) + "\n"
-            conn.commit()
-            conn.close()
             add_log("refresh",
                     f"Bulk refresh voltooid: {updated} bijgewerkt, {skipped} overgeslagen, {errors} fouten",
                     ", ".join(error_details[:5]) if error_details else "",
@@ -7477,18 +7524,15 @@ def bulk_refresh():
         return Response(stream_with_context(generate()), mimetype="application/x-ndjson")
 
     # ── Batch mode (legacy) ───────────────────────────────────────────────────
-    conn = get_db()
     updated = skipped = errors = 0
     error_details = []
     for movie_id in ids:
-        status, title, err = _process_movie(conn, movie_id, fetch_posters)
+        status, title, err = _process_movie(movie_id, fetch_posters)
         if status == "updated":  updated += 1
         elif status == "skipped": skipped += 1
         else:
             errors += 1
             if err: error_details.append(err)
-    conn.commit()
-    conn.close()
     return jsonify({
         "status":        "done",
         "updated":       updated,

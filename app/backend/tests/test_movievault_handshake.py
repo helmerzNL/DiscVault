@@ -325,6 +325,22 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         self.assertEqual(status.get("movievault_token_prefix"), "mv_sec")
         self.assertEqual(status.get("movievault_instance_id"), "dv_test_instance")
 
+    def test_movievault_status_does_not_start_handshake_without_token(self):
+        calls = []
+
+        def fake_post(*args, **kwargs):
+            calls.append((args, kwargs))
+            return FakeResponse(500, {"error": "unexpected"})
+
+        self.mv.requests.post = fake_post
+
+        status = self.mv.movievault_status()
+
+        self.assertEqual(calls, [])
+        self.assertFalse(status.get("movievault_token_set"))
+        self.assertEqual(status.get("movievault_link_status"), "unlinked")
+        self.assertTrue(status.get("movievault_handshake_ready"))
+
     def test_disabling_movievault_source_disconnects_and_blocks_reconnect(self):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
