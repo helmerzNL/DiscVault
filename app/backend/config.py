@@ -121,7 +121,7 @@ MOVIEVAULT_CONTRIBUTION_ENABLED_DEFAULT = (
 )
 METADATA_SOURCE_ORDER_DEFAULT = os.environ.get(
     "METADATA_SOURCE_ORDER",
-    "movievault,tmdb,omdb,bluray_com,bluray_disc_de",
+    "movievault,tmdb,omdb,bluray_com",
 )
 APP_TZ = os.environ.get("TZ", "Europe/Amsterdam").strip() or "Europe/Amsterdam"
 

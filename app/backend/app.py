@@ -4843,7 +4843,7 @@ def lookup_movie_bluray_specs(title: str, year: str = "", barcode: str = "") -> 
 
 
 def lookup_movie_bluray_by_barcode(barcode: str) -> dict | None:
-    if not barcode:
+    if not _is_bluray_scrape_enabled() or not barcode:
         return None
     try:
         detail_href = _bluray_find_first_movie_url(barcode)
@@ -6065,23 +6065,40 @@ def lookup_box_set_proposal():
     if not title and not barcode:
         return jsonify({"error": "title or barcode is required"}), 400
     try:
-        proposal = None
-        if barcode:
-            info = lookup_movievault_by_barcode(barcode)
-            proposal = (info or {}).get("box_set_proposal")
-        if not proposal and barcode:
-            info = lookup_movie_bluray_by_barcode(barcode)
-            proposal = (info or {}).get("box_set_proposal")
-        if not proposal and title:
-            proposal = lookup_movievault_box_set_proposal(title, year, barcode)
-        if not proposal and title:
-            proposal = lookup_bluray_box_set_proposal_by_title(title, year)
+        proposal = _lookup_box_set_proposal_by_order(title, year, barcode)
         if proposal:
             _log_bluray_box_set_proposal(barcode or title, proposal)
             return jsonify({"status": "found", "box_set_proposal": proposal})
         return jsonify({"status": "not_found"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def _lookup_box_set_proposal_by_order(title: str = "", year: str = "", barcode: str = "") -> dict | None:
+    for source in _metadata_source_order():
+        if not _metadata_source_enabled(source):
+            continue
+        if source == "movievault":
+            if barcode:
+                info = lookup_movievault_by_barcode(barcode)
+                proposal = (info or {}).get("box_set_proposal")
+                if proposal:
+                    return proposal
+            if title:
+                proposal = lookup_movievault_box_set_proposal(title, year, barcode)
+                if proposal:
+                    return proposal
+        elif source == "bluray_com":
+            if barcode:
+                info = lookup_movie_bluray_by_barcode(barcode)
+                proposal = (info or {}).get("box_set_proposal")
+                if proposal:
+                    return proposal
+            if title:
+                proposal = lookup_bluray_box_set_proposal_by_title(title, year)
+                if proposal:
+                    return proposal
+    return None
 
 
 def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dict | None, str, dict | None, list, str]:
@@ -6675,7 +6692,7 @@ def sync_single_source(movie_id):
     data = request.json or {}
     source = (data.get("source") or "").strip()
     fetch_posters = data.get("fetch_posters", True)
-    allowed = {"omdb_imdb", "tmdb_title", "omdb_title", "fallback_title", "bluray_com", "bluray_disc_de"}
+    allowed = {"omdb_imdb", "tmdb_title", "omdb_title", "fallback_title", "bluray_com"}
     if source not in allowed:
         return jsonify({"status": "error", "error": "Unknown source"}), 400
 
@@ -6738,18 +6755,6 @@ def sync_single_source(movie_id):
             else:
                 _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
             source_label = "Blu-ray.com"
-
-        elif source == "bluray_disc_de":
-            if _is_bluraydiscde_scrape_enabled():
-                specs, d_attempts = lookup_movie_bluraydiscde_specs_traced(search_title, year, barcode)
-                for a in d_attempts:
-                    _trace_add(attempts, "bluray-disc.de", a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
-                info = _merge_disc_specs({}, specs)
-                if specs and specs.get("poster"):
-                    info["poster"] = specs.get("poster")
-            else:
-                _trace_add(attempts, "bluray-disc.de", "skipped", "source toggle uit")
-            source_label = "bluray-disc.de"
 
         if not info:
             conn.close()
@@ -8027,7 +8032,6 @@ METADATA_SOURCE_LABELS = {
     "tmdb": "TMDb",
     "omdb": "OMDb",
     "bluray_com": "Blu-ray.com",
-    "bluray_disc_de": "bluray-disc.de",
 }
 
 
@@ -8080,8 +8084,6 @@ def _metadata_source_enabled(source: str) -> bool:
         return _is_omdb_enabled()
     if source == "bluray_com":
         return _is_bluray_scrape_enabled()
-    if source == "bluray_disc_de":
-        return _is_bluraydiscde_scrape_enabled()
     return False
 
 
@@ -8202,16 +8204,6 @@ def _merge_metadata_by_order(
                 data = _merge_disc_specs(base or {"title": primary_title, "year": year}, specs)
                 if not specs and not base:
                     data = None
-            elif source == "bluray_disc_de":
-                if not primary_title:
-                    _trace_add(attempts, label, "skipped", "geen titel")
-                    continue
-                specs, source_attempts = lookup_movie_bluraydiscde_specs_traced(primary_title, year, barcode)
-                for a in source_attempts:
-                    _trace_add(attempts, label, a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
-                data = _merge_disc_specs({"title": primary_title, "year": year}, specs) if specs else None
-                if specs and specs.get("poster") and data and not data.get("poster"):
-                    data["poster"] = specs.get("poster")
         except Exception as ex:
             _trace_add(attempts, label, "error", f"title={primary_title}", str(ex))
             data = None

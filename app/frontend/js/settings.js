@@ -146,7 +146,7 @@ function selectRatingCountry(code) {
   showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }
 
-const METADATA_SOURCE_ORDER_DEFAULT = ['movievault', 'tmdb', 'omdb', 'bluray_com', 'bluray_disc_de'];
+const METADATA_SOURCE_ORDER_DEFAULT = ['movievault', 'tmdb', 'omdb', 'bluray_com'];
 let metadataSourceOrderDirty = false;
 let metadataSourceDragId = '';
 let metadataSourceOrderSavedValue = '';
@@ -167,12 +167,10 @@ async function loadSourceSettings() {
     const elOmdb = document.getElementById('sourceOmdbToggle');
     const elTmdb = document.getElementById('sourceTmdbToggle');
     const el = document.getElementById('sourceBlurayToggle');
-    const el2 = document.getElementById('sourceBlurayDiscDeToggle');
     if (elMovieVault) elMovieVault.checked = d.movievault_enabled !== false;
     if (elOmdb) { elOmdb.checked = !!d.omdb_enabled; elOmdb.disabled = !d.omdb_key_set; }
     if (elTmdb) { elTmdb.checked = !!d.tmdb_enabled; elTmdb.disabled = !d.tmdb_key_set; }
     if (el)  el.checked  = !!d.bluray_scrape_enabled;
-    if (el2) el2.checked = !!d.bluraydiscde_scrape_enabled;
     _applyMovieVaultSourceState(d.movievault_enabled !== false);
     _renderMetadataSourceOrder(d);
     _applyApiKeyBadge('omdb', d.omdb_key_set);
@@ -186,10 +184,14 @@ async function loadSourceSettings() {
 
 function ensureMetadataSourceOrderRendered() {
   const list = document.getElementById('metadataSourceOrderList');
-  if (list && list.children.length === 0) {
+  if (!list) return;
+  if (list.children.length === 0) {
     _renderMetadataSourceOrder({});
-    _refreshMetadataSourceOrderStates();
+  } else {
+    metadataSourceOrderSavedValue = _metadataSourceOrderValue();
+    _bindMetadataSourceDrag(list);
   }
+  _refreshMetadataSourceOrderStates();
 }
 
 function _applyBadge(id, text, state) {
@@ -239,7 +241,6 @@ function _metadataSourceStateFromSettings(data) {
     tmdb: _settingsBool(data.tmdb_enabled) && !!data.tmdb_key_set,
     omdb: _settingsBool(data.omdb_enabled) && !!data.omdb_key_set,
     bluray_com: !!data.bluray_scrape_enabled,
-    bluray_disc_de: !!data.bluraydiscde_scrape_enabled,
   };
 }
 
@@ -252,13 +253,11 @@ function _metadataSourceStateFromInputs() {
   const elOmdb = document.getElementById('sourceOmdbToggle');
   const elTmdb = document.getElementById('sourceTmdbToggle');
   const el = document.getElementById('sourceBlurayToggle');
-  const el2 = document.getElementById('sourceBlurayDiscDeToggle');
   return {
     movievault: !!(elMovieVault && elMovieVault.checked),
     tmdb: !!(elTmdb && elTmdb.checked && !elTmdb.disabled),
     omdb: !!(elOmdb && elOmdb.checked && !elOmdb.disabled),
     bluray_com: !!(el && el.checked),
-    bluray_disc_de: !!(el2 && el2.checked),
   };
 }
 
@@ -268,7 +267,6 @@ function _metadataSourceLabel(source, labels = {}) {
     tmdb: 'TMDb',
     omdb: 'OMDb',
     bluray_com: 'Blu-ray.com',
-    bluray_disc_de: 'bluray-disc.de',
   }[source] || source;
 }
 
@@ -550,13 +548,11 @@ async function saveSourceSettings(options = {}) {
   const elOmdb = document.getElementById('sourceOmdbToggle');
   const elTmdb = document.getElementById('sourceTmdbToggle');
   const el = document.getElementById('sourceBlurayToggle');
-  const el2 = document.getElementById('sourceBlurayDiscDeToggle');
   const body = {
     movievault_enabled: !!(elMovieVault && elMovieVault.checked),
     omdb_enabled: !!(elOmdb && elOmdb.checked),
     tmdb_enabled: !!(elTmdb && elTmdb.checked),
     bluray_scrape_enabled: !!(el && el.checked),
-    bluraydiscde_scrape_enabled: !!(el2 && el2.checked),
     metadata_source_order: _metadataSourceOrderValue(),
   };
   _applyMovieVaultSourceState(body.movievault_enabled);

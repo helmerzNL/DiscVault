@@ -72,7 +72,6 @@ def register_settings_routes(
         "tmdb": "TMDb",
         "omdb": "OMDb",
         "bluray_com": "Blu-ray.com",
-        "bluray_disc_de": "bluray-disc.de",
     }
 
     def _setting_value(key: str, default: str = "") -> str:
@@ -165,7 +164,6 @@ def register_settings_routes(
             ("omdb_enabled", "OMDb"),
             ("tmdb_enabled", "TMDb"),
             ("bluray_scrape_enabled", "Blu-ray.com"),
-            ("bluraydiscde_scrape_enabled", "bluray-disc.de"),
         ]
         result = {}
         conn = get_db()
