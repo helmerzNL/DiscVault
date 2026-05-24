@@ -1115,6 +1115,17 @@
   @media (min-width: 900px) {
     .add-main-layout { flex-direction: row; align-items: flex-start; }
     .add-candidates-panel { width: 360px; flex-shrink: 0; order: 2; position: sticky; top: 80px; }
+    .add-candidates-inline {
+      width: auto;
+      max-width: none;
+      flex-shrink: 1;
+      order: initial;
+      position: static;
+      top: auto;
+    }
+    .add-candidates-inline .tmdb-candidate-list {
+      grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+    }
     .add-form-section { order: 1; }
   }
   @media (max-width: 600px) {
