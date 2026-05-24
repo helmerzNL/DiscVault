@@ -160,7 +160,7 @@ function switchToevoegen(sub) {
     btn.classList.toggle('active', btn.getAttribute('data-toevoegen-sub') === sub);
   });
   const map = { scan: 'addSubScan', manual: 'addSubManual', import: 'addSubImport' };
-  document.querySelectorAll('#panel-toevoegen .settings-sub-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('#panel-toevoegen .profile-sub-section').forEach(s => s.classList.remove('active'));
   const el = document.getElementById(map[sub]);
   if (el) el.classList.add('active');
 }

@@ -77,6 +77,7 @@ async function loadSettings() {
   loadAuthSettings();
   loadQueueSettings();
   loadSourceSettings();
+  loadMovieVaultIntegrationStatus();
   loadApiKeySettings();
   loadDebugSettings(); // also initialises showLocalTitleToggle
   loadLanguagePicker();
@@ -145,35 +146,199 @@ function selectRatingCountry(code) {
   showStatus('preferencesStatus', t('js.advancedSettingsSaved'), 'success');
 }
 
+const METADATA_SOURCE_ORDER_DEFAULT = ['movievault', 'tmdb', 'omdb', 'bluray_com', 'bluray_disc_de'];
+let metadataSourceOrderDirty = false;
+let metadataSourceDragId = '';
+let metadataSourceOrderSavedValue = '';
+let movieVaultIntegrationDisabled = false;
+
+function _settingsEsc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
 async function loadSourceSettings() {
   try {
     const r = await fetch(`${API}/settings/sources`);
     const d = await r.json();
+    const elMovieVault = document.getElementById('sourceMovieVaultToggle');
     const elOmdb = document.getElementById('sourceOmdbToggle');
     const elTmdb = document.getElementById('sourceTmdbToggle');
     const el = document.getElementById('sourceBlurayToggle');
     const el2 = document.getElementById('sourceBlurayDiscDeToggle');
+    if (elMovieVault) elMovieVault.checked = d.movievault_enabled !== false;
     if (elOmdb) { elOmdb.checked = !!d.omdb_enabled; elOmdb.disabled = !d.omdb_key_set; }
     if (elTmdb) { elTmdb.checked = !!d.tmdb_enabled; elTmdb.disabled = !d.tmdb_key_set; }
     if (el)  el.checked  = !!d.bluray_scrape_enabled;
     if (el2) el2.checked = !!d.bluraydiscde_scrape_enabled;
-    const orderInput = document.getElementById('metadataSourceOrderInput');
-    if (orderInput) orderInput.value = d.metadata_source_order_value || (Array.isArray(d.metadata_source_order) ? d.metadata_source_order.join(',') : '');
+    _applyMovieVaultSourceState(d.movievault_enabled !== false);
+    _renderMetadataSourceOrder(d);
     _applyApiKeyBadge('omdb', d.omdb_key_set);
     _applyApiKeyBadge('tmdb', d.tmdb_key_set);
+    _setSourceOrderDirty(false);
   } catch(e) {}
 }
 
-function _applyApiKeyBadge(service, isSet) {
-  const badge = document.getElementById(`${service}KeyBadge`);
+function _applyBadge(id, text, state) {
+  const badge = document.getElementById(id);
   if (!badge) return;
+  badge.textContent = text;
+  badge.className = `metadata-source-badge ${state || ''}`.trim();
+  badge.style.display = 'inline-flex';
+}
+
+function _applyApiKeyBadge(service, isSet) {
+  const id = `${service}KeyBadge`;
   if (isSet) {
-    badge.textContent = '\u2713 Ingesteld';
-    badge.style.cssText = 'display:inline; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; background:rgba(80,200,120,0.15); color:#5c8; border:1px solid rgba(80,200,120,0.3);';
+    _applyBadge(id, `\u2713 ${t('settings.badgeConfigured')}`, 'success');
   } else {
-    badge.textContent = '\u26A0 Geen key';
-    badge.style.cssText = 'display:inline; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; background:rgba(255,160,0,0.15); color:#fa0; border:1px solid rgba(255,160,0,0.3);';
+    _applyBadge(id, `\u26A0 ${t('settings.badgeNoKey')}`, 'warning');
   }
+}
+
+function _applyMovieVaultSourceState(enabled) {
+  const row = document.getElementById('sourceMovieVaultRow');
+  if (row) row.classList.toggle('is-disabled', !enabled);
+  _applyBadge(
+    'movievaultActiveBadge',
+    enabled ? `\u2713 ${t('settings.badgeActive')}` : t('settings.badgeDisabled'),
+    enabled ? 'success' : 'muted',
+  );
+}
+
+function _metadataSourceStateFromSettings(data) {
+  return {
+    movievault: data.movievault_enabled !== false,
+    tmdb: _settingsBool(data.tmdb_enabled) && !!data.tmdb_key_set,
+    omdb: _settingsBool(data.omdb_enabled) && !!data.omdb_key_set,
+    bluray_com: !!data.bluray_scrape_enabled,
+    bluray_disc_de: !!data.bluraydiscde_scrape_enabled,
+  };
+}
+
+function _settingsBool(value) {
+  return value === true || value === 'true' || value === 1;
+}
+
+function _metadataSourceStateFromInputs() {
+  const elMovieVault = document.getElementById('sourceMovieVaultToggle');
+  const elOmdb = document.getElementById('sourceOmdbToggle');
+  const elTmdb = document.getElementById('sourceTmdbToggle');
+  const el = document.getElementById('sourceBlurayToggle');
+  const el2 = document.getElementById('sourceBlurayDiscDeToggle');
+  return {
+    movievault: !!(elMovieVault && elMovieVault.checked),
+    tmdb: !!(elTmdb && elTmdb.checked && !elTmdb.disabled),
+    omdb: !!(elOmdb && elOmdb.checked && !elOmdb.disabled),
+    bluray_com: !!(el && el.checked),
+    bluray_disc_de: !!(el2 && el2.checked),
+  };
+}
+
+function _metadataSourceLabel(source, labels = {}) {
+  return labels[source] || {
+    movievault: 'MovieVault',
+    tmdb: 'TMDb',
+    omdb: 'OMDb',
+    bluray_com: 'Blu-ray.com',
+    bluray_disc_de: 'bluray-disc.de',
+  }[source] || source;
+}
+
+function _normalizeMetadataSourceOrder(order) {
+  const requested = Array.isArray(order)
+    ? order
+    : String(order || '').split(',');
+  const normalized = [];
+  for (const source of requested) {
+    const key = String(source || '').trim().toLowerCase();
+    if (METADATA_SOURCE_ORDER_DEFAULT.includes(key) && !normalized.includes(key)) {
+      normalized.push(key);
+    }
+  }
+  for (const key of METADATA_SOURCE_ORDER_DEFAULT) {
+    if (!normalized.includes(key)) normalized.push(key);
+  }
+  return normalized;
+}
+
+function _renderMetadataSourceOrder(data = {}) {
+  const list = document.getElementById('metadataSourceOrderList');
+  if (!list) return;
+  const order = _normalizeMetadataSourceOrder(data.metadata_source_order || data.metadata_source_order_value);
+  const labels = data.metadata_source_labels || {};
+  const states = _metadataSourceStateFromSettings(data);
+  list.innerHTML = order.map(source => {
+    const enabled = states[source] !== false;
+    return `<div class="metadata-source-order-item${enabled ? '' : ' is-disabled'}" draggable="true" data-source="${_settingsEsc(source)}">
+      <span class="metadata-source-order-handle mdi mdi-drag" aria-hidden="true"></span>
+      <span class="metadata-source-order-label">${_settingsEsc(_metadataSourceLabel(source, labels))}</span>
+      <span class="metadata-source-order-state">${enabled ? _settingsEsc(t('settings.badgeActive')) : _settingsEsc(t('settings.badgeDisabled'))}</span>
+    </div>`;
+  }).join('');
+  metadataSourceOrderSavedValue = order.join(',');
+  _bindMetadataSourceDrag(list);
+}
+
+function _refreshMetadataSourceOrderStates() {
+  const list = document.getElementById('metadataSourceOrderList');
+  if (!list) return;
+  const states = _metadataSourceStateFromInputs();
+  list.querySelectorAll('.metadata-source-order-item').forEach(item => {
+    const source = item.dataset.source;
+    const enabled = states[source] !== false;
+    item.classList.toggle('is-disabled', !enabled);
+    const state = item.querySelector('.metadata-source-order-state');
+    if (state) state.textContent = enabled ? t('settings.badgeActive') : t('settings.badgeDisabled');
+  });
+}
+
+function _bindMetadataSourceDrag(list) {
+  list.querySelectorAll('.metadata-source-order-item').forEach(item => {
+    item.addEventListener('dragstart', (event) => {
+      metadataSourceDragId = item.dataset.source || '';
+      item.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', metadataSourceDragId);
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      _setSourceOrderDirty(_metadataSourceOrderValue() !== metadataSourceOrderSavedValue);
+      metadataSourceDragId = '';
+    });
+    item.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      const dragging = list.querySelector('.metadata-source-order-item.dragging');
+      if (!dragging || dragging === item) return;
+      item.classList.add('drag-over');
+      const box = item.getBoundingClientRect();
+      const after = event.clientY > box.top + box.height / 2;
+      list.insertBefore(dragging, after ? item.nextSibling : item);
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+    item.addEventListener('drop', (event) => {
+      event.preventDefault();
+      item.classList.remove('drag-over');
+      if (metadataSourceDragId) _setSourceOrderDirty(true);
+    });
+  });
+}
+
+function _metadataSourceOrderValue() {
+  const list = document.getElementById('metadataSourceOrderList');
+  if (!list) return METADATA_SOURCE_ORDER_DEFAULT.join(',');
+  const order = Array.from(list.querySelectorAll('.metadata-source-order-item'))
+    .map(item => item.dataset.source)
+    .filter(Boolean);
+  return _normalizeMetadataSourceOrder(order).join(',');
+}
+
+function _setSourceOrderDirty(isDirty) {
+  metadataSourceOrderDirty = !!isDirty;
+  const btn = document.getElementById('metadataSourceOrderSaveBtn');
+  if (btn) btn.disabled = !metadataSourceOrderDirty;
 }
 
 function _setMovieVaultInfo(id, value) {
@@ -182,6 +347,7 @@ function _setMovieVaultInfo(id, value) {
 }
 
 function _movievaultStatusLabel(data) {
+  if (data.movievault_enabled === false) return t('settings.movievaultStatusDisabled');
   const status = String(data.movievault_link_status || '').toLowerCase();
   if (status === 'active' || data.movievault_token_set) return t('settings.movievaultStatusLinked');
   if (status === 'revoked') return t('settings.movievaultStatusRevoked');
@@ -197,6 +363,8 @@ function _formatMovieVaultTime(value) {
 }
 
 function updateMovieVaultIntegrationInfo(data) {
+  data = data || {};
+  movieVaultIntegrationDisabled = data.movievault_enabled === false;
   const instanceParts = [data.movievault_instance_name, data.movievault_instance_id].filter(Boolean);
   const tokenLabel = data.movievault_token_prefix
     ? `${data.movievault_token_prefix}...`
@@ -206,6 +374,27 @@ function updateMovieVaultIntegrationInfo(data) {
   _setMovieVaultInfo('movievaultAuthInfo', data.movievault_auth_method || '-');
   _setMovieVaultInfo('movievaultTokenInfo', tokenLabel);
   _setMovieVaultInfo('movievaultLastHandshakeInfo', _formatMovieVaultTime(data.movievault_last_handshake_at));
+  const btn = document.getElementById('movievaultReconnectBtn');
+  if (btn) {
+    btn.disabled = movieVaultIntegrationDisabled;
+    btn.title = movieVaultIntegrationDisabled ? t('settings.movievaultEnableToReconnect') : '';
+  }
+}
+
+async function loadMovieVaultIntegrationStatus() {
+  const card = document.getElementById('movievaultIntegrationCard');
+  if (!card) return;
+  updateMovieVaultIntegrationInfo({
+    movievault_enabled: !movieVaultIntegrationDisabled,
+    movievault_link_status: 'unlinked',
+    movievault_auth_method: 'bootstrap_signed',
+    movievault_token_set: false,
+  });
+  try {
+    const r = await fetch(`${API}/settings/movievault/status`, { headers: authHeaders() });
+    if (!r.ok) return;
+    updateMovieVaultIntegrationInfo(await r.json());
+  } catch(e) {}
 }
 
 async function loadApiKeySettings() {
@@ -279,6 +468,10 @@ async function saveApiKey(service) {
 
 async function reconnectMovieVault() {
   const btn = document.getElementById('movievaultReconnectBtn');
+  if (movieVaultIntegrationDisabled) {
+    showStatus('movievaultReconnectStatus', t('settings.movievaultEnableToReconnect'), 'info');
+    return;
+  }
   if (btn) btn.disabled = true;
   showStatus('movievaultReconnectStatus', t('settings.movievaultReconnecting'), 'info');
   try {
@@ -292,33 +485,38 @@ async function reconnectMovieVault() {
       showStatus('movievaultReconnectStatus', d.error || t('settings.movievaultReconnectFailed'), 'error');
       return;
     }
+    await loadMovieVaultIntegrationStatus();
     await loadApiKeySettings();
     await loadSourceSettings();
     showStatus('movievaultReconnectStatus', t('settings.movievaultReconnectOk'), 'success');
   } catch(e) {
     showStatus('movievaultReconnectStatus', t('js.error', e.message), 'error');
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) btn.disabled = movieVaultIntegrationDisabled;
   }
 }
 
-async function saveSourceSettings() {
+async function saveSourceSettings(options = {}) {
+  if (options && options.orderOnly && !metadataSourceOrderDirty) return;
+  const elMovieVault = document.getElementById('sourceMovieVaultToggle');
   const elOmdb = document.getElementById('sourceOmdbToggle');
   const elTmdb = document.getElementById('sourceTmdbToggle');
   const el = document.getElementById('sourceBlurayToggle');
   const el2 = document.getElementById('sourceBlurayDiscDeToggle');
-  const orderInput = document.getElementById('metadataSourceOrderInput');
   const body = {
+    movievault_enabled: !!(elMovieVault && elMovieVault.checked),
     omdb_enabled: !!(elOmdb && elOmdb.checked),
     tmdb_enabled: !!(elTmdb && elTmdb.checked),
     bluray_scrape_enabled: !!(el && el.checked),
     bluraydiscde_scrape_enabled: !!(el2 && el2.checked),
-    metadata_source_order: (orderInput?.value || '').trim(),
+    metadata_source_order: _metadataSourceOrderValue(),
   };
+  _applyMovieVaultSourceState(body.movievault_enabled);
+  _refreshMetadataSourceOrderStates();
   try {
     const r = await fetch(`${API}/settings/sources`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(body)
     });
     const d = await r.json();
@@ -326,6 +524,9 @@ async function saveSourceSettings() {
       showStatus('sourceSettingsStatus', d.error || t('js.saveFailed'), 'error');
       return;
     }
+    updateMovieVaultIntegrationInfo(d);
+    await loadSourceSettings();
+    await loadMovieVaultIntegrationStatus();
     showStatus('sourceSettingsStatus', t('js.sourceSettingsSaved'), 'success');
   } catch(e) {
     showStatus('sourceSettingsStatus', t('js.error', e.message), 'error');

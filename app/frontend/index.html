@@ -183,23 +183,27 @@
 
   <!-- TOEVOEGEN PANEL -->
   <div class="panel" id="panel-toevoegen">
-    <div class="settings-submenu">
-      <button class="settings-sub-btn active" type="button" data-toevoegen-sub="scan" onclick="switchToevoegen('scan')">
-        <span class="settings-sub-icon mdi mdi-barcode-scan" aria-hidden="true"></span>
-        <span class="settings-sub-label" data-i18n="toevoegen.scan">Barcode scannen</span>
-      </button>
-      <button class="settings-sub-btn" type="button" data-toevoegen-sub="manual" onclick="switchToevoegen('manual')">
-        <span class="settings-sub-icon mdi mdi-pencil-plus-outline" aria-hidden="true"></span>
-        <span class="settings-sub-label" data-i18n="toevoegen.manual">Handmatig</span>
-      </button>
-      <button class="settings-sub-btn" type="button" data-toevoegen-sub="import" onclick="switchToevoegen('import')">
-        <span class="settings-sub-icon mdi mdi-database-import-outline" aria-hidden="true"></span>
-        <span class="settings-sub-label" data-i18n="toevoegen.import">Importeren</span>
-      </button>
+    <div class="profile-layout">
+      <nav class="profile-sidebar" aria-label="Toevoegen navigatie">
+        <button class="profile-sidebar-btn active" type="button" data-toevoegen-sub="scan" onclick="switchToevoegen('scan')">
+          <span class="mdi mdi-barcode-scan profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="toevoegen.scan">Barcode scannen</span>
+        </button>
+        <button class="profile-sidebar-btn" type="button" data-toevoegen-sub="manual" onclick="switchToevoegen('manual')">
+          <span class="mdi mdi-pencil-plus-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="toevoegen.manual">Handmatig</span>
+        </button>
+        <button class="profile-sidebar-btn" type="button" data-toevoegen-sub="import" onclick="switchToevoegen('import')">
+          <span class="mdi mdi-database-import-outline profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="toevoegen.import">Importeren</span>
+        </button>
+      </nav>
+      <div class="profile-content">
+        <div class="profile-sub-section active" id="addSubScan"></div>
+        <div class="profile-sub-section" id="addSubManual"></div>
+        <div class="profile-sub-section" id="addSubImport"></div>
+      </div>
     </div>
-    <div class="settings-sub-section active" id="addSubScan"></div>
-    <div class="settings-sub-section" id="addSubManual"></div>
-    <div class="settings-sub-section" id="addSubImport"></div>
   </div>
 
   <!-- COLLECTION PANEL -->
@@ -1193,6 +1197,13 @@
           <div class="card" id="metadataSourcesCard" style="margin-top:20px;">
             <div class="card-title" data-i18n="settings.metadataSources">Metadata Bronnen</div>
 
+            <!-- MovieVault -->
+            <label id="sourceMovieVaultRow" class="metadata-source-row">
+              <input type="checkbox" id="sourceMovieVaultToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
+              <span data-i18n="settings.movievaultMetadataDesc">MovieVault - Request and Share movie Meta Data with MovieVault</span>
+              <span id="movievaultActiveBadge" class="metadata-source-badge" style="display:none;"></span>
+            </label>
+
             <!-- OMDb -->
             <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:6px;">
               <input type="checkbox" id="sourceOmdbToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
@@ -1244,11 +1255,13 @@
               De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiële API.
             </div>
             <div style="margin-top:14px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-              <label for="metadataSourceOrderInput" style="display:block; font-size:0.78rem; font-weight:600; color:var(--text); margin-bottom:6px;" data-i18n="settings.sourceOrderLabel">Bronvolgorde</label>
-              <input type="text" id="metadataSourceOrderInput" autocomplete="off" data-i18n-placeholder="settings.sourceOrderPlaceholder" placeholder="movievault,tmdb,omdb,bluray_com"
-                style="width:100%; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+                <div style="font-size:0.78rem; font-weight:600; color:var(--text);" data-i18n="settings.sourceOrderLabel">Bronvolgorde</div>
+                <button type="button" id="metadataSourceOrderSaveBtn" class="btn btn-secondary" onclick="saveSourceSettings({ orderOnly: true })" disabled style="min-height:34px; padding:6px 12px; font-size:0.78rem;" data-i18n="settings.sourceOrderSave">Volgorde opslaan</button>
+              </div>
+              <div id="metadataSourceOrderList" class="metadata-source-order-list" aria-label="Metadata source order"></div>
               <div style="font-size:0.72rem; color:var(--text-muted); margin-top:7px; line-height:1.5;" data-i18n="settings.sourceOrderHelp">
-                DiscVault probeert bronnen van links naar rechts. Standaard: MovieVault, TMDb, OMDb, Blu-ray.com.
+                Sleep bronnen om de volgorde te wijzigen. DiscVault probeert bronnen van boven naar beneden.
               </div>
             </div>
             <div id="sourceSettingsStatus" class="status-msg" style="margin-top:12px;"></div>
