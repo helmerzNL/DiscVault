@@ -151,6 +151,7 @@ let metadataSourceOrderDirty = false;
 let metadataSourceDragId = '';
 let metadataSourceOrderSavedValue = '';
 let movieVaultIntegrationDisabled = false;
+let movieVaultIntegrationConnecting = false;
 
 function _settingsEsc(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -226,7 +227,7 @@ function _updateMovieVaultActionButtons(enabled) {
   movieVaultIntegrationDisabled = !enabled;
   const reconnectBtn = document.getElementById('movievaultReconnectBtn');
   if (reconnectBtn) {
-    reconnectBtn.disabled = !enabled;
+    reconnectBtn.disabled = !enabled || movieVaultIntegrationConnecting;
     reconnectBtn.title = enabled ? '' : t('settings.movievaultEnableToReconnect');
   }
   const disconnectBtn = document.getElementById('movievaultDisconnectBtn');
@@ -373,6 +374,7 @@ function _setMovieVaultInfo(id, value) {
 function _movievaultStatusLabel(data) {
   if (data.movievault_enabled === false) return t('settings.movievaultStatusDisabled');
   const status = String(data.movievault_link_status || '').toLowerCase();
+  if (status === 'connecting') return t('settings.movievaultStatusConnecting');
   if (status === 'active' || data.movievault_token_set) return t('settings.movievaultStatusLinked');
   if (status === 'revoked') return t('settings.movievaultStatusRevoked');
   if (status === 'error') return t('settings.movievaultStatusError');
@@ -389,6 +391,7 @@ function _formatMovieVaultTime(value) {
 function updateMovieVaultIntegrationInfo(data) {
   data = data || {};
   movieVaultIntegrationDisabled = data.movievault_enabled === false;
+  movieVaultIntegrationConnecting = String(data.movievault_link_status || '').toLowerCase() === 'connecting';
   const instanceParts = [data.movievault_instance_name, data.movievault_instance_id].filter(Boolean);
   const tokenLabel = data.movievault_token_prefix
     ? `${data.movievault_token_prefix}...`
@@ -399,6 +402,24 @@ function updateMovieVaultIntegrationInfo(data) {
   _setMovieVaultInfo('movievaultTokenInfo', tokenLabel);
   _setMovieVaultInfo('movievaultLastHandshakeInfo', _formatMovieVaultTime(data.movievault_last_handshake_at));
   _updateMovieVaultActionButtons(!movieVaultIntegrationDisabled);
+}
+
+function _movievaultIsConnecting(data) {
+  return String((data || {}).movievault_link_status || '').toLowerCase() === 'connecting'
+    || String((data || {}).status || '').toLowerCase() === 'connecting';
+}
+
+async function _pollMovieVaultReconnectStatus() {
+  let latest = null;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const r = await fetch(`${API}/settings/movievault/status`, { headers: authHeaders() });
+    if (!r.ok) break;
+    latest = await r.json();
+    updateMovieVaultIntegrationInfo(latest);
+    if (!_movievaultIsConnecting(latest)) break;
+  }
+  return latest;
 }
 
 async function loadMovieVaultIntegrationStatus() {
@@ -505,6 +526,18 @@ async function reconnectMovieVault() {
       showStatus('movievaultReconnectStatus', d.error || t('settings.movievaultReconnectFailed'), 'error');
       return;
     }
+    if (_movievaultIsConnecting(d)) {
+      const finalStatus = await _pollMovieVaultReconnectStatus();
+      if (!finalStatus || _movievaultIsConnecting(finalStatus)) {
+        showStatus('movievaultReconnectStatus', t('settings.movievaultReconnecting'), 'info');
+        return;
+      }
+      const finalLinkStatus = String(finalStatus.movievault_link_status || '').toLowerCase();
+      if (finalLinkStatus === 'error' || finalLinkStatus === 'revoked') {
+        showStatus('movievaultReconnectStatus', finalStatus.error || t('settings.movievaultReconnectFailed'), 'error');
+        return;
+      }
+    }
     await loadMovieVaultIntegrationStatus();
     await loadApiKeySettings();
     await loadSourceSettings();
@@ -512,7 +545,7 @@ async function reconnectMovieVault() {
   } catch(e) {
     showStatus('movievaultReconnectStatus', t('js.error', e.message), 'error');
   } finally {
-    if (btn) btn.disabled = movieVaultIntegrationDisabled;
+    if (btn) btn.disabled = movieVaultIntegrationDisabled || movieVaultIntegrationConnecting;
   }
 }
 

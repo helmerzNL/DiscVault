@@ -229,6 +229,10 @@ def get_movievault_api_token() -> str:
     return token_provider().get_token()
 
 
+def get_stored_movievault_api_token() -> str:
+    return _stored_movievault_api_token()
+
+
 def mask_token(token: str | None) -> str:
     token = str(token or "").strip()
     if not token:
@@ -656,7 +660,7 @@ def movievault_status() -> dict:
         scopes = []
     if not isinstance(scopes, list):
         scopes = []
-    token = get_movievault_api_token()
+    token = get_stored_movievault_api_token()
     return {
         "movievault_auth_method": token_provider().name,
         "movievault_enabled": is_movievault_integration_enabled(),
