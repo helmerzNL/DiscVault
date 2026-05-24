@@ -1203,20 +1203,20 @@
               <span id="movievaultKeyBadge" style="display:none; font-size:0.65rem; padding:1px 7px; border-radius:10px; font-weight:600; margin-left:4px;"></span>
             </div>
             <div id="movievaultKeyBlock" style="margin:0 0 16px 24px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <input type="url" id="movievaultUrlInput" autocomplete="off" data-i18n-placeholder="settings.movievaultUrlPlaceholder" placeholder="https://movievault-search.example.com"
-                  style="flex:1 1 240px; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
-                <input type="url" id="movievaultContributionUrlInput" autocomplete="off" data-i18n-placeholder="settings.movievaultContributionUrlPlaceholder" placeholder="https://movievault-ingest.example.com"
-                  style="flex:1 1 240px; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
-                <input type="password" id="movievaultKeyInput" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholderMovievault" placeholder="Plak je MovieVault API token hier..."
-                  style="flex:1 1 220px; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
-                <button type="button" onclick="toggleKeyVisibility('movievault')" title="Toon/verberg key" style="padding:6px 10px; font-size:0.85rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--text);">👁</button>
-                <button class="btn btn-primary" onclick="saveApiKey('movievault')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
-                <button type="button" id="movievaultKeyClearBtn" onclick="clearApiKey('movievault')" style="display:none; padding:6px 10px; font-size:0.8rem; background:var(--surface3); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--danger);">🗑</button>
-              </div>
+              <div id="movievaultTokenStatus" style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; font-family:'DM Mono',monospace;">Token: - · Instance: -</div>
               <div style="font-size:0.74rem; color:var(--text-muted); margin-top:8px; line-height:1.55;" data-i18n-html="settings.movievaultKeyHelp">
-                Stel de MovieVault base URL in om de gedeelde catalogus als eerste bron te gebruiken. De API key is optioneel wanneer MovieVault publieke leesrechten toestaat.
+                DiscVault koppelt MovieVault server-side en toont hier alleen de status.
               </div>
+              <details style="margin-top:10px;">
+                <summary style="cursor:pointer; font-size:0.78rem; color:var(--text-muted);" data-i18n="settings.movievaultAdvancedEndpoints">Advanced custom endpoints</summary>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+                  <input type="url" id="movievaultUrlInput" autocomplete="off" data-i18n-placeholder="settings.movievaultUrlPlaceholder" placeholder="https://movievault-search.example.com"
+                    style="flex:1 1 240px; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                  <input type="url" id="movievaultContributionUrlInput" autocomplete="off" data-i18n-placeholder="settings.movievaultContributionUrlPlaceholder" placeholder="https://movievault-ingest.example.com"
+                    style="flex:1 1 240px; padding:7px 10px; font-size:0.82rem; font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                  <button class="btn btn-primary" onclick="saveApiKey('movievault')" style="padding:6px 14px; font-size:0.8rem; white-space:nowrap;" data-i18n="settings.apiKeySave">Opslaan</button>
+                </div>
+              </details>
               <label style="display:flex; align-items:center; gap:8px; font-size:0.78rem; cursor:pointer; color:var(--text); margin-top:10px;">
                 <input type="checkbox" id="movievaultContributionToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
                 <span data-i18n="settings.movievaultContributionDesc">Ontbrekende metadata delen met MovieVault</span>

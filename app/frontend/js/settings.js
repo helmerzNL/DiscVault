@@ -204,7 +204,15 @@ async function loadApiKeySettings() {
     // Pre-fill inputs with current stored value so user can verify/correct
     _fillKeyInput('omdb', d.omdb_key, d.omdb_key_set);
     _fillKeyInput('tmdb', d.tmdb_key, d.tmdb_key_set);
-    _fillKeyInput('movievault', d.movievault_api_token || d.movievault_key, d.movievault_token_set || d.movievault_key_set);
+    const mvStatus = document.getElementById('movievaultTokenStatus');
+    if (mvStatus) {
+      const tokenLabel = d.movievault_token_prefix
+        ? `Token: ${d.movievault_token_prefix}...`
+        : (d.movievault_token_set ? 'Token ingesteld' : 'Nog niet gekoppeld');
+      const instanceLabel = d.movievault_instance_id ? `Instance: ${d.movievault_instance_id}` : 'Instance: -';
+      const authLabel = d.movievault_auth_method ? `Auth: ${d.movievault_auth_method}` : 'Auth: -';
+      mvStatus.textContent = `${tokenLabel} · ${instanceLabel} · ${authLabel}`;
+    }
     const mvUrl = document.getElementById('movievaultUrlInput');
     if (mvUrl) mvUrl.value = d.movievault_search_url || d.movievault_base_url || '';
     const mvContributionUrl = document.getElementById('movievaultContributionUrlInput');
@@ -247,10 +255,8 @@ async function saveApiKey(service) {
   const input = document.getElementById(`${service}KeyInput`);
   const key = input ? input.value.trim() : '';
   try {
-    const body = { [`${service}_key`]: key };
+    const body = service === 'movievault' ? {} : { [`${service}_key`]: key };
     if (service === 'movievault') {
-      body.movievault_api_token = key;
-      delete body.movievault_key;
       const urlInput = document.getElementById('movievaultUrlInput');
       body.movievault_search_url = (urlInput?.value || '').trim();
       const contributionUrlInput = document.getElementById('movievaultContributionUrlInput');

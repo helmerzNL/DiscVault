@@ -18,13 +18,16 @@ _MOVIEVAULT_API_TOKEN_ENV = os.environ.get(
 )
 _MOVIEVAULT_SEARCH_URL_ENV = os.environ.get(
     "MOVIEVAULT_SEARCH_URL",
-    os.environ.get("MOVIEVAULT_BASE_URL", ""),
+    os.environ.get("MOVIEVAULT_BASE_URL", "https://search.discvault.eu"),
 )
 _MOVIEVAULT_INGEST_URL_ENV = os.environ.get(
-    "MOVIEVAULT_INGEST_URL", ""
+    "MOVIEVAULT_INGEST_URL", "https://movies.discvault.eu"
 )
 _MOVIEVAULT_CONTRIBUTION_URL_ENV = os.environ.get("MOVIEVAULT_CONTRIBUTION_URL", "")
 _MOVIEVAULT_SHARING_MODE_ENV = os.environ.get("MOVIEVAULT_SHARING_MODE", "opt_in")
+_MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET_ENV = os.environ.get(
+    "MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET", ""
+)
 
 
 class LiveKey:
@@ -77,6 +80,10 @@ MOVIEVAULT_CONTRIBUTION_URL = LiveKey(
 )
 MOVIEVAULT_SHARING_MODE = LiveKey(
     "movievault_sharing_mode", _MOVIEVAULT_SHARING_MODE_ENV
+)
+MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET = LiveKey(
+    "movievault_discvault_handshake_secret",
+    _MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET_ENV,
 )
 
 TMDB_LANGUAGES = [
