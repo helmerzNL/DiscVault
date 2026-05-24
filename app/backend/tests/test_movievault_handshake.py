@@ -390,6 +390,52 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         self.assertEqual(reconnect.status_code, 409)
         self.assertFalse(reconnect.get_json().get("movievault_enabled"))
 
+    def test_movievault_disconnect_route_clears_token_and_link(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_enabled", "false"),
+            )
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_link_status", "active"),
+            )
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_api_token_enc", self.mv._encrypt_secret("mv_secret_token")),
+            )
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_token_prefix", "mv_secret"),
+            )
+            conn.commit()
+
+        try:
+            from flask import Flask
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("Flask dependency is not installed") from exc
+
+        routes = importlib.import_module("app.backend.settings.routes")
+        app = Flask(__name__)
+        routes.register_settings_routes(
+            app,
+            require_admin=lambda: None,
+            is_source_enabled=lambda key, default=False: default,
+            is_bluray_scrape_enabled=lambda: False,
+            is_bluraydiscde_scrape_enabled=lambda: False,
+            is_registration_enabled=lambda: False,
+        )
+
+        response = app.test_client().post("/api/settings/movievault/disconnect")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data.get("movievault_link_status"), "disabled")
+        self.assertFalse(data.get("movievault_token_set"))
+        self.assertFalse(data.get("movievault_enabled"))
+        self.assertEqual(self.setting("movievault_api_token_enc"), "")
+        self.assertEqual(self.mv.get_movievault_api_token(), "")
+
 
 class MovieVaultZeroConfigTests(unittest.TestCase):
     def setUp(self):

@@ -329,6 +329,27 @@ def register_settings_routes(
             result.update(movievault_status())
             return jsonify(result), 502
 
+    @app.route("/api/settings/movievault/disconnect", methods=["POST"])
+    def disconnect_movievault_settings():
+        err = require_admin()
+        if err:
+            return err
+        disconnect_movievault_connection("manual_disconnect")
+        add_log("settings", "MovieVault connection disconnected", level="info")
+        result = {"status": "ok"}
+        result.update(movievault_status())
+        result.update({
+            "movievault_enabled": _bool_setting("movievault_enabled", MOVIEVAULT_ENABLED_DEFAULT),
+            "movievault_url_set": bool(_movievault_search_url()),
+            "movievault_ingest_url_set": bool(_movievault_ingest_url()),
+            "movievault_contribution_url_set": bool(_first_setting(
+                ("movievault_contribution_url",),
+                str(MOVIEVAULT_CONTRIBUTION_URL).strip(),
+            )),
+            "movievault_sharing_mode": _movievault_sharing_mode(),
+        })
+        return jsonify(result)
+
     @app.route("/api/settings/api-keys", methods=["POST"])
     def set_api_keys_settings():
         err = require_admin()

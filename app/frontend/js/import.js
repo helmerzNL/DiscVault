@@ -408,6 +408,8 @@ function switchTabDirect(name) {
   if (name === 'settings') loadSettings();
   if (name === 'admin')    loadAdminTab();
   if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
+  if (name === 'toevoegen') switchToevoegen((typeof currentToevoegenSub !== 'undefined' && currentToevoegenSub) || 'scan');
+  if (name === 'scan') switchToevoegen('scan');
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();
