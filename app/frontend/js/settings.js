@@ -159,6 +159,7 @@ function _settingsEsc(value) {
 }
 
 async function loadSourceSettings() {
+  ensureMetadataSourceOrderRendered();
   try {
     const r = await fetch(`${API}/settings/sources`);
     const d = await r.json();
@@ -177,7 +178,18 @@ async function loadSourceSettings() {
     _applyApiKeyBadge('omdb', d.omdb_key_set);
     _applyApiKeyBadge('tmdb', d.tmdb_key_set);
     _setSourceOrderDirty(false);
-  } catch(e) {}
+  } catch(e) {
+    ensureMetadataSourceOrderRendered();
+    _setSourceOrderDirty(false);
+  }
+}
+
+function ensureMetadataSourceOrderRendered() {
+  const list = document.getElementById('metadataSourceOrderList');
+  if (list && list.children.length === 0) {
+    _renderMetadataSourceOrder({});
+    _refreshMetadataSourceOrderStates();
+  }
 }
 
 function _applyBadge(id, text, state) {
@@ -200,11 +212,25 @@ function _applyApiKeyBadge(service, isSet) {
 function _applyMovieVaultSourceState(enabled) {
   const row = document.getElementById('sourceMovieVaultRow');
   if (row) row.classList.toggle('is-disabled', !enabled);
+  _updateMovieVaultActionButtons(enabled);
   _applyBadge(
     'movievaultActiveBadge',
     enabled ? `\u2713 ${t('settings.badgeActive')}` : t('settings.badgeDisabled'),
     enabled ? 'success' : 'muted',
   );
+}
+
+function _updateMovieVaultActionButtons(enabled) {
+  movieVaultIntegrationDisabled = !enabled;
+  const reconnectBtn = document.getElementById('movievaultReconnectBtn');
+  if (reconnectBtn) {
+    reconnectBtn.disabled = !enabled;
+    reconnectBtn.title = enabled ? '' : t('settings.movievaultEnableToReconnect');
+  }
+  const disconnectBtn = document.getElementById('movievaultDisconnectBtn');
+  if (disconnectBtn) {
+    disconnectBtn.style.display = enabled ? 'none' : '';
+  }
 }
 
 function _metadataSourceStateFromSettings(data) {
@@ -374,11 +400,7 @@ function updateMovieVaultIntegrationInfo(data) {
   _setMovieVaultInfo('movievaultAuthInfo', data.movievault_auth_method || '-');
   _setMovieVaultInfo('movievaultTokenInfo', tokenLabel);
   _setMovieVaultInfo('movievaultLastHandshakeInfo', _formatMovieVaultTime(data.movievault_last_handshake_at));
-  const btn = document.getElementById('movievaultReconnectBtn');
-  if (btn) {
-    btn.disabled = movieVaultIntegrationDisabled;
-    btn.title = movieVaultIntegrationDisabled ? t('settings.movievaultEnableToReconnect') : '';
-  }
+  _updateMovieVaultActionButtons(!movieVaultIntegrationDisabled);
 }
 
 async function loadMovieVaultIntegrationStatus() {
@@ -493,6 +515,32 @@ async function reconnectMovieVault() {
     showStatus('movievaultReconnectStatus', t('js.error', e.message), 'error');
   } finally {
     if (btn) btn.disabled = movieVaultIntegrationDisabled;
+  }
+}
+
+async function disconnectMovieVault() {
+  const btn = document.getElementById('movievaultDisconnectBtn');
+  if (btn) btn.disabled = true;
+  showStatus('movievaultReconnectStatus', t('settings.movievaultDisconnecting'), 'info');
+  try {
+    const r = await fetch(`${API}/settings/movievault/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    });
+    const d = await r.json();
+    updateMovieVaultIntegrationInfo(d);
+    await loadMovieVaultIntegrationStatus();
+    await loadApiKeySettings();
+    await loadSourceSettings();
+    if (!r.ok) {
+      showStatus('movievaultReconnectStatus', d.error || t('settings.movievaultDisconnectFailed'), 'error');
+      return;
+    }
+    showStatus('movievaultReconnectStatus', t('settings.movievaultDisconnectOk'), 'success');
+  } catch(e) {
+    showStatus('movievaultReconnectStatus', t('js.error', e.message), 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 

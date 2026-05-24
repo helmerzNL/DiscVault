@@ -155,14 +155,20 @@ function reorganizeToevoegenPanels() {
 }
 
 function switchToevoegen(sub) {
-  currentToevoegenSub = sub;
-  document.querySelectorAll('[data-toevoegen-sub]').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-toevoegen-sub') === sub);
-  });
   const map = { scan: 'addSubScan', manual: 'addSubManual', import: 'addSubImport' };
-  document.querySelectorAll('#panel-toevoegen .profile-sub-section').forEach(s => s.classList.remove('active'));
-  const el = document.getElementById(map[sub]);
-  if (el) el.classList.add('active');
+  const nextSub = map[sub] ? sub : 'scan';
+  reorganizeToevoegenPanels();
+  currentToevoegenSub = nextSub;
+  document.querySelectorAll('[data-toevoegen-sub]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-toevoegen-sub') === nextSub);
+  });
+  Object.entries(map).forEach(([key, id]) => {
+    const section = document.getElementById(id);
+    if (!section) return;
+    const active = key === nextSub;
+    section.classList.toggle('active', active);
+    section.style.display = active ? '' : 'none';
+  });
 }
 
 function switchTab(name) {
@@ -185,6 +191,8 @@ function switchTab(name) {
   if (name === 'settings') loadSettings();
   if (name === 'admin') loadAdminTab();
   if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
+  if (name === 'toevoegen') switchToevoegen(currentToevoegenSub || 'scan');
+  if (name === 'scan') switchToevoegen('scan');
   if (name === 'import') switchToevoegen('import');
   if (name === 'search') {
     filterSearchMovies();
