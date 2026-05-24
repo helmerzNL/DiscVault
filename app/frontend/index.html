@@ -1248,10 +1248,6 @@
               <input type="checkbox" id="sourceBlurayToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
               <span data-i18n="settings.blurayDesc">Blu-ray.com scraper (experimenteel)</span>
             </label>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-bottom:10px;">
-              <input type="checkbox" id="sourceBlurayDiscDeToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px;">
-              <span data-i18n="settings.blurayDeDesc">bluray-disc.de scraper (experimenteel)</span>
-            </label>
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.sourceHelp">
               De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiële API.
             </div>
@@ -1260,7 +1256,28 @@
                 <div style="font-size:0.78rem; font-weight:600; color:var(--text);" data-i18n="settings.sourceOrderLabel">Bronvolgorde</div>
                 <button type="button" id="metadataSourceOrderSaveBtn" class="btn btn-secondary" onclick="saveSourceSettings({ orderOnly: true })" disabled style="min-height:34px; padding:6px 12px; font-size:0.78rem;" data-i18n="settings.sourceOrderSave">Volgorde opslaan</button>
               </div>
-              <div id="metadataSourceOrderList" class="metadata-source-order-list" aria-label="Metadata source order"></div>
+              <div id="metadataSourceOrderList" class="metadata-source-order-list" aria-label="Metadata source order">
+                <div class="metadata-source-order-item" draggable="true" data-source="movievault">
+                  <span class="metadata-source-order-handle mdi mdi-drag" aria-hidden="true"></span>
+                  <span class="metadata-source-order-label">MovieVault</span>
+                  <span class="metadata-source-order-state" data-i18n="settings.badgeActive">Actief</span>
+                </div>
+                <div class="metadata-source-order-item" draggable="true" data-source="tmdb">
+                  <span class="metadata-source-order-handle mdi mdi-drag" aria-hidden="true"></span>
+                  <span class="metadata-source-order-label">TMDb</span>
+                  <span class="metadata-source-order-state" data-i18n="settings.badgeActive">Actief</span>
+                </div>
+                <div class="metadata-source-order-item" draggable="true" data-source="omdb">
+                  <span class="metadata-source-order-handle mdi mdi-drag" aria-hidden="true"></span>
+                  <span class="metadata-source-order-label">OMDb</span>
+                  <span class="metadata-source-order-state" data-i18n="settings.badgeActive">Actief</span>
+                </div>
+                <div class="metadata-source-order-item" draggable="true" data-source="bluray_com">
+                  <span class="metadata-source-order-handle mdi mdi-drag" aria-hidden="true"></span>
+                  <span class="metadata-source-order-label">Blu-ray.com</span>
+                  <span class="metadata-source-order-state" data-i18n="settings.badgeActive">Actief</span>
+                </div>
+              </div>
               <div style="font-size:0.72rem; color:var(--text-muted); margin-top:7px; line-height:1.5;" data-i18n="settings.sourceOrderHelp">
                 Sleep bronnen om de volgorde te wijzigen. DiscVault probeert bronnen van boven naar beneden.
               </div>
