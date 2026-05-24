@@ -3964,6 +3964,92 @@ def _submit_movievault_box_set_proposal_contribution(
     return _submit_movievault_entity_contribution("box_set", source, sources, box_context)
 
 
+def _movievault_box_set_source_from_db(conn, box_set_id: int) -> dict:
+    row = conn.execute(
+        """
+        SELECT
+            bs.id,
+            COALESCE(NULLIF(bs.title, ''), NULLIF(eg.title, '')) AS title,
+            COALESCE(NULLIF(bs.barcode, ''), '') AS barcode,
+            COALESCE(NULLIF(bs.tmdb_id, ''), NULLIF(eg.tmdb_id, '')) AS tmdb_id,
+            COALESCE(NULLIF(bs.imdb_id, ''), NULLIF(eg.imdb_id, '')) AS imdb_id,
+            COALESCE(NULLIF(bs.year, ''), NULLIF(eg.year, '')) AS year,
+            COALESCE(NULLIF(bs.description, ''), NULLIF(eg.description, '')) AS description
+        FROM box_sets bs
+        LEFT JOIN edition_groups eg ON eg.id = bs.id
+        WHERE bs.id=?
+        """,
+        (box_set_id,),
+    ).fetchone()
+    if not row:
+        return {}
+    members = []
+    years = []
+    for index, movie in enumerate(conn.execute(
+        """
+        SELECT DISTINCT
+            m.title,
+            m.year,
+            m.release_date,
+            m.tmdb_id,
+            m.imdb_id,
+            COALESCE(bsm.sort_order, 9999) AS sort_order
+        FROM box_set_movies bsm
+        JOIN movies m ON m.id = bsm.movie_id
+        WHERE bsm.box_set_id=?
+        ORDER BY COALESCE(bsm.sort_order, 9999), m.year, m.title
+        """,
+        (box_set_id,),
+    ).fetchall(), start=1):
+        title = (movie["title"] or "").strip()
+        if not title:
+            continue
+        year = _parse_year(movie["year"] or movie["release_date"] or "")
+        if year:
+            years.append(year)
+        member = {
+            "title": title,
+            "year": year or "",
+            "tmdbId": movie["tmdb_id"] or "",
+            "imdbId": movie["imdb_id"] or "",
+            "sortOrder": movie["sort_order"] if movie["sort_order"] != 9999 else index,
+        }
+        members.append({k: v for k, v in member.items() if v not in (None, "", [], {})})
+    if not members:
+        return {}
+    years = sorted(set(y for y in years if y))
+    year_range = row["year"] or ""
+    if not year_range and years:
+        year_range = str(years[0]) if years[0] == years[-1] else f"{years[0]}-{years[-1]}"
+    return {
+        "barcode": row["barcode"] or "",
+        "title": row["title"] or "",
+        "tmdb_id": row["tmdb_id"] or "",
+        "imdb_id": row["imdb_id"] or "",
+        "year_range": year_range,
+        "description": row["description"] or "",
+        "members": members,
+    }
+
+
+def _submit_movievault_box_set_contribution_from_db(box_set_id: int, sources: str, context: dict | None = None) -> bool:
+    conn = get_db()
+    try:
+        source = _movievault_box_set_source_from_db(conn, box_set_id)
+    finally:
+        conn.close()
+    if not source:
+        add_log("movievault", "MovieVault box-set contribution skipped", f"Box Set ID: {box_set_id}; reason=no public box-set metadata", "info")
+        return False
+    box_context = dict(context or {})
+    box_context.update({
+        "localEntityType": "box_set",
+        "localEntityId": box_set_id,
+        "barcode": source.get("barcode") or "",
+    })
+    return _submit_movievault_entity_contribution("box_set", source, sources, box_context)
+
+
 def _submit_movievault_contribution(movie_info: dict | None, sources: str, context: dict | None = None) -> bool:
     context = context or {}
     if not movie_info:
@@ -7347,6 +7433,7 @@ def bulk_refresh():
     # also include all sibling movies so the whole group is refreshed.
     _expand_conn = get_db()
     expanded = set(ids)
+    affected_box_set_ids = set()
     for mid in list(ids):
         row = _expand_conn.execute(
             "SELECT collection_id, super_group_id, edition_group_id FROM movies WHERE id=?",
@@ -7354,23 +7441,46 @@ def bulk_refresh():
         ).fetchone()
         if not row:
             continue
+        for box_row in _expand_conn.execute("SELECT box_set_id FROM box_set_movies WHERE movie_id=?", (mid,)):
+            affected_box_set_ids.add(box_row["box_set_id"])
         if row["collection_id"]:
             for r in _expand_conn.execute(
                 "SELECT id FROM movies WHERE collection_id=?", (row["collection_id"],)
             ):
                 expanded.add(r["id"])
         if row["super_group_id"]:
+            affected_box_set_ids.add(row["super_group_id"])
             for r in _expand_conn.execute(
                 "SELECT id FROM movies WHERE super_group_id=?", (row["super_group_id"],)
             ):
                 expanded.add(r["id"])
         if row["edition_group_id"]:
+            group_row = _expand_conn.execute(
+                "SELECT parent_group_id, group_type FROM edition_groups WHERE id=?",
+                (row["edition_group_id"],),
+            ).fetchone()
+            if group_row and group_row["group_type"] == "boxset":
+                affected_box_set_ids.add(row["edition_group_id"])
+            if group_row and group_row["parent_group_id"]:
+                parent = _expand_conn.execute(
+                    "SELECT group_type FROM edition_groups WHERE id=?",
+                    (group_row["parent_group_id"],),
+                ).fetchone()
+                if parent and parent["group_type"] == "boxset":
+                    affected_box_set_ids.add(group_row["parent_group_id"])
             for r in _expand_conn.execute(
                 "SELECT id FROM movies WHERE edition_group_id=?", (row["edition_group_id"],)
             ):
                 expanded.add(r["id"])
+        for box_id in list(affected_box_set_ids):
+            for r in _expand_conn.execute(
+                "SELECT movie_id AS id FROM box_set_movies WHERE box_set_id=?",
+                (box_id,),
+            ):
+                expanded.add(r["id"])
     _expand_conn.close()
     ids = list(expanded)
+    affected_box_set_ids = sorted(int(v) for v in affected_box_set_ids if v)
 
     # Warn once per bulk if key(s) are missing
     if not TMDB_API_KEY and not OMDB_API_KEY:
@@ -7514,6 +7624,12 @@ def bulk_refresh():
                     f"Bulk refresh voltooid: {updated} bijgewerkt, {skipped} overgeslagen, {errors} fouten",
                     ", ".join(error_details[:5]) if error_details else "",
                     "success" if not errors else "warn")
+            for box_set_id in affected_box_set_ids:
+                _submit_movievault_box_set_contribution_from_db(
+                    box_set_id,
+                    "Bulk refresh box-set",
+                    {"localEntityType": "box_set", "localEntityId": box_set_id},
+                )
             yield json.dumps({
                 "type":         "done",
                 "updated":      updated,
@@ -7533,6 +7649,12 @@ def bulk_refresh():
         else:
             errors += 1
             if err: error_details.append(err)
+    for box_set_id in affected_box_set_ids:
+        _submit_movievault_box_set_contribution_from_db(
+            box_set_id,
+            "Bulk refresh box-set",
+            {"localEntityType": "box_set", "localEntityId": box_set_id},
+        )
     return jsonify({
         "status":        "done",
         "updated":       updated,
