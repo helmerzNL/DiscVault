@@ -7737,6 +7737,41 @@ def search_title():
                 "metadata_candidates": metadata_candidates,
                 "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
             })
+
+        def _candidate_fallback_response():
+            if not metadata_candidates:
+                return None
+            candidate = metadata_candidates[0] if len(metadata_candidates) == 1 else None
+            movie = (candidate or {}).get("movie") if isinstance(candidate, dict) else None
+            if not movie and candidate and candidate.get("tmdb_id"):
+                movie = lookup_movie_tmdb_by_id(candidate.get("tmdb_id"))
+            if isinstance(movie, dict) and movie:
+                movie = _finalize_metadata_info(movie)
+                add_log(
+                    "lookup",
+                    f"Titel-zoekactie gevonden via kandidaat: \"{movie.get('title') or title}\"",
+                    f"Candidates: {len(metadata_candidates)}; Providers: {_metadata_candidate_provider_summary(metadata_candidates)}; Metadata source order: {_metadata_source_order_log()}",
+                    "success",
+                )
+                return jsonify({
+                    "status": "found",
+                    "movie": movie,
+                    "source": (candidate or {}).get("provider_label") or (candidate or {}).get("provider") or "Metadata candidate",
+                    "metadata_candidates": metadata_candidates,
+                    "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
+                })
+            add_log(
+                "lookup",
+                f"Titel-zoekactie kandidaten gevonden: \"{title}\"",
+                f"Candidates: {len(metadata_candidates)}; Providers: {_metadata_candidate_provider_summary(metadata_candidates)}; Metadata source order: {_metadata_source_order_log()}",
+                "success",
+            )
+            return jsonify({
+                "status": "candidates",
+                "metadata_candidates": metadata_candidates,
+                "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
+            })
+
         movie_info, source = _merge_metadata_by_order(
             title,
             year,
@@ -7755,6 +7790,9 @@ def search_title():
                 "metadata_candidates": metadata_candidates,
                 "tmdb_candidates": [c for c in metadata_candidates if c.get("provider") == "tmdb"],
             })
+        fallback_response = _candidate_fallback_response()
+        if fallback_response:
+            return fallback_response
         add_log("lookup", f"Titel-zoekactie geen resultaat: \"{title}\"", f"Backends: {_trace_summary(attempts)}", "warn")
         return jsonify({"status": "not_found"})
     except Exception as e:
