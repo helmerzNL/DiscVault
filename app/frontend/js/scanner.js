@@ -289,6 +289,58 @@ function _detectFormatFromTitle(title) {
   return '';
 }
 
+function _lookupStreamErrorText(text, status) {
+  const plain = String(text || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plain ? `HTTP ${status}: ${plain.slice(0, 180)}` : `HTTP ${status}`;
+}
+
+async function readLookupNdjson(response, onMessage) {
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(_lookupStreamErrorText(text, response.status));
+  }
+  if (!response.body || !response.body.getReader) {
+    throw new Error('Lookup stream unavailable');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+
+  const parseLine = (line) => {
+    try {
+      return JSON.parse(line);
+    } catch (e) {
+      if (line.trim().startsWith('<')) {
+        throw new Error('Backend returned HTML instead of lookup data');
+      }
+      throw new Error(`Invalid lookup stream response: ${e.message}`);
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      onMessage(parseLine(line));
+    }
+  }
+
+  buf += decoder.decode();
+  if (buf.trim()) {
+    onMessage(parseLine(buf));
+  }
+}
+
 async function doLookup(barcode) {
   showStatus('scanStatus', t('js.lookingUp'), 'info');
   document.getElementById('movieResult').style.display = 'none';
@@ -298,18 +350,9 @@ async function doLookup(barcode) {
 
   try {
     const r = await fetch(`${API}/lookup/${barcode}?stream=1`);
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '', finalData = null, stepRawTitle = '';
+    let finalData = null, stepRawTitle = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n'); buf = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const msg = JSON.parse(line);
+    await readLookupNdjson(r, (msg) => {
         if (msg.type === 'step') {
           if (msg.raw_title) stepRawTitle = msg.raw_title;
           const icon = msg.status === 'searching' ? '<span class="spinner"></span>'
@@ -318,8 +361,7 @@ async function doLookup(barcode) {
         } else if (msg.type === 'done') {
           finalData = msg;
         }
-      }
-    }
+    });
 
     if (!finalData) {
       showStatus('scanStatus', t('js.backendError', r.status), 'error');

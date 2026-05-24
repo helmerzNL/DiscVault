@@ -2874,3 +2874,38 @@
     cursor: pointer; padding: 4px; flex-shrink: 0; line-height: 1;
   }
   .pwa-install-banner-close:hover { color: var(--text); }
+
+  @media (max-width: 768px) {
+    #panel-scan .scanner-layout,
+    #addSubScan .scanner-layout,
+    #panel-add .quick-manual-add-card,
+    #addSubManual .quick-manual-add-card {
+      width: calc(100% + 40px);
+      max-width: none !important;
+      margin-left: -20px;
+      margin-right: -20px;
+      border-left: 0;
+      border-right: 0;
+      border-radius: 0;
+      box-sizing: border-box;
+    }
+
+    #panel-scan .scanner-layout .card,
+    #addSubScan .scanner-layout .card {
+      border-left: 0;
+      border-right: 0;
+      border-radius: 0;
+      box-sizing: border-box;
+    }
+  }
+
+  @media (max-width: 480px) {
+    #panel-scan .scanner-layout,
+    #addSubScan .scanner-layout,
+    #panel-add .quick-manual-add-card,
+    #addSubManual .quick-manual-add-card {
+      width: calc(100% + 28px);
+      margin-left: -14px;
+      margin-right: -14px;
+    }
+  }
