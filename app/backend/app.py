@@ -4541,6 +4541,21 @@ def _trace_summary(attempts: list[str]) -> str:
     return f"Metadata source order: {order}. Attempts: {attempts_summary}" if order else attempts_summary
 
 
+def _barcode_metadata_flow_note(barcode: str = "", title: str = "", source: str = "") -> str:
+    identity = []
+    if barcode:
+        identity.append(f"barcode={barcode}")
+    if title:
+        identity.append(f"title hint=\"{title}\"")
+    context = f" ({', '.join(identity)})" if identity else ""
+    return (
+        f"Flow: barcode lookup is an identification step{context}; "
+        "MovieVault may be queried by barcode first to detect an existing shared release or box-set. "
+        f"After that, metadata refresh follows the configured source order: {_metadata_source_order_log()}. "
+        f"Selected metadata source result: {source or '-'}"
+    )
+
+
 def _extract_hdr_tokens(text: str) -> str:
     if not text:
         return ""
@@ -4705,7 +4720,17 @@ def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
     return candidates[:30]
 
 
-def _log_bluray_box_set_proposal(barcode, proposal):
+def _box_set_proposal_source_label(proposal) -> str:
+    source = str((proposal or {}).get("source") or "").strip()
+    normalized = source.lower().replace("_", "-")
+    if normalized in {"movievault", "movie-vault"}:
+        return "MovieVault"
+    if "blu-ray.com" in normalized or "bluray.com" in normalized or normalized == "bluray-com":
+        return "Blu-ray.com"
+    return source or "Metadata source"
+
+
+def _log_box_set_proposal(barcode, proposal):
     movies = (proposal or {}).get("movies") or []
     if len(movies) < 2:
         return
@@ -4720,14 +4745,15 @@ def _log_bluray_box_set_proposal(barcode, proposal):
         titles.append(f"{title} ({year})" if year else title)
     if not titles:
         return
-    box_set_title = (proposal.get("title") or "Unknown box set").strip()
+    source_label = _box_set_proposal_source_label(proposal)
+    box_set_title = (proposal.get("title") or proposal.get("name") or "Unknown box set").strip()
     detail = (
-        f"Barcode: {barcode}; Box Set: {box_set_title}; "
+        f"Source: {source_label}; Barcode: {barcode}; Box Set: {box_set_title}; "
         f"Movies found ({len(titles)}): {', '.join(titles)}"
     )
     add_log(
         "lookup",
-        f"Blu-ray.com box-set found: \"{box_set_title}\" ({len(titles)} movies)",
+        f"{source_label} box-set found: \"{box_set_title}\" ({len(titles)} movies)",
         detail,
         "success",
     )
@@ -6175,7 +6201,7 @@ def lookup_box_set_proposal():
     try:
         proposal = _lookup_box_set_proposal_by_order(title, year, barcode)
         if proposal:
-            _log_bluray_box_set_proposal(barcode or title, proposal)
+            _log_box_set_proposal(barcode or title, proposal)
             return jsonify({"status": "found", "box_set_proposal": proposal})
         return jsonify({"status": "not_found"})
     except Exception as e:
@@ -6229,6 +6255,13 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
         attempts=attempts,
         stop_after_first=False,
     )
+    if barcode:
+        add_log(
+            "lookup",
+            "Barcode metadata flow",
+            _barcode_metadata_flow_note(barcode, lookup_title, source),
+            "info",
+        )
 
     if not info and raw_title:
         info = {f: "" for f in ALL_FIELDS}
@@ -6241,7 +6274,7 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
 
     info = _finalize_metadata_info(info)
     box_set_proposal = (info or {}).get("box_set_proposal")
-    _log_bluray_box_set_proposal(barcode, box_set_proposal)
+    _log_box_set_proposal(barcode, box_set_proposal)
 
     source_label = source or "Barcode lookup"
     source_parts = {part.strip() for part in source_label.split("+") if part.strip()}
