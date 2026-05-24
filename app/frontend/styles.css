@@ -947,6 +947,14 @@
     line-height: 1.5;
   }
 
+  .add-boxset-inline {
+    margin: -4px 0 20px;
+  }
+
+  .add-candidates-inline {
+    margin: -4px 0 20px;
+  }
+
   /* TMDb disambiguation candidates */
   .tmdb-candidates-header {
     font-size: 0.8rem;
@@ -956,14 +964,15 @@
   }
 
   .tmdb-candidate-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 6px;
   }
 
   .tmdb-candidate-card {
     display: flex;
     gap: 12px;
+    min-width: 0;
     padding: 10px;
     border-radius: 8px;
     cursor: pointer;
@@ -1027,6 +1036,20 @@
     padding-bottom: 18px;
     border-bottom: 1px solid var(--border);
     margin-bottom: 20px;
+  }
+
+  .add-candidates-inline .tmdb-candidate-list {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+
+  @media (max-width: 720px) {
+    .add-candidates-inline .tmdb-candidate-list {
+      grid-template-columns: 1fr;
+    }
+  }
+  .add-search-bar input.input-muted {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
   .add-main-layout {
     display: flex;
@@ -2359,6 +2382,8 @@
   .profile-content { flex: 1; min-width: 0; }
   .profile-sub-section { display: none; }
   .profile-sub-section.active { display: block; }
+  #panel-toevoegen .profile-sub-section[hidden] { display: none !important; }
+  #panel-toevoegen .profile-sub-section.active:not([hidden]) { display: block !important; }
 
   @media (max-width: 900px) {
     :root {
