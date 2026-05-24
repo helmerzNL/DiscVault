@@ -6441,6 +6441,84 @@ def upload_movie_poster(movie_id):
     return jsonify({"status": "updated", "movie": dict(updated), "poster_file": new_file})
 
 
+def _box_set_ids_for_movie(conn, movie_id, row=None):
+    ids = set()
+    if row is not None:
+        try:
+            if row["super_group_id"]:
+                ids.add(int(row["super_group_id"]))
+        except (KeyError, TypeError, ValueError):
+            pass
+    for link in conn.execute("SELECT box_set_id FROM box_set_movies WHERE movie_id=?", (movie_id,)).fetchall():
+        try:
+            ids.add(int(link["box_set_id"]))
+        except (KeyError, TypeError, ValueError):
+            pass
+    return ids
+
+
+def _remove_movie_poster_assets(row):
+    poster_file = (row["poster_file"] or "").strip() if row and "poster_file" in row.keys() else ""
+    if not poster_file:
+        return
+    _remove_asset_variants(poster_file, ("poster",))
+    try:
+        os.remove(os.path.join(POSTER_DIR, poster_file))
+    except OSError:
+        pass
+
+
+def _delete_movie_dependencies(conn, row):
+    movie_id = row["id"]
+    _remove_movie_poster_assets(row)
+    conn.execute("DELETE FROM movie_people WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM vault_movies WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM box_set_movies WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM collection_items WHERE item_type='movie' AND item_id = ?", (movie_id,))
+    conn.execute("UPDATE edition_groups SET primary_movie_id=NULL WHERE primary_movie_id=?", (movie_id,))
+    conn.execute("DELETE FROM movies WHERE id = ?", (movie_id,))
+
+
+def _delete_empty_box_set_containers(conn, box_set_ids):
+    deleted = []
+    for box_set_id in sorted({int(value) for value in box_set_ids if value}):
+        has_members = conn.execute(
+            "SELECT 1 FROM box_set_movies WHERE box_set_id=? LIMIT 1",
+            (box_set_id,),
+        ).fetchone()
+        has_legacy_members = conn.execute(
+            "SELECT 1 FROM movies WHERE super_group_id=? LIMIT 1",
+            (box_set_id,),
+        ).fetchone()
+        has_child_groups = conn.execute(
+            "SELECT 1 FROM edition_groups WHERE parent_group_id=? LIMIT 1",
+            (box_set_id,),
+        ).fetchone()
+        if has_members or has_legacy_members or has_child_groups:
+            continue
+
+        box_set = conn.execute("SELECT title FROM box_sets WHERE id=?", (box_set_id,)).fetchone()
+        group = conn.execute("SELECT title, group_type FROM edition_groups WHERE id=?", (box_set_id,)).fetchone()
+        title = (box_set["title"] if box_set and box_set["title"] else None) or (
+            group["title"] if group and group["title"] else f"#{box_set_id}"
+        )
+
+        conn.execute("DELETE FROM collection_items WHERE item_type='box_set' AND item_id=?", (box_set_id,))
+        conn.execute("DELETE FROM box_set_movies WHERE box_set_id=?", (box_set_id,))
+        conn.execute("DELETE FROM box_sets WHERE id=?", (box_set_id,))
+        if not group or (group["group_type"] or "boxset") == "boxset":
+            conn.execute("DELETE FROM edition_groups WHERE id=?", (box_set_id,))
+
+        deleted.append(box_set_id)
+        _log_container_event(
+            conn,
+            "Empty Box Set container removed",
+            f"ID: {box_set_id}; Title: {title}",
+            "warn",
+        )
+    return deleted
+
+
 @app.route("/api/movies/bulk-delete", methods=["POST"])
 def bulk_delete():
     ids = (request.json or {}).get("ids", [])
@@ -6448,23 +6526,22 @@ def bulk_delete():
         return jsonify({"error": "No ids provided"}), 400
     conn = get_db()
     deleted = 0
+    box_set_ids_to_check = set()
     for movie_id in ids:
         row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
         if not row or not _check_movie_owner(row):
             continue
-        if row and row["poster_file"]:
-            _remove_asset_variants(row["poster_file"], ("poster",))
-            try:
-                os.remove(os.path.join(POSTER_DIR, row["poster_file"]))
-            except OSError:
-                pass
-        conn.execute("DELETE FROM movie_people WHERE movie_id = ?", (movie_id,))
-        conn.execute("DELETE FROM movies WHERE id = ?", (movie_id,))
+        box_set_ids_to_check.update(_box_set_ids_for_movie(conn, movie_id, row))
+        _delete_movie_dependencies(conn, row)
         deleted += 1
+    deleted_box_sets = _delete_empty_box_set_containers(conn, box_set_ids_to_check)
     conn.commit()
     conn.close()
-    add_log("delete", f"Bulk verwijderd: {deleted} film(s)", f"IDs: {ids[:20]}", "success")
-    return jsonify({"status": "done", "deleted": deleted})
+    detail = f"IDs: {ids[:20]}"
+    if deleted_box_sets:
+        detail += f"; Box sets removed: {deleted_box_sets}"
+    add_log("delete", f"Bulk verwijderd: {deleted} film(s)", detail, "success")
+    return jsonify({"status": "done", "deleted": deleted, "deleted_box_sets": deleted_box_sets})
 
 
 METADATA_REFRESH_FIELDS = [
@@ -7027,18 +7104,16 @@ def delete_movie(movie_id):
         conn.close()
         return jsonify({"error": "Not your movie"}), 403
     title = row["title"]
-    if row["poster_file"]:
-        _remove_asset_variants(row["poster_file"], ("poster",))
-        try:
-            os.remove(os.path.join(POSTER_DIR, row["poster_file"]))
-        except OSError:
-            pass
-    conn.execute("DELETE FROM movie_people WHERE movie_id = ?", (movie_id,))
-    conn.execute("DELETE FROM movies WHERE id = ?", (movie_id,))
+    box_set_ids = _box_set_ids_for_movie(conn, movie_id, row)
+    _delete_movie_dependencies(conn, row)
+    deleted_box_sets = _delete_empty_box_set_containers(conn, box_set_ids)
     conn.commit()
     conn.close()
-    add_log("delete", f"Film verwijderd: {title} (ID {movie_id})")
-    return jsonify({"status": "deleted"})
+    detail = f"ID {movie_id}"
+    if deleted_box_sets:
+        detail += f"; Box sets removed: {deleted_box_sets}"
+    add_log("delete", f"Film verwijderd: {title} ({detail})")
+    return jsonify({"status": "deleted", "deleted_box_sets": deleted_box_sets})
 
 
 # ---------------------------------------------------------------------------

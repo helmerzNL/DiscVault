@@ -9,7 +9,7 @@ import uuid
 class SyncIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory()
+        cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         root = cls.tmp.name
         os.environ.update({
             "DB_PATH": os.path.join(root, "discvault.db"),
@@ -21,6 +21,16 @@ class SyncIntegrationTests(unittest.TestCase):
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if repo_root not in sys.path:
             sys.path.insert(0, repo_root)
+        for name in (
+            "app.backend.app",
+            "app.backend.config",
+            "app.backend.db",
+            "app.backend.logging_utils",
+            "app.backend.movievault_client",
+            "app.backend.push.routes",
+            "app.backend.settings.routes",
+        ):
+            sys.modules.pop(name, None)
         try:
             cls.backend = importlib.import_module("app.backend.app")
         except ModuleNotFoundError as exc:
@@ -46,6 +56,43 @@ class SyncIntegrationTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         return response.get_json()["movie"]
+
+    def _create_box_set(self, title=None):
+        title = title or f"Box Set {uuid.uuid4().hex[:8]}"
+        response = self.client.post("/api/edition-groups", json={
+            "title": title,
+            "group_type": "boxset",
+            "barcode": f"BOX-{uuid.uuid4().hex[:12].upper()}",
+        })
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        return response.get_json()
+
+    def _table_count(self, table, row_id):
+        conn = self.backend.get_db()
+        try:
+            return conn.execute(f"SELECT COUNT(*) FROM {table} WHERE id=?", (row_id,)).fetchone()[0]
+        finally:
+            conn.close()
+
+    def _box_set_member_count(self, box_set_id):
+        conn = self.backend.get_db()
+        try:
+            return conn.execute(
+                "SELECT COUNT(*) FROM box_set_movies WHERE box_set_id=?",
+                (box_set_id,),
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+    def _collection_item_count(self, item_type, item_id):
+        conn = self.backend.get_db()
+        try:
+            return conn.execute(
+                "SELECT COUNT(*) FROM collection_items WHERE item_type=? AND item_id=?",
+                (item_type, item_id),
+            ).fetchone()[0]
+        finally:
+            conn.close()
 
     def test_bootstrap_delta_and_movie_tombstone(self):
         bootstrap = self._json(self.client.get("/api/sync/bootstrap"))
@@ -79,6 +126,42 @@ class SyncIntegrationTests(unittest.TestCase):
             ("movie", str(movie["id"])),
             {(t["entity"], t["entity_id"]) for t in after_delete["tombstones"]},
         )
+
+    def test_deleting_last_box_set_movie_removes_empty_container(self):
+        box_set = self._create_box_set()
+        movie = self._create_movie("Single Member Box Set")
+        assign = self.client.put(f"/api/movies/{movie['id']}/containers", json={"box_set_ids": [box_set["id"]]})
+        self.assertEqual(assign.status_code, 200, assign.get_data(as_text=True))
+
+        deleted = self.client.delete(f"/api/movies/{movie['id']}")
+
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        self.assertEqual(deleted.get_json()["deleted_box_sets"], [box_set["id"]])
+        self.assertEqual(self._table_count("box_sets", box_set["id"]), 0)
+        self.assertEqual(self._table_count("edition_groups", box_set["id"]), 0)
+        self.assertEqual(self._box_set_member_count(box_set["id"]), 0)
+        self.assertEqual(self._collection_item_count("box_set", box_set["id"]), 0)
+
+    def test_bulk_delete_removes_empty_box_set_after_last_member(self):
+        box_set = self._create_box_set()
+        first = self._create_movie("Bulk Box Set One")
+        second = self._create_movie("Bulk Box Set Two")
+        for movie in (first, second):
+            assign = self.client.put(f"/api/movies/{movie['id']}/containers", json={"box_set_ids": [box_set["id"]]})
+            self.assertEqual(assign.status_code, 200, assign.get_data(as_text=True))
+        self.assertEqual(self._box_set_member_count(box_set["id"]), 2)
+
+        first_delete = self.client.post("/api/movies/bulk-delete", json={"ids": [first["id"]]})
+        self.assertEqual(first_delete.status_code, 200, first_delete.get_data(as_text=True))
+        self.assertEqual(first_delete.get_json()["deleted_box_sets"], [])
+        self.assertEqual(self._table_count("box_sets", box_set["id"]), 1)
+
+        second_delete = self.client.post("/api/movies/bulk-delete", json={"ids": [second["id"]]})
+        self.assertEqual(second_delete.status_code, 200, second_delete.get_data(as_text=True))
+        self.assertEqual(second_delete.get_json()["deleted_box_sets"], [box_set["id"]])
+        self.assertEqual(self._table_count("box_sets", box_set["id"]), 0)
+        self.assertEqual(self._table_count("edition_groups", box_set["id"]), 0)
+        self.assertEqual(self._box_set_member_count(box_set["id"]), 0)
 
     def test_operations_are_idempotent_and_detect_conflicts(self):
         key = f"op-{uuid.uuid4().hex}"
