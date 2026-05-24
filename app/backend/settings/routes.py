@@ -19,6 +19,9 @@ try:
     from ..db import get_db
     from ..logging_utils import add_log
     from ..movievault_client import (
+        MovieVaultHandshakeError,
+        MovieVaultInstanceRevoked,
+        perform_handshake,
         get_movievault_api_token as _movievault_client_api_token,
         movievault_status,
     )
@@ -41,6 +44,9 @@ except ImportError:  # pragma: no cover - supports running app.py directly
     from db import get_db
     from logging_utils import add_log
     from movievault_client import (
+        MovieVaultHandshakeError,
+        MovieVaultInstanceRevoked,
+        perform_handshake,
         get_movievault_api_token as _movievault_client_api_token,
         movievault_status,
     )
@@ -168,18 +174,27 @@ def register_settings_routes(
                 f"{label} bron {'ingeschakeld' if val else 'uitgeschakeld'}",
                 level="info",
             )
-        sharing_mode = str(data.get("movievault_sharing_mode") or "opt_in").strip().lower()
-        if sharing_mode not in {"opt_in", "opt_out", "disabled"}:
-            sharing_mode = "opt_in"
-        contribution_enabled = sharing_mode != "disabled" and bool(data.get("movievault_contribution_enabled", True))
-        conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-            ("movievault_contribution_enabled", "true" if contribution_enabled else "false"),
-        )
-        conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-            ("movievault_sharing_mode", sharing_mode),
-        )
+        if "movievault_sharing_mode" in data or "movievault_contribution_enabled" in data:
+            sharing_mode = str(data.get("movievault_sharing_mode") or "opt_in").strip().lower()
+            if sharing_mode not in {"opt_in", "opt_out", "disabled"}:
+                sharing_mode = "opt_in"
+            contribution_enabled = sharing_mode != "disabled" and bool(data.get("movievault_contribution_enabled", True))
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_contribution_enabled", "true" if contribution_enabled else "false"),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ("movievault_sharing_mode", sharing_mode),
+            )
+            result["movievault_contribution_enabled"] = contribution_enabled
+            result["movievault_sharing_mode"] = sharing_mode
+            add_log(
+                "settings",
+                f"MovieVault delen {'ingeschakeld' if contribution_enabled else 'uitgeschakeld'}",
+                f"Sharing mode: {sharing_mode}",
+                level="info",
+            )
         raw_order = str(data.get("metadata_source_order") or "").strip()
         if raw_order:
             requested = [x.strip().lower() for x in raw_order.replace(";", ",").split(",")]
@@ -198,14 +213,6 @@ def register_settings_routes(
             )
             result["metadata_source_order"] = order
             result["metadata_source_order_value"] = order_value
-        result["movievault_contribution_enabled"] = contribution_enabled
-        result["movievault_sharing_mode"] = sharing_mode
-        add_log(
-            "settings",
-            f"MovieVault delen {'ingeschakeld' if contribution_enabled else 'uitgeschakeld'}",
-            f"Sharing mode: {sharing_mode}",
-            level="info",
-        )
         conn.commit()
         conn.close()
         return jsonify(result)
@@ -257,6 +264,30 @@ def register_settings_routes(
         result["movievault_key_masked"] = mv_status.get("movievault_token_masked", "")
         result["movievault_token_masked"] = mv_status.get("movievault_token_masked", "")
         return jsonify(result)
+
+    @app.route("/api/settings/movievault/reconnect", methods=["POST"])
+    def reconnect_movievault_settings():
+        err = require_admin()
+        if err:
+            return err
+        try:
+            perform_handshake()
+            add_log("settings", "MovieVault koppeling vernieuwd", level="info")
+            result = {"status": "ok"}
+            result.update(movievault_status())
+            return jsonify(result)
+        except MovieVaultInstanceRevoked:
+            result = {"error": "MovieVault instance is ingetrokken"}
+            result.update(movievault_status())
+            return jsonify(result), 403
+        except MovieVaultHandshakeError as ex:
+            result = {"error": str(ex)}
+            result.update(movievault_status())
+            return jsonify(result), 502
+        except Exception as ex:
+            result = {"error": str(ex)}
+            result.update(movievault_status())
+            return jsonify(result), 502
 
     @app.route("/api/settings/api-keys", methods=["POST"])
     def set_api_keys_settings():

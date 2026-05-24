@@ -2459,16 +2459,108 @@ def _movievault_log(level: str, message: str, detail: str = ""):
 def _movievault_config_log_detail(extra: str = "") -> str:
     api_token = _movievault_api_token()
     parts = [
-        f"Search URL: {_movievault_base_url() or '-'}",
-        f"Ingest URL: {_movievault_ingest_url() or '-'}",
-        f"Contribution endpoint: {_movievault_contribution_url() or '-'}",
-        f"API token: {_movievault_mask_token(api_token)}",
+        f"API token: {_movievault_troubleshoot_token_mask(api_token)}",
         f"Token configured: {'yes' if api_token else 'no'}",
         f"Sharing mode: {_movievault_sharing_mode()}",
     ]
     if extra:
         parts.append(extra)
     return "; ".join(parts)
+
+
+def _movievault_troubleshoot_token_mask(token: str | None) -> str:
+    token = str(token or "").strip()
+    if not token:
+        return "-"
+    if len(token) <= 8:
+        return f"{token[:2]}..."
+    return f"{token[:8]}...{token[-4:]}"
+
+
+def _movievault_compact(value, limit: int = 360) -> str:
+    if value in (None, "", [], {}):
+        return ""
+    if not isinstance(value, str):
+        try:
+            value = json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+        except Exception:
+            value = str(value)
+    value = re.sub(r"\s+", " ", value).strip()
+    value = _movievault_sanitize_log_text(value)
+    return value[:limit]
+
+
+def _movievault_sanitize_log_text(value: str) -> str:
+    for secret in (
+        _movievault_base_url(),
+        _movievault_ingest_url(),
+        _movievault_contribution_url(),
+        _movievault_api_token(),
+    ):
+        secret = str(secret or "").strip()
+        if secret:
+            value = value.replace(secret, "[redacted]")
+    return value
+
+
+def _movievault_response_json(response):
+    try:
+        return response.json()
+    except Exception:
+        return None
+
+
+def _movievault_response_error(response) -> str:
+    data = _movievault_response_json(response)
+    if isinstance(data, dict):
+        parts = []
+        for key in ("error", "code", "message", "detail"):
+            value = data.get(key)
+            if value not in (None, "", [], {}):
+                parts.append(f"{key}={_movievault_compact(value, 180)}")
+        for key in ("errors", "validationErrors", "issues"):
+            value = data.get(key)
+            if value not in (None, "", [], {}):
+                parts.append(f"{key}={_movievault_compact(value, 240)}")
+        if parts:
+            return "; ".join(parts)
+        return _movievault_compact(data)
+    return _movievault_compact(getattr(response, "text", "") or "", 360)
+
+
+def _movievault_extract_movievault_id(value, allow_plain_id: bool = False) -> str:
+    if not isinstance(value, dict):
+        return ""
+    keys = ("movieVaultId", "movievaultId", "movievault_id", "_movievault_id", "entityId")
+    if allow_plain_id:
+        keys = keys + ("id",)
+    for key in keys:
+        item = value.get(key)
+        if item not in (None, "", [], {}):
+            return str(item)
+    for key in ("entity", "movie", "release", "person", "boxSet", "box_set", "data", "result", "contribution"):
+        item = value.get(key)
+        found = _movievault_extract_movievault_id(item, allow_plain_id=allow_plain_id)
+        if found:
+            return found
+    return ""
+
+
+def _movievault_submission_action(response) -> str:
+    data = _movievault_response_json(response)
+    if not isinstance(data, dict):
+        return "shared"
+    for key in ("action", "status", "result", "outcome"):
+        value = str(data.get(key) or "").strip().lower()
+        if value in {"created", "new", "inserted"}:
+            return "created"
+        if value in {"updated", "merged", "changed"}:
+            return "updated"
+        if value in {"unchanged", "not_updated", "not-updated", "no_change", "skipped"}:
+            return "not_updated"
+        if value in {"accepted", "ok", "success", "shared"}:
+            return "shared"
+    return "shared"
 
 
 MOVIEVAULT_TEMPLATE_CACHE_KEY = "movievault_contribution_template_cache"
@@ -3145,11 +3237,17 @@ def _movievault_contribution_payload(
     ).hexdigest()
     identity = _movievault_entity_identity(entity_type, filtered_payload, context)
     identity = identity or str(context.get("localEntityId") or context.get("barcode") or "unknown")
+    movievault_id = (
+        _movievault_extract_movievault_id(source_data)
+        or _movievault_extract_movievault_id(raw_payload)
+        or _movievault_extract_movievault_id(filtered_payload)
+    )
     idem = f"{entity_type}:{identity}:{template_version or 'unknown'}:{payload_fingerprint}"
     stats = {
         "entity_type": entity_type,
         "template_version": template_version,
         "template_source": template_source,
+        "movievault_id": movievault_id,
         "raw_count": len(raw_payload),
         "filtered_count": len(filtered_payload),
         "raw_fields": raw_fields,
@@ -3179,19 +3277,18 @@ def _movievault_stats_detail(stats: dict, endpoint: str = "", http_status: str =
     parts = [
         f"Local entity: {stats.get('local_entity_type')}:{stats.get('local_entity_id')}",
         f"MovieVault entity: {stats.get('entity_type')}",
-        f"Template: {stats.get('template_version') or '-'} ({stats.get('template_source') or '-'})",
+        f"Template version: {stats.get('template_version') or '-'} ({stats.get('template_source') or '-'})",
+        f"MovieVault ID: {stats.get('movievault_id') or '-'}",
         f"Fields before/after: {stats.get('raw_count', 0)}/{stats.get('filtered_count', 0)}",
-        f"Fields: {', '.join(stats.get('filtered_fields') or []) or '-'}",
+        f"Synchronized fields: {', '.join(stats.get('filtered_fields') or []) or '-'}",
         f"Filtered out: {', '.join(stats.get('filtered_out') or []) or '-'}",
         f"Missing source fields: {', '.join((stats.get('missing_source_fields') or [])[:24]) or '-'}",
         f"Idempotency: {stats.get('idempotency_prefix') or '-'}",
     ]
-    if endpoint:
-        parts.append(f"Endpoint: {endpoint}")
     if http_status:
         parts.append(f"HTTP status: {http_status}")
     if response_body:
-        parts.append(f"Response: {response_body[:240]}")
+        parts.append(f"MovieVault error: {_movievault_compact(response_body, 360)}")
     return "; ".join(parts)
 
 
@@ -3201,64 +3298,206 @@ def _movievault_is_title_only(entity_type: str, payload: dict) -> bool:
     return sorted((payload or {}).keys()) == ["title"]
 
 
-def _submit_movievault_entity_contribution(
+def _movievault_new_submission_result(entity_type: str, source_data: dict | None, sources: str, context: dict | None) -> dict:
+    return {
+        "entity_type": entity_type,
+        "title": (source_data or {}).get("title") if source_data else "",
+        "sources": sources,
+        "context": context or {},
+        "submitted": False,
+        "status": "skipped",
+        "action": "not_updated",
+        "http_status": "",
+        "error": "",
+        "warnings": [],
+        "stats": {},
+        "movievault_id": "",
+        "refreshed_template": False,
+    }
+
+
+def _movievault_result_detail(result: dict) -> str:
+    stats = dict(result.get("stats") or {})
+    if result.get("movievault_id") and not stats.get("movievault_id"):
+        stats["movievault_id"] = result.get("movievault_id")
+    parts = [
+        f"Outcome: {result.get('action') or result.get('status') or '-'}",
+        _movievault_stats_detail(
+            stats,
+            http_status=str(result.get("http_status") or ""),
+            response_body=result.get("error") or "",
+        ) if stats else f"Entity: {result.get('entity_type') or '-'}",
+    ]
+    if result.get("refreshed_template"):
+        parts.append("Template refreshed after validation error: yes")
+    warnings = result.get("warnings") or []
+    if warnings:
+        parts.append(f"Warnings: {'; '.join(warnings)}")
+    if result.get("error") and not stats:
+        parts.append(f"MovieVault error: {result.get('error')}")
+    return "; ".join(part for part in parts if part)
+
+
+def _movievault_log_submission_result(result: dict):
+    title = result.get("title") or result.get("entity_type") or "entity"
+    status = result.get("status")
+    if status == "submitted":
+        message = f"MovieVault contribution shared: \"{title}\""
+        level = "info"
+    elif status == "rejected":
+        message = f"MovieVault contribution rejected: \"{title}\""
+        level = "warn"
+    elif status == "error":
+        message = f"MovieVault contribution failed: \"{title}\""
+        level = "warn"
+    else:
+        message = f"MovieVault contribution not updated: \"{title}\""
+        level = "info"
+    _movievault_log(level, message, _movievault_config_log_detail(_movievault_result_detail(result)))
+
+
+def _movievault_result_counts(results: list[dict], not_updated_extra: int = 0) -> dict:
+    counts = {
+        "created": 0,
+        "updated": 0,
+        "shared": 0,
+        "rejected": 0,
+        "not_updated": max(0, int(not_updated_extra or 0)),
+        "errors": 0,
+    }
+    for result in results:
+        status = result.get("status")
+        action = result.get("action")
+        if status == "submitted":
+            if action in {"created", "updated", "not_updated"}:
+                counts[action] += 1
+            else:
+                counts["shared"] += 1
+        elif status == "rejected":
+            counts["rejected"] += 1
+        elif status == "error":
+            counts["errors"] += 1
+        else:
+            counts["not_updated"] += 1
+    return counts
+
+
+def _movievault_result_templates(results: list[dict]) -> str:
+    values = []
+    for result in results:
+        stats = result.get("stats") or {}
+        entity = stats.get("entity_type") or result.get("entity_type") or "-"
+        version = stats.get("template_version") or "-"
+        source = stats.get("template_source") or "-"
+        item = f"{entity}={version} ({source})"
+        if item not in values:
+            values.append(item)
+    return ", ".join(values) or "-"
+
+
+def _movievault_result_fields(results: list[dict]) -> str:
+    values = []
+    for result in results:
+        stats = result.get("stats") or {}
+        fields = ", ".join(stats.get("filtered_fields") or []) or "-"
+        item = f"{result.get('entity_type') or '-'}=[{fields}]"
+        if item not in values:
+            values.append(item)
+    return "; ".join(values) or "-"
+
+
+def _movievault_result_entities(results: list[dict]) -> str:
+    values = []
+    for result in results:
+        entity = result.get("entity_type") or "-"
+        outcome = result.get("action") or result.get("status") or "-"
+        http_status = result.get("http_status") or "-"
+        movievault_id = result.get("movievault_id") or (result.get("stats") or {}).get("movievault_id") or "-"
+        values.append(f"{entity}: {outcome}, HTTP {http_status}, MovieVault ID {movievault_id}")
+    return "; ".join(values) or "-"
+
+
+def _movievault_result_errors(results: list[dict]) -> str:
+    values = []
+    for result in results:
+        if result.get("error"):
+            values.append(f"{result.get('entity_type') or '-'}: {_movievault_compact(result.get('error'), 240)}")
+        for warning in result.get("warnings") or []:
+            values.append(f"{result.get('entity_type') or '-'} warning: {_movievault_compact(warning, 180)}")
+    return "; ".join(values[:8]) or "-"
+
+
+def _movievault_log_result_summary(
+    message: str,
+    results: list[dict],
+    *,
+    considered: int | None = None,
+    candidates: int | None = None,
+    not_updated_extra: int = 0,
+    ignored: int = 0,
+):
+    if not results and not not_updated_extra and not ignored:
+        return
+    counts = _movievault_result_counts(results, not_updated_extra=not_updated_extra)
+    level = "warn" if counts["rejected"] or counts["errors"] else "info"
+    parts = []
+    if considered is not None:
+        parts.append(f"Items considered: {considered}")
+    if candidates is not None:
+        parts.append(f"Submitted candidates: {candidates}")
+    if ignored:
+        parts.append(f"Ignored because of limit: {ignored}")
+    parts.extend([
+        (
+            "Counts: "
+            f"created={counts['created']}; updated={counts['updated']}; shared={counts['shared']}; "
+            f"rejected={counts['rejected']}; not updated={counts['not_updated']}; errors={counts['errors']}"
+        ),
+        f"Entities: {_movievault_result_entities(results)}",
+        f"Templates: {_movievault_result_templates(results)}",
+        f"Synchronized fields: {_movievault_result_fields(results)}",
+        f"Errors/warnings: {_movievault_result_errors(results)}",
+    ])
+    _movievault_log(level, message, _movievault_config_log_detail("; ".join(parts)))
+
+
+def _submit_movievault_entity_contribution_result(
     entity_type: str,
     source_data: dict | None,
     sources: str,
     context: dict | None = None,
     force_template: bool = False,
-) -> bool:
+) -> dict:
+    result = _movievault_new_submission_result(entity_type, source_data, sources, context)
     url = _movievault_contribution_url()
     title = (source_data or {}).get("title") if source_data else ""
     if not _is_movievault_contribution_enabled() or _movievault_sharing_mode() == "disabled":
-        _movievault_log(
-            "info",
-            "MovieVault bijdrage overgeslagen",
-            _movievault_config_log_detail(f"Delen staat uit; title={title or '?'}; sources={sources}"),
-        )
-        return False
+        result["error"] = f"Sharing is disabled; title={title or '?'}; sources={sources}"
+        return result
     if not url or not source_data:
-        _movievault_log(
-            "info",
-            "MovieVault bijdrage overgeslagen",
-            _movievault_config_log_detail(
-                f"Ingest URL of payload ontbreekt; entity={entity_type}; title={title or '?'}; sources={sources}"
-            ),
-        )
-        return False
+        result["error"] = f"Contribution URL or payload missing; entity={entity_type}; title={title or '?'}; sources={sources}"
+        return result
     try:
         payload, stats = _movievault_contribution_payload(entity_type, source_data, sources, context, force_template)
+        result["stats"] = stats
+        result["movievault_id"] = stats.get("movievault_id") or ""
         if not payload:
-            _movievault_log(
-                "warn",
-                "MovieVault bijdrage overgeslagen",
-                _movievault_config_log_detail(
-                    _movievault_stats_detail(stats)
-                    + f"; Verplichte velden ontbreken: {', '.join(stats.get('missing_required') or []) or '-'}; "
-                    f"title={title or '?'}; sources={sources}"
-                ),
-            )
-            return False
+            result["status"] = "skipped"
+            result["error"] = f"Required fields missing: {', '.join(stats.get('missing_required') or []) or '-'}"
+            return result
         if _movievault_is_title_only(entity_type, payload.get("payload") or {}):
-            _movievault_log(
-                "warn",
-                "MovieVault contribution is title-only after refresh",
-                _movievault_config_log_detail(_movievault_stats_detail(stats)),
-            )
-        _movievault_log(
-            "info",
-            f"MovieVault bijdrage versturen: \"{title or entity_type}\"",
-            _movievault_config_log_detail(_movievault_stats_detail(stats, endpoint=url)),
-        )
+            result["warnings"].append("Movie contribution is title-only after template filtering")
         r = movievault_request("POST", url, json=payload, include_auth=True, timeout=8)
         if 200 <= r.status_code < 300:
-            add_log(
-                "movievault",
-                f"Metadata gedeeld met MovieVault: \"{title or entity_type}\"",
-                _movievault_stats_detail(stats, endpoint=url, http_status=str(r.status_code)),
-                "info",
-            )
-            return True
+            data = _movievault_response_json(r)
+            result.update({
+                "submitted": True,
+                "status": "submitted",
+                "action": _movievault_submission_action(r),
+                "http_status": str(r.status_code),
+                "movievault_id": _movievault_extract_movievault_id(data, allow_plain_id=True) or result.get("movievault_id") or "",
+            })
+            return result
         validation_error = False
         if r.status_code == 400:
             try:
@@ -3266,47 +3505,53 @@ def _submit_movievault_entity_contribution(
             except Exception:
                 validation_error = "validation_error" in (r.text or "")
         if validation_error:
-            _movievault_log(
-                "warn",
-                f"MovieVault validatiefout, template wordt vernieuwd: \"{title or entity_type}\"",
-                _movievault_stats_detail(stats, endpoint=url, http_status="400", response_body=r.text),
-            )
+            result["warnings"].append("Validation error returned; contribution template refreshed and retried once")
+            result["refreshed_template"] = True
             payload, stats = _movievault_contribution_payload(entity_type, source_data, sources, context, True)
+            result["stats"] = stats
+            result["movievault_id"] = stats.get("movievault_id") or result.get("movievault_id") or ""
             if not payload:
-                _movievault_log(
-                    "warn",
-                    "MovieVault bijdrage overgeslagen na template refresh",
-                    _movievault_config_log_detail(
-                        _movievault_stats_detail(stats)
-                        + f"; Verplichte velden ontbreken: {', '.join(stats.get('missing_required') or []) or '-'}; "
-                        f"title={title or '?'}; sources={sources}"
-                    ),
-                )
-                return False
+                result["status"] = "skipped"
+                result["error"] = f"Required fields missing after template refresh: {', '.join(stats.get('missing_required') or []) or '-'}"
+                return result
             if _movievault_is_title_only(entity_type, payload.get("payload") or {}):
-                _movievault_log(
-                    "warn",
-                    "MovieVault contribution is title-only after refresh",
-                    _movievault_config_log_detail(_movievault_stats_detail(stats)),
-                )
+                result["warnings"].append("Movie contribution is title-only after template refresh")
             r = movievault_request("POST", url, json=payload, include_auth=True, timeout=8)
             if 200 <= r.status_code < 300:
-                add_log(
-                    "movievault",
-                    f"Metadata gedeeld met MovieVault na template refresh: \"{title or entity_type}\"",
-                    _movievault_stats_detail(stats, endpoint=url, http_status=str(r.status_code)),
-                    "info",
-                )
-                return True
-        add_log(
-            "movievault",
-            f"MovieVault bijdrage geweigerd: \"{title or entity_type}\"",
-            _movievault_stats_detail(stats, endpoint=url, http_status=str(r.status_code), response_body=r.text),
-            "warn",
-        )
+                data = _movievault_response_json(r)
+                result.update({
+                    "submitted": True,
+                    "status": "submitted",
+                    "action": _movievault_submission_action(r),
+                    "http_status": str(r.status_code),
+                    "movievault_id": _movievault_extract_movievault_id(data, allow_plain_id=True) or result.get("movievault_id") or "",
+                })
+                return result
+        result.update({
+            "status": "rejected",
+            "action": "rejected",
+            "http_status": str(r.status_code),
+            "error": _movievault_response_error(r) or f"HTTP {r.status_code}",
+        })
     except Exception as ex:
-        add_log("movievault", f"MovieVault bijdrage mislukt: \"{title or entity_type}\"", str(ex), "warn")
-    return False
+        result.update({
+            "status": "error",
+            "action": "error",
+            "error": str(ex),
+        })
+    return result
+
+
+def _submit_movievault_entity_contribution(
+    entity_type: str,
+    source_data: dict | None,
+    sources: str,
+    context: dict | None = None,
+    force_template: bool = False,
+) -> bool:
+    result = _submit_movievault_entity_contribution_result(entity_type, source_data, sources, context, force_template)
+    _movievault_log_submission_result(result)
+    return bool(result.get("submitted"))
 
 
 def _movievault_person_has_contributable_metadata(person: dict | None) -> bool:
@@ -3339,9 +3584,12 @@ def _submit_movievault_people_contributions(
     people = source.get("people")
     if not isinstance(people, list):
         return False
-    submitted = False
-    for index, person in enumerate(people[:25], start=1):
+    results = []
+    not_updated = 0
+    limited_people = people[:25]
+    for index, person in enumerate(limited_people, start=1):
         if not _movievault_person_has_contributable_metadata(person):
+            not_updated += 1
             continue
         person_context = dict(context or {})
         person_context.update(
@@ -3353,11 +3601,20 @@ def _submit_movievault_people_contributions(
                 or index,
             }
         )
-        submitted = (
-            _submit_movievault_entity_contribution("person", person, sources, person_context)
-            or submitted
+        results.append(
+            _submit_movievault_entity_contribution_result("person", person, sources, person_context)
         )
-    return submitted
+    ignored = max(len(people) - len(limited_people), 0)
+    movie_title = source.get("title") or (context or {}).get("title") or "movie"
+    _movievault_log_result_summary(
+        f"MovieVault people contribution summary: \"{movie_title}\"",
+        results,
+        considered=len(limited_people),
+        candidates=len(results),
+        not_updated_extra=not_updated,
+        ignored=ignored,
+    )
+    return any(result.get("submitted") for result in results)
 
 
 def _movievault_box_set_source_from_proposal(
@@ -3436,13 +3693,22 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
     context = context or {}
     if not movie_info:
         return False
-    submitted = _submit_movievault_entity_contribution("movie", movie_info, sources, context)
+    results = [
+        _submit_movievault_entity_contribution_result("movie", movie_info, sources, context)
+    ]
     source = _movievault_public_source(movie_info)
     release_candidate = _movievault_raw_payload(source, "release")
     if release_candidate.get("barcode") and release_candidate.get("title"):
-        submitted = _submit_movievault_entity_contribution("release", movie_info, sources, context) or submitted
-    submitted = _submit_movievault_people_contributions(movie_info, sources, context) or submitted
-    return submitted
+        results.append(_submit_movievault_entity_contribution_result("release", movie_info, sources, context))
+    title = source.get("title") or (context or {}).get("title") or "movie"
+    _movievault_log_result_summary(
+        f"MovieVault contribution summary: \"{title}\"",
+        results,
+        considered=len(results),
+        candidates=len(results),
+    )
+    people_submitted = _submit_movievault_people_contributions(movie_info, sources, context)
+    return any(result.get("submitted") for result in results) or people_submitted
 
 
 def _normalize_movievault_movie(data: dict | None):
