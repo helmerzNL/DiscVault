@@ -8,19 +8,29 @@ contract, operational endpoint details, internal contribution templates, retry
 rules, or service-side behavior. Keep those materials in the private MovieVault
 repository.
 
+## Contract Location
+
+DiscVault-side MovieVault client contracts live under:
+
+```text
+docs/contracts/
+```
+
+Keep this file as a short public overview only.
+
 ## Public Configuration Surface
 
 DiscVault recognizes these environment variables:
 
 ```env
-MOVIEVAULT_SEARCH_URL=
-MOVIEVAULT_INGEST_URL=
-MOVIEVAULT_API_TOKEN=
+MOVIEVAULT_SEARCH_URL=https://search.discvault.eu
+MOVIEVAULT_INGEST_URL=https://movies.discvault.eu
 MOVIEVAULT_SHARING_MODE=opt_in
 ```
 
-Use placeholders in public examples. Real service URLs and tokens belong in local
-deployment configuration only.
+`MOVIEVAULT_API_TOKEN` is managed automatically server-side. DiscVault must not
+send the full MovieVault token to browsers or mobile clients. Stored MovieVault
+tokens should use the encrypted server-side setting.
 
 ## Privacy Boundary
 

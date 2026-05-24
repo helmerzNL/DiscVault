@@ -46,6 +46,11 @@ try:
     )
     from .db import get_db
     from .logging_utils import add_log
+    from .movievault_client import (
+        get_movievault_api_token as _movievault_client_api_token,
+        mask_token as _movievault_client_mask_token,
+        movievault_request,
+    )
     from .settings.routes import register_settings_routes
     from .push.routes import (
         init_push_dependencies, push_to_user, push_to_user_if_pref,
@@ -65,6 +70,11 @@ except ImportError:  # pragma: no cover - supports running app.py directly
     )
     from db import get_db
     from logging_utils import add_log
+    from movievault_client import (
+        get_movievault_api_token as _movievault_client_api_token,
+        mask_token as _movievault_client_mask_token,
+        movievault_request,
+    )
     from settings.routes import register_settings_routes
     from push.routes import (
         init_push_dependencies, push_to_user, push_to_user_if_pref,
@@ -2401,14 +2411,11 @@ def _movievault_ingest_url() -> str:
 
 
 def _movievault_api_token() -> str:
-    return str(MOVIEVAULT_API_TOKEN).strip() or str(MOVIEVAULT_API_KEY).strip()
+    return _movievault_client_api_token()
 
 
 def _movievault_mask_token(token: str | None) -> str:
-    token = str(token or "").strip()
-    if not token:
-        return "-"
-    return f"*****{token[-6:]}"
+    return _movievault_client_mask_token(token)
 
 
 def _movievault_sharing_mode() -> str:
@@ -2611,7 +2618,7 @@ def _movievault_fetch_contribution_template() -> dict | None:
     if not base:
         return None
     url = f"{base}/api/v1/contribution-template"
-    r = requests.get(url, headers={"Accept": "application/json"}, timeout=8)
+    r = movievault_request("GET", url, include_auth=False, timeout=8)
     if r.status_code == 404:
         _movievault_log("info", "MovieVault contribution template niet gevonden", f"GET {url}; HTTP 404")
         return None
@@ -2823,7 +2830,7 @@ def _movievault_get(path: str, params: dict | None = None):
         return None
     try:
         url = f"{base}{path if path.startswith('/') else '/' + path}"
-        r = requests.get(url, params=params or {}, headers=_movievault_headers(), timeout=8)
+        r = movievault_request("GET", url, params=params or {}, include_auth=True, timeout=8)
         detail = f"GET {path}; params={params or {}}; HTTP {r.status_code}"
         if r.status_code == 404:
             _movievault_log("info", "MovieVault lookup route/resource niet gevonden", detail)
@@ -3161,7 +3168,7 @@ def _movievault_contribution_payload(
     return {
         "idempotencyKey": idem,
         "sourceClient": "discvault",
-        "sourceVersion": "3.4.x",
+        "sourceVersion": os.environ.get("BUILD_VERSION", "dev"),
         "sharingMode": _movievault_sharing_mode(),
         "entityType": entity_type,
         "payload": filtered_payload,
@@ -3243,7 +3250,7 @@ def _submit_movievault_entity_contribution(
             f"MovieVault bijdrage versturen: \"{title or entity_type}\"",
             _movievault_config_log_detail(_movievault_stats_detail(stats, endpoint=url)),
         )
-        r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
+        r = movievault_request("POST", url, json=payload, include_auth=True, timeout=8)
         if 200 <= r.status_code < 300:
             add_log(
                 "movievault",
@@ -3282,7 +3289,7 @@ def _submit_movievault_entity_contribution(
                     "MovieVault contribution is title-only after refresh",
                     _movievault_config_log_detail(_movievault_stats_detail(stats)),
                 )
-            r = requests.post(url, json=payload, headers=_movievault_headers(include_auth=True), timeout=8)
+            r = movievault_request("POST", url, json=payload, include_auth=True, timeout=8)
             if 200 <= r.status_code < 300:
                 add_log(
                     "movievault",

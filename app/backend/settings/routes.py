@@ -18,6 +18,10 @@ try:
     )
     from ..db import get_db
     from ..logging_utils import add_log
+    from ..movievault_client import (
+        get_movievault_api_token as _movievault_client_api_token,
+        movievault_status,
+    )
 except ImportError:  # pragma: no cover - supports running app.py directly
     from config import (
         METADATA_SOURCE_ORDER_DEFAULT,
@@ -36,6 +40,10 @@ except ImportError:  # pragma: no cover - supports running app.py directly
     )
     from db import get_db
     from logging_utils import add_log
+    from movievault_client import (
+        get_movievault_api_token as _movievault_client_api_token,
+        movievault_status,
+    )
 
 
 def register_settings_routes(
@@ -91,7 +99,7 @@ def register_settings_routes(
         ).rstrip("/")
 
     def _movievault_api_token() -> str:
-        return str(MOVIEVAULT_API_TOKEN).strip() or str(MOVIEVAULT_API_KEY).strip()
+        return _movievault_client_api_token()
 
     def _movievault_sharing_mode() -> str:
         mode = _setting_value("movievault_sharing_mode", str(MOVIEVAULT_SHARING_MODE) or "opt_in").strip().lower()
@@ -217,13 +225,14 @@ def register_settings_routes(
         tmdb = str(TMDB_API_KEY)
         omdb = str(OMDB_API_KEY)
         movievault_token = _movievault_api_token()
+        mv_status = movievault_status()
         movievault_search = _movievault_search_url()
         movievault_ingest = _movievault_ingest_url()
         movievault_contribution = _first_setting(
             ("movievault_contribution_url",),
             str(MOVIEVAULT_CONTRIBUTION_URL).strip(),
         )
-        return jsonify({
+        result = {
             "tmdb_key_set": bool(tmdb),
             "omdb_key_set": bool(omdb),
             "movievault_key_set": bool(movievault_token),
@@ -238,14 +247,16 @@ def register_settings_routes(
             "movievault_token_masked": _mask(movievault_token),
             "tmdb_key": tmdb,
             "omdb_key": omdb,
-            "movievault_key": movievault_token,
-            "movievault_api_token": movievault_token,
             "movievault_base_url": movievault_search,
             "movievault_search_url": movievault_search,
             "movievault_ingest_url": movievault_ingest,
             "movievault_contribution_url": movievault_contribution,
             "movievault_sharing_mode": _movievault_sharing_mode(),
-        })
+        }
+        result.update(mv_status)
+        result["movievault_key_masked"] = mv_status.get("movievault_token_masked", "")
+        result["movievault_token_masked"] = mv_status.get("movievault_token_masked", "")
+        return jsonify(result)
 
     @app.route("/api/settings/api-keys", methods=["POST"])
     def set_api_keys_settings():
@@ -275,16 +286,23 @@ def register_settings_routes(
                 if "movievault_api_token" in data
                 else data.get("movievault_token", data.get("movievault_key", ""))
             ).strip()
-            masked = ("\u2022" * max(len(val) - 4, 0)) + val[-4:] if val else ""
             if val:
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-                    ("movievault_api_token", val),
-                )
-                conn.execute("DELETE FROM settings WHERE key=?", ("movievault_api_key",))
-                add_log("settings", f"MovieVault API token opgeslagen ({masked})", level="info")
+                conn.close()
+                return jsonify({
+                    "error": "MovieVault tokens worden server-side via handshake geprovisioned.",
+                }), 400
             else:
-                conn.execute("DELETE FROM settings WHERE key IN (?, ?)", ("movievault_api_token", "movievault_api_key"))
+                conn.execute(
+                    "DELETE FROM settings WHERE key IN (?, ?, ?, ?, ?, ?)",
+                    (
+                        "movievault_api_token",
+                        "movievault_api_token_enc",
+                        "movievault_api_key",
+                        "movievault_token_prefix",
+                        "movievault_token_scopes",
+                        "movievault_last_handshake_at",
+                    ),
+                )
                 add_log("settings", "MovieVault API token verwijderd uit database", level="info")
         if any(k in data for k in ("movievault_search_url", "movievault_base_url", "movievault_url")):
             val = str(
