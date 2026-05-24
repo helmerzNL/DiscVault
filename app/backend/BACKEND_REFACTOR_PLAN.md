@@ -15,19 +15,11 @@ frontend and iOS app.
 - [ ] Step 4: Split containers into a dedicated module/service.
 - [ ] Step 5: Split movies/import/lookup after the smaller domains are stable.
 
-## Container Schema Reference
+## Private References
 
-The normalized Vault / Box Set / Collection database model and the temporary
-legacy compatibility rules are documented in `CONTAINER_SCHEMA.md`. Use that
-file as the reference when splitting container code or migrating the iOS app.
-
-## Mobile API Contract
-
-Native mobile response rules for iOS and future Android clients are documented
-in `MOBILE_API_CONTRACT.md`. Keep this contract in sync when changing sync
-responses, filmography responses, image URLs, asset manifests or normalized
-container payloads. Changes should remain additive for PWA compatibility unless
-a coordinated frontend migration explicitly removes a legacy field.
+Detailed container schema notes and native mobile API contracts are maintained
+outside the public repository. Keep public changes additive unless a coordinated
+frontend/mobile migration explicitly removes a legacy field.
 
 ## Step 3 Validation Notes
 
