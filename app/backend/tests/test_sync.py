@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import sys
 import tempfile
@@ -56,6 +57,58 @@ class SyncIntegrationTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         return response.get_json()["movie"]
+
+    def test_movie_source_image_urls_are_stored_for_movievault(self):
+        original_download = self.backend.download_poster
+        calls = []
+
+        def fake_download(url, asset_kind="poster"):
+            calls.append((url, asset_kind))
+            return f"local-{asset_kind}.jpg"
+
+        poster_url = "https://images.example.test/poster.jpg"
+        backdrop_url = "https://images.example.test/backdrop-main.jpg"
+        backdrop_urls = [
+            backdrop_url,
+            "https://images.example.test/backdrop-alt.jpg",
+        ]
+        try:
+            self.backend.download_poster = fake_download
+            response = self.client.post("/api/movies", json={
+                "title": f"Source Images {uuid.uuid4().hex[:8]}",
+                "barcode": f"SRCIMG-{uuid.uuid4().hex[:10].upper()}",
+                "poster_url": poster_url,
+                "backdrop": backdrop_url,
+                "backdrops": json.dumps(backdrop_urls),
+                "format": "4K UHD",
+            })
+        finally:
+            self.backend.download_poster = original_download
+
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        movie = response.get_json()["movie"]
+        self.assertEqual(movie["poster"], poster_url)
+        self.assertEqual(movie["poster_url"], poster_url)
+        self.assertEqual(movie["backdrop"], "/api/images/local-backdrop.jpg")
+        self.assertEqual(movie["backdrop_url"], backdrop_url)
+        self.assertEqual(json.loads(movie["backdrop_urls"]), backdrop_urls)
+        self.assertIn((poster_url, "poster"), calls)
+        self.assertIn((backdrop_url, "backdrop"), calls)
+
+        payload = self.backend._movievault_raw_payload(
+            self.backend._movievault_public_source(movie),
+            "movie",
+        )
+        self.assertEqual(payload["posterUrl"], poster_url)
+        self.assertEqual(payload["backdropUrl"], backdrop_url)
+        self.assertEqual(payload["backdropUrls"], movie["backdrop_urls"])
+        self.assertEqual(
+            self.backend._movievault_normalize_template_value(
+                payload["backdropUrls"],
+                {"type": "array"},
+            ),
+            backdrop_urls,
+        )
 
     def _create_box_set(self, title=None):
         title = title or f"Box Set {uuid.uuid4().hex[:8]}"

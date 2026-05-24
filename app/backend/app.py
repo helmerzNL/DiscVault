@@ -401,9 +401,12 @@ SCHEMA_COLUMNS = [
     ("tmdb_id",              "TEXT"),
     # Media
     ("poster",               "TEXT"),
+    ("poster_url",           "TEXT"),
     ("poster_file",          "TEXT"),
     ("backdrop",             "TEXT"),
+    ("backdrop_url",         "TEXT"),
     ("backdrops",            "TEXT"),
+    ("backdrop_urls",        "TEXT"),
     ("trailer_url",          "TEXT"),
     ("videos",               "TEXT"),
     # Distribution
@@ -421,6 +424,77 @@ SCHEMA_COLUMNS = [
 
 # Fields allowed in INSERT/UPDATE (everything except id and added_at handling)
 ALL_FIELDS = [col for col, _ in SCHEMA_COLUMNS if col not in ("barcode", "added_at")]
+
+
+def _is_remote_image_url(value) -> bool:
+    return isinstance(value, str) and value.strip().startswith(("http://", "https://"))
+
+
+def _coerce_list_values(raw) -> list:
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        values = raw
+    else:
+        text = str(raw).strip()
+        if not text:
+            return []
+        try:
+            decoded = json.loads(text)
+            values = decoded if isinstance(decoded, list) else [decoded]
+        except Exception:
+            values = [text]
+    out = []
+    seen = set()
+    for value in values:
+        if value is None:
+            continue
+        item = str(value).strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def _remote_image_values(raw) -> list:
+    return [value for value in _coerce_list_values(raw) if _is_remote_image_url(value)]
+
+
+def _first_remote_image_value(*values) -> str:
+    for value in values:
+        for item in _remote_image_values(value):
+            return item
+    return ""
+
+
+def preserve_source_image_urls(row_or_updates):
+    if not row_or_updates:
+        return row_or_updates
+
+    poster = (row_or_updates.get("poster") or "").strip()
+    poster_url = (row_or_updates.get("poster_url") or "").strip()
+    if not poster and poster_url:
+        row_or_updates["poster"] = poster_url
+        poster = poster_url
+    if not poster_url and _is_remote_image_url(poster):
+        row_or_updates["poster_url"] = poster
+
+    backdrop = (row_or_updates.get("backdrop") or "").strip()
+    backdrop_url = (row_or_updates.get("backdrop_url") or "").strip()
+    backdrop_urls = row_or_updates.get("backdrop_urls") or ""
+    source_backdrops = _remote_image_values(backdrop_urls) or _remote_image_values(row_or_updates.get("backdrops"))
+    if not backdrop and backdrop_url:
+        row_or_updates["backdrop"] = backdrop_url
+        backdrop = backdrop_url
+    if not backdrop_url:
+        primary_backdrop_url = _first_remote_image_value(backdrop) or (source_backdrops[0] if source_backdrops else "")
+        if primary_backdrop_url:
+            row_or_updates["backdrop_url"] = primary_backdrop_url
+    if not backdrop_urls and source_backdrops:
+        row_or_updates["backdrop_urls"] = json.dumps(source_backdrops, ensure_ascii=False)
+
+    return row_or_updates
 
 
 def _init_container_tables(conn):
@@ -1400,6 +1474,32 @@ def init_db():
         if col not in existing:
             bare = defn.split(" NOT NULL")[0].split(" DEFAULT")[0].strip()
             conn.execute(f"ALTER TABLE movies ADD COLUMN {col} {bare}")
+    existing = existing | {col for col, _ in SCHEMA_COLUMNS}
+
+    try:
+        conn.execute("""
+            UPDATE movies
+               SET poster_url = poster
+             WHERE COALESCE(poster_url, '') = ''
+               AND (poster LIKE 'http://%' OR poster LIKE 'https://%')
+        """)
+        conn.execute("""
+            UPDATE movies
+               SET backdrop_url = backdrop
+             WHERE COALESCE(backdrop_url, '') = ''
+               AND (backdrop LIKE 'http://%' OR backdrop LIKE 'https://%')
+        """)
+        for row_id, backdrops in conn.execute(
+            "SELECT id, backdrops FROM movies WHERE COALESCE(backdrop_urls, '') = '' AND COALESCE(backdrops, '') != ''"
+        ).fetchall():
+            source_backdrops = _remote_image_values(backdrops)
+            if source_backdrops:
+                conn.execute(
+                    "UPDATE movies SET backdrop_urls=?, backdrop_url=COALESCE(NULLIF(backdrop_url, ''), ?) WHERE id=?",
+                    (json.dumps(source_backdrops, ensure_ascii=False), source_backdrops[0], row_id),
+                )
+    except Exception:
+        pass
 
     # Migrate movies: add owner_id if missing
     if "owner_id" not in existing:
@@ -1874,30 +1974,7 @@ def localize_backdrop(backdrop_url):
 
 
 def _parse_backdrop_values(raw):
-    if not raw:
-        return []
-    if isinstance(raw, list):
-        values = raw
-    else:
-        text = str(raw).strip()
-        if not text:
-            return []
-        try:
-            decoded = json.loads(text)
-            values = decoded if isinstance(decoded, list) else [decoded]
-        except Exception:
-            values = [text]
-    out = []
-    seen = set()
-    for value in values:
-        if not value:
-            continue
-        item = str(value).strip()
-        if not item or item in seen:
-            continue
-        seen.add(item)
-        out.append(item)
-    return out
+    return _coerce_list_values(raw)
 
 
 def localize_backdrops(backdrops_value):
@@ -1919,6 +1996,7 @@ def localize_backdrops(backdrops_value):
 def prepare_local_image_variants(row_or_updates):
     if not row_or_updates:
         return row_or_updates
+    preserve_source_image_urls(row_or_updates)
     poster_file = row_or_updates.get("poster_file")
     if poster_file:
         ensure_asset_variant(poster_file, "poster")
@@ -2625,7 +2703,7 @@ MOVIEVAULT_TEMPLATE_MAX_AGE_SECONDS = 24 * 60 * 60
 def _movievault_fallback_contribution_template() -> dict:
     localized = {"type": "string", "localized": True}
     return {
-        "version": "bundled-2026-05-23.1",
+        "version": "bundled-2026-05-24.1",
         "entityTypes": ["movie", "release", "box_set", "person"],
         "localizedFieldPattern": "<field>_<iso-639-1-language>",
         "templates": {
@@ -2658,6 +2736,7 @@ def _movievault_fallback_contribution_template() -> dict:
                     "genre": {"type": "string"},
                     "posterUrl": {"type": "string"},
                     "backdropUrl": {"type": "string"},
+                    "backdropUrls": {"type": "array"},
                 },
             },
             "release": {
@@ -2678,6 +2757,7 @@ def _movievault_fallback_contribution_template() -> dict:
                     "screenRatios": {"type": "string"},
                     "posterUrl": {"type": "string"},
                     "backdropUrl": {"type": "string"},
+                    "backdropUrls": {"type": "array"},
                 },
             },
             "box_set": {
@@ -2839,7 +2919,15 @@ def _movievault_normalize_template_value(value, spec: dict):
             match = re.search(r"-?\d+", str(value))
             return int(match.group(0)) if match else None
     if field_type == "array" and isinstance(value, str):
-        return [part.strip() for part in re.split(r"[,;\n]+", value) if part.strip()]
+        text = value.strip()
+        if text.startswith("["):
+            try:
+                decoded = json.loads(text)
+                if isinstance(decoded, list):
+                    return [item for item in decoded if item not in (None, "", [], {})]
+            except Exception:
+                pass
+        return [part.strip() for part in re.split(r"[,;\n]+", text) if part.strip()]
     return value
 
 
@@ -3023,7 +3111,10 @@ MOVIEVAULT_ENTITY_FIELD_MAPS = {
         "genre": "genre",
         "studios": "studios",
         "poster": "posterUrl",
+        "poster_url": "posterUrl",
         "backdrop": "backdropUrl",
+        "backdrop_url": "backdropUrl",
+        "backdrop_urls": "backdropUrls",
         "format": "format",
         "edition": "edition",
         "country": "country",
@@ -3062,7 +3153,10 @@ MOVIEVAULT_ENTITY_FIELD_MAPS = {
         "regions": "regions",
         "screen_ratios": "screenRatios",
         "poster": "posterUrl",
+        "poster_url": "posterUrl",
         "backdrop": "backdropUrl",
+        "backdrop_url": "backdropUrl",
+        "backdrop_urls": "backdropUrls",
         "title_nl": "title_nl",
         "title_de": "title_de",
         "title_fr": "title_fr",
@@ -3112,6 +3206,7 @@ MOVIEVAULT_ENTITY_FIELD_MAPS = {
 
 def _movievault_public_source(source: dict | None) -> dict:
     source = dict(source or {})
+    preserve_source_image_urls(source)
     if (
         isinstance(source.get("_content_ratings"), dict)
         and source["_content_ratings"]
@@ -3836,8 +3931,11 @@ def _normalize_movievault_movie(data: dict | None):
         "imdb_id": _movievault_text(_movievault_first(movie, "imdbId", "imdb_id")),
         "tmdb_id": _movievault_text(_movievault_first(movie, "tmdbId", "tmdb_id")),
         "poster": poster,
+        "poster_url": poster,
         "backdrop": backdrop,
+        "backdrop_url": backdrop,
         "backdrops": backdrops,
+        "backdrop_urls": backdrops,
         "trailer_url": _movievault_text(_movievault_first(movie, "trailerUrl", "trailer_url")),
         "videos": _movievault_text(_movievault_first(movie, "videos")),
         "distributor": _movievault_text(_movievault_first(movie, "distributor", "label", "publisher")),
@@ -3885,6 +3983,7 @@ def _normalize_movievault_box_set(data: dict | None):
         "barcode": _movievault_text(_movievault_first(payload, "barcode", "ean", "upc")),
         "year_range": _movievault_text(_movievault_first(payload, "yearRange", "year_range")),
         "poster": _movievault_image_url(_movievault_first(payload, "poster", "posterUrl", "poster_url", "image")),
+        "poster_url": _movievault_image_url(_movievault_first(payload, "poster", "posterUrl", "poster_url", "image")),
         "movies": members,
     }
 
@@ -4123,8 +4222,11 @@ def lookup_movie_tmdb(title, year=""):
             "genre":          ", ".join(genres),
             "plot":           d.get("overview", ""),
             "poster":         poster_url,
+            "poster_url":     poster_url,
             "backdrop":       backdrops[0] if backdrops else "",
+            "backdrop_url":   backdrops[0] if backdrops else "",
             "backdrops":      json.dumps(backdrops),
+            "backdrop_urls":  json.dumps(backdrops),
             "trailer_url":    trailer_url,
             "videos":         json.dumps(extra_videos) if extra_videos else "",
             "runtime":        str(d.get("runtime", "")),
@@ -4273,8 +4375,11 @@ def lookup_movie_tmdb_by_id(tmdb_id):
             "genre":          ", ".join(genres),
             "plot":           d.get("overview", ""),
             "poster":         poster_url,
+            "poster_url":     poster_url,
             "backdrop":       backdrops[0] if backdrops else "",
+            "backdrop_url":   backdrops[0] if backdrops else "",
             "backdrops":      json.dumps(backdrops),
+            "backdrop_urls":  json.dumps(backdrops),
             "trailer_url":    trailer_url,
             "videos":         json.dumps(extra_videos) if extra_videos else "",
             "runtime":        str(d.get("runtime", "")),
@@ -5766,6 +5871,7 @@ def debug_person_photo(person_id):
 @app.route("/api/movies", methods=["POST"])
 def add_movie():
     data = request.json or {}
+    preserve_source_image_urls(data)
     if not data.get("title"):
         return jsonify({"error": "title is required"}), 400
     if not data.get("barcode"):
@@ -5917,6 +6023,7 @@ def _movie_payload_from_box_set_member(member, fallback_format, box_set_title):
     row["box_set"] = box_set_title
     if not row.get("poster"):
         row["poster"] = member.get("poster") or member.get("poster_url") or member.get("cover_url") or ""
+    preserve_source_image_urls(row)
     return row
 
 
@@ -6551,7 +6658,7 @@ METADATA_REFRESH_FIELDS = [
     "hdr", "audio_tracks", "subtitles",
     "title_nl", "title_fr", "title_de", "title_es",
     "plot_nl", "plot_fr", "plot_de", "plot_es",
-    "backdrop", "backdrops", "trailer_url", "videos",
+    "poster_url", "backdrop", "backdrop_url", "backdrops", "backdrop_urls", "trailer_url", "videos",
     "audience_rating", "content_ratings",
 ]
 
@@ -6843,6 +6950,7 @@ def sync_single_source(movie_id):
             "actor", "producer", "studios", "original_title",
             "language", "country", "runtime", "genre",
             "hdr", "audio_tracks", "subtitles",
+            "poster_url", "backdrop", "backdrop_url", "backdrops", "backdrop_urls",
         ]
         updates = {f: info[f] for f in refresh_fields if info.get(f)}
 
@@ -7384,6 +7492,9 @@ FIELD_ALIASES = {
     "tmdb id": "tmdb_id", "tmdb": "tmdb_id",
     # poster
     "cover": "poster", "image": "poster", "cover url": "poster",
+    "poster url": "poster_url", "poster source url": "poster_url",
+    "backdrop url": "backdrop_url", "backdrop source url": "backdrop_url",
+    "backdrop urls": "backdrop_urls", "backdrops url": "backdrop_urls",
     # distributor
     "publisher": "distributor", "label": "distributor", "uitgever": "distributor",
     # purchase
@@ -7417,7 +7528,8 @@ def enrich_from_api(row: dict) -> dict:
         return row
 
     fillable_fields = [
-        "plot", "poster", "rating", "imdb_id", "tmdb_id", "release_date",
+        "plot", "poster", "poster_url", "backdrop", "backdrop_url", "backdrops", "backdrop_urls",
+        "rating", "imdb_id", "tmdb_id", "release_date",
         "actor", "producer", "studios", "original_title", "language", "country",
         "runtime", "genre", "director", "hdr", "audio_tracks", "subtitles",
     ]
@@ -7472,7 +7584,13 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id:
     # Derive imdb_id from imdb_url if not set separately
     imdb_id = _extract_imdb_id(row.get("imdb_url") or row.get("imdb_id") or "")
 
-    poster_url  = (row.get("poster") or "").strip()
+    poster_url  = (row.get("poster") or row.get("poster_url") or "").strip()
+    source_poster_url = (row.get("poster_url") or poster_url).strip()
+    backdrop_url = (row.get("backdrop_url") or _first_remote_image_value(row.get("backdrop"), row.get("backdrops"), row.get("backdrop_urls"))).strip()
+    backdrop_urls = row.get("backdrop_urls") or ""
+    if not backdrop_urls:
+        remote_backdrops = _remote_image_values(row.get("backdrops") or row.get("backdrop") or backdrop_url)
+        backdrop_urls = json.dumps(remote_backdrops, ensure_ascii=False) if remote_backdrops else ""
     poster_file = (row.get("poster_file") or "").strip()
     if fetch_posters and poster_url and not poster_file:
         poster_file = download_poster(poster_url) or ""
@@ -7513,7 +7631,12 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id:
         "imdb_url":             _s("imdb_url"),
         "tmdb_id":              _s("tmdb_id"),
         "poster":               poster_url,
+        "poster_url":           source_poster_url,
         "poster_file":          poster_file,
+        "backdrop":             _s("backdrop"),
+        "backdrop_url":         backdrop_url,
+        "backdrops":            _s("backdrops"),
+        "backdrop_urls":        backdrop_urls,
         "distributor":          _s("distributor"),
         "purchase_date":        _s("purchase_date"),
         "purchase_price":       _s("purchase_price"),
@@ -8165,6 +8288,7 @@ def _metadata_source_enabled(source: str) -> bool:
 def _finalize_metadata_info(info: dict | None) -> dict:
     if not isinstance(info, dict):
         return {}
+    preserve_source_image_urls(info)
     ratings = info.get("_content_ratings")
     if isinstance(ratings, dict) and ratings:
         info["content_ratings"] = json.dumps(ratings, ensure_ascii=False)
