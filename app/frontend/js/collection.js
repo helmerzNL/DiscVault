@@ -3567,10 +3567,10 @@ async function autoFillFromTitle() {
       showStatus('addStatus', d.error || t('js.backendError', r.status), 'error');
       return;
     }
-    if (d.status === 'candidates' && Array.isArray(d.metadata_candidates) && d.metadata_candidates.length) {
+    if (Array.isArray(d.metadata_candidates) && d.metadata_candidates.length) {
       _showAddCandidates(d.metadata_candidates);
       addTitleLookupResolvedTitle = '';
-      showStatus('addStatus', '', '');
+      showStatus('addStatus', t('scan.otherMatches'), 'info');
       return;
     }
     if (d.status !== 'found' || !d.movie) {
@@ -3580,9 +3580,7 @@ async function autoFillFromTitle() {
     _fillAddFields(d.movie);
     const proposal = await lookupAddBoxSetProposal(d.movie);
     if (proposal) displayAddBoxSetProposal(proposal);
-    else if (Array.isArray(d.metadata_candidates) && d.metadata_candidates.length > 1) {
-      _showAddCandidates(d.metadata_candidates);
-    } else if (Array.isArray(d.tmdb_candidates) && d.tmdb_candidates.length > 1) {
+    else if (Array.isArray(d.tmdb_candidates) && d.tmdb_candidates.length > 1) {
       _showAddCandidates(d.tmdb_candidates);
     }
     addTitleLookupResolvedTitle = document.getElementById('addTitle').value.trim();
