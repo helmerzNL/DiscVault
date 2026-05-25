@@ -515,14 +515,20 @@ def register_settings_routes(
         data = request.json or {}
         val = bool(data.get("debug_enabled", False))
         conn = get_db()
+        current = is_source_enabled("debug_enabled", False)
+        cleared = 0
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             ("debug_enabled", "true" if val else "false"),
         )
+        if current and not val:
+            cursor = conn.execute("DELETE FROM logs WHERE category='refresh_debug'")
+            cleared = cursor.rowcount if cursor.rowcount is not None else 0
         conn.commit()
         conn.close()
-        add_log("settings", f"Debug modus {'ingeschakeld' if val else 'uitgeschakeld'}", level="info")
-        return jsonify({"debug_enabled": val})
+        detail = f"Metadata debug log entries cleared: {cleared}" if cleared else ""
+        add_log("settings", f"Debug modus {'ingeschakeld' if val else 'uitgeschakeld'}", detail, level="info")
+        return jsonify({"debug_enabled": val, "debug_log_cleared": cleared})
 
     @app.route("/api/settings/display", methods=["GET"])
     def get_display_settings():

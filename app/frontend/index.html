@@ -1098,9 +1098,11 @@
                 <option value="add" data-i18n="logs.catAdd">＋ Toevoegen</option>
                 <option value="delete" data-i18n="logs.catDelete">🗑 Verwijderen</option>
                 <option value="containers" data-i18n="logs.catContainers">▣ Containers</option>
+                <option value="refresh_debug" data-i18n="logs.catDebug">Debug metadata</option>
                 <option value="general" data-i18n="logs.catGeneral">⚙ Algemeen</option>
               </select>
               <button class="btn btn-secondary" onclick="loadLogs()" style="padding:8px 14px;" data-i18n="logs.refresh">↻ Vernieuwen</button>
+              <button class="btn btn-secondary" onclick="downloadDebugLogs()" style="padding:8px 14px;" data-i18n="logs.downloadDebug">Download debug log</button>
               <button class="btn btn-danger" onclick="clearLogs()" style="margin-left:auto; padding:8px 14px;" data-i18n="logs.clear">🗑 Wis logs</button>
             </div>
             <div id="logCount" style="font-family:'DM Mono',monospace; font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;"></div>

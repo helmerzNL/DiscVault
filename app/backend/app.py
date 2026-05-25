@@ -19,7 +19,7 @@ import cbor2
 import xml.etree.ElementTree as ET
 from functools import wraps
 from urllib.parse import quote_plus, quote, urlparse
-from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g, stream_with_context, redirect
+from flask import Flask, request, jsonify, send_from_directory, send_file, Response, make_response, g, stream_with_context, redirect, has_request_context
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -3317,11 +3317,16 @@ def _movievault_lookup_summary(data) -> str:
 def _movievault_get(path: str, params: dict | None = None):
     base = _movievault_base_url()
     if not base:
+        _metadata_debug_log("MovieVault lookup skipped", f"Path: {path}; Reason: missing base URL")
         return None
     try:
         url = f"{base}{path if path.startswith('/') else '/' + path}"
+        start = time.time()
+        _metadata_debug_log("MovieVault lookup HTTP request", f"Method: GET; URL: {url}; Params: {_movievault_compact(params or {}, 360)}")
         r = movievault_request("GET", url, params=params or {}, include_auth=True, timeout=5)
-        detail = f"GET {path}; params={params or {}}; HTTP {r.status_code}"
+        elapsed_ms = int((time.time() - start) * 1000)
+        detail = f"GET {path}; params={params or {}}; HTTP {r.status_code}; elapsed_ms={elapsed_ms}"
+        _metadata_debug_log("MovieVault lookup HTTP response", f"{detail}; response={_movievault_compact(getattr(r, 'text', ''), 700)}")
         if r.status_code == 404:
             _movievault_log("info", "MovieVault lookup route/resource not found", detail)
             return None
@@ -3748,6 +3753,16 @@ def _movievault_contribution_payload(
         "local_entity_id": context.get("localEntityId") or "-",
         "sources": sources,
     }
+    _metadata_debug_log(
+        "MovieVault contribution payload prepared",
+        (
+            f"Entity: {entity_type}; Public identity: {public_identity or '-'}; Template: {template_version or '-'} "
+            f"({template_source}); Fields before/after: {len(raw_payload)}/{len(filtered_payload)}; "
+            f"Shared fields: {', '.join(filtered_fields) or '-'}; Filtered out: {', '.join(filtered_out) or '-'}; "
+            f"Missing source fields: {', '.join(sorted(missing_source)) or '-'}; "
+            f"Payload: {_movievault_compact(filtered_payload, 900)}"
+        ),
+    )
     if missing_required:
         return None, stats
     return {
@@ -4073,8 +4088,20 @@ def _submit_movievault_entity_contribution_result(
                 "action": "unchanged_payload",
                 "error": "",
             })
+            _metadata_debug_log(
+                "MovieVault contribution HTTP skipped",
+                f"Reason: unchanged payload; {_movievault_stats_detail(stats)}",
+            )
             return result
+        _metadata_debug_log(
+            "MovieVault contribution HTTP request",
+            f"Method: POST; URL: {url}; {_movievault_stats_detail(stats)}",
+        )
         r = movievault_request("POST", url, json=payload, include_auth=True, timeout=8)
+        _metadata_debug_log(
+            "MovieVault contribution HTTP response",
+            f"HTTP: {r.status_code}; Action: {_movievault_submission_action(r)}; Response: {_movievault_compact(getattr(r, 'text', ''), 500)}",
+        )
         if 200 <= r.status_code < 300:
             data = _movievault_response_json(r)
             result.update({
@@ -4110,8 +4137,20 @@ def _submit_movievault_entity_contribution_result(
                     "action": "unchanged_payload",
                     "error": "",
                 })
+                _metadata_debug_log(
+                    "MovieVault contribution HTTP skipped",
+                    f"Reason: unchanged payload after template refresh; {_movievault_stats_detail(stats)}",
+                )
                 return result
+            _metadata_debug_log(
+                "MovieVault contribution HTTP request",
+                f"Method: POST; URL: {url}; Retry: after validation template refresh; {_movievault_stats_detail(stats)}",
+            )
             r = movievault_request("POST", url, json=payload, include_auth=True, timeout=8)
+            _metadata_debug_log(
+                "MovieVault contribution HTTP response",
+                f"HTTP: {r.status_code}; Action: {_movievault_submission_action(r)}; Response: {_movievault_compact(getattr(r, 'text', ''), 500)}",
+            )
             if 200 <= r.status_code < 300:
                 data = _movievault_response_json(r)
                 result.update({
@@ -5186,6 +5225,93 @@ def _trace_add(attempts: list[str], backend: str, result: str, query: str = "", 
     if extra:
         part += f" ({extra})"
     attempts.append(part)
+    _metadata_debug_log(
+        "Metadata source action",
+        f"Backend: {backend}; Result: {result}; Query: {query or '-'}; Extra: {extra or '-'}",
+    )
+
+
+def _metadata_debug_enabled() -> bool:
+    try:
+        with connect_db() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key='debug_enabled'").fetchone()
+        return bool(row and str(row[0]).strip().lower() == "true")
+    except Exception:
+        return False
+
+
+def _metadata_debug_operation_active() -> bool:
+    if getattr(threading.current_thread(), "_discvault_metadata_debug", False):
+        return True
+    if not has_request_context():
+        return False
+    try:
+        path = request.path or ""
+        method = (request.method or "").upper()
+    except Exception:
+        return False
+    if method == "POST" and path == "/api/movies":
+        return True
+    if method == "POST" and path == "/api/import":
+        return True
+    if method == "GET" and path.startswith("/api/lookup/"):
+        return True
+    if method == "POST" and re.fullmatch(r"/api/movies/\d+/(refresh|sync-all|sync-source)", path):
+        return True
+    return False
+
+
+def _metadata_debug_log(message: str, detail: str = "", level: str = "info"):
+    if not _metadata_debug_enabled() or not _metadata_debug_operation_active():
+        return
+    add_log("refresh_debug", message, _movievault_sanitize_log_text(detail or ""), level)
+
+
+def _metadata_debug_db(query: str, params=None, context: str = ""):
+    private_keys = {"owner_id", "notes", "purchase_price", "purchase_date", "location"}
+    if isinstance(params, dict):
+        params_value = {
+            key: ("[redacted]" if str(key) in private_keys else value)
+            for key, value in params.items()
+        }
+    elif isinstance(params, (list, tuple)):
+        params_value = f"{len(params)} positional value(s)"
+    else:
+        params_value = params if params is not None else []
+    _metadata_debug_log(
+        "Database query",
+        f"Context: {context or '-'}; SQL: {query}; Params: {_movievault_compact(params_value, 260)}",
+    )
+
+
+def _metadata_debug_fields(message: str, data: dict | None, *, source: str = "", limit: int = 60):
+    if not _metadata_debug_enabled() or not isinstance(data, dict):
+        return
+    public = {
+        key: value
+        for key, value in data.items()
+        if value not in (None, "", [], {}) and key not in {"owner_id", "notes", "purchase_price", "purchase_date", "location"}
+    }
+    items = list(public.items())[:limit]
+    shown = {key: value for key, value in items}
+    suffix = "" if len(public) <= limit else f"; truncated={len(public) - limit}"
+    _metadata_debug_log(
+        message,
+        f"Source: {source or '-'}; Fields: {', '.join(shown.keys()) or '-'}; Values: {_movievault_compact(shown, 900)}{suffix}",
+    )
+
+
+def _metadata_debug_movie_updates(movie_id: int, updates: dict | None, source: str, context: str):
+    updates = updates or {}
+    _metadata_debug_fields(f"{context} update fields prepared", updates, source=source)
+    if not updates:
+        _metadata_debug_log(f"{context} no database update fields", f"Movie ID: {movie_id}; Source: {source}")
+        return
+    for key, value in updates.items():
+        _metadata_debug_log(
+            f"{context} field update",
+            f"Movie ID: {movie_id}; Field: {key}; Source: {source}; Value: {_movievault_compact(value, 360)}",
+        )
 
 
 def _trace_summary(attempts: list[str]) -> str:
@@ -5986,6 +6112,48 @@ def get_logs():
     return jsonify([dict(r) for r in rows])
 
 
+@app.route("/api/logs/debug/download", methods=["GET"])
+def download_debug_logs():
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT id, timestamp, level, category, message, detail
+          FROM logs
+         WHERE category = 'refresh_debug'
+         ORDER BY id ASC
+        """
+    ).fetchall()
+    conn.close()
+    lines = [
+        "# DiscVault metadata debug log",
+        f"# Exported: {local_now_iso()}",
+        f"# Entries: {len(rows)}",
+        "",
+    ]
+    for row in rows:
+        lines.append(
+            "\t".join([
+                str(row["id"]),
+                str(row["timestamp"] or ""),
+                str(row["level"] or ""),
+                str(row["category"] or ""),
+                str(row["message"] or "").replace("\t", " "),
+                str(row["detail"] or "").replace("\t", " ").replace("\r", " ").replace("\n", " "),
+            ])
+        )
+    payload = ("\n".join(lines) + "\n").encode("utf-8")
+    filename = f"discvault-metadata-debug-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.log"
+    return send_file(
+        io.BytesIO(payload),
+        mimetype="text/plain; charset=utf-8",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
 @app.route("/api/logs", methods=["DELETE"])
 def clear_logs():
     err = _require_admin()
@@ -6630,14 +6798,22 @@ def debug_person_photo(person_id):
 def add_movie():
     data = request.json or {}
     preserve_source_image_urls(data)
+    _metadata_debug_log(
+        "Movie add started",
+        f"Mode: {'manual' if not data.get('barcode') else 'barcode/pre-filled'}; Incoming fields: {', '.join(sorted(data.keys())) or '-'}",
+    )
+    _metadata_debug_fields("Movie add incoming payload", data, source="POST /api/movies")
     if not data.get("title"):
         return jsonify({"error": "title is required"}), 400
     if not data.get("barcode"):
         safe = re.sub(r'[^A-Za-z0-9]', '_', data["title"])[:30].upper()
         data = {**data, "barcode": f"MANUAL-{safe}-{int(datetime.utcnow().timestamp() * 1000) % 1000000}"}
+        _metadata_debug_log("Manual barcode generated", f"Title: {data['title']}; Barcode: {data['barcode']}")
     poster_file = data.get("poster_file") or ""
     if not poster_file and data.get("poster"):
+        _metadata_debug_log("Poster download started", f"Source URL: {data.get('poster')}; Asset kind: poster")
         poster_file = download_poster(data["poster"]) or ""
+        _metadata_debug_log("Poster download finished", f"Source URL: {data.get('poster')}; Stored file: {poster_file or '-'}")
     conn = get_db()
     try:
         row = {col: data.get(col, "") for col in [c for c, _ in SCHEMA_COLUMNS]}
@@ -6654,23 +6830,42 @@ def add_movie():
         row["owner_id"] = owner_id
         places = ", ".join(f":{c}" for c in cols)
         colstr = ", ".join(cols)
+        _metadata_debug_fields("Movie add database row prepared", row, source="local request")
+        _metadata_debug_db(f"INSERT INTO movies ({colstr}) VALUES ({places})", {k: row.get(k) for k in cols}, "add movie")
         conn.execute(f"INSERT INTO movies ({colstr}) VALUES ({places})", row)
         conn.commit()
+        _metadata_debug_log("Movie add database commit", f"Barcode: {data['barcode']}; Title: {data['title']}")
+        _metadata_debug_db("SELECT * FROM movies WHERE barcode = ?", (data["barcode"],), "add movie fetch created row")
         movie = conn.execute(
             "SELECT * FROM movies WHERE barcode = ?", (data["barcode"],)
         ).fetchone()
         movie_id = movie["id"]
         if row.get("edition_group_id"):
+            _metadata_debug_db(
+                "INSERT OR IGNORE INTO vault_movies (vault_id, movie_id) VALUES (?, ?)",
+                (int(row["edition_group_id"]), movie_id),
+                "add movie vault link",
+            )
             conn.execute(
                 "INSERT OR IGNORE INTO vault_movies (vault_id, movie_id) VALUES (?, ?)",
                 (int(row["edition_group_id"]), movie_id)
             )
         if row.get("super_group_id"):
+            _metadata_debug_db(
+                "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
+                (int(row["super_group_id"]), movie_id),
+                "add movie box-set link",
+            )
             conn.execute(
                 "INSERT OR IGNORE INTO box_set_movies (box_set_id, movie_id) VALUES (?, ?)",
                 (int(row["super_group_id"]), movie_id)
             )
         if row.get("collection_id"):
+            _metadata_debug_db(
+                "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, 'movie', ?)",
+                (int(row["collection_id"]), movie_id),
+                "add movie collection link",
+            )
             conn.execute(
                 "INSERT OR IGNORE INTO collection_items (collection_id, item_type, item_id) VALUES (?, 'movie', ?)",
                 (int(row["collection_id"]), movie_id)
@@ -6700,16 +6895,22 @@ def add_movie():
         tmdb_id = data.get("tmdb_id") or movie_dict.get("tmdb_id", "")
         if not cast_crew and tmdb_id and TMDB_API_KEY:
             try:
+                _metadata_debug_log("Cast/crew fetch started", f"Source: TMDb; tmdb_id={tmdb_id}; Movie ID: {movie_id}")
                 cast_crew = _fetch_tmdb_cast_crew(tmdb_id)
+                _metadata_debug_log("Cast/crew fetch finished", f"Source: TMDb; tmdb_id={tmdb_id}; Entries: {len(cast_crew or [])}")
             except Exception:
+                _metadata_debug_log("Cast/crew fetch failed", f"Source: TMDb; tmdb_id={tmdb_id}", "warn")
                 cast_crew = None
         if cast_crew:
             sync_conn = None
             try:
                 sync_conn = get_db()
+                _metadata_debug_db("SELECT * FROM movies WHERE id=?", (movie_id,), "add movie owner check before cast sync")
                 if _check_movie_owner(sync_conn.execute("SELECT * FROM movies WHERE id=?", (movie_id,)).fetchone()):
+                    _metadata_debug_log("Cast/crew sync started", f"Movie ID: {movie_id}; Entries: {len(cast_crew or [])}")
                     _sync_movie_cast_crew(sync_conn, movie_id, cast_crew, download_photos=False)
                     sync_conn.commit()
+                    _metadata_debug_log("Cast/crew sync committed", f"Movie ID: {movie_id}")
             except Exception:
                 try:
                     if sync_conn:
@@ -6723,6 +6924,7 @@ def add_movie():
         refresh_conn = None
         try:
             refresh_conn = get_db()
+            _metadata_debug_db("SELECT * FROM movies WHERE id = ?", (movie_id,), "add movie refresh created row")
             refreshed = refresh_conn.execute(
                 "SELECT * FROM movies WHERE id = ?", (movie_id,)
             ).fetchone()
@@ -7034,15 +7236,23 @@ def _lookup_box_set_proposal_by_order(title: str = "", year: str = "", barcode: 
 def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dict | None, str, dict | None, list, str]:
     raw_title = ""
     metadata_candidates = []
+    _metadata_debug_log("Barcode metadata lookup started", f"Barcode: {barcode}; Source order: {_metadata_source_order_log()}")
     try:
+        _metadata_debug_log("UPCItemDB lookup started", f"Barcode: {barcode}")
         raw_title = lookup_by_barcode_upcitemdb(barcode) or ""
+        _metadata_debug_log("UPCItemDB lookup finished", f"Barcode: {barcode}; Raw title: {raw_title or '-'}")
         _trace_add(attempts, "UPCItemDB", "hit" if raw_title else "miss", f"barcode={barcode}", "title hint")
     except Exception as ex:
+        _metadata_debug_log("UPCItemDB lookup failed", f"Barcode: {barcode}; Error: {ex}", "warn")
         _trace_add(attempts, "UPCItemDB", "error", f"barcode={barcode}", str(ex))
 
     title_candidates = _title_candidates_from_upc(raw_title) if raw_title else []
     lookup_title = title_candidates[0] if title_candidates else raw_title
     fallback_title = raw_title if raw_title and raw_title != lookup_title else ""
+    _metadata_debug_log(
+        "Barcode metadata title candidates",
+        f"Barcode: {barcode}; Lookup title: {lookup_title or '-'}; Fallback title: {fallback_title or '-'}; Candidates: {_movievault_compact(title_candidates, 500)}",
+    )
     info, source = _merge_metadata_by_order(
         lookup_title,
         "",
@@ -7067,9 +7277,11 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
         _trace_add(attempts, "UPCItemDB", "partial", "title-only fallback")
 
     if not info:
+        _metadata_debug_log("Barcode metadata lookup finished", f"Barcode: {barcode}; Result: no metadata", "warn")
         return None, source, None, metadata_candidates, raw_title
 
     info = _finalize_metadata_info(info)
+    _metadata_debug_fields("Barcode metadata lookup result", info, source=source or "Barcode lookup")
     box_set_proposal = (info or {}).get("box_set_proposal")
     _log_box_set_proposal(barcode, box_set_proposal)
     if lookup_title:
@@ -7791,16 +8003,20 @@ METADATA_REFRESH_FIELDS = [
 def refresh_single(movie_id):
     """Refresh metadata for one movie. Returns details of what changed."""
     fetch_posters = (request.json or {}).get("fetch_posters", True)
+    _metadata_debug_log("Metadata refresh started", f"Movie ID: {movie_id}; Fetch posters: {fetch_posters}")
     conn = get_db()
+    _metadata_debug_db("SELECT * FROM movies WHERE id = ?", (movie_id,), "refresh single initial movie load")
     row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     if not row:
         conn.close()
+        _metadata_debug_log("Metadata refresh skipped", f"Movie ID: {movie_id}; Reason: movie not found", "warn")
         return jsonify({"status": "skipped", "reason": "not_found"})
     if not _check_movie_owner(row):
         conn.close()
         return jsonify({"error": "Not your movie"}), 403
 
     movie = dict(row)
+    _metadata_debug_fields("Metadata refresh current movie state", movie, source="database")
     title          = movie.get("title", "")
     original_title = movie.get("original_title", "")
     search_title   = original_title or title
@@ -7827,10 +8043,13 @@ def refresh_single(movie_id):
             return jsonify({"status": "skipped", "reason": "not_found_in_api", "title": title})
 
         info = _finalize_metadata_info(info)
+        _metadata_debug_fields("Metadata refresh merged provider result", info, source=source)
         updates = {f: info[f] for f in METADATA_REFRESH_FIELDS if info.get(f)}
         _merge_video_updates(movie, info, updates)
+        _metadata_debug_fields("Metadata refresh update fields prepared", updates, source=source)
 
         conn = get_db()
+        _metadata_debug_db("SELECT * FROM movies WHERE id = ?", (movie_id,), "refresh single reload before update")
         current_row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
         if not current_row:
             conn.close()
@@ -7844,23 +8063,34 @@ def refresh_single(movie_id):
 
         new_poster_url = info.get("poster", "")
         _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
+        _metadata_debug_fields("Metadata refresh update fields after poster handling", updates, source=source)
 
         if updates:
             prepare_local_image_variants(updates)
             sc = ", ".join(f"{k} = ?" for k in updates)
+            _metadata_debug_movie_updates(movie_id, updates, source, "Metadata refresh")
+            _metadata_debug_db(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id], "refresh single update movie")
             conn.execute(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id])
+        else:
+            _metadata_debug_movie_updates(movie_id, updates, source, "Metadata refresh")
 
         # Sync cast/crew — use tmdb_id directly for reliable credits fetch
         cast_crew = info.get("_cast_crew")
         if not cast_crew and TMDB_API_KEY:
             tid = info.get("tmdb_id") or movie.get("tmdb_id") or ""
             if tid:
+                _metadata_debug_log("Cast/crew fetch started", f"Source: TMDb; tmdb_id={tid}; Movie ID: {movie_id}")
                 cast_crew = _fetch_tmdb_cast_crew(tid)
+                _metadata_debug_log("Cast/crew fetch finished", f"Source: TMDb; tmdb_id={tid}; Entries: {len(cast_crew or [])}")
         if cast_crew:
+            _metadata_debug_log("Cast/crew sync started", f"Movie ID: {movie_id}; Entries: {len(cast_crew or [])}")
             _sync_movie_cast_crew(conn, movie_id, cast_crew, download_photos=fetch_posters)
+            _metadata_debug_log("Cast/crew sync finished", f"Movie ID: {movie_id}")
 
         conn.commit()
+        _metadata_debug_log("Metadata refresh database commit", f"Movie ID: {movie_id}; Updated fields: {', '.join(updates.keys()) or '-'}")
         movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
+        _metadata_debug_fields("Metadata refresh MovieVault contribution state", movie_state, source=source)
         conn.close()
 
         fields_updated = list(updates.keys())
@@ -7952,7 +8182,11 @@ def sync_single_all_backends(movie_id):
         if updates:
             prepare_local_image_variants(updates)
             sc = ", ".join(f"{k} = ?" for k in updates)
+            _metadata_debug_movie_updates(movie_id, updates, source_label, "Sync all sources")
+            _metadata_debug_db(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id], "sync all update movie")
             conn.execute(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id])
+        else:
+            _metadata_debug_movie_updates(movie_id, updates, source_label, "Sync all sources")
 
         # Sync cast/crew — use tmdb_id directly for reliable credits fetch
         cast_crew = info.get("_cast_crew")
@@ -7961,10 +8195,14 @@ def sync_single_all_backends(movie_id):
             if tid:
                 cast_crew = _fetch_tmdb_cast_crew(tid)
         if cast_crew:
+            _metadata_debug_log("Cast/crew sync started", f"Movie ID: {movie_id}; Entries: {len(cast_crew or [])}; Context: sync all")
             _sync_movie_cast_crew(conn, movie_id, cast_crew, download_photos=fetch_posters)
+            _metadata_debug_log("Cast/crew sync finished", f"Movie ID: {movie_id}; Context: sync all")
 
         conn.commit()
+        _metadata_debug_log("Sync all database commit", f"Movie ID: {movie_id}; Updated fields: {', '.join(updates.keys()) or '-'}")
         movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
+        _metadata_debug_fields("Sync all MovieVault contribution state", movie_state, source=source_label)
         conn.close()
 
         fields_updated = list(updates.keys())
@@ -8003,11 +8241,13 @@ def sync_single_source(movie_id):
     data = request.json or {}
     source = (data.get("source") or "").strip()
     fetch_posters = data.get("fetch_posters", True)
+    _metadata_debug_log("Sync source started", f"Movie ID: {movie_id}; Source: {source}; Fetch posters: {fetch_posters}")
     allowed = {"omdb_imdb", "tmdb_title", "omdb_title", "fallback_title", "bluray_com"}
     if source not in allowed:
         return jsonify({"status": "error", "error": "Unknown source"}), 400
 
     conn = get_db()
+    _metadata_debug_db("SELECT * FROM movies WHERE id = ?", (movie_id,), "sync source initial movie load")
     row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     if not row:
         conn.close()
@@ -8071,6 +8311,7 @@ def sync_single_source(movie_id):
             conn.close()
             add_log("refresh", f"Sync bron geen resultaat: \"{title}\"", f"Bron: {source_label}. Backends: {_trace_summary(attempts)}", "warn")
             return jsonify({"status": "skipped", "reason": "not_found_in_source", "title": title})
+        _metadata_debug_fields("Sync source provider result", info, source=source_label)
 
         refresh_fields = [
             "plot", "rating", "imdb_id", "tmdb_id", "release_date",
@@ -8087,9 +8328,15 @@ def sync_single_source(movie_id):
         if updates:
             prepare_local_image_variants(updates)
             sc = ", ".join(f"{k} = ?" for k in updates)
+            _metadata_debug_movie_updates(movie_id, updates, source_label, "Sync source")
+            _metadata_debug_db(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id], "sync source update movie")
             conn.execute(f"UPDATE movies SET {sc} WHERE id = ?", list(updates.values()) + [movie_id])
+        else:
+            _metadata_debug_movie_updates(movie_id, updates, source_label, "Sync source")
         conn.commit()
+        _metadata_debug_log("Sync source database commit", f"Movie ID: {movie_id}; Updated fields: {', '.join(updates.keys()) or '-'}")
         movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
+        _metadata_debug_fields("Sync source MovieVault contribution state", movie_state, source=source_label)
         conn.close()
 
         fields_updated = list(updates.keys())
@@ -8119,6 +8366,7 @@ def bulk_refresh():
     vault (edition_group), box-set (super_group) or collection."""
     ids           = (request.json or {}).get("ids", [])
     fetch_posters = (request.json or {}).get("fetch_posters", True)
+    _metadata_debug_log("Bulk metadata refresh started", f"Requested IDs: {_movievault_compact(ids, 500)}; Fetch posters: {fetch_posters}")
     if not ids:
         return jsonify({"error": "No ids provided"}), 400
 
@@ -8174,6 +8422,7 @@ def bulk_refresh():
     _expand_conn.close()
     ids = list(expanded)
     affected_box_set_ids = sorted(int(v) for v in affected_box_set_ids if v)
+    _metadata_debug_log("Bulk metadata refresh expanded", f"Expanded IDs: {_movievault_compact(ids, 700)}; Affected box sets: {_movievault_compact(affected_box_set_ids, 300)}")
 
     # Warn once per bulk if key(s) are missing
     if not TMDB_API_KEY and not OMDB_API_KEY:
@@ -8189,6 +8438,7 @@ def bulk_refresh():
     def _process_movie(movie_id, fetch_posters):
         """Process a single movie and return (status, title, error_detail)."""
         conn = get_db()
+        _metadata_debug_db("SELECT * FROM movies WHERE id = ?", (movie_id,), "bulk refresh movie load")
         row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
         if not row or not _check_movie_owner(row):
             conn.close()
@@ -8220,10 +8470,12 @@ def bulk_refresh():
                 return "skipped", title, None
 
             info = _finalize_metadata_info(info)
+            _metadata_debug_fields("Bulk refresh merged provider result", info, source=source)
             updates = {f: info[f] for f in METADATA_REFRESH_FIELDS if info.get(f)}
             _merge_video_updates(movie, info, updates)
 
             conn = get_db()
+            _metadata_debug_db("SELECT * FROM movies WHERE id = ?", (movie_id,), "bulk refresh reload before update")
             current_row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
             if not current_row or not _check_movie_owner(current_row):
                 conn.close()
@@ -8239,10 +8491,14 @@ def bulk_refresh():
             if updates:
                 prepare_local_image_variants(updates)
                 set_clause = ", ".join(f"{k} = ?" for k in updates)
+                _metadata_debug_movie_updates(movie_id, updates, source, "Bulk refresh")
+                _metadata_debug_db(f"UPDATE movies SET {set_clause} WHERE id = ?", list(updates.values()) + [movie_id], "bulk refresh update movie")
                 conn.execute(
                     f"UPDATE movies SET {set_clause} WHERE id = ?",
                     list(updates.values()) + [movie_id]
                 )
+            else:
+                _metadata_debug_movie_updates(movie_id, updates, source, "Bulk refresh")
 
             cast_crew = info.get("_cast_crew")
             if not cast_crew and TMDB_API_KEY:
@@ -8250,11 +8506,15 @@ def bulk_refresh():
                 if tid:
                     cast_crew = _fetch_tmdb_cast_crew(tid)
             if cast_crew:
+                _metadata_debug_log("Cast/crew sync started", f"Movie ID: {movie_id}; Entries: {len(cast_crew or [])}; Context: bulk refresh")
                 _sync_movie_cast_crew(conn, movie_id, cast_crew, download_photos=fetch_posters)
+                _metadata_debug_log("Cast/crew sync finished", f"Movie ID: {movie_id}; Context: bulk refresh")
 
             fields_str = ", ".join(updates.keys()) if updates else "(geen wijzigingen)"
             conn.commit()
+            _metadata_debug_log("Bulk refresh database commit", f"Movie ID: {movie_id}; Updated fields: {fields_str}")
             movie_state = _movievault_movie_contribution_state(conn, movie_id, movie, info, updates)
+            _metadata_debug_fields("Bulk refresh MovieVault contribution state", movie_state, source=source)
             conn.close()
             conn = None
             add_log("refresh", f"Bijgewerkt: \"{title}\"",
@@ -8388,7 +8648,10 @@ def lookup(barcode):
             # 1. Local DB
             yield emit(1, "Local DB", "searching")
             conn = get_db()
+            _metadata_debug_log("Barcode local lookup started", f"Barcode: {barcode}; Mode: stream")
+            _metadata_debug_db("SELECT * FROM movies WHERE barcode = ?", (barcode,), "stream barcode lookup existing movie")
             existing = conn.execute("SELECT * FROM movies WHERE barcode = ?", (barcode,)).fetchone()
+            _metadata_debug_db("SELECT bs.*, eg.group_type, eg.poster_file AS legacy_poster_file FROM box_sets bs LEFT JOIN edition_groups eg ON eg.id = bs.id WHERE bs.barcode=?", (barcode,), "stream barcode lookup existing box-set")
             existing_box_set = conn.execute(
                 """
                 SELECT bs.*, eg.group_type, eg.poster_file AS legacy_poster_file
@@ -8398,6 +8661,7 @@ def lookup(barcode):
                 """,
                 (barcode,),
             ).fetchone()
+            _metadata_debug_db("SELECT v.*, eg.group_type, eg.poster_file AS legacy_poster_file FROM vaults v LEFT JOIN edition_groups eg ON eg.id = v.id WHERE v.barcode=?", (barcode,), "stream barcode lookup existing vault")
             existing_vault = conn.execute(
                 """
                 SELECT v.*, eg.group_type, eg.poster_file AS legacy_poster_file
@@ -8458,16 +8722,19 @@ def lookup(barcode):
             add_log("lookup", f"Fout bij opzoeken barcode {barcode}", str(e), "error")
             yield json.dumps({"type": "done", "status": "error", "error": str(e), "barcode": barcode}) + "\n"
 
-    return Response(stream_lookup(), mimetype="application/x-ndjson")
+    return Response(stream_with_context(stream_lookup()), mimetype="application/x-ndjson")
 
 
 def _lookup_sync(barcode):
     try:
         attempts = []
         conn     = get_db()
+        _metadata_debug_log("Barcode local lookup started", f"Barcode: {barcode}")
+        _metadata_debug_db("SELECT * FROM movies WHERE barcode = ?", (barcode,), "barcode lookup existing movie")
         existing = conn.execute(
             "SELECT * FROM movies WHERE barcode = ?", (barcode,)
         ).fetchone()
+        _metadata_debug_db("SELECT bs.*, eg.group_type, eg.poster_file AS legacy_poster_file FROM box_sets bs LEFT JOIN edition_groups eg ON eg.id = bs.id WHERE bs.barcode=?", (barcode,), "barcode lookup existing box-set")
         existing_box_set = conn.execute(
             """
             SELECT bs.*, eg.group_type, eg.poster_file AS legacy_poster_file
@@ -8477,6 +8744,7 @@ def _lookup_sync(barcode):
             """,
             (barcode,),
         ).fetchone()
+        _metadata_debug_db("SELECT v.*, eg.group_type, eg.poster_file AS legacy_poster_file FROM vaults v LEFT JOIN edition_groups eg ON eg.id = v.id WHERE v.barcode=?", (barcode,), "barcode lookup existing vault")
         existing_vault = conn.execute(
             """
             SELECT v.*, eg.group_type, eg.poster_file AS legacy_poster_file
@@ -8739,7 +9007,9 @@ def enrich_from_api(row: dict) -> dict:
     search_title = (row.get("original_title") or row.get("title") or "").strip()
     year     = _parse_year(row.get("year") or row.get("release_date") or "")
     imdb_id  = _extract_imdb_id(row.get("imdb_url") or row.get("imdb_id") or "")
+    _metadata_debug_fields("Import enrich input row", row, source="import")
     if not search_title:
+        _metadata_debug_log("Import enrich skipped", "Reason: no search title")
         return row
 
     fillable_fields = [
@@ -8773,8 +9043,11 @@ def enrich_from_api(row: dict) -> dict:
             stop_after_first=False,
         )
         info = _finalize_metadata_info(info)
+        _metadata_debug_fields("Import enrich provider result", info, source=_source)
         fill_missing_from(info)
+        _metadata_debug_fields("Import enrich output row", row, source=_source)
     except Exception:
+        _metadata_debug_log("Import enrich failed", f"Title: {search_title}; Year: {year}", "warn")
         pass
 
     return row
@@ -8782,7 +9055,9 @@ def enrich_from_api(row: dict) -> dict:
 
 def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id: str = None) -> str:
     title = (row.get("title") or "").strip()
+    _metadata_debug_fields("Import row insert/update started", row, source="import")
     if not title:
+        _metadata_debug_log("Import row skipped", "Reason: title missing", "warn")
         return "skipped"
 
     year = _parse_year(row.get("year") or row.get("release_date") or "")
@@ -8791,7 +9066,9 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id:
     if not barcode:
         safe = re.sub(r'[^A-Za-z0-9]', '_', title)[:40].upper()
         barcode = f"IMPORT-{safe}-{year}"
+        _metadata_debug_log("Import barcode generated", f"Title: {title}; Barcode: {barcode}")
 
+    _metadata_debug_db("SELECT id FROM movies WHERE barcode = ?", (barcode,), "import duplicate check")
     existing = conn.execute(
         "SELECT id FROM movies WHERE barcode = ?", (barcode,)
     ).fetchone()
@@ -8808,7 +9085,9 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id:
         backdrop_urls = json.dumps(remote_backdrops, ensure_ascii=False) if remote_backdrops else ""
     poster_file = (row.get("poster_file") or "").strip()
     if fetch_posters and poster_url and not poster_file:
+        _metadata_debug_log("Import poster download started", f"Source URL: {poster_url}; Title: {title}")
         poster_file = download_poster(poster_url) or ""
+        _metadata_debug_log("Import poster download finished", f"Source URL: {poster_url}; Stored file: {poster_file or '-'}")
 
     def _s(key):
         return (row.get(key) or "").strip()
@@ -8865,12 +9144,15 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id:
 
     if existing:
         if mode == "skip":
+            _metadata_debug_log("Import row skipped", f"Reason: existing barcode and mode=skip; Barcode: {barcode}; Title: {title}")
             return "skipped"
         updates = {k: v for k, v in fields.items()
                    if k not in ("barcode", "added_at") and v}
         if updates:
             prepare_local_image_variants(updates)
             set_clause = ", ".join(f"{k} = ?" for k in updates)
+            _metadata_debug_fields("Import update fields prepared", updates, source="import")
+            _metadata_debug_db(f"UPDATE movies SET {set_clause} WHERE barcode = ?", list(updates.values()) + [barcode], "import update movie")
             conn.execute(
                 f"UPDATE movies SET {set_clause} WHERE barcode = ?",
                 list(updates.values()) + [barcode]
@@ -8880,6 +9162,8 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id:
         cols   = list(fields.keys())
         places = ", ".join(f":{c}" for c in cols)
         colstr = ", ".join(cols)
+        _metadata_debug_fields("Import insert fields prepared", fields, source="import")
+        _metadata_debug_db(f"INSERT INTO movies ({colstr}) VALUES ({places})", fields, "import insert movie")
         conn.execute(f"INSERT INTO movies ({colstr}) VALUES ({places})", fields)
         return "added"
 
@@ -8992,6 +9276,10 @@ def import_movies():
     import_owner_id = _get_current_user_id()
 
     add_log("import", f"Import gestart: {f.filename}", f"Rijen: {len(rows)}, Modus: {mode}, Enrich: {enrich}, Posters: {fetch_posters}")
+    _metadata_debug_log(
+        "Import started",
+        f"File: {f.filename}; Rows: {len(rows)}; Mode: {mode}; Enrich: {enrich}; Fetch posters: {fetch_posters}; Import ID: {import_id}",
+    )
 
     def stream_import():
         conn = get_db()
@@ -9002,6 +9290,7 @@ def import_movies():
 
         try:
             for i, row in enumerate(rows):
+                _metadata_debug_fields("Import row processing", row, source=f"row {i + 1}/{total}")
                 if _is_import_cancelled(import_id):
                     cancelled = True
                     add_log(
@@ -9080,7 +9369,7 @@ def import_movies():
 
         _clear_import_cancel(import_id)
 
-    return Response(stream_import(), mimetype="application/json")
+    return Response(stream_with_context(stream_import()), mimetype="application/json")
 
 
 @app.route("/api/import/cancel/<import_id>", methods=["POST"])
@@ -9588,19 +9877,55 @@ def _merge_metadata_by_order(
     movievault_hit = False
     primary_title = (title or "").strip()
     fallback_title = (fallback_title or "").strip()
+    _metadata_debug_log(
+        "Metadata merge started",
+        (
+            f"Title: {primary_title or '-'}; Fallback title: {fallback_title or '-'}; Year: {year or '-'}; "
+            f"Barcode: {barcode or '-'}; IMDb: {imdb_id or '-'}; TMDb: {tmdb_id or '-'}; "
+            f"Source order: {_metadata_source_order_log()}"
+        ),
+    )
 
     def merge_from(data: dict | None, source_label: str, release_priority: bool = False):
         nonlocal info
         if not data:
+            _metadata_debug_log("Metadata merge skipped", f"Source: {source_label}; Reason: no data")
             return False
+        _metadata_debug_fields("Metadata source returned fields", data, source=source_label)
         if not info:
             info = dict(data)
+            for key, value in data.items():
+                if value not in (None, "", [], {}):
+                    _metadata_debug_log(
+                        "Metadata field accepted",
+                        f"Source: {source_label}; Field: {key}; Mode: initial; Value: {_movievault_compact(value, 260)}",
+                    )
         else:
             for key, value in data.items():
                 if release_priority and key in RELEASE_PRIORITY_FIELDS and value:
+                    old_value = info.get(key)
                     info[key] = value
+                    _metadata_debug_log(
+                        "Metadata field overwritten",
+                        (
+                            f"Source: {source_label}; Field: {key}; Reason: release-priority; "
+                            f"Old: {_movievault_compact(old_value, 180) or '-'}; New: {_movievault_compact(value, 260)}"
+                        ),
+                    )
                 elif value and not info.get(key):
                     info[key] = value
+                    _metadata_debug_log(
+                        "Metadata field accepted",
+                        f"Source: {source_label}; Field: {key}; Mode: fill-empty; Value: {_movievault_compact(value, 260)}",
+                    )
+                elif value:
+                    _metadata_debug_log(
+                        "Metadata field kept existing",
+                        (
+                            f"Source: {source_label}; Field: {key}; Reason: existing value retained; "
+                            f"Incoming: {_movievault_compact(value, 180)}; Existing: {_movievault_compact(info.get(key), 180)}"
+                        ),
+                    )
         if release_priority:
             _mark_release_image_sources(info, data)
         else:
@@ -9612,6 +9937,7 @@ def _merge_metadata_by_order(
         label = METADATA_SOURCE_LABELS[source]
         data = None
         release_priority = False
+        _metadata_debug_log("Metadata source started", f"Source: {label}; Enabled: {_metadata_source_enabled(source)}")
         if not _metadata_source_enabled(source):
             _trace_add(attempts, label, "skipped", "source uitgeschakeld of niet geconfigureerd")
             continue
@@ -9706,9 +10032,11 @@ def _merge_metadata_by_order(
 
         source_release_priority = source == "bluray_com" or release_priority
         if merge_from(data, label, release_priority=source_release_priority) and stop_after_first:
+            _metadata_debug_log("Metadata merge stopped", f"Source: {label}; Reason: stop_after_first")
             break
 
     source_label = " + ".join(dict.fromkeys(used_sources))
+    _metadata_debug_fields("Metadata merge finished", info, source=source_label or "-")
     if (
         contribute_to_movievault
         and info
