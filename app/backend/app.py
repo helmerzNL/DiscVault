@@ -4234,10 +4234,20 @@ def lookup_movievault_by_barcode(barcode: str):
 def lookup_movievault_movie(title: str = "", year: str = "", barcode: str = ""):
     if not _is_movievault_enabled():
         return None
+    title = (title or "").strip()
+    year = (year or "").strip()
+    barcode = (barcode or "").strip()
     if barcode:
         by_barcode = lookup_movievault_by_barcode(barcode)
         if by_barcode:
             return by_barcode
+    if not title:
+        _movievault_log(
+            "info",
+            "MovieVault title lookup skipped",
+            f"Barcode: {barcode or '-'}; reason=no title after barcode lookup miss",
+        )
+        return None
     params = {"q": title}
     if year:
         params["year"] = year
