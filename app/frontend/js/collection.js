@@ -2182,18 +2182,20 @@ function _selectedMediaOverlay() {
     <div style="position:absolute;left:7px;bottom:7px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#0a0a0f;font-size:0.9rem;font-weight:900;display:flex;align-items:center;justify-content:center;">✓</div>`;
 }
 
+function _movieBackdropChoices(movie) {
+  const values = [
+    ..._parseMediaList(movie.backdrops),
+    movie.backdrop,
+    movie.backdrop_url,
+    movie.backdropUrl,
+  ];
+  return [...new Set(values.map(url => backdropSrc(url)).filter(Boolean))];
+}
+
 function loadMovieMedia() {
   const movie = allMovies.find(m => m.id === currentMovieId) || {};
   const posters = _moviePosterChoices(movie);
-
-  // Backdrops
-  let backdrops = [];
-  try { backdrops = movie.backdrops ? JSON.parse(movie.backdrops) : []; } catch(e) {}
-  backdrops = backdrops.map(url => backdropSrc(url)).filter(Boolean);
-  if (!backdrops.length) {
-    const primaryBackdrop = backdropSrc(movie);
-    if (primaryBackdrop) backdrops = [primaryBackdrop];
-  }
+  const backdrops = _movieBackdropChoices(movie);
 
   // Trailer
   const trailerUrl = movie.trailer_url || '';
@@ -2292,6 +2294,99 @@ function loadMovieMedia() {
     } else {
       vidContainer.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${showAutoVideos ? t('modal.noVideosAuto') : t('modal.noVideosManual')}</div>`;
     }
+  }
+}
+
+function _renderEditMediaManagement(movie) {
+  const target = document.getElementById('editMediaManagerContent');
+  if (!target) return;
+  movie = movie || allMovies.find(m => m.id === currentMovieId) || {};
+  const posters = _moviePosterChoices(movie);
+  const backdrops = _movieBackdropChoices(movie);
+  const currentPoster = posterSrc({ ...movie, _container_poster_file: null }) || '';
+  const currentPosterFile = String(movie.poster_file || movie.posterFile || '').split(/[\\/]/).pop();
+  const currentBackdrop = backdropSrc(movie);
+
+  const renderItems = (items, kind) => {
+    if (!items.length) {
+      return `<div style="color:var(--text-muted);font-size:0.84rem;padding:14px 0;">${t('edit.noImages')}</div>`;
+    }
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${kind === 'poster' ? '118px' : '220px'},1fr));gap:10px;">
+      ${items.map(item => {
+        const value = kind === 'poster' ? item.value : item;
+        const src = kind === 'poster' ? item.src : item;
+        const choiceFile = String(value || '').split(/[\\/]/).pop();
+        const isActive = kind === 'poster'
+          ? (src === currentPoster || (currentPosterFile && choiceFile === currentPosterFile))
+          : (src === currentBackdrop);
+        const encodedValue = encodeURIComponent(value || '');
+        return `<div style="position:relative;border:1px solid ${isActive ? 'var(--accent)' : 'var(--border)'};border-radius:8px;overflow:hidden;background:var(--surface2);">
+          <img src="${escHtml(src)}" loading="lazy" style="width:100%;display:block;aspect-ratio:${kind === 'poster' ? '2/3' : '16/9'};object-fit:cover;">
+          ${isActive ? _selectedMediaOverlay() : ''}
+          <button class="btn btn-danger" type="button" style="position:absolute;right:6px;bottom:6px;padding:5px 9px;font-size:0.72rem;z-index:3;" onclick="deleteMovieMediaChoice(${movie.id}, '${kind}', decodeURIComponent('${encodedValue}'))">${t('edit.removeImage')}</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+  };
+
+  target.innerHTML = `
+    <section style="margin-bottom:22px;">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px;">${t('modal.posters')}</div>
+      ${renderItems(posters, 'poster')}
+    </section>
+    <section>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px;">${t('modal.backdrops')}</div>
+      ${renderItems(backdrops, 'backdrop')}
+    </section>
+  `;
+}
+
+async function deleteMovieMediaChoice(movieId, kind, value) {
+  if (!confirm(t('edit.confirmRemoveImage'))) return;
+  try {
+    const r = await fetch(`${API}/movies/${movieId}/media-choice`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, value })
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showStatus('editStatus', data.error || t('js.backendError', r.status), 'error');
+      return;
+    }
+    if (data.movie) {
+      const idx = allMovies.findIndex(m => m.id === movieId);
+      if (idx >= 0) allMovies[idx] = data.movie;
+    }
+    const movie = allMovies.find(m => m.id === movieId) || data.movie || {};
+    _renderEditMediaManagement(movie);
+    loadMovieMedia();
+    const poster = document.getElementById('modalPoster');
+    const posterUrl = posterSrc({ ...movie, _container_poster_file: null });
+    if (poster) {
+      poster.innerHTML = posterUrl
+        ? `<img src="${posterUrl}" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
+        : '<div class="no-img">🎬</div>';
+    }
+    const backdropUrl = backdropSrc(movie);
+    const hero = document.getElementById('detailHeroImg');
+    const bg = document.getElementById('movieDetailBg');
+    const heroWrap = document.querySelector('.detail-hero-wrap');
+    if (heroWrap) heroWrap.classList.toggle('no-backdrop', !backdropUrl);
+    [hero, bg].forEach(el => {
+      if (!el) return;
+      el.classList.remove('loaded');
+      el.style.backgroundImage = backdropUrl ? `url('${backdropUrl}')` : '';
+      if (backdropUrl) {
+        const img = new Image();
+        img.onload = () => el.classList.add('loaded');
+        img.src = backdropUrl;
+      }
+    });
+    filterMovies();
+    showStatus('editStatus', t('js.saved'), 'success');
+  } catch(e) {
+    showStatus('editStatus', t('js.error', e.message), 'error');
   }
 }
 
@@ -3183,6 +3278,7 @@ async function startEdit() {
   _populateGroupCheckboxes(movie.group_ids || []);
   _renderEditContainerSummary(movie);
   await _populateEditContainerSelectors(movie);
+  _renderEditMediaManagement(movie);
 
   document.getElementById('editStatus').className = 'status-msg';
   switchEditTab('general'); // initialize tab state before showing modal
@@ -4155,7 +4251,7 @@ function switchEditTab(name) {
   document.querySelectorAll('[data-edit-tab]').forEach(b => b.classList.remove('active'));
   const btn = document.querySelector(`[data-edit-tab="${name}"]`);
   if (btn) btn.classList.add('active');
-  const tabs = { General: 'editTabGeneral', Edition: 'editTabEdition', Details: 'editTabDetails' };
+  const tabs = { General: 'editTabGeneral', Edition: 'editTabEdition', Details: 'editTabDetails', Media: 'editTabMedia' };
   Object.entries(tabs).forEach(([key, id]) => {
     const el = document.getElementById(id);
     console.log('[DV]  ', id, 'found:', !!el, 'setting:', key.toLowerCase() === name ? 'grid' : 'none');

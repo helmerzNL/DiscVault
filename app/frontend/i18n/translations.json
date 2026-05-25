@@ -855,7 +855,12 @@
     "scan.view": "Bekijken",
     "logs.catDebug": "Debug metadata",
     "logs.downloadDebug": "Download debug log",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Afbeeldingen",
+    "edit.manageImages": "Posters en achtergronden beheren",
+    "edit.removeImage": "Verwijderen",
+    "edit.noImages": "Geen afbeeldingen gevonden.",
+    "edit.confirmRemoveImage": "Deze afbeelding verwijderen?"
   },
   "en": {
     "nav.collection": "Collection",
@@ -1708,7 +1713,12 @@
     "scan.view": "View",
     "logs.catDebug": "Metadata debug",
     "logs.downloadDebug": "Download debug log",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Images",
+    "edit.manageImages": "Manage posters and backdrops",
+    "edit.removeImage": "Remove",
+    "edit.noImages": "No images found.",
+    "edit.confirmRemoveImage": "Remove this image?"
   },
   "fr": {
     "nav.collection": "Collection",
@@ -2563,7 +2573,12 @@
     "scan.view": "Voir",
     "logs.catDebug": "Debug metadata",
     "logs.downloadDebug": "Telecharger le journal debug",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Images",
+    "edit.manageImages": "Gérer les affiches et arrière-plans",
+    "edit.removeImage": "Supprimer",
+    "edit.noImages": "Aucune image trouvée.",
+    "edit.confirmRemoveImage": "Supprimer cette image ?"
   },
   "de": {
     "nav.collection": "Sammlung",
@@ -3417,7 +3432,12 @@
     "scan.view": "Ansehen",
     "logs.catDebug": "Metadata-Debug",
     "logs.downloadDebug": "Debug-Protokoll herunterladen",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Bilder",
+    "edit.manageImages": "Poster und Hintergrundbilder verwalten",
+    "edit.removeImage": "Entfernen",
+    "edit.noImages": "Keine Bilder gefunden.",
+    "edit.confirmRemoveImage": "Dieses Bild entfernen?"
   },
   "es": {
     "nav.collection": "Colección",
@@ -4271,7 +4291,12 @@
     "scan.view": "Ver",
     "logs.catDebug": "Debug de metadata",
     "logs.downloadDebug": "Descargar log debug",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Imágenes",
+    "edit.manageImages": "Gestionar pósteres y fondos",
+    "edit.removeImage": "Eliminar",
+    "edit.noImages": "No se encontraron imágenes.",
+    "edit.confirmRemoveImage": "¿Eliminar esta imagen?"
   },
   "pt": {
     "nav.collection": "Coleção",
@@ -5126,7 +5151,12 @@
     "scan.view": "Ver",
     "logs.catDebug": "Debug de metadata",
     "logs.downloadDebug": "Transferir log debug",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Imagens",
+    "edit.manageImages": "Gerir posters e fundos",
+    "edit.removeImage": "Remover",
+    "edit.noImages": "Nenhuma imagem encontrada.",
+    "edit.confirmRemoveImage": "Remover esta imagem?"
   },
   "it": {
     "nav.collection": "Collezione",
@@ -5981,7 +6011,12 @@
     "scan.view": "Visualizza",
     "logs.catDebug": "Debug metadata",
     "logs.downloadDebug": "Scarica log debug",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Immagini",
+    "edit.manageImages": "Gestisci poster e sfondi",
+    "edit.removeImage": "Rimuovi",
+    "edit.noImages": "Nessuna immagine trovata.",
+    "edit.confirmRemoveImage": "Rimuovere questa immagine?"
   },
   "sv": {
     "nav.collection": "Samling",
@@ -6834,7 +6869,12 @@
     "scan.view": "Visa",
     "logs.catDebug": "Metadatafelsökning",
     "logs.downloadDebug": "Ladda ner felsökningslogg",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Bilder",
+    "edit.manageImages": "Hantera affischer och bakgrunder",
+    "edit.removeImage": "Ta bort",
+    "edit.noImages": "Inga bilder hittades.",
+    "edit.confirmRemoveImage": "Ta bort den här bilden?"
   },
   "da": {
     "nav.collection": "Samling",
@@ -7687,7 +7727,12 @@
     "scan.view": "Visning",
     "logs.catDebug": "Fejlretning af metadata",
     "logs.downloadDebug": "Download fejlretningslog",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Billeder",
+    "edit.manageImages": "Administrer plakater og baggrunde",
+    "edit.removeImage": "Fjern",
+    "edit.noImages": "Ingen billeder fundet.",
+    "edit.confirmRemoveImage": "Fjern dette billede?"
   },
   "no": {
     "nav.collection": "Samling",
@@ -8540,7 +8585,12 @@
     "scan.view": "Visning",
     "logs.catDebug": "Feilsøking av metadata",
     "logs.downloadDebug": "Last ned feilsøkingslogg",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Bilder",
+    "edit.manageImages": "Administrer plakater og baktepper",
+    "edit.removeImage": "Fjern",
+    "edit.noImages": "Ingen bilder funnet.",
+    "edit.confirmRemoveImage": "Fjerne dette bildet?"
   },
   "fi": {
     "nav.collection": "Kokoelma",
@@ -9393,6 +9443,11 @@
     "scan.view": "Näytä",
     "logs.catDebug": "Metatietojen virheenkorjaus",
     "logs.downloadDebug": "Lataa virheenkorjausloki",
-    "edit.tmdbId": "TMDb ID"
+    "edit.tmdbId": "TMDb ID",
+    "edit.images": "Kuvat",
+    "edit.manageImages": "Hallitse julisteita ja taustoja",
+    "edit.removeImage": "Poista",
+    "edit.noImages": "Kuvia ei löytynyt.",
+    "edit.confirmRemoveImage": "Poistetaanko tämä kuva?"
   }
 }
