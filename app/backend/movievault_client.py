@@ -318,6 +318,7 @@ def build_handshake_request() -> tuple[str, dict, str]:
     payload = {
         "instanceId": get_or_create_instance_id(),
         "instanceName": get_instance_name(),
+        "instanceVersion": SOFTWARE_VERSION,
         "requestedScopes": list(REQUESTED_SCOPES),
     }
     raw_body = _raw_json_body(payload)
@@ -472,6 +473,7 @@ class BootstrapSignedTokenProvider(MovieVaultTokenProvider):
         return {
             "instanceId": get_or_create_instance_id(),
             "instanceName": get_instance_name(),
+            "instanceVersion": SOFTWARE_VERSION,
             "publicKey": public_key,
             "software": {
                 "name": "DiscVault",
@@ -533,6 +535,7 @@ class BootstrapSignedTokenProvider(MovieVaultTokenProvider):
         payload = {
             "instanceId": get_or_create_instance_id(),
             "instanceName": get_instance_name(),
+            "instanceVersion": SOFTWARE_VERSION,
             "requestedScopes": list(REQUESTED_SCOPES),
         }
         raw_body = _raw_json_body(payload)
@@ -601,6 +604,10 @@ def token_provider() -> MovieVaultTokenProvider:
     env_method = os.environ.get("MOVIEVAULT_AUTH_METHOD", "").strip().lower()
     method = configured_method or env_method
     if method in {"hmac", "hmac_handshake", "legacy_hmac"}:
+        return HmacHandshakeTokenProvider()
+    if method in {"bootstrap", "bootstrap_signed", "zero_config"}:
+        return BootstrapSignedTokenProvider()
+    if _handshake_secret():
         return HmacHandshakeTokenProvider()
     return BootstrapSignedTokenProvider()
 
