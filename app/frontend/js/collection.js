@@ -3050,7 +3050,7 @@ const EDIT_FIELDS = {
   Notes:              'notes',
   Poster:             'poster',
   ImdbId:             'imdb_id',
-  ImdbUrl:            'imdb_url',
+  TmdbId:             'tmdb_id',
   TrailerUrl:         'trailer_url',
 };
 
