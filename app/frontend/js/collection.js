@@ -1918,6 +1918,10 @@ async function openMovieDetail(id, skipGroupRedirect) {
       { code: 'es', name: 'Español',    country: 'ES' },
       { code: 'pt', name: 'Português',  country: 'PT' },
       { code: 'it', name: 'Italiano',   country: 'IT' },
+      { code: 'sv', name: 'Svenska',    country: 'SE' },
+      { code: 'da', name: 'Dansk',      country: 'DK' },
+      { code: 'no', name: 'Norsk',      country: 'NO' },
+      { code: 'fi', name: 'Suomi',      country: 'FI' },
     ];
     const _ratingBadge = c => c
       ? `<span style="display:inline-block;font-size:0.68rem;font-weight:700;padding:1px 6px;border:1px solid rgba(255,165,0,0.5);border-radius:4px;color:#f90;margin-left:8px;vertical-align:middle;">${c}</span>`
@@ -2618,7 +2622,7 @@ function _switchPersonTab(tab) {
 
 async function _loadPersonFilmography(personId) {
   _personFilmographyData = null;
-  const langMap = {nl:'nl-NL', fr:'fr-FR', de:'de-DE', es:'es-ES', pt:'pt-PT', it:'it-IT'};
+  const langMap = {nl:'nl-NL', fr:'fr-FR', de:'de-DE', es:'es-ES', pt:'pt-PT', it:'it-IT', sv:'sv-SE', da:'da-DK', no:'no-NO', fi:'fi-FI'};
   const lang = langMap[currentLang] || 'en-US';
   try {
     const r = await fetch(`${API}/people/${personId}/filmography?language=${lang}`);

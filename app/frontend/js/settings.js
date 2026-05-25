@@ -945,9 +945,9 @@ async function resetDatabase() {
 }
 
 // ── Language picker ─────────────────────────────────────────────────────────
-const LANGS_ORDER    = ['nl', 'en', 'fr', 'de', 'es', 'pt', 'it'];
-const LANG_NATIVE    = { nl: 'Nederlands', en: 'English', fr: 'Français', de: 'Deutsch', es: 'Español', pt: 'Português', it: 'Italiano' };
-const LANG_FLAG_CODE = { nl: 'nl', en: 'gb', fr: 'fr', de: 'de', es: 'es', pt: 'pt', it: 'it' };
+const LANGS_ORDER    = ['nl', 'en', 'fr', 'de', 'es', 'pt', 'it', 'sv', 'da', 'no', 'fi'];
+const LANG_NATIVE    = { nl: 'Nederlands', en: 'English', fr: 'Français', de: 'Deutsch', es: 'Español', pt: 'Português', it: 'Italiano', sv: 'Svenska', da: 'Dansk', no: 'Norsk', fi: 'Suomi' };
+const LANG_FLAG_CODE = { nl: 'nl', en: 'gb', fr: 'fr', de: 'de', es: 'es', pt: 'pt', it: 'it', sv: 'sv', da: 'da', no: 'no', fi: 'fi' };
 
 function loadLanguagePicker() {
   const container = document.getElementById('languagePicker');
