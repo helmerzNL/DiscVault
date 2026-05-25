@@ -8113,8 +8113,10 @@ def bulk_delete():
     conn = get_db()
     deleted = 0
     deleted_containers = 0
+    deleted_box_sets = []
     skipped = 0
     seen = set()
+    touched_box_set_ids = set()
     for item in items:
         item_type = item["type"]
         item_id = item["id"]
@@ -8124,6 +8126,8 @@ def bulk_delete():
         seen.add(key)
         if item_type == "movie":
             row = conn.execute("SELECT * FROM movies WHERE id = ?", (item_id,)).fetchone()
+            if row:
+                touched_box_set_ids.update(_box_set_ids_for_movie(conn, item_id, row))
             if _delete_movie_row(conn, row):
                 deleted += 1
             else:
@@ -8149,6 +8153,8 @@ def bulk_delete():
         else:
             skipped += 1
 
+    deleted_box_sets = _delete_empty_box_set_containers(conn, touched_box_set_ids)
+    deleted_containers += len(deleted_box_sets)
     conn.commit()
     _log_container_validation(conn, "bulk delete")
     conn.commit()
@@ -8159,7 +8165,13 @@ def bulk_delete():
         f"Items: {items[:20]}; Skipped: {skipped}",
         "success" if deleted or deleted_containers else "warn",
     )
-    return jsonify({"status": "done", "deleted": deleted, "deleted_containers": deleted_containers, "skipped": skipped})
+    return jsonify({
+        "status": "done",
+        "deleted": deleted,
+        "deleted_containers": deleted_containers,
+        "deleted_box_sets": deleted_box_sets,
+        "skipped": skipped,
+    })
 
 
 METADATA_REFRESH_FIELDS = [
