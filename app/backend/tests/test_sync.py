@@ -111,6 +111,110 @@ class SyncIntegrationTests(unittest.TestCase):
             backdrop_urls,
         )
 
+    def test_movievault_movie_payload_excludes_release_fields(self):
+        source = {
+            "title": "Bohemian Rhapsody 4K Blu-ray",
+            "barcode": "8712626045139",
+            "format": "4K UHD",
+            "edition": "4K Ultra HD + Blu-ray",
+            "packaging": "Keep Case",
+            "country": "Netherlands",
+            "language": "nl",
+            "hdr": "Dolby Vision",
+            "audio_tracks": "English Dolby Atmos",
+            "subtitles": "Dutch, English SDH",
+            "regions": "B",
+            "screen_ratios": "2.39:1",
+            "distributor": "20th Century Fox",
+            "poster_url": "https://release.example.test/poster.jpg",
+            "_release_poster_url": "https://release.example.test/poster.jpg",
+            "_movie_poster_url": "https://tmdb.example.test/poster.jpg",
+            "backdrop_urls": json.dumps([
+                "https://release.example.test/backdrop.jpg",
+                "https://discvault.example.test/api/images/local-backdrop.jpg",
+            ]),
+            "_release_backdrop_urls": json.dumps(["https://release.example.test/backdrop.jpg"]),
+            "_movie_backdrop_urls": json.dumps(["https://tmdb.example.test/backdrop.jpg"]),
+            "tmdb_id": "424694",
+            "imdb_id": "tt1727824",
+            "runtime": "134",
+            "plot": "Public overview",
+        }
+
+        movie_payload = self.backend._movievault_raw_payload(source, "movie")
+        release_payload = self.backend._movievault_raw_payload(source, "release")
+
+        self.assertNotIn("barcode", movie_payload)
+        self.assertNotIn("format", movie_payload)
+        self.assertNotIn("edition", movie_payload)
+        self.assertNotIn("packaging", movie_payload)
+        self.assertNotIn("country", movie_payload)
+        self.assertNotIn("language", movie_payload)
+        self.assertNotIn("hdr", movie_payload)
+        self.assertNotIn("audioTracks", movie_payload)
+        self.assertNotIn("subtitles", movie_payload)
+        self.assertNotIn("regions", movie_payload)
+        self.assertNotIn("screenRatios", movie_payload)
+        self.assertEqual(movie_payload["posterUrl"], "https://tmdb.example.test/poster.jpg")
+        self.assertEqual(movie_payload["backdropUrls"], ["https://tmdb.example.test/backdrop.jpg"])
+
+        self.assertEqual(release_payload["barcode"], "8712626045139")
+        self.assertEqual(release_payload["format"], "4K UHD")
+        self.assertEqual(release_payload["packaging"], "Keep Case")
+        self.assertEqual(release_payload["posterUrl"], "https://release.example.test/poster.jpg")
+        self.assertEqual(release_payload["backdropUrls"], ["https://release.example.test/backdrop.jpg"])
+
+    def test_movievault_skips_unchanged_person_payload(self):
+        original_enabled = self.backend._is_movievault_contribution_enabled
+        original_url = self.backend._movievault_contribution_url
+        original_request = self.backend.movievault_request
+        calls = []
+
+        class FakeResponse:
+            status_code = 202
+            text = "{}"
+
+            def json(self):
+                return {}
+
+        def fake_request(method, url, **kwargs):
+            calls.append({"method": method, "url": url, "json": kwargs.get("json")})
+            return FakeResponse()
+
+        person = {
+            "name": "Rami Malek",
+            "tmdbId": 11856,
+            "biography": "Public biography",
+            "knownFor": "Acting",
+        }
+        context = {"localEntityType": "person", "localEntityId": "11856"}
+
+        try:
+            self.backend._is_movievault_contribution_enabled = lambda: True
+            self.backend._movievault_contribution_url = lambda: "https://movies.example.test/api/v1/contributions"
+            self.backend.movievault_request = fake_request
+            first = self.backend._submit_movievault_entity_contribution_result(
+                "person",
+                person,
+                "Unit test",
+                context,
+            )
+            second = self.backend._submit_movievault_entity_contribution_result(
+                "person",
+                person,
+                "Unit test",
+                context,
+            )
+        finally:
+            self.backend._is_movievault_contribution_enabled = original_enabled
+            self.backend._movievault_contribution_url = original_url
+            self.backend.movievault_request = original_request
+
+        self.assertEqual(first["status"], "submitted")
+        self.assertEqual(second["status"], "skipped")
+        self.assertEqual(second["action"], "unchanged_payload")
+        self.assertEqual(len([call for call in calls if call["method"] == "POST"]), 1)
+
     def test_movievault_template_version_check_refreshes_fresh_cache_when_due(self):
         original_request = self.backend.movievault_request
         now = time.time()

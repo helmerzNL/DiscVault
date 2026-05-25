@@ -1469,6 +1469,16 @@ def init_db():
             value TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS movievault_contribution_fingerprints (
+            entity_type      TEXT NOT NULL,
+            public_identity  TEXT NOT NULL,
+            template_version TEXT NOT NULL,
+            fingerprint      TEXT NOT NULL,
+            updated_at       TEXT NOT NULL,
+            PRIMARY KEY (entity_type, public_identity, template_version)
+        )
+    """)
 
     # Auth: invite codes for admin-controlled registration
     conn.execute("""
@@ -2806,6 +2816,8 @@ def _movievault_submission_action(response) -> str:
             return "created"
         if value in {"updated", "merged", "changed"}:
             return "updated"
+        if value in {"duplicate", "duplicated", "already_exists", "already-exists"}:
+            return "duplicate"
         if value in {"unchanged", "not_updated", "not-updated", "no_change", "skipped"}:
             return "not_updated"
         if value in {"accepted", "ok", "success", "shared"}:
@@ -2864,7 +2876,6 @@ def _movievault_fallback_contribution_template() -> dict:
                 "entityType": "movie",
                 "required": ["title"],
                 "fields": {
-                    "barcode": {"type": "string"},
                     "title": localized,
                     "originalTitle": localized,
                     "sortTitle": {"type": "string"},
@@ -2875,16 +2886,6 @@ def _movievault_fallback_contribution_template() -> dict:
                     "overview": localized,
                     "runtime": {"type": "integer"},
                     "people": {"type": "array"},
-                    "format": {"type": "string"},
-                    "edition": localized,
-                    "country": {"type": "string"},
-                    "language": {"type": "string"},
-                    "hdr": {"type": "string"},
-                    "audioTracks": {"type": "array"},
-                    "subtitles": {"type": "array"},
-                    "regions": {"type": "array"},
-                    "screenRatios": {"type": "string"},
-                    "distributor": {"type": "string"},
                     "studios": {"type": "string"},
                     "genre": {"type": "string"},
                     "posterUrl": {"type": "string"},
@@ -2902,6 +2903,7 @@ def _movievault_fallback_contribution_template() -> dict:
                     "language": {"type": "string"},
                     "format": {"type": "string"},
                     "edition": localized,
+                    "packaging": {"type": "string"},
                     "distributor": {"type": "string"},
                     "hdr": {"type": "string"},
                     "audioTracks": {"type": "array"},
@@ -3203,9 +3205,15 @@ def _movievault_public_image_source(value) -> str:
     value = _movievault_text(value)
     if not value or value == "N/A":
         return ""
-    if value.startswith(("/api/images/", "/api/posters/", "/api/profiles/")):
+    local_image_prefixes = ("/api/images/", "/api/posters/", "/api/profiles/")
+    if value.startswith(local_image_prefixes):
         return ""
     if value.startswith(("http://", "https://")):
+        try:
+            if urlparse(value).path.startswith(local_image_prefixes):
+                return ""
+        except Exception:
+            pass
         return value
     return ""
 
@@ -3347,7 +3355,6 @@ def _movievault_get(path: str, params: dict | None = None):
 
 MOVIEVAULT_ENTITY_FIELD_MAPS = {
     "movie": {
-        "barcode": "barcode",
         "title": "title",
         "original_title": "originalTitle",
         "sort_title": "sortTitle",
@@ -3359,21 +3366,14 @@ MOVIEVAULT_ENTITY_FIELD_MAPS = {
         "plot": "overview",
         "genre": "genre",
         "studios": "studios",
+        "_movie_poster_url": "posterUrl",
         "poster": "posterUrl",
         "poster_url": "posterUrl",
+        "_movie_backdrop_url": "backdropUrl",
         "backdrop": "backdropUrl",
         "backdrop_url": "backdropUrl",
+        "_movie_backdrop_urls": "backdropUrls",
         "backdrop_urls": "backdropUrls",
-        "format": "format",
-        "edition": "edition",
-        "country": "country",
-        "language": "language",
-        "hdr": "hdr",
-        "audio_tracks": "audioTracks",
-        "subtitles": "subtitles",
-        "regions": "regions",
-        "screen_ratios": "screenRatios",
-        "distributor": "distributor",
         "title_nl": "title_nl",
         "title_de": "title_de",
         "title_fr": "title_fr",
@@ -3395,6 +3395,7 @@ MOVIEVAULT_ENTITY_FIELD_MAPS = {
         "language": "language",
         "format": "format",
         "edition": "edition",
+        "packaging": "packaging",
         "distributor": "distributor",
         "hdr": "hdr",
         "audio_tracks": "audioTracks",
@@ -3545,7 +3546,14 @@ def _movievault_movie_contribution_state(
         pass
     for source in (merged or {}, updates or {}):
         for key, value in source.items():
-            if key.startswith("_"):
+            if key.startswith("_") and key not in {
+                "_movie_poster_url",
+                "_movie_backdrop_url",
+                "_movie_backdrop_urls",
+                "_release_poster_url",
+                "_release_backdrop_url",
+                "_release_backdrop_urls",
+            }:
                 continue
             if value not in (None, "", [], {}):
                 state[key] = value
@@ -3571,6 +3579,34 @@ def _movievault_raw_payload(source: dict, entity_type: str) -> dict:
     field_map = MOVIEVAULT_ENTITY_FIELD_MAPS.get(entity_type, {})
     for src_key, dst_key in field_map.items():
         value = source.get(src_key)
+        if entity_type == "movie" and dst_key in {"posterUrl", "backdropUrl", "backdropUrls"}:
+            preferred_key = {
+                "posterUrl": "_movie_poster_url",
+                "backdropUrl": "_movie_backdrop_url",
+                "backdropUrls": "_movie_backdrop_urls",
+            }[dst_key]
+            preferred_value = source.get(preferred_key)
+            preferred_public = (
+                _movievault_public_image_sources(preferred_value)
+                if dst_key == "backdropUrls"
+                else _movievault_public_image_source(preferred_value)
+            )
+            if src_key != preferred_key and preferred_public:
+                continue
+            release_key = {
+                "posterUrl": "_release_poster_url",
+                "backdropUrl": "_release_backdrop_url",
+                "backdropUrls": "_release_backdrop_urls",
+            }[dst_key]
+            release_value = source.get(release_key)
+            if dst_key == "backdropUrls":
+                release_public = _movievault_public_image_sources(release_value)
+                current_public = _movievault_public_image_sources(value)
+            else:
+                release_public = _movievault_public_image_source(release_value)
+                current_public = _movievault_public_image_source(value)
+            if release_public and release_public == current_public:
+                continue
         if dst_key in {"posterUrl", "backdropUrl"}:
             value = _movievault_public_image_source(value)
         elif dst_key == "backdropUrls":
@@ -3594,6 +3630,47 @@ def _movievault_missing_source_fields(source: dict, entity_type: str, template_f
         if not any(source.get(k) not in (None, "", [], {}) for k in source_keys):
             missing.append(field)
     return missing
+
+
+def _movievault_normalized_identity(value) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _movievault_normalized_code(value) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").strip().lower())
+
+
+def _movievault_public_identity(entity_type: str, filtered_payload: dict, context: dict) -> str:
+    if entity_type == "movie":
+        tmdb_id = str(filtered_payload.get("tmdbId") or "").strip()
+        if tmdb_id:
+            return f"tmdb:{tmdb_id}"
+        imdb_id = str(filtered_payload.get("imdbId") or "").strip().lower()
+        if imdb_id:
+            return f"imdb:{imdb_id}"
+        title = _movievault_normalized_identity(filtered_payload.get("title"))
+        year = str(filtered_payload.get("year") or "").strip()
+        return f"title:{title}:{year}" if title else ""
+    if entity_type == "release":
+        barcode = _movievault_normalized_code(filtered_payload.get("barcode") or context.get("barcode"))
+        return f"barcode:{barcode}" if barcode else ""
+    if entity_type == "box_set":
+        barcode = _movievault_normalized_code(filtered_payload.get("barcode") or context.get("barcode"))
+        if barcode:
+            return f"barcode:{barcode}"
+        title = _movievault_normalized_identity(filtered_payload.get("title"))
+        return f"title:{title}" if title else ""
+    if entity_type == "person":
+        tmdb_id = str(filtered_payload.get("tmdbId") or "").strip()
+        if tmdb_id:
+            return f"tmdb:{tmdb_id}"
+        name = _movievault_normalized_identity(filtered_payload.get("name"))
+        return f"name:{name}" if name else ""
+    return ""
 
 
 def _movievault_entity_identity(entity_type: str, filtered_payload: dict, context: dict) -> str:
@@ -3641,8 +3718,9 @@ def _movievault_contribution_payload(
     payload_fingerprint = hashlib.sha256(
         json.dumps(filtered_payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()
+    public_identity = _movievault_public_identity(entity_type, filtered_payload, context)
     identity = _movievault_entity_identity(entity_type, filtered_payload, context)
-    identity = identity or str(context.get("localEntityId") or context.get("barcode") or "unknown")
+    identity = identity or public_identity or str(context.get("localEntityId") or context.get("barcode") or "unknown")
     movievault_id = (
         _movievault_extract_movievault_id(source_data)
         or _movievault_extract_movievault_id(raw_payload)
@@ -3661,6 +3739,9 @@ def _movievault_contribution_payload(
         "filtered_out": filtered_out,
         "missing_source_fields": sorted(missing_source),
         "missing_required": missing_required,
+        "payload_fingerprint": payload_fingerprint,
+        "payload_fingerprint_prefix": payload_fingerprint[:12],
+        "public_identity": public_identity,
         "idempotency_key": idem,
         "idempotency_prefix": idem[:24],
         "local_entity_type": context.get("localEntityType") or entity_type,
@@ -3685,11 +3766,13 @@ def _movievault_stats_detail(stats: dict, endpoint: str = "", http_status: str =
         f"Local entity: {stats.get('local_entity_type')}:{stats.get('local_entity_id')}",
         f"MovieVault entity: {stats.get('entity_type')}",
         f"Template version: {stats.get('template_version') or '-'} ({stats.get('template_source') or '-'})",
+        f"Public identity: {stats.get('public_identity') or '-'}",
         f"MovieVault ID: {_movievault_id_label(movievault_id, http_status)}",
         f"Fields before/after: {stats.get('raw_count', 0)}/{stats.get('filtered_count', 0)}",
         f"Synchronized fields: {', '.join(stats.get('filtered_fields') or []) or '-'}",
         f"Filtered out: {', '.join(stats.get('filtered_out') or []) or '-'}",
         f"Missing source fields: {', '.join((stats.get('missing_source_fields') or [])[:24]) or '-'}",
+        f"Payload fingerprint: {stats.get('payload_fingerprint_prefix') or '-'}",
         f"Idempotency: {stats.get('idempotency_prefix') or '-'}",
     ]
     if http_status:
@@ -3703,6 +3786,77 @@ def _movievault_is_title_only(entity_type: str, payload: dict) -> bool:
     if entity_type != "movie":
         return False
     return sorted((payload or {}).keys()) == ["title"]
+
+
+def _ensure_movievault_contribution_fingerprint_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS movievault_contribution_fingerprints (
+            entity_type      TEXT NOT NULL,
+            public_identity  TEXT NOT NULL,
+            template_version TEXT NOT NULL,
+            fingerprint      TEXT NOT NULL,
+            updated_at       TEXT NOT NULL,
+            PRIMARY KEY (entity_type, public_identity, template_version)
+        )
+    """)
+
+
+def _movievault_cached_fingerprint(stats: dict) -> str:
+    entity_type = stats.get("entity_type") or ""
+    public_identity = stats.get("public_identity") or ""
+    template_version = stats.get("template_version") or "unknown"
+    if not entity_type or not public_identity:
+        return ""
+    conn = None
+    try:
+        conn = get_db()
+        _ensure_movievault_contribution_fingerprint_table(conn)
+        row = conn.execute(
+            """
+            SELECT fingerprint
+              FROM movievault_contribution_fingerprints
+             WHERE entity_type=? AND public_identity=? AND template_version=?
+            """,
+            (entity_type, public_identity, template_version),
+        ).fetchone()
+        return row["fingerprint"] if row else ""
+    except Exception:
+        return ""
+    finally:
+        if conn:
+            conn.close()
+
+
+def _movievault_payload_unchanged(stats: dict) -> bool:
+    fingerprint = stats.get("payload_fingerprint") or ""
+    return bool(fingerprint and fingerprint == _movievault_cached_fingerprint(stats))
+
+
+def _movievault_store_successful_fingerprint(stats: dict):
+    entity_type = stats.get("entity_type") or ""
+    public_identity = stats.get("public_identity") or ""
+    template_version = stats.get("template_version") or "unknown"
+    fingerprint = stats.get("payload_fingerprint") or ""
+    if not entity_type or not public_identity or not fingerprint:
+        return
+    conn = None
+    try:
+        conn = get_db()
+        _ensure_movievault_contribution_fingerprint_table(conn)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO movievault_contribution_fingerprints
+                (entity_type, public_identity, template_version, fingerprint, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (entity_type, public_identity, template_version, fingerprint, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+    except Exception as ex:
+        _movievault_log("warn", "MovieVault fingerprint cache update failed", str(ex))
+    finally:
+        if conn:
+            conn.close()
 
 
 def _movievault_new_submission_result(entity_type: str, source_data: dict | None, sources: str, context: dict | None) -> dict:
@@ -3750,6 +3904,9 @@ def _movievault_log_submission_result(result: dict):
     status = result.get("status")
     if status == "submitted":
         message = f"MovieVault contribution shared: \"{title}\""
+        level = "info"
+    elif result.get("action") == "unchanged_payload":
+        message = "MovieVault contribution skipped: unchanged payload"
         level = "info"
     elif status == "rejected":
         message = f"MovieVault contribution rejected: \"{title}\""
@@ -3910,6 +4067,13 @@ def _submit_movievault_entity_contribution_result(
             return result
         if _movievault_is_title_only(entity_type, payload.get("payload") or {}):
             result["warnings"].append("Movie contribution is title-only after template filtering")
+        if _movievault_payload_unchanged(stats):
+            result.update({
+                "status": "skipped",
+                "action": "unchanged_payload",
+                "error": "",
+            })
+            return result
         r = movievault_request("POST", url, json=payload, include_auth=True, timeout=8)
         if 200 <= r.status_code < 300:
             data = _movievault_response_json(r)
@@ -3920,6 +4084,7 @@ def _submit_movievault_entity_contribution_result(
                 "http_status": str(r.status_code),
                 "movievault_id": _movievault_extract_movievault_id(data, allow_plain_id=True) or result.get("movievault_id") or "",
             })
+            _movievault_store_successful_fingerprint(stats)
             return result
         validation_error = False
         if r.status_code == 400:
@@ -3939,6 +4104,13 @@ def _submit_movievault_entity_contribution_result(
                 return result
             if _movievault_is_title_only(entity_type, payload.get("payload") or {}):
                 result["warnings"].append("Movie contribution is title-only after template refresh")
+            if _movievault_payload_unchanged(stats):
+                result.update({
+                    "status": "skipped",
+                    "action": "unchanged_payload",
+                    "error": "",
+                })
+                return result
             r = movievault_request("POST", url, json=payload, include_auth=True, timeout=8)
             if 200 <= r.status_code < 300:
                 data = _movievault_response_json(r)
@@ -3949,6 +4121,7 @@ def _submit_movievault_entity_contribution_result(
                     "http_status": str(r.status_code),
                     "movievault_id": _movievault_extract_movievault_id(data, allow_plain_id=True) or result.get("movievault_id") or "",
                 })
+                _movievault_store_successful_fingerprint(stats)
                 return result
         result.update({
             "status": "rejected",
@@ -4238,13 +4411,14 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
     context = context or {}
     if not movie_info:
         return False
-    results = [
-        _submit_movievault_entity_contribution_result("movie", movie_info, sources, context)
-    ]
+    results = []
     source = _movievault_public_source(movie_info)
     release_candidate = _movievault_raw_payload(source, "release")
     if release_candidate.get("barcode") and release_candidate.get("title"):
         results.append(_submit_movievault_entity_contribution_result("release", movie_info, sources, context))
+    results.append(
+        _submit_movievault_entity_contribution_result("movie", movie_info, sources, context)
+    )
     title = source.get("title") or (context or {}).get("title") or "movie"
     _movievault_log_result_summary(
         f"MovieVault contribution summary: \"{title}\"",
@@ -5515,6 +5689,7 @@ def lookup_movie_bluray_specs_traced(title: str, year: str = "", barcode: str = 
             return None, attempts
         out = {
             "hdr": parsed.get("hdr", ""),
+            "packaging": parsed.get("packaging", ""),
             "audio_tracks": parsed.get("audio_tracks", ""),
             "subtitles": parsed.get("subtitles", ""),
         }
@@ -5708,6 +5883,7 @@ def lookup_movie_bluraydiscde_specs_traced(title: str, year: str = "", barcode: 
             return None, attempts
         out = {
             "hdr": parsed.get("hdr", ""),
+            "packaging": parsed.get("packaging", ""),
             "audio_tracks": parsed.get("audio_tracks", ""),
             "subtitles": parsed.get("subtitles", ""),
             "poster": parsed.get("poster", ""),
@@ -5721,7 +5897,7 @@ def lookup_movie_bluraydiscde_specs_traced(title: str, year: str = "", barcode: 
 def _merge_disc_specs(target: dict, specs: dict | None) -> dict:
     if not specs:
         return target
-    for key in ("hdr", "audio_tracks", "subtitles", "poster"):
+    for key in ("hdr", "packaging", "audio_tracks", "subtitles", "poster"):
         if specs.get(key) and not target.get(key):
             target[key] = specs[key]
     return target
@@ -6955,7 +7131,7 @@ def update_movie(movie_id):
         lookup_year = _parse_year(merged.get("year") or merged.get("release_date") or "")
 
         missing_spec_fields = []
-        for key in ("hdr", "audio_tracks", "subtitles"):
+        for key in ("hdr", "packaging", "audio_tracks", "subtitles"):
             value = merged.get(key)
             if value is None or str(value).strip() == "":
                 missing_spec_fields.append(key)
@@ -6978,7 +7154,7 @@ def update_movie(movie_id):
                         "info"
                     )
         elif lookup_title:
-            _trace_add(attempts, "Blu-ray.com", "skipped", f"title={lookup_title}", "geen missende hdr/audio/subtitles")
+            _trace_add(attempts, "Blu-ray.com", "skipped", f"title={lookup_title}", "geen missende hdr/packaging/audio/subtitles")
     else:
         _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
 
@@ -7603,7 +7779,7 @@ METADATA_REFRESH_FIELDS = [
     "plot", "rating", "imdb_id", "tmdb_id", "release_date",
     "actor", "producer", "studios", "original_title",
     "language", "country", "runtime", "genre", "director",
-    "hdr", "audio_tracks", "subtitles",
+    "hdr", "packaging", "audio_tracks", "subtitles",
     "title_nl", "title_fr", "title_de", "title_es",
     "plot_nl", "plot_fr", "plot_de", "plot_es",
     "poster_url", "backdrop", "backdrop_url", "backdrops", "backdrop_urls", "trailer_url", "videos",
@@ -7900,7 +8076,7 @@ def sync_single_source(movie_id):
             "plot", "rating", "imdb_id", "tmdb_id", "release_date",
             "actor", "producer", "studios", "original_title",
             "language", "country", "runtime", "genre",
-            "hdr", "audio_tracks", "subtitles",
+            "hdr", "packaging", "audio_tracks", "subtitles",
             "poster_url", "backdrop", "backdrop_url", "backdrops", "backdrop_urls",
         ]
         updates = {f: info[f] for f in refresh_fields if info.get(f)}
@@ -8570,7 +8746,7 @@ def enrich_from_api(row: dict) -> dict:
         "plot", "poster", "poster_url", "backdrop", "backdrop_url", "backdrops", "backdrop_urls",
         "rating", "imdb_id", "tmdb_id", "release_date",
         "actor", "producer", "studios", "original_title", "language", "country",
-        "runtime", "genre", "director", "hdr", "audio_tracks", "subtitles",
+        "runtime", "genre", "director", "hdr", "packaging", "audio_tracks", "subtitles",
     ]
 
     def is_missing(field_name: str) -> bool:
@@ -9337,6 +9513,62 @@ def _finalize_metadata_info(info: dict | None) -> dict:
     return info
 
 
+RELEASE_PRIORITY_FIELDS = {
+    "poster",
+    "poster_url",
+    "format",
+    "edition",
+    "packaging",
+    "country",
+    "language",
+    "distributor",
+    "hdr",
+    "audio_tracks",
+    "subtitles",
+    "regions",
+    "screen_ratios",
+    "backdrop",
+    "backdrop_url",
+    "backdrop_urls",
+}
+
+
+def _mark_movie_image_sources(info: dict, data: dict):
+    for src_key, dst_key in (
+        ("poster_url", "_movie_poster_url"),
+        ("poster", "_movie_poster_url"),
+        ("backdrop_url", "_movie_backdrop_url"),
+        ("backdrop", "_movie_backdrop_url"),
+        ("backdrop_urls", "_movie_backdrop_urls"),
+    ):
+        value = data.get(src_key)
+        if dst_key == "_movie_backdrop_urls":
+            value = _movievault_public_image_sources(value)
+            value = json.dumps(value, ensure_ascii=False) if value else ""
+        else:
+            value = _movievault_public_image_source(value)
+        if value and not info.get(dst_key):
+            info[dst_key] = value
+
+
+def _mark_release_image_sources(info: dict, data: dict):
+    for src_key, dst_key in (
+        ("poster_url", "_release_poster_url"),
+        ("poster", "_release_poster_url"),
+        ("backdrop_url", "_release_backdrop_url"),
+        ("backdrop", "_release_backdrop_url"),
+        ("backdrop_urls", "_release_backdrop_urls"),
+    ):
+        value = data.get(src_key)
+        if dst_key == "_release_backdrop_urls":
+            value = _movievault_public_image_sources(value)
+            value = json.dumps(value, ensure_ascii=False) if value else ""
+        else:
+            value = _movievault_public_image_source(value)
+        if value:
+            info[dst_key] = value
+
+
 def _merge_metadata_by_order(
     title: str,
     year: str = "",
@@ -9357,7 +9589,7 @@ def _merge_metadata_by_order(
     primary_title = (title or "").strip()
     fallback_title = (fallback_title or "").strip()
 
-    def merge_from(data: dict | None, source_label: str):
+    def merge_from(data: dict | None, source_label: str, release_priority: bool = False):
         nonlocal info
         if not data:
             return False
@@ -9365,14 +9597,21 @@ def _merge_metadata_by_order(
             info = dict(data)
         else:
             for key, value in data.items():
-                if value and not info.get(key):
+                if release_priority and key in RELEASE_PRIORITY_FIELDS and value:
                     info[key] = value
+                elif value and not info.get(key):
+                    info[key] = value
+        if release_priority:
+            _mark_release_image_sources(info, data)
+        else:
+            _mark_movie_image_sources(info, data)
         used_sources.append(source_label)
         return True
 
     for source in _metadata_source_order():
         label = METADATA_SOURCE_LABELS[source]
         data = None
+        release_priority = False
         if not _metadata_source_enabled(source):
             _trace_add(attempts, label, "skipped", "source uitgeschakeld of niet geconfigureerd")
             continue
@@ -9382,10 +9621,16 @@ def _merge_metadata_by_order(
                     _trace_add(attempts, label, "skipped", "geen titel of barcode")
                     continue
                 movievault_attempted = True
-                data = lookup_movievault_movie(primary_title, year, barcode)
+                if barcode:
+                    data = lookup_movievault_by_barcode(barcode)
+                    release_priority = bool(data)
+                    _trace_add(attempts, label, "hit" if data else "miss", f"barcode={barcode}")
+                if not data:
+                    data = lookup_movievault_movie(primary_title, year, "")
                 if not data and fallback_title and fallback_title != primary_title:
-                    data = lookup_movievault_movie(fallback_title, year, barcode)
-                _trace_add(attempts, label, "hit" if data else "miss", f"title={primary_title}, year={year}, barcode={barcode}")
+                    data = lookup_movievault_movie(fallback_title, year, "")
+                if not release_priority:
+                    _trace_add(attempts, label, "hit" if data else "miss", f"title={primary_title}, year={year}")
                 if data:
                     movievault_hit = True
             elif source == "tmdb":
@@ -9427,9 +9672,21 @@ def _merge_metadata_by_order(
                             "title": by_barcode.get("title", "") or primary_title,
                             "year": by_barcode.get("year", "") or year,
                             "poster": by_barcode.get("poster", ""),
+                            "poster_url": by_barcode.get("poster_url", ""),
+                            "format": by_barcode.get("format", ""),
+                            "edition": by_barcode.get("edition", ""),
+                            "packaging": by_barcode.get("packaging", ""),
+                            "country": by_barcode.get("country", ""),
+                            "language": by_barcode.get("language", ""),
+                            "distributor": by_barcode.get("distributor", ""),
                             "hdr": by_barcode.get("hdr", ""),
                             "audio_tracks": by_barcode.get("audio_tracks", ""),
                             "subtitles": by_barcode.get("subtitles", ""),
+                            "regions": by_barcode.get("regions", ""),
+                            "screen_ratios": by_barcode.get("screen_ratios", ""),
+                            "backdrop": by_barcode.get("backdrop", ""),
+                            "backdrop_url": by_barcode.get("backdrop_url", ""),
+                            "backdrop_urls": by_barcode.get("backdrop_urls", ""),
                         })
                         if by_barcode.get("box_set_proposal"):
                             base["box_set_proposal"] = by_barcode.get("box_set_proposal")
@@ -9447,7 +9704,8 @@ def _merge_metadata_by_order(
             _trace_add(attempts, label, "error", f"title={primary_title}", str(ex))
             data = None
 
-        if merge_from(data, label) and stop_after_first:
+        source_release_priority = source == "bluray_com" or release_priority
+        if merge_from(data, label, release_priority=source_release_priority) and stop_after_first:
             break
 
     source_label = " + ".join(dict.fromkeys(used_sources))
