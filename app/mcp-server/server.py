@@ -294,7 +294,7 @@ def execute_tool(name: str, args: dict, bearer: str | None = None) -> str:
 SERVER_INFO = {
     "protocolVersion": "2025-11-05",
     "capabilities": {"tools": {}},
-    "serverInfo": {"name": "discvault", "version": "3.2.0"}
+    "serverInfo": {"name": "discvault", "version": "3.5.0"}
 }
 
 def handle_message(msg: dict, bearer: str | None = None) -> dict | None:
@@ -424,7 +424,7 @@ def run_http(host: str, port: int):
 
     @app.route("/health", methods=["GET"])
     def health():
-        return fj({"status": "ok", "transport": "streamable-http", "version": "3.2.0"})
+        return fj({"status": "ok", "transport": "streamable-http", "version": "3.5.0"})
 
     print(f"DiscVault MCP (Streamable HTTP) on {host}:{port}/mcp", file=sys.stderr)
     app.run(host=host, port=port, threaded=True)
