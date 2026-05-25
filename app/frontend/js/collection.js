@@ -3428,6 +3428,7 @@ let currentAddBoxSetProposal = null;
 let addTitleLookupResolvedTitle = '';
 let addBarcodeLookupResolvedBarcode = '';
 let addMetadataCandidateMap = {};
+let addBarcodeLookupInFlight = '';
 
 function _escapeAddHtml(value) {
   return String(value || '').replace(/[&<>"']/g, ch => ({
@@ -3869,6 +3870,13 @@ function _fillAddFields(movie) {
 }
 
 async function _lookupBarcodeForAdd(barcode) {
+  barcode = String(barcode || '').trim();
+  if (!barcode) return;
+  if (addBarcodeLookupInFlight) {
+    showStatus('addStatus', t('js.lookingUp'), 'info');
+    return;
+  }
+  addBarcodeLookupInFlight = barcode;
   showStatus('addStatus', t('js.lookingUp'), 'info');
   document.getElementById('addTmdbCandidates').style.display = 'none';
   hideAddBoxSetProposal();
@@ -3916,6 +3924,8 @@ async function _lookupBarcodeForAdd(barcode) {
     }
   } catch(e) {
     showStatus('addStatus', t('js.connectionError', e.message), 'error');
+  } finally {
+    if (addBarcodeLookupInFlight === barcode) addBarcodeLookupInFlight = '';
   }
 }
 
