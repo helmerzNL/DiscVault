@@ -33,15 +33,18 @@ jobs:
       - name: Derive build version
         id: version
         run: |
+          SHA="$(git rev-parse HEAD)"
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
-            VERSION="beta-$(git rev-parse --short HEAD)"
+            VERSION="beta-${SHA:0:7}"
           else
-            VERSION="dev-$(git rev-parse --short HEAD)"
+            VERSION="dev-${SHA:0:7}"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
           echo "Building version: ${VERSION}"
+          echo "Build SHA: ${SHA}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -84,6 +87,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BUILD_VERSION=${{ steps.version.outputs.version }}
+            BUILD_SHA=${{ steps.version.outputs.sha }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -46,6 +46,7 @@ try:
     )
     from .db import connect_db, enable_wal, get_db
     from .logging_utils import add_log
+    from .versioning import backend_version
     from .movievault_client import (
         get_movievault_api_token as _movievault_client_api_token,
         mask_token as _movievault_client_mask_token,
@@ -70,6 +71,7 @@ except ImportError:  # pragma: no cover - supports running app.py directly
     )
     from db import connect_db, enable_wal, get_db
     from logging_utils import add_log
+    from versioning import backend_version
     from movievault_client import (
         get_movievault_api_token as _movievault_client_api_token,
         mask_token as _movievault_client_mask_token,
@@ -3768,7 +3770,7 @@ def _movievault_contribution_payload(
     return {
         "idempotencyKey": idem,
         "sourceClient": "discvault",
-        "sourceVersion": os.environ.get("BUILD_VERSION", "dev"),
+        "sourceVersion": backend_version(),
         "sharingMode": _movievault_sharing_mode(),
         "entityType": entity_type,
         "payload": filtered_payload,

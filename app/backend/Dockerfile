@@ -1,11 +1,19 @@
 FROM python:3.12-slim
 
+ARG BUILD_VERSION=dev
+ARG BUILD_SHA=unknown
+
+ENV BUILD_VERSION=${BUILD_VERSION} \
+    BUILD_SHA=${BUILD_SHA} \
+    DISCVAULT_BACKEND_VERSION=${BUILD_VERSION} \
+    DISCVAULT_BUILD_SHA=${BUILD_SHA}
+
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+COPY . .
 
 RUN mkdir -p /data
 
