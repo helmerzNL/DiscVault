@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DiscVault FAQ</title>
+    <meta
+      name="description"
+      content="Frequently asked questions and setup notes for DiscVault, the self-hosted physical disc collection manager."
+    />
+    <meta property="og:title" content="DiscVault FAQ" />
+    <meta
+      property="og:description"
+      content="Frequently asked questions and setup notes for DiscVault."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://discvault.eu/faq.html" />
+    <meta name="theme-color" content="#0a0a0f" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="./favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=10" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+    <header class="site-header wrap">
+      <a class="brand" href="./index.html" aria-label="DiscVault home">
+        <span class="brand-dot"></span>
+        <span>DiscVault</span>
+      </a>
+      <button class="hamburger" aria-label="Toggle menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="./index.html#features" data-i18n="nav.features">Features</a>
+        <a href="./index.html#install" data-i18n="nav.install">Install</a>
+        <a href="./index.html#community" data-i18n="nav.community">Community</a>
+        <a href="./faq.html" aria-current="page" data-i18n="nav.faq">FAQ</a>
+        <a class="nav-github" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
+        <div class="lang-switcher">
+          <select class="lang-select" aria-label="Language">
+            <option value="da">🇩🇰 Dansk</option>
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="en">🇬🇧 English</option>
+            <option value="es">🇪🇸 Español</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="it">🇮🇹 Italiano</option>
+            <option value="nl">🇳🇱 Nederlands</option>
+            <option value="no">🇳🇴 Norsk</option>
+            <option value="pt">🇵🇹 Português</option>
+            <option value="fi">🇫🇮 Suomi</option>
+            <option value="sv">🇸🇪 Svenska</option>
+          </select>
+        </div>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero faq-hero wrap">
+        <p class="eyebrow" data-i18n="faq.eyebrow">FAQ</p>
+        <h1>
+          <span data-i18n="faq.h1.line1">DiscVault questions,</span>
+          <br>
+          <span class="accent" data-i18n="faq.h1.accent">collected in one place.</span>
+        </h1>
+        <p class="lead" data-i18n="faq.lead">
+          This page is being prepared as the home for installation notes, MovieVault beta details, language support, and common troubleshooting answers.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-solid" href="./index.html" data-i18n="faq.btn.home">Back to DiscVault</a>
+          <a class="btn btn-ghost" href="https://discord.gg/jSUfV7PT" target="_blank" rel="noreferrer" data-i18n="community.btn.discord">Join Discord</a>
+        </div>
+      </section>
+
+      <section class="wrap section faq-section">
+        <div class="section-head">
+          <p class="eyebrow" data-i18n="faq.sections.eyebrow">Coming together</p>
+          <h2 data-i18n="faq.sections.h2">The first FAQ topics are ready to be filled out.</h2>
+        </div>
+        <div class="faq-list">
+          <article class="card faq-item">
+            <span class="badge badge-soon" data-i18n="faq.badge.draft">Draft</span>
+            <h3 data-i18n="faq.install.title">Installation &amp; updates</h3>
+            <p data-i18n="faq.install.body">Deployment notes for Unraid, Docker, stable releases, beta builds, backups, and updates.</p>
+          </article>
+          <article class="card faq-item">
+            <span class="badge badge-soon" data-i18n="faq.badge.draft">Draft</span>
+            <h3 data-i18n="faq.movievault.title">MovieVault beta</h3>
+            <p data-i18n="faq.movievault.body">Opt-in metadata enrichment, community contributions, privacy expectations, and beta limitations.</p>
+          </article>
+          <article class="card faq-item">
+            <span class="badge badge-soon" data-i18n="faq.badge.draft">Draft</span>
+            <h3 data-i18n="faq.languages.title">Languages</h3>
+            <p data-i18n="faq.languages.body">Supported interface languages, translation coverage, and how language selection is saved.</p>
+          </article>
+          <article class="card faq-item">
+            <span class="badge badge-soon" data-i18n="faq.badge.draft">Draft</span>
+            <h3 data-i18n="faq.support.title">Support &amp; community</h3>
+            <p data-i18n="faq.support.body">Where to ask questions, report issues, follow releases, and join the DiscVault Discord.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer wrap">
+      <p data-i18n="footer.tagline">DiscVault. Built for collectors.</p>
+      <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="footer.github">Source on GitHub</a>
+    </footer>
+
+    <script src="./translations.js?v=9"></script>
+    <script>
+      document.querySelector('.hamburger').addEventListener('click', function () {
+        var open = this.getAttribute('aria-expanded') === 'true';
+        this.setAttribute('aria-expanded', !open);
+        document.querySelector('.site-nav').classList.toggle('open');
+      });
+      document.querySelectorAll('.site-nav a').forEach(function (a) {
+        a.addEventListener('click', function () {
+          document.querySelector('.hamburger').setAttribute('aria-expanded', 'false');
+          document.querySelector('.site-nav').classList.remove('open');
+        });
+      });
+
+      function setLang(lang) {
+        var t = T[lang] || T.en;
+        document.documentElement.lang = lang;
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+          var key = el.getAttribute('data-i18n');
+          var v = t[key];
+          if (v === undefined) v = T.en[key];
+          if (v !== undefined) el.innerHTML = v;
+        });
+        var sel = document.querySelector('.lang-select');
+        if (sel) sel.value = lang;
+        try { localStorage.setItem('dv-lang', lang); } catch(e) {}
+      }
+
+      document.querySelector('.lang-select').addEventListener('change', function() {
+        setLang(this.value);
+      });
+
+      (function() {
+        var saved; try { saved = localStorage.getItem('dv-lang'); } catch(e) {}
+        var pref = saved || (navigator.language || '').slice(0,2).toLowerCase();
+        if (pref === 'nb' || pref === 'nn') pref = 'no';
+        if (T[pref]) setLang(pref);
+      })();
+    </script>
+  </body>
+</html>

@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=9" />
+    <link rel="stylesheet" href="./styles.css?v=10" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -40,6 +40,7 @@
         <a href="#features" data-i18n="nav.features">Features</a>
         <a href="#install" data-i18n="nav.install">Install</a>
         <a href="#community" data-i18n="nav.community">Community</a>
+        <a href="./faq.html" data-i18n="nav.faq">FAQ</a>
         <a class="nav-github" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer">GitHub</a>
         <div class="lang-switcher">
           <select class="lang-select" aria-label="Language">
@@ -143,15 +144,15 @@
             </figure>
             <figure class="shot shot-desktop">
               <img src="./images/Desktop_movie_detail_02_en.png" alt="DiscVault movie plot in English" loading="lazy" />
-              <figcaption>Plot — English</figcaption>
+              <figcaption data-i18n="cap.plot.en">Plot — English</figcaption>
             </figure>
             <figure class="shot shot-desktop">
               <img src="./images/Desktop_movie_detail_02_nl.png" alt="DiscVault filmplot in het Nederlands" loading="lazy" />
-              <figcaption>Plot — Nederlands</figcaption>
+              <figcaption data-i18n="cap.plot.nl">Plot — Dutch</figcaption>
             </figure>
             <figure class="shot shot-desktop">
               <img src="./images/Desktop_movie_detail_02_de.png" alt="DiscVault Filmhandlung auf Deutsch" loading="lazy" />
-              <figcaption>Plot — Deutsch</figcaption>
+              <figcaption data-i18n="cap.plot.de">Plot — German</figcaption>
             </figure>
           </div>
         </div>
@@ -245,7 +246,7 @@
         <div class="shot-group">
           <h3 class="carousel-label group-label">
             <span data-i18n="screenshots.label.admin">Admin</span>
-            <span class="badge-admin">Admin only</span>
+            <span class="badge-admin" data-i18n="screenshots.badge.adminonly">Admin only</span>
           </h3>
           <div class="carousel">
             <figure class="shot shot-desktop">
@@ -628,6 +629,7 @@
         </div>
         <div class="hero-actions">
           <a class="btn btn-solid" href="https://forums.unraid.net/topic/198808-support-discvault-physical-disc-collection-manager/" target="_blank" rel="noreferrer" data-i18n="community.btn.support">Support Thread</a>
+          <a class="btn btn-ghost" href="https://discord.gg/jSUfV7PT" target="_blank" rel="noreferrer" data-i18n="community.btn.discord">Join Discord</a>
           <a class="btn btn-ghost" href="https://github.com/helmerzNL/DiscVault/issues" target="_blank" rel="noreferrer" data-i18n="community.btn.issue">Report an Issue</a>
         </div>
       </section>
@@ -638,7 +640,7 @@
       <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="footer.github">Source on GitHub</a>
     </footer>
 
-    <script src="./translations.js?v=7"></script>
+    <script src="./translations.js?v=9"></script>
     <script>
 
     function setLang(lang) {
