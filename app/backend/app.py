@@ -5557,7 +5557,7 @@ def _bluray_find_first_movie_url(query: str) -> str | None:
     payload = {
         "section": "bluraymovies",
         "userid": "-1",
-        "country": "US",
+        "country": "all",
         "keyword": query.strip(),
     }
     try:
@@ -5623,7 +5623,7 @@ def search_movie_bluray_candidates(title: str = "", year: str = "") -> list[dict
     try:
         response = requests.post(
             "https://www.blu-ray.com/search/quicksearch.php",
-            data={"section": "bluraymovies", "userid": "-1", "country": "US", "keyword": query},
+            data={"section": "bluraymovies", "userid": "-1", "country": "all", "keyword": query},
             headers=headers,
             timeout=4,
         )
