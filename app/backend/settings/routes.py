@@ -91,6 +91,15 @@ def register_settings_routes(
             pass
         return default
 
+    def _set_setting(key: str, value: str):
+        conn = get_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            (key, value),
+        )
+        conn.commit()
+        conn.close()
+
     def _first_setting(keys, default: str = "") -> str:
         for key in keys:
             value = _setting_value(key, "")
