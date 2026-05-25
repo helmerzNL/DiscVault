@@ -195,11 +195,47 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(second)
         self.assertEqual(first["idempotencyKey"], second["idempotencyKey"])
         self.assertEqual(first_stats["source_reference"]["key"], "032429316110-BOX-01")
-        self.assertEqual(first_stats["source_reference"]["parentBarcode"], "032429316110")
         self.assertEqual(first_stats["source_reference"]["memberSortOrder"], 1)
         self.assertEqual(first["sourceReference"], first_stats["source_reference"])
         self.assertNotIn("sourceReference", first["payload"])
         self.assertNotIn("barcode", first["payload"])
+        self.assertNotIn("parentBarcode", first["sourceReference"])
+
+    def test_movievault_box_set_member_release_uses_source_reference_not_barcode(self):
+        source = {
+            "title": "Mission: Impossible 4K Blu-ray",
+            "barcode": "032429316110-BOX-01",
+            "format": "4K UHD",
+            "edition": "Box-set member",
+            "hdr": "Dolby Vision",
+            "audio_tracks": "English Dolby Atmos",
+        }
+        first, first_stats = self.backend._movievault_contribution_payload(
+            "release",
+            source,
+            "Unit test",
+            {"localEntityType": "movie", "localEntityId": 101},
+        )
+        second, second_stats = self.backend._movievault_contribution_payload(
+            "release",
+            source,
+            "Unit test",
+            {"localEntityType": "movie", "localEntityId": 202},
+        )
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first["idempotencyKey"], second["idempotencyKey"])
+        self.assertEqual(first_stats["source_reference"]["key"], "032429316110-BOX-01")
+        self.assertEqual(first_stats["source_reference"]["memberSortOrder"], 1)
+        self.assertEqual(first_stats["missing_required"], [])
+        self.assertEqual(first["sourceReference"], first_stats["source_reference"])
+        self.assertEqual(first["payload"]["title"], "Mission: Impossible 4K Blu-ray")
+        self.assertEqual(first["payload"]["format"], "4K UHD")
+        self.assertEqual(first["payload"]["hdr"], "Dolby Vision")
+        self.assertNotIn("barcode", first["payload"])
+        self.assertNotIn("sourceReference", first["payload"])
+        self.assertNotIn("parentBarcode", first["sourceReference"])
 
     def test_movievault_skips_unchanged_person_payload(self):
         original_enabled = self.backend._is_movievault_contribution_enabled

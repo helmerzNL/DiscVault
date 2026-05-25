@@ -3606,6 +3606,8 @@ def _movievault_raw_payload(source: dict, entity_type: str) -> dict:
     field_map = MOVIEVAULT_ENTITY_FIELD_MAPS.get(entity_type, {})
     for src_key, dst_key in field_map.items():
         value = source.get(src_key)
+        if entity_type == "release" and dst_key == "barcode":
+            value = _external_metadata_barcode(value)
         if entity_type == "movie" and dst_key in {"posterUrl", "backdropUrl", "backdropUrls"}:
             preferred_key = {
                 "posterUrl": "_movie_poster_url",
@@ -3690,13 +3692,12 @@ def _disc_vault_box_set_member_reference(value) -> dict:
     return {
         "type": "box_set_member",
         "key": code,
-        "parentBarcode": match.group(1),
         "memberSortOrder": int(match.group(2)),
     }
 
 
 def _movievault_source_reference(entity_type: str, source_data: dict, context: dict) -> dict:
-    if entity_type != "movie":
+    if entity_type not in {"movie", "release"}:
         return {}
     barcode = (
         source_data.get("barcode")
@@ -3788,15 +3789,19 @@ def _movievault_contribution_payload(
     filtered_payload, _, _, missing_required = _movievault_filter_payload_for_template(
         raw_payload, entity_type, force_template=force_template
     )
+    source_reference = _movievault_source_reference(entity_type, source_data, context)
+    if entity_type == "release" and source_reference and "barcode" in missing_required:
+        missing_required = [field for field in missing_required if field != "barcode"]
     filtered_fields = sorted(filtered_payload.keys())
     raw_fields = sorted(raw_payload.keys())
     filtered_out = [field for field in raw_fields if field not in filtered_payload]
     missing_source = _movievault_missing_source_fields(source_data, entity_type, template_fields, raw_payload)
-    source_reference = _movievault_source_reference(entity_type, source_data, context)
     payload_fingerprint = hashlib.sha256(
         json.dumps(filtered_payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()
     public_identity = _movievault_public_identity(entity_type, filtered_payload, context)
+    if entity_type == "release" and source_reference:
+        public_identity = f"source_reference:{source_reference.get('type')}:{source_reference.get('key')}"
     identity = _movievault_entity_identity(entity_type, filtered_payload, context, source_reference)
     identity = identity or public_identity or str(context.get("localEntityId") or context.get("barcode") or "unknown")
     movievault_id = (
@@ -4529,14 +4534,15 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
     results = []
     source = _movievault_public_source(movie_info)
     release_candidate = _movievault_raw_payload(source, "release")
-    if release_candidate.get("barcode") and not _external_metadata_barcode(release_candidate.get("barcode")):
+    release_source_reference = _movievault_source_reference("release", source, context)
+    raw_release_barcode = str(source.get("barcode") or context.get("barcode") or "").strip()
+    if raw_release_barcode and release_source_reference and not release_candidate.get("barcode"):
         _movievault_log(
             "info",
-            "MovieVault release contribution skipped",
-            f"Barcode: {release_candidate.get('barcode')}; reason=local/synthetic DiscVault identifier",
+            "MovieVault release contribution uses source reference",
+            f"Barcode: {raw_release_barcode}; reason=local/synthetic DiscVault identifier; sourceReference={_movievault_compact(release_source_reference, 240)}",
         )
-        release_candidate.pop("barcode", None)
-    if release_candidate.get("barcode") and release_candidate.get("title"):
+    if release_candidate.get("title") and (release_candidate.get("barcode") or release_source_reference):
         results.append(_submit_movievault_entity_contribution_result("release", movie_info, sources, context))
     results.append(
         _submit_movievault_entity_contribution_result("movie", movie_info, sources, context)
