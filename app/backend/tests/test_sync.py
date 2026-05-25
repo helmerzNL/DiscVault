@@ -1059,6 +1059,24 @@ class SyncIntegrationTests(unittest.TestCase):
         result = self._json(self.client.get(f"/api/movies?q={movie['barcode']}"))
         self.assertIn(movie["id"], {item["id"] for item in result})
 
+    def test_movie_update_allows_upc_ean_field(self):
+        movie = self._create_movie("Editable Barcode Movie")
+        other = self._create_movie("Duplicate Barcode Guard")
+        new_barcode = f"EAN-{uuid.uuid4().hex[:10].upper()}"
+
+        updated = self.client.put(
+            f"/api/movies/{movie['id']}",
+            json={"title": movie["title"], "barcode": new_barcode},
+        )
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        self.assertEqual(updated.get_json()["barcode"], new_barcode)
+
+        duplicate = self.client.put(
+            f"/api/movies/{movie['id']}",
+            json={"title": movie["title"], "barcode": other["barcode"]},
+        )
+        self.assertEqual(duplicate.status_code, 409, duplicate.get_data(as_text=True))
+
 
 if __name__ == "__main__":
     unittest.main()
