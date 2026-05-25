@@ -564,6 +564,10 @@ function displayBoxSetProposal(proposal, barcode, detectedFormat) {
   btn.disabled = false;
   btn.textContent = t('scan.boxSetProposalSave');
   panel.style.display = 'block';
+  const btnSave = document.getElementById('btnSave');
+  if (btnSave) btnSave.style.display = 'none';
+  const btnSupplement = document.getElementById('btnSupplement');
+  if (btnSupplement) btnSupplement.style.display = 'none';
   updateBoxSetProposalSelection();
 }
 
