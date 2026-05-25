@@ -351,3 +351,166 @@ var T = {
     'footer.tagline':'DiscVault. Creato per collezionisti.','footer.github':'Codice sorgente su GitHub'
   }
 };
+
+Object.assign(T.en, {
+  'hero.point6':'Nine languages, including Swedish, Norwegian, Finnish, and Danish',
+  'f12.body':'DiscVault now supports nine languages: English, Dutch, French, German, Spanish, Portuguese, Italian, Swedish, Norwegian, Finnish, and Danish.',
+  'f16.badge':'New in 3.0.0 beta',
+  'f16.title':'MovieVault metadata enrichment',
+  'f16.body':'Opt in to enrich releases and box sets with community-sourced metadata. Corrections you add are contributed back to MovieVault, while existing DiscVault workflows stay unchanged.',
+  'install.beta.body':'Try MovieVault enrichment and expanded language support early:'
+});
+
+Object.assign(T.nl, {
+  'hero.point6':'Negen talen, inclusief Zweeds, Noors, Fins en Deens',
+  'f12.body':'DiscVault ondersteunt nu negen talen: Engels, Nederlands, Frans, Duits, Spaans, Portugees, Italiaans, Zweeds, Noors, Fins en Deens.',
+  'f16.badge':'Nieuw in 3.0.0 beta',
+  'f16.title':'MovieVault-metadata verrijking',
+  'f16.body':'Kies optioneel voor verrijking van releases en boxsets met metadata uit de community. Correcties die je toevoegt gaan terug naar MovieVault, terwijl bestaande DiscVault-workflows ongewijzigd blijven.',
+  'install.beta.body':'Probeer MovieVault-verrijking en uitgebreide taalondersteuning vroeg:'
+});
+
+Object.assign(T.fr, {
+  'hero.point6':'Neuf langues, dont le suédois, le norvégien, le finnois et le danois',
+  'f12.body':'DiscVault prend désormais en charge neuf langues : anglais, néerlandais, français, allemand, espagnol, portugais, italien, suédois, norvégien, finnois et danois.',
+  'f16.badge':'Nouveau dans la bêta 3.0.0',
+  'f16.title':'Enrichissement de métadonnées MovieVault',
+  'f16.body':'Activez cette option pour enrichir les éditions et coffrets avec des métadonnées issues de la communauté. Les corrections que vous ajoutez sont reversées à MovieVault, sans modifier les workflows DiscVault existants.',
+  'install.beta.body':'Essayez en avant-première l’enrichissement MovieVault et la prise en charge étendue des langues :'
+});
+
+Object.assign(T.de, {
+  'hero.point6':'Neun Sprachen, inklusive Schwedisch, Norwegisch, Finnisch und Dänisch',
+  'f12.body':'DiscVault unterstützt jetzt neun Sprachen: Englisch, Niederländisch, Französisch, Deutsch, Spanisch, Portugiesisch, Italienisch, Schwedisch, Norwegisch, Finnisch und Dänisch.',
+  'f16.badge':'Neu in 3.0.0 Beta',
+  'f16.title':'MovieVault-Metadatenanreicherung',
+  'f16.body':'Aktiviere optional die Anreicherung von Releases und Box-Sets mit Community-Metadaten. Korrekturen, die du hinzufügst, werden an MovieVault zurückgegeben, während bestehende DiscVault-Workflows unverändert bleiben.',
+  'install.beta.body':'Teste MovieVault-Anreicherung und erweiterte Sprachunterstützung frühzeitig:'
+});
+
+Object.assign(T.es, {
+  'hero.point6':'Nueve idiomas, incluidos sueco, noruego, finés y danés',
+  'f12.body':'DiscVault ahora admite nueve idiomas: inglés, neerlandés, francés, alemán, español, portugués, italiano, sueco, noruego, finés y danés.',
+  'f16.badge':'Nuevo en la beta 3.0.0',
+  'f16.title':'Enriquecimiento de metadatos con MovieVault',
+  'f16.body':'Activa opcionalmente el enriquecimiento de lanzamientos y box sets con metadatos de la comunidad. Las correcciones que añadas se devuelven a MovieVault, mientras los flujos existentes de DiscVault no cambian.',
+  'install.beta.body':'Prueba antes el enriquecimiento de MovieVault y el soporte ampliado de idiomas:'
+});
+
+Object.assign(T.pt, {
+  'hero.point6':'Nove idiomas, incluindo sueco, norueguês, finlandês e dinamarquês',
+  'f12.body':'O DiscVault suporta agora nove idiomas: inglês, neerlandês, francês, alemão, espanhol, português, italiano, sueco, norueguês, finlandês e dinamarquês.',
+  'f16.badge':'Novo na beta 3.0.0',
+  'f16.title':'Enriquecimento de metadados MovieVault',
+  'f16.body':'Ativa opcionalmente o enriquecimento de lançamentos e box sets com metadados da comunidade. As correções que adicionares são contribuídas de volta para o MovieVault, mantendo os fluxos existentes do DiscVault inalterados.',
+  'install.beta.body':'Experimenta cedo o enriquecimento MovieVault e o suporte alargado de idiomas:'
+});
+
+Object.assign(T.it, {
+  'hero.point6':'Nove lingue, incluse svedese, norvegese, finlandese e danese',
+  'f12.body':'DiscVault ora supporta nove lingue: inglese, olandese, francese, tedesco, spagnolo, portoghese, italiano, svedese, norvegese, finlandese e danese.',
+  'f16.badge':'Nuovo nella beta 3.0.0',
+  'f16.title':'Arricchimento metadati MovieVault',
+  'f16.body':'Attiva opzionalmente l’arricchimento di release e cofanetti con metadati della community. Le correzioni che aggiungi vengono restituite a MovieVault, mentre i flussi DiscVault esistenti restano invariati.',
+  'install.beta.body':'Prova in anticipo l’arricchimento MovieVault e il supporto linguistico esteso:'
+});
+
+T.sv = Object.assign({}, T.en, {
+  'nav.features':'Funktioner','nav.install':'Installation','nav.community':'Community',
+  'hero.eyebrow':'Självhostat medieverktyg för samlare',
+  'hero.h1.line1':'Din hylla är fysisk.','hero.h1.accent':'Din katalog ska vara snabb.',
+  'hero.lead':'DiscVault är en modern samlingshanterare för 4K UHD, Blu-ray och DVD. Skanna streckkoder, berika metadata, bläddra snyggt och integrera med MCP-flöden.',
+  'hero.btn.get':'Hämta DiscVault','hero.btn.deploy':'Så installerar du',
+  'hero.point1':'Streckkodsskanner + manuell inmatning','hero.point2':'OMDb- och TMDb-metadata som fallback',
+  'hero.point3':'Backup, återställning och loggar','hero.point4':'Fungerar offline som PWA',
+  'hero.point5':'MCP-endpoint för AI-flöden','hero.point6':'Nio språk, inklusive svenska, norska, finska och danska',
+  'screenshots.eyebrow':'Skärmbilder','screenshots.h2':'Se DiscVault i bruk — desktop och mobil.',
+  'screenshots.label.desktop':'Desktop','screenshots.label.mobile':'Mobil',
+  'features.eyebrow':'Funktioner','features.h2':'Byggt för personer med riktiga hyllor, riktiga staplar och riktiga utgåvor.',
+  'f1.title':'Skanna och berika','f1.body':'Använd kameran för att skanna streckkoder och hämta automatiskt filmmetadata och omslag.',
+  'f2.title':'Filtrera och sök','f2.body':'Sök på titel, genre eller regissör och filtrera på format i en tydlig samlingsvy.',
+  'f3.title':'Backup &amp; återställning','f3.body':'Skapa och ladda ner fullständiga backuper av din samling och återställ dem när som helst med ett klick.',
+  'f4.title':'Fungerar offline','f4.body':'Lägg till DiscVault på hemskärmen och använd det offline — bläddra och hantera samlingen utan internet.',
+  'f5.title':'Säkert från början','f5.body':'Kör självhostat, kontrollera din egen dataväg och håll samlingsdata privat.',
+  'f6.title':'MCP-redo','f6.body':'Anslut AI-assistenter till ditt bibliotek via DiscVaults MCP-endpoint för automatisering och sök.',
+  'f12.title':'Flera språk','f12.body':'DiscVault stöder nu nio språk: engelska, nederländska, franska, tyska, spanska, portugisiska, italienska, svenska, norska, finska och danska.',
+  'f16.badge':'Ny i 3.0.0 beta','f16.title':'MovieVault-metadata','f16.body':'Välj att berika releaser och boxar med community-metadata. Rättelser du lägger till bidrar tillbaka till MovieVault, medan befintliga DiscVault-flöden förblir oförändrade.',
+  'install.eyebrow':'Installation','install.h2':'Installera på Unraid eller kör överallt där Docker körs.','install.beta.body':'Prova MovieVault-berikning och utökat språkstöd tidigt:',
+  'community.eyebrow':'Community','community.h2':'Behöver du hjälp eller vill följa uppdateringar?','community.btn.support':'Supporttråd','community.btn.issue':'Rapportera ett problem',
+  'footer.tagline':'DiscVault. Byggt för samlare.','footer.github':'Källkod på GitHub'
+});
+
+T.no = Object.assign({}, T.en, {
+  'nav.features':'Funksjoner','nav.install':'Installasjon','nav.community':'Community',
+  'hero.eyebrow':'Selvhostet medieverktøy for samlere',
+  'hero.h1.line1':'Hyllen din er fysisk.','hero.h1.accent':'Katalogen din bør være rask.',
+  'hero.lead':'DiscVault er en moderne samlingsbehandler for 4K UHD, Blu-ray og DVD. Skann strekkoder, berik metadata, bla pent og integrer med MCP-arbeidsflyter.',
+  'hero.btn.get':'Hent DiscVault','hero.btn.deploy':'Slik installerer du',
+  'hero.point1':'Strekkodeskanner + manuell registrering','hero.point2':'OMDb- og TMDb-metadata som fallback',
+  'hero.point3':'Sikkerhetskopi, gjenoppretting og logger','hero.point4':'Fungerer offline som PWA',
+  'hero.point5':'MCP-endepunkt for AI-arbeidsflyter','hero.point6':'Ni språk, inkludert svensk, norsk, finsk og dansk',
+  'screenshots.eyebrow':'Skjermbilder','screenshots.h2':'Se DiscVault i bruk — skrivebord og mobil.',
+  'screenshots.label.desktop':'Skrivebord','screenshots.label.mobile':'Mobil',
+  'features.eyebrow':'Funksjoner','features.h2':'Bygget for folk med ekte hyller, ekte stabler og ekte utgaver.',
+  'f1.title':'Skann og berik','f1.body':'Bruk kameraet til å skanne strekkoder og hent automatisk filmmetadata og omslag.',
+  'f2.title':'Filtrer og søk','f2.body':'Søk etter tittel, sjanger eller regissør og filtrer etter format i en ryddig samlingsvisning.',
+  'f3.title':'Sikkerhetskopi &amp; gjenoppretting','f3.body':'Lag og last ned komplette sikkerhetskopier av samlingen, og gjenopprett dem når som helst med ett klikk.',
+  'f4.title':'Fungerer offline','f4.body':'Legg DiscVault til på startskjermen og bruk det offline — bla og administrer samlingen uten internett.',
+  'f5.title':'Trygt fra starten','f5.body':'Kjør selvhostet, kontroller din egen datavei og hold samlingsdataene private.',
+  'f6.title':'MCP-klar','f6.body':'Koble AI-assistenter til biblioteket ditt via DiscVaults MCP-endepunkt for automatisering og søk.',
+  'f12.title':'Flere språk','f12.body':'DiscVault støtter nå ni språk: engelsk, nederlandsk, fransk, tysk, spansk, portugisisk, italiensk, svensk, norsk, finsk og dansk.',
+  'f16.badge':'Ny i 3.0.0 beta','f16.title':'MovieVault-metadata','f16.body':'Velg å berike utgivelser og bokser med metadata fra fellesskapet. Korrigeringer du legger til, bidrar tilbake til MovieVault, mens eksisterende DiscVault-flyter forblir uendret.',
+  'install.eyebrow':'Installasjon','install.h2':'Installer på Unraid eller kjør hvor som helst Docker kjører.','install.beta.body':'Prøv MovieVault-berikelse og utvidet språkstøtte tidlig:',
+  'community.eyebrow':'Community','community.h2':'Trenger du hjelp eller vil følge oppdateringer?','community.btn.support':'Supporttråd','community.btn.issue':'Rapporter et problem',
+  'footer.tagline':'DiscVault. Bygget for samlere.','footer.github':'Kildekode på GitHub'
+});
+
+T.fi = Object.assign({}, T.en, {
+  'nav.features':'Ominaisuudet','nav.install':'Asennus','nav.community':'Yhteisö',
+  'hero.eyebrow':'Itse hostattu mediatyökalu keräilijöille',
+  'hero.h1.line1':'Hyllysi on fyysinen.','hero.h1.accent':'Luettelosi pitäisi olla nopea.',
+  'hero.lead':'DiscVault on moderni kokoelmanhallinta 4K UHD-, Blu-ray- ja DVD-levyille. Skannaa viivakoodeja, rikasta metatietoja, selaa kauniisti ja liitä MCP-työnkulkuihin.',
+  'hero.btn.get':'Hanki DiscVault','hero.btn.deploy':'Asennusohje',
+  'hero.point1':'Viivakoodiskanneri + manuaalinen syöttö','hero.point2':'OMDb- ja TMDb-metatiedot varalla',
+  'hero.point3':'Varmuuskopiointi, palautus ja lokit','hero.point4':'Toimii offline-tilassa PWA:na',
+  'hero.point5':'MCP-päätepiste AI-työnkuluille','hero.point6':'Yhdeksän kieltä, mukaan lukien ruotsi, norja, suomi ja tanska',
+  'screenshots.eyebrow':'Kuvakaappaukset','screenshots.h2':'Katso DiscVault käytössä — työpöydällä ja mobiilissa.',
+  'screenshots.label.desktop':'Työpöytä','screenshots.label.mobile':'Mobiili',
+  'features.eyebrow':'Ominaisuudet','features.h2':'Rakennettu ihmisille, joilla on oikeita hyllyjä, pinoja ja julkaisuja.',
+  'f1.title':'Skannaa ja rikasta','f1.body':'Skannaa viivakoodeja kameralla ja hae automaattisesti elokuvien metatiedot ja kansikuvat.',
+  'f2.title':'Suodata ja hae','f2.body':'Hae nimellä, lajityypillä tai ohjaajalla ja suodata formaatin mukaan selkeässä kokoelmanäkymässä.',
+  'f3.title':'Varmuuskopiointi &amp; palautus','f3.body':'Luo ja lataa täydet varmuuskopiot kokoelmastasi ja palauta ne milloin tahansa yhdellä napsautuksella.',
+  'f4.title':'Toimii offline-tilassa','f4.body':'Lisää DiscVault aloitusnäyttöön ja käytä sitä offline-tilassa — selaa ja hallitse kokoelmaa ilman internetiä.',
+  'f5.title':'Turvallinen suunnittelultaan','f5.body':'Aja itse hostattuna, hallitse omaa datapolkuasi ja pidä kokoelmatiedot yksityisinä.',
+  'f6.title':'MCP-valmis','f6.body':'Liitä AI-avustajat kirjastoosi DiscVaultin MCP-päätepisteen kautta automaatiota ja hakua varten.',
+  'f12.title':'Useita kieliä','f12.body':'DiscVault tukee nyt yhdeksää kieltä: englantia, hollantia, ranskaa, saksaa, espanjaa, portugalia, italiaa, ruotsia, norjaa, suomea ja tanskaa.',
+  'f16.badge':'Uusi 3.0.0 betassa','f16.title':'MovieVault-metatietojen rikastus','f16.body':'Voit rikastaa julkaisuja ja boksisettejä yhteisön metatiedoilla. Lisäämäsi korjaukset palautuvat MovieVaultiin, ja nykyiset DiscVault-työnkulut säilyvät ennallaan.',
+  'install.eyebrow':'Asennus','install.h2':'Asenna Unraidiin tai aja missä tahansa, missä Docker toimii.','install.beta.body':'Kokeile MovieVault-rikastusta ja laajennettua kielitukea aikaisin:',
+  'community.eyebrow':'Yhteisö','community.h2':'Tarvitsetko apua tai haluatko seurata päivityksiä?','community.btn.support':'Tukiketju','community.btn.issue':'Ilmoita ongelmasta',
+  'footer.tagline':'DiscVault. Rakennettu keräilijöille.','footer.github':'Lähdekoodi GitHubissa'
+});
+
+T.da = Object.assign({}, T.en, {
+  'nav.features':'Funktioner','nav.install':'Installation','nav.community':'Community',
+  'hero.eyebrow':'Selvhostet medieværktøj til samlere',
+  'hero.h1.line1':'Din hylde er fysisk.','hero.h1.accent':'Dit katalog bør være hurtigt.',
+  'hero.lead':'DiscVault er en moderne samlingsmanager til 4K UHD, Blu-ray og DVD. Scan stregkoder, berig metadata, browse smukt og integrer med MCP-workflows.',
+  'hero.btn.get':'Hent DiscVault','hero.btn.deploy':'Sådan installerer du',
+  'hero.point1':'Stregkodescanner + manuel indtastning','hero.point2':'OMDb- og TMDb-metadata som fallback',
+  'hero.point3':'Backup, gendannelse og logfiler','hero.point4':'Fungerer offline som PWA',
+  'hero.point5':'MCP-endpoint til AI-workflows','hero.point6':'Ni sprog, inklusive svensk, norsk, finsk og dansk',
+  'screenshots.eyebrow':'Skærmbilleder','screenshots.h2':'Se DiscVault i brug — desktop og mobil.',
+  'screenshots.label.desktop':'Desktop','screenshots.label.mobile':'Mobil',
+  'features.eyebrow':'Funktioner','features.h2':'Bygget til folk med rigtige hylder, rigtige stabler og rigtige udgaver.',
+  'f1.title':'Scan og berig','f1.body':'Brug kameraet til at scanne stregkoder og hent automatisk filmmetadata og covers.',
+  'f2.title':'Filtrer og søg','f2.body':'Søg efter titel, genre eller instruktør og filtrer efter format i en ren samlingsvisning.',
+  'f3.title':'Backup &amp; gendannelse','f3.body':'Opret og download komplette backups af din samling, og gendan dem når som helst med ét klik.',
+  'f4.title':'Fungerer offline','f4.body':'Føj DiscVault til startskærmen og brug det offline — browse og administrer samlingen uden internet.',
+  'f5.title':'Sikkert fra starten','f5.body':'Kør selvhostet, kontroller din egen datavej og hold dine samlingsdata private.',
+  'f6.title':'MCP-klar','f6.body':'Forbind AI-assistenter til dit bibliotek via DiscVaults MCP-endpoint til automatisering og søgning.',
+  'f12.title':'Flere sprog','f12.body':'DiscVault understøtter nu ni sprog: engelsk, nederlandsk, fransk, tysk, spansk, portugisisk, italiensk, svensk, norsk, finsk og dansk.',
+  'f16.badge':'Ny i 3.0.0 beta','f16.title':'MovieVault-metadata','f16.body':'Vælg at berige udgivelser og boxsets med metadata fra communityet. Rettelser du tilføjer, bidrager tilbage til MovieVault, mens eksisterende DiscVault-workflows forbliver uændrede.',
+  'install.eyebrow':'Installation','install.h2':'Installer på Unraid eller kør hvor som helst Docker kører.','install.beta.body':'Prøv MovieVault-berigelse og udvidet sprogunderstøttelse tidligt:',
+  'community.eyebrow':'Community','community.h2':'Har du brug for hjælp eller vil følge opdateringer?','community.btn.support':'Supporttråd','community.btn.issue':'Rapportér et problem',
+  'footer.tagline':'DiscVault. Bygget til samlere.','footer.github':'Kildekode på GitHub'
+});

@@ -6,7 +6,7 @@
     <title>DiscVault - Physical Disc Collection Manager</title>
     <meta
       name="description"
-      content="DiscVault helps you manage your 4K UHD, Blu-ray, and DVD collection with barcode scanning, metadata lookup, backups, and MCP integration."
+      content="DiscVault helps you manage your 4K UHD, Blu-ray, and DVD collection with barcode scanning, optional MovieVault metadata enrichment, backups, and MCP integration."
     />
     <meta property="og:title" content="DiscVault" />
     <meta
@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=8" />
+    <link rel="stylesheet" href="./styles.css?v=9" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -50,6 +50,10 @@
             <option value="es">🇪🇸 Español</option>
             <option value="pt">🇵🇹 Português</option>
             <option value="it">🇮🇹 Italiano</option>
+            <option value="sv">🇸🇪 Svenska</option>
+            <option value="no">🇳🇴 Norsk</option>
+            <option value="fi">🇫🇮 Suomi</option>
+            <option value="da">🇩🇰 Dansk</option>
           </select>
         </div>
       </nav>
@@ -90,7 +94,7 @@
           <li data-i18n="hero.point3">Backup, restore, and logs</li>
           <li data-i18n="hero.point4">Works offline as a PWA</li>
           <li data-i18n="hero.point5">MCP endpoint for AI workflows</li>
-          <li data-i18n="hero.point6">Fully localized: English, Dutch, French, German, Spanish, Portuguese &amp; Italian</li>
+          <li data-i18n="hero.point6">Nine languages, including Swedish, Norwegian, Finnish, and Danish</li>
         </ul>
       </section>
 
@@ -450,6 +454,11 @@
                 <h3 data-i18n="s_plex.title">Compare with Plex / Jellyfin</h3>
                 <p data-i18n="s_plex.body">See which physical discs you also have digitally in Plex or Jellyfin — and which titles you only own physically but haven't ripped yet.</p>
               </article>
+              <article class="card">
+                <span class="badge badge-new" data-i18n="f16.badge">New in 3.0.0 beta</span>
+                <h3 data-i18n="f16.title">MovieVault metadata enrichment</h3>
+                <p data-i18n="f16.body">Opt in to enrich releases and box sets with community-sourced metadata. Corrections you add are contributed back to MovieVault, while existing DiscVault workflows stay unchanged.</p>
+              </article>
             </div>
           </div>
         </div>
@@ -597,7 +606,7 @@
           </article>
           <article class="install-card">
             <h3 data-i18n="install.beta.title">Beta</h3>
-            <p data-i18n="install.beta.body">Try new features early — new features and more languages coming:</p>
+            <p data-i18n="install.beta.body">Try MovieVault enrichment and expanded language support early:</p>
             <pre><code>ghcr.io/helmerzNL/DiscVault:beta</code></pre>
           </article>
           <article class="install-card">
@@ -629,14 +638,16 @@
       <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="footer.github">Source on GitHub</a>
     </footer>
 
-    <script src="./translations.js?v=6"></script>
+    <script src="./translations.js?v=7"></script>
     <script>
 
     function setLang(lang) {
       var t = T[lang] || T.en;
       document.documentElement.lang = lang;
       document.querySelectorAll('[data-i18n]').forEach(function(el) {
-        var v = t[el.getAttribute('data-i18n')];
+        var key = el.getAttribute('data-i18n');
+        var v = t[key];
+        if (v === undefined) v = T.en[key];
         if (v !== undefined) el.innerHTML = v;
       });
       var sel = document.querySelector('.lang-select');
@@ -693,6 +704,7 @@
     (function() {
       var saved; try { saved = localStorage.getItem('dv-lang'); } catch(e) {}
       var pref = saved || (navigator.language || '').slice(0,2).toLowerCase();
+      if (pref === 'nb' || pref === 'nn') pref = 'no';
       if (T[pref]) setLang(pref);
     })();
     </script>
