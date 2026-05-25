@@ -636,8 +636,35 @@ async function clearLogs() {
   loadLogs();
 }
 
-function downloadDebugLogs() {
-  window.location.href = `${API}/logs/debug/download`;
+async function downloadDebugLogs() {
+  try {
+    const r = await fetch(`${API}/logs/debug/download`);
+    if (!r.ok) {
+      let msg = t('js.downloadFailed');
+      try {
+        const data = await r.json();
+        msg = data.error || msg;
+      } catch (_) {}
+      document.getElementById('logCount').textContent = msg;
+      return;
+    }
+
+    const blob = await r.blob();
+    const disposition = r.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+    const filename = filenameMatch
+      ? decodeURIComponent(filenameMatch[1].replace(/"/g, ''))
+      : 'discvault-metadata-debug.log';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch(e) {
+    document.getElementById('logCount').textContent = t('js.error', e.message);
+  }
 }
 
 // Auto-refresh timer
