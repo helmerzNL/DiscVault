@@ -1801,7 +1801,8 @@
         <button class="modal-tab active" onclick="switchEditTab('general')" data-edit-tab="general">Algemeen</button>
         <button class="modal-tab" onclick="switchEditTab('edition')" data-edit-tab="edition">Editie</button>
         <button class="modal-tab" onclick="switchEditTab('details')" data-edit-tab="details">Details</button>
-        <span style="margin-left:auto;font-size:0.65rem;color:var(--text-muted);opacity:0.5;">v62</span>
+        <button class="modal-tab" onclick="switchEditTab('media')" data-edit-tab="media" data-i18n="edit.images">Afbeeldingen</button>
+        <span style="margin-left:auto;font-size:0.65rem;color:var(--text-muted);opacity:0.5;">v63</span>
       </div>
 
       <!-- Edit Tab: Algemeen -->
@@ -2031,6 +2032,14 @@
             </select>
             <button class="btn btn-secondary" type="button" onclick="addVideoEntry()" data-i18n="edit.addVideo">+ Toevoegen</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Edit Tab: Afbeeldingen -->
+      <div class="form-grid" id="editTabMedia" style="display:none;">
+        <div class="input-group full">
+          <label data-i18n="edit.manageImages">Posters en achtergronden beheren</label>
+          <div id="editMediaManagerContent"></div>
         </div>
       </div>
 

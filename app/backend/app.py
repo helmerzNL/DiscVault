@@ -7660,6 +7660,91 @@ def set_movie_poster_choice(movie_id):
     return jsonify({"status": "updated", "movie": dict(updated), "poster_file": selected_value})
 
 
+def _media_choice_key(value: str) -> str:
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    if value.startswith("/api/images/") or value.startswith("/api/posters/"):
+        return os.path.basename(value.split("?", 1)[0])
+    if value.startswith(("http://", "https://")):
+        return value
+    return os.path.basename(value.replace("\\", "/"))
+
+
+def _remove_media_choice(values, target):
+    target_key = _media_choice_key(target)
+    removed = False
+    remaining = []
+    for item in values:
+        if _media_choice_key(item) == target_key:
+            removed = True
+            continue
+        remaining.append(item)
+    return remaining, removed
+
+
+@app.route("/api/movies/<int:movie_id>/media-choice", methods=["DELETE"])
+def delete_movie_media_choice(movie_id):
+    data = request.json or {}
+    kind = (data.get("kind") or "").strip().lower()
+    raw_value = (data.get("value") or "").strip()
+    if kind not in ("poster", "backdrop") or not raw_value:
+        return jsonify({"error": "Invalid media choice"}), 400
+
+    conn = get_db()
+    movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+    if not movie:
+        conn.close()
+        return jsonify({"error": "Film niet gevonden"}), 404
+    if not _check_movie_owner(movie):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
+
+    target_key = _media_choice_key(raw_value)
+    updates = {}
+    if kind == "poster":
+        posters, removed = _remove_media_choice(_parse_poster_values(movie["posters"]), raw_value)
+        for field in ("poster_file", "poster", "poster_url"):
+            if _media_choice_key(movie[field]) == target_key:
+                updates[field] = ""
+                removed = True
+        if updates.get("poster_file") == "":
+            local_fallback = next((p for p in posters if not _is_remote_image_url(p)), "")
+            updates["poster_file"] = local_fallback
+            if not local_fallback:
+                remote_fallback = next((p for p in posters if _is_remote_image_url(p)), "")
+                if remote_fallback:
+                    updates["poster"] = remote_fallback
+                    updates["poster_url"] = remote_fallback
+        updates["posters"] = json.dumps(posters, ensure_ascii=False) if posters else ""
+    else:
+        backdrops, removed = _remove_media_choice(_parse_backdrop_values(movie["backdrops"]), raw_value)
+        for field in ("backdrop", "backdrop_url"):
+            if _media_choice_key(movie[field]) == target_key:
+                updates[field] = ""
+                removed = True
+        if updates.get("backdrop") == "":
+            updates["backdrop"] = backdrops[0] if backdrops else ""
+        if updates.get("backdrop_url") == "":
+            updates["backdrop_url"] = next((b for b in backdrops if _is_remote_image_url(b)), "")
+        updates["backdrops"] = json.dumps(backdrops, ensure_ascii=False) if backdrops else ""
+        source_backdrops = [b for b in backdrops if _is_remote_image_url(b)]
+        updates["backdrop_urls"] = json.dumps(source_backdrops, ensure_ascii=False) if source_backdrops else ""
+
+    if not removed:
+        conn.close()
+        return jsonify({"error": "Media item not found"}), 404
+
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    conn.execute(f"UPDATE movies SET {set_clause} WHERE id=?", list(updates.values()) + [movie_id])
+    conn.commit()
+    updated = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+    conn.close()
+
+    add_log("refresh", f"Afbeelding verwijderd voor \"{updated['title']}\"", f"Type: {kind}; Waarde: {raw_value}", "success")
+    return jsonify({"status": "updated", "movie": dict(updated)})
+
+
 def _box_set_ids_for_movie(conn, movie_id, row=None):
     ids = set()
     if row is not None:
