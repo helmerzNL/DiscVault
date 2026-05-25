@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=11" />
+    <link rel="stylesheet" href="./styles.css?v=12" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -83,42 +83,50 @@
           <h2 data-i18n="faq.sections.h2">The first FAQ topics are ready to be filled out.</h2>
         </div>
         <div class="faq-articles">
-          <article class="card faq-article">
-            <span class="badge badge-new" data-i18n="faq.badge.published">FAQ</span>
-            <h3 data-i18n="faq.install.title">Installation &amp; updates</h3>
-            <p data-i18n="faq.install.p1">DiscVault is designed to run self-hosted. The easiest setup is the all-in-one Docker container, which includes the web app and backend in one image. On Unraid, use the Community Applications template and keep your database and uploaded assets on persistent storage.</p>
-            <p data-i18n="faq.install.p2">For stable use, choose the <code>latest</code> image tag. If you want to test new features early, choose the <code>beta</code> tag and expect occasional changes while features are still being refined.</p>
-            <h4 data-i18n="faq.install.before.title">Before you update</h4>
-            <ul>
-              <li data-i18n="faq.install.before.1">Create a backup from the admin tools or copy the persistent data directory while the container is stopped.</li>
-              <li data-i18n="faq.install.before.2">Check the release notes when moving between beta and stable builds.</li>
-              <li data-i18n="faq.install.before.3">Keep your environment variables and volume mappings unchanged unless the release notes say otherwise.</li>
-            </ul>
-            <h4 data-i18n="faq.install.update.title">Updating</h4>
-            <p data-i18n="faq.install.update.body">Pull the newer image, recreate the container with the same volumes and settings, then open DiscVault and confirm that your collection, users, passkeys, backups, and settings are still visible. If anything looks wrong, stop the container and restore the backup before continuing.</p>
-          </article>
+          <details class="card faq-article">
+            <summary class="faq-summary">
+              <span class="badge badge-new" data-i18n="faq.badge.published">FAQ</span>
+              <span class="faq-summary-title" data-i18n="faq.install.title">Installation &amp; updates</span>
+            </summary>
+            <div class="faq-answer">
+              <p data-i18n="faq.install.p1">DiscVault is designed to run self-hosted. The easiest setup is the all-in-one Docker container, which includes the web app and backend in one image. On Unraid, use the Community Applications template and keep your database and uploaded assets on persistent storage.</p>
+              <p data-i18n="faq.install.p2">For stable use, choose the <code>latest</code> image tag. If you want to test new features early, choose the <code>beta</code> tag and expect occasional changes while features are still being refined.</p>
+              <h4 data-i18n="faq.install.before.title">Before you update</h4>
+              <ul>
+                <li data-i18n="faq.install.before.1">Create a backup from the admin tools or copy the persistent data directory while the container is stopped.</li>
+                <li data-i18n="faq.install.before.2">Check the release notes when moving between beta and stable builds.</li>
+                <li data-i18n="faq.install.before.3">Keep your environment variables and volume mappings unchanged unless the release notes say otherwise.</li>
+              </ul>
+              <h4 data-i18n="faq.install.update.title">Updating</h4>
+              <p data-i18n="faq.install.update.body">Pull the newer image, recreate the container with the same volumes and settings, then open DiscVault and confirm that your collection, users, passkeys, backups, and settings are still visible. If anything looks wrong, stop the container and restore the backup before continuing.</p>
+            </div>
+          </details>
 
-          <article class="card faq-article">
-            <span class="badge badge-new" data-i18n="faq.badge.published">FAQ</span>
-            <h3 data-i18n="faq.passkeys.title">Passkeys versus passwords</h3>
-            <p data-i18n="faq.passkeys.p1">DiscVault uses passkeys so you do not need to create, remember, reuse, or share a password. A passkey is a cryptographic key pair: the private key stays on your device or in your trusted credential manager, while DiscVault only receives the public key.</p>
-            <p data-i18n="faq.passkeys.p2">That makes passkeys safer than passwords. There is no password database for an attacker to steal, nothing useful to type into a fake login page, and every passkey is unique to the site where it was created. Signing in is also easier because you approve it with your device unlock method, such as Face ID, Touch ID, fingerprint, Windows Hello, or a device PIN.</p>
-            <h4 data-i18n="faq.passkeys.why.title">Why they are safer and easier</h4>
-            <ul>
-              <li data-i18n="faq.passkeys.why.1">Phishing resistant: the browser and operating system only use the passkey for the correct website.</li>
-              <li data-i18n="faq.passkeys.why.2">No shared secret: DiscVault stores a public key, not a reusable password.</li>
-              <li data-i18n="faq.passkeys.why.3">Unique per service: a passkey created for DiscVault cannot be reused somewhere else.</li>
-              <li data-i18n="faq.passkeys.why.4">Fast sign-in: unlock your device instead of typing a password.</li>
-            </ul>
-            <h4 data-i18n="faq.passkeys.requirements.title">Minimum requirements</h4>
-            <ul>
-              <li data-i18n="faq.passkeys.req.windows">Windows: use a current browser with passkey support and Windows Hello. Windows 11 version 22H2 or newer is recommended for native passkey management; Windows Hello needs at least a PIN, with face or fingerprint optional.</li>
-              <li data-i18n="faq.passkeys.req.macos">macOS: macOS Ventura 13 or newer with iCloud Keychain enabled, or another passkey-capable credential manager/browser.</li>
-              <li data-i18n="faq.passkeys.req.ios">iPhone and iPad: iOS 16 or iPadOS 16 or newer with iCloud Keychain and two-factor authentication enabled.</li>
-              <li data-i18n="faq.passkeys.req.android">Android: Android 9 or newer with a passkey-capable credential provider such as Google Password Manager, plus a screen lock.</li>
-            </ul>
-            <p data-i18n="faq.passkeys.recovery">Tip: register more than one passkey where possible, for example your phone and your desktop device. That gives you a recovery path if one device is replaced or lost.</p>
-          </article>
+          <details class="card faq-article">
+            <summary class="faq-summary">
+              <span class="badge badge-new" data-i18n="faq.badge.published">FAQ</span>
+              <span class="faq-summary-title" data-i18n="faq.passkeys.title">Passkeys versus passwords</span>
+            </summary>
+            <div class="faq-answer">
+              <p data-i18n="faq.passkeys.p1">DiscVault uses passkeys so you do not need to create, remember, reuse, or share a password. A passkey is a cryptographic key pair: the private key stays on your device or in your trusted credential manager, while DiscVault only receives the public key.</p>
+              <p data-i18n="faq.passkeys.p2">That makes passkeys safer than passwords. There is no password database for an attacker to steal, nothing useful to type into a fake login page, and every passkey is unique to the site where it was created. Signing in is also easier because you approve it with your device unlock method, such as Face ID, Touch ID, fingerprint, Windows Hello, or a device PIN.</p>
+              <h4 data-i18n="faq.passkeys.why.title">Why they are safer and easier</h4>
+              <ul>
+                <li data-i18n="faq.passkeys.why.1">Phishing resistant: the browser and operating system only use the passkey for the correct website.</li>
+                <li data-i18n="faq.passkeys.why.2">No shared secret: DiscVault stores a public key, not a reusable password.</li>
+                <li data-i18n="faq.passkeys.why.3">Unique per service: a passkey created for DiscVault cannot be reused somewhere else.</li>
+                <li data-i18n="faq.passkeys.why.4">Fast sign-in: unlock your device instead of typing a password.</li>
+              </ul>
+              <h4 data-i18n="faq.passkeys.requirements.title">Minimum requirements</h4>
+              <ul>
+                <li data-i18n="faq.passkeys.req.windows">Windows: use a current browser with passkey support and Windows Hello. Windows 11 version 22H2 or newer is recommended for native passkey management; Windows Hello needs at least a PIN, with face or fingerprint optional.</li>
+                <li data-i18n="faq.passkeys.req.macos">macOS: macOS Ventura 13 or newer with iCloud Keychain enabled, or another passkey-capable credential manager/browser.</li>
+                <li data-i18n="faq.passkeys.req.ios">iPhone and iPad: iOS 16 or iPadOS 16 or newer with iCloud Keychain and two-factor authentication enabled.</li>
+                <li data-i18n="faq.passkeys.req.android">Android: Android 9 or newer with a passkey-capable credential provider such as Google Password Manager, plus a screen lock.</li>
+              </ul>
+              <p data-i18n="faq.passkeys.recovery">Tip: register more than one passkey where possible, for example your phone and your desktop device. That gives you a recovery path if one device is replaced or lost.</p>
+            </div>
+          </details>
         </div>
       </section>
     </main>
@@ -128,7 +136,7 @@
       <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="footer.github">Source on GitHub</a>
     </footer>
 
-    <script src="./translations.js?v=10"></script>
+    <script src="./translations.js?v=11"></script>
     <script>
       document.querySelector('.hamburger').addEventListener('click', function () {
         var open = this.getAttribute('aria-expanded') === 'true';
