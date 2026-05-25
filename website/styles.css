@@ -708,6 +708,45 @@ code {
   gap: 0.85rem;
 }
 
+.faq-articles {
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.faq-article {
+  max-width: 860px;
+}
+
+.faq-article h3 {
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.faq-article h4 {
+  margin: 1.1rem 0 0.45rem;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.faq-article ul {
+  margin: 0.65rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--text-muted);
+}
+
+.faq-article li + li {
+  margin-top: 0.35rem;
+}
+
+.faq-article p code {
+  background: rgba(10, 10, 15, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  padding: 0.04rem 0.28rem;
+  white-space: nowrap;
+}
+
 .site-footer {
   border-top: 1px solid var(--border);
   padding: 1rem 0 2rem;
