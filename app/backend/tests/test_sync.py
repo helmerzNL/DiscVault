@@ -108,7 +108,7 @@ class SyncIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(payload["posterUrl"], poster_url)
         self.assertEqual(payload["backdropUrl"], backdrop_url)
-        self.assertEqual(payload["backdropUrls"], movie["backdrop_urls"])
+        self.assertEqual(payload["backdropUrls"], json.loads(movie["backdrop_urls"]))
         self.assertEqual(
             self.backend._movievault_normalize_template_value(
                 payload["backdropUrls"],
@@ -251,7 +251,7 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(second["status"], "skipped")
         self.assertEqual(second["action"], "unchanged_payload")
         self.assertEqual(len([call for call in calls if call["method"] == "POST"]), 1)
-        submitted = calls[0]["json"]
+        submitted = next(call["json"] for call in calls if call["method"] == "POST")
         self.assertEqual(submitted["sourceVersion"], "3.5-test")
         self.assertNotIn("sourceVersion", submitted["payload"])
 
@@ -1000,11 +1000,11 @@ class SyncIntegrationTests(unittest.TestCase):
         try:
             self.backend._lookup_metadata_for_barcode = failing_lookup
             response = self.client.get("/api/lookup/STREAM-ERROR?stream=1")
+            body = response.get_data(as_text=True)
         finally:
             self.backend._lookup_metadata_for_barcode = original_lookup
 
-        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200, body)
         self.assertNotIn("<!doctype", body.lower())
         done = None
         for line in body.splitlines():
