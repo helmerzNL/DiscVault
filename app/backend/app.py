@@ -6972,7 +6972,7 @@ def add_movie():
             try:
                 dup_conn = get_db()
                 dups = dup_conn.execute(
-                    "SELECT id, title, edition_type, format, edition_group_id FROM movies"
+                    "SELECT id, title, edition_type, custom_edition_label, format, edition_group_id FROM movies"
                     " WHERE tmdb_id = ? AND id != ?",
                     (tmdb_id_new, movie_dict["id"])
                 ).fetchall()
@@ -6980,6 +6980,7 @@ def add_movie():
                     hint = {
                         "existing_movies": [
                             {"id": d["id"], "title": d["title"], "edition_type": d["edition_type"] or "standard",
+                             "custom_edition_label": d["custom_edition_label"] or "",
                              "format": d["format"], "edition_group_id": d["edition_group_id"]}
                             for d in dups
                         ]

@@ -847,6 +847,24 @@ async function saveMovie() {
 let _editionLinkNewMovie  = null;
 let _editionLinkHint      = null;
 
+function _editionPromptLabel(movie) {
+  const type = movie?.edition_type || 'standard';
+  if (type === 'standard') return '';
+  if (type === 'custom') return movie?.custom_edition_label || t('edition.custom');
+  const labels = {
+    steelbook: t('edition.steelbook'),
+    directors_cut: t('edition.directorsCut'),
+    limited: t('edition.limited'),
+    theatrical: t('edition.theatrical'),
+    '4k_upgrade': t('edition.4kUpgrade'),
+    '4k_combo': t('edition.4kCombo'),
+    boxset_disc: t('edition.boxsetDisc'),
+    dvd: 'DVD',
+    bluray: 'Blu-ray',
+  };
+  return labels[type] || String(type).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function _showEditionLinkPrompt(newMovie, hint) {
   _editionLinkNewMovie = newMovie;
   _editionLinkHint     = hint;
@@ -855,12 +873,13 @@ function _showEditionLinkPrompt(newMovie, hint) {
   const existing = document.getElementById('editionLinkExisting');
   if (!modal) return;
   desc.textContent = t('edition.linkDesc', newMovie.title);
-  existing.innerHTML = hint.existing_movies.map(m =>
-    `<div style="padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px; font-size:0.84rem;">
+  existing.innerHTML = hint.existing_movies.map(m => {
+    const editionLabel = _editionPromptLabel(m);
+    return `<div style="padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; margin-bottom:6px; font-size:0.84rem;">
       <strong>${m.title}</strong> · ${m.format || ''}
-      ${m.edition_type && m.edition_type !== 'standard' ? `<span style="color:var(--accent); font-size:0.76rem;"> · ${m.edition_type}</span>` : ''}
-    </div>`
-  ).join('');
+      ${editionLabel ? `<span style="color:var(--accent); font-size:0.76rem;"> · ${editionLabel}</span>` : ''}
+    </div>`;
+  }).join('');
   modal.style.display = 'flex';
 }
 
