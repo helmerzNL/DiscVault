@@ -633,6 +633,13 @@ def movievault_request(
             headers["Authorization"] = f"Bearer {token}"
             if method.upper() in {"POST", "PUT", "PATCH"}:
                 headers.setdefault("Content-Type", "application/json")
+        else:
+            _log(
+                "warn",
+                "MovieVault authenticated request skipped",
+                f"path={_path_only(url)}; reason=missing bearer token",
+            )
+            raise MovieVaultHandshakeError("MovieVault authentication token is unavailable")
     response = requests.request(method.upper(), url, headers=headers, **kwargs)
     if (
         include_auth

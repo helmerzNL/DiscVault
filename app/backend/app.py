@@ -3826,6 +3826,16 @@ def _submit_movievault_entity_contribution(
     return bool(result.get("submitted"))
 
 
+def _submit_movievault_contribution_async(target, *args):
+    def runner():
+        try:
+            target(*args)
+        except Exception as ex:
+            _movievault_log("warn", "MovieVault background contribution failed", str(ex))
+
+    threading.Thread(target=runner, daemon=True).start()
+
+
 def _movievault_person_has_contributable_metadata(person: dict | None) -> bool:
     if not isinstance(person, dict) or not person.get("name"):
         return False
@@ -6660,6 +6670,7 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
         fallback_title=fallback_title,
         attempts=attempts,
         stop_after_first=False,
+        contribute_to_movievault=False,
     )
     if barcode:
         add_log(
@@ -6694,7 +6705,8 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
             "movieVaultHit": "MovieVault" in source_parts,
         }
         if _movievault_box_set_source_from_proposal(box_set_proposal, barcode, info):
-            _submit_movievault_box_set_proposal_contribution(
+            _submit_movievault_contribution_async(
+                _submit_movievault_box_set_proposal_contribution,
                 box_set_proposal,
                 barcode,
                 info,
@@ -6702,7 +6714,8 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
                 contribution_context,
             )
         else:
-            _submit_movievault_contribution(
+            _submit_movievault_contribution_async(
+                _submit_movievault_contribution,
                 info,
                 source_label,
                 contribution_context,
