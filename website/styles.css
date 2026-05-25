@@ -716,10 +716,63 @@ code {
 
 .faq-article {
   max-width: 860px;
+  padding: 0;
 }
 
-.faq-article h3 {
+.faq-summary {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.25rem;
+  padding: 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq-summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-summary::after {
+  content: "+";
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1rem;
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.faq-article[open] .faq-summary::after {
+  content: "−";
+  border-color: rgba(232, 197, 71, 0.5);
+  background: rgba(232, 197, 71, 0.08);
+}
+
+.faq-summary:focus-visible {
+  outline: 2px solid rgba(232, 197, 71, 0.65);
+  outline-offset: 3px;
+}
+
+.faq-summary .badge {
+  margin-bottom: 0;
+}
+
+.faq-summary-title {
   font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.faq-answer {
+  border-top: 1px solid var(--border);
+  padding: 1rem;
 }
 
 .faq-article h4 {
