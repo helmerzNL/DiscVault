@@ -507,10 +507,24 @@ async function bulkDelete() {
 
   showProgress(t('js.deleting'), ids.length);
   try {
+    const visibleById = new Map(getCurrentMovies().map(m => [m.id, m]));
+    const items = ids.map(id => {
+      const m = visibleById.get(id) || allMovies.find(x => x.id === id) || {};
+      if (m._is_super_group && m._parent_group_id) {
+        return { type: 'box_set', id: m._parent_group_id, representative_id: id };
+      }
+      if (m._is_group && m.edition_group_id) {
+        return { type: 'vault', id: m.edition_group_id, representative_id: id };
+      }
+      if (m._is_collection && m._collection_id) {
+        return { type: 'collection', id: m._collection_id, representative_id: id };
+      }
+      return { type: 'movie', id };
+    });
     const r = await fetch(`${API}/movies/bulk-delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids })
+      body: JSON.stringify({ ids, items })
     });
     const d = await r.json();
     allMovies = allMovies.filter(m => !selectedIds.has(m.id));
@@ -522,6 +536,7 @@ async function bulkDelete() {
       finishProgress(t('js.deleted', d.deleted));
     }
     filterMovies();
+    loadCollection();
     loadStats();
     updateBulkCount();
   } catch(e) {

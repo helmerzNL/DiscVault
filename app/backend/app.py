@@ -1382,6 +1382,18 @@ def init_db():
     except Exception:
         pass
 
+    for column, definition in (
+        ("movie_title", "TEXT"),
+        ("movie_year", "TEXT"),
+        ("movie_format", "TEXT"),
+        ("tmdb_id", "TEXT"),
+        ("imdb_id", "TEXT"),
+        ("poster", "TEXT"),
+        ("poster_file", "TEXT"),
+        ("movie_deleted_at", "TEXT"),
+    ):
+        _add_column_if_missing(conn, "watch_history", column, definition)
+
     # Auth: settings
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -7027,7 +7039,7 @@ def _box_set_ids_for_movie(conn, movie_id, row=None):
     return ids
 
 
-def _remove_movie_poster_assets(row):
+def _delete_local_movie_asset(row):
     poster_file = (row["poster_file"] or "").strip() if row and "poster_file" in row.keys() else ""
     if not poster_file:
         return
@@ -7038,15 +7050,47 @@ def _remove_movie_poster_assets(row):
         pass
 
 
+def _snapshot_watch_history_for_movie(conn, row) -> bool:
+    if not row:
+        return False
+    movie_id = int(row["id"])
+    has_history = bool(conn.execute("SELECT 1 FROM watch_history WHERE movie_id=? LIMIT 1", (movie_id,)).fetchone())
+    if not has_history:
+        return False
+    poster_file = (row["poster_file"] or "").strip() if row["poster_file"] else ""
+    poster_url = (row["poster"] or "").strip() if row["poster"] else ""
+    if not poster_file and poster_url:
+        poster_file = download_poster(poster_url) or ""
+    conn.execute(
+        """
+        UPDATE watch_history
+           SET movie_title = COALESCE(NULLIF(movie_title, ''), ?),
+               movie_year = COALESCE(NULLIF(movie_year, ''), ?),
+               movie_format = COALESCE(NULLIF(movie_format, ''), ?),
+               tmdb_id = COALESCE(NULLIF(tmdb_id, ''), ?),
+               imdb_id = COALESCE(NULLIF(imdb_id, ''), ?),
+               poster = COALESCE(NULLIF(poster, ''), ?),
+               poster_file = COALESCE(NULLIF(poster_file, ''), ?),
+               movie_deleted_at = COALESCE(movie_deleted_at, ?)
+         WHERE movie_id=?
+        """,
+        (
+            row["title"] or "",
+            row["year"] or "",
+            row["format"] or "",
+            row["tmdb_id"] or "",
+            row["imdb_id"] or "",
+            poster_url,
+            poster_file,
+            datetime.utcnow().isoformat(),
+            movie_id,
+        ),
+    )
+    return True
+
+
 def _delete_movie_dependencies(conn, row):
-    movie_id = row["id"]
-    _remove_movie_poster_assets(row)
-    conn.execute("DELETE FROM movie_people WHERE movie_id = ?", (movie_id,))
-    conn.execute("DELETE FROM vault_movies WHERE movie_id = ?", (movie_id,))
-    conn.execute("DELETE FROM box_set_movies WHERE movie_id = ?", (movie_id,))
-    conn.execute("DELETE FROM collection_items WHERE item_type='movie' AND item_id = ?", (movie_id,))
-    conn.execute("UPDATE edition_groups SET primary_movie_id=NULL WHERE primary_movie_id=?", (movie_id,))
-    conn.execute("DELETE FROM movies WHERE id = ?", (movie_id,))
+    return _delete_movie_row(conn, row)
 
 
 def _delete_empty_box_set_containers(conn, box_set_ids):
@@ -7089,29 +7133,250 @@ def _delete_empty_box_set_containers(conn, box_set_ids):
     return deleted
 
 
+def _delete_orphan_people(conn, person_ids):
+    clean_ids = sorted({int(pid) for pid in person_ids if pid})
+    if not clean_ids:
+        return 0
+    deleted = 0
+    for person_id in clean_ids:
+        still_used = conn.execute(
+            "SELECT 1 FROM movie_people WHERE person_id=? LIMIT 1",
+            (person_id,),
+        ).fetchone()
+        if still_used:
+            continue
+        row = conn.execute("SELECT photo_file FROM people WHERE id=?", (person_id,)).fetchone()
+        photo_file = (row["photo_file"] or "").strip() if row and row["photo_file"] else ""
+        if photo_file:
+            _remove_asset_variants(photo_file, ("profile",))
+            try:
+                os.remove(os.path.join(PROFILE_DIR, photo_file))
+            except OSError:
+                pass
+        conn.execute("DELETE FROM people WHERE id=?", (person_id,))
+        deleted += 1
+    return deleted
+
+
+def _delete_movie_row(conn, row) -> bool:
+    if not row or not _check_movie_owner(row):
+        return False
+    movie_id = int(row["id"])
+    keep_poster_for_history = _snapshot_watch_history_for_movie(conn, row)
+    person_ids = [
+        int(r["person_id"]) for r in conn.execute(
+            "SELECT person_id FROM movie_people WHERE movie_id=?",
+            (movie_id,),
+        ).fetchall()
+    ]
+    if not keep_poster_for_history:
+        _delete_local_movie_asset(row)
+    conn.execute("DELETE FROM movie_people WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM movie_groups WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM watchlist WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM vault_movies WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM box_set_movies WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM collection_items WHERE item_type='movie' AND item_id = ?", (movie_id,))
+    conn.execute("DELETE FROM movies WHERE id = ?", (movie_id,))
+    _delete_orphan_people(conn, person_ids)
+    return True
+
+
+def _bulk_can_delete_movie_rows(rows) -> bool:
+    uid = _get_current_user_id()
+    if not uid:
+        return True
+    if _get_current_user_role() == "admin":
+        return True
+    return all(row["owner_id"] == uid for row in rows)
+
+
+def _movie_rows_for_ids(conn, movie_ids):
+    clean_ids = sorted({int(mid) for mid in movie_ids if str(mid).strip()})
+    if not clean_ids:
+        return []
+    placeholders = ",".join("?" * len(clean_ids))
+    return conn.execute(f"SELECT * FROM movies WHERE id IN ({placeholders})", clean_ids).fetchall()
+
+
+def _movie_ids_for_full_container_delete(conn, item_type, container_id):
+    if item_type == "box_set":
+        rows = conn.execute(
+            """
+            SELECT movie_id AS id FROM box_set_movies WHERE box_set_id=?
+            UNION
+            SELECT id FROM movies WHERE super_group_id=?
+            UNION
+            SELECT m.id
+            FROM movies m
+            JOIN edition_groups child ON child.id = m.edition_group_id
+            WHERE child.parent_group_id=?
+            """,
+            (container_id, container_id, container_id),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT movie_id AS id FROM vault_movies WHERE vault_id=?
+            UNION
+            SELECT id FROM movies WHERE edition_group_id=?
+            """,
+            (container_id, container_id),
+        ).fetchall()
+    return [int(r["id"]) for r in rows]
+
+
+def _delete_container_card_with_movies(conn, item_type, container_id):
+    if item_type not in ("box_set", "vault"):
+        return 0, 0, False
+    table = "box_sets" if item_type == "box_set" else "vaults"
+    group_type = "boxset" if item_type == "box_set" else "vault"
+    container = conn.execute(
+        f"""
+        SELECT eg.id, eg.title, eg.poster_file, eg.backdrop, eg.group_type
+        FROM edition_groups eg
+        LEFT JOIN {table} c ON c.id = eg.id
+        WHERE eg.id=? AND (c.id IS NOT NULL OR eg.group_type=?)
+        """,
+        (container_id, group_type),
+    ).fetchone()
+    if not container:
+        return 0, 0, False
+
+    movie_ids = _movie_ids_for_full_container_delete(conn, item_type, container_id)
+    movie_rows = _movie_rows_for_ids(conn, movie_ids)
+    if movie_rows and not _bulk_can_delete_movie_rows(movie_rows):
+        return 0, 0, False
+    if not movie_rows and _is_auth_enabled() and _get_current_user_role() != "admin":
+        return 0, 0, False
+
+    deleted_movies = 0
+    for row in movie_rows:
+        if _delete_movie_row(conn, row):
+            deleted_movies += 1
+
+    if item_type == "box_set":
+        child_ids = [
+            int(r["id"]) for r in conn.execute(
+                "SELECT id FROM edition_groups WHERE parent_group_id=?",
+                (container_id,),
+            ).fetchall()
+        ]
+        if child_ids:
+            placeholders = ",".join("?" * len(child_ids))
+            conn.execute(f"DELETE FROM vault_movies WHERE vault_id IN ({placeholders})", child_ids)
+            conn.execute(f"DELETE FROM box_set_movies WHERE box_set_id IN ({placeholders})", child_ids)
+            conn.execute(f"DELETE FROM collection_items WHERE item_type IN ('vault','box_set') AND item_id IN ({placeholders})", child_ids)
+            conn.execute(f"DELETE FROM vaults WHERE id IN ({placeholders})", child_ids)
+            conn.execute(f"DELETE FROM box_sets WHERE id IN ({placeholders})", child_ids)
+            conn.execute(f"DELETE FROM edition_groups WHERE id IN ({placeholders})", child_ids)
+        conn.execute("DELETE FROM box_set_movies WHERE box_set_id=?", (container_id,))
+        conn.execute("DELETE FROM collection_items WHERE item_type='box_set' AND item_id=?", (container_id,))
+        conn.execute("DELETE FROM box_sets WHERE id=?", (container_id,))
+        label = "Box Set"
+    else:
+        conn.execute("DELETE FROM vault_movies WHERE vault_id=?", (container_id,))
+        conn.execute("DELETE FROM collection_items WHERE item_type='vault' AND item_id=?", (container_id,))
+        conn.execute("DELETE FROM vaults WHERE id=?", (container_id,))
+        label = "Vault"
+
+    if container["poster_file"]:
+        _remove_asset_variants(container["poster_file"], ("poster",))
+        try:
+            os.remove(os.path.join(POSTER_DIR, container["poster_file"]))
+        except OSError:
+            pass
+    conn.execute("UPDATE edition_groups SET parent_group_id=NULL WHERE parent_group_id=?", (container_id,))
+    conn.execute("DELETE FROM edition_groups WHERE id=?", (container_id,))
+    _log_container_event(
+        conn,
+        f"{label} deleted from bulk selection",
+        f"ID: {container_id}; Title: {container['title'] or '?'}; Movies deleted: {deleted_movies}",
+        "warn",
+    )
+    return deleted_movies, 1, True
+
+
 @app.route("/api/movies/bulk-delete", methods=["POST"])
 def bulk_delete():
-    ids = (request.json or {}).get("ids", [])
-    if not ids:
+    payload = request.json or {}
+    ids = payload.get("ids", [])
+    raw_items = payload.get("items") or []
+    if not ids and not raw_items:
         return jsonify({"error": "No ids provided"}), 400
+
+    items = []
+    if raw_items:
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            item_type = str(item.get("type") or "movie").strip().lower().replace("-", "_")
+            if item_type == "boxset":
+                item_type = "box_set"
+            try:
+                item_id = int(item.get("id"))
+            except Exception:
+                continue
+            items.append({"type": item_type, "id": item_id})
+    else:
+        for movie_id in ids:
+            try:
+                items.append({"type": "movie", "id": int(movie_id)})
+            except Exception:
+                continue
+    if not items:
+        return jsonify({"error": "No valid ids provided"}), 400
+
     conn = get_db()
     deleted = 0
-    box_set_ids_to_check = set()
-    for movie_id in ids:
-        row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
-        if not row or not _check_movie_owner(row):
+    deleted_containers = 0
+    skipped = 0
+    seen = set()
+    for item in items:
+        item_type = item["type"]
+        item_id = item["id"]
+        key = (item_type, item_id)
+        if key in seen:
             continue
-        box_set_ids_to_check.update(_box_set_ids_for_movie(conn, movie_id, row))
-        _delete_movie_dependencies(conn, row)
-        deleted += 1
-    deleted_box_sets = _delete_empty_box_set_containers(conn, box_set_ids_to_check)
+        seen.add(key)
+        if item_type == "movie":
+            row = conn.execute("SELECT * FROM movies WHERE id = ?", (item_id,)).fetchone()
+            if _delete_movie_row(conn, row):
+                deleted += 1
+            else:
+                skipped += 1
+        elif item_type in ("box_set", "vault"):
+            movie_count, container_count, ok = _delete_container_card_with_movies(conn, item_type, item_id)
+            if ok:
+                deleted += movie_count
+                deleted_containers += container_count
+            else:
+                skipped += 1
+        elif item_type == "collection":
+            if _get_current_user_role() == "admin":
+                row = conn.execute("SELECT title FROM collections WHERE id=?", (item_id,)).fetchone()
+                conn.execute("DELETE FROM collection_items WHERE collection_id=?", (item_id,))
+                conn.execute("UPDATE edition_groups SET collection_id=NULL WHERE collection_id=?", (item_id,))
+                conn.execute("UPDATE movies SET collection_id=NULL WHERE collection_id=?", (item_id,))
+                conn.execute("DELETE FROM collections WHERE id=?", (item_id,))
+                _log_container_event(conn, "Collection deleted from bulk selection", f"ID: {item_id}; Title: {(row['title'] if row else '?')}", "warn")
+                deleted_containers += 1
+            else:
+                skipped += 1
+        else:
+            skipped += 1
+
+    conn.commit()
+    _log_container_validation(conn, "bulk delete")
     conn.commit()
     conn.close()
-    detail = f"IDs: {ids[:20]}"
-    if deleted_box_sets:
-        detail += f"; Box sets removed: {deleted_box_sets}"
-    add_log("delete", f"Bulk verwijderd: {deleted} film(s)", detail, "success")
-    return jsonify({"status": "done", "deleted": deleted, "deleted_box_sets": deleted_box_sets})
+    add_log(
+        "delete",
+        f"Bulk verwijderd: {deleted} film(s), {deleted_containers} container(s)",
+        f"Items: {items[:20]}; Skipped: {skipped}",
+        "success" if deleted or deleted_containers else "warn",
+    )
+    return jsonify({"status": "done", "deleted": deleted, "deleted_containers": deleted_containers, "skipped": skipped})
 
 
 METADATA_REFRESH_FIELDS = [
@@ -7748,7 +8013,7 @@ def delete_movie(movie_id):
         return jsonify({"error": "Not your movie"}), 403
     title = row["title"]
     box_set_ids = _box_set_ids_for_movie(conn, movie_id, row)
-    _delete_movie_dependencies(conn, row)
+    _delete_movie_row(conn, row)
     deleted_box_sets = _delete_empty_box_set_containers(conn, box_set_ids)
     conn.commit()
     conn.close()
@@ -10169,9 +10434,17 @@ def get_watch_history_page():
     conn = get_db()
     rows = conn.execute("""
         SELECT h.id, h.watched_at, h.movie_id,
-               m.title, m.year, m.format, m.poster, m.poster_file
+               COALESCE(m.title, h.movie_title) AS title,
+               COALESCE(m.year, h.movie_year) AS year,
+               COALESCE(m.format, h.movie_format) AS format,
+               COALESCE(m.tmdb_id, h.tmdb_id) AS tmdb_id,
+               COALESCE(m.imdb_id, h.imdb_id) AS imdb_id,
+               COALESCE(m.poster, h.poster) AS poster,
+               COALESCE(m.poster_file, h.poster_file) AS poster_file,
+               CASE WHEN m.id IS NULL THEN 0 ELSE 1 END AS movie_exists,
+               h.movie_deleted_at
         FROM watch_history h
-        JOIN movies m ON m.id = h.movie_id
+        LEFT JOIN movies m ON m.id = h.movie_id
         WHERE h.user_id = ?
         ORDER BY h.watched_at DESC, h.id DESC
     """, (uid,)).fetchall()

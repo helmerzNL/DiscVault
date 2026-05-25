@@ -417,11 +417,15 @@ async function loadWatchHistory() {
         const img = src
           ? `<img src="${src}" onerror="this.outerHTML='<div class=\\'no-img-sm\\'>🎬</div>'">`
           : '<div class="no-img-sm">🎬</div>';
-        return `<div class="watch-history-row" onclick="openMovieDetail(${e.movie_id})">
+        const exists = e.movie_exists !== false && e.movie_exists !== 0;
+        const click = exists ? `onclick="openMovieDetail(${e.movie_id})"` : '';
+        const deletedStyle = exists ? '' : ' style="opacity:.72;cursor:default;"';
+        const deletedLabel = exists ? '' : ` · ${t('js.deleted', 'Deleted')}`;
+        return `<div class="watch-history-row" ${click}${deletedStyle}>
           ${img}
           <div>
-            <div class="whr-title">${e.title}</div>
-            <div class="whr-meta">${e.year || '—'} · ${e.format || '—'}</div>
+            <div class="whr-title">${e.title || '—'}</div>
+            <div class="whr-meta">${e.year || '—'} · ${e.format || '—'}${deletedLabel}</div>
           </div>
         </div>`;
       }).join('');
@@ -724,4 +728,3 @@ async function removeUserFromRole(roleId, userId) {
   await loadRoleUsers(roleId);
   await populateRoleUserSelect(roleId);
 }
-
