@@ -847,6 +847,58 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(done["barcode"], movie["barcode"])
         self.assertEqual(done["movie"]["id"], movie["id"])
 
+    def test_bluray_quicksearch_uses_all_country_for_barcode_lookup(self):
+        original_post = self.backend.requests.post
+
+        class FakeResponse:
+            status_code = 200
+            text = "var urls = new Array('https://www.blu-ray.com/movies/Test-Movie/12345/');"
+
+        captured = {}
+
+        def fake_post(url, data=None, headers=None, timeout=None):
+            captured["url"] = url
+            captured["data"] = dict(data or {})
+            return FakeResponse()
+
+        try:
+            self.backend.requests.post = fake_post
+            url = self.backend._bluray_find_first_movie_url("7340112740717")
+        finally:
+            self.backend.requests.post = original_post
+
+        self.assertEqual(url, "https://www.blu-ray.com/movies/Test-Movie/12345/")
+        self.assertEqual(captured["url"], "https://www.blu-ray.com/search/quicksearch.php")
+        self.assertEqual(captured["data"]["country"], "all")
+
+    def test_bluray_candidate_search_uses_all_country(self):
+        original_post = self.backend.requests.post
+        original_enabled = self.backend._is_bluray_scrape_enabled
+
+        class FakeResponse:
+            status_code = 200
+            text = "var urls = new Array('https://www.blu-ray.com/movies/Test-Title/67890/');"
+
+        captured = {}
+
+        def fake_post(url, data=None, headers=None, timeout=None):
+            captured["url"] = url
+            captured["data"] = dict(data or {})
+            return FakeResponse()
+
+        try:
+            self.backend.requests.post = fake_post
+            self.backend._is_bluray_scrape_enabled = lambda: True
+            candidates = self.backend.search_movie_bluray_candidates("Test Title", "2026")
+        finally:
+            self.backend.requests.post = original_post
+            self.backend._is_bluray_scrape_enabled = original_enabled
+
+        self.assertEqual(captured["url"], "https://www.blu-ray.com/search/quicksearch.php")
+        self.assertEqual(captured["data"]["country"], "all")
+        self.assertTrue(candidates)
+        self.assertEqual(candidates[0]["id"], "67890")
+
     def test_barcode_lookup_stream_returns_json_error_on_exception(self):
         original_lookup = self.backend._lookup_metadata_for_barcode
 
