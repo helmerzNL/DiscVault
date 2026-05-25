@@ -7426,6 +7426,20 @@ def update_movie(movie_id):
 
     existing = dict(existing_row)
     updates = {k: data[k] for k in ALL_FIELDS if k in data}
+    if "barcode" in data:
+        new_barcode = str(data.get("barcode") or "").strip()
+        if not new_barcode:
+            conn.close()
+            return jsonify({"error": "UPC/EAN / DiscVault ID is required"}), 400
+        if new_barcode != (existing.get("barcode") or ""):
+            duplicate = conn.execute(
+                "SELECT id FROM movies WHERE barcode=? AND id<>?",
+                (new_barcode, movie_id),
+            ).fetchone()
+            if duplicate:
+                conn.close()
+                return jsonify({"error": "UPC/EAN / DiscVault ID already exists"}), 409
+        updates["barcode"] = new_barcode
     if not updates:
         conn.close()
         return jsonify({"error": "Nothing to update"}), 400
