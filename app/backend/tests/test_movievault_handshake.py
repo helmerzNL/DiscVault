@@ -46,6 +46,7 @@ class MovieVaultHandshakeTests(unittest.TestCase):
             self.inserted_fake_requests = True
         for name in (
             "app.backend.config",
+            "app.backend.db",
             "app.backend.logging_utils",
             "app.backend.movievault_client",
             "app.backend.settings.routes",
@@ -217,7 +218,7 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         self.assertEqual(self.mv.get_movievault_api_token(), "mv_provisioned")
         self.assertEqual(requests_seen, ["Bearer mv_provisioned"])
 
-    def test_disabled_movievault_does_not_attach_token_or_recover(self):
+    def test_disabled_movievault_does_not_send_authenticated_request_or_recover(self):
         os.environ["MOVIEVAULT_API_TOKEN"] = "mv_env_token"
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
@@ -242,10 +243,10 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         self.mv.requests.request = fake_request
         self.mv.requests.post = fake_post
 
-        response = self.mv.movievault_request("GET", "https://search.example.test/api/v1/movies")
+        with self.assertRaises(self.mv.MovieVaultHandshakeError):
+            self.mv.movievault_request("GET", "https://search.example.test/api/v1/movies")
 
-        self.assertEqual(response.status_code, 401)
-        self.assertEqual(requests_seen, [None])
+        self.assertEqual(requests_seen, [])
         self.assertEqual(self.mv.get_movievault_api_token(), "")
 
     def test_movievault_logs_show_api_path_not_full_endpoint(self):
