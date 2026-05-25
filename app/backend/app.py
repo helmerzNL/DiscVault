@@ -3671,6 +3671,49 @@ def _movievault_normalized_code(value) -> str:
     return re.sub(r"[^a-z0-9]", "", str(value or "").strip().lower())
 
 
+def _external_metadata_barcode(value) -> str:
+    """Return a barcode only when it is a real public UPC/EAN/GTIN value.
+
+    DiscVault also creates local identifiers such as 032429316110-BOX-01,
+    MANUAL-* and IMPORT-*. Those must never be used against external metadata
+    providers because they can partially match unrelated releases.
+    """
+    code = str(value or "").strip()
+    return code if re.fullmatch(r"\d{8}|\d{12}|\d{13}|\d{14}", code) else ""
+
+
+def _disc_vault_box_set_member_reference(value) -> dict:
+    code = str(value or "").strip()
+    match = re.fullmatch(r"(\d{8}|\d{12}|\d{13}|\d{14})-BOX-(\d{2})(?:-.+)?", code, re.IGNORECASE)
+    if not match:
+        return {}
+    return {
+        "type": "box_set_member",
+        "key": code,
+        "parentBarcode": match.group(1),
+        "memberSortOrder": int(match.group(2)),
+    }
+
+
+def _movievault_source_reference(entity_type: str, source_data: dict, context: dict) -> dict:
+    if entity_type != "movie":
+        return {}
+    barcode = (
+        source_data.get("barcode")
+        or context.get("barcode")
+        or context.get("sourceIdentifier")
+        or context.get("sourceReferenceKey")
+        or ""
+    )
+    reference = _disc_vault_box_set_member_reference(barcode)
+    if not reference:
+        return {}
+    box_set_title = source_data.get("box_set") or context.get("boxSetTitle") or ""
+    if box_set_title:
+        reference["boxSetTitle"] = box_set_title
+    return reference
+
+
 def _movievault_public_identity(entity_type: str, filtered_payload: dict, context: dict) -> str:
     if entity_type == "movie":
         tmdb_id = str(filtered_payload.get("tmdbId") or "").strip()
@@ -3700,7 +3743,14 @@ def _movievault_public_identity(entity_type: str, filtered_payload: dict, contex
     return ""
 
 
-def _movievault_entity_identity(entity_type: str, filtered_payload: dict, context: dict) -> str:
+def _movievault_entity_identity(
+    entity_type: str,
+    filtered_payload: dict,
+    context: dict,
+    source_reference: dict | None = None,
+) -> str:
+    if source_reference and source_reference.get("type") and source_reference.get("key"):
+        return f"{source_reference.get('type')}:{source_reference.get('key')}"
     if entity_type == "release":
         return str(filtered_payload.get("barcode") or context.get("barcode") or "").strip()
     if entity_type == "box_set":
@@ -3742,11 +3792,12 @@ def _movievault_contribution_payload(
     raw_fields = sorted(raw_payload.keys())
     filtered_out = [field for field in raw_fields if field not in filtered_payload]
     missing_source = _movievault_missing_source_fields(source_data, entity_type, template_fields, raw_payload)
+    source_reference = _movievault_source_reference(entity_type, source_data, context)
     payload_fingerprint = hashlib.sha256(
         json.dumps(filtered_payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()
     public_identity = _movievault_public_identity(entity_type, filtered_payload, context)
-    identity = _movievault_entity_identity(entity_type, filtered_payload, context)
+    identity = _movievault_entity_identity(entity_type, filtered_payload, context, source_reference)
     identity = identity or public_identity or str(context.get("localEntityId") or context.get("barcode") or "unknown")
     movievault_id = (
         _movievault_extract_movievault_id(source_data)
@@ -3769,6 +3820,7 @@ def _movievault_contribution_payload(
         "payload_fingerprint": payload_fingerprint,
         "payload_fingerprint_prefix": payload_fingerprint[:12],
         "public_identity": public_identity,
+        "source_reference": source_reference,
         "idempotency_key": idem,
         "idempotency_prefix": idem[:24],
         "local_entity_type": context.get("localEntityType") or entity_type,
@@ -3793,6 +3845,7 @@ def _movievault_contribution_payload(
         "sourceVersion": backend_version(),
         "sharingMode": _movievault_sharing_mode(),
         "entityType": entity_type,
+        **({"sourceReference": source_reference} if source_reference else {}),
         "payload": filtered_payload,
     }, stats
 
@@ -3804,6 +3857,7 @@ def _movievault_stats_detail(stats: dict, endpoint: str = "", http_status: str =
         f"MovieVault entity: {stats.get('entity_type')}",
         f"Template version: {stats.get('template_version') or '-'} ({stats.get('template_source') or '-'})",
         f"Public identity: {stats.get('public_identity') or '-'}",
+        f"Source reference: {_movievault_compact(stats.get('source_reference') or {}, 240) or '-'}",
         f"MovieVault ID: {_movievault_id_label(movievault_id, http_status)}",
         f"Fields before/after: {stats.get('raw_count', 0)}/{stats.get('filtered_count', 0)}",
         f"Synchronized fields: {', '.join(stats.get('filtered_fields') or []) or '-'}",
@@ -4475,6 +4529,13 @@ def _submit_movievault_contribution(movie_info: dict | None, sources: str, conte
     results = []
     source = _movievault_public_source(movie_info)
     release_candidate = _movievault_raw_payload(source, "release")
+    if release_candidate.get("barcode") and not _external_metadata_barcode(release_candidate.get("barcode")):
+        _movievault_log(
+            "info",
+            "MovieVault release contribution skipped",
+            f"Barcode: {release_candidate.get('barcode')}; reason=local/synthetic DiscVault identifier",
+        )
+        release_candidate.pop("barcode", None)
     if release_candidate.get("barcode") and release_candidate.get("title"):
         results.append(_submit_movievault_entity_contribution_result("release", movie_info, sources, context))
     results.append(
@@ -9992,15 +10053,22 @@ def _merge_metadata_by_order(
     movievault_attempted = False
     movievault_hit = False
     primary_title = (title or "").strip()
+    barcode = (barcode or "").strip()
+    lookup_barcode = _external_metadata_barcode(barcode)
     fallback_title = (fallback_title or "").strip()
     _metadata_debug_log(
         "Metadata merge started",
         (
             f"Title: {primary_title or '-'}; Fallback title: {fallback_title or '-'}; Year: {year or '-'}; "
-            f"Barcode: {barcode or '-'}; IMDb: {imdb_id or '-'}; TMDb: {tmdb_id or '-'}; "
+            f"Barcode: {barcode or '-'}; External barcode: {lookup_barcode or '-'}; IMDb: {imdb_id or '-'}; TMDb: {tmdb_id or '-'}; "
             f"Source order: {_metadata_source_order_log()}"
         ),
     )
+    if barcode and not lookup_barcode:
+        _metadata_debug_log(
+            "External barcode lookup skipped",
+            f"Barcode: {barcode}; Reason: local/synthetic DiscVault identifier",
+        )
 
     def merge_from(data: dict | None, source_label: str, release_priority: bool = False):
         nonlocal info
@@ -10059,14 +10127,16 @@ def _merge_metadata_by_order(
             continue
         try:
             if source == "movievault":
-                if not primary_title and not barcode:
+                if not primary_title and not lookup_barcode:
                     _trace_add(attempts, label, "skipped", "geen titel of barcode")
                     continue
                 movievault_attempted = True
-                if barcode:
-                    data = lookup_movievault_by_barcode(barcode)
+                if lookup_barcode:
+                    data = lookup_movievault_by_barcode(lookup_barcode)
                     release_priority = bool(data)
-                    _trace_add(attempts, label, "hit" if data else "miss", f"barcode={barcode}")
+                    _trace_add(attempts, label, "hit" if data else "miss", f"barcode={lookup_barcode}")
+                elif barcode:
+                    _trace_add(attempts, label, "skipped", f"barcode={barcode}", "local/synthetic identifier")
                 if not data:
                     data = lookup_movievault_movie(primary_title, year, "")
                 if not data and fallback_title and fallback_title != primary_title:
@@ -10102,13 +10172,13 @@ def _merge_metadata_by_order(
                     data = lookup_movie_omdb(title=fallback_title)
                     _trace_add(attempts, label, "hit" if data else "miss", f"fallback title={fallback_title}")
             elif source == "bluray_com":
-                if not primary_title and not barcode:
+                if not primary_title and not lookup_barcode:
                     _trace_add(attempts, label, "skipped", "geen titel of barcode")
                     continue
                 base = {}
-                if barcode:
-                    by_barcode = lookup_movie_bluray_by_barcode(barcode)
-                    _trace_add(attempts, label, "hit" if by_barcode else "miss", f"barcode={barcode}")
+                if lookup_barcode:
+                    by_barcode = lookup_movie_bluray_by_barcode(lookup_barcode)
+                    _trace_add(attempts, label, "hit" if by_barcode else "miss", f"barcode={lookup_barcode}")
                     if by_barcode:
                         base.update({
                             "title": by_barcode.get("title", "") or primary_title,
@@ -10132,10 +10202,12 @@ def _merge_metadata_by_order(
                         })
                         if by_barcode.get("box_set_proposal"):
                             base["box_set_proposal"] = by_barcode.get("box_set_proposal")
+                elif barcode:
+                    _trace_add(attempts, label, "skipped", f"barcode={barcode}", "local/synthetic identifier")
                 specs, source_attempts = lookup_movie_bluray_specs_traced(
                     base.get("title") or primary_title,
                     base.get("year") or year,
-                    barcode,
+                    lookup_barcode,
                 )
                 for a in source_attempts:
                     _trace_add(attempts, label, a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))

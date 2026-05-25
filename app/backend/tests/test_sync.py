@@ -11,7 +11,10 @@ import uuid
 class SyncIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        try:
+            cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        except TypeError:
+            cls.tmp = tempfile.TemporaryDirectory()
         root = cls.tmp.name
         os.environ.update({
             "DB_PATH": os.path.join(root, "discvault.db"),
@@ -166,6 +169,37 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(release_payload["packaging"], "Keep Case")
         self.assertEqual(release_payload["posterUrl"], "https://release.example.test/poster.jpg")
         self.assertEqual(release_payload["backdropUrls"], ["https://release.example.test/backdrop.jpg"])
+
+    def test_movievault_box_set_member_source_reference_is_stable(self):
+        source = {
+            "title": "Mission: Impossible",
+            "year": "1996",
+            "tmdb_id": "954",
+            "barcode": "032429316110-BOX-01",
+            "box_set": "Mission: Impossible Collection",
+        }
+        first, first_stats = self.backend._movievault_contribution_payload(
+            "movie",
+            source,
+            "Unit test",
+            {"localEntityType": "movie", "localEntityId": 101},
+        )
+        second, second_stats = self.backend._movievault_contribution_payload(
+            "movie",
+            source,
+            "Unit test",
+            {"localEntityType": "movie", "localEntityId": 202},
+        )
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first["idempotencyKey"], second["idempotencyKey"])
+        self.assertEqual(first_stats["source_reference"]["key"], "032429316110-BOX-01")
+        self.assertEqual(first_stats["source_reference"]["parentBarcode"], "032429316110")
+        self.assertEqual(first_stats["source_reference"]["memberSortOrder"], 1)
+        self.assertEqual(first["sourceReference"], first_stats["source_reference"])
+        self.assertNotIn("sourceReference", first["payload"])
+        self.assertNotIn("barcode", first["payload"])
 
     def test_movievault_skips_unchanged_person_payload(self):
         original_enabled = self.backend._is_movievault_contribution_enabled
@@ -870,6 +904,64 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(url, "https://www.blu-ray.com/movies/Test-Movie/12345/")
         self.assertEqual(captured["url"], "https://www.blu-ray.com/search/quicksearch.php")
         self.assertEqual(captured["data"]["country"], "all")
+
+    def test_synthetic_box_set_member_barcode_is_not_used_for_external_lookup(self):
+        originals = {
+            "order": self.backend._metadata_source_order,
+            "enabled": self.backend._metadata_source_enabled,
+            "movievault_barcode": self.backend.lookup_movievault_by_barcode,
+            "movievault_movie": self.backend.lookup_movievault_movie,
+            "bluray_barcode": self.backend.lookup_movie_bluray_by_barcode,
+            "bluray_specs": self.backend.lookup_movie_bluray_specs_traced,
+        }
+        calls = []
+
+        def fake_movievault_barcode(barcode):
+            calls.append(("movievault_barcode", barcode))
+            return {"title": "Wrong release", "backdrop": "https://wrong.example/backdrop.jpg"}
+
+        def fake_movievault_movie(title="", year="", barcode=""):
+            calls.append(("movievault_movie", title, year, barcode))
+            return None
+
+        def fake_bluray_barcode(barcode):
+            calls.append(("bluray_barcode", barcode))
+            return {"title": "Dragonball - Box 01 Blu-ray", "backdrop": "https://wrong.example/dragonball.jpg"}
+
+        def fake_bluray_specs(title="", year="", barcode=""):
+            calls.append(("bluray_specs", title, year, barcode))
+            return ({"hdr": "HDR10"}, [{"result": "hit", "query": f"title={title}, year={year}", "extra": ""}])
+
+        try:
+            self.backend._metadata_source_order = lambda: ["movievault", "bluray_com"]
+            self.backend._metadata_source_enabled = lambda source: True
+            self.backend.lookup_movievault_by_barcode = fake_movievault_barcode
+            self.backend.lookup_movievault_movie = fake_movievault_movie
+            self.backend.lookup_movie_bluray_by_barcode = fake_bluray_barcode
+            self.backend.lookup_movie_bluray_specs_traced = fake_bluray_specs
+
+            attempts = []
+            info, source = self.backend._merge_metadata_by_order(
+                "Mission: Impossible",
+                "1996",
+                barcode="032429316110-BOX-01",
+                attempts=attempts,
+                contribute_to_movievault=False,
+            )
+        finally:
+            self.backend._metadata_source_order = originals["order"]
+            self.backend._metadata_source_enabled = originals["enabled"]
+            self.backend.lookup_movievault_by_barcode = originals["movievault_barcode"]
+            self.backend.lookup_movievault_movie = originals["movievault_movie"]
+            self.backend.lookup_movie_bluray_by_barcode = originals["bluray_barcode"]
+            self.backend.lookup_movie_bluray_specs_traced = originals["bluray_specs"]
+
+        self.assertEqual(info["hdr"], "HDR10")
+        self.assertNotIn("backdrop", info)
+        self.assertNotIn(("movievault_barcode", "032429316110-BOX-01"), calls)
+        self.assertNotIn(("bluray_barcode", "032429316110-BOX-01"), calls)
+        self.assertIn(("bluray_specs", "Mission: Impossible", "1996", ""), calls)
+        self.assertTrue(any("local/synthetic identifier" in attempt for attempt in attempts))
 
     def test_bluray_candidate_search_uses_all_country(self):
         original_post = self.backend.requests.post
