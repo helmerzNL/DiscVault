@@ -33,6 +33,8 @@ class MovieVaultHandshakeTests(unittest.TestCase):
             "MOVIEVAULT_API_KEY": "",
             "MOVIEVAULT_AUTH_METHOD": "hmac_handshake",
             "RP_NAME": "DiscVault Test",
+            "BUILD_VERSION": "3.5-test",
+            "BUILD_SHA": "abcdef1234567890",
         })
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if repo_root not in sys.path:
@@ -50,6 +52,7 @@ class MovieVaultHandshakeTests(unittest.TestCase):
             "app.backend.logging_utils",
             "app.backend.movievault_client",
             "app.backend.settings.routes",
+            "app.backend.versioning",
         ):
             sys.modules.pop(name, None)
         self.mv = importlib.import_module("app.backend.movievault_client")
@@ -111,6 +114,10 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         self.assertEqual(headers["X-DiscVault-Signature"], f"sha256={expected}")
         self.assertEqual(captured["url"], "https://movies.example.test/api/v1/internal/discvault/handshake")
         self.assertIn("instanceVersion", body)
+        self.assertEqual(body["software"]["name"], "DiscVault")
+        self.assertEqual(body["software"]["version"], "3.5-test")
+        self.assertEqual(body["software"]["backendVersion"], "3.5-test")
+        self.assertEqual(body["software"]["buildSha"], "abcdef1234567890")
         self.assertTrue(self.setting("movievault_instance_id").startswith("dv_"))
         self.assertEqual(self.mv.get_movievault_api_token(), "mv_full_token_123")
         self.assertEqual(self.setting("movievault_api_token"), "")
@@ -468,6 +475,8 @@ class MovieVaultZeroConfigTests(unittest.TestCase):
             "MOVIEVAULT_API_KEY": "",
             "MOVIEVAULT_AUTH_METHOD": "",
             "RP_NAME": "DiscVault Test",
+            "BUILD_VERSION": "3.5-test",
+            "BUILD_SHA": "abcdef1234567890",
         })
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if repo_root not in sys.path:
@@ -481,7 +490,7 @@ class MovieVaultZeroConfigTests(unittest.TestCase):
             fake_requests.request = None
             sys.modules["requests"] = fake_requests
             self.inserted_fake_requests = True
-        for name in ("app.backend.config", "app.backend.movievault_client"):
+        for name in ("app.backend.config", "app.backend.movievault_client", "app.backend.versioning"):
             sys.modules.pop(name, None)
         self.mv = importlib.import_module("app.backend.movievault_client")
         with sqlite3.connect(self.db_path) as conn:
@@ -538,6 +547,9 @@ class MovieVaultZeroConfigTests(unittest.TestCase):
         self.assertEqual(self.mv.token_provider().name, "bootstrap_signed")
         self.assertEqual(captured["url"], "https://movies.example.test/api/v1/internal/discvault/bootstrap")
         self.assertEqual(captured["body"]["software"]["name"], "DiscVault")
+        self.assertEqual(captured["body"]["software"]["version"], "3.5-test")
+        self.assertEqual(captured["body"]["software"]["backendVersion"], "3.5-test")
+        self.assertEqual(captured["body"]["software"]["buildSha"], "abcdef1234567890")
         self.assertTrue(captured["body"]["publicKey"])
         self.assertEqual(self.setting("movievault_instance_public_key_id"), "dvpk_testkey")
         self.assertTrue(self.setting("movievault_instance_private_key_enc"))
@@ -575,6 +587,9 @@ class MovieVaultZeroConfigTests(unittest.TestCase):
         self.assertEqual(captured["headers"]["X-DiscVault-Key-Id"], public_key_id)
         self.assertTrue(captured["headers"]["X-DiscVault-Signature"].startswith("key-v1="))
         self.assertEqual(captured["body"]["instanceId"], self.setting("movievault_instance_id"))
+        self.assertEqual(captured["body"]["software"]["name"], "DiscVault")
+        self.assertEqual(captured["body"]["software"]["backendVersion"], "3.5-test")
+        self.assertEqual(captured["body"]["software"]["buildSha"], "abcdef1234567890")
         self.assertEqual(self.mv.get_movievault_api_token(), "mv_recovered_token")
 
 

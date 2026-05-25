@@ -22,6 +22,7 @@ try:
     )
     from .db import connect_db
     from .logging_utils import add_log
+    from .versioning import backend_version, software_identity
 except ImportError:  # pragma: no cover - supports running app.py directly
     from config import (
         JWT_SECRET,
@@ -34,6 +35,7 @@ except ImportError:  # pragma: no cover - supports running app.py directly
     )
     from db import connect_db
     from logging_utils import add_log
+    from versioning import backend_version, software_identity
 
 
 REQUESTED_SCOPES = ("search:read", "contributions:write", "contributions:read")
@@ -52,7 +54,7 @@ INSTANCE_PRIVATE_KEY_KEY = "movievault_instance_private_key"
 INSTANCE_PRIVATE_KEY_ENC_KEY = "movievault_instance_private_key_enc"
 INSTANCE_PUBLIC_KEY_KEY = "movievault_instance_public_key"
 INSTANCE_PUBLIC_KEY_ID_KEY = "movievault_instance_public_key_id"
-SOFTWARE_VERSION = os.environ.get("BUILD_VERSION", "dev")
+SOFTWARE_VERSION = backend_version()
 
 
 class MovieVaultHandshakeError(RuntimeError):
@@ -319,6 +321,7 @@ def build_handshake_request() -> tuple[str, dict, str]:
         "instanceId": get_or_create_instance_id(),
         "instanceName": get_instance_name(),
         "instanceVersion": SOFTWARE_VERSION,
+        "software": software_identity(),
         "requestedScopes": list(REQUESTED_SCOPES),
     }
     raw_body = _raw_json_body(payload)
@@ -475,10 +478,7 @@ class BootstrapSignedTokenProvider(MovieVaultTokenProvider):
             "instanceName": get_instance_name(),
             "instanceVersion": SOFTWARE_VERSION,
             "publicKey": public_key,
-            "software": {
-                "name": "DiscVault",
-                "version": SOFTWARE_VERSION,
-            },
+            "software": software_identity(),
             "requestedScopes": list(REQUESTED_SCOPES),
         }
 
@@ -536,6 +536,7 @@ class BootstrapSignedTokenProvider(MovieVaultTokenProvider):
             "instanceId": get_or_create_instance_id(),
             "instanceName": get_instance_name(),
             "instanceVersion": SOFTWARE_VERSION,
+            "software": software_identity(),
             "requestedScopes": list(REQUESTED_SCOPES),
         }
         raw_body = _raw_json_body(payload)

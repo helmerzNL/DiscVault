@@ -1,6 +1,10 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        - BUILD_VERSION=${BUILD_VERSION:-dev}
+        - BUILD_SHA=${BUILD_SHA:-unknown}
     container_name: discvault-backend
     restart: unless-stopped
     environment:
@@ -20,6 +24,10 @@ services:
       - RP_NAME=${RP_NAME:-DiscVault}
       - RP_ORIGIN=${RP_ORIGIN:-http://localhost:6080}
       - TZ=${TZ:-Europe/Amsterdam}
+      - BUILD_VERSION=${BUILD_VERSION:-dev}
+      - BUILD_SHA=${BUILD_SHA:-unknown}
+      - DISCVAULT_BACKEND_VERSION=${BUILD_VERSION:-dev}
+      - DISCVAULT_BUILD_SHA=${BUILD_SHA:-unknown}
     volumes:
       - /mnt/user/appdata/discvault/data:/data
     networks:

@@ -19,6 +19,8 @@ class SyncIntegrationTests(unittest.TestCase):
             "PROFILE_DIR": os.path.join(root, "profiles"),
             "BACKUP_DIR": os.path.join(root, "backups"),
             "AVATAR_DIR": os.path.join(root, "avatars"),
+            "BUILD_VERSION": "3.5-test",
+            "BUILD_SHA": "abcdef1234567890",
         })
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if repo_root not in sys.path:
@@ -31,6 +33,7 @@ class SyncIntegrationTests(unittest.TestCase):
             "app.backend.movievault_client",
             "app.backend.push.routes",
             "app.backend.settings.routes",
+            "app.backend.versioning",
         ):
             sys.modules.pop(name, None)
         try:
@@ -214,6 +217,9 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(second["status"], "skipped")
         self.assertEqual(second["action"], "unchanged_payload")
         self.assertEqual(len([call for call in calls if call["method"] == "POST"]), 1)
+        submitted = calls[0]["json"]
+        self.assertEqual(submitted["sourceVersion"], "3.5-test")
+        self.assertNotIn("sourceVersion", submitted["payload"])
 
     def test_movievault_template_version_check_refreshes_fresh_cache_when_due(self):
         original_request = self.backend.movievault_request
