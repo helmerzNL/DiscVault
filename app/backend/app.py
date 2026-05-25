@@ -5297,7 +5297,13 @@ def _metadata_debug_db(query: str, params=None, context: str = ""):
             for key, value in params.items()
         }
     elif isinstance(params, (list, tuple)):
-        params_value = f"{len(params)} positional value(s)"
+        query_text = str(query or "").lower()
+        context_text = str(context or "").lower()
+        has_private_field = any(key in query_text or key in context_text for key in private_keys)
+        if len(params) == 1 and "barcode" in query_text and not has_private_field:
+            params_value = [params[0]]
+        else:
+            params_value = f"{len(params)} positional value(s)"
     else:
         params_value = params if params is not None else []
     _metadata_debug_log(

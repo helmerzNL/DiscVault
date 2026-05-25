@@ -4,6 +4,7 @@ let _nativeStream = null;
 let _nativeTimer = null;
 let _detectedFormat = '';   // format detected from UPC/EAN title, persists across candidate selection
 let currentBoxSetProposal = null;
+let _lookupInFlightBarcode = '';
 
 function _supportsNativeDetector() {
   return typeof BarcodeDetector !== 'undefined';
@@ -342,6 +343,17 @@ async function readLookupNdjson(response, onMessage) {
 }
 
 async function doLookup(barcode) {
+  barcode = String(barcode || '').trim();
+  if (!barcode) return;
+  if (_lookupInFlightBarcode) {
+    if (_lookupInFlightBarcode === barcode) {
+      showStatus('scanStatus', t('js.lookingUp'), 'info');
+      return;
+    }
+    showStatus('scanStatus', t('js.lookingUp'), 'info');
+    return;
+  }
+  _lookupInFlightBarcode = barcode;
   showStatus('scanStatus', t('js.lookingUp'), 'info');
   document.getElementById('movieResult').style.display = 'none';
   document.getElementById('noResult').style.display = 'none';
@@ -438,6 +450,8 @@ async function doLookup(barcode) {
   } catch(e) {
     showStatus('scanStatus', t('js.connectionError', e.message), 'error');
     document.getElementById('noResult').style.display = 'block';
+  } finally {
+    if (_lookupInFlightBarcode === barcode) _lookupInFlightBarcode = '';
   }
 }
 
