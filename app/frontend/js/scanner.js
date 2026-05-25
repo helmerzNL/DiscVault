@@ -712,6 +712,8 @@ function posterSrc(m) {
   // never overwritten.  Use _container_poster_file first for those cards.
   const containerPoster = apiImageUrl(m._container_poster_file, 'poster');
   if (containerPoster) return containerPoster;
+  const filePoster = apiImageUrl(m.posterFile || m.poster_file, 'poster');
+  if (filePoster) return filePoster;
   const responsePoster = firstImageUrl([
     m.posterUrl,
     m.poster_url,
@@ -720,8 +722,6 @@ function posterSrc(m) {
     m.poster,
   ], 'poster');
   if (responsePoster) return responsePoster;
-  const filePoster = apiImageUrl(m.posterFile || m.poster_file, 'poster');
-  if (filePoster) return filePoster;
   const tmdbPoster = apiImageUrl(m.posterPath || m.poster_path, 'tmdbPoster');
   if (tmdbPoster) return tmdbPoster;
   return null;

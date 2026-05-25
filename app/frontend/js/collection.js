@@ -2132,8 +2132,48 @@ function _playYouTube(key) {
   el.onclick = null;
 }
 
+function _parseMediaList(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(v => String(v || '').trim()).filter(Boolean);
+  const text = String(raw || '').trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.map(v => String(v || '').trim()).filter(Boolean) : [String(parsed || '').trim()].filter(Boolean);
+  } catch(e) {
+    return [text];
+  }
+}
+
+function _moviePosterChoices(movie) {
+  const rawValues = [
+    ..._parseMediaList(movie.posters),
+    movie.poster_file,
+    movie.posterFile,
+    movie.poster_url,
+    movie.posterUrl,
+    movie.cover_url,
+    movie.coverUrl,
+    movie.poster,
+  ];
+  const choices = [];
+  const seen = new Set();
+  for (const raw of rawValues) {
+    const value = String(raw || '').trim();
+    if (!value) continue;
+    const src = /^https?:\/\//i.test(value) || value.startsWith('/api/')
+      ? apiImageUrl(value, 'poster')
+      : apiImageUrl(value.split(/[\\/]/).pop(), 'poster');
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    choices.push({ value, src });
+  }
+  return choices;
+}
+
 function loadMovieMedia() {
   const movie = allMovies.find(m => m.id === currentMovieId) || {};
+  const posters = _moviePosterChoices(movie);
 
   // Backdrops
   let backdrops = [];
@@ -2155,17 +2195,41 @@ function loadMovieMedia() {
   // --- Images tab ---
   const imgContainer = document.getElementById('mediaImagesContent');
   if (imgContainer) {
+    const sections = [];
+    if (posters.length > 0) {
+      const currentPoster = posterSrc({ ...movie, _container_poster_file: null }) || '';
+      const currentPosterFile = String(movie.poster_file || movie.posterFile || '').split(/[\\/]/).pop();
+      sections.push(`<section style="margin-bottom:22px;">
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px;">${t('modal.posters')}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:10px;">
+          ${posters.map(item => {
+            const choiceFile = String(item.value || '').split(/[\\/]/).pop();
+            const isActive = item.src === currentPoster || (currentPosterFile && choiceFile === currentPosterFile);
+            return `<button type="button" title="${escHtml(t('modal.usePoster'))}" aria-pressed="${isActive ? 'true' : 'false'}" style="appearance:none;background:transparent;padding:0;position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'var(--border)'};cursor:pointer;box-shadow:${isActive ? '0 0 0 2px rgba(64,224,208,.22)' : 'none'};" onclick="setMoviePoster(${movie.id}, ${JSON.stringify(item.value).replace(/</g, '\\u003c')})">
+              <img src="${item.src}" loading="lazy" style="width:100%;display:block;aspect-ratio:2/3;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+              ${isActive ? `<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.34));pointer-events:none;"></div><div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:800;padding:3px 8px;border-radius:4px;">${t('modal.selected')}</div><div style="position:absolute;left:7px;bottom:7px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#0a0a0f;font-size:0.9rem;font-weight:900;display:flex;align-items:center;justify-content:center;">✓</div>` : ''}
+            </button>`;
+          }).join('')}
+        </div>
+      </section>`);
+    }
     if (backdrops.length > 0) {
       const currentBackdrop = backdropSrc(movie);
-      imgContainer.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
-        ${backdrops.map(url => {
+      sections.push(`<section>
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px;">${t('modal.backdrops')}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
+          ${backdrops.map(url => {
           const isActive = url === currentBackdrop;
-          return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setMovieBackdrop(${movie.id}, '${url.replace(/'/g, "\\'")}')">
+          return `<button type="button" aria-pressed="${isActive ? 'true' : 'false'}" style="appearance:none;background:transparent;padding:0;position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;box-shadow:${isActive ? '0 0 0 2px rgba(64,224,208,.22)' : 'none'};" onclick="setMovieBackdrop(${movie.id}, '${url.replace(/'/g, "\\'")}')">
             <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-            ${isActive ? '<div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;">Backdrop</div>' : ''}
-          </div>`;
-        }).join('')}
-      </div>`;
+            ${isActive ? `<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.34));pointer-events:none;"></div><div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:800;padding:3px 8px;border-radius:4px;">${t('modal.selected')}</div><div style="position:absolute;left:7px;bottom:7px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#0a0a0f;font-size:0.9rem;font-weight:900;display:flex;align-items:center;justify-content:center;">✓</div>` : ''}
+          </button>`;
+          }).join('')}
+        </div>
+      </section>`);
+    }
+    if (sections.length) {
+      imgContainer.innerHTML = sections.join('');
     } else {
       imgContainer.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.88rem;">${t('modal.noMedia')}</div>`;
     }
@@ -2225,6 +2289,33 @@ function _ytThumbHtml(key) {
       <span style="display:block;width:0;height:0;border-style:solid;border-width:12px 0 12px 22px;border-color:transparent transparent transparent #fff;margin-left:4px;"></span>
     </div>
   </div>`;
+}
+
+async function setMoviePoster(movieId, value) {
+  const response = await fetch(`${API}/movies/${movieId}/poster-choice`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    showStatus('editStatus', data.error || t('js.backendError', response.status), 'error');
+    return;
+  }
+  if (data.movie) {
+    const idx = allMovies.findIndex(m => m.id === movieId);
+    if (idx >= 0) allMovies[idx] = data.movie;
+  }
+  const movie = allMovies.find(m => m.id === movieId) || data.movie || {};
+  const src = posterSrc({ ...movie, _container_poster_file: null });
+  const poster = document.getElementById('modalPoster');
+  if (poster) {
+    poster.innerHTML = src
+      ? `<img src="${src}" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>🎬</div>'">`
+      : '<div class="no-img">🎬</div>';
+  }
+  loadMovieMedia();
+  filterMovies();
 }
 
 async function setMovieBackdrop(movieId, url) {

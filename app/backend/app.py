@@ -403,6 +403,7 @@ SCHEMA_COLUMNS = [
     ("poster",               "TEXT"),
     ("poster_url",           "TEXT"),
     ("poster_file",          "TEXT"),
+    ("posters",              "TEXT"),
     ("backdrop",             "TEXT"),
     ("backdrop_url",         "TEXT"),
     ("backdrops",            "TEXT"),
@@ -468,6 +469,63 @@ def _first_remote_image_value(*values) -> str:
     return ""
 
 
+def _normalize_poster_choice(value) -> str:
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    if value.startswith("/api/images/") or value.startswith("/api/posters/"):
+        return os.path.basename(value.split("?", 1)[0])
+    return value
+
+
+def _parse_poster_values(raw) -> list:
+    values = []
+    seen = set()
+    for item in _coerce_list_values(raw):
+        normalized = _normalize_poster_choice(item)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        values.append(normalized)
+    return values
+
+
+def _merge_poster_values(*values) -> list:
+    merged = []
+    seen = set()
+    for raw in values:
+        for item in _parse_poster_values(raw):
+            if item in seen:
+                continue
+            seen.add(item)
+            merged.append(item)
+    return merged
+
+
+def _poster_values_json(*values) -> str:
+    posters = _merge_poster_values(*values)
+    return json.dumps(posters, ensure_ascii=False) if posters else ""
+
+
+def _add_poster_choice_to_updates(current_movie, updates, *values):
+    current_movie = current_movie or {}
+    updates = updates or {}
+    posters = _merge_poster_values(
+        current_movie.get("posters"),
+        current_movie.get("poster_file"),
+        current_movie.get("poster"),
+        current_movie.get("poster_url"),
+        updates.get("posters"),
+        updates.get("poster_file"),
+        updates.get("poster"),
+        updates.get("poster_url"),
+        *values,
+    )
+    if posters:
+        updates["posters"] = json.dumps(posters, ensure_ascii=False)
+    return updates
+
+
 def preserve_source_image_urls(row_or_updates):
     if not row_or_updates:
         return row_or_updates
@@ -515,8 +573,11 @@ def _init_container_tables(conn):
             primary_movie_id        INTEGER,
             badge_label             TEXT,
             backdrop                TEXT,
+            backdrop_url            TEXT,
+            backdrop_urls           TEXT,
             description             TEXT,
             poster_file             TEXT,
+            poster_url              TEXT,
             legacy_edition_group_id INTEGER UNIQUE,
             created_at              TEXT NOT NULL
         )
@@ -578,6 +639,13 @@ def _init_container_tables(conn):
     box_set_cols = {row[1] for row in conn.execute("PRAGMA table_info(box_sets)")}
     if "barcode" not in box_set_cols:
         conn.execute("ALTER TABLE box_sets ADD COLUMN barcode TEXT")
+    for col, definition in (
+        ("poster_url", "TEXT"),
+        ("backdrop_url", "TEXT"),
+        ("backdrop_urls", "TEXT"),
+    ):
+        if col not in box_set_cols:
+            conn.execute(f"ALTER TABLE box_sets ADD COLUMN {col} {definition}")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_box_sets_barcode ON box_sets(barcode)")
 
 
@@ -2013,11 +2081,43 @@ def prepare_local_image_variants(row_or_updates):
     poster_file = row_or_updates.get("poster_file")
     if poster_file:
         ensure_asset_variant(poster_file, "poster")
+    for poster_value in _parse_poster_values(row_or_updates.get("posters")):
+        if poster_value and not _is_remote_image_url(poster_value):
+            ensure_asset_variant(os.path.basename(poster_value.replace("\\", "/")), "poster")
     if row_or_updates.get("backdrop"):
         row_or_updates["backdrop"] = localize_backdrop(row_or_updates.get("backdrop"))
     if row_or_updates.get("backdrops"):
         row_or_updates["backdrops"] = localize_backdrops(row_or_updates.get("backdrops"))
     return row_or_updates
+
+
+def _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters=True):
+    """Keep the selected edition poster while collecting new poster candidates."""
+    movie = movie or {}
+    updates = updates or {}
+    new_poster_url = (new_poster_url or "").strip()
+    downloaded_file = ""
+    if new_poster_url:
+        if new_poster_url != (movie.get("poster") or ""):
+            updates["poster"] = new_poster_url
+            if _is_remote_image_url(new_poster_url):
+                updates["poster_url"] = new_poster_url
+        if fetch_posters and not (movie.get("poster_file") or "").strip():
+            downloaded_file = download_poster(new_poster_url) or ""
+            if downloaded_file:
+                updates["poster_file"] = downloaded_file
+        _add_poster_choice_to_updates(movie, updates, downloaded_file or new_poster_url)
+        return downloaded_file
+
+    existing_poster = (movie.get("poster") or movie.get("poster_url") or "").strip()
+    if fetch_posters and existing_poster and not (movie.get("poster_file") or "").strip():
+        downloaded_file = download_poster(existing_poster) or ""
+        if downloaded_file:
+            updates["poster_file"] = downloaded_file
+            _add_poster_choice_to_updates(movie, updates, downloaded_file)
+    elif movie.get("poster_file") or movie.get("poster") or movie.get("poster_url"):
+        _add_poster_choice_to_updates(movie, updates)
+    return downloaded_file
 
 
 def _log_asset_sync_event(conn, message, detail="", level="info"):
@@ -2546,7 +2646,10 @@ def _movievault_mask_token(token: str | None) -> str:
 
 
 def _movievault_sharing_mode() -> str:
-    mode = str(MOVIEVAULT_SHARING_MODE).strip().lower() or "opt_in"
+    mode = _movievault_setting_first(
+        ("movievault_sharing_mode",),
+        str(MOVIEVAULT_SHARING_MODE).strip() or "opt_in",
+    ).strip().lower()
     if mode not in {"opt_in", "opt_out", "disabled"}:
         return "opt_in"
     return mode
@@ -2676,9 +2779,9 @@ def _movievault_response_error(response) -> str:
 def _movievault_extract_movievault_id(value, allow_plain_id: bool = False) -> str:
     if not isinstance(value, dict):
         return ""
-    keys = ("movieVaultId", "movievaultId", "movievault_id", "_movievault_id", "entityId")
+    keys = ("movieVaultId", "movievaultId", "movievault_id", "_movievault_id")
     if allow_plain_id:
-        keys = keys + ("id",)
+        keys = keys + ("externalId", "external_id")
     for key in keys:
         item = value.get(key)
         if item not in (None, "", [], {}):
@@ -2823,6 +2926,9 @@ def _movievault_fallback_contribution_template() -> dict:
                     "language": {"type": "string"},
                     "yearRange": {"type": "string"},
                     "description": localized,
+                    "posterUrl": {"type": "string"},
+                    "backdropUrl": {"type": "string"},
+                    "backdropUrls": {"type": "array"},
                     "members": {"type": "array"},
                 },
             },
@@ -3093,6 +3199,30 @@ def _movievault_image_url(value) -> str:
     return value
 
 
+def _movievault_public_image_source(value) -> str:
+    value = _movievault_text(value)
+    if not value or value == "N/A":
+        return ""
+    if value.startswith(("/api/images/", "/api/posters/", "/api/profiles/")):
+        return ""
+    if value.startswith(("http://", "https://")):
+        return value
+    return ""
+
+
+def _movievault_public_image_sources(value) -> list[str]:
+    values = _coerce_list_values(value)
+    out = []
+    seen = set()
+    for item in values:
+        source = _movievault_public_image_source(item)
+        if not source or source in seen:
+            continue
+        seen.add(source)
+        out.append(source)
+    return out
+
+
 def _movievault_first_payload(data):
     if not data:
         return None
@@ -3299,6 +3429,11 @@ MOVIEVAULT_ENTITY_FIELD_MAPS = {
         "year_range": "yearRange",
         "yearRange": "yearRange",
         "description": "description",
+        "poster": "posterUrl",
+        "poster_url": "posterUrl",
+        "backdrop": "backdropUrl",
+        "backdrop_url": "backdropUrl",
+        "backdrop_urls": "backdropUrls",
         "members": "members",
         "movies": "members",
         "title_nl": "title_nl",
@@ -3436,6 +3571,10 @@ def _movievault_raw_payload(source: dict, entity_type: str) -> dict:
     field_map = MOVIEVAULT_ENTITY_FIELD_MAPS.get(entity_type, {})
     for src_key, dst_key in field_map.items():
         value = source.get(src_key)
+        if dst_key in {"posterUrl", "backdropUrl"}:
+            value = _movievault_public_image_source(value)
+        elif dst_key == "backdropUrls":
+            value = _movievault_public_image_sources(value)
         if value not in (None, "", [], {}):
             raw[dst_key] = value
     return raw
@@ -3961,6 +4100,23 @@ def _movievault_box_set_source_from_proposal(
         "language": proposal.get("language") or movie_info.get("language") or "",
         "year_range": year_range,
         "description": proposal.get("description") or movie_info.get("plot") or "",
+        "poster_url": (
+            proposal.get("poster_url")
+            or proposal.get("posterUrl")
+            or proposal.get("poster")
+            or movie_info.get("poster_url")
+            or movie_info.get("poster")
+            or ""
+        ),
+        "backdrop_url": (
+            proposal.get("backdrop_url")
+            or proposal.get("backdropUrl")
+            or proposal.get("backdrop")
+            or movie_info.get("backdrop_url")
+            or movie_info.get("backdrop")
+            or ""
+        ),
+        "backdrop_urls": proposal.get("backdrop_urls") or proposal.get("backdropUrls") or movie_info.get("backdrop_urls") or "",
         "members": member_payload,
     }
 
@@ -3996,7 +4152,10 @@ def _movievault_box_set_source_from_db(conn, box_set_id: int) -> dict:
             COALESCE(NULLIF(bs.tmdb_id, ''), NULLIF(eg.tmdb_id, '')) AS tmdb_id,
             COALESCE(NULLIF(bs.imdb_id, ''), NULLIF(eg.imdb_id, '')) AS imdb_id,
             COALESCE(NULLIF(bs.year, ''), NULLIF(eg.year, '')) AS year,
-            COALESCE(NULLIF(bs.description, ''), NULLIF(eg.description, '')) AS description
+            COALESCE(NULLIF(bs.description, ''), NULLIF(eg.description, '')) AS description,
+            COALESCE(NULLIF(bs.poster_url, ''), '') AS poster_url,
+            COALESCE(NULLIF(bs.backdrop_url, ''), NULLIF(bs.backdrop, '')) AS backdrop_url,
+            COALESCE(NULLIF(bs.backdrop_urls, ''), '') AS backdrop_urls
         FROM box_sets bs
         LEFT JOIN edition_groups eg ON eg.id = bs.id
         WHERE bs.id=?
@@ -4050,6 +4209,9 @@ def _movievault_box_set_source_from_db(conn, box_set_id: int) -> dict:
         "imdb_id": row["imdb_id"] or "",
         "year_range": year_range,
         "description": row["description"] or "",
+        "poster_url": row["poster_url"] or "",
+        "backdrop_url": row["backdrop_url"] or "",
+        "backdrop_urls": row["backdrop_urls"] or "",
         "members": members,
     }
 
@@ -4154,7 +4316,7 @@ def _normalize_movievault_movie(data: dict | None):
         "trailer_url": _movievault_text(_movievault_first(movie, "trailerUrl", "trailer_url")),
         "videos": _movievault_text(_movievault_first(movie, "videos")),
         "distributor": _movievault_text(_movievault_first(movie, "distributor", "label", "publisher")),
-        "_movievault_id": _movievault_text(_movievault_first(movie, "movieVaultId", "movievaultId", "movievault_id", "id", "movieId", "movie_id")),
+        "_movievault_id": _movievault_text(_movievault_first(movie, "movieVaultId", "movievaultId", "movievault_id")),
     }
 
 
@@ -4194,6 +4356,7 @@ def _normalize_movievault_box_set(data: dict | None):
         return None
     return {
         "source": "movievault",
+        "movievault_id": _movievault_text(_movievault_first(payload, "movieVaultId", "movievaultId", "movievault_id")),
         "name": title,
         "barcode": _movievault_text(_movievault_first(payload, "barcode", "ean", "upc")),
         "year_range": _movievault_text(_movievault_first(payload, "yearRange", "year_range")),
@@ -6305,6 +6468,7 @@ def add_movie():
         row["barcode"]     = data["barcode"]
         row["title"]       = data["title"]
         row["poster_file"] = poster_file
+        row["posters"]     = _poster_values_json(data.get("posters"), poster_file, data.get("poster"), data.get("poster_url"))
         row["format"]      = data.get("format", "4K UHD")
         row["added_at"]    = datetime.utcnow().isoformat()
         prepare_local_image_variants(row)
@@ -6488,6 +6652,9 @@ def _movie_payload_from_box_set_member(member, fallback_format, box_set_title):
     row["format"] = row.get("format") or fallback_format or "4K UHD"
     row["box_set"] = box_set_title
     preserve_source_image_urls(row)
+    if not row.get("poster_file") and row.get("poster"):
+        row["poster_file"] = download_poster(row["poster"]) or ""
+    row["posters"] = _poster_values_json(row.get("posters"), row.get("poster_file"), row.get("poster"), row.get("poster_url"))
     return row
 
 
@@ -6526,15 +6693,32 @@ def create_box_set_from_proposal():
             )
             box_set_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
             conn.execute(
-                "INSERT OR IGNORE INTO box_sets (id, title, barcode, tmdb_id, imdb_id, year, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT OR IGNORE INTO box_sets (id, title, barcode, tmdb_id, imdb_id, year, poster_url, backdrop_url, backdrop_urls, legacy_edition_group_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (box_set_id, box_set_title, barcode or "", data.get("tmdb_id") or "", data.get("imdb_id") or "",
-                 data.get("year") or "", box_set_id, now)
+                 data.get("year") or "", data.get("poster_url") or data.get("poster") or "",
+                 data.get("backdrop_url") or data.get("backdrop") or "",
+                 data.get("backdrop_urls") or data.get("backdrops") or "", box_set_id, now)
             )
         if barcode:
             conn.execute(
                 "UPDATE box_sets SET barcode=COALESCE(NULLIF(barcode, ''), ?) WHERE id=?",
                 (barcode, box_set_id),
             )
+        conn.execute(
+            """
+            UPDATE box_sets
+               SET poster_url=COALESCE(NULLIF(poster_url, ''), ?),
+                   backdrop_url=COALESCE(NULLIF(backdrop_url, ''), ?),
+                   backdrop_urls=COALESCE(NULLIF(backdrop_urls, ''), ?)
+             WHERE id=?
+            """,
+            (
+                data.get("poster_url") or data.get("poster") or "",
+                data.get("backdrop_url") or data.get("backdrop") or "",
+                data.get("backdrop_urls") or data.get("backdrops") or "",
+                box_set_id,
+            ),
+        )
 
         cols = [c for c, _ in SCHEMA_COLUMNS] + ["owner_id"]
         colstr = ", ".join(cols)
@@ -7006,21 +7190,57 @@ def upload_movie_poster(movie_id):
         conn.close()
         return jsonify({"error": err}), 400
 
-    old_file = (movie["poster_file"] or "").strip()
-    if old_file:
-        _remove_asset_variants(old_file, ("poster",))
-        try:
-            os.remove(os.path.join(POSTER_DIR, os.path.basename(old_file)))
-        except OSError:
-            pass
+    posters = _poster_values_json(movie["posters"], movie["poster_file"], movie["poster"], movie["poster_url"], new_file)
 
-    conn.execute("UPDATE movies SET poster_file = ? WHERE id = ?", (new_file, movie_id))
+    conn.execute("UPDATE movies SET poster_file = ?, posters = ? WHERE id = ?", (new_file, posters, movie_id))
     conn.commit()
     updated = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     conn.close()
 
     add_log("refresh", f"Eigen cover geupload voor \"{updated['title']}\"", f"Bestand: {new_file}", "success")
     return jsonify({"status": "updated", "movie": dict(updated), "poster_file": new_file})
+
+
+@app.route("/api/movies/<int:movie_id>/poster-choice", methods=["PUT"])
+def set_movie_poster_choice(movie_id):
+    data = request.json or {}
+    raw_value = _normalize_poster_choice(data.get("value") or data.get("poster_file") or data.get("poster") or "")
+    if not raw_value:
+        return jsonify({"error": "Poster value is required"}), 400
+
+    conn = get_db()
+    movie = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+    if not movie:
+        conn.close()
+        return jsonify({"error": "Film niet gevonden"}), 404
+    if not _check_movie_owner(movie):
+        conn.close()
+        return jsonify({"error": "Not your movie"}), 403
+
+    selected_value = raw_value
+    if _is_remote_image_url(raw_value):
+        selected_value = download_poster(raw_value) or ""
+        if not selected_value:
+            conn.close()
+            return jsonify({"error": "Poster kon niet worden gedownload"}), 400
+
+    selected_value = _normalize_poster_choice(selected_value)
+    updates = {
+        "poster_file": selected_value,
+        "posters": _poster_values_json(movie["posters"], movie["poster_file"], movie["poster"], movie["poster_url"], raw_value, selected_value),
+    }
+    if _is_remote_image_url(raw_value):
+        updates["poster"] = raw_value
+        updates["poster_url"] = raw_value
+    prepare_local_image_variants(updates)
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    conn.execute(f"UPDATE movies SET {set_clause} WHERE id=?", list(updates.values()) + [movie_id])
+    conn.commit()
+    updated = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+    conn.close()
+
+    add_log("refresh", f"Posterkeuze bijgewerkt voor \"{updated['title']}\"", f"Poster: {selected_value}", "success")
+    return jsonify({"status": "updated", "movie": dict(updated), "poster_file": selected_value})
 
 
 def _box_set_ids_for_movie(conn, movie_id, row=None):
@@ -7447,18 +7667,7 @@ def refresh_single(movie_id):
         movie = dict(current_row)
 
         new_poster_url = info.get("poster", "")
-        if new_poster_url and new_poster_url != movie.get("poster"):
-            if movie.get("poster_file"):
-                _remove_asset_variants(movie["poster_file"], ("poster",))
-                try: os.remove(os.path.join(POSTER_DIR, movie["poster_file"]))
-                except OSError: pass
-            updates["poster"] = new_poster_url
-            if fetch_posters:
-                nf = download_poster(new_poster_url)
-                updates["poster_file"] = nf or ""
-        elif not movie.get("poster_file") and movie.get("poster") and fetch_posters:
-            nf = download_poster(movie["poster"])
-            if nf: updates["poster_file"] = nf
+        _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
 
         if updates:
             prepare_local_image_variants(updates)
@@ -7562,21 +7771,7 @@ def sync_single_all_backends(movie_id):
         movie = dict(current_row)
 
         new_poster_url = info.get("poster", "")
-        if new_poster_url and new_poster_url != movie.get("poster"):
-            if movie.get("poster_file"):
-                _remove_asset_variants(movie["poster_file"], ("poster",))
-                try:
-                    os.remove(os.path.join(POSTER_DIR, movie["poster_file"]))
-                except OSError:
-                    pass
-            updates["poster"] = new_poster_url
-            if fetch_posters:
-                nf = download_poster(new_poster_url)
-                updates["poster_file"] = nf or ""
-        elif not movie.get("poster_file") and movie.get("poster") and fetch_posters:
-            nf = download_poster(movie["poster"])
-            if nf:
-                updates["poster_file"] = nf
+        _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
 
         if updates:
             prepare_local_image_variants(updates)
@@ -7711,17 +7906,7 @@ def sync_single_source(movie_id):
         updates = {f: info[f] for f in refresh_fields if info.get(f)}
 
         new_poster_url = info.get("poster", "")
-        if new_poster_url and new_poster_url != movie.get("poster"):
-            if movie.get("poster_file"):
-                _remove_asset_variants(movie["poster_file"], ("poster",))
-                try:
-                    os.remove(os.path.join(POSTER_DIR, movie["poster_file"]))
-                except OSError:
-                    pass
-            updates["poster"] = new_poster_url
-            if fetch_posters:
-                nf = download_poster(new_poster_url)
-                updates["poster_file"] = nf or ""
+        _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
 
         if updates:
             prepare_local_image_variants(updates)
@@ -7870,28 +8055,10 @@ def bulk_refresh():
             movie = dict(current_row)
 
             new_poster_url = info.get("poster", "")
-            if new_poster_url and new_poster_url != movie.get("poster"):
-                if movie.get("poster_file"):
-                    _remove_asset_variants(movie["poster_file"], ("poster",))
-                    try:
-                        os.remove(os.path.join(POSTER_DIR, movie["poster_file"]))
-                    except OSError:
-                        pass
-                updates["poster"] = new_poster_url
-                if fetch_posters:
-                    new_file = download_poster(new_poster_url)
-                    if new_file:
-                        updates["poster_file"] = new_file
-                        add_log("refresh", f"Poster gedownload voor \"{title}\"",
-                                f"Bron: {source}, Bestand: {new_file}", "success")
-                    else:
-                        updates["poster_file"] = ""
-                        add_log("refresh", f"Poster download mislukt voor \"{title}\"",
-                                f"URL: {new_poster_url}", "warn")
-            elif not movie.get("poster_file") and movie.get("poster") and fetch_posters:
-                new_file = download_poster(movie["poster"])
-                if new_file:
-                    updates["poster_file"] = new_file
+            new_file = _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
+            if new_file:
+                add_log("refresh", f"Poster gedownload voor \"{title}\"",
+                        f"Bron: {source}, Bestand: {new_file}", "success")
 
             if updates:
                 prepare_local_image_variants(updates)
@@ -8505,6 +8672,7 @@ def insert_row(conn, row: dict, mode: str, fetch_posters: bool = True, owner_id:
         "poster":               poster_url,
         "poster_url":           source_poster_url,
         "poster_file":          poster_file,
+        "posters":              _poster_values_json(row.get("posters"), poster_file, poster_url, source_poster_url),
         "backdrop":             _s("backdrop"),
         "backdrop_url":         backdrop_url,
         "backdrops":            _s("backdrops"),
@@ -10866,11 +11034,19 @@ def _sync_asset_manifest(conn, movie_ids=None):
             return []
         movie_filter = f" WHERE id IN ({','.join('?' * len(movie_ids))})"
         params = movie_ids
-    for m in conn.execute(f"SELECT id, poster_file, backdrop, backdrops, updated_at, sync_revision FROM movies{movie_filter}", params).fetchall():
+    for m in conn.execute(f"SELECT id, poster_file, posters, backdrop, backdrops, updated_at, sync_revision FROM movies{movie_filter}", params).fetchall():
         for entry in (
             _asset_manifest_entry("movie_poster", "movie", m["id"], m["poster_file"], m["updated_at"], m["sync_revision"]),
             _asset_manifest_entry("movie_backdrop", "movie", m["id"], m["backdrop"], m["updated_at"], m["sync_revision"]),
         ):
+            if entry:
+                assets.append(entry)
+        seen_posters = {m["poster_file"]} if m["poster_file"] else set()
+        for poster_value in _parse_poster_values(m["posters"]):
+            if poster_value in seen_posters:
+                continue
+            seen_posters.add(poster_value)
+            entry = _asset_manifest_entry("movie_poster", "movie", m["id"], poster_value, m["updated_at"], m["sync_revision"])
             if entry:
                 assets.append(entry)
         seen_backdrops = {m["backdrop"]} if m["backdrop"] else set()

@@ -101,6 +101,7 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         self.mv.perform_handshake()
 
         raw_body = captured["data"].decode("utf-8")
+        body = json.loads(raw_body)
         headers = captured["headers"]
         expected = hmac.new(
             b"test-secret",
@@ -109,6 +110,7 @@ class MovieVaultHandshakeTests(unittest.TestCase):
         ).hexdigest()
         self.assertEqual(headers["X-DiscVault-Signature"], f"sha256={expected}")
         self.assertEqual(captured["url"], "https://movies.example.test/api/v1/internal/discvault/handshake")
+        self.assertIn("instanceVersion", body)
         self.assertTrue(self.setting("movievault_instance_id").startswith("dv_"))
         self.assertEqual(self.mv.get_movievault_api_token(), "mv_full_token_123")
         self.assertEqual(self.setting("movievault_api_token"), "")
