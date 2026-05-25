@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v118";
+const SW_VERSION = "discvault-sw-v119";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -29,6 +29,10 @@ const APP_SHELL = [
   "/flags/es.svg",
   "/flags/pt.svg",
   "/flags/it.svg",
+  "/flags/sv.svg",
+  "/flags/da.svg",
+  "/flags/no.svg",
+  "/flags/fi.svg",
   "/flags/us.svg",
   "/flags/gb.svg",
   "/flags/ca.svg"

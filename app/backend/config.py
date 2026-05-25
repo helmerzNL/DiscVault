@@ -96,6 +96,10 @@ TMDB_LANGUAGES = [
     ("es", "es-ES"),
     ("pt", "pt-PT"),
     ("it", "it-IT"),
+    ("sv", "sv-SE"),
+    ("da", "da-DK"),
+    ("no", "no-NO"),
+    ("fi", "fi-FI"),
 ]
 RATING_COUNTRIES = {"US", "GB", "CA", "NL", "FR", "DE", "ES", "PT", "IT"}
 
