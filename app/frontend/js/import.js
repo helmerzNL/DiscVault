@@ -636,6 +636,10 @@ async function clearLogs() {
   loadLogs();
 }
 
+function downloadDebugLogs() {
+  window.location.href = `${API}/logs/debug/download`;
+}
+
 // Auto-refresh timer
 function startLogAutoRefresh() {
   stopLogAutoRefresh();
@@ -654,4 +658,3 @@ function stopLogAutoRefresh() {
 }
 
 startLogAutoRefresh();
-
