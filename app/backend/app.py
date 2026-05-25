@@ -6440,32 +6440,31 @@ def _unique_box_set_member_barcode(conn, base_barcode, index):
 def _movie_payload_from_box_set_member(member, fallback_format, box_set_title):
     title = (member.get("title") or "").strip()
     year = (member.get("year") or "").strip()
-    movie_info = None
-    try:
-        movie_info, _source = _merge_metadata_by_order(
-            title,
-            year,
-            barcode=member.get("barcode") or "",
-            imdb_id=member.get("imdb_id") or member.get("imdbId") or "",
-            tmdb_id=member.get("tmdb_id") or member.get("tmdbId") or "",
-            stop_after_first=False,
-            contribute_to_movievault=False,
-        )
-        movie_info = _finalize_metadata_info(movie_info)
-    except Exception:
-        movie_info = None
     row = {col: "" for col, _ in SCHEMA_COLUMNS}
-    if movie_info:
-        for col, _ in SCHEMA_COLUMNS:
-            row[col] = movie_info.get(col, "") if movie_info.get(col, "") is not None else ""
-        if isinstance(movie_info.get("_content_ratings"), dict):
-            row["content_ratings"] = json.dumps(movie_info["_content_ratings"], ensure_ascii=False)
-    row["title"] = row.get("title") or title
-    row["year"] = row.get("year") or year
+    direct_fields = {
+        "title": title,
+        "original_title": member.get("original_title") or member.get("originalTitle") or "",
+        "year": year,
+        "release_date": member.get("release_date") or member.get("releaseDate") or "",
+        "imdb_id": member.get("imdb_id") or member.get("imdbId") or "",
+        "tmdb_id": member.get("tmdb_id") or member.get("tmdbId") or "",
+        "plot": member.get("plot") or member.get("overview") or member.get("description") or "",
+        "runtime": member.get("runtime") or "",
+        "genre": member.get("genre") or "",
+        "country": member.get("country") or "",
+        "language": member.get("language") or "",
+        "poster": member.get("poster") or member.get("poster_url") or member.get("posterUrl") or member.get("cover_url") or "",
+        "poster_url": member.get("poster_url") or member.get("posterUrl") or member.get("cover_url") or "",
+        "backdrop": member.get("backdrop") or member.get("backdrop_url") or member.get("backdropUrl") or "",
+        "backdrop_url": member.get("backdrop_url") or member.get("backdropUrl") or "",
+        "backdrops": member.get("backdrops") or "",
+        "backdrop_urls": member.get("backdrop_urls") or member.get("backdropUrls") or "",
+    }
+    for key, value in direct_fields.items():
+        if key in row and value not in (None, "", [], {}):
+            row[key] = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
     row["format"] = row.get("format") or fallback_format or "4K UHD"
     row["box_set"] = box_set_title
-    if not row.get("poster"):
-        row["poster"] = member.get("poster") or member.get("poster_url") or member.get("cover_url") or ""
     preserve_source_image_urls(row)
     return row
 
@@ -6534,8 +6533,6 @@ def create_box_set_from_proposal():
             row["super_group_id"] = box_set_id
             row["added_at"] = datetime.utcnow().isoformat()
             row["owner_id"] = owner_id
-            if not row.get("poster_file") and row.get("poster"):
-                row["poster_file"] = download_poster(row["poster"]) or ""
             prepare_local_image_variants(row)
             conn.execute(f"INSERT INTO movies ({colstr}) VALUES ({places})", row)
             movie_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -6585,7 +6582,8 @@ def create_box_set_from_proposal():
                 if movie.get("title")
             ],
         }
-        _submit_movievault_entity_contribution(
+        _submit_movievault_contribution_async(
+            _submit_movievault_entity_contribution,
             "box_set",
             box_set_contribution,
             "Box-set proposal create",
