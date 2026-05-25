@@ -854,7 +854,8 @@
     "bulk.directCollectionGroup": "Collection (directe films)",
     "scan.view": "Bekijken",
     "logs.catDebug": "Debug metadata",
-    "logs.downloadDebug": "Download debug log"
+    "logs.downloadDebug": "Download debug log",
+    "edit.tmdbId": "TMDb ID"
   },
   "en": {
     "nav.collection": "Collection",
@@ -1706,7 +1707,8 @@
     "bulk.directCollectionGroup": "Collection (direct movies)",
     "scan.view": "View",
     "logs.catDebug": "Metadata debug",
-    "logs.downloadDebug": "Download debug log"
+    "logs.downloadDebug": "Download debug log",
+    "edit.tmdbId": "TMDb ID"
   },
   "fr": {
     "nav.collection": "Collection",
@@ -2560,7 +2562,8 @@
     "bulk.directCollectionGroup": "Collection (films directs)",
     "scan.view": "Voir",
     "logs.catDebug": "Debug metadata",
-    "logs.downloadDebug": "Telecharger le journal debug"
+    "logs.downloadDebug": "Telecharger le journal debug",
+    "edit.tmdbId": "TMDb ID"
   },
   "de": {
     "nav.collection": "Sammlung",
@@ -3413,7 +3416,8 @@
     "bulk.directCollectionGroup": "Collection (direkte Filme)",
     "scan.view": "Ansehen",
     "logs.catDebug": "Metadata-Debug",
-    "logs.downloadDebug": "Debug-Protokoll herunterladen"
+    "logs.downloadDebug": "Debug-Protokoll herunterladen",
+    "edit.tmdbId": "TMDb ID"
   },
   "es": {
     "nav.collection": "Colección",
@@ -4266,7 +4270,8 @@
     "bulk.directCollectionGroup": "Collection (películas directas)",
     "scan.view": "Ver",
     "logs.catDebug": "Debug de metadata",
-    "logs.downloadDebug": "Descargar log debug"
+    "logs.downloadDebug": "Descargar log debug",
+    "edit.tmdbId": "TMDb ID"
   },
   "pt": {
     "nav.collection": "Coleção",
@@ -5120,7 +5125,8 @@
     "bulk.directCollectionGroup": "Collection (filmes diretos)",
     "scan.view": "Ver",
     "logs.catDebug": "Debug de metadata",
-    "logs.downloadDebug": "Transferir log debug"
+    "logs.downloadDebug": "Transferir log debug",
+    "edit.tmdbId": "TMDb ID"
   },
   "it": {
     "nav.collection": "Collezione",
@@ -5974,7 +5980,8 @@
     "bulk.directCollectionGroup": "Collection (film diretti)",
     "scan.view": "Visualizza",
     "logs.catDebug": "Debug metadata",
-    "logs.downloadDebug": "Scarica log debug"
+    "logs.downloadDebug": "Scarica log debug",
+    "edit.tmdbId": "TMDb ID"
   },
   "sv": {
     "nav.collection": "Samling",
@@ -6826,7 +6833,8 @@
     "bulk.directCollectionGroup": "Samling (direkta filmer)",
     "scan.view": "Visa",
     "logs.catDebug": "Metadatafelsökning",
-    "logs.downloadDebug": "Ladda ner felsökningslogg"
+    "logs.downloadDebug": "Ladda ner felsökningslogg",
+    "edit.tmdbId": "TMDb ID"
   },
   "da": {
     "nav.collection": "Samling",
@@ -7678,7 +7686,8 @@
     "bulk.directCollectionGroup": "Samling (direkte film)",
     "scan.view": "Visning",
     "logs.catDebug": "Fejlretning af metadata",
-    "logs.downloadDebug": "Download fejlretningslog"
+    "logs.downloadDebug": "Download fejlretningslog",
+    "edit.tmdbId": "TMDb ID"
   },
   "no": {
     "nav.collection": "Samling",
@@ -8530,7 +8539,8 @@
     "bulk.directCollectionGroup": "Samling (direkte filmer)",
     "scan.view": "Visning",
     "logs.catDebug": "Feilsøking av metadata",
-    "logs.downloadDebug": "Last ned feilsøkingslogg"
+    "logs.downloadDebug": "Last ned feilsøkingslogg",
+    "edit.tmdbId": "TMDb ID"
   },
   "fi": {
     "nav.collection": "Kokoelma",
@@ -9382,6 +9392,7 @@
     "bulk.directCollectionGroup": "Kokoelma (suorat elokuvat)",
     "scan.view": "Näytä",
     "logs.catDebug": "Metatietojen virheenkorjaus",
-    "logs.downloadDebug": "Lataa virheenkorjausloki"
+    "logs.downloadDebug": "Lataa virheenkorjausloki",
+    "edit.tmdbId": "TMDb ID"
   }
 }
