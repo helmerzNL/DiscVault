@@ -1953,3 +1953,47 @@ Object.assign(T.da, {
   'faq.passkeys.req.android':'Android: Android 9 eller nyere med en passkey-kompatibel credential provider som Google Password Manager, plus skærmlås.',
   'faq.passkeys.recovery':'Tip: registrer mere end én passkey, hvor det er muligt, for eksempel din telefon og din desktopenhed. Det giver dig en gendannelsesvej, hvis én enhed udskiftes eller mistes.'
 });
+
+Object.assign(T.en, {
+  'hero.point6':'Nine languages: English, Dutch, French, German, Spanish, Portuguese, Italian, Swedish, Norwegian, Finnish, and Danish'
+});
+
+Object.assign(T.nl, {
+  'hero.point6':'Negen talen: Engels, Nederlands, Frans, Duits, Spaans, Portugees, Italiaans, Zweeds, Noors, Fins en Deens'
+});
+
+Object.assign(T.fr, {
+  'hero.point6':'Neuf langues : anglais, néerlandais, français, allemand, espagnol, portugais, italien, suédois, norvégien, finnois et danois'
+});
+
+Object.assign(T.de, {
+  'hero.point6':'Neun Sprachen: Englisch, Niederländisch, Französisch, Deutsch, Spanisch, Portugiesisch, Italienisch, Schwedisch, Norwegisch, Finnisch und Dänisch'
+});
+
+Object.assign(T.es, {
+  'hero.point6':'Nueve idiomas: inglés, neerlandés, francés, alemán, español, portugués, italiano, sueco, noruego, finés y danés'
+});
+
+Object.assign(T.pt, {
+  'hero.point6':'Nove idiomas: inglês, neerlandês, francês, alemão, espanhol, português, italiano, sueco, norueguês, finlandês e dinamarquês'
+});
+
+Object.assign(T.it, {
+  'hero.point6':'Nove lingue: inglese, olandese, francese, tedesco, spagnolo, portoghese, italiano, svedese, norvegese, finlandese e danese'
+});
+
+Object.assign(T.sv, {
+  'hero.point6':'Nio språk: engelska, nederländska, franska, tyska, spanska, portugisiska, italienska, svenska, norska, finska och danska'
+});
+
+Object.assign(T.no, {
+  'hero.point6':'Ni språk: engelsk, nederlandsk, fransk, tysk, spansk, portugisisk, italiensk, svensk, norsk, finsk og dansk'
+});
+
+Object.assign(T.fi, {
+  'hero.point6':'Yhdeksän kieltä: englanti, hollanti, ranska, saksa, espanja, portugali, italia, ruotsi, norja, suomi ja tanska'
+});
+
+Object.assign(T.da, {
+  'hero.point6':'Ni sprog: engelsk, nederlandsk, fransk, tysk, spansk, portugisisk, italiensk, svensk, norsk, finsk og dansk'
+});
