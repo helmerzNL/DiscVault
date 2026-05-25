@@ -2175,6 +2175,13 @@ function _moviePosterChoices(movie) {
   return choices;
 }
 
+function _selectedMediaOverlay() {
+  return `<div style="position:absolute;left:0;right:0;top:0;height:5px;background:var(--accent);z-index:2;"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.34));pointer-events:none;"></div>
+    <div style="position:absolute;top:8px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:800;padding:3px 8px;border-radius:4px;">${t('modal.selected')}</div>
+    <div style="position:absolute;left:7px;bottom:7px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#0a0a0f;font-size:0.9rem;font-weight:900;display:flex;align-items:center;justify-content:center;">✓</div>`;
+}
+
 function loadMovieMedia() {
   const movie = allMovies.find(m => m.id === currentMovieId) || {};
   const posters = _moviePosterChoices(movie);
@@ -2209,9 +2216,10 @@ function loadMovieMedia() {
           ${posters.map(item => {
             const choiceFile = String(item.value || '').split(/[\\/]/).pop();
             const isActive = item.src === currentPoster || (currentPosterFile && choiceFile === currentPosterFile);
-            return `<button type="button" title="${escHtml(t('modal.usePoster'))}" aria-pressed="${isActive ? 'true' : 'false'}" style="appearance:none;background:transparent;padding:0;position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'var(--border)'};cursor:pointer;box-shadow:${isActive ? '0 0 0 2px rgba(64,224,208,.22)' : 'none'};" onclick="setMoviePoster(${movie.id}, ${JSON.stringify(item.value).replace(/</g, '\\u003c')})">
-              <img src="${item.src}" loading="lazy" style="width:100%;display:block;aspect-ratio:2/3;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-              ${isActive ? `<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.34));pointer-events:none;"></div><div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:800;padding:3px 8px;border-radius:4px;">${t('modal.selected')}</div><div style="position:absolute;left:7px;bottom:7px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#0a0a0f;font-size:0.9rem;font-weight:900;display:flex;align-items:center;justify-content:center;">✓</div>` : ''}
+            const encodedValue = encodeURIComponent(item.value || '');
+            return `<button type="button" title="${escHtml(t('modal.usePoster'))}" aria-pressed="${isActive ? 'true' : 'false'}" style="appearance:none;background:transparent;padding:0;position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'var(--border)'};cursor:pointer;box-shadow:${isActive ? '0 0 0 2px rgba(232,197,71,.25)' : 'none'};" onclick="setMoviePoster(${movie.id}, decodeURIComponent('${encodedValue}'))">
+              <img src="${escHtml(item.src)}" loading="lazy" style="width:100%;display:block;aspect-ratio:2/3;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+              ${isActive ? _selectedMediaOverlay() : ''}
             </button>`;
           }).join('')}
         </div>
@@ -2224,9 +2232,10 @@ function loadMovieMedia() {
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
           ${backdrops.map(url => {
           const isActive = url === currentBackdrop;
-          return `<button type="button" aria-pressed="${isActive ? 'true' : 'false'}" style="appearance:none;background:transparent;padding:0;position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;box-shadow:${isActive ? '0 0 0 2px rgba(64,224,208,.22)' : 'none'};" onclick="setMovieBackdrop(${movie.id}, '${url.replace(/'/g, "\\'")}')">
-            <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-            ${isActive ? `<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.34));pointer-events:none;"></div><div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:800;padding:3px 8px;border-radius:4px;">${t('modal.selected')}</div><div style="position:absolute;left:7px;bottom:7px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#0a0a0f;font-size:0.9rem;font-weight:900;display:flex;align-items:center;justify-content:center;">✓</div>` : ''}
+          const encodedUrl = encodeURIComponent(url || '');
+          return `<button type="button" aria-pressed="${isActive ? 'true' : 'false'}" style="appearance:none;background:transparent;padding:0;position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'var(--border)'};cursor:pointer;box-shadow:${isActive ? '0 0 0 2px rgba(232,197,71,.25)' : 'none'};" onclick="setMovieBackdrop(${movie.id}, decodeURIComponent('${encodedUrl}'))">
+            <img src="${escHtml(url)}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+            ${isActive ? _selectedMediaOverlay() : ''}
           </button>`;
           }).join('')}
         </div>
