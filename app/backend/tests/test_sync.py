@@ -1064,6 +1064,122 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(captured["url"], "https://www.blu-ray.com/search/quicksearch.php")
         self.assertEqual(captured["data"]["country"], "all")
 
+    def test_bluray_barcode_lookup_prefers_dvd_section_for_ean(self):
+        original_post = self.backend.requests.post
+        calls = []
+
+        class FakeResponse:
+            status_code = 200
+
+            def __init__(self, text):
+                self.text = text
+
+        def fake_post(url, data=None, headers=None, timeout=None):
+            section = (data or {}).get("section")
+            calls.append(section)
+            if section == "dvdmovies":
+                return FakeResponse("var urls = new Array('https://www.blu-ray.com/dvd/Back-to-the-Future-DVD/219226/');")
+            return FakeResponse("var urls = new Array('https://www.blu-ray.com/movies/Back-to-the-Future-4K-Blu-ray/395515/');")
+
+        try:
+            self.backend.requests.post = fake_post
+            url = self.backend._bluray_find_first_movie_url("5050582369601")
+        finally:
+            self.backend.requests.post = original_post
+
+        self.assertEqual(url, "https://www.blu-ray.com/dvd/Back-to-the-Future-DVD/219226/")
+        self.assertEqual(calls[0], "dvdmovies")
+
+    def test_bluray_specs_lookup_uses_barcode_before_title(self):
+        original_find = self.backend._bluray_find_first_movie_url
+        original_parse = self.backend._bluray_parse_movie_page
+        queries = []
+
+        def fake_find(query):
+            queries.append(query)
+            if query == "5050582369601":
+                return "https://www.blu-ray.com/dvd/Back-to-the-Future-DVD/219226/"
+            return "https://www.blu-ray.com/movies/Back-to-the-Future-4K-Blu-ray/395515/"
+
+        def fake_parse(url):
+            return {
+                "title": "Back to the Future DVD",
+                "poster": "https://images.example.test/back-to-the-future-dvd.jpg",
+                "poster_url": "https://images.example.test/back-to-the-future-dvd.jpg",
+                "format": "DVD",
+                "audio_tracks": "English: Dolby Digital 5.1",
+            }
+
+        try:
+            self.backend._bluray_find_first_movie_url = fake_find
+            self.backend._bluray_parse_movie_page = fake_parse
+            specs, attempts = self.backend.lookup_movie_bluray_specs_traced(
+                "Back to the Future",
+                "1985",
+                "5050582369601",
+            )
+        finally:
+            self.backend._bluray_find_first_movie_url = original_find
+            self.backend._bluray_parse_movie_page = original_parse
+
+        self.assertEqual(queries, ["5050582369601"])
+        self.assertEqual(attempts[0]["query"], "barcode=5050582369601")
+        self.assertEqual(specs["format"], "DVD")
+        self.assertEqual(specs["poster"], "https://images.example.test/back-to-the-future-dvd.jpg")
+
+    def test_bluray_barcode_release_overwrites_tmdb_poster(self):
+        originals = {
+            "order": self.backend._metadata_source_order,
+            "enabled": self.backend._metadata_source_enabled,
+            "tmdb": self.backend.lookup_movie_tmdb,
+            "bluray_barcode": self.backend.lookup_movie_bluray_by_barcode,
+            "bluray_specs": self.backend.lookup_movie_bluray_specs_traced,
+        }
+
+        def fake_tmdb(title, year=""):
+            return {
+                "title": "Back to the Future",
+                "year": "1985",
+                "poster": "https://images.example.test/back-to-the-future-tmdb.jpg",
+                "poster_url": "https://images.example.test/back-to-the-future-tmdb.jpg",
+            }
+
+        def fake_bluray_barcode(barcode):
+            return {
+                "title": "Back to the Future DVD",
+                "poster": "https://images.example.test/back-to-the-future-dvd.jpg",
+                "poster_url": "https://images.example.test/back-to-the-future-dvd.jpg",
+                "format": "DVD",
+            }
+
+        try:
+            self.backend._metadata_source_order = lambda: ["tmdb", "bluray_com"]
+            self.backend._metadata_source_enabled = lambda source: True
+            self.backend.lookup_movie_tmdb = fake_tmdb
+            self.backend.lookup_movie_bluray_by_barcode = fake_bluray_barcode
+            self.backend.lookup_movie_bluray_specs_traced = lambda *args, **kwargs: ({}, [])
+
+            attempts = []
+            info, source = self.backend._merge_metadata_by_order(
+                "Back to the Future",
+                "1985",
+                barcode="5050582369601",
+                attempts=attempts,
+                contribute_to_movievault=False,
+            )
+        finally:
+            self.backend._metadata_source_order = originals["order"]
+            self.backend._metadata_source_enabled = originals["enabled"]
+            self.backend.lookup_movie_tmdb = originals["tmdb"]
+            self.backend.lookup_movie_bluray_by_barcode = originals["bluray_barcode"]
+            self.backend.lookup_movie_bluray_specs_traced = originals["bluray_specs"]
+
+        self.assertEqual(info["poster"], "https://images.example.test/back-to-the-future-dvd.jpg")
+        self.assertEqual(info["poster_url"], "https://images.example.test/back-to-the-future-dvd.jpg")
+        self.assertEqual(info["format"], "DVD")
+        self.assertIn("TMDb", source)
+        self.assertIn("Blu-ray.com", source)
+
     def test_synthetic_box_set_member_barcode_is_not_used_for_external_lookup(self):
         originals = {
             "order": self.backend._metadata_source_order,
