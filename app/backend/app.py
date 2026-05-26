@@ -5782,6 +5782,32 @@ def _candidate_title_words(title: str) -> set[str]:
     return {w.lower() for w in re.findall(r"[A-Za-z0-9]+", title or "") if len(w) > 2 and w.lower() not in stop}
 
 
+def _box_set_candidate_kind(title: str) -> str:
+    low = (title or "").lower()
+    if re.search(r"\b(making of|behind the scenes|bonus|bonus disc|special features?|extras?|documentary|featurette|interviews?)\b", low):
+        return "bonus"
+    if re.search(r"\b(part|episode|chapter)\s*(?:iii|3|three)\b|\biii\b", low):
+        return "part3"
+    if re.search(r"\b(part|episode|chapter)\s*(?:ii|2|two)\b|\bii\b", low):
+        return "part2"
+    if re.search(r"\b(part|episode|chapter)\s*(?:iv|4|four)\b|\biv\b", low):
+        return "part4"
+    if re.search(r"\b(part|episode|chapter)\s*(?:v|5|five)\b|\bv\b", low):
+        return "part5"
+    return "main"
+
+
+def _box_set_member_order(title: str) -> int:
+    return {
+        "main": 1,
+        "part2": 2,
+        "part3": 3,
+        "part4": 4,
+        "part5": 5,
+        "bonus": 90,
+    }.get(_box_set_candidate_kind(title), 50)
+
+
 def _box_set_candidate_members_from_sources(box_set_title: str, year: str = "", limit_hint: int = 0) -> list[dict]:
     base_title = _box_set_base_title(box_set_title)
     if not base_title or len(base_title) < 3:
@@ -5802,15 +5828,28 @@ def _box_set_candidate_members_from_sources(box_set_title: str, year: str = "", 
             continue
         seen.add(key)
         filtered.append(candidate)
-    filtered.sort(key=lambda c: (
+    regular = [c for c in filtered if _box_set_candidate_kind(c.get("title") or "") != "bonus"]
+    bonus = [c for c in filtered if _box_set_candidate_kind(c.get("title") or "") == "bonus"]
+    regular.sort(key=lambda c: (
+        _box_set_member_order(c.get("title") or ""),
         int(c.get("year") or 9999) if str(c.get("year") or "").isdigit() else 9999,
         str(c.get("title") or ""),
     ))
-    if limit_hint >= 3 and len(filtered) >= limit_hint - 1:
-        return filtered[:limit_hint]
+    bonus.sort(key=lambda c: (
+        int(c.get("year") or 9999) if str(c.get("year") or "").isdigit() else 9999,
+        str(c.get("title") or ""),
+    ))
+    ordered = regular + bonus
+    if limit_hint >= 3:
+        regular_limit = regular[:limit_hint]
+        if len(regular_limit) >= limit_hint:
+            return regular_limit
+        if len(regular_limit) >= limit_hint - 1:
+            return regular_limit + bonus[:limit_hint - len(regular_limit)]
     if "trilogy" in (box_set_title or "").lower() and len(filtered) >= 3:
-        return filtered[:3]
-    return filtered if len(filtered) >= 2 else []
+        regular_limit = regular[:3]
+        return regular_limit if len(regular_limit) >= 3 else ordered[:3]
+    return ordered if len(ordered) >= 2 else []
 
 
 def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
