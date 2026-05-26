@@ -199,7 +199,7 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(first["sourceReference"], first_stats["source_reference"])
         self.assertNotIn("sourceReference", first["payload"])
         self.assertNotIn("barcode", first["payload"])
-        self.assertNotIn("parentBarcode", first["sourceReference"])
+        self.assertEqual(first["sourceReference"]["parentBarcode"], "032429316110")
 
     def test_movievault_box_set_member_release_uses_source_reference_not_barcode(self):
         source = {
@@ -235,7 +235,7 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(first["payload"]["hdr"], "Dolby Vision")
         self.assertNotIn("barcode", first["payload"])
         self.assertNotIn("sourceReference", first["payload"])
-        self.assertNotIn("parentBarcode", first["sourceReference"])
+        self.assertEqual(first["sourceReference"]["parentBarcode"], "032429316110")
 
     def test_movievault_skips_unchanged_person_payload(self):
         original_enabled = self.backend._is_movievault_contribution_enabled
@@ -245,10 +245,10 @@ class SyncIntegrationTests(unittest.TestCase):
 
         class FakeResponse:
             status_code = 202
-            text = "{}"
+            text = '{"status":"accepted","contributionId":"mv_contrib_person_1"}'
 
             def json(self):
-                return {}
+                return {"status": "accepted", "contributionId": "mv_contrib_person_1"}
 
         def fake_request(method, url, **kwargs):
             calls.append({"method": method, "url": url, "json": kwargs.get("json")})
@@ -290,6 +290,129 @@ class SyncIntegrationTests(unittest.TestCase):
         submitted = next(call["json"] for call in calls if call["method"] == "POST")
         self.assertEqual(submitted["sourceVersion"], "3.5-test")
         self.assertNotIn("sourceVersion", submitted["payload"])
+
+    def test_movievault_resubmits_after_prior_unchanged_skip(self):
+        original_enabled = self.backend._is_movievault_contribution_enabled
+        original_url = self.backend._movievault_contribution_url
+        original_request = self.backend.movievault_request
+        calls = []
+
+        class FakeResponse:
+            status_code = 202
+            text = '{"status":"accepted","contributionId":"mv_contrib_resubmit"}'
+
+            def json(self):
+                return {"status": "accepted", "contributionId": f"mv_contrib_resubmit_{len(calls)}"}
+
+        def fake_request(method, url, **kwargs):
+            calls.append({"method": method, "url": url, "json": kwargs.get("json")})
+            return FakeResponse()
+
+        person = {
+            "name": f"Repeat Person {uuid.uuid4().hex[:8]}",
+            "tmdbId": int(uuid.uuid4().int % 900000) + 100000,
+            "knownFor": "Acting",
+        }
+        context = {"localEntityType": "person", "localEntityId": str(person["tmdbId"])}
+
+        try:
+            self.backend._is_movievault_contribution_enabled = lambda: True
+            self.backend._movievault_contribution_url = lambda: "https://movies.example.test/api/v1/contributions"
+            self.backend.movievault_request = fake_request
+            first = self.backend._submit_movievault_entity_contribution_result("person", person, "Unit test", context)
+            second = self.backend._submit_movievault_entity_contribution_result("person", person, "Unit test", context)
+            third = self.backend._submit_movievault_entity_contribution_result("person", person, "Unit test", context)
+        finally:
+            self.backend._is_movievault_contribution_enabled = original_enabled
+            self.backend._movievault_contribution_url = original_url
+            self.backend.movievault_request = original_request
+
+        self.assertEqual(first["status"], "submitted")
+        self.assertEqual(second["action"], "unchanged_payload")
+        self.assertEqual(third["status"], "submitted")
+        self.assertEqual(len([call for call in calls if call["method"] == "POST"]), 2)
+
+    def test_movievault_resubmits_when_successful_state_is_unproven(self):
+        original_enabled = self.backend._is_movievault_contribution_enabled
+        original_url = self.backend._movievault_contribution_url
+        original_request = self.backend.movievault_request
+        calls = []
+
+        class FakeResponse:
+            status_code = 202
+            text = "{}"
+
+            def json(self):
+                return {}
+
+        def fake_request(method, url, **kwargs):
+            calls.append({"method": method, "url": url, "json": kwargs.get("json")})
+            return FakeResponse()
+
+        person = {
+            "name": f"Pending Person {uuid.uuid4().hex[:8]}",
+            "tmdbId": int(uuid.uuid4().int % 900000) + 100000,
+            "knownFor": "Directing",
+        }
+        context = {"localEntityType": "person", "localEntityId": str(person["tmdbId"])}
+
+        try:
+            self.backend._is_movievault_contribution_enabled = lambda: True
+            self.backend._movievault_contribution_url = lambda: "https://movies.example.test/api/v1/contributions"
+            self.backend.movievault_request = fake_request
+            first = self.backend._submit_movievault_entity_contribution_result("person", person, "Unit test", context)
+            second = self.backend._submit_movievault_entity_contribution_result("person", person, "Unit test", context)
+        finally:
+            self.backend._is_movievault_contribution_enabled = original_enabled
+            self.backend._movievault_contribution_url = original_url
+            self.backend.movievault_request = original_request
+
+        self.assertEqual(first["status"], "submitted")
+        self.assertEqual(second["status"], "submitted")
+        self.assertEqual(len([call for call in calls if call["method"] == "POST"]), 2)
+
+    def test_movievault_force_contribution_posts_again_with_new_idempotency_key(self):
+        original_enabled = self.backend._is_movievault_contribution_enabled
+        original_url = self.backend._movievault_contribution_url
+        original_request = self.backend.movievault_request
+        calls = []
+
+        class FakeResponse:
+            status_code = 202
+            text = '{"status":"accepted","contributionId":"mv_contrib_force"}'
+
+            def json(self):
+                return {"status": "accepted", "contributionId": f"mv_contrib_force_{len(calls)}"}
+
+        def fake_request(method, url, **kwargs):
+            calls.append({"method": method, "url": url, "json": kwargs.get("json")})
+            return FakeResponse()
+
+        person = {
+            "name": f"Force Person {uuid.uuid4().hex[:8]}",
+            "tmdbId": int(uuid.uuid4().int % 900000) + 100000,
+            "knownFor": "Writing",
+        }
+        context = {"localEntityType": "person", "localEntityId": str(person["tmdbId"])}
+        force_context = {**context, "forceMovieVaultContribution": True}
+
+        try:
+            self.backend._is_movievault_contribution_enabled = lambda: True
+            self.backend._movievault_contribution_url = lambda: "https://movies.example.test/api/v1/contributions"
+            self.backend.movievault_request = fake_request
+            first = self.backend._submit_movievault_entity_contribution_result("person", person, "Unit test", context)
+            second = self.backend._submit_movievault_entity_contribution_result("person", person, "Unit test", force_context)
+        finally:
+            self.backend._is_movievault_contribution_enabled = original_enabled
+            self.backend._movievault_contribution_url = original_url
+            self.backend.movievault_request = original_request
+
+        self.assertEqual(first["status"], "submitted")
+        self.assertEqual(second["status"], "submitted")
+        self.assertEqual(len([call for call in calls if call["method"] == "POST"]), 2)
+        keys = [call["json"]["idempotencyKey"] for call in calls if call["method"] == "POST"]
+        self.assertNotEqual(keys[0], keys[1])
+        self.assertIn(":attempt:", keys[1])
 
     def test_movievault_template_version_check_refreshes_fresh_cache_when_due(self):
         original_request = self.backend.movievault_request

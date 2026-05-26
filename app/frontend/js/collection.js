@@ -3026,7 +3026,7 @@ async function refreshSingleMovie(btnEl) {
     const r = await fetch(`${API}/movies/${currentMovieId}/sync-all`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fetch_posters: true })
+      body: JSON.stringify({ fetch_posters: true, forceMovieVaultContribution: true })
     });
     const d = await r.json();
 
@@ -3089,7 +3089,7 @@ async function syncSingleMovieSource(source, buttonId) {
     const r = await fetch(`${API}/movies/${currentMovieId}/sync-source`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source, fetch_posters: true })
+      body: JSON.stringify({ source, fetch_posters: true, forceMovieVaultContribution: true })
     });
     const d = await r.json();
 
