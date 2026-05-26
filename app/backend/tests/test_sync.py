@@ -1199,6 +1199,7 @@ class SyncIntegrationTests(unittest.TestCase):
             return [
                 {"provider": "tmdb", "tmdb_id": "105", "title": "Back to the Future", "year": "1985", "poster": "p1"},
                 {"provider": "tmdb", "tmdb_id": "165", "title": "Back to the Future Part II", "year": "1989", "poster": "p2"},
+                {"provider": "tmdb", "tmdb_id": "999", "title": "Back to the Future: Making the Trilogy", "year": "2002", "poster": "bonus"},
                 {"provider": "tmdb", "tmdb_id": "196", "title": "Back to the Future Part III", "year": "1990", "poster": "p3"},
             ]
 
@@ -1224,6 +1225,7 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(proposal["member_confidence"], "candidate")
         self.assertEqual(len(proposal["movies"]), 3)
         self.assertEqual(proposal["movies"][1]["title"], "Back to the Future Part II")
+        self.assertEqual(proposal["movies"][2]["title"], "Back to the Future Part III")
 
     def test_synthetic_box_set_member_barcode_is_not_used_for_external_lookup(self):
         originals = {
