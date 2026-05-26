@@ -1252,6 +1252,73 @@ class SyncIntegrationTests(unittest.TestCase):
             {},
         )
 
+    def test_bluray_box_set_without_members_prefers_container_source_members(self):
+        originals = {
+            "order": self.backend._metadata_source_order,
+            "enabled": self.backend._metadata_source_enabled,
+            "movievault_box_set": self.backend.lookup_movievault_box_set_proposal,
+            "tmdb_box_set": self.backend.lookup_tmdb_box_set_proposal,
+            "candidates": self.backend._metadata_candidates_by_order,
+        }
+        html = """
+        <html><head>
+          <meta property="og:title" content="Back to the Future: Trilogy DVD" />
+          <meta property="og:image" content="https://images.example.test/bttf-dvd-box.jpg" />
+        </head><body>
+          <h1>Back to the Future: Trilogy DVD</h1>
+          <div>4-disc collector's set</div>
+          <div>Four-disc set</div>
+        </body></html>
+        """
+
+        class FakeResponse:
+            status_code = 200
+            text = html
+
+        original_get = self.backend.requests.get
+
+        def fake_tmdb_box_set(title, year=""):
+            self.assertIn(title, {"Back to the Future: Trilogy DVD", "Back to the Future"})
+            return {
+                "title": "Back to the Future Collection",
+                "source": "TMDb",
+                "tmdb_id": "264",
+                "movies": [
+                    {"provider": "tmdb", "tmdb_id": "105", "title": "Back to the Future", "year": "1985"},
+                    {"provider": "tmdb", "tmdb_id": "165", "title": "Back to the Future Part II", "year": "1989"},
+                    {"provider": "tmdb", "tmdb_id": "196", "title": "Back to the Future Part III", "year": "1990"},
+                ],
+            }
+
+        try:
+            self.backend._metadata_source_order = lambda: ["tmdb", "bluray_com"]
+            self.backend._metadata_source_enabled = lambda source: source in {"tmdb", "bluray_com"}
+            self.backend.lookup_movievault_box_set_proposal = lambda *args, **kwargs: None
+            self.backend.lookup_tmdb_box_set_proposal = fake_tmdb_box_set
+            self.backend._metadata_candidates_by_order = lambda *args, **kwargs: self.fail("movie candidate fallback should not run")
+            self.backend.requests.get = lambda *args, **kwargs: FakeResponse()
+            parsed = self.backend._bluray_parse_movie_page(
+                "https://www.blu-ray.com/dvd/Back-to-the-Future-Trilogy-DVD/28624/"
+            )
+        finally:
+            self.backend._metadata_source_order = originals["order"]
+            self.backend._metadata_source_enabled = originals["enabled"]
+            self.backend.lookup_movievault_box_set_proposal = originals["movievault_box_set"]
+            self.backend.lookup_tmdb_box_set_proposal = originals["tmdb_box_set"]
+            self.backend._metadata_candidates_by_order = originals["candidates"]
+            self.backend.requests.get = original_get
+
+        proposal = parsed.get("box_set_proposal")
+        self.assertIsNotNone(proposal)
+        self.assertEqual(proposal["source"], "TMDb")
+        self.assertEqual(proposal["member_source"], "TMDb box-set lookup")
+        self.assertTrue(proposal["detected_without_members"])
+        self.assertEqual([movie["title"] for movie in proposal["movies"]], [
+            "Back to the Future",
+            "Back to the Future Part II",
+            "Back to the Future Part III",
+        ])
+
     def test_synthetic_box_set_member_barcode_is_not_used_for_external_lookup(self):
         originals = {
             "order": self.backend._metadata_source_order,

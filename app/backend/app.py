@@ -5245,6 +5245,74 @@ def lookup_movie_tmdb(title, year=""):
     return None
 
 
+def lookup_tmdb_box_set_proposal(title: str = "", year: str = "") -> dict | None:
+    if not TMDB_API_KEY or not _is_tmdb_enabled() or not title:
+        return None
+    base_title = _box_set_base_title(title)
+    query = base_title or title
+    try:
+        params = f"query={requests.utils.quote(query)}&api_key={TMDB_API_KEY}"
+        r = requests.get(f"https://api.themoviedb.org/3/search/collection?{params}", timeout=5)
+        if r.status_code != 200:
+            return None
+        base_words = _candidate_title_words(base_title or title)
+        collection_id = ""
+        collection_name = ""
+        for item in (r.json().get("results") or [])[:5]:
+            name = item.get("name") or ""
+            name_words = _candidate_title_words(name)
+            if base_words and not (base_words & name_words):
+                continue
+            collection_id = str(item.get("id") or "")
+            collection_name = name
+            break
+        if not collection_id:
+            return None
+        rd = requests.get(
+            f"https://api.themoviedb.org/3/collection/{collection_id}?api_key={TMDB_API_KEY}&language=en-US",
+            timeout=5,
+        )
+        if rd.status_code != 200:
+            return None
+        data = rd.json()
+        members = []
+        seen = set()
+        for part in data.get("parts") or []:
+            part_title = (part.get("title") or part.get("name") or "").strip()
+            if not part_title:
+                continue
+            release_date = part.get("release_date") or ""
+            year_value = _parse_year(release_date)
+            key = (part_title.lower(), year_value)
+            if key in seen:
+                continue
+            seen.add(key)
+            poster_path = part.get("poster_path") or ""
+            members.append({
+                "provider": "tmdb",
+                "provider_label": "TMDb",
+                "id": str(part.get("id") or ""),
+                "tmdb_id": str(part.get("id") or ""),
+                "title": part_title,
+                "year": year_value,
+                "overview": (part.get("overview") or "")[:180],
+                "poster": f"https://image.tmdb.org/t/p/w185{poster_path}" if poster_path else "",
+                "sort_order": len(members) + 1,
+            })
+        if len(members) < 2:
+            return None
+        return {
+            "title": data.get("name") or collection_name or title,
+            "source": "TMDb",
+            "tmdb_id": collection_id,
+            "poster": f"https://image.tmdb.org/t/p/original{data.get('poster_path')}" if data.get("poster_path") else "",
+            "poster_url": f"https://image.tmdb.org/t/p/original{data.get('poster_path')}" if data.get("poster_path") else "",
+            "movies": members,
+        }
+    except Exception:
+        return None
+
+
 def search_movie_omdb_candidates(title: str = "", year: str = "") -> list[dict]:
     if not OMDB_API_KEY or not _is_omdb_enabled() or not title:
         return []
@@ -5729,10 +5797,10 @@ def _extract_hdr_tokens(text: str) -> str:
 
 def _clean_bluray_member_title(title: str) -> str:
     title = re.sub(r"\s+", " ", title or "").strip()
-    title = re.sub(r"\s+(4K|Blu-ray|DVD|Ultra HD)\s+\(\d{4}\)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+(4K|Blu[- ]ray|DVD|Ultra HD)\s+\(\d{4}\)\s*$", "", title, flags=re.I).strip()
     title = re.sub(r"\s+\(\d{4}\)\s*$", "", title).strip()
-    title = re.sub(r"\s+(4K Ultra HD|4K UHD|Ultra HD|Blu-ray|DVD|Digital|Review)\b.*$", "", title, flags=re.I).strip()
-    title = re.sub(r"\s+\((4K|Blu-ray|DVD|Ultra HD|Limited Edition|Collector'?s Edition)[^)]+\)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+(4K Ultra HD|4K UHD|Ultra HD|Blu[- ]ray|DVD|Digital|Review)\b.*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+\((4K|Blu[- ]ray|DVD|Ultra HD|Limited Edition|Collector'?s Edition)[^)]+\)\s*$", "", title, flags=re.I).strip()
     title = re.sub(r"\s*[\-|–|:]\s*(4K|Blu-ray|DVD|Ultra HD).*$", "", title, flags=re.I).strip()
     return title.strip(" -–:|")
 
@@ -5826,6 +5894,58 @@ def _box_set_member_order(title: str) -> int:
     }.get(_box_set_candidate_kind(title), 50)
 
 
+def _box_set_members_from_container_sources(box_set_title: str, year: str = "", barcode: str = "") -> dict | None:
+    base_title = _box_set_base_title(box_set_title)
+    queries = []
+    for value in (box_set_title, base_title):
+        value = (value or "").strip()
+        if value and value.lower() not in {q.lower() for q in queries}:
+            queries.append(value)
+    _metadata_debug_log(
+        "Box-set member source lookup started",
+        f"Title: {box_set_title or '-'}; Base title: {base_title or '-'}; Barcode: {barcode or '-'}; Source order: {_metadata_source_order_log()}",
+    )
+    for source in _metadata_source_order():
+        if not _metadata_source_enabled(source):
+            _metadata_debug_log(
+                "Box-set member source skipped",
+                f"Source: {METADATA_SOURCE_LABELS.get(source, source)}; Reason: disabled",
+            )
+            continue
+        if source == "bluray_com":
+            _metadata_debug_log(
+                "Box-set member source skipped",
+                "Source: Blu-ray.com; Reason: source already detected the box-set but did not list members explicitly",
+            )
+            continue
+        proposal = None
+        label = METADATA_SOURCE_LABELS.get(source, source)
+        for query in queries:
+            if source == "movievault":
+                proposal = lookup_movievault_box_set_proposal(query, year, "")
+            elif source == "tmdb":
+                proposal = lookup_tmdb_box_set_proposal(query, year)
+            else:
+                _metadata_debug_log(
+                    "Box-set member source skipped",
+                    f"Source: {label}; Reason: no box-set/member endpoint available",
+                )
+                break
+            member_count = len((proposal or {}).get("movies") or [])
+            _metadata_debug_log(
+                "Box-set member source action",
+                f"Source: {label}; Query: {query}; Result: {'hit' if member_count >= 2 else 'miss'}; Members: {member_count}",
+            )
+            if member_count >= 2:
+                proposal = dict(proposal)
+                proposal["member_source"] = f"{label} box-set lookup"
+                proposal["member_confidence"] = "candidate"
+                proposal["detected_without_members"] = True
+                proposal["detected_member_source_title"] = query
+                return proposal
+    return None
+
+
 def _box_set_candidate_members_from_sources(box_set_title: str, year: str = "", limit_hint: int = 0) -> list[dict]:
     base_title = _box_set_base_title(box_set_title)
     if not base_title or len(base_title) < 3:
@@ -5834,18 +5954,30 @@ def _box_set_candidate_members_from_sources(box_set_title: str, year: str = "", 
     candidates = _metadata_candidates_by_order(base_title, "")
     filtered = []
     seen = set()
+    seen_titles = set()
     for candidate in candidates:
         title = (candidate.get("title") or "").strip()
         if not title:
             continue
+        clean_title = _clean_bluray_member_title(title)
+        if clean_title and clean_title.lower() != title.lower() and re.search(r"\b(?:4k|uhd|ultra\s*hd|blu[- ]?ray|dvd)\b", title, re.I):
+            continue
+        if clean_title:
+            title = clean_title
         candidate_words = _candidate_title_words(title)
         if base_words and not (base_words & candidate_words):
+            continue
+        title_key = title.lower()
+        if title_key in seen_titles:
             continue
         key = _metadata_candidate_key(candidate)
         if key in seen:
             continue
         seen.add(key)
-        filtered.append(candidate)
+        seen_titles.add(title_key)
+        item = dict(candidate)
+        item["title"] = title
+        filtered.append(item)
     regular = [c for c in filtered if _box_set_candidate_kind(c.get("title") or "") not in {"bonus", "release"}]
     bonus = [c for c in filtered if _box_set_candidate_kind(c.get("title") or "") == "bonus"]
     regular.sort(key=lambda c: (
@@ -6024,10 +6156,12 @@ def _log_box_set_proposal(barcode, proposal):
     source_label = _box_set_proposal_source_label(proposal)
     box_set_title = (proposal.get("title") or proposal.get("name") or "Unknown box set").strip()
     if _box_set_proposal_is_candidate_only(proposal):
+        member_source = (proposal.get("member_source") or "metadata candidates").strip()
         detail = (
             f"Source: {source_label}; Barcode: {barcode}; Box Set: {box_set_title}; "
             f"Candidate members ({len(titles)}): {', '.join(titles)}; "
-            "Reason: source did not list bundle members explicitly"
+            f"Member source: {member_source}; "
+            "Reason: release source did not list bundle members explicitly"
         )
         add_log(
             "lookup",
@@ -6309,18 +6443,32 @@ def _bluray_parse_movie_page(detail_url: str) -> dict | None:
         }
     elif is_box_set_page:
         hint_count = _box_set_member_hint_count(detection_text)
-        fallback_members = _box_set_candidate_members_from_sources(title, year, hint_count)
+        container_proposal = _box_set_members_from_container_sources(title, year)
+        fallback_members = (container_proposal or {}).get("movies") or []
+        member_source = (container_proposal or {}).get("member_source") or "metadata_candidates"
+        member_source_title = (container_proposal or {}).get("detected_member_source_title") or ""
+        if len(fallback_members) < 2:
+            _metadata_debug_log(
+                "Box-set member candidate fallback started",
+                f"Title: {title}; Base title: {_box_set_base_title(title)}; Hint count: {hint_count or '-'}",
+            )
+            fallback_members = _box_set_candidate_members_from_sources(title, year, hint_count)
         if len(fallback_members) >= 2:
             out["box_set_proposal"] = {
                 "title": re.sub(r"\s+(4K Ultra HD|4K UHD|Blu-ray|DVD)\b.*$", "", title, flags=re.I).strip() or title,
-                "source": "Blu-ray.com",
+                "source": (container_proposal or {}).get("source") or "Blu-ray.com",
                 "detail_url": detail_url,
                 "movies": fallback_members,
-                "member_source": "metadata_candidates",
+                "member_source": member_source,
                 "member_confidence": "candidate",
                 "detected_without_members": True,
                 "detected_member_hint_count": hint_count,
             }
+            if member_source_title:
+                out["box_set_proposal"]["detected_member_source_title"] = member_source_title
+            for field in ("tmdb_id", "movievault_id", "poster", "poster_url", "year_range"):
+                if (container_proposal or {}).get(field):
+                    out["box_set_proposal"][field] = container_proposal[field]
             return {k: v for k, v in out.items() if v}
         add_log(
             "lookup",
@@ -7782,6 +7930,11 @@ def _lookup_box_set_proposal_by_order(title: str = "", year: str = "", barcode: 
                     return proposal
             if title:
                 proposal = lookup_movievault_box_set_proposal(title, year, barcode)
+                if proposal:
+                    return proposal
+        elif source == "tmdb":
+            if title:
+                proposal = lookup_tmdb_box_set_proposal(title, year)
                 if proposal:
                     return proposal
         elif source == "bluray_com":
