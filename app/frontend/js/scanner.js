@@ -551,6 +551,12 @@ function displayBoxSetProposal(proposal, barcode, detectedFormat) {
   if (!nameEl || !listEl || !panel || !btn) return;
 
   nameEl.textContent = '';
+  const descEl = panel.querySelector('.boxset-proposal-desc');
+  if (descEl) {
+    descEl.textContent = proposal.detected_without_members
+      ? 'A box set was detected, but Blu-ray.com did not list the member discs. Review these metadata candidates before creating the box set.'
+      : t('scan.boxSetProposalDesc');
+  }
   listEl.innerHTML = movies.map((m, idx) => `
     <div class="boxset-member-row">
       <input class="boxset-member-check" type="checkbox" id="scanBoxSetMovieSelect${idx}" checked onchange="toggleBoxSetProposalMovie(${idx}, this.checked)" aria-label="${_escapeHtml(m.title)}">

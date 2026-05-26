@@ -1180,6 +1180,51 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertIn("TMDb", source)
         self.assertIn("Blu-ray.com", source)
 
+    def test_bluray_box_set_without_members_uses_metadata_candidate_fallback(self):
+        original_candidates = self.backend._metadata_candidates_by_order
+        html = """
+        <html><head>
+          <meta property="og:title" content="Back to the Future: The Ultimate Trilogy DVD" />
+          <meta property="og:image" content="https://images.example.test/bttf-dvd-box.jpg" />
+        </head><body>
+          <h1>Back to the Future: The Ultimate Trilogy DVD</h1>
+          <div>4-disc collector's set</div>
+          <div>Video: 4 DVD-9</div>
+          <div>Four-disc set</div>
+        </body></html>
+        """
+
+        def fake_candidates(title, year=""):
+            self.assertEqual(title, "Back to the Future")
+            return [
+                {"provider": "tmdb", "tmdb_id": "105", "title": "Back to the Future", "year": "1985", "poster": "p1"},
+                {"provider": "tmdb", "tmdb_id": "165", "title": "Back to the Future Part II", "year": "1989", "poster": "p2"},
+                {"provider": "tmdb", "tmdb_id": "196", "title": "Back to the Future Part III", "year": "1990", "poster": "p3"},
+            ]
+
+        class FakeResponse:
+            status_code = 200
+            text = html
+
+        original_get = self.backend.requests.get
+
+        try:
+            self.backend._metadata_candidates_by_order = fake_candidates
+            self.backend.requests.get = lambda *args, **kwargs: FakeResponse()
+            parsed = self.backend._bluray_parse_movie_page(
+                "https://www.blu-ray.com/dvd/Back-to-the-Future-The-Ultimate-Trilogy-DVD/219226/"
+            )
+        finally:
+            self.backend._metadata_candidates_by_order = original_candidates
+            self.backend.requests.get = original_get
+
+        proposal = parsed.get("box_set_proposal")
+        self.assertIsNotNone(proposal)
+        self.assertTrue(proposal["detected_without_members"])
+        self.assertEqual(proposal["member_confidence"], "candidate")
+        self.assertEqual(len(proposal["movies"]), 3)
+        self.assertEqual(proposal["movies"][1]["title"], "Back to the Future Part II")
+
     def test_synthetic_box_set_member_barcode_is_not_used_for_external_lookup(self):
         originals = {
             "order": self.backend._metadata_source_order,
