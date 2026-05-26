@@ -5730,9 +5730,87 @@ def _looks_like_box_set_title(title: str) -> bool:
     markers = (
         "box set", "boxset", "collection", "trilogy", "quadrilogy", "anthology",
         "complete", "movie set", "film set", "movie collection", "film collection",
-        "limited edition set", "collector's set", "ultimate set", "bundle",
+        "limited edition set", "collector's set", "collector set", "ultimate set", "bundle",
+        "four-disc set", "three-disc set", "five-disc set", "six-disc set",
     )
-    return any(m in low for m in markers) or bool(re.search(r"\b\d+\s*(movie|film|disc)\b", low))
+    return any(m in low for m in markers) or bool(re.search(r"\b\d+\s*[- ]?\s*(movie|film|disc|dvd|bd)s?\b", low))
+
+
+def _box_set_member_hint_count(text: str) -> int:
+    low = (text or "").lower()
+    word_counts = {
+        "trilogy": 3,
+        "three-disc": 3,
+        "three disc": 3,
+        "quadrilogy": 4,
+        "tetralogy": 4,
+        "four-disc": 4,
+        "four disc": 4,
+        "five-disc": 5,
+        "five disc": 5,
+        "six-disc": 6,
+        "six disc": 6,
+    }
+    for marker, count in word_counts.items():
+        if marker in low:
+            return count
+    match = re.search(r"\b(\d+)\s*[- ]?\s*(?:movie|film|disc|dvd|bd)s?\b", low)
+    if match:
+        count = int(match.group(1))
+        if 2 <= count <= 20:
+            return count
+    return 0
+
+
+def _box_set_base_title(title: str) -> str:
+    value = re.sub(r"\s+", " ", title or "").strip()
+    value = re.sub(r"\s*\([^)]*(?:dvd|blu-ray|4k|ultra hd|disc|collector|collection|set|trilogy)[^)]*\)", "", value, flags=re.I)
+    value = re.sub(
+        r"\b(?:the\s+)?(?:complete\s+)?(?:ultimate\s+)?(?:collector'?s?\s+)?"
+        r"(?:trilogy|quadrilogy|tetralogy|anthology|collection|box\s*set|boxset|movie\s+set|film\s+set|bundle)\b.*$",
+        "",
+        value,
+        flags=re.I,
+    )
+    value = re.sub(r"\b\d+\s*[- ]?\s*(?:disc|dvd|bd|movie|film)s?\b.*$", "", value, flags=re.I)
+    value = re.sub(r"\s*[:\-–|]+\s*$", "", value).strip()
+    return value or _clean_bluray_member_title(title)
+
+
+def _candidate_title_words(title: str) -> set[str]:
+    stop = {"the", "a", "an", "of", "and", "or", "to", "in", "on", "for", "part", "episode", "movie", "film"}
+    return {w.lower() for w in re.findall(r"[A-Za-z0-9]+", title or "") if len(w) > 2 and w.lower() not in stop}
+
+
+def _box_set_candidate_members_from_sources(box_set_title: str, year: str = "", limit_hint: int = 0) -> list[dict]:
+    base_title = _box_set_base_title(box_set_title)
+    if not base_title or len(base_title) < 3:
+        return []
+    base_words = _candidate_title_words(base_title)
+    candidates = _metadata_candidates_by_order(base_title, "")
+    filtered = []
+    seen = set()
+    for candidate in candidates:
+        title = (candidate.get("title") or "").strip()
+        if not title:
+            continue
+        candidate_words = _candidate_title_words(title)
+        if base_words and not (base_words & candidate_words):
+            continue
+        key = _metadata_candidate_key(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        filtered.append(candidate)
+    filtered.sort(key=lambda c: (
+        int(c.get("year") or 9999) if str(c.get("year") or "").isdigit() else 9999,
+        str(c.get("title") or ""),
+    ))
+    if limit_hint >= 3 and len(filtered) >= limit_hint - 1:
+        return filtered[:limit_hint]
+    if "trilogy" in (box_set_title or "").lower() and len(filtered) >= 3:
+        return filtered[:3]
+    return filtered if len(filtered) >= 2 else []
 
 
 def _extract_bluray_box_set_members(dsoup, box_set_title: str) -> list[dict]:
@@ -6148,8 +6226,10 @@ def _bluray_parse_movie_page(detail_url: str) -> dict | None:
         "audio_tracks": audio_text,
         "subtitles": subs_text,
     }
+    page_text = dsoup.get_text(" ", strip=True)
+    detection_text = " ".join([title or "", page_text[:4000]])
     members = _extract_bluray_box_set_members(dsoup, title)
-    is_box_set_page = _looks_like_box_set_title(title)
+    is_box_set_page = _looks_like_box_set_title(detection_text)
     if len(members) >= 2 and is_box_set_page:
         out["box_set_proposal"] = {
             "title": re.sub(r"\s+(4K Ultra HD|4K UHD|Blu-ray|DVD)\b.*$", "", title, flags=re.I).strip() or title,
@@ -6158,10 +6238,24 @@ def _bluray_parse_movie_page(detail_url: str) -> dict | None:
             "movies": members,
         }
     elif is_box_set_page:
+        hint_count = _box_set_member_hint_count(detection_text)
+        fallback_members = _box_set_candidate_members_from_sources(title, year, hint_count)
+        if len(fallback_members) >= 2:
+            out["box_set_proposal"] = {
+                "title": re.sub(r"\s+(4K Ultra HD|4K UHD|Blu-ray|DVD)\b.*$", "", title, flags=re.I).strip() or title,
+                "source": "Blu-ray.com",
+                "detail_url": detail_url,
+                "movies": fallback_members,
+                "member_source": "metadata_candidates",
+                "member_confidence": "candidate",
+                "detected_without_members": True,
+                "detected_member_hint_count": hint_count,
+            }
+            return {k: v for k, v in out.items() if v}
         add_log(
             "lookup",
             f"Blu-ray.com box-set page found but no member list extracted: \"{title}\"",
-            f"URL: {detail_url}; Member candidates found: {len(members)}",
+            f"URL: {detail_url}; Member candidates found: {len(members)}; Hint count: {hint_count or '-'}",
             "warn",
         )
     return {k: v for k, v in out.items() if v}
