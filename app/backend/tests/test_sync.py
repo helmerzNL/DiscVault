@@ -170,6 +170,63 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(release_payload["posterUrl"], "https://release.example.test/poster.jpg")
         self.assertEqual(release_payload["backdropUrls"], ["https://release.example.test/backdrop.jpg"])
 
+    def test_metadata_refresh_policy_keeps_existing_manual_fields(self):
+        original_setting = self.backend._setting_value
+
+        try:
+            self.backend._setting_value = lambda key, default="": "false" if key == "metadata_preferred_provider_overwrite" else original_setting(key, default)
+            filtered = self.backend._metadata_filter_refresh_updates(
+                {
+                    "title": "Manual Title",
+                    "plot": "Manual plot",
+                    "audio_tracks": "Old audio",
+                    "poster": "manual-poster.jpg",
+                },
+                {
+                    "title": "Provider Title",
+                    "plot": "Provider plot",
+                    "audio_tracks": "New audio",
+                    "poster": "provider-poster.jpg",
+                    "imdb_id": "tt1234567",
+                },
+                "TMDb",
+                "Unit test",
+            )
+        finally:
+            self.backend._setting_value = original_setting
+
+        self.assertNotIn("title", filtered)
+        self.assertNotIn("plot", filtered)
+        self.assertNotIn("poster", filtered)
+        self.assertNotIn("imdb_id", filtered)
+        self.assertEqual(filtered["audio_tracks"], "New audio")
+
+    def test_metadata_refresh_policy_allows_preferred_provider_overwrite(self):
+        original_setting = self.backend._setting_value
+
+        try:
+            self.backend._setting_value = lambda key, default="": "true" if key == "metadata_preferred_provider_overwrite" else original_setting(key, default)
+            filtered = self.backend._metadata_filter_refresh_updates(
+                {
+                    "title": "Manual Title",
+                    "plot": "Manual plot",
+                    "poster_file": "local.jpg",
+                },
+                {
+                    "title": "Provider Title",
+                    "plot": "Provider plot",
+                    "poster_file": "downloaded.jpg",
+                },
+                "TMDb",
+                "Unit test",
+            )
+        finally:
+            self.backend._setting_value = original_setting
+
+        self.assertEqual(filtered["title"], "Provider Title")
+        self.assertEqual(filtered["plot"], "Provider plot")
+        self.assertNotIn("poster_file", filtered)
+
     def test_movievault_box_set_member_source_reference_is_stable(self):
         source = {
             "title": "Mission: Impossible",
@@ -1095,7 +1152,7 @@ class SyncIntegrationTests(unittest.TestCase):
         original_parse = self.backend._bluray_parse_movie_page
         queries = []
 
-        def fake_find(query):
+        def fake_find(query, preferred_format=""):
             queries.append(query)
             if query == "5050582369601":
                 return "https://www.blu-ray.com/dvd/Back-to-the-Future-DVD/219226/"
@@ -1126,6 +1183,109 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(attempts[0]["query"], "barcode=5050582369601")
         self.assertEqual(specs["format"], "DVD")
         self.assertEqual(specs["poster"], "https://images.example.test/back-to-the-future-dvd.jpg")
+
+    def test_bluray_specs_rejects_4k_result_for_bluray_member(self):
+        original_find = self.backend._bluray_find_first_movie_url
+        original_parse = self.backend._bluray_parse_movie_page
+
+        def fake_find(query, preferred_format=""):
+            return "https://www.blu-ray.com/movies/Back-to-the-Future-4K-Blu-ray/395515/"
+
+        def fake_parse(url):
+            return {
+                "title": "Back to the Future 4K Blu-ray",
+                "format": "4K UHD",
+                "audio_tracks": "English Dolby Atmos",
+            }
+
+        try:
+            self.backend._bluray_find_first_movie_url = fake_find
+            self.backend._bluray_parse_movie_page = fake_parse
+            specs, attempts = self.backend.lookup_movie_bluray_specs_traced(
+                "Back to the Future",
+                "1985",
+                "5050582369601-BOX-01",
+                "Blu-ray",
+            )
+        finally:
+            self.backend._bluray_find_first_movie_url = original_find
+            self.backend._bluray_parse_movie_page = original_parse
+
+        self.assertIsNone(specs)
+        self.assertTrue(any("format mismatch" in (attempt.get("extra") or "") for attempt in attempts))
+
+    def test_bluray_specs_uses_parent_dvd_box_set_for_member_audio_only(self):
+        original_find = self.backend._bluray_find_first_movie_url
+        original_parse = self.backend._bluray_parse_movie_page
+        queries = []
+
+        def fake_find(query, preferred_format=""):
+            queries.append((query, preferred_format))
+            if query == "5050582369601-BOX-01":
+                self.fail("synthetic member barcode should not be used externally")
+            if query == "5050582369601":
+                return "https://www.blu-ray.com/dvd/Back-to-the-Future-Trilogy-DVD/28624/"
+            return None
+
+        def fake_parse(url):
+            return {
+                "title": "Back to the Future: Trilogy DVD",
+                "format": "DVD",
+                "poster": "https://images.example.test/box-set.jpg",
+                "poster_url": "https://images.example.test/box-set.jpg",
+                "audio_tracks": "English Dolby Digital 5.1",
+                "subtitles": "Dutch, English SDH",
+            }
+
+        try:
+            self.backend._bluray_find_first_movie_url = fake_find
+            self.backend._bluray_parse_movie_page = fake_parse
+            specs, attempts = self.backend.lookup_movie_bluray_specs_traced(
+                "Back to the Future Part III",
+                "1990",
+                "5050582369601-BOX-01",
+                "DVD",
+            )
+        finally:
+            self.backend._bluray_find_first_movie_url = original_find
+            self.backend._bluray_parse_movie_page = original_parse
+
+        self.assertIn(("5050582369601", "DVD"), queries)
+        self.assertEqual(specs["format"], "DVD")
+        self.assertEqual(specs["audio_tracks"], "English Dolby Digital 5.1")
+        self.assertEqual(specs["subtitles"], "Dutch, English SDH")
+        self.assertNotIn("poster", specs)
+
+    def test_merge_disc_specs_does_not_upgrade_audio_across_formats(self):
+        target = {
+            "title": "Back to the Future",
+            "format": "Blu-ray",
+        }
+        specs = {
+            "format": "4K UHD",
+            "audio_tracks": "English Dolby Atmos",
+            "subtitles": "Dutch",
+            "hdr": "Dolby Vision",
+        }
+
+        merged = self.backend._merge_disc_specs(dict(target), specs)
+
+        self.assertEqual(merged, target)
+
+    def test_barcode_release_data_rejects_format_mismatch(self):
+        data = {
+            "title": "Back to the Future 4K Blu-ray",
+            "format": "4K UHD",
+            "audio_tracks": "English Dolby Atmos",
+        }
+
+        self.assertIsNone(
+            self.backend._filter_release_data_for_media_format(data, "Blu-ray", "unit test")
+        )
+        self.assertEqual(
+            self.backend._filter_release_data_for_media_format(data, "4K UHD", "unit test"),
+            data,
+        )
 
     def test_bluray_barcode_release_overwrites_tmdb_poster(self):
         originals = {

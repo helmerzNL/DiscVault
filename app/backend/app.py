@@ -6182,7 +6182,37 @@ def _log_box_set_proposal(barcode, proposal):
     )
 
 
-def _bluray_search_sections(query: str) -> list[str]:
+def _media_format_is_dvd(value) -> bool:
+    return "dvd" in str(value or "").strip().lower()
+
+
+def _normalized_media_format(value) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    if re.search(r"4k|uhd|ultra\s*hd", text):
+        return "4K UHD"
+    if re.search(r"blu[- ]?ray", text):
+        return "Blu-ray"
+    if re.search(r"\bdvd\b", text):
+        return "DVD"
+    return ""
+
+
+def _media_format_matches_preference(actual: str, preferred: str) -> bool:
+    preferred_norm = _normalized_media_format(preferred)
+    if not preferred_norm:
+        return True
+    actual_norm = _normalized_media_format(actual)
+    return actual_norm == preferred_norm
+
+
+def _bluray_search_sections(query: str, preferred_format: str = "") -> list[str]:
+    preferred = _normalized_media_format(preferred_format)
+    if preferred == "DVD":
+        return ["dvdmovies"]
+    if preferred in {"Blu-ray", "4K UHD"}:
+        return ["bluraymovies"]
     text = (query or "").strip().lower()
     if re.fullmatch(r"\d{8,14}", text) or re.search(r"\bdvd\b", text):
         return ["dvdmovies", "bluraymovies"]
@@ -6193,7 +6223,7 @@ def _is_bluray_release_url(value: str) -> bool:
     return bool(re.search(r"blu-ray\.com/(?:movies|dvd)/", value or "", flags=re.I))
 
 
-def _bluray_find_first_movie_url(query: str) -> str | None:
+def _bluray_find_first_movie_url(query: str, preferred_format: str = "") -> str | None:
     """Search Blu-ray.com via their quicksearch AJAX endpoint and return the
     first movie detail URL, or None if nothing was found."""
     if not query:
@@ -6204,7 +6234,7 @@ def _bluray_find_first_movie_url(query: str) -> str | None:
         "X-Requested-With": "XMLHttpRequest",
         "Referer": "https://www.blu-ray.com/",
     }
-    for section in _bluray_search_sections(query):
+    for section in _bluray_search_sections(query, preferred_format):
         payload = {
             "section": section,
             "userid": "-1",
@@ -6229,7 +6259,7 @@ def _bluray_find_first_movie_url(query: str) -> str | None:
             pass
 
     # Fallback: try the old GET search page and look for <a href="/movies/...">
-    for section in _bluray_search_sections(query):
+    for section in _bluray_search_sections(query, preferred_format):
         try:
             q = quote_plus(query.strip())
             search_url = (
@@ -6479,37 +6509,104 @@ def _bluray_parse_movie_page(detail_url: str) -> dict | None:
     return {k: v for k, v in out.items() if v}
 
 
-def lookup_movie_bluray_specs_traced(title: str, year: str = "", barcode: str = ""):
+def lookup_movie_bluray_specs_traced(title: str, year: str = "", barcode: str = "", preferred_format: str = ""):
     attempts = []
     if not title and not barcode:
         attempts.append({"result": "skipped", "query": "geen titel of barcode"})
         return None, attempts
 
     detail_href = None
+    preferred_format = _normalized_media_format(preferred_format)
+    member_reference = _disc_vault_box_set_member_reference(barcode)
+    lookup_barcode = "" if member_reference else barcode
 
-    if barcode:
-        query = f"barcode={barcode}"
+    if barcode and member_reference:
+        attempts.append({
+            "result": "skipped",
+            "query": f"barcode={barcode}",
+            "extra": "synthetic box-set member barcode; using title and parent box-set context",
+        })
+
+    if lookup_barcode:
+        query = f"barcode={lookup_barcode}"
         try:
-            detail_href = _bluray_find_first_movie_url(barcode)
-            attempts.append({"result": "hit" if detail_href else "miss", "query": query})
+            detail_href = _bluray_find_first_movie_url(lookup_barcode, preferred_format)
+            attempts.append({
+                "result": "hit" if detail_href else "miss",
+                "query": query,
+                "extra": f"preferred_format={preferred_format}" if preferred_format else "",
+            })
         except Exception as ex:
             attempts.append({"result": "error", "query": query, "extra": str(ex)})
 
     if not detail_href and title:
         query = f"title={title}, year={year}"
         try:
-            detail_href = _bluray_find_first_movie_url(f"{title} {year}".strip())
-            attempts.append({"result": "hit" if detail_href else "miss", "query": query})
+            detail_href = _bluray_find_first_movie_url(f"{title} {year}".strip(), preferred_format)
+            attempts.append({
+                "result": "hit" if detail_href else "miss",
+                "query": query,
+                "extra": f"preferred_format={preferred_format}" if preferred_format else "",
+            })
         except Exception as ex:
             attempts.append({"result": "error", "query": query, "extra": str(ex)})
 
     if not detail_href:
+        if member_reference and member_reference.get("parentBarcode"):
+            try:
+                parent_barcode = member_reference["parentBarcode"]
+                parent_href = _bluray_find_first_movie_url(parent_barcode, preferred_format)
+                attempts.append({
+                    "result": "hit" if parent_href else "miss",
+                    "query": f"parent box-set barcode={parent_barcode}",
+                    "extra": "using parent box-set audio/subtitle context",
+                })
+                if parent_href:
+                    parent_parsed = _bluray_parse_movie_page(parent_href)
+                    if parent_parsed and _media_format_matches_preference(parent_parsed.get("format", ""), preferred_format):
+                        out = {
+                            "audio_tracks": parent_parsed.get("audio_tracks", ""),
+                            "subtitles": parent_parsed.get("subtitles", ""),
+                            "format": parent_parsed.get("format", ""),
+                        }
+                        return {k: v for k, v in out.items() if v}, attempts
+            except Exception as ex:
+                attempts.append({"result": "error", "query": "parent box-set detail parse", "extra": str(ex)})
         return None, attempts
 
     try:
         parsed = _bluray_parse_movie_page(detail_href)
         if not parsed:
             attempts.append({"result": "miss", "query": "detail parse"})
+            return None, attempts
+        parsed_format = parsed.get("format", "")
+        if not _media_format_matches_preference(parsed_format, preferred_format):
+            attempts.append({
+                "result": "skipped",
+                "query": "detail parse",
+                "extra": f"format mismatch: preferred={preferred_format or '-'}, found={parsed_format or '-'}",
+            })
+            parsed = None
+            if member_reference and member_reference.get("parentBarcode"):
+                try:
+                    parent_barcode = member_reference["parentBarcode"]
+                    parent_href = _bluray_find_first_movie_url(parent_barcode, preferred_format)
+                    attempts.append({
+                        "result": "hit" if parent_href else "miss",
+                        "query": f"parent box-set barcode={parent_barcode}",
+                        "extra": "using parent box-set audio/subtitle context",
+                    })
+                    if parent_href:
+                        parent_parsed = _bluray_parse_movie_page(parent_href)
+                        if parent_parsed and _media_format_matches_preference(parent_parsed.get("format", ""), preferred_format):
+                            out = {
+                                "audio_tracks": parent_parsed.get("audio_tracks", ""),
+                                "subtitles": parent_parsed.get("subtitles", ""),
+                                "format": parent_parsed.get("format", ""),
+                            }
+                            return {k: v for k, v in out.items() if v}, attempts
+                except Exception as ex:
+                    attempts.append({"result": "error", "query": "parent box-set detail parse", "extra": str(ex)})
             return None, attempts
         out = {
             "hdr": parsed.get("hdr", ""),
@@ -6526,8 +6623,8 @@ def lookup_movie_bluray_specs_traced(title: str, year: str = "", barcode: str = 
         return None, attempts
 
 
-def lookup_movie_bluray_specs(title: str, year: str = "", barcode: str = "") -> dict | None:
-    specs, _ = lookup_movie_bluray_specs_traced(title, year, barcode)
+def lookup_movie_bluray_specs(title: str, year: str = "", barcode: str = "", preferred_format: str = "") -> dict | None:
+    specs, _ = lookup_movie_bluray_specs_traced(title, year, barcode, preferred_format)
     return specs
 
 
@@ -6544,6 +6641,23 @@ def lookup_movie_bluray_by_barcode(barcode: str) -> dict | None:
         return parsed
     except Exception:
         return None
+
+
+def _filter_release_data_for_media_format(data: dict | None, preferred_format: str = "", context: str = "") -> dict | None:
+    if not data:
+        return data
+    preferred = _normalized_media_format(preferred_format)
+    if not preferred:
+        return data
+    actual = _normalized_media_format(data.get("format") or "")
+    if actual == preferred:
+        return data
+    _metadata_debug_log(
+        "Blu-ray.com release data rejected",
+        f"Context: {context or '-'}; Preferred format: {preferred}; Found format: {actual or '-'}; Reason: avoid cross-format specs/audio upgrade",
+        "warn",
+    )
+    return None
 
 
 def lookup_bluray_box_set_proposal_by_title(title: str, year: str = "") -> dict | None:
@@ -6723,6 +6837,15 @@ def lookup_movie_bluraydiscde_specs_traced(title: str, year: str = "", barcode: 
 
 def _merge_disc_specs(target: dict, specs: dict | None) -> dict:
     if not specs:
+        return target
+    target_format = _normalized_media_format(target.get("format") or "")
+    specs_format = _normalized_media_format(specs.get("format") or "")
+    if target_format and specs_format and target_format != specs_format:
+        _metadata_debug_log(
+            "Disc specs merge skipped",
+            f"Target format: {target_format}; Specs format: {specs_format}; Reason: avoid cross-format specs/audio upgrade",
+            "warn",
+        )
         return target
     for key in ("hdr", "packaging", "audio_tracks", "subtitles", "poster", "poster_url", "format"):
         if specs.get(key) and not target.get(key):
@@ -8069,7 +8192,12 @@ def update_movie(movie_id):
                 missing_spec_fields.append(key)
 
         if lookup_title and missing_spec_fields:
-            specs, bluray_attempts = lookup_movie_bluray_specs_traced(lookup_title, lookup_year, merged.get("barcode") or "")
+            specs, bluray_attempts = lookup_movie_bluray_specs_traced(
+                lookup_title,
+                lookup_year,
+                merged.get("barcode") or "",
+                merged.get("format") or "",
+            )
             for a in bluray_attempts:
                 _trace_add(attempts, "Blu-ray.com", a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
             if specs:
@@ -8859,6 +8987,7 @@ def refresh_single(movie_id):
             barcode=movie.get("barcode", ""),
             imdb_id=imdb_id,
             tmdb_id=tmdb_id_known,
+            media_format=movie.get("format") or "",
             fallback_title=title if original_title and original_title != title else "",
             attempts=attempts,
             contribute_to_movievault=False,
@@ -8888,6 +9017,7 @@ def refresh_single(movie_id):
 
         new_poster_url = info.get("poster", "")
         _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
+        updates = _metadata_filter_refresh_updates(movie, updates, source, "Metadata refresh")
         _metadata_debug_fields("Metadata refresh update fields after poster handling", updates, source=source)
 
         if updates:
@@ -8979,6 +9109,7 @@ def sync_single_all_backends(movie_id):
             barcode=movie.get("barcode") or "",
             imdb_id=imdb_id,
             tmdb_id=movie.get("tmdb_id") or "",
+            media_format=movie.get("format") or "",
             fallback_title=title if original_title and original_title != title else "",
             attempts=attempts,
             contribute_to_movievault=False,
@@ -9006,6 +9137,7 @@ def sync_single_all_backends(movie_id):
 
         new_poster_url = info.get("poster", "")
         _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
+        updates = _metadata_filter_refresh_updates(movie, updates, source_label, "Sync all sources")
 
         if updates:
             prepare_local_image_variants(updates)
@@ -9132,10 +9264,10 @@ def sync_single_source(movie_id):
 
         elif source == "bluray_com":
             if _is_bluray_scrape_enabled():
-                specs, b_attempts = lookup_movie_bluray_specs_traced(search_title, year, barcode)
+                specs, b_attempts = lookup_movie_bluray_specs_traced(search_title, year, barcode, movie.get("format") or "")
                 for a in b_attempts:
                     _trace_add(attempts, "Blu-ray.com", a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))
-                info = _merge_disc_specs({}, specs)
+                info = _merge_disc_specs({"format": movie.get("format") or ""}, specs)
             else:
                 _trace_add(attempts, "Blu-ray.com", "skipped", "source toggle uit")
             source_label = "Blu-ray.com"
@@ -9157,6 +9289,7 @@ def sync_single_source(movie_id):
 
         new_poster_url = info.get("poster", "")
         _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
+        updates = _metadata_filter_refresh_updates(movie, updates, source_label, "Sync source")
 
         if updates:
             prepare_local_image_variants(updates)
@@ -9299,6 +9432,7 @@ def bulk_refresh():
                 barcode=movie.get("barcode") or "",
                 imdb_id=imdb_id,
                 tmdb_id=movie.get("tmdb_id") or "",
+                media_format=movie.get("format") or "",
                 fallback_title=title if original_title and original_title != title else "",
                 attempts=attempts,
                 contribute_to_movievault=False,
@@ -9323,6 +9457,7 @@ def bulk_refresh():
 
             new_poster_url = info.get("poster", "")
             new_file = _merge_refresh_poster_updates(movie, updates, new_poster_url, fetch_posters)
+            updates = _metadata_filter_refresh_updates(movie, updates, source, "Bulk refresh")
             if new_file:
                 add_log("refresh", f"Poster gedownload voor \"{title}\"",
                         f"Bron: {source}, Bestand: {new_file}", "success")
@@ -9887,6 +10022,7 @@ def enrich_from_api(row: dict) -> dict:
             barcode=row.get("barcode") or "",
             imdb_id=imdb_id,
             tmdb_id=row.get("tmdb_id") or "",
+            media_format=row.get("format") or "",
             fallback_title=row.get("title") or "",
             stop_after_first=False,
         )
@@ -10670,6 +10806,108 @@ RELEASE_PRIORITY_FIELDS = {
 }
 
 
+METADATA_LOCAL_ONLY_FIELDS = {
+    "barcode",
+    "added_at",
+    "owner_id",
+    "poster_file",
+    "posters",
+}
+
+
+METADATA_MANUAL_PROTECTED_FIELDS = {
+    "title",
+    "original_title",
+    "plot",
+    "poster",
+    "poster_url",
+    "backdrop",
+    "backdrop_url",
+    "backdrops",
+    "backdrop_urls",
+    "trailer_url",
+    "videos",
+}
+
+
+METADATA_TECHNICAL_RELEASE_FIELDS = {
+    "format",
+    "edition",
+    "packaging",
+    "country",
+    "language",
+    "distributor",
+    "hdr",
+    "audio_tracks",
+    "subtitles",
+    "regions",
+    "screen_ratios",
+}
+
+
+def _metadata_preferred_provider_overwrite_enabled() -> bool:
+    return _setting_value("metadata_preferred_provider_overwrite", "false").strip().lower() == "true"
+
+
+def _metadata_value_present(value) -> bool:
+    return value not in (None, "", [], {})
+
+
+def _metadata_field_overwrite_allowed(
+    field: str,
+    current_value,
+    incoming_value,
+    source_label: str = "",
+    context: str = "",
+) -> tuple[bool, str]:
+    if not _metadata_value_present(incoming_value):
+        return False, "incoming value is empty"
+    if field in METADATA_LOCAL_ONLY_FIELDS:
+        return not _metadata_value_present(current_value), "local-only field is empty"
+    if not _metadata_value_present(current_value):
+        return True, "current field is empty"
+    if field in METADATA_TECHNICAL_RELEASE_FIELDS:
+        return True, "release metadata may refresh this field"
+    if _metadata_preferred_provider_overwrite_enabled() and field not in METADATA_LOCAL_ONLY_FIELDS:
+        return True, "preferred provider overwrite is enabled"
+    if field in METADATA_MANUAL_PROTECTED_FIELDS:
+        return False, "manual/display field already has a value"
+    return False, "existing value retained"
+
+
+def _metadata_filter_refresh_updates(
+    current_movie: dict | None,
+    updates: dict | None,
+    source_label: str = "",
+    context: str = "",
+) -> dict:
+    current_movie = current_movie or {}
+    filtered = {}
+    skipped = []
+    for field, incoming in (updates or {}).items():
+        allowed, reason = _metadata_field_overwrite_allowed(
+            field,
+            current_movie.get(field),
+            incoming,
+            source_label,
+            context,
+        )
+        if allowed:
+            filtered[field] = incoming
+        else:
+            skipped.append(f"{field} ({reason})")
+    if skipped:
+        _metadata_debug_log(
+            "Metadata refresh fields retained",
+            (
+                f"Context: {context or '-'}; Source: {source_label or '-'}; "
+                f"Skipped: {', '.join(skipped[:30])}"
+            ),
+            "info",
+        )
+    return filtered
+
+
 def _mark_movie_image_sources(info: dict, data: dict):
     for src_key, dst_key in (
         ("poster_url", "_movie_poster_url"),
@@ -10712,6 +10950,7 @@ def _merge_metadata_by_order(
     barcode: str = "",
     imdb_id: str = "",
     tmdb_id: str = "",
+    media_format: str = "",
     fallback_title: str = "",
     attempts: list | None = None,
     stop_after_first: bool = False,
@@ -10732,7 +10971,7 @@ def _merge_metadata_by_order(
         (
             f"Title: {primary_title or '-'}; Fallback title: {fallback_title or '-'}; Year: {year or '-'}; "
             f"Barcode: {barcode or '-'}; External barcode: {lookup_barcode or '-'}; IMDb: {imdb_id or '-'}; TMDb: {tmdb_id or '-'}; "
-            f"Source order: {_metadata_source_order_log()}"
+            f"Media format: {media_format or '-'}; Source order: {_metadata_source_order_log()}"
         ),
     )
     if barcode and not lookup_barcode:
@@ -10849,6 +11088,11 @@ def _merge_metadata_by_order(
                 base = {}
                 if lookup_barcode:
                     by_barcode = lookup_movie_bluray_by_barcode(lookup_barcode)
+                    by_barcode = _filter_release_data_for_media_format(
+                        by_barcode,
+                        media_format,
+                        f"barcode={lookup_barcode}",
+                    )
                     _trace_add(attempts, label, "hit" if by_barcode else "miss", f"barcode={lookup_barcode}")
                     if by_barcode:
                         base.update({
@@ -10879,6 +11123,7 @@ def _merge_metadata_by_order(
                     base.get("title") or primary_title,
                     base.get("year") or year,
                     lookup_barcode,
+                    base.get("format") or media_format,
                 )
                 for a in source_attempts:
                     _trace_add(attempts, label, a.get("result", "miss"), a.get("query", ""), a.get("extra", ""))

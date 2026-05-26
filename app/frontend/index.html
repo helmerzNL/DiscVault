@@ -1254,6 +1254,13 @@
             <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.5;" data-i18n="settings.sourceHelp">
               De scrapers proberen HDR/Audiosporen/Ondertitels op te halen zonder officiële API.
             </div>
+            <label style="display:flex; align-items:flex-start; gap:8px; font-size:0.88rem; cursor:pointer; color:var(--text); margin-top:14px;">
+              <input type="checkbox" id="metadataPreferredOverwriteToggle" onchange="saveSourceSettings()" style="accent-color:var(--accent); width:16px; height:16px; margin-top:2px;">
+              <span>
+                <span data-i18n="settings.preferredProviderOverwrite">Voorkeursbron mag bestaande velden overschrijven</span>
+                <span style="display:block; font-size:0.72rem; color:var(--text-muted); line-height:1.45; margin-top:3px;" data-i18n="settings.preferredProviderOverwriteDesc">Uit: bestaande handmatige waarden blijven staan. Aan: de hoogste actieve metadata bron mag velden bij refresh vervangen; technische discvelden blijven beperkt tot hetzelfde mediumtype.</span>
+              </span>
+            </label>
             <div style="margin-top:14px; padding:12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px;">
               <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
                 <div style="font-size:0.78rem; font-weight:600; color:var(--text);" data-i18n="settings.sourceOrderLabel">Bronvolgorde</div>

@@ -172,6 +172,10 @@ def register_settings_routes(
             "metadata_source_order": _metadata_source_order(),
             "metadata_source_order_value": ",".join(_metadata_source_order()),
             "metadata_source_labels": metadata_source_labels,
+            "metadata_preferred_provider_overwrite": _bool_setting(
+                "metadata_preferred_provider_overwrite",
+                False,
+            ),
             "bluray_scrape_enabled": is_bluray_scrape_enabled(),
             "bluraydiscde_scrape_enabled": is_bluraydiscde_scrape_enabled(),
         })
@@ -226,6 +230,19 @@ def register_settings_routes(
                 "settings",
                 f"MovieVault sharing {'enabled' if contribution_enabled else 'disabled'}",
                 f"Sharing mode: {sharing_mode}",
+                level="info",
+            )
+        if "metadata_preferred_provider_overwrite" in data:
+            preferred_overwrite = bool(data.get("metadata_preferred_provider_overwrite", False))
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ("metadata_preferred_provider_overwrite", "true" if preferred_overwrite else "false"),
+            )
+            result["metadata_preferred_provider_overwrite"] = preferred_overwrite
+            add_log(
+                "settings",
+                "Metadata preferred provider overwrite updated",
+                f"Enabled: {'yes' if preferred_overwrite else 'no'}",
                 level="info",
             )
         raw_order = str(data.get("metadata_source_order") or "").strip()

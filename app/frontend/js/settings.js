@@ -168,10 +168,12 @@ async function loadSourceSettings() {
     const elOmdb = document.getElementById('sourceOmdbToggle');
     const elTmdb = document.getElementById('sourceTmdbToggle');
     const el = document.getElementById('sourceBlurayToggle');
+    const elPreferredOverwrite = document.getElementById('metadataPreferredOverwriteToggle');
     if (elMovieVault) elMovieVault.checked = d.movievault_enabled !== false;
     if (elOmdb) { elOmdb.checked = !!d.omdb_enabled; elOmdb.disabled = !d.omdb_key_set; }
     if (elTmdb) { elTmdb.checked = !!d.tmdb_enabled; elTmdb.disabled = !d.tmdb_key_set; }
     if (el)  el.checked  = !!d.bluray_scrape_enabled;
+    if (elPreferredOverwrite) elPreferredOverwrite.checked = !!d.metadata_preferred_provider_overwrite;
     _applyMovieVaultSourceState(d.movievault_enabled !== false);
     _renderMetadataSourceOrder(d);
     _applyApiKeyBadge('omdb', d.omdb_key_set);
@@ -581,11 +583,13 @@ async function saveSourceSettings(options = {}) {
   const elOmdb = document.getElementById('sourceOmdbToggle');
   const elTmdb = document.getElementById('sourceTmdbToggle');
   const el = document.getElementById('sourceBlurayToggle');
+  const elPreferredOverwrite = document.getElementById('metadataPreferredOverwriteToggle');
   const body = {
     movievault_enabled: !!(elMovieVault && elMovieVault.checked),
     omdb_enabled: !!(elOmdb && elOmdb.checked),
     tmdb_enabled: !!(elTmdb && elTmdb.checked),
     bluray_scrape_enabled: !!(el && el.checked),
+    metadata_preferred_provider_overwrite: !!(elPreferredOverwrite && elPreferredOverwrite.checked),
     metadata_source_order: _metadataSourceOrderValue(),
   };
   _applyMovieVaultSourceState(body.movievault_enabled);
