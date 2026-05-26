@@ -5900,6 +5900,17 @@ def _log_box_set_proposal(barcode, proposal):
     )
 
 
+def _bluray_search_sections(query: str) -> list[str]:
+    text = (query or "").strip().lower()
+    if re.fullmatch(r"\d{8,14}", text) or re.search(r"\bdvd\b", text):
+        return ["dvdmovies", "bluraymovies"]
+    return ["bluraymovies", "dvdmovies"]
+
+
+def _is_bluray_release_url(value: str) -> bool:
+    return bool(re.search(r"blu-ray\.com/(?:movies|dvd)/", value or "", flags=re.I))
+
+
 def _bluray_find_first_movie_url(query: str) -> str | None:
     """Search Blu-ray.com via their quicksearch AJAX endpoint and return the
     first movie detail URL, or None if nothing was found."""
@@ -5911,50 +5922,52 @@ def _bluray_find_first_movie_url(query: str) -> str | None:
         "X-Requested-With": "XMLHttpRequest",
         "Referer": "https://www.blu-ray.com/",
     }
-    payload = {
-        "section": "bluraymovies",
-        "userid": "-1",
-        "country": "all",
-        "keyword": query.strip(),
-    }
-    try:
-        sr = requests.post(
-            "https://www.blu-ray.com/search/quicksearch.php",
-            data=payload, headers=headers, timeout=10,
-        )
-        if sr.status_code != 200:
-            return None
-        # The response contains a JS block with:  var urls = new Array('url1', 'url2', ...);
-        m = re.search(r"var\s+urls\s*=\s*new\s+Array\(([^)]+)\)", sr.text)
-        if m:
-            raw = m.group(1)
-            urls = [u.strip().strip("'\"") for u in raw.split(",") if "/movies/" in u]
-            if urls:
-                return urls[0]
-    except Exception:
-        pass
+    for section in _bluray_search_sections(query):
+        payload = {
+            "section": section,
+            "userid": "-1",
+            "country": "all",
+            "keyword": query.strip(),
+        }
+        try:
+            sr = requests.post(
+                "https://www.blu-ray.com/search/quicksearch.php",
+                data=payload, headers=headers, timeout=10,
+            )
+            if sr.status_code != 200:
+                continue
+            # The response contains a JS block with:  var urls = new Array('url1', 'url2', ...);
+            m = re.search(r"var\s+urls\s*=\s*new\s+Array\(([^)]+)\)", sr.text)
+            if m:
+                raw = m.group(1)
+                urls = [u.strip().strip("'\"") for u in raw.split(",") if _is_bluray_release_url(u)]
+                if urls:
+                    return urls[0]
+        except Exception:
+            pass
 
     # Fallback: try the old GET search page and look for <a href="/movies/...">
-    try:
-        q = quote_plus(query.strip())
-        search_url = (
-            "https://www.blu-ray.com/search/?quicksearch=1"
-            "&quicksearch_country=all&section=bluraymovies&quicksearch_keyword=" + q
-        )
-        sr = requests.get(search_url, headers=headers, timeout=8)
-        if sr.status_code != 200:
-            return None
-        soup = BeautifulSoup(sr.text, "html.parser")
-        for a in soup.select('a[href*="/movies/"]'):
-            href = (a.get("href") or "").strip()
-            if not href:
+    for section in _bluray_search_sections(query):
+        try:
+            q = quote_plus(query.strip())
+            search_url = (
+                "https://www.blu-ray.com/search/?quicksearch=1"
+                f"&quicksearch_country=all&section={section}&quicksearch_keyword=" + q
+            )
+            sr = requests.get(search_url, headers=headers, timeout=8)
+            if sr.status_code != 200:
                 continue
-            if href.startswith("/"):
-                href = "https://www.blu-ray.com" + href
-            if "blu-ray.com/movies/" in href and re.search(r"/\d{4,}/", href):
-                return href
-    except Exception:
-        pass
+            soup = BeautifulSoup(sr.text, "html.parser")
+            for a in soup.select('a[href*="/movies/"], a[href*="/dvd/"]'):
+                href = (a.get("href") or "").strip()
+                if not href:
+                    continue
+                if href.startswith("/"):
+                    href = "https://www.blu-ray.com" + href
+                if _is_bluray_release_url(href) and re.search(r"/\d{4,}/", href):
+                    return href
+        except Exception:
+            pass
     return None
 
 
@@ -5974,44 +5987,50 @@ def search_movie_bluray_candidates(title: str = "", year: str = "") -> list[dict
         value = (value or "").strip().strip("'\"")
         if value.startswith("/"):
             value = "https://www.blu-ray.com" + value
-        if "blu-ray.com/movies/" in value and value not in urls:
+        if _is_bluray_release_url(value) and value not in urls:
             urls.append(value)
 
     try:
-        response = requests.post(
-            "https://www.blu-ray.com/search/quicksearch.php",
-            data={"section": "bluraymovies", "userid": "-1", "country": "all", "keyword": query},
-            headers=headers,
-            timeout=4,
-        )
-        if response.status_code == 200:
-            match = re.search(r"var\s+urls\s*=\s*new\s+Array\(([^)]+)\)", response.text)
-            if match:
-                for item in match.group(1).split(","):
-                    add_url(item)
+        for section in _bluray_search_sections(query):
+            response = requests.post(
+                "https://www.blu-ray.com/search/quicksearch.php",
+                data={"section": section, "userid": "-1", "country": "all", "keyword": query},
+                headers=headers,
+                timeout=4,
+            )
+            if response.status_code == 200:
+                match = re.search(r"var\s+urls\s*=\s*new\s+Array\(([^)]+)\)", response.text)
+                if match:
+                    for item in match.group(1).split(","):
+                        add_url(item)
+            if urls:
+                break
     except Exception:
         pass
 
     if not urls:
         try:
-            search_url = (
-                "https://www.blu-ray.com/search/?quicksearch=1"
-                "&quicksearch_country=all&section=bluraymovies&quicksearch_keyword="
-                + quote_plus(query)
-            )
-            response = requests.get(search_url, headers=headers, timeout=4)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, "html.parser")
-                for link in soup.select('a[href*="/movies/"]'):
-                    add_url(link.get("href") or "")
-                    if len(urls) >= 8:
-                        break
+            for section in _bluray_search_sections(query):
+                search_url = (
+                    "https://www.blu-ray.com/search/?quicksearch=1"
+                    f"&quicksearch_country=all&section={section}&quicksearch_keyword="
+                    + quote_plus(query)
+                )
+                response = requests.get(search_url, headers=headers, timeout=4)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    for link in soup.select('a[href*="/movies/"], a[href*="/dvd/"]'):
+                        add_url(link.get("href") or "")
+                        if len(urls) >= 8:
+                            break
+                if urls:
+                    break
         except Exception:
             pass
 
     candidates = []
     for url in urls[:8]:
-        match = re.search(r"/movies/([^/]+)/(\d+)", url)
+        match = re.search(r"/(?:movies|dvd)/([^/]+)/(\d+)", url)
         if not match:
             continue
         title_from_url = re.sub(r"[-_]+", " ", match.group(1)).strip()
@@ -6108,6 +6127,12 @@ def _bluray_parse_movie_page(detail_url: str) -> dict | None:
     if not hdr_text:
         hdr_text = _extract_hdr_tokens(dsoup.get_text(" ", strip=True)[:5000])
 
+    page_text = dsoup.get_text(" ", strip=True)
+    format_text = " ".join([detail_url or "", title or "", page_text[:2000]])
+    release_format = _detect_format_from_upc(format_text)
+    if "/dvd/" in (detail_url or "").lower():
+        release_format = "DVD"
+
     year = ""
     m = re.search(r"\((\d{4})\)", title)
     if m:
@@ -6117,6 +6142,8 @@ def _bluray_parse_movie_page(detail_url: str) -> dict | None:
         "title": title,
         "year": year,
         "poster": poster,
+        "poster_url": poster,
+        "format": release_format,
         "hdr": hdr_text,
         "audio_tracks": audio_text,
         "subtitles": subs_text,
@@ -6148,18 +6175,18 @@ def lookup_movie_bluray_specs_traced(title: str, year: str = "", barcode: str = 
 
     detail_href = None
 
-    if title:
-        query = f"title={title}, year={year}"
+    if barcode:
+        query = f"barcode={barcode}"
         try:
-            detail_href = _bluray_find_first_movie_url(f"{title} {year}".strip())
+            detail_href = _bluray_find_first_movie_url(barcode)
             attempts.append({"result": "hit" if detail_href else "miss", "query": query})
         except Exception as ex:
             attempts.append({"result": "error", "query": query, "extra": str(ex)})
 
-    if not detail_href and barcode:
-        query = f"barcode={barcode}"
+    if not detail_href and title:
+        query = f"title={title}, year={year}"
         try:
-            detail_href = _bluray_find_first_movie_url(barcode)
+            detail_href = _bluray_find_first_movie_url(f"{title} {year}".strip())
             attempts.append({"result": "hit" if detail_href else "miss", "query": query})
         except Exception as ex:
             attempts.append({"result": "error", "query": query, "extra": str(ex)})
@@ -6177,6 +6204,9 @@ def lookup_movie_bluray_specs_traced(title: str, year: str = "", barcode: str = 
             "packaging": parsed.get("packaging", ""),
             "audio_tracks": parsed.get("audio_tracks", ""),
             "subtitles": parsed.get("subtitles", ""),
+            "poster": parsed.get("poster", ""),
+            "poster_url": parsed.get("poster_url", ""),
+            "format": parsed.get("format", ""),
         }
         return {k: v for k, v in out.items() if v}, attempts
     except Exception as ex:
@@ -6382,7 +6412,7 @@ def lookup_movie_bluraydiscde_specs_traced(title: str, year: str = "", barcode: 
 def _merge_disc_specs(target: dict, specs: dict | None) -> dict:
     if not specs:
         return target
-    for key in ("hdr", "packaging", "audio_tracks", "subtitles", "poster"):
+    for key in ("hdr", "packaging", "audio_tracks", "subtitles", "poster", "poster_url", "format"):
         if specs.get(key) and not target.get(key):
             target[key] = specs[key]
     return target
