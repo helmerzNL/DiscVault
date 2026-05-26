@@ -1489,6 +1489,24 @@ def init_db():
             PRIMARY KEY (entity_type, public_identity, template_version)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS movievault_entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            local_entity_type TEXT NOT NULL,
+            local_entity_id TEXT NOT NULL,
+            movievault_entity_type TEXT NOT NULL,
+            movievault_id TEXT,
+            contribution_id TEXT,
+            last_submit_status TEXT,
+            last_http_status INTEGER,
+            payload_fingerprint TEXT,
+            template_version TEXT,
+            attempted_at TEXT,
+            submitted_at TEXT,
+            error_message TEXT,
+            UNIQUE(local_entity_type, local_entity_id, movievault_entity_type)
+        )
+    """)
 
     # Auth: invite codes for admin-controlled registration
     conn.execute("""
@@ -2814,6 +2832,20 @@ def _movievault_extract_movievault_id(value, allow_plain_id: bool = False) -> st
     return ""
 
 
+def _movievault_extract_contribution_id(value) -> str:
+    if not isinstance(value, dict):
+        return ""
+    for key in ("contributionId", "contribution_id", "idempotencyContributionId"):
+        item = value.get(key)
+        if item not in (None, "", [], {}):
+            return str(item)
+    for key in ("contribution", "data", "result"):
+        found = _movievault_extract_contribution_id(value.get(key))
+        if found:
+            return found
+    return ""
+
+
 def _movievault_submission_action(response) -> str:
     if getattr(response, "status_code", None) == 202:
         return "accepted"
@@ -3692,6 +3724,7 @@ def _disc_vault_box_set_member_reference(value) -> dict:
     return {
         "type": "box_set_member",
         "key": code,
+        "parentBarcode": match.group(1),
         "memberSortOrder": int(match.group(2)),
     }
 
@@ -3713,6 +3746,17 @@ def _movievault_source_reference(entity_type: str, source_data: dict, context: d
     if box_set_title:
         reference["boxSetTitle"] = box_set_title
     return reference
+
+
+def _movievault_force_contribution(context: dict | None) -> bool:
+    if not isinstance(context, dict):
+        return False
+    for key in ("forceMovieVaultContribution", "force_movievault_contribution", "force_movievault"):
+        if context.get(key) is True:
+            return True
+        if isinstance(context.get(key), str) and context.get(key).strip().lower() in {"1", "true", "yes", "on"}:
+            return True
+    return False
 
 
 def _movievault_public_identity(entity_type: str, filtered_payload: dict, context: dict) -> str:
@@ -3809,7 +3853,10 @@ def _movievault_contribution_payload(
         or _movievault_extract_movievault_id(raw_payload)
         or _movievault_extract_movievault_id(filtered_payload)
     )
+    force_submit = _movievault_force_contribution(context)
     idem = f"{entity_type}:{identity}:{template_version or 'unknown'}:{payload_fingerprint}"
+    if force_submit:
+        idem = f"{idem}:attempt:{uuid.uuid4().hex}"
     stats = {
         "entity_type": entity_type,
         "template_version": template_version,
@@ -3826,6 +3873,7 @@ def _movievault_contribution_payload(
         "payload_fingerprint_prefix": payload_fingerprint[:12],
         "public_identity": public_identity,
         "source_reference": source_reference,
+        "force_movievault_contribution": force_submit,
         "idempotency_key": idem,
         "idempotency_prefix": idem[:24],
         "local_entity_type": context.get("localEntityType") or entity_type,
@@ -3871,6 +3919,20 @@ def _movievault_stats_detail(stats: dict, endpoint: str = "", http_status: str =
         f"Payload fingerprint: {stats.get('payload_fingerprint_prefix') or '-'}",
         f"Idempotency: {stats.get('idempotency_prefix') or '-'}",
     ]
+    if stats.get("force_movievault_contribution"):
+        parts.append("Force submit: yes")
+    cached_state = stats.get("cached_movievault_state") or {}
+    if cached_state:
+        parts.append(
+            "Cached MovieVault state: "
+            f"status={cached_state.get('last_submit_status') or '-'}, "
+            f"http={cached_state.get('last_http_status') or '-'}, "
+            f"contribution={cached_state.get('contribution_id') or '-'}, "
+            f"entity={cached_state.get('movievault_id') or '-'}, "
+            f"successful={'yes' if stats.get('cached_movievault_success') else 'no'}"
+        )
+    if stats.get("skip_reason"):
+        parts.append(f"Skip decision: {stats.get('skip_reason')}")
     if http_status:
         parts.append(f"MovieVault response: {_movievault_http_status_label(http_status)}")
     if response_body:
@@ -3895,6 +3957,85 @@ def _ensure_movievault_contribution_fingerprint_table(conn):
             PRIMARY KEY (entity_type, public_identity, template_version)
         )
     """)
+
+
+def _ensure_movievault_entities_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS movievault_entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            local_entity_type TEXT NOT NULL,
+            local_entity_id TEXT NOT NULL,
+            movievault_entity_type TEXT NOT NULL,
+            movievault_id TEXT,
+            contribution_id TEXT,
+            last_submit_status TEXT,
+            last_http_status INTEGER,
+            payload_fingerprint TEXT,
+            template_version TEXT,
+            attempted_at TEXT,
+            submitted_at TEXT,
+            error_message TEXT,
+            UNIQUE(local_entity_type, local_entity_id, movievault_entity_type)
+        )
+    """)
+
+
+def _movievault_entity_cache_key(stats: dict) -> tuple[str, str, str]:
+    entity_type = str(stats.get("entity_type") or "").strip()
+    local_type = str(stats.get("local_entity_type") or entity_type or "").strip()
+    local_id = str(stats.get("local_entity_id") or "").strip()
+    if not local_id or local_id == "-":
+        source_reference = stats.get("source_reference") or {}
+        local_id = str(source_reference.get("key") or stats.get("public_identity") or "").strip()
+    return local_type, local_id, entity_type
+
+
+def _movievault_load_entity_state(stats: dict) -> dict:
+    local_type, local_id, entity_type = _movievault_entity_cache_key(stats)
+    if not local_type or not local_id or not entity_type:
+        return {}
+    conn = None
+    try:
+        conn = get_db()
+        _ensure_movievault_entities_table(conn)
+        row = conn.execute(
+            """
+            SELECT *
+              FROM movievault_entities
+             WHERE local_entity_type=? AND local_entity_id=? AND movievault_entity_type=?
+            """,
+            (local_type, local_id, entity_type),
+        ).fetchone()
+        return dict(row) if row else {}
+    except Exception:
+        return {}
+    finally:
+        if conn:
+            conn.close()
+
+
+def _movievault_state_is_successful(state: dict | None) -> bool:
+    if not state:
+        return False
+    status = str(state.get("last_submit_status") or "").strip().lower()
+    http_status = str(state.get("last_http_status") or "").strip()
+    has_movievault_id = bool(str(state.get("movievault_id") or "").strip().startswith("mv_"))
+    has_contribution_id = bool(str(state.get("contribution_id") or "").strip())
+    successful_status = status in {"accepted", "duplicate", "created", "updated", "shared", "submitted"}
+    successful_http = http_status in {"200", "201", "202", "204"}
+    return has_movievault_id or (has_contribution_id and successful_status and successful_http)
+
+
+def _movievault_state_failed_or_unknown(state: dict | None) -> bool:
+    if not state:
+        return True
+    status = str(state.get("last_submit_status") or "").strip().lower()
+    http_status = str(state.get("last_http_status") or "").strip()
+    if status in {"rejected", "error", "failed", "network_error", "timeout"}:
+        return True
+    if http_status and (http_status.startswith("4") or http_status.startswith("5")):
+        return True
+    return False
 
 
 def _movievault_cached_fingerprint(stats: dict) -> str:
@@ -3924,8 +4065,35 @@ def _movievault_cached_fingerprint(stats: dict) -> str:
 
 
 def _movievault_payload_unchanged(stats: dict) -> bool:
+    should_skip, _reason, _state = _movievault_payload_skip_decision(stats)
+    return should_skip
+
+
+def _movievault_payload_skip_decision(stats: dict) -> tuple[bool, str, dict]:
     fingerprint = stats.get("payload_fingerprint") or ""
-    return bool(fingerprint and fingerprint == _movievault_cached_fingerprint(stats))
+    template_version = stats.get("template_version") or "unknown"
+    force_submit = bool(stats.get("force_movievault_contribution"))
+    state = _movievault_load_entity_state(stats)
+    stats["cached_movievault_state"] = state
+    stats["cached_movievault_success"] = _movievault_state_is_successful(state)
+    if force_submit:
+        return False, "forceMovieVaultContribution=true", state
+    if not state:
+        return False, "no local MovieVault submit state", state
+    previous_status = str(state.get("last_submit_status") or "").strip().lower()
+    if previous_status == "unchanged_payload":
+        return False, "previous MovieVault attempt was skipped", state
+    if _movievault_state_failed_or_unknown(state):
+        return False, "previous MovieVault attempt failed or status is unknown", state
+    if not _movievault_state_is_successful(state):
+        return False, "no proven successful MovieVault submit", state
+    if (
+        fingerprint
+        and fingerprint == (state.get("payload_fingerprint") or "")
+        and template_version == (state.get("template_version") or "unknown")
+    ):
+        return True, "unchanged payload with successful MovieVault submit state", state
+    return False, "payload fingerprint or template version changed", state
 
 
 def _movievault_store_successful_fingerprint(stats: dict):
@@ -3955,6 +4123,83 @@ def _movievault_store_successful_fingerprint(stats: dict):
             conn.close()
 
 
+def _movievault_store_entity_state(stats: dict, result: dict):
+    local_type, local_id, entity_type = _movievault_entity_cache_key(stats)
+    fingerprint = stats.get("payload_fingerprint") or ""
+    if not local_type or not local_id or not entity_type or not fingerprint:
+        return
+    status = str(result.get("action") or result.get("status") or "").strip() or "unknown"
+    http_status = result.get("http_status") or None
+    movievault_id = str(result.get("movievault_id") or stats.get("movievault_id") or "").strip()
+    contribution_id = str(result.get("contribution_id") or "").strip()
+    error_message = str(result.get("error") or "").strip()
+    now = datetime.utcnow().isoformat()
+    submitted_at = now if _movievault_state_is_successful({
+        "movievault_id": movievault_id,
+        "contribution_id": contribution_id,
+        "last_submit_status": status,
+        "last_http_status": http_status,
+    }) else None
+    conn = None
+    try:
+        conn = get_db()
+        _ensure_movievault_entities_table(conn)
+        existing = conn.execute(
+            """
+            SELECT movievault_id, contribution_id, submitted_at
+              FROM movievault_entities
+             WHERE local_entity_type=? AND local_entity_id=? AND movievault_entity_type=?
+            """,
+            (local_type, local_id, entity_type),
+        ).fetchone()
+        if existing:
+            if not movievault_id:
+                movievault_id = existing["movievault_id"] or ""
+            if not contribution_id:
+                contribution_id = existing["contribution_id"] or ""
+        if submitted_at is None and existing:
+            submitted_at = existing["submitted_at"]
+        conn.execute(
+            """
+            INSERT INTO movievault_entities (
+                local_entity_type, local_entity_id, movievault_entity_type,
+                movievault_id, contribution_id, last_submit_status, last_http_status,
+                payload_fingerprint, template_version, attempted_at, submitted_at, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(local_entity_type, local_entity_id, movievault_entity_type) DO UPDATE SET
+                movievault_id=excluded.movievault_id,
+                contribution_id=excluded.contribution_id,
+                last_submit_status=excluded.last_submit_status,
+                last_http_status=excluded.last_http_status,
+                payload_fingerprint=excluded.payload_fingerprint,
+                template_version=excluded.template_version,
+                attempted_at=excluded.attempted_at,
+                submitted_at=excluded.submitted_at,
+                error_message=excluded.error_message
+            """,
+            (
+                local_type,
+                local_id,
+                entity_type,
+                movievault_id,
+                contribution_id,
+                status,
+                int(http_status) if str(http_status or "").isdigit() else None,
+                fingerprint,
+                stats.get("template_version") or "unknown",
+                now,
+                submitted_at,
+                error_message,
+            ),
+        )
+        conn.commit()
+    except Exception as ex:
+        _movievault_log("warn", "MovieVault entity state update failed", str(ex))
+    finally:
+        if conn:
+            conn.close()
+
+
 def _movievault_new_submission_result(entity_type: str, source_data: dict | None, sources: str, context: dict | None) -> dict:
     return {
         "entity_type": entity_type,
@@ -3969,6 +4214,7 @@ def _movievault_new_submission_result(entity_type: str, source_data: dict | None
         "warnings": [],
         "stats": {},
         "movievault_id": "",
+        "contribution_id": "",
         "refreshed_template": False,
     }
 
@@ -4073,9 +4319,10 @@ def _movievault_result_entities(results: list[dict]) -> str:
         outcome = result.get("action") or result.get("status") or "-"
         http_status = result.get("http_status") or "-"
         movievault_id = result.get("movievault_id") or (result.get("stats") or {}).get("movievault_id") or ""
+        contribution_id = result.get("contribution_id") or "-"
         values.append(
             f"{entity}: {outcome}, MovieVault response: {_movievault_http_status_label(http_status)}, "
-            f"MovieVault ID: {_movievault_id_label(movievault_id, http_status)}"
+            f"MovieVault ID: {_movievault_id_label(movievault_id, http_status)}, Contribution ID: {contribution_id}"
         )
     return "; ".join(values) or "-"
 
@@ -4153,6 +4400,7 @@ def _submit_movievault_entity_contribution_result(
     if not url or not source_data:
         result["error"] = f"Contribution URL or payload missing; entity={entity_type}; title={title or '?'}; sources={sources}"
         return result
+    stats = {}
     try:
         payload, stats = _movievault_contribution_payload(entity_type, source_data, sources, context, force_template)
         result["stats"] = stats
@@ -4160,10 +4408,13 @@ def _submit_movievault_entity_contribution_result(
         if not payload:
             result["status"] = "skipped"
             result["error"] = f"Required fields missing: {', '.join(stats.get('missing_required') or []) or '-'}"
+            _movievault_store_entity_state(stats, result)
             return result
         if _movievault_is_title_only(entity_type, payload.get("payload") or {}):
             result["warnings"].append("Movie contribution is title-only after template filtering")
-        if _movievault_payload_unchanged(stats):
+        should_skip, skip_reason, _state = _movievault_payload_skip_decision(stats)
+        stats["skip_reason"] = skip_reason
+        if should_skip:
             result.update({
                 "status": "skipped",
                 "action": "unchanged_payload",
@@ -4173,6 +4424,7 @@ def _submit_movievault_entity_contribution_result(
                 "MovieVault contribution HTTP skipped",
                 f"Reason: unchanged payload; {_movievault_stats_detail(stats)}",
             )
+            _movievault_store_entity_state(stats, result)
             return result
         _metadata_debug_log(
             "MovieVault contribution HTTP request",
@@ -4191,8 +4443,10 @@ def _submit_movievault_entity_contribution_result(
                 "action": _movievault_submission_action(r),
                 "http_status": str(r.status_code),
                 "movievault_id": _movievault_extract_movievault_id(data, allow_plain_id=True) or result.get("movievault_id") or "",
+                "contribution_id": _movievault_extract_contribution_id(data),
             })
             _movievault_store_successful_fingerprint(stats)
+            _movievault_store_entity_state(stats, result)
             return result
         validation_error = False
         if r.status_code == 400:
@@ -4209,10 +4463,13 @@ def _submit_movievault_entity_contribution_result(
             if not payload:
                 result["status"] = "skipped"
                 result["error"] = f"Required fields missing after template refresh: {', '.join(stats.get('missing_required') or []) or '-'}"
+                _movievault_store_entity_state(stats, result)
                 return result
             if _movievault_is_title_only(entity_type, payload.get("payload") or {}):
                 result["warnings"].append("Movie contribution is title-only after template refresh")
-            if _movievault_payload_unchanged(stats):
+            should_skip, skip_reason, _state = _movievault_payload_skip_decision(stats)
+            stats["skip_reason"] = skip_reason
+            if should_skip:
                 result.update({
                     "status": "skipped",
                     "action": "unchanged_payload",
@@ -4222,6 +4479,7 @@ def _submit_movievault_entity_contribution_result(
                     "MovieVault contribution HTTP skipped",
                     f"Reason: unchanged payload after template refresh; {_movievault_stats_detail(stats)}",
                 )
+                _movievault_store_entity_state(stats, result)
                 return result
             _metadata_debug_log(
                 "MovieVault contribution HTTP request",
@@ -4240,8 +4498,10 @@ def _submit_movievault_entity_contribution_result(
                     "action": _movievault_submission_action(r),
                     "http_status": str(r.status_code),
                     "movievault_id": _movievault_extract_movievault_id(data, allow_plain_id=True) or result.get("movievault_id") or "",
+                    "contribution_id": _movievault_extract_contribution_id(data),
                 })
                 _movievault_store_successful_fingerprint(stats)
+                _movievault_store_entity_state(stats, result)
                 return result
         result.update({
             "status": "rejected",
@@ -4249,12 +4509,16 @@ def _submit_movievault_entity_contribution_result(
             "http_status": str(r.status_code),
             "error": _movievault_response_error(r) or f"HTTP {r.status_code}",
         })
+        if stats:
+            _movievault_store_entity_state(stats, result)
     except Exception as ex:
         result.update({
             "status": "error",
             "action": "error",
             "error": str(ex),
         })
+        if stats:
+            _movievault_store_entity_state(stats, result)
     return result
 
 
@@ -7415,6 +7679,7 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
 @app.route("/api/movies/<int:movie_id>", methods=["PUT"])
 def update_movie(movie_id):
     data = request.json or {}
+    force_movievault = _movievault_force_contribution(data)
     conn = get_db()
     existing_row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     if not existing_row:
@@ -7556,6 +7821,7 @@ def update_movie(movie_id):
                 "localEntityType": "movie",
                 "localEntityId": movie_id,
                 "barcode": movie_state.get("barcode") or "",
+                "forceMovieVaultContribution": force_movievault,
             },
         )
     return jsonify(dict(movie))
@@ -8211,8 +8477,13 @@ METADATA_REFRESH_FIELDS = [
 @app.route("/api/movies/<int:movie_id>/refresh", methods=["POST"])
 def refresh_single(movie_id):
     """Refresh metadata for one movie. Returns details of what changed."""
-    fetch_posters = (request.json or {}).get("fetch_posters", True)
-    _metadata_debug_log("Metadata refresh started", f"Movie ID: {movie_id}; Fetch posters: {fetch_posters}")
+    data = request.json or {}
+    fetch_posters = data.get("fetch_posters", True)
+    force_movievault = _movievault_force_contribution(data)
+    _metadata_debug_log(
+        "Metadata refresh started",
+        f"Movie ID: {movie_id}; Fetch posters: {fetch_posters}; Force MovieVault contribution: {force_movievault}",
+    )
     conn = get_db()
     _metadata_debug_db("SELECT * FROM movies WHERE id = ?", (movie_id,), "refresh single initial movie load")
     row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
@@ -8317,6 +8588,7 @@ def refresh_single(movie_id):
                 "localEntityType": "movie",
                 "localEntityId": movie_id,
                 "barcode": movie_state.get("barcode") or "",
+                "forceMovieVaultContribution": force_movievault,
             },
         )
         return jsonify({
@@ -8333,7 +8605,9 @@ def refresh_single(movie_id):
 @app.route("/api/movies/<int:movie_id>/sync-all", methods=["POST"])
 def sync_single_all_backends(movie_id):
     """Sync one movie by consulting all active backends, then merge best-effort metadata."""
-    fetch_posters = (request.json or {}).get("fetch_posters", True)
+    data = request.json or {}
+    fetch_posters = data.get("fetch_posters", True)
+    force_movievault = _movievault_force_contribution(data)
     conn = get_db()
     row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
     if not row:
@@ -8429,6 +8703,7 @@ def sync_single_all_backends(movie_id):
                 "localEntityType": "movie",
                 "localEntityId": movie_id,
                 "barcode": movie_state.get("barcode") or "",
+                "forceMovieVaultContribution": force_movievault,
             },
         )
         return jsonify({
@@ -8450,7 +8725,11 @@ def sync_single_source(movie_id):
     data = request.json or {}
     source = (data.get("source") or "").strip()
     fetch_posters = data.get("fetch_posters", True)
-    _metadata_debug_log("Sync source started", f"Movie ID: {movie_id}; Source: {source}; Fetch posters: {fetch_posters}")
+    force_movievault = _movievault_force_contribution(data)
+    _metadata_debug_log(
+        "Sync source started",
+        f"Movie ID: {movie_id}; Source: {source}; Fetch posters: {fetch_posters}; Force MovieVault contribution: {force_movievault}",
+    )
     allowed = {"omdb_imdb", "tmdb_title", "omdb_title", "fallback_title", "bluray_com"}
     if source not in allowed:
         return jsonify({"status": "error", "error": "Unknown source"}), 400
@@ -8558,6 +8837,7 @@ def sync_single_source(movie_id):
                 "localEntityType": "movie",
                 "localEntityId": movie_id,
                 "barcode": movie_state.get("barcode") or "",
+                "forceMovieVaultContribution": force_movievault,
             },
         )
         return jsonify({"status": "updated", "title": title, "source": source_label, "fields": fields_updated, "has_poster": bool(has_poster)})
@@ -8573,9 +8853,14 @@ def bulk_refresh():
     With ?stream=1 streams NDJSON progress events (one per movie).
     IDs are automatically expanded to include all members of the same
     vault (edition_group), box-set (super_group) or collection."""
-    ids           = (request.json or {}).get("ids", [])
-    fetch_posters = (request.json or {}).get("fetch_posters", True)
-    _metadata_debug_log("Bulk metadata refresh started", f"Requested IDs: {_movievault_compact(ids, 500)}; Fetch posters: {fetch_posters}")
+    data = request.json or {}
+    ids = data.get("ids", [])
+    fetch_posters = data.get("fetch_posters", True)
+    force_movievault = _movievault_force_contribution(data)
+    _metadata_debug_log(
+        "Bulk metadata refresh started",
+        f"Requested IDs: {_movievault_compact(ids, 500)}; Fetch posters: {fetch_posters}; Force MovieVault contribution: {force_movievault}",
+    )
     if not ids:
         return jsonify({"error": "No ids provided"}), 400
 
@@ -8735,6 +9020,7 @@ def bulk_refresh():
                     "localEntityType": "movie",
                     "localEntityId": movie_id,
                     "barcode": movie_state.get("barcode") or "",
+                    "forceMovieVaultContribution": force_movievault,
                 },
             )
             return "updated", title, None
@@ -8772,7 +9058,11 @@ def bulk_refresh():
                 _submit_movievault_box_set_contribution_from_db(
                     box_set_id,
                     "Bulk refresh box-set",
-                    {"localEntityType": "box_set", "localEntityId": box_set_id},
+                    {
+                        "localEntityType": "box_set",
+                        "localEntityId": box_set_id,
+                        "forceMovieVaultContribution": force_movievault,
+                    },
                 )
             yield json.dumps({
                 "type":         "done",
@@ -8797,7 +9087,11 @@ def bulk_refresh():
         _submit_movievault_box_set_contribution_from_db(
             box_set_id,
             "Bulk refresh box-set",
-            {"localEntityType": "box_set", "localEntityId": box_set_id},
+            {
+                "localEntityType": "box_set",
+                "localEntityId": box_set_id,
+                "forceMovieVaultContribution": force_movievault,
+            },
         )
     return jsonify({
         "status":        "done",
