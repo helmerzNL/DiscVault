@@ -1433,26 +1433,74 @@ function _loadCollectionMedia(imgContainer, vidContainer, colId) {
     });
 }
 
+function _jsString(value) {
+  return JSON.stringify(String(value || '')).replace(/</g, '\\u003c');
+}
+
+function _parseImageList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function _imageStorageValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('/api/images/')) return raw;
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    if (parsed.origin === window.location.origin && parsed.pathname.startsWith('/api/images/')) {
+      return `${parsed.pathname}${parsed.search || ''}`;
+    }
+  } catch(e) {}
+  return raw;
+}
+
+function _backdropCandidates(movie) {
+  const rawValues = [
+    ..._parseImageList(movie && movie.backdrops),
+    ..._parseImageList(movie && movie.backdrop_urls),
+    movie && movie.backdrop,
+    movie && movie.backdrop_url,
+    movie && movie.backdropUrl,
+  ];
+  const candidates = [];
+  const seen = new Set();
+  for (const raw of rawValues) {
+    const storage = _imageStorageValue(raw);
+    const display = backdropSrc(storage);
+    if (!display) continue;
+    const key = display.split('?')[0].toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({ raw: storage, display });
+  }
+  if (!candidates.length && movie) {
+    const fallback = backdropSrc(movie);
+    if (fallback) candidates.push({ raw: _imageStorageValue(fallback), display: fallback });
+  }
+  return candidates;
+}
+
 function _renderMediaGrid(container, allMembers, currentBackdrop, type, groupId) {
   let html = '';
   const activeBackdrop = backdropSrc(currentBackdrop);
   allMembers.forEach(m => {
-    let backdrops = [];
-    try { backdrops = m.backdrops ? JSON.parse(m.backdrops) : []; } catch(e) {}
-    backdrops = backdrops.map(url => backdropSrc(url)).filter(Boolean);
-    if (!backdrops.length) {
-      const primaryBackdrop = backdropSrc(m);
-      if (primaryBackdrop) backdrops = [primaryBackdrop];
-    }
+    const backdrops = _backdropCandidates(m);
     if (!backdrops.length) return;
 
     html += `<div style="margin-bottom:20px;">
-      <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">${m.title || ''} ${m.year ? '(' + m.year + ')' : ''}</div>
+      <div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">${escHtml(m.title || '')} ${m.year ? '(' + escHtml(m.year) + ')' : ''}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
-        ${backdrops.map(url => {
-          const isActive = url === activeBackdrop;
-          return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setGroupBackdrop('${type}', ${groupId}, '${url.replace(/'/g, "\\'")}')">
-            <img src="${url}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+        ${backdrops.map(({ raw, display }) => {
+          const isActive = display === activeBackdrop;
+          return `<div style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'transparent'};cursor:pointer;" onclick="setGroupBackdrop('${type}', ${groupId}, ${_jsString(raw)})">
+            <img src="${escHtml(display)}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
             ${isActive ? '<div style="position:absolute;top:6px;right:6px;background:var(--accent);color:#0a0a0f;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:4px;">Backdrop</div>' : ''}
           </div>`;
         }).join('')}
@@ -1503,20 +1551,22 @@ function _renderVideosGrid(container, allMembers) {
 }
 
 async function setGroupBackdrop(type, groupId, url) {
-  const normalizedUrl = backdropSrc(url);
+  const storageUrl = _imageStorageValue(url);
+  const displayUrl = backdropSrc(storageUrl);
   const endpoint = type === 'col'
     ? `${API}/collections/${groupId}`
     : `${API}/edition-groups/${groupId}`;
-  await fetch(endpoint, {
+  const r = await fetch(endpoint, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ backdrop: normalizedUrl })
+    body: JSON.stringify({ backdrop: storageUrl })
   });
+  if (!r.ok) return;
   // Apply immediately
   const movieCard = _currentCollection || _currentSuperGroup || allMovies.find(m => m.id === _currentEditionGroupPrimaryId);
-  _applyEgBackdrop(normalizedUrl, movieCard || {});
-  if (type === 'col' && _currentCollectionData) _currentCollectionData.backdrop = normalizedUrl;
-  if (type === 'eg' && _currentEgGroupData) _currentEgGroupData.backdrop = normalizedUrl;
+  _applyEgBackdrop(displayUrl, movieCard || {});
+  if (type === 'col' && _currentCollectionData) _currentCollectionData.backdrop = storageUrl;
+  if (type === 'eg' && _currentEgGroupData) _currentEgGroupData.backdrop = storageUrl;
   // Reload media tab to update active indicator
   loadEgMedia();
 }
@@ -2200,13 +2250,7 @@ function _sameMediaChoice(a, b) {
 }
 
 function _movieBackdropChoices(movie) {
-  const values = [
-    ..._parseMediaList(movie.backdrops),
-    movie.backdrop,
-    movie.backdrop_url,
-    movie.backdropUrl,
-  ];
-  return [...new Set(values.map(url => backdropSrc(url)).filter(Boolean))];
+  return _backdropCandidates(movie);
 }
 
 function loadMovieMedia() {
@@ -2248,10 +2292,10 @@ function loadMovieMedia() {
       sections.push(`<section>
         <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px;">${t('modal.backdrops')}</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
-          ${backdrops.map(url => {
-          const isActive = _sameMediaChoice(url, currentBackdrop);
-          return `<button type="button" aria-pressed="${isActive ? 'true' : 'false'}" data-backdrop-value="${escHtml(url || '')}" style="appearance:none;background:transparent;padding:0;position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'var(--border)'};cursor:pointer;box-shadow:${isActive ? '0 0 0 2px rgba(232,197,71,.25)' : 'none'};" onclick="setMovieBackdrop(${movie.id}, this.dataset.backdropValue)">
-            <img src="${escHtml(url)}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+          ${backdrops.map(item => {
+          const isActive = _sameMediaChoice(item.display, currentBackdrop) || _sameMediaChoice(item.raw, currentBackdrop);
+          return `<button type="button" aria-pressed="${isActive ? 'true' : 'false'}" data-backdrop-value="${escHtml(item.raw || '')}" style="appearance:none;background:transparent;padding:0;position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isActive ? 'var(--accent)' : 'var(--border)'};cursor:pointer;box-shadow:${isActive ? '0 0 0 2px rgba(232,197,71,.25)' : 'none'};" onclick="setMovieBackdrop(${movie.id}, this.dataset.backdropValue)">
+            <img src="${escHtml(item.display)}" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
             ${isActive ? _selectedMediaOverlay() : ''}
           </button>`;
           }).join('')}
@@ -2328,12 +2372,12 @@ function _renderEditMediaManagement(movie) {
     }
     return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${kind === 'poster' ? '118px' : '220px'},1fr));gap:10px;">
       ${items.map(item => {
-        const value = kind === 'poster' ? item.value : item;
-        const src = kind === 'poster' ? item.src : item;
+        const value = kind === 'poster' ? item.value : item.raw;
+        const src = kind === 'poster' ? item.src : item.display;
         const choiceFile = String(value || '').split(/[\\/]/).pop();
         const isActive = kind === 'poster'
           ? (_sameMediaChoice(src, currentPoster) || _sameMediaChoice(value, currentPoster) || (currentPosterFile && choiceFile === currentPosterFile))
-          : _sameMediaChoice(src, currentBackdrop);
+          : (_sameMediaChoice(src, currentBackdrop) || _sameMediaChoice(value, currentBackdrop));
         return `<div style="position:relative;border:1px solid ${isActive ? 'var(--accent)' : 'var(--border)'};border-radius:8px;overflow:hidden;background:var(--surface2);">
           <img src="${escHtml(src)}" loading="lazy" style="width:100%;display:block;aspect-ratio:${kind === 'poster' ? '2/3' : '16/9'};object-fit:cover;">
           ${isActive ? _selectedMediaOverlay() : ''}
@@ -2441,15 +2485,17 @@ async function setMoviePoster(movieId, value) {
 }
 
 async function setMovieBackdrop(movieId, url) {
-  const normalizedUrl = backdropSrc(url);
-  await fetch(`${API}/movies/${movieId}`, {
+  const storageUrl = _imageStorageValue(url);
+  const displayUrl = backdropSrc(storageUrl);
+  const r = await fetch(`${API}/movies/${movieId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ backdrop: normalizedUrl })
+    body: JSON.stringify({ backdrop: storageUrl })
   });
+  if (!r.ok) return;
   // Update local cache and apply immediately
   const movie = allMovies.find(m => m.id === movieId);
-  if (movie) movie.backdrop = normalizedUrl;
+  if (movie) movie.backdrop = storageUrl;
   // Update hero/bg on the detail page
   const hero = document.getElementById('detailHeroImg');
   const bg = document.getElementById('movieDetailBg');
@@ -2457,17 +2503,17 @@ async function setMovieBackdrop(movieId, url) {
   if (heroWrap) heroWrap.classList.remove('no-backdrop');
   if (hero) {
     hero.classList.remove('loaded');
-    hero.style.backgroundImage = `url('${normalizedUrl}')`;
+    hero.style.backgroundImage = `url('${displayUrl}')`;
     const img = new Image();
     img.onload = () => hero.classList.add('loaded');
-    img.src = normalizedUrl;
+    img.src = displayUrl;
   }
   if (bg) {
     bg.classList.remove('loaded');
-    bg.style.backgroundImage = `url('${normalizedUrl}')`;
+    bg.style.backgroundImage = `url('${displayUrl}')`;
     const img = new Image();
     img.onload = () => bg.classList.add('loaded');
-    img.src = normalizedUrl;
+    img.src = displayUrl;
   }
   // Reload media tab to update active indicator
   loadMovieMedia();
@@ -3197,34 +3243,188 @@ async function _populateGroupCheckboxes(currentGroupIds) {
   } catch(e) {}
 }
 
-function _checkedEditContainerIds(selector) {
-  return [...document.querySelectorAll(selector + ':checked')]
-    .map(cb => parseInt(cb.value, 10))
+const _editContainerConfig = {
+  vault: {
+    targetId: 'editVaultsContainer',
+    stateKey: 'vaults',
+    allKey: 'allVaults',
+    label: 'Vault',
+    placeholderKey: 'edit.editionGroupPlaceholder',
+    createEndpoint: `${API}/edition-groups`,
+    createPayload: title => ({ title, group_type: 'vault' }),
+  },
+  boxset: {
+    targetId: 'editBoxSetsContainer',
+    stateKey: 'boxSets',
+    allKey: 'allBoxSets',
+    label: 'Box Set',
+    placeholderKey: 'edit.superGroupPlaceholder',
+    createEndpoint: `${API}/edition-groups`,
+    createPayload: title => ({ title, group_type: 'boxset' }),
+  },
+  collection: {
+    targetId: 'editCollectionsContainer',
+    stateKey: 'collections',
+    allKey: 'allCollections',
+    label: 'Collection',
+    placeholderKey: 'edit.collectionPlaceholder',
+    createEndpoint: `${API}/collections`,
+    createPayload: title => ({ title }),
+  },
+};
+
+let _editContainerState = {
+  vaults: [],
+  boxSets: [],
+  collections: [],
+  allVaults: [],
+  allBoxSets: [],
+  allCollections: [],
+};
+
+function _editContainerIds(key) {
+  return (_editContainerState[key] || [])
+    .map(item => parseInt(item.id, 10))
     .filter(Number.isFinite);
 }
 
 function _editContainerSnapshot() {
   return JSON.stringify({
-    vault_ids: _checkedEditContainerIds('.edit-vault-cb').sort((a, b) => a - b),
-    box_set_ids: _checkedEditContainerIds('.edit-boxset-cb').sort((a, b) => a - b),
-    collection_ids: _checkedEditContainerIds('.edit-collection-cb').sort((a, b) => a - b),
+    vault_ids: _editContainerIds('vaults').sort((a, b) => a - b),
+    box_set_ids: _editContainerIds('boxSets').sort((a, b) => a - b),
+    collection_ids: _editContainerIds('collections').sort((a, b) => a - b),
   });
 }
 
-function _renderEditContainerChecks(targetId, items, checkedIds, className, emptyText) {
-  const target = document.getElementById(targetId);
-  if (!target) return;
-  const checked = new Set((checkedIds || []).map(Number));
-  if (!items.length) {
-    target.innerHTML = `<span style="color:var(--text-muted); font-size:0.82rem;">${emptyText}</span>`;
-    return;
+function _containerMemberCount(item, type) {
+  if (!item) return 0;
+  if (type === 'collection') {
+    return Number(item.group_count || 0)
+      + Number(item.loose_movie_count || 0)
+      + Number(item.eg_movie_count || 0)
+      + Number(item.boxset_loose_count || 0);
   }
-  target.innerHTML = items.map(item => `
-    <label style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.82rem; white-space:nowrap;">
-      <input type="checkbox" class="${className}" value="${item.id}" ${checked.has(Number(item.id)) ? 'checked' : ''} onchange="_editDirty=true" style="accent-color:var(--accent); width:15px; height:15px;">
-      ${escHtml(item.title || ('#' + item.id))}
-    </label>
-  `).join('');
+  return Number(item.member_count || 0) + Number(item.loose_movie_count || 0) + Number(item.child_member_count || 0);
+}
+
+function _mergeEditContainerItems(selectedItems, allItems, extraIds) {
+  const allById = new Map((allItems || []).map(item => [Number(item.id), item]));
+  const selectedById = new Map();
+  for (const item of selectedItems || []) {
+    const id = Number(item && item.id);
+    if (!Number.isFinite(id)) continue;
+    selectedById.set(id, { ...(allById.get(id) || {}), ...item, id });
+  }
+  for (const rawId of extraIds || []) {
+    const id = Number(rawId);
+    if (!Number.isFinite(id) || selectedById.has(id)) continue;
+    const item = allById.get(id) || { id, title: `#${id}` };
+    selectedById.set(id, { ...item, id });
+  }
+  return [...selectedById.values()].sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
+}
+
+function _renderEditContainerPicker(type, query = '') {
+  const config = _editContainerConfig[type];
+  if (!config) return;
+  const target = document.getElementById(config.targetId);
+  if (!target) return;
+  const inputId = `editContainerInput_${type}`;
+  const dropdownId = `editContainerDropdown_${type}`;
+  const keepFocus = document.activeElement && document.activeElement.id === inputId;
+  const selected = _editContainerState[config.stateKey] || [];
+  const selectedIds = new Set(selected.map(item => Number(item.id)));
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  const matches = (_editContainerState[config.allKey] || [])
+    .filter(item => !selectedIds.has(Number(item.id)))
+    .filter(item => !normalizedQuery || String(item.title || '').toLowerCase().includes(normalizedQuery))
+    .slice(0, 8);
+  const exactExists = (_editContainerState[config.allKey] || [])
+    .some(item => String(item.title || '').trim().toLowerCase() === normalizedQuery);
+  const chips = selected.length
+    ? selected.map(item => `
+      <button type="button" onclick="editContainerRemove('${type}', ${Number(item.id)})" style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:0.82rem;cursor:pointer;">
+        <span>${escHtml(item.title || ('#' + item.id))}</span>
+        <span style="color:var(--text-muted);font-size:0.75rem;">${_containerMemberCount(item, type)}</span>
+        <span style="font-weight:800;color:var(--danger);">x</span>
+      </button>`).join('')
+    : `<span style="color:var(--text-muted);font-size:0.82rem;">${escHtml(t('settings.groupMgmtEmpty'))}</span>`;
+  const suggestions = matches.map(item => `
+    <button type="button" onclick="editContainerSelect('${type}', ${Number(item.id)})" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer;">
+      <span>${escHtml(item.title || ('#' + item.id))}</span>
+      <span style="color:var(--text-muted);font-size:0.76rem;white-space:nowrap;">${_containerMemberCount(item, type)} ${escHtml(t('js.movies'))}</span>
+    </button>`).join('');
+  const createLabel = type === 'vault'
+    ? `+ ${t('edit.editionGroupCreate')}: "${query}"`
+    : t(type === 'boxset' ? 'edit.superGroupCreate' : 'edit.collectionCreate', query);
+  const createAction = normalizedQuery && !exactExists
+    ? `<button type="button" onclick="editContainerCreate('${type}')" style="display:flex;width:100%;align-items:center;gap:8px;padding:8px 10px;border:0;border-top:1px solid var(--border);background:transparent;color:var(--accent);text-align:left;cursor:pointer;font-weight:700;">${escHtml(createLabel)}</button>`
+    : '';
+  target.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">${chips}</div>
+    <div style="position:relative;max-width:520px;">
+      <input type="text" id="${inputId}" value="${escHtml(query)}" placeholder="${escHtml(t(config.placeholderKey))}" autocomplete="off" oninput="editContainerSearch('${type}', this.value)" onfocus="editContainerSearch('${type}', this.value)" style="width:100%;">
+      <div id="${dropdownId}" style="${(matches.length || createAction) ? '' : 'display:none;'}position:absolute;z-index:60;top:calc(100% + 4px);left:0;right:0;max-height:260px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.28);">
+        ${suggestions || (normalizedQuery ? `<div style="padding:8px 10px;color:var(--text-muted);font-size:0.82rem;">${escHtml(t('settings.groupMgmtEmpty'))}</div>` : '')}
+        ${createAction}
+      </div>
+    </div>`;
+  const input = document.getElementById(inputId);
+  if (input && keepFocus) {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+
+function editContainerSearch(type, query) {
+  _renderEditContainerPicker(type, query);
+}
+
+function editContainerSelect(type, id) {
+  const config = _editContainerConfig[type];
+  if (!config) return;
+  const item = (_editContainerState[config.allKey] || []).find(candidate => Number(candidate.id) === Number(id));
+  if (!item) return;
+  if (!(_editContainerState[config.stateKey] || []).some(candidate => Number(candidate.id) === Number(id))) {
+    _editContainerState[config.stateKey].push(item);
+    _editDirty = true;
+  }
+  _renderEditContainerPicker(type);
+}
+
+function editContainerRemove(type, id) {
+  const config = _editContainerConfig[type];
+  if (!config) return;
+  _editContainerState[config.stateKey] = (_editContainerState[config.stateKey] || [])
+    .filter(item => Number(item.id) !== Number(id));
+  _editDirty = true;
+  _renderEditContainerPicker(type);
+}
+
+async function editContainerCreate(type) {
+  const config = _editContainerConfig[type];
+  if (!config) return;
+  const input = document.getElementById(`editContainerInput_${type}`);
+  const title = (input && input.value || '').trim();
+  if (!title) return;
+  try {
+    const r = await fetch(config.createEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config.createPayload(title))
+    });
+    const item = await r.json();
+    if (!r.ok) {
+      showStatus('editStatus', item.error || t('js.saveError'), 'error');
+      return;
+    }
+    _editContainerState[config.allKey].push(item);
+    _editContainerState[config.stateKey].push(item);
+    _editDirty = true;
+    _renderEditContainerPicker(type);
+  } catch(e) {
+    showStatus('editStatus', t('js.connectionError', e.message), 'error');
+  }
 }
 
 async function _populateEditContainerSelectors(movie) {
@@ -3246,9 +3446,17 @@ async function _populateEditContainerSelectors(movie) {
     const cols = await colRes.json();
     const vaults = egs.filter(g => !_isBoxSetGroup(g));
     const boxSets = egs.filter(g => _isBoxSetGroup(g));
-    _renderEditContainerChecks('editVaultsContainer', vaults, checkedVaultIds, 'edit-vault-cb', t('js.noGroups'));
-    _renderEditContainerChecks('editBoxSetsContainer', boxSets, checkedBoxSetIds, 'edit-boxset-cb', t('js.noGroups'));
-    _renderEditContainerChecks('editCollectionsContainer', cols, checkedCollectionIds, 'edit-collection-cb', t('settings.groupMgmtEmpty', 'Geen groepen gevonden.'));
+    _editContainerState = {
+      allVaults: vaults,
+      allBoxSets: boxSets,
+      allCollections: cols,
+      vaults: _mergeEditContainerItems(containers.vaults, vaults, checkedVaultIds),
+      boxSets: _mergeEditContainerItems(containers.box_sets, boxSets, checkedBoxSetIds),
+      collections: _mergeEditContainerItems(containers.collections_direct, cols, checkedCollectionIds),
+    };
+    _renderEditContainerPicker('vault');
+    _renderEditContainerPicker('boxset');
+    _renderEditContainerPicker('collection');
   } catch (e) {
     ['editVaultsContainer', 'editBoxSetsContainer', 'editCollectionsContainer'].forEach(id => {
       const target = document.getElementById(id);
@@ -3352,9 +3560,9 @@ async function saveEdit() {
   // Extra videos JSON
   payload.videos = _collectEditVideos();
   const containerPayload = {
-    vault_ids: _checkedEditContainerIds('.edit-vault-cb'),
-    box_set_ids: _checkedEditContainerIds('.edit-boxset-cb'),
-    collection_ids: _checkedEditContainerIds('.edit-collection-cb'),
+    vault_ids: _editContainerIds('vaults'),
+    box_set_ids: _editContainerIds('boxSets'),
+    collection_ids: _editContainerIds('collections'),
   };
 
   // Collect selected group IDs from checkboxes
