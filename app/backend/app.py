@@ -4617,6 +4617,8 @@ def _movievault_box_set_source_from_proposal(
 ) -> dict:
     if not isinstance(proposal, dict):
         return {}
+    if _box_set_proposal_is_candidate_only(proposal):
+        return {}
     movies = proposal.get("movies") or proposal.get("members") or []
     if not isinstance(movies, list) or len(movies) < 2:
         return {}
@@ -4676,6 +4678,16 @@ def _movievault_box_set_source_from_proposal(
         "backdrop_urls": proposal.get("backdrop_urls") or proposal.get("backdropUrls") or movie_info.get("backdrop_urls") or "",
         "members": member_payload,
     }
+
+
+def _box_set_proposal_is_candidate_only(proposal) -> bool:
+    if not isinstance(proposal, dict):
+        return False
+    return bool(
+        proposal.get("detected_without_members")
+        or proposal.get("member_confidence") == "candidate"
+        or proposal.get("member_source") == "metadata_candidates"
+    )
 
 
 def _submit_movievault_box_set_proposal_contribution(
@@ -5784,8 +5796,13 @@ def _candidate_title_words(title: str) -> set[str]:
 
 def _box_set_candidate_kind(title: str) -> str:
     low = (title or "").lower()
-    if re.search(r"\b(making of|behind the scenes|bonus|bonus disc|special features?|extras?|documentary|featurette|interviews?)\b", low):
+    if re.search(r"\b(making of|looking back|behind the scenes|bonus|bonus disc|special features?|extras?|documentary|featurette|interviews?)\b", low):
         return "bonus"
+    if re.search(r"\b(?:4k|uhd|ultra\s*hd|blu[- ]?ray|dvd)\b", low) and not re.search(
+        r"\b(part|episode|chapter)\s*(?:ii|iii|iv|v|2|3|4|5|two|three|four|five)\b|\b(?:ii|iii|iv|v)\b",
+        low,
+    ):
+        return "release"
     if re.search(r"\b(part|episode|chapter)\s*(?:iii|3|three)\b|\biii\b", low):
         return "part3"
     if re.search(r"\b(part|episode|chapter)\s*(?:ii|2|two)\b|\bii\b", low):
@@ -5805,6 +5822,7 @@ def _box_set_member_order(title: str) -> int:
         "part4": 4,
         "part5": 5,
         "bonus": 90,
+        "release": 95,
     }.get(_box_set_candidate_kind(title), 50)
 
 
@@ -5828,7 +5846,7 @@ def _box_set_candidate_members_from_sources(box_set_title: str, year: str = "", 
             continue
         seen.add(key)
         filtered.append(candidate)
-    regular = [c for c in filtered if _box_set_candidate_kind(c.get("title") or "") != "bonus"]
+    regular = [c for c in filtered if _box_set_candidate_kind(c.get("title") or "") not in {"bonus", "release"}]
     bonus = [c for c in filtered if _box_set_candidate_kind(c.get("title") or "") == "bonus"]
     regular.sort(key=lambda c: (
         _box_set_member_order(c.get("title") or ""),
@@ -5844,11 +5862,11 @@ def _box_set_candidate_members_from_sources(box_set_title: str, year: str = "", 
         regular_limit = regular[:limit_hint]
         if len(regular_limit) >= limit_hint:
             return regular_limit
-        if len(regular_limit) >= limit_hint - 1:
-            return regular_limit + bonus[:limit_hint - len(regular_limit)]
+        if len(regular_limit) >= 2:
+            return regular_limit
     if "trilogy" in (box_set_title or "").lower() and len(filtered) >= 3:
         regular_limit = regular[:3]
-        return regular_limit if len(regular_limit) >= 3 else ordered[:3]
+        return regular_limit if len(regular_limit) >= 2 else []
     return ordered if len(ordered) >= 2 else []
 
 
@@ -6005,6 +6023,19 @@ def _log_box_set_proposal(barcode, proposal):
         return
     source_label = _box_set_proposal_source_label(proposal)
     box_set_title = (proposal.get("title") or proposal.get("name") or "Unknown box set").strip()
+    if _box_set_proposal_is_candidate_only(proposal):
+        detail = (
+            f"Source: {source_label}; Barcode: {barcode}; Box Set: {box_set_title}; "
+            f"Candidate members ({len(titles)}): {', '.join(titles)}; "
+            "Reason: source did not list bundle members explicitly"
+        )
+        add_log(
+            "lookup",
+            f"{source_label} box-set detected; member candidates proposed: \"{box_set_title}\" ({len(titles)} candidates)",
+            detail,
+            "info",
+        )
+        return
     detail = (
         f"Source: {source_label}; Barcode: {barcode}; Box Set: {box_set_title}; "
         f"Movies found ({len(titles)}): {', '.join(titles)}"
@@ -7463,6 +7494,16 @@ def add_movie():
             f"Barcode: {data['barcode']}, Format: {data.get('format','')}, Metadata source order: {_metadata_source_order_log()}",
             "success",
         )
+        _submit_movievault_contribution_async(
+            _submit_movievault_contribution,
+            movie_dict,
+            "Movie save",
+            {
+                "localEntityType": "movie",
+                "localEntityId": movie_id,
+                "barcode": movie_dict.get("barcode") or data.get("barcode") or "",
+            },
+        )
 
         # Check for duplicate TMDb ID to suggest edition grouping
         hint = None
@@ -7811,30 +7852,18 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
         metadata_candidates = _metadata_candidates_by_order(lookup_title, "")
 
     source_label = source or "Barcode lookup"
-    source_parts = {part.strip() for part in source_label.split("+") if part.strip()}
-    has_non_movievault_source = not source_parts or any(part != "MovieVault" for part in source_parts)
-    if has_non_movievault_source:
-        contribution_context = {
-            "barcode": barcode,
-            "rawTitle": raw_title or "",
-            "movieVaultHit": "MovieVault" in source_parts,
-        }
-        if _movievault_box_set_source_from_proposal(box_set_proposal, barcode, info):
-            _submit_movievault_contribution_async(
-                _submit_movievault_box_set_proposal_contribution,
-                box_set_proposal,
-                barcode,
-                info,
-                source_label,
-                contribution_context,
-            )
-        else:
-            _submit_movievault_contribution_async(
-                _submit_movievault_contribution,
-                info,
-                source_label,
-                contribution_context,
-            )
+    if box_set_proposal and _box_set_proposal_is_candidate_only(box_set_proposal):
+        _metadata_debug_log(
+            "MovieVault box-set contribution skipped",
+            "Reason: barcode lookup only proposed candidate members; contribution waits until the user saves",
+            "info",
+        )
+    else:
+        _metadata_debug_log(
+            "MovieVault contribution skipped",
+            "Reason: barcode lookup is read-only; contribution waits until the movie or box-set is saved",
+            "info",
+        )
 
     return info, source_label, box_set_proposal, metadata_candidates, raw_title
 
@@ -10533,7 +10562,7 @@ def _merge_metadata_by_order(
     fallback_title: str = "",
     attempts: list | None = None,
     stop_after_first: bool = False,
-    contribute_to_movievault: bool = True,
+    contribute_to_movievault: bool = False,
 ) -> tuple[dict | None, str]:
     """Fetch metadata in configured order and fill missing fields from later sources."""
     attempts = attempts if attempts is not None else []
