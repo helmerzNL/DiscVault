@@ -1199,6 +1199,8 @@ class SyncIntegrationTests(unittest.TestCase):
             return [
                 {"provider": "tmdb", "tmdb_id": "105", "title": "Back to the Future", "year": "1985", "poster": "p1"},
                 {"provider": "tmdb", "tmdb_id": "165", "title": "Back to the Future Part II", "year": "1989", "poster": "p2"},
+                {"provider": "tmdb", "tmdb_id": "998", "title": "Looking Back to the Future", "year": "2009", "poster": "bonus2"},
+                {"provider": "bluray_com", "tmdb_id": "", "title": "Back to the Future 4K Blu ray", "year": "", "poster": "release"},
                 {"provider": "tmdb", "tmdb_id": "999", "title": "Back to the Future: Making the Trilogy", "year": "2002", "poster": "bonus"},
                 {"provider": "tmdb", "tmdb_id": "196", "title": "Back to the Future Part III", "year": "1990", "poster": "p3"},
             ]
@@ -1226,6 +1228,29 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(len(proposal["movies"]), 3)
         self.assertEqual(proposal["movies"][1]["title"], "Back to the Future Part II")
         self.assertEqual(proposal["movies"][2]["title"], "Back to the Future Part III")
+        titles = [movie["title"] for movie in proposal["movies"]]
+        self.assertNotIn("Looking Back to the Future", titles)
+        self.assertNotIn("Back to the Future 4K Blu ray", titles)
+
+    def test_candidate_only_box_set_proposal_is_not_movievault_source(self):
+        proposal = {
+            "title": "Back to the Future: Trilogy",
+            "source": "Blu-ray.com",
+            "detected_without_members": True,
+            "member_confidence": "candidate",
+            "member_source": "metadata_candidates",
+            "movies": [
+                {"title": "Back to the Future", "year": "1985"},
+                {"title": "Back to the Future Part II", "year": "1989"},
+                {"title": "Back to the Future Part III", "year": "1990"},
+            ],
+        }
+
+        self.assertTrue(self.backend._box_set_proposal_is_candidate_only(proposal))
+        self.assertEqual(
+            self.backend._movievault_box_set_source_from_proposal(proposal, "5050582369601", {}),
+            {},
+        )
 
     def test_synthetic_box_set_member_barcode_is_not_used_for_external_lookup(self):
         originals = {
