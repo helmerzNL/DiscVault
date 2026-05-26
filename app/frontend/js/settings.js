@@ -41,7 +41,11 @@ async function loadUserPrefsFromServer() {
     }
     // Apply loaded prefs to JS variables
     const lang = prefs.lang;
-    if (lang && lang !== currentLang) setLanguage(lang);
+    if (lang && lang !== currentLang && LANGS[lang]) {
+      setLanguage(lang);
+      loadRatingCountryPicker();
+      loadLanguagePicker();
+    }
     if ('rating_country' in prefs) { /* already in localStorage, picked up on next render */ }
     if ('collectors_mode' in prefs) {
       collectorsMode = prefs.collectors_mode === 'true';
@@ -949,30 +953,67 @@ async function resetDatabase() {
 }
 
 // ── Language picker ─────────────────────────────────────────────────────────
-const LANGS_ORDER    = ['nl', 'en', 'fr', 'de', 'es', 'pt', 'it', 'sv', 'da', 'no', 'fi'];
-const LANG_NATIVE    = { nl: 'Nederlands', en: 'English', fr: 'Français', de: 'Deutsch', es: 'Español', pt: 'Português', it: 'Italiano', sv: 'Svenska', da: 'Dansk', no: 'Norsk', fi: 'Suomi' };
+const LANGS_ORDER_PREFERRED = ['nl', 'en', 'fr', 'de', 'es', 'pt', 'it', 'sv', 'da', 'no', 'fi'];
+const LANG_NATIVE = {
+  nl: 'Nederlands',
+  en: 'English',
+  fr: 'Français',
+  de: 'Deutsch',
+  es: 'Español',
+  pt: 'Português',
+  it: 'Italiano',
+  sv: 'Svenska',
+  da: 'Dansk',
+  no: 'Norsk',
+  fi: 'Suomi',
+};
 const LANG_FLAG_CODE = { nl: 'nl', en: 'gb', fr: 'fr', de: 'de', es: 'es', pt: 'pt', it: 'it', sv: 'sv', da: 'da', no: 'no', fi: 'fi' };
+
+function _availableLanguages() {
+  const available = Object.keys(LANGS || {}).filter(Boolean);
+  const ordered = LANGS_ORDER_PREFERRED.filter(lang => available.includes(lang));
+  available
+    .filter(lang => !ordered.includes(lang))
+    .sort((a, b) => a.localeCompare(b))
+    .forEach(lang => ordered.push(lang));
+  return ordered.length ? ordered : ['nl'];
+}
+
+function _languageNativeName(lang) {
+  if (LANG_NATIVE[lang]) return LANG_NATIVE[lang];
+  try {
+    const name = new Intl.DisplayNames([lang], { type: 'language' }).of(lang);
+    if (name) return name.charAt(0).toUpperCase() + name.slice(1);
+  } catch(e) {}
+  return String(lang || '').toUpperCase();
+}
+
+function _languageFlagCode(lang) {
+  return LANG_FLAG_CODE[lang] || (lang === 'en-US' ? 'us' : String(lang || '').split('-')[1]?.toLowerCase()) || String(lang || 'gb').slice(0, 2).toLowerCase();
+}
 
 function loadLanguagePicker() {
   const container = document.getElementById('languagePicker');
   if (!container) return;
-  container.innerHTML = LANGS_ORDER.map(lang => {
+  const languages = _availableLanguages();
+  container.innerHTML = languages.map(lang => {
     const active = currentLang === lang;
     return `<button type="button" onclick="changeLanguage('${lang}')" id="langBtn_${lang}"
       style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};border-radius:8px;background:${active ? 'rgba(232,197,71,0.08)' : 'var(--surface2)'};cursor:pointer;font-size:0.82rem;color:var(--text);">
-      <img src="/flags/${LANG_FLAG_CODE[lang]}.svg" width="20" height="15" alt="${lang}" style="border-radius:2px;flex-shrink:0;">
-      <span>${LANG_NATIVE[lang]}</span>
+      <img src="/flags/${_languageFlagCode(lang)}.svg" width="20" height="15" alt="${lang}" style="border-radius:2px;flex-shrink:0;" onerror="this.style.display='none'">
+      <span>${_settingsEsc(_languageNativeName(lang))}</span>
     </button>`;
   }).join('');
 }
 
 // ── Language & MCP Settings ───────────────────────────────────────────────────
 function changeLanguage(lang) {
+  if (!LANGS[lang]) lang = 'nl';
   setLanguage(lang);
   loadRatingCountryPicker();
   loadLanguagePicker();
-  _updateWatchedBtn();
-  _updateWatchlistBtn();
+  if (typeof _updateWatchedBtn === 'function') _updateWatchedBtn();
+  if (typeof _updateWatchlistBtn === 'function') _updateWatchlistBtn();
   loadCollection();
   loadStats();
   if (document.getElementById('panel-settings').classList.contains('active')) loadSettings();
