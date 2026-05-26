@@ -1012,11 +1012,19 @@ function changeLanguage(lang) {
   setLanguage(lang);
   loadRatingCountryPicker();
   loadLanguagePicker();
+  const preferencesStatus = document.getElementById('preferencesStatus');
+  if (preferencesStatus) {
+    preferencesStatus.innerHTML = '';
+    preferencesStatus.className = 'status-msg';
+  }
   if (typeof _updateWatchedBtn === 'function') _updateWatchedBtn();
   if (typeof _updateWatchlistBtn === 'function') _updateWatchlistBtn();
   loadCollection();
   loadStats();
-  if (document.getElementById('panel-settings').classList.contains('active')) loadSettings();
+  if (document.getElementById('panel-settings').classList.contains('active')) {
+    loadRatingCountryPicker();
+    loadLanguagePicker();
+  }
   if (document.getElementById('panel-lists').classList.contains('active')) {
     const activeListsSub = document.querySelector('[data-lists-sub].active');
     if (activeListsSub) switchListsSubmenu(activeListsSub.getAttribute('data-lists-sub'));
