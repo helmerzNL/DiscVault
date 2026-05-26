@@ -22,6 +22,10 @@ function t(key, ...args) {
 }
 
 function applyLanguage() {
+  if (!LANGS[currentLang] && LANGS.nl) {
+    currentLang = 'nl';
+    localStorage.setItem('dv_lang', currentLang);
+  }
   document.documentElement.lang = currentLang;
   document.title = t('js.pageTitle');
   document.querySelectorAll('[data-i18n]').forEach(el => {
