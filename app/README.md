@@ -259,6 +259,23 @@ Show migration status:
 docker compose -f docker-compose.next.yml --profile tools run --rm migration-status
 ```
 
+Start the minimal PostgreSQL-backed Next API on a Docker host:
+
+```bash
+docker compose -f docker-compose.next.yml up -d next-api
+```
+
+Initial endpoints:
+
+```text
+GET http://localhost:6180/api/next/health
+GET http://localhost:6180/api/next/stats
+GET http://localhost:6180/api/next/settings
+GET http://localhost:6180/api/next/metadata/plugins
+GET http://localhost:6180/api/next/movies
+GET http://localhost:6180/api/next/containers
+```
+
 The first migration set creates the PostgreSQL foundation for users/passkeys,
 RBAC, movies, people, containers, media assets, metadata plugins, events,
 offline sync, push notifications, entitlements and migration import state.
