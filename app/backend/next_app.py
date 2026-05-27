@@ -30,10 +30,6 @@ def create_app() -> Flask:
     register_routes(flask_app)
     return flask_app
 
-
-app = create_app()
-
-
 class NextApiError(RuntimeError):
     """Expected API error with a caller-facing status code."""
 
@@ -394,6 +390,9 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 items = cur.fetchall()
         return response({"status": "ok", "items": items})
+
+
+app = create_app()
 
 
 if __name__ == "__main__":
