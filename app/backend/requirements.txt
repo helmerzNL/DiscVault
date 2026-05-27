@@ -8,3 +8,4 @@ cryptography==46.0.7
 Pillow==12.2.0
 beautifulsoup4==4.12.3
 pywebpush==2.0.0
+psycopg[binary,pool]>=3.2,<4

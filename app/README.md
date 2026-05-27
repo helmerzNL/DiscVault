@@ -185,3 +185,76 @@ Manual backup example:
 ```bash
 cp /mnt/user/appdata/discvault/discvault.db ./discvault-backup.db
 ```
+
+## DiscVault Next preparation
+
+DiscVault Next planning starts with a read-only audit of the current SQLite
+database and data volume. The audit script does not import the Flask app and
+does not run migrations.
+
+Local example:
+
+```bash
+python scripts/db_audit.py --db .local/discvault.db
+```
+
+Production-copy example:
+
+```bash
+python scripts/db_audit.py \
+  --db /path/to/copied/discvault.db \
+  --data-dir /path/to/copied/data \
+  --output-dir /path/to/audit-output
+```
+
+The generated JSON contains schema objects, row counts, table classifications,
+foreign keys, indexes, media file inventory, integrity checks and SQLite-specific
+SQL findings for PostgreSQL migration planning.
+
+Create a canonical export package for PostgreSQL import planning:
+
+```bash
+python scripts/sqlite_export.py --db .local/discvault.db
+```
+
+By default this export excludes security, device-specific and log/control data
+such as passkeys, invite codes, push subscriptions and logs. Include those only
+for an explicit admin/security migration rehearsal:
+
+```bash
+python scripts/sqlite_export.py \
+  --db /path/to/copied/discvault.db \
+  --data-dir /path/to/copied/data \
+  --output-dir /path/to/export-output \
+  --include-security \
+  --include-device \
+  --include-logs
+```
+
+### DiscVault Next PostgreSQL skeleton
+
+`docker-compose.next.yml` starts a PostgreSQL service and provides tool profiles
+for the first DiscVault Next migrations. It does not replace the current SQLite
+runtime yet.
+
+Start PostgreSQL:
+
+```bash
+docker compose -f docker-compose.next.yml up -d postgres
+```
+
+Apply pending DiscVault Next migrations:
+
+```bash
+docker compose -f docker-compose.next.yml --profile tools run --rm migrate
+```
+
+Show migration status:
+
+```bash
+docker compose -f docker-compose.next.yml --profile tools run --rm migration-status
+```
+
+The first migration set creates the PostgreSQL foundation for users/passkeys,
+RBAC, movies, people, containers, media assets, metadata plugins, events,
+offline sync, push notifications, entitlements and migration import state.

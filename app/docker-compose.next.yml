@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: discvault-next-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-discvault_next}
+      POSTGRES_USER: ${POSTGRES_USER:-discvault_next}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-discvault_next_dev}
+      TZ: ${TZ:-Europe/Amsterdam}
+    volumes:
+      - ${DISCVAULT_NEXT_POSTGRES_DATA:-./.local/postgres-next}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-discvault_next} -d ${POSTGRES_DB:-discvault_next}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - discvault-next-net
+
+  migrate:
+    build:
+      context: ./backend
+      args:
+        - BUILD_VERSION=${BUILD_VERSION:-next-dev}
+        - BUILD_SHA=${BUILD_SHA:-unknown}
+    container_name: discvault-next-migrate
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
+      TZ: ${TZ:-Europe/Amsterdam}
+    command: ["python", "next_database.py", "migrate"]
+    networks:
+      - discvault-next-net
+
+  migration-status:
+    build:
+      context: ./backend
+      args:
+        - BUILD_VERSION=${BUILD_VERSION:-next-dev}
+        - BUILD_SHA=${BUILD_SHA:-unknown}
+    container_name: discvault-next-migration-status
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
+      TZ: ${TZ:-Europe/Amsterdam}
+    command: ["python", "next_database.py", "status"]
+    networks:
+      - discvault-next-net
+
+networks:
+  discvault-next-net:
+    driver: bridge
