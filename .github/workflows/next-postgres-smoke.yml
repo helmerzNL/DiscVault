@@ -100,10 +100,45 @@ jobs:
               "/api/next/metadata/plugins",
               "/api/next/movies",
               "/api/next/containers",
+              "/api/next/sync/state",
+              "/api/next/sync/bootstrap",
+              "/api/next/sync/delta?since=0",
           ):
               response = client.get(path)
               assert response.status_code == 200, (path, response.status_code, response.data[:500])
               payload = response.get_json()
               assert payload["status"] == "ok", (path, payload)
               print(path, payload["status"])
+
+          mutation = {
+              "clientId": "ci-pwa-install",
+              "baseRevision": 0,
+              "mutations": [
+                  {
+                      "clientMutationId": "ci-movie-1",
+                      "entityType": "movie",
+                      "operation": "upsert",
+                      "clientEntityId": "local-movie-1",
+                      "payload": {
+                          "title": "Offline Test Movie",
+                          "year": "2026",
+                          "format": "4K UHD"
+                      }
+                  }
+              ]
+          }
+          first = client.post("/api/next/sync/mutations", json=mutation)
+          assert first.status_code == 200, first.data[:500]
+          first_payload = first.get_json()
+          assert first_payload["results"][0]["status"] == "applied", first_payload
+
+          replay = client.post("/api/next/sync/mutations", json=mutation)
+          assert replay.status_code == 200, replay.data[:500]
+          replay_payload = replay.get_json()
+          assert replay_payload["results"][0]["replayed"] is True, replay_payload
+
+          delta = client.get("/api/next/sync/delta?since=0")
+          delta_payload = delta.get_json()
+          assert delta_payload["changes"], delta_payload
+          print("/api/next/sync/mutations", "ok")
           PY

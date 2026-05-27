@@ -274,11 +274,19 @@ GET http://localhost:6180/api/next/settings
 GET http://localhost:6180/api/next/metadata/plugins
 GET http://localhost:6180/api/next/movies
 GET http://localhost:6180/api/next/containers
+GET http://localhost:6180/api/next/sync/state
+GET http://localhost:6180/api/next/sync/bootstrap
+GET http://localhost:6180/api/next/sync/delta?since=0
+POST http://localhost:6180/api/next/sync/mutations
 ```
 
 The first migration set creates the PostgreSQL foundation for users/passkeys,
 RBAC, movies, people, containers, media assets, metadata plugins, events,
 offline sync, push notifications, entitlements and migration import state.
+
+The initial sync API is shared by future PWA, iOS and Android clients. Clients
+use bootstrap to fill a local cache, delta to catch up by revision, and
+mutations to send idempotent offline changes back to the server.
 
 Run a read-only dry-run against a copied legacy data directory:
 
