@@ -18,6 +18,36 @@ services:
     networks:
       - discvault-next-net
 
+  next-api:
+    build:
+      context: ./backend
+      args:
+        - BUILD_VERSION=${BUILD_VERSION:-next-dev}
+        - BUILD_SHA=${BUILD_SHA:-unknown}
+    container_name: discvault-next-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
+      TZ: ${TZ:-Europe/Amsterdam}
+      BUILD_VERSION: ${BUILD_VERSION:-next-dev}
+      BUILD_SHA: ${BUILD_SHA:-unknown}
+      DISCVAULT_BACKEND_VERSION: ${BUILD_VERSION:-next-dev}
+      DISCVAULT_BUILD_SHA: ${BUILD_SHA:-unknown}
+    command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "180", "next_app:app"]
+    ports:
+      - "${DISCVAULT_NEXT_API_PORT:-6180}:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/next/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - discvault-next-net
+
   migrate:
     build:
       context: ./backend
