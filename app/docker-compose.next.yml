@@ -54,6 +54,34 @@ services:
     networks:
       - discvault-next-net
 
+  import-sqlite:
+    build:
+      context: ./backend
+      args:
+        - BUILD_VERSION=${BUILD_VERSION:-next-dev}
+        - BUILD_SHA=${BUILD_SHA:-unknown}
+    container_name: discvault-next-import-sqlite
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
+      TZ: ${TZ:-Europe/Amsterdam}
+    volumes:
+      - ${DISCVAULT_SQLITE_IMPORT_DATA:-./.local/import-data}:/import:ro
+    command:
+      [
+        "python",
+        "next_import.py",
+        "--db",
+        "/import/discvault.db",
+        "--data-dir",
+        "/import"
+      ]
+    networks:
+      - discvault-next-net
+
 networks:
   discvault-next-net:
     driver: bridge

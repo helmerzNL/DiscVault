@@ -234,8 +234,12 @@ python scripts/sqlite_export.py \
 ### DiscVault Next PostgreSQL skeleton
 
 `docker-compose.next.yml` starts a PostgreSQL service and provides tool profiles
-for the first DiscVault Next migrations. It does not replace the current SQLite
-runtime yet.
+for the first DiscVault Next migrations on a Docker host. It does not replace the
+current SQLite runtime yet.
+
+Local Docker is not required for every developer step. The GitHub Actions
+workflow `DiscVault Next PostgreSQL Smoke` validates the migration runner against
+a temporary PostgreSQL service and runs a minimal importer smoke test.
 
 Start PostgreSQL:
 
@@ -258,3 +262,27 @@ docker compose -f docker-compose.next.yml --profile tools run --rm migration-sta
 The first migration set creates the PostgreSQL foundation for users/passkeys,
 RBAC, movies, people, containers, media assets, metadata plugins, events,
 offline sync, push notifications, entitlements and migration import state.
+
+Run a read-only dry-run against a copied legacy data directory:
+
+```bash
+python backend/next_import.py \
+  --db /path/to/copied/data/discvault.db \
+  --data-dir /path/to/copied/data \
+  --dry-run
+```
+
+Import the copied SQLite data into the Next PostgreSQL schema on a Docker host:
+
+```bash
+DISCVAULT_SQLITE_IMPORT_DATA=/path/to/copied/data \
+docker compose -f docker-compose.next.yml --profile tools run --rm import-sqlite
+```
+
+If Docker is not available locally, run this on the beta host or another machine
+that has access to the copied data directory.
+
+The default import migrates functional collection data, people, credits,
+containers and media references. Users/passkeys, watch history and other
+personal/device data require explicit importer flags and should only be used for
+an intentional security migration rehearsal.
