@@ -10,6 +10,7 @@ on:
       - "app/backend/next_database.py"
       - "app/backend/next_import.py"
       - "app/backend/next_app.py"
+      - "app/backend/next_worker.py"
       - "app/backend/migrations_next/**"
       - "app/backend/requirements.txt"
 
@@ -52,7 +53,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile next_database.py next_import.py next_app.py
+        run: python -m py_compile next_database.py next_import.py next_app.py next_worker.py
 
       - name: Apply Next migrations
         run: python next_database.py migrate
@@ -103,6 +104,7 @@ jobs:
               "/api/next/sync/state",
               "/api/next/sync/bootstrap",
               "/api/next/sync/delta?since=0",
+              "/api/next/jobs",
           ):
               response = client.get(path)
               assert response.status_code == 200, (path, response.status_code, response.data[:500])
@@ -141,4 +143,34 @@ jobs:
           delta_payload = delta.get_json()
           assert delta_payload["changes"], delta_payload
           print("/api/next/sync/mutations", "ok")
+
+          job_response = client.post(
+              "/api/next/jobs",
+              json={
+                  "jobType": "sync.noop",
+                  "payload": {"message": "CI worker smoke"}
+              },
+          )
+          assert job_response.status_code == 201, job_response.data[:500]
+          job_payload = job_response.get_json()
+          assert job_payload["job"]["status"] == "pending", job_payload
+          print("/api/next/jobs", "created", job_payload["job"]["id"])
+          PY
+
+      - name: Run Next worker once
+        run: python next_worker.py run-once --worker-id ci-worker
+
+      - name: Verify worker completed job
+        run: |
+          python - <<'PY'
+          from next_app import app
+
+          client = app.test_client()
+          response = client.get("/api/next/jobs?status=completed")
+          assert response.status_code == 200, response.data[:500]
+          payload = response.get_json()
+          assert payload["jobs"], payload
+          assert payload["jobs"][0]["jobType"] == "sync.noop", payload
+          assert payload["jobs"][0]["result"]["workerId"] == "ci-worker", payload
+          print("/api/next/jobs?status=completed", "ok")
           PY

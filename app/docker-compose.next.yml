@@ -48,6 +48,26 @@ services:
     networks:
       - discvault-next-net
 
+  next-worker:
+    build:
+      context: ./backend
+      args:
+        - BUILD_VERSION=${BUILD_VERSION:-next-dev}
+        - BUILD_SHA=${BUILD_SHA:-unknown}
+    container_name: discvault-next-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
+      TZ: ${TZ:-Europe/Amsterdam}
+      DISCVAULT_WORKER_ID: ${DISCVAULT_WORKER_ID:-next-worker-1}
+      DISCVAULT_WORKER_POLL_INTERVAL: ${DISCVAULT_WORKER_POLL_INTERVAL:-2}
+    command: ["python", "next_worker.py", "work"]
+    networks:
+      - discvault-next-net
+
   migrate:
     build:
       context: ./backend

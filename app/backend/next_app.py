@@ -758,6 +758,47 @@ def plugin_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def job_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "jobType": row["job_type"],
+        "status": row["status"],
+        "requestedBy": row.get("requested_by"),
+        "payload": row.get("payload") or {},
+        "result": row.get("result") or {},
+        "error": row.get("error"),
+        "createdAt": row.get("created_at"),
+        "startedAt": row.get("started_at"),
+        "finishedAt": row.get("finished_at"),
+    }
+
+
+def create_background_job(conn, *, job_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if not table_exists(conn, "background_jobs"):
+        raise NextApiError("Background job table is not available", 503)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO background_jobs (job_type, payload)
+            VALUES (%s, %s)
+            RETURNING
+                id,
+                job_type,
+                status,
+                requested_by,
+                payload,
+                result,
+                error,
+                created_at,
+                started_at,
+                finished_at
+            """,
+            (job_type, Jsonb(json_ready(payload))),
+        )
+        row = cur.fetchone()
+    return job_row(row)
+
+
 def register_routes(flask_app: Flask) -> None:
     @flask_app.errorhandler(NextApiError)
     def handle_next_error(error: NextApiError):
@@ -972,6 +1013,88 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 items = cur.fetchall()
         return response({"status": "ok", "items": items})
+
+    @flask_app.get("/api/next/jobs")
+    def jobs():
+        limit = parse_int_arg("limit", 100, minimum=1, maximum=500)
+        status = (request.args.get("status") or "").strip()
+        with connect() as conn:
+            if not table_exists(conn, "background_jobs"):
+                return response({"status": "ok", "jobs": []})
+            params: list[Any] = []
+            where = ""
+            if status:
+                where = "WHERE status = %s"
+                params.append(status)
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                        id,
+                        job_type,
+                        status,
+                        requested_by,
+                        payload,
+                        result,
+                        error,
+                        created_at,
+                        started_at,
+                        finished_at
+                    FROM background_jobs
+                    {where}
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (*params, limit),
+                )
+                rows = cur.fetchall()
+        return response({"status": "ok", "jobs": [job_row(row) for row in rows]})
+
+    @flask_app.post("/api/next/jobs")
+    def create_job():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Job request body must be an object", 400)
+        job_type = str(body.get("jobType") or body.get("job_type") or "").strip()
+        if not job_type:
+            raise NextApiError("jobType is required", 400)
+        payload = body.get("payload") or {}
+        if not isinstance(payload, dict):
+            raise NextApiError("payload must be an object", 400)
+        with connect() as conn:
+            with conn.transaction():
+                job = create_background_job(conn, job_type=job_type, payload=payload)
+        return response({"status": "ok", "job": job}, 201)
+
+    @flask_app.get("/api/next/jobs/<job_id>")
+    def get_job(job_id: str):
+        job_uuid = parse_uuid(job_id, "jobId")
+        with connect() as conn:
+            if not table_exists(conn, "background_jobs"):
+                raise NextApiError("Background job table is not available", 503)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        job_type,
+                        status,
+                        requested_by,
+                        payload,
+                        result,
+                        error,
+                        created_at,
+                        started_at,
+                        finished_at
+                    FROM background_jobs
+                    WHERE id=%s
+                    """,
+                    (job_uuid,),
+                )
+                row = cur.fetchone()
+        if not row:
+            raise NextApiError("Job not found", 404)
+        return response({"status": "ok", "job": job_row(row)})
 
     @flask_app.get("/api/next/sync/state")
     def sync_state():
