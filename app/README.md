@@ -237,6 +237,9 @@ python scripts/sqlite_export.py \
 for the first DiscVault Next migrations on a Docker host. It does not replace the
 current SQLite runtime yet.
 
+For a Docker host that should use the published `:dev` image instead of building
+from source, use `deploy/next/docker-compose.yml`.
+
 Local Docker is not required for every developer step. The GitHub Actions
 workflow `DiscVault Next PostgreSQL Smoke` validates the migration runner against
 a temporary PostgreSQL service and runs a minimal importer smoke test.
