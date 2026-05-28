@@ -1,0 +1,19 @@
+{
+  "id": "omdb",
+  "name": "OMDb",
+  "version": "1.0.0",
+  "categories": ["metadata_source"],
+  "capabilities": [
+    "search_title",
+    "lookup_external_id",
+    "movie_details",
+    "ratings"
+  ],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {},
+  "orderIndex": 20,
+  "entitlements": {
+    "source_use": "metadata.source.omdb.use"
+  }
+}
