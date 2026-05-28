@@ -1502,9 +1502,62 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       margin-top: 3px;
       overflow-wrap: anywhere;
     }
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .62;
+    }
+    .auth-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
+      gap: 14px;
+      align-items: start;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 16px;
+    }
+    .auth-copy {
+      min-width: 0;
+    }
+    .auth-copy strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 5px;
+    }
+    .auth-copy p {
+      max-width: 72ch;
+    }
+    .auth-form {
+      display: grid;
+      gap: 9px;
+      min-width: 0;
+    }
+    .auth-form label {
+      color: var(--muted);
+      font-size: .78rem;
+      display: grid;
+      gap: 5px;
+    }
+    .auth-form .actions {
+      justify-content: flex-end;
+    }
+    .auth-status {
+      color: var(--muted);
+      font-size: .86rem;
+      min-height: 1.35em;
+      overflow-wrap: anywhere;
+    }
+    .auth-status.good { color: var(--green); }
+    .auth-status.bad { color: var(--red); }
+    .auth-status.info { color: var(--blue); }
+    .hidden {
+      display: none !important;
+    }
     @media (max-width: 980px) {
       main { width: min(100vw - 20px, 760px); padding-top: 18px; }
       header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+      .auth-panel { grid-template-columns: 1fr; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .layout { grid-template-columns: 1fr; }
       .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
@@ -1565,6 +1618,30 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       <div class="stat"><strong id="peopleCount">""" + h(counts.get("people", 0)) + """</strong><span>People</span></div>
       <div class="stat"><strong id="assetCount">""" + h(counts.get("mediaAssets", 0)) + """</strong><span>Media assets</span></div>
       <div class="stat"><strong id="pluginCount">""" + h(len(enabled_plugins)) + """</strong><span>Enabled plugins</span></div>
+    </section>
+
+    <section class="auth-panel" id="authPanel">
+      <div class="auth-copy">
+        <strong id="authTitle">Passkeys</strong>
+        <p id="authDescription">Checking authentication status...</p>
+        <p class="muted" id="authMeta"></p>
+      </div>
+      <div class="auth-form">
+        <div id="authSetupFields">
+          <label>Username
+            <input id="authUsername" type="text" value="admin" autocomplete="username">
+          </label>
+          <label>Passkey name
+            <input id="authCredentialName" type="text" value="Owner passkey" autocomplete="off">
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" id="authSetupButton" onclick="registerOwnerPasskey()">Create owner passkey</button>
+          <button type="button" id="authLoginButton" onclick="loginPasskey()">Sign in</button>
+          <button type="button" id="authLogoutButton" onclick="logoutPasskey()">Sign out</button>
+        </div>
+        <div class="auth-status" id="authStatusLine"></div>
+      </div>
     </section>
 
     <div class="toolbar">
@@ -1637,6 +1714,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       plugins: initialState.plugins || [],
       activeFormat: "all"
     };
+    var authToken = localStorage.getItem("dv_next_token") || "";
+    var authState = {};
 
     function escapeHtml(value) {
       return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
@@ -1664,6 +1743,202 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (Array.isArray(value)) return value.length ? value.join(", ") : "-";
       if (typeof value === "object") return JSON.stringify(value);
       return value;
+    }
+    function authHeaders() {
+      return authToken ? {"Authorization": `Bearer ${authToken}`} : {};
+    }
+    function base64urlToBuffer(value) {
+      let normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+      while (normalized.length % 4) normalized += "=";
+      const binary = atob(normalized);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return bytes.buffer;
+    }
+    function bufferToBase64url(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+      return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
+    }
+    function setAuthStatus(message, tone) {
+      const node = document.getElementById("authStatusLine");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `auth-status ${tone || ""}`.trim();
+    }
+    function webauthnUnavailableReason() {
+      if (!window.PublicKeyCredential || !navigator.credentials) {
+        return "This browser does not support passkeys.";
+      }
+      if (!window.isSecureContext) {
+        return "Open this app over HTTPS to use passkeys.";
+      }
+      return "";
+    }
+    async function authJson(url, options) {
+      const headers = {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...((options && options.headers) || {})
+      };
+      const response = await fetch(url, {
+        cache: "no-store",
+        ...(options || {}),
+        headers
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error || `${url} failed with HTTP ${response.status}`);
+      }
+      return payload;
+    }
+    function renderAuthStatus() {
+      const title = document.getElementById("authTitle");
+      const description = document.getElementById("authDescription");
+      const meta = document.getElementById("authMeta");
+      const setupFields = document.getElementById("authSetupFields");
+      const setupButton = document.getElementById("authSetupButton");
+      const loginButton = document.getElementById("authLoginButton");
+      const logoutButton = document.getElementById("authLogoutButton");
+      const unavailable = webauthnUnavailableReason();
+      const setupRequired = !!authState.setup_required;
+      const authenticated = !!authState.authenticated;
+      title.textContent = authenticated ? "Signed in" : setupRequired ? "First passkey" : "Passkeys";
+      description.textContent = authenticated
+        ? `Signed in${authState.role ? ` as ${authState.role}` : ""}.`
+        : setupRequired
+          ? "Create the first owner passkey for this DiscVault Next instance."
+          : "Sign in with your passkey.";
+      meta.textContent = `RP ID: ${authState.rp_id || "-"}; origins: ${(authState.rp_origins || []).join(", ") || "-"}`;
+      setupFields.classList.toggle("hidden", !setupRequired);
+      setupButton.classList.toggle("hidden", !setupRequired);
+      loginButton.classList.toggle("hidden", setupRequired || authenticated);
+      logoutButton.classList.toggle("hidden", !authenticated);
+      setupButton.disabled = !!unavailable;
+      loginButton.disabled = !!unavailable;
+      if (unavailable) {
+        setAuthStatus(unavailable, "bad");
+      } else if (!document.getElementById("authStatusLine").textContent) {
+        setAuthStatus(setupRequired ? "Ready to create a passkey." : "Ready.", "info");
+      }
+    }
+    async function refreshAuthStatus() {
+      try {
+        authState = await authJson("/api/next/auth/status", {headers: authHeaders()});
+        renderAuthStatus();
+      } catch (error) {
+        setAuthStatus(error.message, "bad");
+      }
+    }
+    async function registerOwnerPasskey() {
+      const unavailable = webauthnUnavailableReason();
+      if (unavailable) {
+        setAuthStatus(unavailable, "bad");
+        return;
+      }
+      const username = document.getElementById("authUsername").value.trim() || "admin";
+      const credentialName = document.getElementById("authCredentialName").value.trim() || "Owner passkey";
+      const button = document.getElementById("authSetupButton");
+      button.disabled = true;
+      setAuthStatus("Waiting for your passkey prompt...", "info");
+      try {
+        const optionsPayload = await authJson("/api/next/auth/register/options", {
+          method: "POST",
+          body: JSON.stringify({username, display_name: username})
+        });
+        const options = optionsPayload.options;
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.user.id = base64urlToBuffer(options.user.id);
+        options.excludeCredentials = (options.excludeCredentials || []).map((credential) => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id)
+        }));
+        const attestation = await navigator.credentials.create({publicKey: options});
+        const credential = {
+          id: attestation.id,
+          rawId: bufferToBase64url(attestation.rawId),
+          response: {
+            attestationObject: bufferToBase64url(attestation.response.attestationObject),
+            clientDataJSON: bufferToBase64url(attestation.response.clientDataJSON)
+          },
+          type: attestation.type,
+          authenticatorAttachment: attestation.authenticatorAttachment
+        };
+        const verified = await authJson("/api/next/auth/register/verify", {
+          method: "POST",
+          body: JSON.stringify({
+            user_id: optionsPayload.user_id,
+            username,
+            display_name: username,
+            credential_name: credentialName,
+            credential
+          })
+        });
+        authToken = verified.token || "";
+        if (authToken) localStorage.setItem("dv_next_token", authToken);
+        setAuthStatus("Passkey created. You are signed in.", "good");
+        await refreshAuthStatus();
+      } catch (error) {
+        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+      } finally {
+        button.disabled = false;
+      }
+    }
+    async function loginPasskey() {
+      const unavailable = webauthnUnavailableReason();
+      if (unavailable) {
+        setAuthStatus(unavailable, "bad");
+        return;
+      }
+      const button = document.getElementById("authLoginButton");
+      button.disabled = true;
+      setAuthStatus("Waiting for your passkey prompt...", "info");
+      try {
+        const optionsPayload = await authJson("/api/next/auth/login/options", {
+          method: "POST",
+          body: "{}"
+        });
+        const options = optionsPayload.options;
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.allowCredentials = (options.allowCredentials || []).map((credential) => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id)
+        }));
+        const assertion = await navigator.credentials.get({publicKey: options});
+        const credential = {
+          id: assertion.id,
+          rawId: bufferToBase64url(assertion.rawId),
+          response: {
+            authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+            signature: bufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+          },
+          type: assertion.type,
+          authenticatorAttachment: assertion.authenticatorAttachment
+        };
+        const verified = await authJson("/api/next/auth/login/verify", {
+          method: "POST",
+          body: JSON.stringify({credential})
+        });
+        authToken = verified.token || "";
+        if (authToken) localStorage.setItem("dv_next_token", authToken);
+        setAuthStatus("Signed in.", "good");
+        await refreshAuthStatus();
+      } catch (error) {
+        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+      } finally {
+        button.disabled = false;
+      }
+    }
+    function logoutPasskey() {
+      authToken = "";
+      localStorage.removeItem("dv_next_token");
+      setAuthStatus("Signed out.", "info");
+      refreshAuthStatus();
     }
     function field(label, value) {
       return `<div class="field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(valueOrDash(value))}</strong></div>`;
@@ -1884,6 +2159,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     function bootCollection() {
       setClientStatus("Client script started.");
+      refreshAuthStatus();
       loadCollection().catch((error) => {
         document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
         document.getElementById("resultCount").textContent = "Error";
@@ -4247,6 +4523,9 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/collection/")
     @flask_app.get("/api/next/app")
     @flask_app.get("/api/next/app/")
+    @flask_app.get("/")
+    @flask_app.get("/app")
+    @flask_app.get("/app/")
     def collection_dashboard():
         with connect() as conn:
             snapshot = collection_dashboard_snapshot(conn)

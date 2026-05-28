@@ -54,6 +54,9 @@ curl http://localhost:6180/api/next/health
 curl http://localhost:6180/api/next/stats
 ```
 
+When this service is published directly behind a reverse proxy, the Next
+collection UI is available at `/`, `/app`, and `/api/next/app`.
+
 ## Passkeys
 
 Passkeys require a stable relying party configuration. Set these values in
