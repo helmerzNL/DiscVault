@@ -16,7 +16,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: helmerzNL/DiscVault
+  IMAGE_NAME: helmerznl/discvault
 
 jobs:
   build-and-push:
