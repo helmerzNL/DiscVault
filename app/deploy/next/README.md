@@ -135,6 +135,18 @@ curl http://localhost:6180/api/next/metadata/plugins
 
 These endpoints require authentication once passkeys are enabled.
 
+Admin plugin changes are exposed as API foundation for the later full plugin UI:
+
+```bash
+curl -X PATCH http://localhost:6180/api/next/plugins/plex \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled":true,"orderIndex":105}'
+```
+
+The PATCH route requires an owner/admin session. Metadata source plugins are
+kept in sync with the legacy-compatible `metadata_plugins` table; digital media
+source plugins are updated in the generic `plugins` table.
+
 Logs:
 
 ```bash
