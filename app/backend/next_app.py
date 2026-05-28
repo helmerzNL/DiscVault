@@ -12,6 +12,7 @@ import html as html_lib
 import json as json_lib
 import mimetypes
 import os
+import re
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -33,6 +34,7 @@ try:
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
     from .next_plugin_runtime import plugin_registry_snapshot
+    from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_effective_enabled
@@ -45,6 +47,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
     from next_plugin_runtime import plugin_registry_snapshot
+    from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
     from next_auth import next_auth_current_user
     from next_auth import next_auth_effective_enabled
@@ -62,6 +65,7 @@ TARGET_DATA_TABLES = (
     "media_assets",
     "users",
 )
+PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 
 
 def create_app() -> Flask:
@@ -3747,6 +3751,158 @@ def require_next_admin_user(conn) -> dict[str, Any]:
     return user
 
 
+def plugin_secret_key(plugin_id: str, secret_name: str) -> str:
+    name = str(secret_name or "").strip()
+    if not PLUGIN_SECRET_NAME_PATTERN.match(name):
+        raise NextApiError(
+            "Secret names may only contain letters, numbers, dots, dashes and underscores",
+            400,
+        )
+    return f"plugin_secret:{plugin_id}:{name}"
+
+
+def plugin_is_metadata(categories: Any) -> bool:
+    values = {str(item) for item in (categories or [])}
+    return bool({"metadata_source", "metadata_receiver"}.intersection(values))
+
+
+def plugin_config_payload(settings: Any, secrets_ref: Any) -> dict[str, Any]:
+    safe_settings = settings if isinstance(settings, dict) else {}
+    refs = secrets_ref if isinstance(secrets_ref, dict) else {}
+    safe_refs: dict[str, dict[str, Any]] = {}
+    for name, ref in refs.items():
+        if not PLUGIN_SECRET_NAME_PATTERN.match(str(name)):
+            continue
+        key = ref.get("key") if isinstance(ref, dict) else ref
+        item: dict[str, Any] = {"configured": True}
+        if key:
+            item["key"] = str(key)
+        safe_refs[str(name)] = item
+    return {
+        "settings": safe_settings,
+        "settingsConfigured": bool(safe_settings),
+        "secretNames": sorted(safe_refs),
+        "secretsConfigured": bool(safe_refs),
+        "secretsRef": safe_refs,
+    }
+
+
+def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
+    if not table_exists(conn, "plugin_settings"):
+        return plugin_config_payload({}, {})
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT settings, secrets_ref
+            FROM plugin_settings
+            WHERE plugin_id=%s
+            """,
+            (plugin_id,),
+        )
+        row = cur.fetchone()
+    return plugin_config_payload(
+        row.get("settings") if row else {},
+        row.get("secrets_ref") if row else {},
+    )
+
+
+def update_plugin_config(
+    conn,
+    *,
+    plugin_id: str,
+    categories: Any,
+    actor_id: UUID | str | None,
+    settings_provided: bool,
+    settings_value: Any,
+    secrets_provided: bool,
+    secrets_value: Any,
+) -> None:
+    if not table_exists(conn, "plugin_settings"):
+        raise NextApiError("Plugin settings table is not available", 503)
+    if settings_provided and not isinstance(settings_value, dict):
+        raise NextApiError("settings must be an object", 400)
+    if secrets_provided and not isinstance(secrets_value, dict):
+        raise NextApiError("secrets must be an object", 400)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT settings, secrets_ref
+            FROM plugin_settings
+            WHERE plugin_id=%s
+            """,
+            (plugin_id,),
+        )
+        existing = cur.fetchone()
+
+    settings = dict(existing.get("settings") or {}) if existing else {}
+    secrets_ref = dict(existing.get("secrets_ref") or {}) if existing else {}
+    if settings_provided:
+        settings = dict(settings_value or {})
+
+    with conn.transaction():
+        with conn.cursor() as cur:
+            if secrets_provided:
+                for raw_name, secret_value in secrets_value.items():
+                    secret_name = str(raw_name or "").strip()
+                    secret_key = plugin_secret_key(plugin_id, secret_name)
+                    if secret_value is None or secret_value == "":
+                        cur.execute("DELETE FROM app_settings WHERE key=%s", (secret_key,))
+                        secrets_ref.pop(secret_name, None)
+                        continue
+                    if isinstance(secret_value, (dict, list)):
+                        raise NextApiError("Secret values must be scalar JSON values", 400)
+                    cur.execute(
+                        """
+                        INSERT INTO app_settings (key, value, is_secret, updated_at, updated_by)
+                        VALUES (%s, %s, true, now(), %s)
+                        ON CONFLICT (key) DO UPDATE SET
+                            value=EXCLUDED.value,
+                            is_secret=true,
+                            updated_at=now(),
+                            updated_by=EXCLUDED.updated_by
+                        """,
+                        (secret_key, Jsonb(secret_value), actor_id),
+                    )
+                    secrets_ref[secret_name] = {
+                        "key": secret_key,
+                        "configured": True,
+                    }
+
+            cur.execute(
+                """
+                INSERT INTO plugin_settings (plugin_id, settings, secrets_ref, updated_at, updated_by)
+                VALUES (%s, %s, %s, now(), %s)
+                ON CONFLICT (plugin_id) DO UPDATE SET
+                    settings=EXCLUDED.settings,
+                    secrets_ref=EXCLUDED.secrets_ref,
+                    updated_at=now(),
+                    updated_by=EXCLUDED.updated_by
+                """,
+                (plugin_id, Jsonb(settings), Jsonb(secrets_ref), actor_id),
+            )
+
+            if plugin_is_metadata(categories) and table_exists(conn, "metadata_plugin_settings"):
+                cur.execute(
+                    """
+                    INSERT INTO metadata_plugin_settings (
+                        plugin_id,
+                        settings,
+                        secrets_ref,
+                        updated_at,
+                        updated_by
+                    )
+                    VALUES (%s, %s, %s, now(), %s)
+                    ON CONFLICT (plugin_id) DO UPDATE SET
+                        settings=EXCLUDED.settings,
+                        secrets_ref=EXCLUDED.secrets_ref,
+                        updated_at=now(),
+                        updated_by=EXCLUDED.updated_by
+                    """,
+                    (plugin_id, Jsonb(settings), Jsonb(secrets_ref), actor_id),
+                )
+
+
 def client_entity_mapping(
     conn,
     *,
@@ -4986,6 +5142,130 @@ def register_routes(flask_app: Flask) -> None:
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
             updated = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
         return response({"status": "ok", "plugin": updated, "registry": registry})
+
+    @flask_app.get("/api/next/plugins/<plugin_id>/config")
+    def plugin_config(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+
+        with connect() as conn:
+            require_next_admin_user(conn)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+            if not plugin:
+                raise NextApiError("Plugin not found", 404)
+            config = plugin_config_from_db(conn, plugin_id)
+        return response({"status": "ok", "plugin": plugin, "config": config})
+
+    @flask_app.patch("/api/next/plugins/<plugin_id>/config")
+    def update_plugin_settings(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        body = request.get_json(silent=True) or {}
+        has_settings = "settings" in body
+        has_secrets = "secrets" in body
+        if not has_settings and not has_secrets:
+            raise NextApiError("Supply settings and/or secrets", 400)
+
+        with connect() as conn:
+            actor = require_next_admin_user(conn)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, categories FROM plugins WHERE id=%s",
+                    (plugin_id,),
+                )
+                plugin_row = cur.fetchone()
+            if not plugin_row:
+                raise NextApiError("Plugin not found", 404)
+
+            update_plugin_config(
+                conn,
+                plugin_id=plugin_id,
+                categories=plugin_row.get("categories"),
+                actor_id=actor.get("id"),
+                settings_provided=has_settings,
+                settings_value=body.get("settings"),
+                secrets_provided=has_secrets,
+                secrets_value=body.get("secrets"),
+            )
+
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+            config = plugin_config_from_db(conn, plugin_id)
+        return response({"status": "ok", "plugin": plugin, "config": config})
+
+    @flask_app.get("/api/next/plugins/<plugin_id>/health")
+    def plugin_health(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+
+        with connect() as conn:
+            require_next_admin_user(conn)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+            if not plugin:
+                raise NextApiError("Plugin not found", 404)
+            config = plugin_config_from_db(conn, plugin_id)
+
+        manifest = plugin.get("manifest") or {}
+        requires_secrets = bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets"))
+        runtime = run_plugin_health(
+            plugin_id,
+            {
+                "pluginId": plugin_id,
+                "enabled": plugin["enabled"],
+                "settings": config["settings"],
+                "settingsConfigured": config["settingsConfigured"],
+                "secretNames": config["secretNames"],
+                "secretsConfigured": config["secretsConfigured"],
+            },
+        )
+        state = str(runtime.get("state") or "unknown")
+        if runtime.get("status") == "error":
+            state = str(runtime.get("state") or "runtime_error")
+        elif requires_secrets and not config["secretsConfigured"]:
+            state = "needs_configuration"
+
+        return response(
+            {
+                "status": "ok",
+                "plugin": plugin,
+                "config": {
+                    "settingsConfigured": config["settingsConfigured"],
+                    "secretNames": config["secretNames"],
+                    "secretsConfigured": config["secretsConfigured"],
+                },
+                "health": {
+                    "state": state,
+                    "requiresSecrets": requires_secrets,
+                    "runtime": runtime,
+                },
+            }
+        )
 
     @flask_app.get("/api/next/metadata/plugins")
     def metadata_plugins():

@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -143,6 +144,20 @@ def load_runtime(manifest: dict[str, Any], plugin_dir: Path) -> tuple[Path | Non
     return module_path, runtime
 
 
+def load_runtime_module(plugin: PluginDiscovery):
+    if not plugin.module_path:
+        return None
+    spec = importlib.util.spec_from_file_location(
+        module_name_for(plugin.plugin_id, plugin.module_path),
+        plugin.module_path,
+    )
+    if not spec or not spec.loader:
+        raise RuntimeError("Could not create module spec")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def discover_plugins() -> dict[str, Any]:
     plugins: list[PluginDiscovery] = []
     errors: list[dict[str, Any]] = []
@@ -168,6 +183,69 @@ def discover_plugins() -> dict[str, Any]:
         "plugins": plugins,
         "errors": errors,
     }
+
+
+def discovered_plugin(plugin_id: str) -> tuple[PluginDiscovery | None, dict[str, Any]]:
+    discovery = discover_plugins()
+    for plugin in discovery["plugins"]:
+        if plugin.plugin_id == plugin_id:
+            return plugin, discovery
+    return None, discovery
+
+
+def run_plugin_health(plugin_id: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    plugin, discovery = discovered_plugin(plugin_id)
+    if not plugin:
+        return {
+            "status": "error",
+            "state": "not_found",
+            "pluginId": plugin_id,
+            "errors": discovery["errors"],
+        }
+
+    runtime = dict(plugin.runtime)
+    result: dict[str, Any] = {
+        "status": "ok",
+        "state": "available",
+        "pluginId": plugin_id,
+        "runtime": runtime,
+        "sourcePath": str(plugin.path),
+        "runtimeModule": str(plugin.module_path) if plugin.module_path else None,
+    }
+    if runtime.get("error"):
+        result.update({"status": "error", "state": "runtime_error"})
+        return result
+    if not runtime.get("loaded"):
+        result.update({"state": "manifest_only"})
+        return result
+    if "health_check" not in (runtime.get("entrypoints") or []):
+        result.update({"state": "no_health_check"})
+        return result
+
+    started = time.perf_counter()
+    try:
+        module = load_runtime_module(plugin)
+        health_check = getattr(module, "health_check")
+        health = health_check(context or {})
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        if not isinstance(health, dict):
+            health = {"result": health}
+        result.update(
+            {
+                "health": health,
+                "elapsedMs": elapsed_ms,
+                "state": str(health.get("status") or "available"),
+            }
+        )
+    except Exception as exc:
+        result.update(
+            {
+                "status": "error",
+                "state": "runtime_error",
+                "error": str(exc),
+            }
+        )
+    return result
 
 
 def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -> dict[str, Any]:
@@ -363,6 +441,7 @@ def plugin_registry_row(row: dict[str, Any]) -> dict[str, Any]:
         "capabilities": capabilities,
         "orderIndex": row["order_index"],
         "manifest": manifest,
+        "requiresSecrets": bool(manifest.get("requiresSecrets", False)),
         "settingsSchema": row.get("settings_schema") or {},
         "settingsConfigured": bool(settings),
         "secretsConfigured": bool(secrets_ref),
