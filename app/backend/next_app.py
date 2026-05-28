@@ -1751,6 +1751,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <div class="admin-controls">
             <button type="button" id="adminAuthToggle" data-admin-action="toggle-auth">Toggle Authentication</button>
             <button type="button" id="adminInviteOnlyToggle" data-admin-action="toggle-invite-only">Toggle Invite-only</button>
+            <button type="button" id="adminMovieVaultReceiverToggle" data-admin-action="toggle-movievault-receiver">Toggle MovieVault Receiver</button>
           </div>
           <p class="muted" id="adminSecurityState">-</p>
         </div>
@@ -1847,6 +1848,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     };
     var authToken = localStorage.getItem("dv_next_token") || "";
     var authState = {};
+    var ownerSettings = {};
 
     function escapeHtml(value) {
       return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
@@ -2266,20 +2268,34 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const stateLine = document.getElementById("adminSecurityState");
       const authButton = document.getElementById("adminAuthToggle");
       const inviteButton = document.getElementById("adminInviteOnlyToggle");
+      const movieVaultReceiverButton = document.getElementById("adminMovieVaultReceiverToggle");
       if (stateLine) {
-        stateLine.textContent = `Auth ${authState.configured_auth_enabled ? "configured on" : "configured off"}; active ${authState.auth_enabled ? "yes" : "no"}; registration ${authState.registration_enabled ? "open" : "invite-only"}.`;
+        const receiverText = authState.role === "owner"
+          ? ` MovieVault receiver ${ownerSettings.movievault_contribution_enabled ? "on" : "off"}.`
+          : "";
+        stateLine.textContent = `Auth ${authState.configured_auth_enabled ? "configured on" : "configured off"}; active ${authState.auth_enabled ? "yes" : "no"}; registration ${authState.registration_enabled ? "open" : "invite-only"}.${receiverText}`;
       }
       if (authButton) authButton.textContent = authState.configured_auth_enabled ? "Disable Auth" : "Enable Auth";
       if (inviteButton) inviteButton.textContent = authState.registration_enabled ? "Require Invites" : "Allow Open Registration";
+      if (movieVaultReceiverButton) {
+        movieVaultReceiverButton.classList.toggle("hidden", authState.role !== "owner");
+        movieVaultReceiverButton.textContent = ownerSettings.movievault_contribution_enabled
+          ? "Disable MovieVault Receiver"
+          : "Enable MovieVault Receiver";
+      }
     }
     async function loadAdmin() {
       if (!isAdminUser()) return;
       setAdminStatus("Loading admin data...", "info");
-      const [usersPayload, credentialsPayload, invitesPayload] = await Promise.all([
+      const [usersPayload, credentialsPayload, invitesPayload, ownerSettingsPayload] = await Promise.all([
         authJson("/api/next/auth/users", {headers: authHeaders()}),
         authJson("/api/next/auth/credentials", {headers: authHeaders()}),
-        authJson("/api/next/auth/invite", {headers: authHeaders()})
+        authJson("/api/next/auth/invite", {headers: authHeaders()}),
+        authState.role === "owner"
+          ? authJson("/api/next/auth/owner/settings", {headers: authHeaders()})
+          : Promise.resolve({settings: {}})
       ]);
+      ownerSettings = ownerSettingsPayload.settings || {};
       renderAdminSecurity();
       renderAdminUsers(usersPayload.users || [], usersPayload.roles || []);
       renderAdminCredentials(credentialsPayload.credentials || []);
@@ -2303,6 +2319,19 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAuthStatus();
       renderAdminSecurity();
       await loadAdmin();
+    }
+    async function setMovieVaultReceiver(enabled) {
+      if (authState.role !== "owner") {
+        setAdminStatus("Only the owner can change MovieVault receiver mode.", "bad");
+        return;
+      }
+      const payload = await authJson("/api/next/auth/owner/settings", {
+        method: "POST",
+        body: JSON.stringify({movievault_contribution_enabled: enabled})
+      });
+      ownerSettings = payload.settings || {};
+      renderAdminSecurity();
+      setAdminStatus(`MovieVault receiver ${enabled ? "enabled" : "disabled"}.`, "good");
     }
     async function createAdminInvite() {
       const input = document.getElementById("adminInviteUsername");
@@ -2399,19 +2428,21 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             ? setAuthConfigured(!authState.configured_auth_enabled)
             : action === "toggle-invite-only"
               ? setInviteOnly(!!authState.registration_enabled)
-              : action === "create-invite"
-                ? createAdminInvite()
-                : target.dataset.adminUserStatus
-                  ? updateAdminUserStatus(target.dataset.adminUserStatus, target.dataset.status)
-                  : target.dataset.adminUserDelete
-                    ? deleteAdminUser(target.dataset.adminUserDelete)
-                    : target.dataset.adminOwnerTransfer
-                      ? transferOwnership(target.dataset.adminOwnerTransfer, target.dataset.username)
-                      : target.dataset.adminCredentialDelete
-                        ? deleteAdminCredential(target.dataset.adminCredentialDelete)
-                        : target.dataset.adminInviteDelete
-                          ? deleteAdminInvite(target.dataset.adminInviteDelete)
-                          : Promise.resolve();
+              : action === "toggle-movievault-receiver"
+                ? setMovieVaultReceiver(!ownerSettings.movievault_contribution_enabled)
+                : action === "create-invite"
+                  ? createAdminInvite()
+                  : target.dataset.adminUserStatus
+                    ? updateAdminUserStatus(target.dataset.adminUserStatus, target.dataset.status)
+                    : target.dataset.adminUserDelete
+                      ? deleteAdminUser(target.dataset.adminUserDelete)
+                      : target.dataset.adminOwnerTransfer
+                        ? transferOwnership(target.dataset.adminOwnerTransfer, target.dataset.username)
+                        : target.dataset.adminCredentialDelete
+                          ? deleteAdminCredential(target.dataset.adminCredentialDelete)
+                          : target.dataset.adminInviteDelete
+                            ? deleteAdminInvite(target.dataset.adminInviteDelete)
+                            : Promise.resolve();
         Promise.resolve(task).catch((error) => setAdminStatus(error.message, "bad"));
       });
       panel.addEventListener("change", (event) => {
