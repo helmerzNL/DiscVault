@@ -781,6 +781,403 @@ def migration_dashboard_html() -> str:
 """
 
 
+def collection_dashboard_html() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DiscVault Next Collection</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101116;
+      --surface: #191c24;
+      --surface-2: #222633;
+      --line: #343a4c;
+      --text: #f4f5f8;
+      --muted: #aab0bd;
+      --accent: #e8c547;
+      --blue: #82aaff;
+      --green: #48c78e;
+      --red: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1360px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(1.7rem, 3vw, 2.5rem); letter-spacing: 0; }
+    h2 { font-size: 1rem; }
+    p { color: var(--muted); line-height: 1.5; }
+    a, button {
+      color: inherit;
+      font: inherit;
+    }
+    button, a.button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: var(--text);
+      cursor: pointer;
+      min-height: 38px;
+      padding: 0 13px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+    button.active {
+      border-color: rgba(232,197,71,.65);
+      color: var(--accent);
+    }
+    .actions, .filters {
+      display: flex;
+      gap: 9px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) auto;
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    input {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 0 13px;
+      font: inherit;
+    }
+    input:focus {
+      border-color: rgba(130,170,255,.75);
+      outline: none;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat, .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 15px;
+      min-width: 0;
+    }
+    .stat strong {
+      display: block;
+      font-size: 1.8rem;
+      line-height: 1.1;
+    }
+    .stat span, .muted {
+      color: var(--muted);
+      font-size: .86rem;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 14px;
+      align-items: start;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      gap: 12px;
+    }
+    .movie {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--surface);
+      min-width: 0;
+    }
+    .poster {
+      aspect-ratio: 2 / 3;
+      background: linear-gradient(145deg, #232836, #141720);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: .82rem;
+      overflow: hidden;
+    }
+    .poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .movie-body {
+      padding: 10px;
+    }
+    .movie-title {
+      font-weight: 700;
+      font-size: .94rem;
+      line-height: 1.25;
+      min-height: 2.35em;
+      overflow-wrap: anywhere;
+    }
+    .tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .tag {
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 999px;
+      padding: 3px 7px;
+      color: var(--muted);
+      font-size: .72rem;
+      line-height: 1.2;
+    }
+    .tag.good { color: var(--green); border-color: rgba(72,199,142,.38); }
+    .tag.blue { color: var(--blue); border-color: rgba(130,170,255,.38); }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: baseline;
+      margin-bottom: 12px;
+    }
+    .containers {
+      display: grid;
+      gap: 9px;
+      margin-top: 12px;
+    }
+    .container-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px;
+      background: var(--surface-2);
+    }
+    .container-card strong {
+      display: block;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .empty {
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.02);
+    }
+    @media (max-width: 980px) {
+      main { width: min(100vw - 20px, 760px); padding-top: 18px; }
+      header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .layout { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+      .actions, .filters { justify-content: flex-start; }
+    }
+    @media (max-width: 520px) {
+      .stats { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>DiscVault Next Collection</h1>
+        <p>Read-only PostgreSQL collection view for validating the migrated library.</p>
+      </div>
+      <div class="actions">
+        <button type="button" onclick="loadCollection()">Refresh</button>
+        <a class="button" href="/api/next/migration">Migration</a>
+        <a class="button" href="/api/next/movies?limit=200">Movies JSON</a>
+      </div>
+    </header>
+
+    <section class="stats">
+      <div class="stat"><strong id="movieCount">-</strong><span>Movies</span></div>
+      <div class="stat"><strong id="peopleCount">-</strong><span>People</span></div>
+      <div class="stat"><strong id="assetCount">-</strong><span>Media assets</span></div>
+      <div class="stat"><strong id="pluginCount">-</strong><span>Enabled plugins</span></div>
+    </section>
+
+    <div class="toolbar">
+      <input id="searchInput" type="search" placeholder="Search title, barcode, format..." oninput="renderMovies()">
+      <div class="filters" id="formatFilters"></div>
+    </div>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="section-head">
+          <h2>Movies</h2>
+          <span class="muted" id="resultCount">Loading...</span>
+        </div>
+        <div class="grid" id="movieGrid"></div>
+      </div>
+      <aside class="panel">
+        <div class="section-head">
+          <h2>Containers</h2>
+          <span class="muted" id="containerCount">-</span>
+        </div>
+        <div class="containers" id="containerList"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      movies: [],
+      containers: [],
+      stats: {},
+      plugins: [],
+      activeFormat: "all"
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, function (char) {
+        const escapes = {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+        return escapes[char] || char;
+      });
+    }
+    function number(value) {
+      return Number(value || 0).toLocaleString();
+    }
+    function usableImage(url) {
+      if (!url) return "";
+      if (String(url).startsWith("http://") || String(url).startsWith("https://")) return url;
+      return "";
+    }
+    function movieMatches(movie, query) {
+      if (!query) return true;
+      const haystack = [
+        movie.title,
+        movie.original_title,
+        movie.barcode,
+        movie.format,
+        movie.year,
+        movie.edition
+      ].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(query.toLowerCase());
+    }
+    function renderFormatFilters() {
+      const formats = Array.from(new Set(state.movies.map((movie) => movie.format).filter(Boolean))).sort();
+      const buttons = ["all", ...formats].map((format) => {
+        const label = format === "all" ? "All formats" : format;
+        return `<button type="button" class="${state.activeFormat === format ? "active" : ""}" onclick="setFormat('${escapeHtml(format)}')">${escapeHtml(label)}</button>`;
+      });
+      document.getElementById("formatFilters").innerHTML = buttons.join("");
+    }
+    function setFormat(format) {
+      state.activeFormat = format;
+      renderFormatFilters();
+      renderMovies();
+    }
+    function renderStats() {
+      const counts = state.stats.counts || {};
+      document.getElementById("movieCount").textContent = number(counts.movies);
+      document.getElementById("peopleCount").textContent = number(counts.people);
+      document.getElementById("assetCount").textContent = number(counts.mediaAssets);
+      document.getElementById("pluginCount").textContent = number(state.plugins.filter((plugin) => plugin.enabled).length);
+    }
+    function renderMovies() {
+      const query = document.getElementById("searchInput").value.trim();
+      const filtered = state.movies.filter((movie) => {
+        const formatOk = state.activeFormat === "all" || movie.format === state.activeFormat;
+        return formatOk && movieMatches(movie, query);
+      });
+      document.getElementById("resultCount").textContent = `${number(filtered.length)} shown`;
+      document.getElementById("movieGrid").innerHTML = filtered.length ? filtered.map((movie) => {
+        const poster = usableImage(movie.poster_url);
+        const posterHtml = poster
+          ? `<img src="${escapeHtml(poster)}" alt="">`
+          : `<span>No poster</span>`;
+        return `
+          <article class="movie">
+            <div class="poster">${posterHtml}</div>
+            <div class="movie-body">
+              <div class="movie-title">${escapeHtml(movie.title || "Untitled")}</div>
+              <div class="tags">
+                ${movie.year ? `<span class="tag good">${escapeHtml(movie.year)}</span>` : ""}
+                ${movie.format ? `<span class="tag blue">${escapeHtml(movie.format)}</span>` : ""}
+                ${movie.barcode ? `<span class="tag">${escapeHtml(movie.barcode)}</span>` : ""}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("") : `<div class="empty">No movies match the current filter.</div>`;
+    }
+    function renderContainers() {
+      document.getElementById("containerCount").textContent = number(state.containers.length);
+      document.getElementById("containerList").innerHTML = state.containers.length ? state.containers.map((container) => `
+        <div class="container-card">
+          <strong>${escapeHtml(container.title || "Untitled")}</strong>
+          <div class="tags">
+            <span class="tag blue">${escapeHtml((container.container_type || "container").replaceAll("_", " "))}</span>
+            ${container.year ? `<span class="tag good">${escapeHtml(container.year)}</span>` : ""}
+            ${container.barcode ? `<span class="tag">${escapeHtml(container.barcode)}</span>` : ""}
+          </div>
+        </div>
+      `).join("") : `<div class="empty">No containers imported yet.</div>`;
+    }
+    async function json(url) {
+      const response = await fetch(url, {cache: "no-store"});
+      if (!response.ok) throw new Error(`${url} failed with HTTP ${response.status}`);
+      return response.json();
+    }
+    async function loadCollection() {
+      document.getElementById("resultCount").textContent = "Loading...";
+      const [stats, movies, containers, plugins] = await Promise.all([
+        json("/api/next/stats"),
+        json("/api/next/movies?limit=200"),
+        json("/api/next/containers"),
+        json("/api/next/metadata/plugins")
+      ]);
+      state.stats = stats || {};
+      state.movies = movies.items || [];
+      state.containers = containers.items || [];
+      state.plugins = plugins.plugins || [];
+      renderStats();
+      renderFormatFilters();
+      renderMovies();
+      renderContainers();
+    }
+    window.addEventListener("load", () => {
+      loadCollection().catch((error) => {
+        document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+        document.getElementById("resultCount").textContent = "Error";
+      });
+    });
+  </script>
+</body>
+</html>
+"""
+
+
 def parse_int_arg(name: str, default: int, *, minimum: int = 0, maximum: int = 1000) -> int:
     raw = request.args.get(name, str(default))
     try:
@@ -1868,6 +2265,11 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/migration/")
     def migration_dashboard():
         return Response(migration_dashboard_html(), mimetype="text/html")
+
+    @flask_app.get("/api/next/collection")
+    @flask_app.get("/api/next/collection/")
+    def collection_dashboard():
+        return Response(collection_dashboard_html(), mimetype="text/html")
 
     @flask_app.get("/api/next/migration/jobs/<job_id>")
     def migration_job(job_id: str):
