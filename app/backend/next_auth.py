@@ -119,6 +119,61 @@ def _current_user_payload() -> dict[str, Any] | None:
     return _verify_token(token) if token else None
 
 
+def next_auth_setting_value(
+    conn,
+    table_exists: TableExists,
+    key: str,
+    default: Any = None,
+) -> Any:
+    if not table_exists(conn, "app_settings"):
+        return default
+    with conn.cursor() as cur:
+        cur.execute("SELECT value FROM app_settings WHERE key=%s", (key,))
+        row = cur.fetchone()
+    return row["value"] if row else default
+
+
+def next_auth_count_table(conn, table_exists: TableExists, table_name: str) -> int:
+    if not table_exists(conn, table_name):
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(f'SELECT COUNT(*) AS count FROM "{table_name}"')
+        row = cur.fetchone()
+    return int(row["count"] if row else 0)
+
+
+def next_auth_configured_enabled(conn, table_exists: TableExists) -> bool:
+    return bool(next_auth_setting_value(conn, table_exists, "auth_enabled", False))
+
+
+def next_auth_ready(conn, table_exists: TableExists) -> bool:
+    return (
+        next_auth_count_table(conn, table_exists, "users") > 0
+        and next_auth_count_table(conn, table_exists, "passkey_credentials") > 0
+    )
+
+
+def next_auth_effective_enabled(conn, table_exists: TableExists) -> bool:
+    return next_auth_configured_enabled(conn, table_exists) and next_auth_ready(conn, table_exists)
+
+
+def next_auth_current_user(conn) -> dict[str, Any] | None:
+    payload = _current_user_payload()
+    user_id = payload.get("sub") if payload else None
+    if not user_id:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, username, display_name, first_name, last_name, status, created_at, updated_at
+            FROM users
+            WHERE id=%s AND status='active'
+            """,
+            (user_id,),
+        )
+        return cur.fetchone()
+
+
 def _parse_uuid(value: Any) -> UUID | None:
     if value in (None, ""):
         return None
