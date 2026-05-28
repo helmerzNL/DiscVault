@@ -823,15 +823,18 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 db = cur.fetchone()
             migrations = migration_overview(conn)
+        migration_state = migrations["state"]
+        is_ready = migration_state == "ready"
         return response(
             {
-                "status": "ok" if migrations["state"] in {"ready", "pending_migrations"} else "degraded",
+                "status": "ok" if is_ready else "degraded",
                 "service": "discvault-next-api",
                 "version": build_version(),
                 "sha": build_sha(),
                 "database": db,
                 "migrations": migrations,
-            }
+            },
+            200 if is_ready else 503,
         )
 
     @flask_app.get("/api/next/stats")
