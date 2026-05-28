@@ -1636,9 +1636,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           </label>
         </div>
         <div class="actions">
-          <button type="button" id="authSetupButton" onclick="registerOwnerPasskey()">Create owner passkey</button>
-          <button type="button" id="authLoginButton" onclick="loginPasskey()">Sign in</button>
-          <button type="button" id="authLogoutButton" onclick="logoutPasskey()">Sign out</button>
+          <button type="button" id="authSetupButton" data-auth-action="setup">Create owner passkey</button>
+          <button type="button" id="authLoginButton" data-auth-action="login">Sign in</button>
+          <button type="button" id="authLogoutButton" data-auth-action="logout">Sign out</button>
         </div>
         <div class="auth-status" id="authStatusLine"></div>
       </div>
@@ -1769,6 +1769,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       node.textContent = message || "";
       node.className = `auth-status ${tone || ""}`.trim();
     }
+    function reportClientError(error) {
+      const message = error && error.message ? error.message : String(error || "Unknown browser error");
+      setAuthStatus(message, "bad");
+    }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return "This browser does not support passkeys.";
@@ -1834,6 +1838,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       }
     }
     async function registerOwnerPasskey() {
+      setAuthStatus("Create owner passkey clicked.", "info");
       const unavailable = webauthnUnavailableReason();
       if (unavailable) {
         setAuthStatus(unavailable, "bad");
@@ -1888,6 +1893,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       }
     }
     async function loginPasskey() {
+      setAuthStatus("Sign in clicked.", "info");
       const unavailable = webauthnUnavailableReason();
       if (unavailable) {
         setAuthStatus(unavailable, "bad");
@@ -1940,6 +1946,24 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       setAuthStatus("Signed out.", "info");
       refreshAuthStatus();
     }
+    function bindAuthButtons() {
+      document.querySelectorAll("[data-auth-action]").forEach((button) => {
+        if (button.dataset.bound === "true") return;
+        button.dataset.bound = "true";
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          const action = button.dataset.authAction;
+          if (action === "setup") registerOwnerPasskey().catch(reportClientError);
+          if (action === "login") loginPasskey().catch(reportClientError);
+          if (action === "logout") logoutPasskey();
+        });
+      });
+    }
+    window.registerOwnerPasskey = registerOwnerPasskey;
+    window.loginPasskey = loginPasskey;
+    window.logoutPasskey = logoutPasskey;
+    window.addEventListener("error", (event) => reportClientError(event.error || event.message));
+    window.addEventListener("unhandledrejection", (event) => reportClientError(event.reason));
     function field(label, value) {
       return `<div class="field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(valueOrDash(value))}</strong></div>`;
     }
@@ -2159,6 +2183,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     function bootCollection() {
       setClientStatus("Client script started.");
+      bindAuthButtons();
       refreshAuthStatus();
       loadCollection().catch((error) => {
         document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
