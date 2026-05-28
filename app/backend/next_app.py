@@ -897,6 +897,19 @@ def server_usable_image(value: Any) -> str:
     return ""
 
 
+def first_usable_image(*values: Any) -> str:
+    for value in values:
+        if isinstance(value, list):
+            nested = first_usable_image(*value)
+            if nested:
+                return nested
+            continue
+        image = server_usable_image(value)
+        if image:
+            return image
+    return ""
+
+
 def server_movie_cards(movies: list[dict[str, Any]]) -> str:
     if not movies:
         return '<div class="empty">No movies imported yet.</div>'
@@ -937,12 +950,13 @@ def server_container_cards(containers: list[dict[str, Any]]) -> str:
             tags.append(f'<span class="tag good">{h(container.get("year"))}</span>')
         if container.get("barcode"):
             tags.append(f'<span class="tag">{h(container.get("barcode"))}</span>')
+        container_id = h(container.get("id"))
         cards.append(
             f"""
-        <div class="container-card">
+        <a class="container-card" href="/api/next/containers/{container_id}/view">
           <strong>{h(container.get("title") or "Untitled")}</strong>
           <div class="tags">{''.join(tags)}</div>
-        </div>
+        </a>
             """.strip()
         )
     return "\n".join(cards)
@@ -1154,6 +1168,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       border-radius: 8px;
       padding: 11px;
       background: var(--surface-2);
+      color: inherit;
+      display: block;
+      text-decoration: none;
     }
     .container-card strong {
       display: block;
@@ -1552,14 +1569,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function renderContainers() {
       document.getElementById("containerCount").textContent = number(state.containers.length);
       document.getElementById("containerList").innerHTML = state.containers.length ? state.containers.map((container) => `
-        <div class="container-card">
+        <a class="container-card" href="/api/next/containers/${encodeURIComponent(container.id)}/view">
           <strong>${escapeHtml(container.title || "Untitled")}</strong>
           <div class="tags">
             <span class="tag blue">${escapeHtml((container.container_type || "container").replaceAll("_", " "))}</span>
             ${container.year ? `<span class="tag good">${escapeHtml(container.year)}</span>` : ""}
             ${container.barcode ? `<span class="tag">${escapeHtml(container.barcode)}</span>` : ""}
           </div>
-        </div>
+        </a>
       `).join("") : `<div class="empty">No containers imported yet.</div>`;
     }
     function renderMovieDetail(detail) {
@@ -1717,6 +1734,449 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (event.key === "Escape") closeMovieDetail();
     });
   </script>
+</body>
+</html>
+"""
+
+
+def container_detail_image(media_assets: list[dict[str, Any]], metadata: dict[str, Any], kind: str) -> str:
+    primary_assets = [
+        asset.get("source_url")
+        for asset in media_assets
+        if asset.get("kind") == kind and asset.get("is_primary")
+    ]
+    other_assets = [
+        asset.get("source_url")
+        for asset in media_assets
+        if asset.get("kind") == kind and not asset.get("is_primary")
+    ]
+    if kind == "poster":
+        metadata_values = [
+            metadata.get("poster_url"),
+            metadata.get("posterUrl"),
+            metadata.get("poster"),
+            metadata.get("posters"),
+        ]
+    else:
+        metadata_values = [
+            metadata.get("backdrop_url"),
+            metadata.get("backdropUrl"),
+            metadata.get("backdrop"),
+            metadata.get("backdrop_urls"),
+            metadata.get("backdropUrls"),
+        ]
+    return first_usable_image(*metadata_values, *primary_assets, *other_assets)
+
+
+def detail_value(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value if item not in (None, ""))
+    if isinstance(value, dict):
+        return json_lib.dumps(json_ready(value), sort_keys=True, ensure_ascii=True)
+    return str(value)
+
+
+def detail_fields(rows: list[tuple[str, Any]]) -> str:
+    items = []
+    for label, value in rows:
+        text = detail_value(value)
+        if text:
+            items.append(
+                f'<div class="field"><span>{h(label)}</span><strong>{h(text)}</strong></div>'
+            )
+    return "".join(items) or '<div class="empty small">No data imported yet.</div>'
+
+
+def detail_tags(*values: Any) -> str:
+    tags = []
+    for value in values:
+        text = detail_value(value)
+        if text:
+            tags.append(f'<span class="tag">{h(text)}</span>')
+    return "".join(tags)
+
+
+def container_detail_movie_cards(movies: list[dict[str, Any]]) -> str:
+    if not movies:
+        return '<div class="empty">No member movies imported yet.</div>'
+    cards = []
+    for movie in movies:
+        metadata = movie.get("metadata") or {}
+        poster = first_usable_image(
+            movie.get("poster_url"),
+            metadata.get("poster_url"),
+            metadata.get("posterUrl"),
+            metadata.get("poster"),
+            metadata.get("posters"),
+        )
+        poster_html = f'<img src="{h(poster)}" alt="">' if poster else "<span>No poster</span>"
+        cards.append(
+            f"""
+          <a class="item-card" href="/api/next/movies/{h(movie.get('id'))}">
+            <div class="thumb">{poster_html}</div>
+            <div class="item-body">
+              <strong>{h(movie.get("title") or "Untitled")}</strong>
+              <div class="tags">
+                {detail_tags(movie.get("year"), movie.get("format"), movie.get("barcode"))}
+              </div>
+            </div>
+          </a>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def container_detail_collection_item_cards(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return '<div class="empty">No collection items imported yet.</div>'
+    cards = []
+    for item in items:
+        metadata = item.get("metadata") or {}
+        poster = first_usable_image(
+            item.get("poster_url"),
+            metadata.get("poster_url"),
+            metadata.get("posterUrl"),
+            metadata.get("poster"),
+            metadata.get("posters"),
+        )
+        poster_html = f'<img src="{h(poster)}" alt="">' if poster else "<span>No poster</span>"
+        entity_type = item.get("entity_type")
+        href = f"/api/next/movies/{h(item.get('entity_id'))}"
+        if entity_type == "container":
+            href = f"/api/next/containers/{h(item.get('entity_id'))}/view"
+        type_label = item.get("container_type") or item.get("item_type") or entity_type
+        cards.append(
+            f"""
+          <a class="item-card" href="{href}">
+            <div class="thumb">{poster_html}</div>
+            <div class="item-body">
+              <strong>{h(item.get("title") or "Untitled")}</strong>
+              <div class="tags">
+                {detail_tags(str(type_label).replace("_", " "), item.get("year"), item.get("format"), item.get("barcode"))}
+              </div>
+            </div>
+          </a>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def container_detail_media_rows(media_assets: list[dict[str, Any]]) -> str:
+    if not media_assets:
+        return '<div class="empty small">No media assets linked yet.</div>'
+    rows = []
+    for asset in media_assets:
+        label = " / ".join(
+            detail_value(value)
+            for value in [asset.get("kind"), asset.get("role"), asset.get("variant")]
+            if detail_value(value)
+        )
+        value = asset.get("source_url") or asset.get("storage_key") or asset.get("sha256")
+        rows.append(f'<div class="field"><span>{h(label)}</span><strong>{h(value)}</strong></div>')
+    return "".join(rows)
+
+
+def container_detail_html(detail: dict[str, Any]) -> str:
+    container = detail.get("container") or {}
+    metadata = container.get("metadata") or {}
+    media_assets = detail.get("mediaAssets") or []
+    identifiers = detail.get("identifiers") or []
+    members = detail.get("memberMovies") or []
+    collection_items = detail.get("collectionItems") or []
+    container_type = str(container.get("container_type") or "container").replace("_", " ")
+    title = container.get("title") or "Untitled"
+    poster = container_detail_image(media_assets, metadata, "poster")
+    backdrop = container_detail_image(media_assets, metadata, "backdrop")
+    poster_html = f'<img src="{h(poster)}" alt="">' if poster else "<span>No poster</span>"
+    hero_style = ""
+    if backdrop:
+        hero_style = (
+            ' style="background-image: linear-gradient(180deg, rgba(16,17,22,.18), '
+            f'var(--surface)), url(&quot;{h(backdrop)}&quot;)"'
+        )
+    identifier_html = (
+        "".join(
+            f'<div class="field"><span>{h(item.get("provider_id"))} {h(item.get("identifier_type"))}</span>'
+            f'<strong>{h(item.get("identifier"))}</strong></div>'
+            for item in identifiers
+        )
+        or '<div class="empty small">No identifiers imported yet.</div>'
+    )
+    metadata_text = json_lib.dumps(json_ready(metadata), indent=2, sort_keys=True, ensure_ascii=True)
+
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>""" + h(title) + """ - DiscVault Next</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101116;
+      --surface: #191c24;
+      --surface-2: #222633;
+      --line: #343a4c;
+      --text: #f4f5f8;
+      --muted: #aab0bd;
+      --accent: #e8c547;
+      --blue: #82aaff;
+      --green: #48c78e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1220px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 22px 0 46px;
+    }
+    a { color: inherit; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      min-height: 38px;
+      padding: 0 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      background: var(--surface-2);
+      white-space: nowrap;
+    }
+    .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+    .hero {
+      min-height: 260px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: linear-gradient(135deg, #242938, #11141d);
+      background-size: cover;
+      background-position: center;
+      overflow: hidden;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 18px;
+      margin-top: -112px;
+      padding: 0 18px 18px;
+      position: relative;
+    }
+    .poster {
+      aspect-ratio: 2 / 3;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      overflow: hidden;
+    }
+    .poster img, .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .summary-main {
+      min-width: 0;
+      padding-top: 110px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 {
+      font-size: clamp(1.7rem, 4vw, 3rem);
+      line-height: 1.05;
+      overflow-wrap: anywhere;
+    }
+    h2 { font-size: 1rem; }
+    p {
+      color: var(--muted);
+      line-height: 1.58;
+      margin-top: 12px;
+      max-width: 78ch;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 9px;
+    }
+    .tag {
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .74rem;
+      padding: 3px 8px;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-width: 0;
+    }
+    .panel.full { grid-column: 1 / -1; }
+    .items {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .item-card {
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr);
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      padding: 9px;
+      color: inherit;
+      text-decoration: none;
+      min-width: 0;
+    }
+    .thumb {
+      aspect-ratio: 2 / 3;
+      border-radius: 6px;
+      background: #151923;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: .7rem;
+      overflow: hidden;
+    }
+    .item-body { min-width: 0; }
+    .item-body strong {
+      display: block;
+      line-height: 1.28;
+      overflow-wrap: anywhere;
+    }
+    .field-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .field {
+      display: grid;
+      grid-template-columns: minmax(110px, .7fr) minmax(0, 1.3fr);
+      gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding-bottom: 8px;
+    }
+    .field:last-child { border-bottom: 0; padding-bottom: 0; }
+    .field span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .field strong {
+      font-weight: 560;
+      overflow-wrap: anywhere;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font-size: .78rem;
+      margin: 12px 0 0;
+      max-height: 420px;
+      overflow: auto;
+    }
+    .empty {
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      text-align: center;
+    }
+    .empty.small { min-height: 48px; }
+    @media (max-width: 860px) {
+      main { width: min(100vw - 20px, 720px); padding-top: 12px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .summary { grid-template-columns: 108px minmax(0, 1fr); gap: 12px; margin-top: -70px; padding: 0 12px 14px; }
+      .summary-main { padding-top: 74px; }
+      .layout { grid-template-columns: 1fr; }
+      .panel.full { grid-column: auto; }
+      .field { grid-template-columns: 1fr; gap: 3px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="topbar">
+      <a class="button" href="/api/next/collection">Back to collection</a>
+      <div class="actions">
+        <a class="button" href="/api/next/containers/""" + h(container.get("id")) + """">JSON</a>
+        <a class="button" href="/api/next/migration">Migration</a>
+      </div>
+    </div>
+    <section class="hero" """ + hero_style + """></section>
+    <section class="summary">
+      <div class="poster">""" + poster_html + """</div>
+      <div class="summary-main">
+        <h1>""" + h(title) + """</h1>
+        <div class="tags">""" + detail_tags(container_type, container.get("year"), container.get("barcode"), container.get("badge_label")) + """</div>
+        <p>""" + h(container.get("description") or "No description imported yet.") + """</p>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="panel">
+        <h2>Member Movies (""" + h(len(members)) + """)</h2>
+        <div class="items">""" + container_detail_movie_cards(members) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Container Details</h2>
+        <div class="field-list">""" + detail_fields([
+            ("Type", container_type),
+            ("Public ID", container.get("public_id")),
+            ("Barcode", container.get("barcode")),
+            ("Primary movie", container.get("primary_movie_id")),
+            ("Created", container.get("created_at")),
+            ("Updated", container.get("updated_at")),
+        ]) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Collection Items (""" + h(len(collection_items)) + """)</h2>
+        <div class="items">""" + container_detail_collection_item_cards(collection_items) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Identifiers</h2>
+        <div class="field-list">""" + identifier_html + """</div>
+      </div>
+      <div class="panel">
+        <h2>Media Assets</h2>
+        <div class="field-list">""" + container_detail_media_rows(media_assets) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Metadata</h2>
+        <pre>""" + h(metadata_text) + """</pre>
+      </div>
+    </section>
+  </main>
 </body>
 </html>
 """
@@ -2176,6 +2636,168 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "credits": movie_credit_entities(conn, movie_id),
         "containers": movie_container_entities(conn, movie_id),
         "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
+    }
+
+
+def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                public_id,
+                container_type,
+                title,
+                barcode,
+                badge_label,
+                year,
+                description,
+                primary_movie_id,
+                metadata,
+                created_at,
+                updated_at
+            FROM containers
+            WHERE id=%s
+            """,
+            (container_id,),
+        )
+        return cur.fetchone()
+
+
+def container_identifier_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "container_identifiers"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT provider_id, identifier_type, identifier, created_at
+            FROM container_identifiers
+            WHERE container_id=%s
+            ORDER BY provider_id, identifier_type, identifier
+            """,
+            (container_id,),
+        )
+        return cur.fetchall()
+
+
+def container_member_movie_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "container_movies") or not table_exists(conn, "movies"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                m.id,
+                m.public_id,
+                m.barcode,
+                m.title,
+                m.sort_title,
+                m.original_title,
+                m.year,
+                m.release_date,
+                m.format,
+                m.edition,
+                m.edition_type,
+                m.country,
+                m.language,
+                m.runtime_minutes,
+                m.overview,
+                m.rating,
+                m.metadata,
+                m.created_at,
+                m.updated_at,
+                m.metadata->>'poster_url' AS poster_url,
+                m.metadata->>'backdrop_url' AS backdrop_url,
+                cm.sort_order,
+                cm.created_at AS linked_at
+            FROM container_movies cm
+            JOIN movies m ON m.id = cm.movie_id
+            WHERE cm.container_id=%s
+            ORDER BY cm.sort_order, lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+            """,
+            (container_id,),
+        )
+        return cur.fetchall()
+
+
+def collection_item_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "collection_items"):
+        return []
+    items: list[dict[str, Any]] = []
+    if table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    ci.item_type,
+                    ci.item_id,
+                    ci.sort_order,
+                    ci.created_at AS linked_at,
+                    'movie' AS entity_type,
+                    m.id AS entity_id,
+                    m.public_id,
+                    m.barcode,
+                    m.title,
+                    m.sort_title,
+                    m.original_title,
+                    m.year,
+                    m.format,
+                    m.edition,
+                    m.metadata,
+                    m.metadata->>'poster_url' AS poster_url,
+                    m.metadata->>'backdrop_url' AS backdrop_url
+                FROM collection_items ci
+                JOIN movies m ON m.id = ci.item_id
+                WHERE ci.collection_id=%s AND ci.item_type='movie'
+                ORDER BY ci.sort_order, lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                """,
+                (container_id,),
+            )
+            items.extend(cur.fetchall())
+    if table_exists(conn, "containers"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    ci.item_type,
+                    ci.item_id,
+                    ci.sort_order,
+                    ci.created_at AS linked_at,
+                    'container' AS entity_type,
+                    c.id AS entity_id,
+                    c.public_id,
+                    c.container_type,
+                    c.barcode,
+                    c.badge_label,
+                    c.title,
+                    c.year,
+                    c.description,
+                    c.metadata,
+                    c.metadata->>'poster_url' AS poster_url,
+                    c.metadata->>'backdrop_url' AS backdrop_url
+                FROM collection_items ci
+                JOIN containers c ON c.id = ci.item_id
+                WHERE ci.collection_id=%s AND ci.item_type <> 'movie'
+                ORDER BY ci.sort_order, c.container_type, lower(c.title)
+                """,
+                (container_id,),
+            )
+            items.extend(cur.fetchall())
+    return sorted(items, key=lambda item: (item.get("sort_order") or 0, str(item.get("title") or "").lower()))
+
+
+def container_detail_entity(conn, container_id: UUID) -> dict[str, Any] | None:
+    container = container_entity(conn, container_id)
+    if not container:
+        return None
+    return {
+        "container": container,
+        "identifiers": container_identifier_entities(conn, container_id),
+        "memberMovies": container_member_movie_entities(conn, container_id),
+        "collectionItems": collection_item_entities(conn, container_id),
+        "mediaAssets": entity_media_asset_entities(conn, "container", container_id),
     }
 
 
@@ -2877,6 +3499,28 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 items = cur.fetchall()
         return response({"status": "ok", "items": items})
+
+    @flask_app.get("/api/next/containers/<container_id>")
+    def container_detail(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        with connect() as conn:
+            if not table_exists(conn, "containers"):
+                raise NextApiError("Container table is not available", 503)
+            detail = container_detail_entity(conn, container_uuid)
+        if not detail:
+            raise NextApiError("Container not found", 404)
+        return response({"status": "ok", "detail": detail})
+
+    @flask_app.get("/api/next/containers/<container_id>/view")
+    def container_detail_view(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        with connect() as conn:
+            if not table_exists(conn, "containers"):
+                raise NextApiError("Container table is not available", 503)
+            detail = container_detail_entity(conn, container_uuid)
+        if not detail:
+            raise NextApiError("Container not found", 404)
+        return html_response(container_detail_html(detail))
 
     @flask_app.get("/api/next/jobs")
     def jobs():
