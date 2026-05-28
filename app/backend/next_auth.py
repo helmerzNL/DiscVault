@@ -205,8 +205,14 @@ def register_next_auth_routes(
                 (key, Jsonb(value), is_secret),
             )
 
-    def auth_enabled(conn) -> bool:
+    def configured_auth_enabled(conn) -> bool:
         return bool(setting_value(conn, "auth_enabled", False))
+
+    def auth_ready(conn) -> bool:
+        return count_table(conn, "users") > 0 and count_table(conn, "passkey_credentials") > 0
+
+    def auth_enabled(conn) -> bool:
+        return configured_auth_enabled(conn) and auth_ready(conn)
 
     def registration_enabled(conn) -> bool:
         return bool(setting_value(conn, "registration_enabled", True))
@@ -355,11 +361,16 @@ def register_next_auth_routes(
     def auth_status_payload(conn) -> dict[str, Any]:
         user_count = count_table(conn, "users")
         credential_count = count_table(conn, "passkey_credentials")
+        is_configured_auth_enabled = configured_auth_enabled(conn)
+        is_auth_ready = user_count > 0 and credential_count > 0
         user = current_user(conn)
         role = primary_role(conn, user["id"]) if user else None
         return {
-            "auth_enabled": auth_enabled(conn),
-            "registration_enabled": registration_enabled(conn),
+            "auth_enabled": is_configured_auth_enabled and is_auth_ready,
+            "configured_auth_enabled": is_configured_auth_enabled,
+            "auth_ready": is_auth_ready,
+            "setup_required": not is_auth_ready,
+            "registration_enabled": registration_enabled(conn) or not is_auth_ready,
             "has_users": user_count > 0,
             "has_credentials": credential_count > 0,
             "user_count": user_count,
@@ -426,8 +437,9 @@ def register_next_auth_routes(
             if not table_exists(conn, "users") or not table_exists(conn, "passkey_credentials"):
                 raise next_api_error("Auth tables are not available", 503)
             has_users = count_table(conn, "users") > 0
+            has_credentials = count_table(conn, "passkey_credentials") > 0
             caller = current_user(conn)
-            if has_users and not caller and not registration_enabled(conn):
+            if has_users and has_credentials and not caller and not registration_enabled(conn):
                 invite = validate_invite(conn, username, invite_code)
                 if not invite:
                     raise next_api_error("Invalid or expired invite code", 403)
@@ -445,7 +457,12 @@ def register_next_auth_routes(
                     (user_id,),
                 )
                 existing_credentials = cur.fetchall()
-            if has_users and user and not can_register_for_existing_user(conn, caller, user_id):
+            if (
+                has_users
+                and has_credentials
+                and user
+                and not can_register_for_existing_user(conn, caller, user_id)
+            ):
                 invite = validate_invite(conn, username, invite_code)
                 if not invite:
                     raise next_api_error("Login or a valid invite code is required to add a passkey", 403)
@@ -517,21 +534,33 @@ def register_next_auth_routes(
 
             with conn.transaction():
                 has_users = count_table(conn, "users") > 0
+                has_credentials = count_table(conn, "passkey_credentials") > 0
                 caller = current_user(conn)
                 with conn.cursor() as cur:
                     cur.execute("SELECT id FROM users WHERE id=%s", (user_id,))
                     existing_user = cur.fetchone()
-                if existing_user and has_users and not can_register_for_existing_user(conn, caller, user_id):
+                if (
+                    existing_user
+                    and has_users
+                    and has_credentials
+                    and not can_register_for_existing_user(conn, caller, user_id)
+                ):
                     invite = validate_invite(conn, username, invite_code)
                     if not invite:
                         raise next_api_error("Login or a valid invite code is required to add a passkey", 403)
-                if has_users and not existing_user and not caller and not registration_enabled(conn):
+                if (
+                    has_users
+                    and has_credentials
+                    and not existing_user
+                    and not caller
+                    and not registration_enabled(conn)
+                ):
                     invite = validate_invite(conn, username, invite_code)
                     if not invite:
                         raise next_api_error("Invalid or expired invite code", 403)
 
                 if not existing_user:
-                    role_key = "owner" if not has_users else "member"
+                    role_key = "owner" if not has_users or not has_credentials else "member"
                     with conn.cursor() as cur:
                         cur.execute(
                             """

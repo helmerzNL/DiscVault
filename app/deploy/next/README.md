@@ -76,6 +76,11 @@ Auth status:
 curl http://localhost:6180/api/next/auth/status
 ```
 
+If legacy settings migrated `auth_enabled=true` but no users/passkeys were
+imported, Next reports `configured_auth_enabled=true` and `auth_enabled=false`
+until the first passkey exists. This keeps first-user setup reachable while
+preserving the configured intent.
+
 Logs:
 
 ```bash
