@@ -17,8 +17,8 @@ docker-compose.yml
 docker-compose.import.yml  # legacy optional one-off CLI importer
 ```
 
-Create `.env` from `.env.example` and change `POSTGRES_PASSWORD` before first
-start.
+Create `.env` from `.env.example` and change `POSTGRES_PASSWORD` and
+`JWT_SECRET` before first start.
 
 ## Start
 
@@ -52,6 +52,28 @@ Health check:
 ```bash
 curl http://localhost:6180/api/next/health
 curl http://localhost:6180/api/next/stats
+```
+
+## Passkeys
+
+Passkeys require a stable relying party configuration. Set these values in
+`.env` before enabling authentication:
+
+```text
+JWT_SECRET=<long stable random secret>
+RP_ID=appdev.discvault.eu
+RP_NAME=DiscVault
+RP_ORIGINS=https://appdev.discvault.eu
+```
+
+`RP_ID` is the browser hostname without scheme or port. `RP_ORIGINS` is a
+comma-separated list of allowed origins. Browsers require a secure context for
+passkeys, so use HTTPS for non-localhost deployments.
+
+Auth status:
+
+```bash
+curl http://localhost:6180/api/next/auth/status
 ```
 
 Logs:
