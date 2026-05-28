@@ -1,0 +1,19 @@
+{
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "version": "1.0.0",
+  "categories": ["digital_media_source"],
+  "capabilities": [
+    "discover_library",
+    "sync_library",
+    "playback_deeplink"
+  ],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {},
+  "orderIndex": 120,
+  "entitlements": {
+    "connect": "digital_source.jellyfin.connect",
+    "sync": "digital_source.jellyfin.sync"
+  }
+}

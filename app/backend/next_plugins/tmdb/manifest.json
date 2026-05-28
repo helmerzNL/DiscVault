@@ -1,0 +1,22 @@
+{
+  "id": "tmdb",
+  "name": "TMDb",
+  "version": "1.0.0",
+  "categories": ["metadata_source"],
+  "capabilities": [
+    "search_title",
+    "lookup_external_id",
+    "movie_details",
+    "people",
+    "images",
+    "videos"
+  ],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {},
+  "orderIndex": 10,
+  "entitlements": {
+    "source_use": "metadata.source.tmdb.use",
+    "source_bulk": "metadata.source.tmdb.bulk"
+  }
+}

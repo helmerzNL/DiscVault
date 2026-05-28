@@ -102,6 +102,34 @@ MovieVault metadata receiving/contribution is separate from using MovieVault as
 a lookup plugin. The owner can toggle `movievault_contribution_enabled` from
 the admin panel; normal admins cannot change this receiver mode.
 
+## Plugin Runtime
+
+DiscVault Next loads plugins from manifest folders. The built-in plugin folder is
+`/opt/discvault/backend/next_plugins`; extra folders can be added later with
+`DISCVAULT_PLUGIN_PATHS` using the platform path separator.
+
+Plugin categories are separate by design:
+
+- `metadata_source`: DiscVault reads metadata from this source to enrich movies
+  and physical releases.
+- `metadata_receiver`: DiscVault can send/share metadata to this receiver.
+- `digital_media_source`: DiscVault can connect to a digital library such as
+  Plex or Jellyfin.
+
+The API syncs discovered manifests into the generic `plugins` table. Metadata
+source/receiver plugins are also mirrored into the existing `metadata_plugins`
+table so the current metadata settings screen keeps working during the
+transition.
+
+Registry check:
+
+```bash
+curl http://localhost:6180/api/next/plugins/registry
+curl http://localhost:6180/api/next/metadata/plugins
+```
+
+These endpoints require authentication once passkeys are enabled.
+
 Logs:
 
 ```bash

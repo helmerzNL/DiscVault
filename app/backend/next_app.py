@@ -32,6 +32,8 @@ try:
     from .next_import import NextImporter
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
+    from .next_plugin_runtime import plugin_registry_snapshot
+    from .next_plugin_runtime import sync_plugin_registry
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_effective_enabled
     from .next_auth import register_next_auth_routes
@@ -42,6 +44,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import NextImporter
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
+    from next_plugin_runtime import plugin_registry_snapshot
+    from next_plugin_runtime import sync_plugin_registry
     from next_auth import next_auth_current_user
     from next_auth import next_auth_effective_enabled
     from next_auth import register_next_auth_routes
@@ -962,7 +966,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dic
 def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
     if not table_exists(conn, "metadata_plugins"):
         return []
-    reconcile_legacy_metadata_plugins(conn)
+    sync_metadata_plugin_registry(conn)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -3693,6 +3697,12 @@ def reconcile_legacy_metadata_plugins(conn) -> dict[str, Any] | None:
     return apply_legacy_metadata_plugin_plan(conn, settings, Jsonb)
 
 
+def sync_metadata_plugin_registry(conn) -> None:
+    sync_plugin_registry(conn, table_exists, Jsonb)
+    if reconcile_legacy_metadata_plugins(conn):
+        sync_plugin_registry(conn, table_exists, Jsonb)
+
+
 def client_entity_mapping(
     conn,
     *,
@@ -4266,7 +4276,7 @@ def non_secret_settings(conn) -> list[dict[str, Any]]:
 def metadata_plugin_entities(conn) -> list[dict[str, Any]]:
     if not table_exists(conn, "metadata_plugins"):
         return []
-    reconcile_legacy_metadata_plugins(conn)
+    sync_metadata_plugin_registry(conn)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -4578,19 +4588,28 @@ def plugin_row(row: dict[str, Any]) -> dict[str, Any]:
     settings_schema = row.get("settings_schema") or {}
     settings = row.get("settings") or {}
     secrets_ref = row.get("secrets_ref") or {}
+    categories = manifest.get("categories", []) if isinstance(manifest, dict) else []
+    capabilities = manifest.get("capabilities", []) if isinstance(manifest, dict) else []
+    entitlements = manifest.get("entitlements", {}) if isinstance(manifest, dict) else {}
+    runtime = manifest.get("runtime", {}) if isinstance(manifest, dict) else {}
     return {
         "id": row["id"],
         "name": row["name"],
         "version": row["version"],
         "enabled": bool(row["enabled"]),
         "installed": bool(row["installed"]),
+        "categories": categories,
+        "kind": manifest.get("kind") if isinstance(manifest, dict) else None,
         "orderIndex": row["order_index"],
-        "capabilities": manifest.get("capabilities", []) if isinstance(manifest, dict) else [],
+        "capabilities": capabilities,
+        "entitlements": entitlements,
         "manifest": manifest,
+        "requiresSecrets": bool(manifest.get("requiresSecrets", False)) if isinstance(manifest, dict) else False,
         "settingsSchema": settings_schema,
         "settingsConfigured": bool(settings),
         "secretsConfigured": bool(secrets_ref),
         "premiumFeatureKey": row.get("premium_feature_key"),
+        "runtime": runtime,
         "updatedAt": row.get("updated_at"),
     }
 
@@ -4816,12 +4835,32 @@ def register_routes(flask_app: Flask) -> None:
                 rows = cur.fetchall()
         return response({"status": "ok", "settings": rows})
 
+    @flask_app.get("/api/next/plugins/registry")
+    def plugins_registry():
+        with connect() as conn:
+            if not table_exists(conn, "plugins"):
+                return response(
+                    {
+                        "status": "ok",
+                        "plugins": [],
+                        "sync": {
+                            "errors": [
+                                "Plugin registry table is not available; run pending migrations."
+                            ]
+                        },
+                    }
+                )
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+        return response(registry)
+
     @flask_app.get("/api/next/metadata/plugins")
     def metadata_plugins():
         with connect() as conn:
             if not table_exists(conn, "metadata_plugins"):
                 return response({"status": "ok", "plugins": []})
-            reconcile_legacy_metadata_plugins(conn)
+            sync_metadata_plugin_registry(conn)
             with conn.cursor() as cur:
                 cur.execute(
                     """

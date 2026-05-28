@@ -10,6 +10,8 @@ on:
       - "app/backend/next_database.py"
       - "app/backend/next_import.py"
       - "app/backend/next_app.py"
+      - "app/backend/next_plugin_runtime.py"
+      - "app/backend/next_plugins/**"
       - "app/backend/next_worker.py"
       - "app/backend/migrations_next/**"
       - "app/backend/requirements.txt"
@@ -53,7 +55,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile next_database.py next_import.py next_app.py next_worker.py
+        run: python -m py_compile next_database.py next_import.py next_app.py next_plugin_runtime.py next_worker.py
 
       - name: Apply Next migrations
         run: python next_database.py migrate
@@ -98,6 +100,7 @@ jobs:
               "/api/next/health",
               "/api/next/stats",
               "/api/next/settings",
+              "/api/next/plugins/registry",
               "/api/next/metadata/plugins",
               "/api/next/movies",
               "/api/next/containers",
