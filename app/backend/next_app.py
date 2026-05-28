@@ -1437,20 +1437,49 @@ def collection_dashboard_html() -> str:
         `).join("")
         : `<div class="empty">No credits imported for this movie.</div>`;
     }
+    function renderMovieDetailError(error) {
+      document.getElementById("detailHero").style.backgroundImage = "";
+      document.getElementById("detailPoster").textContent = "Error";
+      document.getElementById("detailTitle").textContent = "Could not load movie details";
+      document.getElementById("detailTags").innerHTML = `<span class="tag">${escapeHtml(error.message || error)}</span>`;
+      document.getElementById("detailOverview").textContent = "The movie detail request failed. Check the Next API logs for the backend error.";
+      document.getElementById("detailRelease").innerHTML = field("Error", error.message || error);
+      document.getElementById("detailIdentifiers").innerHTML = field("None", "-");
+      document.getElementById("detailSpecs").innerHTML = field("None", "-");
+      document.getElementById("detailContainers").innerHTML = field("None", "-");
+      document.getElementById("detailCredits").innerHTML = `<div class="empty">No credits loaded.</div>`;
+    }
     async function openMovieDetail(movieId) {
       const overlay = document.getElementById("movieDetailOverlay");
       overlay.classList.add("open");
       document.getElementById("detailTitle").textContent = "Loading...";
       document.getElementById("detailOverview").textContent = "";
       document.getElementById("detailPoster").textContent = "Loading";
-      const payload = await json(`/api/next/movies/${encodeURIComponent(movieId)}`);
-      renderMovieDetail(payload.detail || {});
+      document.getElementById("detailTags").innerHTML = "";
+      try {
+        const payload = await json(`/api/next/movies/${encodeURIComponent(movieId)}`, 15000);
+        renderMovieDetail(payload.detail || {});
+      } catch (error) {
+        renderMovieDetailError(error);
+      }
     }
     function closeMovieDetail() {
       document.getElementById("movieDetailOverlay").classList.remove("open");
     }
-    async function json(url) {
-      const response = await fetch(url, {cache: "no-store"});
+    async function json(url, timeoutMs = 20000) {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+      let response;
+      try {
+        response = await fetch(url, {cache: "no-store", signal: controller.signal});
+      } catch (error) {
+        if (error.name === "AbortError") {
+          throw new Error(`${url} timed out after ${Math.round(timeoutMs / 1000)} seconds`);
+        }
+        throw error;
+      } finally {
+        window.clearTimeout(timeout);
+      }
       if (!response.ok) throw new Error(`${url} failed with HTTP ${response.status}`);
       return response.json();
     }
@@ -2406,6 +2435,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.errorhandler(Exception)
     def handle_unexpected_error(error: Exception):  # pragma: no cover - Flask integration
+        flask_app.logger.exception("Unhandled Next API error")
         return response({"status": "error", "error": str(error)}, 500)
 
     @flask_app.get("/api/next/health")
