@@ -991,6 +991,155 @@ def collection_dashboard_html() -> str:
       border-radius: 8px;
       background: rgba(255,255,255,.02);
     }
+    .detail-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      background: rgba(0,0,0,.68);
+      padding: 18px;
+      overflow-y: auto;
+    }
+    .detail-overlay.open {
+      display: block;
+    }
+    .detail-panel {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,.45);
+    }
+    .detail-hero {
+      min-height: 210px;
+      background: linear-gradient(135deg, #242938, #11141d);
+      background-size: cover;
+      background-position: center;
+      position: relative;
+    }
+    .detail-hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(16,17,22,.2), var(--surface));
+    }
+    .detail-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 2;
+      min-width: 40px;
+      padding: 0;
+      font-size: 1.2rem;
+    }
+    .detail-content {
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 18px;
+      padding: 0 18px 18px;
+      margin-top: -96px;
+      position: relative;
+      z-index: 2;
+    }
+    .detail-poster {
+      aspect-ratio: 2 / 3;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
+    .detail-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .detail-main {
+      min-width: 0;
+      padding-top: 100px;
+    }
+    .detail-title {
+      font-size: clamp(1.6rem, 3vw, 2.6rem);
+      line-height: 1.05;
+      margin-bottom: 8px;
+      overflow-wrap: anywhere;
+    }
+    .detail-overview {
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 76ch;
+      margin-top: 12px;
+    }
+    .detail-sections {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 0 18px 18px;
+    }
+    .detail-section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.025);
+      padding: 14px;
+      min-width: 0;
+    }
+    .detail-section.full {
+      grid-column: 1 / -1;
+    }
+    .field-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .field {
+      display: grid;
+      grid-template-columns: minmax(110px, .6fr) minmax(0, 1.4fr);
+      gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      padding-bottom: 8px;
+    }
+    .field:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+    .field span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .field strong {
+      font-weight: 560;
+      overflow-wrap: anywhere;
+    }
+    .credit-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .credit {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px;
+      padding: 9px;
+      background: var(--surface-2);
+      min-width: 0;
+    }
+    .credit strong {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    .credit span {
+      color: var(--muted);
+      font-size: .8rem;
+      display: block;
+      margin-top: 3px;
+      overflow-wrap: anywhere;
+    }
     @media (max-width: 980px) {
       main { width: min(100vw - 20px, 760px); padding-top: 18px; }
       header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
@@ -998,10 +1147,39 @@ def collection_dashboard_html() -> str:
       .layout { grid-template-columns: 1fr; }
       .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
       .actions, .filters { justify-content: flex-start; }
+      .detail-content {
+        grid-template-columns: 120px minmax(0, 1fr);
+        margin-top: -62px;
+      }
+      .detail-main {
+        padding-top: 66px;
+      }
+      .detail-sections {
+        grid-template-columns: 1fr;
+      }
+      .field {
+        grid-template-columns: 1fr;
+        gap: 3px;
+      }
     }
     @media (max-width: 520px) {
       .stats { grid-template-columns: 1fr; }
       .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .detail-overlay {
+        padding: 0;
+      }
+      .detail-panel {
+        min-height: 100vh;
+        border-radius: 0;
+      }
+      .detail-content {
+        grid-template-columns: 92px minmax(0, 1fr);
+        gap: 12px;
+        padding: 0 12px 14px;
+      }
+      .detail-sections {
+        padding: 0 12px 14px;
+      }
     }
   </style>
 </head>
@@ -1047,6 +1225,44 @@ def collection_dashboard_html() -> str:
         <div class="containers" id="containerList"></div>
       </aside>
     </section>
+
+    <div class="detail-overlay" id="movieDetailOverlay" onclick="if(event.target === this) closeMovieDetail()">
+      <article class="detail-panel" aria-modal="true" role="dialog" aria-labelledby="detailTitle">
+        <div class="detail-hero" id="detailHero">
+          <button class="detail-close" type="button" onclick="closeMovieDetail()" aria-label="Close">x</button>
+        </div>
+        <div class="detail-content">
+          <div class="detail-poster" id="detailPoster">No poster</div>
+          <div class="detail-main">
+            <h2 class="detail-title" id="detailTitle">Loading...</h2>
+            <div class="tags" id="detailTags"></div>
+            <p class="detail-overview" id="detailOverview"></p>
+          </div>
+        </div>
+        <div class="detail-sections">
+          <section class="detail-section">
+            <h3>Release</h3>
+            <div class="field-list" id="detailRelease"></div>
+          </section>
+          <section class="detail-section">
+            <h3>Identifiers</h3>
+            <div class="field-list" id="detailIdentifiers"></div>
+          </section>
+          <section class="detail-section">
+            <h3>Technical Specs</h3>
+            <div class="field-list" id="detailSpecs"></div>
+          </section>
+          <section class="detail-section">
+            <h3>Containers</h3>
+            <div class="field-list" id="detailContainers"></div>
+          </section>
+          <section class="detail-section full">
+            <h3>Cast & Crew</h3>
+            <div class="credit-list" id="detailCredits"></div>
+          </section>
+        </div>
+      </article>
+    </div>
   </main>
 
   <script>
@@ -1071,6 +1287,22 @@ def collection_dashboard_html() -> str:
       if (!url) return "";
       if (String(url).startsWith("http://") || String(url).startsWith("https://")) return url;
       return "";
+    }
+    function cssUrl(url) {
+      return String(url || "").replace(/["\\]/g, "");
+    }
+    function valueOrDash(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      if (Array.isArray(value)) return value.length ? value.join(", ") : "-";
+      if (typeof value === "object") return JSON.stringify(value);
+      return value;
+    }
+    function field(label, value) {
+      return `<div class="field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(valueOrDash(value))}</strong></div>`;
+    }
+    function fieldsFromObject(entries) {
+      const rows = entries.filter(([, value]) => value !== null && value !== undefined && value !== "");
+      return rows.length ? rows.map(([label, value]) => field(label, value)).join("") : field("None", "-");
     }
     function movieMatches(movie, query) {
       if (!query) return true;
@@ -1117,7 +1349,7 @@ def collection_dashboard_html() -> str:
           ? `<img src="${escapeHtml(poster)}" alt="">`
           : `<span>No poster</span>`;
         return `
-          <article class="movie">
+          <article class="movie" role="button" tabindex="0" onclick="openMovieDetail('${escapeHtml(movie.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMovieDetail('${escapeHtml(movie.id)}')}">
             <div class="poster">${posterHtml}</div>
             <div class="movie-body">
               <div class="movie-title">${escapeHtml(movie.title || "Untitled")}</div>
@@ -1143,6 +1375,79 @@ def collection_dashboard_html() -> str:
           </div>
         </div>
       `).join("") : `<div class="empty">No containers imported yet.</div>`;
+    }
+    function renderMovieDetail(detail) {
+      const movie = detail.movie || {};
+      const metadata = movie.metadata || {};
+      const specs = detail.technicalSpecs || {};
+      const poster = usableImage(metadata.poster_url || metadata.posterUrl || metadata.poster);
+      const backdrop = usableImage(metadata.backdrop_url || metadata.backdropUrl || metadata.backdrop);
+      document.getElementById("detailHero").style.backgroundImage = backdrop
+        ? `linear-gradient(180deg, rgba(16,17,22,.18), var(--surface)), url("${cssUrl(backdrop)}")`
+        : "";
+      document.getElementById("detailPoster").innerHTML = poster
+        ? `<img src="${escapeHtml(poster)}" alt="">`
+        : "No poster";
+      document.getElementById("detailTitle").textContent = movie.title || "Untitled";
+      document.getElementById("detailOverview").textContent = movie.overview || "No overview imported yet.";
+      document.getElementById("detailTags").innerHTML = [
+        movie.year,
+        movie.format,
+        movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
+        movie.rating ? `Rating ${movie.rating}` : ""
+      ].filter(Boolean).map((item) => `<span class="tag good">${escapeHtml(item)}</span>`).join("");
+      document.getElementById("detailRelease").innerHTML = fieldsFromObject([
+        ["Original title", movie.original_title],
+        ["Barcode", movie.barcode],
+        ["Format", movie.format],
+        ["Edition", movie.edition],
+        ["Edition type", movie.edition_type],
+        ["Release date", movie.release_date],
+        ["Country", movie.country],
+        ["Language", movie.language],
+        ["Location", movie.location],
+        ["Director", metadata.director],
+        ["Producer", metadata.producer],
+        ["Studios", metadata.studios],
+        ["Genre", metadata.genre],
+        ["Distributor", metadata.distributor],
+        ["Trailer", metadata.trailer_url]
+      ]);
+      document.getElementById("detailIdentifiers").innerHTML = (detail.identifiers || []).length
+        ? detail.identifiers.map((identifier) => field(`${identifier.provider_id} ${identifier.identifier_type}`, identifier.identifier)).join("")
+        : field("None", "-");
+      document.getElementById("detailSpecs").innerHTML = fieldsFromObject([
+        ["HDR", specs.hdr || metadata.hdr],
+        ["Packaging", specs.packaging || metadata.packaging],
+        ["Screen ratio", specs.screen_ratios || metadata.screen_ratios],
+        ["Audio", specs.audio_tracks || metadata.audio_tracks],
+        ["Subtitles", specs.subtitles || metadata.subtitles],
+        ["Regions", specs.regions || metadata.regions],
+        ["Content ratings", specs.content_ratings || metadata.content_ratings]
+      ]);
+      document.getElementById("detailContainers").innerHTML = (detail.containers || []).length
+        ? detail.containers.map((container) => field(`${container.container_type} / ${container.relationship}`, container.title)).join("")
+        : field("None", "-");
+      document.getElementById("detailCredits").innerHTML = (detail.credits || []).length
+        ? detail.credits.map((credit) => `
+          <div class="credit">
+            <strong>${escapeHtml(credit.name)}</strong>
+            <span>${escapeHtml(credit.character || credit.job || credit.credit_type || "credit")}</span>
+          </div>
+        `).join("")
+        : `<div class="empty">No credits imported for this movie.</div>`;
+    }
+    async function openMovieDetail(movieId) {
+      const overlay = document.getElementById("movieDetailOverlay");
+      overlay.classList.add("open");
+      document.getElementById("detailTitle").textContent = "Loading...";
+      document.getElementById("detailOverview").textContent = "";
+      document.getElementById("detailPoster").textContent = "Loading";
+      const payload = await json(`/api/next/movies/${encodeURIComponent(movieId)}`);
+      renderMovieDetail(payload.detail || {});
+    }
+    function closeMovieDetail() {
+      document.getElementById("movieDetailOverlay").classList.remove("open");
     }
     async function json(url) {
       const response = await fetch(url, {cache: "no-store"});
@@ -1171,6 +1476,9 @@ def collection_dashboard_html() -> str:
         document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
         document.getElementById("resultCount").textContent = "Error";
       });
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeMovieDetail();
     });
   </script>
 </body>
@@ -1464,6 +1772,175 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         )
         row = cur.fetchone()
     return row
+
+
+def movie_identifier_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movie_identifiers"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT provider_id, identifier_type, identifier, created_at
+            FROM movie_identifiers
+            WHERE movie_id=%s
+            ORDER BY provider_id, identifier_type, identifier
+            """,
+            (movie_id,),
+        )
+        return cur.fetchall()
+
+
+def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "movie_technical_specs"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                hdr,
+                packaging,
+                screen_ratios,
+                audio_tracks,
+                subtitles,
+                regions,
+                content_ratings,
+                updated_at
+            FROM movie_technical_specs
+            WHERE movie_id=%s
+            """,
+            (movie_id,),
+        )
+        return cur.fetchone()
+
+
+def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mc.id,
+                mc.credit_type,
+                mc.character,
+                mc.job,
+                mc.sort_order,
+                p.id AS person_id,
+                p.public_id AS person_public_id,
+                p.name,
+                p.known_for,
+                p.metadata AS person_metadata
+            FROM movie_credits mc
+            JOIN people p ON p.id = mc.person_id
+            WHERE mc.movie_id=%s
+            ORDER BY mc.sort_order, p.name
+            LIMIT %s
+            """,
+            (movie_id, limit),
+        )
+        return cur.fetchall()
+
+
+def movie_container_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "containers"):
+        return []
+    links: list[dict[str, Any]] = []
+    if table_exists(conn, "container_movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    c.id,
+                    c.public_id,
+                    c.container_type,
+                    c.title,
+                    c.barcode,
+                    c.badge_label,
+                    c.year,
+                    c.description,
+                    c.metadata,
+                    cm.sort_order,
+                    'member' AS relationship
+                FROM container_movies cm
+                JOIN containers c ON c.id = cm.container_id
+                WHERE cm.movie_id=%s
+                ORDER BY c.container_type, lower(c.title), cm.sort_order
+                """,
+                (movie_id,),
+            )
+            links.extend(cur.fetchall())
+    if table_exists(conn, "collection_items"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    c.id,
+                    c.public_id,
+                    c.container_type,
+                    c.title,
+                    c.barcode,
+                    c.badge_label,
+                    c.year,
+                    c.description,
+                    c.metadata,
+                    ci.sort_order,
+                    'collection_item' AS relationship
+                FROM collection_items ci
+                JOIN containers c ON c.id = ci.collection_id
+                WHERE ci.item_type='movie' AND ci.item_id=%s
+                ORDER BY lower(c.title), ci.sort_order
+                """,
+                (movie_id,),
+            )
+            links.extend(cur.fetchall())
+    return links
+
+
+def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type=%s AND em.entity_id=%s
+            ORDER BY em.role, em.sort_order, ma.kind
+            """,
+            (entity_type, entity_id),
+        )
+        return cur.fetchall()
+
+
+def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
+    movie = movie_entity(conn, movie_id)
+    if not movie:
+        return None
+    return {
+        "movie": movie,
+        "identifiers": movie_identifier_entities(conn, movie_id),
+        "technicalSpecs": movie_technical_spec_entity(conn, movie_id),
+        "credits": movie_credit_entities(conn, movie_id),
+        "containers": movie_container_entities(conn, movie_id),
+        "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
+    }
 
 
 def all_movie_entities(conn, *, limit: int = 1000) -> list[dict[str, Any]]:
@@ -2105,6 +2582,17 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 items = cur.fetchall()
         return response({"status": "ok", "items": items, "limit": limit, "offset": offset})
+
+    @flask_app.get("/api/next/movies/<movie_id>")
+    def movie_detail(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            detail = movie_detail_entity(conn, movie_uuid)
+        if not detail:
+            raise NextApiError("Movie not found", 404)
+        return response({"status": "ok", "detail": detail})
 
     @flask_app.get("/api/next/containers")
     def containers():
