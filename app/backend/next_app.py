@@ -32,6 +32,8 @@ try:
     from .next_import import NextImporter
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
+    from .next_auth import next_auth_current_user
+    from .next_auth import next_auth_effective_enabled
     from .next_auth import register_next_auth_routes
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
@@ -40,6 +42,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import NextImporter
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
+    from next_auth import next_auth_current_user
+    from next_auth import next_auth_effective_enabled
     from next_auth import register_next_auth_routes
 
 
@@ -993,6 +997,20 @@ def collection_dashboard_snapshot(conn) -> dict[str, Any]:
     }
 
 
+def empty_collection_dashboard_snapshot() -> dict[str, Any]:
+    return {
+        "counts": {},
+        "movies": [],
+        "containers": [],
+        "plugins": [],
+        "build": {
+            "version": build_version(),
+            "sha": build_sha(),
+            "generatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        },
+    }
+
+
 def h(value: Any) -> str:
     return html_lib.escape(str(value or ""), quote=True)
 
@@ -1089,7 +1107,7 @@ def server_movie_cards(movies: list[dict[str, Any]]) -> str:
         movie_id = h(movie.get("id"))
         cards.append(
             f"""
-          <a class="movie" href="{h(app_href(f'/movies/{movie_id}'))}">
+          <a class="movie" href="{h(app_href(f'/movies/{movie_id}'))}" data-movie-id="{movie_id}">
             <div class="poster">{poster_html}</div>
             <div class="movie-body">
               <div class="movie-title">{h(movie.get("title") or "Untitled")}</div>
@@ -1886,6 +1904,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         setAuthStatus("Passkey created. You are signed in.", "good");
         await refreshAuthStatus();
+        await loadCollection();
       } catch (error) {
         setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
       } finally {
@@ -1934,6 +1953,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         setAuthStatus("Signed in.", "good");
         await refreshAuthStatus();
+        await loadCollection();
       } catch (error) {
         setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
       } finally {
@@ -1945,6 +1965,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       localStorage.removeItem("dv_next_token");
       setAuthStatus("Signed out.", "info");
       refreshAuthStatus();
+      clearProtectedCollection("Sign in with your passkey to load the collection.");
     }
     function bindAuthButtons() {
       document.querySelectorAll("[data-auth-action]").forEach((button) => {
@@ -1957,6 +1978,16 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           if (action === "login") loginPasskey().catch(reportClientError);
           if (action === "logout") logoutPasskey();
         });
+      });
+    }
+    function bindCollectionLinks() {
+      if (document.body.dataset.collectionLinksBound === "true") return;
+      document.body.dataset.collectionLinksBound = "true";
+      document.addEventListener("click", (event) => {
+        const movieLink = event.target.closest("[data-movie-id]");
+        if (!movieLink) return;
+        event.preventDefault();
+        openMovieDetail(movieLink.dataset.movieId);
       });
     }
     window.registerOwnerPasskey = registerOwnerPasskey;
@@ -2016,7 +2047,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           ? `<img src="${escapeHtml(poster)}" alt="">`
           : `<span>No poster</span>`;
         return `
-          <a class="movie" href="/api/next/app/movies/${encodeURIComponent(movie.id)}">
+          <a class="movie" href="/api/next/app/movies/${encodeURIComponent(movie.id)}" data-movie-id="${escapeHtml(movie.id)}">
             <div class="poster">${posterHtml}</div>
             <div class="movie-body">
               <div class="movie-title">${escapeHtml(movie.title || "Untitled")}</div>
@@ -2143,7 +2174,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
       let response;
       try {
-        response = await fetch(url, {cache: "no-store", signal: controller.signal});
+        response = await fetch(url, {cache: "no-store", headers: authHeaders(), signal: controller.signal});
       } catch (error) {
         if (error.name === "AbortError") {
           throw new Error(`${url} timed out after ${Math.round(timeoutMs / 1000)} seconds`);
@@ -2156,6 +2187,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         const body = await response.text();
         const error = new Error(`${url} failed with HTTP ${response.status}`);
         error.url = url;
+        error.status = response.status;
         error.body = body.slice(0, 800);
         throw error;
       }
@@ -2181,11 +2213,33 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderContainers();
       setClientStatus(`Loaded ${number(state.movies.length)} movies and ${number(state.containers.length)} containers.`);
     }
-    function bootCollection() {
+    function clearProtectedCollection(message) {
+      state.movies = [];
+      state.containers = [];
+      state.plugins = [];
+      state.stats = {counts: {}};
+      renderStats();
+      renderFormatFilters();
+      renderMovies();
+      renderContainers();
+      document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+      document.getElementById("resultCount").textContent = "Sign in required";
+      setClientStatus(message);
+    }
+    async function bootCollection() {
       setClientStatus("Client script started.");
       bindAuthButtons();
-      refreshAuthStatus();
+      bindCollectionLinks();
+      await refreshAuthStatus();
+      if (authState.auth_enabled && !authState.authenticated) {
+        clearProtectedCollection("Sign in with your passkey to load the collection.");
+        return;
+      }
       loadCollection().catch((error) => {
+        if (error.status === 401) {
+          clearProtectedCollection("Sign in with your passkey to load the collection.");
+          return;
+        }
         document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
         document.getElementById("resultCount").textContent = "Error";
         setClientStatus(`Load failed: ${error.message}`);
@@ -4119,6 +4173,28 @@ def create_background_job(conn, *, job_type: str, payload: dict[str, Any]) -> di
     return job_row(row)
 
 
+PUBLIC_NEXT_PATHS = {
+    "/",
+    "/app",
+    "/app/",
+    "/api/next/app",
+    "/api/next/app/",
+    "/api/next/collection",
+    "/api/next/collection/",
+    "/api/next/health",
+}
+PUBLIC_NEXT_PREFIXES = (
+    "/.well-known/",
+    "/api/auth/",
+    "/api/next/auth/",
+    "/api/next/media/assets/",
+)
+
+
+def is_public_next_path(path: str) -> bool:
+    return path in PUBLIC_NEXT_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_NEXT_PREFIXES)
+
+
 def register_routes(flask_app: Flask) -> None:
     register_next_auth_routes(
         flask_app,
@@ -4147,6 +4223,30 @@ def register_routes(flask_app: Flask) -> None:
     def handle_unexpected_error(error: Exception):  # pragma: no cover - Flask integration
         flask_app.logger.exception("Unhandled Next API error on %s", request.path)
         return response({"status": "error", "error": str(error), "path": request.path}, 500)
+
+    @flask_app.before_request
+    def require_next_auth():
+        if not (
+            request.path == "/"
+            or request.path.startswith(("/app", "/api/next", "/api/auth", "/.well-known"))
+        ):
+            return None
+        if is_public_next_path(request.path):
+            return None
+        with connect() as conn:
+            if not next_auth_effective_enabled(conn, table_exists):
+                return None
+            if next_auth_current_user(conn):
+                return None
+        return response(
+            {
+                "status": "error",
+                "error": "Authentication required",
+                "auth_required": True,
+                "path": request.path,
+            },
+            401,
+        )
 
     @flask_app.get("/api/next/health")
     def health():
@@ -4553,7 +4653,10 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/")
     def collection_dashboard():
         with connect() as conn:
-            snapshot = collection_dashboard_snapshot(conn)
+            if next_auth_effective_enabled(conn, table_exists):
+                snapshot = empty_collection_dashboard_snapshot()
+            else:
+                snapshot = collection_dashboard_snapshot(conn)
         return html_response(collection_dashboard_html(snapshot))
 
     @flask_app.get("/api/next/migration/jobs/<job_id>")

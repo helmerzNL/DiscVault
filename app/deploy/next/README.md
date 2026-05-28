@@ -84,6 +84,10 @@ imported, Next reports `configured_auth_enabled=true` and `auth_enabled=false`
 until the first passkey exists. This keeps first-user setup reachable while
 preserving the configured intent.
 
+After the first passkey exists, Next keeps `/`, `/app`, `/api/next/app`,
+`/api/next/auth/*`, and health public enough for the browser shell and passkey
+flow. Collection data APIs require a Bearer token from passkey login.
+
 Logs:
 
 ```bash
