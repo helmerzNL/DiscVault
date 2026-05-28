@@ -107,6 +107,27 @@ MovieVault metadata receiving/contribution is separate from using MovieVault as
 a lookup plugin. The owner can toggle `movievault_contribution_enabled` from
 the admin panel; normal admins cannot change this receiver mode.
 
+RBAC is available as an API foundation for the later full admin UI. The default
+mode is `basic`, with the protected owner plus Beheerder, Media Editor, Media
+Fan, and Media Viewer roles. Owners can switch to `advanced` mode and create
+custom roles from the fixed permission catalog:
+
+```bash
+curl http://localhost:6180/api/next/auth/rbac
+curl -X PATCH http://localhost:6180/api/next/auth/rbac \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"advanced"}'
+curl -X POST http://localhost:6180/api/next/auth/roles \
+  -H 'Content-Type: application/json' \
+  -d '{"key":"curator","name":"Curator","permissions":["collection.view","metadata.search"]}'
+curl -X PATCH http://localhost:6180/api/next/auth/users/<user-id>/roles \
+  -H 'Content-Type: application/json' \
+  -d '{"roles":["curator","media_viewer"]}'
+```
+
+Switching back to `basic` does not delete custom roles or assignments. It only
+limits which roles are assignable through the basic role layer.
+
 ## Plugin Runtime
 
 DiscVault Next loads plugins from manifest folders. The built-in plugin folder is
