@@ -36,7 +36,10 @@ services:
       BUILD_SHA: ${BUILD_SHA:-unknown}
       DISCVAULT_BACKEND_VERSION: ${BUILD_VERSION:-next-dev}
       DISCVAULT_BUILD_SHA: ${BUILD_SHA:-unknown}
-    command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "180", "next_app:app"]
+      DISCVAULT_LEGACY_DATA_DIR: /data
+    volumes:
+      - ${DISCVAULT_DATA_DIR:-./.local/data}:/data
+    command: ["sh", "-c", "python next_database.py migrate && exec gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 180 next_app:app"]
     ports:
       - "${DISCVAULT_NEXT_API_PORT:-6180}:5000"
     healthcheck:
@@ -57,13 +60,16 @@ services:
     container_name: discvault-next-worker
     restart: unless-stopped
     depends_on:
-      postgres:
+      next-api:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
       TZ: ${TZ:-Europe/Amsterdam}
       DISCVAULT_WORKER_ID: ${DISCVAULT_WORKER_ID:-next-worker-1}
       DISCVAULT_WORKER_POLL_INTERVAL: ${DISCVAULT_WORKER_POLL_INTERVAL:-2}
+      DISCVAULT_LEGACY_DATA_DIR: /data
+    volumes:
+      - ${DISCVAULT_DATA_DIR:-./.local/data}:/data
     command: ["python", "next_worker.py", "work"]
     networks:
       - discvault-next-net
@@ -119,15 +125,15 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
       TZ: ${TZ:-Europe/Amsterdam}
     volumes:
-      - ${DISCVAULT_SQLITE_IMPORT_DATA:-./.local/import-data}:/import:ro
+      - ${DISCVAULT_DATA_DIR:-./.local/data}:/data:ro
     command:
       [
         "python",
         "next_import.py",
         "--db",
-        "/import/discvault.db",
+        "/data/discvault.db",
         "--data-dir",
-        "/import"
+        "/data"
       ]
     networks:
       - discvault-next-net

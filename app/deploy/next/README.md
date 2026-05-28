@@ -12,7 +12,7 @@ and `.env` should be enough to start the normal stack in one action.
 ```text
 docker-compose.yml
 .env
-docker-compose.import.yml  # optional, only for importing an old data copy
+docker-compose.import.yml  # optional one-off CLI importer
 ```
 
 Create `.env` from `.env.example` and change `POSTGRES_PASSWORD` before first
@@ -40,9 +40,12 @@ curl http://localhost:6180/api/next/health
 curl http://localhost:6180/api/next/stats
 ```
 
-## Import A Copied DiscVault Data Directory
+## Existing Data Directory
 
-Set `DISCVAULT_SQLITE_IMPORT_DATA` in `.env` to a directory containing:
+Set `DISCVAULT_DATA_DIR` in `.env` to the existing DiscVault data directory on
+the Docker host. It is mounted into the Next API and worker as `/data`.
+
+Expected contents:
 
 ```text
 discvault.db
@@ -51,16 +54,39 @@ profiles/
 avatars/
 ```
 
-Then run:
+The migration reads `/data/discvault.db` and records PostgreSQL references to
+the existing media files. It does not move or copy existing posters, backdrops,
+profiles, or avatars; those files remain on the filesystem in their existing
+folders.
+
+Migration readiness API:
+
+```bash
+curl http://localhost:6180/api/next/migration/readiness
+curl http://localhost:6180/api/next/migration/status
+```
+
+To start an import job after readiness reports `ready_for_confirmation`:
+
+```bash
+curl -X POST http://localhost:6180/api/next/migration/start \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+## Optional One-Off CLI Import
+
+The normal path is the API-driven migration assistant above. The separate import
+compose file remains available as a troubleshooting or power-user path:
 
 ```bash
 docker compose -f docker-compose.import.yml up import-sqlite
 ```
 
 On Unraid Docker Compose Manager, import `docker-compose.import.yml` as a
-separate one-off project only after the copied data directory is in place. The
-normal `docker-compose.yml` intentionally does not include the import service, so
-starting the stack from the UI will not accidentally run an import.
+separate one-off project only when you explicitly want to run the CLI importer.
+The normal `docker-compose.yml` intentionally does not include the import
+service, so starting the stack from the UI will not accidentally run an import.
 
 The default importer migrates functional collection data and media references.
 Users/passkeys/watch history are intentionally not included in this default

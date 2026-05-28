@@ -38,6 +38,9 @@ services:
       TZ: ${TZ}
       BUILD_VERSION: ${BUILD_VERSION}
       DISCVAULT_BACKEND_VERSION: ${BUILD_VERSION}
+      DISCVAULT_LEGACY_DATA_DIR: /data
+    volumes:
+      - ${DISCVAULT_DATA_DIR}:/data
     ports:
       - "${DISCVAULT_NEXT_API_PORT}:5000"
     depends_on:
@@ -69,6 +72,9 @@ services:
       TZ: ${TZ}
       DISCVAULT_WORKER_ID: ${DISCVAULT_WORKER_ID}
       DISCVAULT_WORKER_POLL_INTERVAL: ${DISCVAULT_WORKER_POLL_INTERVAL}
+      DISCVAULT_LEGACY_DATA_DIR: /data
+    volumes:
+      - ${DISCVAULT_DATA_DIR}:/data
     depends_on:
       next-api:
         condition: service_healthy

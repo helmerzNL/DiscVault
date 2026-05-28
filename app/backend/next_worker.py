@@ -16,11 +16,21 @@ import sys
 import time
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+
+try:
+    from .next_import import ImportError as NextImportError
+    from .next_import import NextImporter
+    from .next_import import clean_text
+except ImportError:  # pragma: no cover - supports python next_worker.py
+    from next_import import ImportError as NextImportError
+    from next_import import NextImporter
+    from next_import import clean_text
 
 
 STOP = False
@@ -60,6 +70,21 @@ def json_ready(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
     return value
+
+
+def bool_value(value: Any, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def claim_job(conn, worker_id: str) -> dict[str, Any] | None:
@@ -144,7 +169,64 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
             "echo": payload,
         }
 
+    if job_type == "migration.import_sqlite":
+        return process_sqlite_import(payload, worker_id)
+
     raise RuntimeError(f"Unsupported job type: {job_type}")
+
+
+def process_sqlite_import(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    sqlite_db = Path(str(payload.get("sqliteDb") or "/data/discvault.db")).expanduser()
+    data_dir = Path(str(payload.get("dataDir") or sqlite_db.parent or "/data")).expanduser()
+    if not sqlite_db.exists() or not sqlite_db.is_file():
+        raise RuntimeError(f"Legacy SQLite database not found: {sqlite_db}")
+    if not data_dir.exists() or not data_dir.is_dir():
+        raise RuntimeError(f"Legacy data directory not found: {data_dir}")
+    include_security = bool_value(payload.get("includeSecurity"), default=False)
+    include_personal = bool_value(payload.get("includePersonal"), default=False)
+    if include_personal and not include_security:
+        raise RuntimeError("includePersonal requires includeSecurity")
+    import_media_references = bool_value(payload.get("importMediaReferences"), default=True)
+    expected_hash = clean_text(payload.get("sourceDatabaseHash"))
+
+    importer = NextImporter(
+        sqlite_db,
+        data_dir,
+        include_security=include_security,
+        include_personal=include_personal,
+        import_media=import_media_references,
+        owner_username=clean_text(payload.get("ownerUsername")),
+    )
+    try:
+        dry_run = importer.dry_run()
+        actual_hash = clean_text(dry_run.get("source_database_sha256"))
+        if expected_hash and actual_hash and expected_hash != actual_hash:
+            raise RuntimeError("Legacy SQLite database changed after readiness check; restart migration readiness.")
+        summary = importer.run()
+    except NextImportError as exc:
+        raise RuntimeError(str(exc)) from exc
+    finally:
+        importer.sqlite.close()
+
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": "migration.import_sqlite",
+        "phase": "completed",
+        "mediaMigrationMode": "reference_existing_files",
+        "source": {
+            "sqliteDb": str(sqlite_db),
+            "dataDir": str(data_dir),
+            "sourceDatabaseHash": expected_hash,
+        },
+        "options": {
+            "includeSecurity": include_security,
+            "includePersonal": include_personal,
+            "importMediaReferences": import_media_references,
+        },
+        "dryRun": dry_run,
+        "summary": summary,
+    }
 
 
 def run_once(worker_id: str) -> int:
