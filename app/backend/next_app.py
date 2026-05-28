@@ -23,13 +23,17 @@ from psycopg.types.json import Jsonb
 
 try:
     from .next_database import discover_migrations
+    from .next_import import CLIENT_SYNC_SETTING_KEYS
     from .next_import import ImportError as NextImportError
     from .next_import import NextImporter
+    from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
+    from next_import import CLIENT_SYNC_SETTING_KEYS
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
+    from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
 
 
@@ -469,6 +473,34 @@ def store_idempotency_response(
         )
 
 
+def app_settings_map(conn) -> dict[str, Any]:
+    if not table_exists(conn, "app_settings"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute("SELECT key, value FROM app_settings WHERE is_secret = false")
+        return {row["key"]: row["value"] for row in cur.fetchall()}
+
+
+def reconcile_legacy_metadata_plugins(conn) -> dict[str, Any] | None:
+    if not table_exists(conn, "app_settings") or not table_exists(conn, "metadata_plugins"):
+        return None
+    settings = app_settings_map(conn)
+    if not settings or "legacy_metadata_plugins_reconciled" in settings:
+        return None
+    legacy_keys = {
+        "metadata_source_order",
+        "tmdb_enabled",
+        "omdb_enabled",
+        "movievault_enabled",
+        "bluray_scrape_enabled",
+        "bluray_com_enabled",
+        "upcitemdb_enabled",
+    }
+    if not any(key in settings for key in legacy_keys):
+        return None
+    return apply_legacy_metadata_plugin_plan(conn, settings, Jsonb)
+
+
 def client_entity_mapping(
     conn,
     *,
@@ -668,8 +700,10 @@ def non_secret_settings(conn) -> list[dict[str, Any]]:
             SELECT key, value, updated_at
             FROM app_settings
             WHERE is_secret = false
+              AND key = ANY(%s::text[])
             ORDER BY key
-            """
+            """,
+            (list(sorted(CLIENT_SYNC_SETTING_KEYS)),),
         )
         return cur.fetchall()
 
@@ -677,6 +711,7 @@ def non_secret_settings(conn) -> list[dict[str, Any]]:
 def metadata_plugin_entities(conn) -> list[dict[str, Any]]:
     if not table_exists(conn, "metadata_plugins"):
         return []
+    reconcile_legacy_metadata_plugins(conn)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -1111,6 +1146,7 @@ def register_routes(flask_app: Flask) -> None:
                     )
                     container_counts = cur.fetchall()
             if table_exists(conn, "metadata_plugins"):
+                reconcile_legacy_metadata_plugins(conn)
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -1164,6 +1200,7 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             if not table_exists(conn, "metadata_plugins"):
                 return response({"status": "ok", "plugins": []})
+            reconcile_legacy_metadata_plugins(conn)
             with conn.cursor() as cur:
                 cur.execute(
                     """
