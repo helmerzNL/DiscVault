@@ -39,6 +39,13 @@ def connect():
     return psycopg.connect(database_url(), row_factory=dict_row, autocommit=False)
 
 
+def background_jobs_ready(conn) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass('public.background_jobs') AS table_name")
+        row = cur.fetchone()
+    return bool(row and row.get("table_name"))
+
+
 def json_ready(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): json_ready(item) for key, item in value.items()}
@@ -142,6 +149,17 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
 
 def run_once(worker_id: str) -> int:
     with connect() as conn:
+        if not background_jobs_ready(conn):
+            print(
+                json.dumps(
+                    {
+                        "status": "waiting",
+                        "reason": "database schema is not initialized",
+                        "missing": "background_jobs",
+                    }
+                )
+            )
+            return 2
         job = claim_job(conn, worker_id)
         if not job:
             print("No pending jobs.")
@@ -159,11 +177,10 @@ def run_once(worker_id: str) -> int:
 
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
-        code = run_once(worker_id)
+        run_once(worker_id)
         if STOP:
             break
-        if code == 0:
-            time.sleep(poll_interval)
+        time.sleep(poll_interval)
     return 0
 
 
