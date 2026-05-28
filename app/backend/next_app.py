@@ -8,6 +8,8 @@ collection summary from the new schema.
 
 from __future__ import annotations
 
+import html as html_lib
+import json as json_lib
 import os
 import uuid
 from datetime import date, datetime
@@ -790,7 +792,176 @@ def migration_dashboard_html() -> str:
 """
 
 
-def collection_dashboard_html() -> str:
+def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movies"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                public_id,
+                barcode,
+                title,
+                sort_title,
+                original_title,
+                year,
+                format,
+                edition,
+                metadata->>'poster_url' AS poster_url,
+                metadata->>'backdrop_url' AS backdrop_url,
+                created_at,
+                updated_at
+            FROM movies
+            ORDER BY lower(COALESCE(sort_title, title)), year NULLS LAST
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return cur.fetchall()
+
+
+def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
+    if not table_exists(conn, "containers"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                public_id,
+                container_type,
+                title,
+                barcode,
+                badge_label,
+                year,
+                description,
+                metadata,
+                created_at,
+                updated_at
+            FROM containers
+            ORDER BY container_type, lower(title)
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return cur.fetchall()
+
+
+def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
+    if not table_exists(conn, "metadata_plugins"):
+        return []
+    reconcile_legacy_metadata_plugins(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, enabled, order_index
+            FROM metadata_plugins
+            ORDER BY order_index, name
+            """
+        )
+        return cur.fetchall()
+
+
+def collection_dashboard_snapshot(conn) -> dict[str, Any]:
+    counts = {
+        "movies": count_table(conn, "movies"),
+        "people": count_table(conn, "people"),
+        "movieCredits": count_table(conn, "movie_credits"),
+        "containers": count_table(conn, "containers"),
+        "mediaAssets": count_table(conn, "media_assets"),
+        "metadataPlugins": count_table(conn, "metadata_plugins"),
+        "users": count_table(conn, "users"),
+    }
+    return {
+        "counts": counts,
+        "movies": collection_movie_preview_entities(conn),
+        "containers": collection_container_preview_entities(conn),
+        "plugins": collection_plugin_preview_entities(conn),
+        "build": {
+            "version": build_version(),
+            "sha": build_sha(),
+            "generatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        },
+    }
+
+
+def h(value: Any) -> str:
+    return html_lib.escape(str(value or ""), quote=True)
+
+
+def server_usable_image(value: Any) -> str:
+    text = str(value or "")
+    if text.startswith("http://") or text.startswith("https://"):
+        return text
+    return ""
+
+
+def server_movie_cards(movies: list[dict[str, Any]]) -> str:
+    if not movies:
+        return '<div class="empty">No movies imported yet.</div>'
+    cards = []
+    for movie in movies:
+        poster = server_usable_image(movie.get("poster_url"))
+        poster_html = f'<img src="{h(poster)}" alt="">' if poster else "<span>No poster</span>"
+        tags = []
+        if movie.get("year"):
+            tags.append(f'<span class="tag good">{h(movie.get("year"))}</span>')
+        if movie.get("format"):
+            tags.append(f'<span class="tag blue">{h(movie.get("format"))}</span>')
+        if movie.get("barcode"):
+            tags.append(f'<span class="tag">{h(movie.get("barcode"))}</span>')
+        movie_id = h(movie.get("id"))
+        cards.append(
+            f"""
+          <article class="movie" role="button" tabindex="0" onclick="openMovieDetail('{movie_id}')" onkeydown="if(event.key==='Enter'||event.key===' '){{event.preventDefault();openMovieDetail('{movie_id}')}}">
+            <div class="poster">{poster_html}</div>
+            <div class="movie-body">
+              <div class="movie-title">{h(movie.get("title") or "Untitled")}</div>
+              <div class="tags">{''.join(tags)}</div>
+            </div>
+          </article>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def server_container_cards(containers: list[dict[str, Any]]) -> str:
+    if not containers:
+        return '<div class="empty">No containers imported yet.</div>'
+    cards = []
+    for container in containers:
+        label = str(container.get("container_type") or "container").replace("_", " ")
+        tags = [f'<span class="tag blue">{h(label)}</span>']
+        if container.get("year"):
+            tags.append(f'<span class="tag good">{h(container.get("year"))}</span>')
+        if container.get("barcode"):
+            tags.append(f'<span class="tag">{h(container.get("barcode"))}</span>')
+        cards.append(
+            f"""
+        <div class="container-card">
+          <strong>{h(container.get("title") or "Untitled")}</strong>
+          <div class="tags">{''.join(tags)}</div>
+        </div>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
+    snapshot = snapshot or {"counts": {}, "movies": [], "containers": [], "plugins": [], "build": {}}
+    counts = snapshot.get("counts") or {}
+    movies = snapshot.get("movies") or []
+    containers = snapshot.get("containers") or []
+    plugins = snapshot.get("plugins") or []
+    enabled_plugins = [plugin for plugin in plugins if plugin.get("enabled")]
+    initial_state_json = html_lib.escape(json_lib.dumps(json_ready(snapshot), separators=(",", ":")), quote=False)
+    movie_cards = server_movie_cards(movies)
+    container_cards = server_container_cards(containers)
+    client_status = (
+        f"Server rendered {len(movies)} movies and {len(containers)} containers. "
+        f"Build {snapshot.get('build', {}).get('sha') or 'unknown'}."
+    )
     return """<!doctype html>
 <html lang="en">
 <head>
@@ -1198,7 +1369,7 @@ def collection_dashboard_html() -> str:
       <div>
         <h1>DiscVault Next Collection</h1>
         <p>Read-only PostgreSQL collection view for validating the migrated library.</p>
-        <p class="muted" id="clientStatus">Client script not started.</p>
+        <p class="muted" id="clientStatus">""" + h(client_status) + """</p>
       </div>
       <div class="actions">
         <button type="button" onclick="loadCollection()">Refresh</button>
@@ -1208,10 +1379,10 @@ def collection_dashboard_html() -> str:
     </header>
 
     <section class="stats">
-      <div class="stat"><strong id="movieCount">-</strong><span>Movies</span></div>
-      <div class="stat"><strong id="peopleCount">-</strong><span>People</span></div>
-      <div class="stat"><strong id="assetCount">-</strong><span>Media assets</span></div>
-      <div class="stat"><strong id="pluginCount">-</strong><span>Enabled plugins</span></div>
+      <div class="stat"><strong id="movieCount">""" + h(counts.get("movies", 0)) + """</strong><span>Movies</span></div>
+      <div class="stat"><strong id="peopleCount">""" + h(counts.get("people", 0)) + """</strong><span>People</span></div>
+      <div class="stat"><strong id="assetCount">""" + h(counts.get("mediaAssets", 0)) + """</strong><span>Media assets</span></div>
+      <div class="stat"><strong id="pluginCount">""" + h(len(enabled_plugins)) + """</strong><span>Enabled plugins</span></div>
     </section>
 
     <div class="toolbar">
@@ -1223,16 +1394,16 @@ def collection_dashboard_html() -> str:
       <div class="panel">
         <div class="section-head">
           <h2>Movies</h2>
-          <span class="muted" id="resultCount">Loading...</span>
+          <span class="muted" id="resultCount">""" + h(len(movies)) + """ server rendered</span>
         </div>
-        <div class="grid" id="movieGrid"></div>
+        <div class="grid" id="movieGrid">""" + movie_cards + """</div>
       </div>
       <aside class="panel">
         <div class="section-head">
           <h2>Containers</h2>
-          <span class="muted" id="containerCount">-</span>
+          <span class="muted" id="containerCount">""" + h(len(containers)) + """</span>
         </div>
-        <div class="containers" id="containerList"></div>
+        <div class="containers" id="containerList">""" + container_cards + """</div>
       </aside>
     </section>
 
@@ -1276,11 +1447,12 @@ def collection_dashboard_html() -> str:
   </main>
 
   <script>
-    const state = {
-      movies: [],
-      containers: [],
-      stats: {},
-      plugins: [],
+    var initialState = JSON.parse(""" + json_lib.dumps(initial_state_json) + """);
+    var state = {
+      movies: initialState.movies || [],
+      containers: initialState.containers || [],
+      stats: {counts: initialState.counts || {}},
+      plugins: initialState.plugins || [],
       activeFormat: "all"
     };
 
@@ -2833,7 +3005,9 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/collection")
     @flask_app.get("/api/next/collection/")
     def collection_dashboard():
-        return html_response(collection_dashboard_html())
+        with connect() as conn:
+            snapshot = collection_dashboard_snapshot(conn)
+        return html_response(collection_dashboard_html(snapshot))
 
     @flask_app.get("/api/next/migration/jobs/<job_id>")
     def migration_job(job_id: str):
