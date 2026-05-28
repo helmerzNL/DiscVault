@@ -204,7 +204,10 @@ def next_auth_current_user(conn) -> dict[str, Any] | None:
 def _parse_uuid(value: Any) -> UUID | None:
     if value in (None, ""):
         return None
-    return UUID(str(value))
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _hash_invite_code(code: str) -> str:
