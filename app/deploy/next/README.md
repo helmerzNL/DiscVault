@@ -147,6 +147,20 @@ The PATCH route requires an owner/admin session. Metadata source plugins are
 kept in sync with the legacy-compatible `metadata_plugins` table; digital media
 source plugins are updated in the generic `plugins` table.
 
+Plugin configuration and health checks use separate admin endpoints:
+
+```bash
+curl http://localhost:6180/api/next/plugins/plex/config
+curl -X PATCH http://localhost:6180/api/next/plugins/plex/config \
+  -H 'Content-Type: application/json' \
+  -d '{"settings":{"baseUrl":"https://plex.example"},"secrets":{"token":"replace-me"}}'
+curl http://localhost:6180/api/next/plugins/plex/health
+```
+
+Secret values are stored as secret `app_settings` entries and are never returned
+by the API. Responses only expose configured state, secret names, and internal
+secret references.
+
 Logs:
 
 ```bash

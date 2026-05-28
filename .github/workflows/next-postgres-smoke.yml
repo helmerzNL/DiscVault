@@ -249,4 +249,25 @@ jobs:
           assert plex["enabled"] is True, update_payload
           assert plex["orderIndex"] == 105, update_payload
           print("/api/next/plugins/plex", "admin-update-ok")
+
+          config = client.patch(
+              "/api/next/plugins/plex/config",
+              json={
+                  "settings": {"baseUrl": "https://plex.example"},
+                  "secrets": {"token": "ci-secret-token"},
+              },
+          )
+          assert config.status_code == 200, config.data[:500]
+          config_payload = config.get_json()
+          assert config_payload["config"]["settings"]["baseUrl"] == "https://plex.example", config_payload
+          assert config_payload["config"]["secretsConfigured"] is True, config_payload
+          assert "token" in config_payload["config"]["secretNames"], config_payload
+          assert "ci-secret-token" not in config.get_data(as_text=True), config_payload
+          print("/api/next/plugins/plex/config", "admin-config-ok")
+
+          health = client.get("/api/next/plugins/plex/health")
+          assert health.status_code == 200, health.data[:500]
+          health_payload = health.get_json()
+          assert health_payload["health"]["state"] == "available", health_payload
+          print("/api/next/plugins/plex/health", "admin-health-ok")
           PY
