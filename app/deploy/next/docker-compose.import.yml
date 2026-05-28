@@ -1,0 +1,28 @@
+services:
+  import-sqlite:
+    image: ${DISCVAULT_NEXT_IMAGE:-ghcr.io/helmerznl/discvault:dev}
+    pull_policy: always
+    container_name: discvault-next-import-sqlite
+    restart: "no"
+    working_dir: /opt/discvault/backend
+    command:
+      [
+        "python",
+        "next_import.py",
+        "--db",
+        "/import/discvault.db",
+        "--data-dir",
+        "/import"
+      ]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discvault_next}
+      TZ: ${TZ:-Europe/Amsterdam}
+    volumes:
+      - ${DISCVAULT_SQLITE_IMPORT_DATA:-./import-data}:/import:ro
+    networks:
+      - discvault-next
+
+networks:
+  discvault-next:
+    external: true
+    name: discvault-next

@@ -49,6 +49,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -79,6 +81,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       disable: true
     networks:
@@ -88,58 +92,12 @@ services:
     image: ${DISCVAULT_NEXT_IMAGE:-ghcr.io/helmerznl/discvault:dev}
     pull_policy: always
     container_name: discvault-next-migrate
-    profiles: ["tools"]
+    restart: "no"
     working_dir: /opt/discvault/backend
     command: ["python", "next_database.py", "migrate"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discvault_next}
       TZ: ${TZ:-Europe/Amsterdam}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-    networks:
-      - discvault-next
-
-  migration-status:
-    image: ${DISCVAULT_NEXT_IMAGE:-ghcr.io/helmerznl/discvault:dev}
-    pull_policy: always
-    container_name: discvault-next-migration-status
-    profiles: ["tools"]
-    working_dir: /opt/discvault/backend
-    command: ["python", "next_database.py", "status"]
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discvault_next}
-      TZ: ${TZ:-Europe/Amsterdam}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-    networks:
-      - discvault-next
-
-  import-sqlite:
-    image: ${DISCVAULT_NEXT_IMAGE:-ghcr.io/helmerznl/discvault:dev}
-    pull_policy: always
-    container_name: discvault-next-import-sqlite
-    profiles: ["tools"]
-    working_dir: /opt/discvault/backend
-    command:
-      [
-        "python",
-        "next_import.py",
-        "--db",
-        "/import/discvault.db",
-        "--data-dir",
-        "/import"
-      ]
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discvault_next}
-      TZ: ${TZ:-Europe/Amsterdam}
-    volumes:
-      - ${DISCVAULT_SQLITE_IMPORT_DATA:-./import-data}:/import:ro
     depends_on:
       postgres:
         condition: service_healthy
