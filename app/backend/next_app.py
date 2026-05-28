@@ -1927,6 +1927,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       };
       const response = await fetch(url, {
         cache: "no-store",
+        credentials: "same-origin",
         ...(options || {}),
         headers
       });
@@ -2154,7 +2155,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         button.disabled = false;
       }
     }
-    function logoutPasskey() {
+    async function logoutPasskey() {
+      try {
+        await authJson("/api/next/auth/logout", {method: "POST", body: "{}"});
+      } catch (error) {
+        console.warn("Server logout failed", error);
+      }
       authToken = "";
       localStorage.removeItem("dv_next_token");
       setAuthStatus("Signed out.", "info");
@@ -2176,7 +2182,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           if (action === "setup") registerOwnerPasskey().catch(reportClientError);
           if (action === "join") registerInvitedPasskey().catch(reportClientError);
           if (action === "login") loginPasskey().catch(reportClientError);
-          if (action === "logout") logoutPasskey();
+          if (action === "logout") logoutPasskey().catch(reportClientError);
         });
       });
     }
@@ -2640,7 +2646,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
       let response;
       try {
-        response = await fetch(url, {cache: "no-store", headers: authHeaders(), signal: controller.signal});
+        response = await fetch(url, {cache: "no-store", credentials: "same-origin", headers: authHeaders(), signal: controller.signal});
       } catch (error) {
         if (error.name === "AbortError") {
           throw new Error(`${url} timed out after ${Math.round(timeoutMs / 1000)} seconds`);

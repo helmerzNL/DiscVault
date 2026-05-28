@@ -21,13 +21,16 @@ from cryptography.hazmat.primitives.asymmetric.ec import (
     EllipticCurvePublicNumbers,
 )
 from cryptography.hazmat.primitives.hashes import SHA256
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, make_response, request
 from psycopg.types.json import Jsonb
 
 
 ConnectFactory = Callable[[], Any]
 ResponseFactory = Callable[[dict[str, Any], int], Any]
 TableExists = Callable[[Any, str], bool]
+
+SESSION_COOKIE_NAME = "dv_next_session"
+SESSION_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
 def _utcnow() -> datetime:
@@ -114,9 +117,27 @@ def _bearer_token() -> str:
     return ""
 
 
+def _session_cookie_token() -> str:
+    return str(request.cookies.get(SESSION_COOKIE_NAME) or "").strip()
+
+
+def _request_is_secure() -> bool:
+    forwarded_proto = (request.headers.get("X-Forwarded-Proto") or "").split(",", 1)[0].strip().lower()
+    if forwarded_proto:
+        return forwarded_proto == "https"
+    if request.is_secure:
+        return True
+    return _request_origin().startswith("https://")
+
+
 def _current_user_payload() -> dict[str, Any] | None:
-    token = _bearer_token()
-    return _verify_token(token) if token else None
+    for token in (_bearer_token(), _session_cookie_token()):
+        if not token:
+            continue
+        payload = _verify_token(token)
+        if payload:
+            return payload
+    return None
 
 
 def next_auth_setting_value(
@@ -238,6 +259,30 @@ def register_next_auth_routes(
     response: ResponseFactory,
     next_api_error: type[Exception],
 ) -> None:
+    def cookie_response(payload: dict[str, Any], token: str | None, status: int = 200):
+        result = make_response(response(payload, status))
+        if token:
+            result.set_cookie(
+                SESSION_COOKIE_NAME,
+                token,
+                max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
+                httponly=True,
+                secure=_request_is_secure(),
+                samesite="Lax",
+                path="/",
+            )
+        return result
+
+    def clear_cookie_response(payload: dict[str, Any], status: int = 200):
+        result = make_response(response(payload, status))
+        result.delete_cookie(
+            SESSION_COOKIE_NAME,
+            path="/",
+            secure=_request_is_secure(),
+            samesite="Lax",
+        )
+        return result
+
     def setting_value(conn, key: str, default: Any = None) -> Any:
         if not table_exists(conn, "app_settings"):
             return default
@@ -838,7 +883,7 @@ def register_next_auth_routes(
                 set_setting(conn, "auth_enabled", True)
 
         token = _create_token(str(user_id), username)
-        return response({"status": "ok", "token": token, "username": username})
+        return cookie_response({"status": "ok", "token": token, "username": username}, token)
 
     @route("/api/next/auth/login/options", "/api/auth/login/options", methods=["POST"])
     def login_options():
@@ -925,7 +970,11 @@ def register_next_auth_routes(
                     )
 
         token = _create_token(str(stored["user_id"]), stored["username"])
-        return response({"status": "ok", "token": token, "username": stored["username"]})
+        return cookie_response({"status": "ok", "token": token, "username": stored["username"]}, token)
+
+    @route("/api/next/auth/logout", "/api/auth/logout", methods=["POST"])
+    def auth_logout():
+        return clear_cookie_response({"status": "ok", "authenticated": False})
 
     @route("/api/next/auth/owner/transfer/options", "/api/auth/owner/transfer/options", methods=["POST"])
     def ownership_transfer_options():

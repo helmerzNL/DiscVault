@@ -88,6 +88,11 @@ After the first passkey exists, Next keeps `/`, `/app`, `/api/next/app`,
 `/api/next/auth/*`, and health public enough for the browser shell and passkey
 flow. Collection data APIs require a Bearer token from passkey login.
 
+Passkey login also sets an HttpOnly `dv_next_session` cookie with the same
+24-hour session lifetime. The browser app still sends a Bearer token for API
+fetches, but the cookie lets direct browser navigation to protected same-origin
+API URLs work after login.
+
 The Next collection view includes an owner/admin management panel after
 passkey login. Owners and admins can view users, change roles, disable or delete
 users, remove passkeys, toggle authentication, toggle invite-only registration,
