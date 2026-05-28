@@ -32,6 +32,7 @@ try:
     from .next_import import NextImporter
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
+    from .next_auth import register_next_auth_routes
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
@@ -39,6 +40,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import NextImporter
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
+    from next_auth import register_next_auth_routes
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
@@ -3817,6 +3819,14 @@ def create_background_job(conn, *, job_type: str, payload: dict[str, Any]) -> di
 
 
 def register_routes(flask_app: Flask) -> None:
+    register_next_auth_routes(
+        flask_app,
+        connect=connect,
+        table_exists=table_exists,
+        response=response,
+        next_api_error=NextApiError,
+    )
+
     @flask_app.errorhandler(NextApiError)
     def handle_next_error(error: NextApiError):
         return response({"status": "error", "error": str(error)}, error.status_code)
