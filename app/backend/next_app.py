@@ -20,6 +20,7 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+from werkzeug.exceptions import HTTPException
 
 try:
     from .next_database import discover_migrations
@@ -1438,12 +1439,17 @@ def collection_dashboard_html() -> str:
         : `<div class="empty">No credits imported for this movie.</div>`;
     }
     function renderMovieDetailError(error) {
+      const message = error.message || String(error);
       document.getElementById("detailHero").style.backgroundImage = "";
       document.getElementById("detailPoster").textContent = "Error";
       document.getElementById("detailTitle").textContent = "Could not load movie details";
-      document.getElementById("detailTags").innerHTML = `<span class="tag">${escapeHtml(error.message || error)}</span>`;
+      document.getElementById("detailTags").innerHTML = `<span class="tag">${escapeHtml(message)}</span>`;
       document.getElementById("detailOverview").textContent = "The movie detail request failed. Check the Next API logs for the backend error.";
-      document.getElementById("detailRelease").innerHTML = field("Error", error.message || error);
+      document.getElementById("detailRelease").innerHTML = [
+        field("Error", message),
+        field("URL", error.url || "-"),
+        field("Response", error.body || "-")
+      ].join("");
       document.getElementById("detailIdentifiers").innerHTML = field("None", "-");
       document.getElementById("detailSpecs").innerHTML = field("None", "-");
       document.getElementById("detailContainers").innerHTML = field("None", "-");
@@ -1480,7 +1486,13 @@ def collection_dashboard_html() -> str:
       } finally {
         window.clearTimeout(timeout);
       }
-      if (!response.ok) throw new Error(`${url} failed with HTTP ${response.status}`);
+      if (!response.ok) {
+        const body = await response.text();
+        const error = new Error(`${url} failed with HTTP ${response.status}`);
+        error.url = url;
+        error.body = body.slice(0, 800);
+        throw error;
+      }
       return response.json();
     }
     async function loadCollection() {
@@ -2433,10 +2445,21 @@ def register_routes(flask_app: Flask) -> None:
     def handle_next_error(error: NextApiError):
         return response({"status": "error", "error": str(error)}, error.status_code)
 
+    @flask_app.errorhandler(HTTPException)
+    def handle_http_error(error: HTTPException):
+        return response(
+            {
+                "status": "error",
+                "error": error.description,
+                "path": request.path,
+            },
+            error.code or 500,
+        )
+
     @flask_app.errorhandler(Exception)
     def handle_unexpected_error(error: Exception):  # pragma: no cover - Flask integration
-        flask_app.logger.exception("Unhandled Next API error")
-        return response({"status": "error", "error": str(error)}, 500)
+        flask_app.logger.exception("Unhandled Next API error on %s", request.path)
+        return response({"status": "error", "error": str(error), "path": request.path}, 500)
 
     @flask_app.get("/api/next/health")
     def health():
