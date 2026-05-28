@@ -232,6 +232,65 @@ def active_migration_job(conn, source_hash: str | None = None) -> dict[str, Any]
     return None
 
 
+def migration_job_summary(conn, job_id: UUID | None = None) -> dict[str, Any] | None:
+    if not table_exists(conn, "background_jobs"):
+        return None
+    params: list[Any] = [MIGRATION_JOB_TYPE]
+    where = "WHERE job_type=%s"
+    if job_id:
+        where += " AND id=%s"
+        params.append(job_id)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                id,
+                job_type,
+                status,
+                requested_by,
+                payload,
+                result,
+                error,
+                created_at,
+                started_at,
+                finished_at
+            FROM background_jobs
+            {where}
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            params,
+        )
+        row = cur.fetchone()
+    return job_row(row) if row else None
+
+
+def plugin_summary(conn) -> dict[str, Any]:
+    if not table_exists(conn, "metadata_plugins"):
+        return {"total": 0, "enabled": 0, "disabled": 0, "items": []}
+    plugins = metadata_plugin_entities(conn)
+    enabled = [plugin for plugin in plugins if plugin["enabled"]]
+    return {
+        "total": len(plugins),
+        "enabled": len(enabled),
+        "disabled": len(plugins) - len(enabled),
+        "order": [plugin["id"] for plugin in plugins],
+        "enabledOrder": [plugin["id"] for plugin in enabled],
+        "items": [
+            {
+                "id": plugin["id"],
+                "name": plugin["name"],
+                "enabled": plugin["enabled"],
+                "orderIndex": plugin["orderIndex"],
+                "settingsConfigured": plugin["settingsConfigured"],
+                "secretsConfigured": plugin["secretsConfigured"],
+                "premiumFeatureKey": plugin["premiumFeatureKey"],
+            }
+            for plugin in plugins
+        ],
+    }
+
+
 def sqlite_readiness_probe(data_dir: Path, sqlite_db: Path) -> dict[str, Any]:
     found = sqlite_db.exists() and sqlite_db.is_file()
     source: dict[str, Any] = {
@@ -334,6 +393,51 @@ def migration_readiness(conn) -> dict[str, Any]:
         "latestRun": latest,
         "warnings": warnings,
         "requiredActions": required_actions,
+    }
+
+
+def migration_report(conn) -> dict[str, Any]:
+    readiness = migration_readiness(conn)
+    latest_run = readiness.get("latestRun")
+    latest_job = None
+    if latest_run:
+        latest_job = migration_job_summary(conn)
+    elif readiness.get("activeJob"):
+        active_id = UUID(str(readiness["activeJob"]["id"]))
+        latest_job = migration_job_summary(conn, active_id)
+
+    latest_result = latest_run.get("result") if latest_run else {}
+    source_counts = readiness.get("legacyData", {}).get("sourceCounts") or {}
+    imported = latest_result.get("counters") if isinstance(latest_result, dict) else {}
+    skipped = latest_result.get("skipped") if isinstance(latest_result, dict) else {}
+    warnings = list(readiness.get("warnings") or [])
+    if isinstance(latest_result, dict):
+        warnings.extend(latest_result.get("warnings") or [])
+
+    return {
+        "state": readiness["state"],
+        "canStart": readiness["canStart"],
+        "requiresConfirmation": readiness["requiresConfirmation"],
+        "source": {
+            "found": readiness["legacyData"]["found"],
+            "readable": readiness["legacyData"]["readable"],
+            "dataDir": readiness["legacyData"]["dataDir"],
+            "sqliteDb": readiness["legacyData"]["sqliteDb"],
+            "sourceDatabaseHash": readiness["legacyData"]["sourceDatabaseHash"],
+            "counts": source_counts,
+            "mediaExtensions": readiness["legacyData"]["mediaExtensions"],
+            "mediaMigrationMode": readiness["legacyData"]["mediaMigrationMode"],
+        },
+        "target": readiness["targetDatabase"],
+        "latestRun": latest_run,
+        "latestJob": latest_job,
+        "summary": {
+            "imported": imported or {},
+            "skipped": skipped or {},
+            "warnings": warnings,
+        },
+        "metadataPlugins": plugin_summary(conn),
+        "requiredActions": readiness["requiredActions"],
     }
 
 
@@ -1413,6 +1517,12 @@ def register_routes(flask_app: Flask) -> None:
                 "requiredActions": readiness["requiredActions"],
             }
         )
+
+    @flask_app.get("/api/next/migration/report")
+    def get_migration_report():
+        with connect() as conn:
+            report = migration_report(conn)
+        return response({"status": "ok", "report": report})
 
     @flask_app.get("/api/next/migration/jobs/<job_id>")
     def migration_job(job_id: str):
