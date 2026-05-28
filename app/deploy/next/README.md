@@ -4,11 +4,15 @@ This compose file runs the PostgreSQL-backed DiscVault Next services from the
 published `:dev` image. It does not need a local source checkout on the Docker
 host.
 
+It is written for Unraid-style Compose Manager usage: importing the compose file
+and `.env` should be enough to start the normal stack in one action.
+
 ## Files
 
 ```text
 docker-compose.yml
 .env
+docker-compose.import.yml  # optional, only for importing an old data copy
 ```
 
 Create `.env` from `.env.example` and change `POSTGRES_PASSWORD` before first
@@ -16,12 +20,19 @@ start.
 
 ## Start
 
-```bash
-docker compose pull
-docker compose up -d postgres
-docker compose --profile tools run --rm migrate
-docker compose up -d next-api next-worker
+Start the compose project from Unraid's Docker Compose Manager UI.
+
+The default stack starts:
+
+```text
+postgres
+migrate
+next-api
+next-worker
 ```
+
+`migrate` is a one-shot service. It runs the PostgreSQL migrations and exits with
+status 0. `next-api` and `next-worker` wait until it completed successfully.
 
 Health check:
 
@@ -44,8 +55,13 @@ avatars/
 Then run:
 
 ```bash
-docker compose --profile tools run --rm import-sqlite
+docker compose -f docker-compose.import.yml up import-sqlite
 ```
+
+On Unraid Docker Compose Manager, import `docker-compose.import.yml` as a
+separate one-off project only after the copied data directory is in place. The
+normal `docker-compose.yml` intentionally does not include the import service, so
+starting the stack from the UI will not accidentally run an import.
 
 The default importer migrates functional collection data and media references.
 Users/passkeys/watch history are intentionally not included in this default
