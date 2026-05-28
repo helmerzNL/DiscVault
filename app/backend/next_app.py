@@ -110,6 +110,14 @@ def response(payload: dict[str, Any], status: int = 200):
     return jsonify(json_ready(payload)), status
 
 
+def html_response(html: str):
+    result = Response(html, mimetype="text/html")
+    result.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    result.headers["Pragma"] = "no-cache"
+    result.headers["Expires"] = "0"
+    return result
+
+
 def table_exists(conn, table_name: str) -> bool:
     with conn.cursor() as cur:
         cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
@@ -1190,6 +1198,7 @@ def collection_dashboard_html() -> str:
       <div>
         <h1>DiscVault Next Collection</h1>
         <p>Read-only PostgreSQL collection view for validating the migrated library.</p>
+        <p class="muted" id="clientStatus">Client script not started.</p>
       </div>
       <div class="actions">
         <button type="button" onclick="loadCollection()">Refresh</button>
@@ -1276,10 +1285,14 @@ def collection_dashboard_html() -> str:
     };
 
     function escapeHtml(value) {
-      return String(value ?? "").replace(/[&<>"']/g, function (char) {
+      return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
         const escapes = {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
         return escapes[char] || char;
       });
+    }
+    function setClientStatus(message) {
+      const node = document.getElementById("clientStatus");
+      if (node) node.textContent = message;
     }
     function number(value) {
       return Number(value || 0).toLocaleString();
@@ -1496,13 +1509,15 @@ def collection_dashboard_html() -> str:
       return response.json();
     }
     async function loadCollection() {
+      setClientStatus("Loading collection data...");
       document.getElementById("resultCount").textContent = "Loading...";
-      const [stats, movies, containers, plugins] = await Promise.all([
-        json("/api/next/stats"),
-        json("/api/next/movies?limit=200"),
-        json("/api/next/containers"),
-        json("/api/next/metadata/plugins")
-      ]);
+      const stats = await json("/api/next/stats");
+      setClientStatus("Stats loaded; loading movies...");
+      const movies = await json("/api/next/movies?limit=200");
+      setClientStatus("Movies loaded; loading containers...");
+      const containers = await json("/api/next/containers");
+      setClientStatus("Containers loaded; loading metadata plugins...");
+      const plugins = await json("/api/next/metadata/plugins");
       state.stats = stats || {};
       state.movies = movies.items || [];
       state.containers = containers.items || [];
@@ -1511,13 +1526,21 @@ def collection_dashboard_html() -> str:
       renderFormatFilters();
       renderMovies();
       renderContainers();
+      setClientStatus(`Loaded ${number(state.movies.length)} movies and ${number(state.containers.length)} containers.`);
     }
-    window.addEventListener("load", () => {
+    function bootCollection() {
+      setClientStatus("Client script started.");
       loadCollection().catch((error) => {
         document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
         document.getElementById("resultCount").textContent = "Error";
+        setClientStatus(`Load failed: ${error.message}`);
       });
-    });
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", bootCollection);
+    } else {
+      bootCollection();
+    }
     window.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeMovieDetail();
     });
@@ -2805,12 +2828,12 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/migration")
     @flask_app.get("/api/next/migration/")
     def migration_dashboard():
-        return Response(migration_dashboard_html(), mimetype="text/html")
+        return html_response(migration_dashboard_html())
 
     @flask_app.get("/api/next/collection")
     @flask_app.get("/api/next/collection/")
     def collection_dashboard():
-        return Response(collection_dashboard_html(), mimetype="text/html")
+        return html_response(collection_dashboard_html())
 
     @flask_app.get("/api/next/migration/jobs/<job_id>")
     def migration_job(job_id: str):
