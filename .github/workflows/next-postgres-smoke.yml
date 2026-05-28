@@ -240,4 +240,13 @@ jobs:
           assert payload["status"] == "ok", payload
           assert any(plugin["id"] == "movievault" for plugin in payload["plugins"]), payload
           print("/api/next/plugins/registry", "session-cookie-ok")
+
+          update = client.patch("/api/next/plugins/plex", json={"enabled": True, "orderIndex": 105})
+          assert update.status_code == 200, update.data[:500]
+          update_payload = update.get_json()
+          plex = update_payload["plugin"]
+          assert plex["id"] == "plex", update_payload
+          assert plex["enabled"] is True, update_payload
+          assert plex["orderIndex"] == 105, update_payload
+          print("/api/next/plugins/plex", "admin-update-ok")
           PY

@@ -3709,6 +3709,44 @@ def sync_metadata_plugin_registry(conn) -> None:
         sync_plugin_registry(conn, table_exists, Jsonb)
 
 
+def next_user_primary_role(conn, user_id: UUID | str) -> str | None:
+    if not table_exists(conn, "user_roles") or not table_exists(conn, "roles"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT r.key
+            FROM user_roles ur
+            JOIN roles r ON r.id = ur.role_id
+            WHERE ur.user_id=%s
+            ORDER BY
+                CASE r.key
+                    WHEN 'owner' THEN 0
+                    WHEN 'admin' THEN 1
+                    ELSE 2
+                END,
+                r.key
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        row = cur.fetchone()
+    return row["key"] if row else None
+
+
+def require_next_admin_user(conn) -> dict[str, Any]:
+    if not next_auth_effective_enabled(conn, table_exists):
+        return {"id": None, "username": "system", "role": "owner"}
+    user = next_auth_current_user(conn)
+    if not user:
+        raise NextApiError("Unauthorized", 401)
+    role = next_user_primary_role(conn, user["id"])
+    if role not in {"owner", "admin"}:
+        raise NextApiError("Admin access required", 403)
+    user["role"] = role
+    return user
+
+
 def client_entity_mapping(
     conn,
     *,
@@ -4860,6 +4898,94 @@ def register_routes(flask_app: Flask) -> None:
                 sync_metadata_plugin_registry(conn)
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
         return response(registry)
+
+    @flask_app.patch("/api/next/plugins/<plugin_id>")
+    def update_plugin(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        body = request.get_json(silent=True) or {}
+        has_enabled = "enabled" in body
+        has_order = "orderIndex" in body or "order_index" in body
+        if not has_enabled and not has_order:
+            raise NextApiError("Supply enabled and/or orderIndex", 400)
+
+        enabled = bool(body.get("enabled")) if has_enabled else None
+        order_value = body.get("orderIndex", body.get("order_index"))
+        order_index = None
+        if has_order:
+            try:
+                order_index = max(1, min(int(order_value), 10000))
+            except (TypeError, ValueError) as exc:
+                raise NextApiError("orderIndex must be an integer", 400) from exc
+
+        with connect() as conn:
+            require_next_admin_user(conn)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, categories FROM plugins WHERE id=%s",
+                    (plugin_id,),
+                )
+                plugin = cur.fetchone()
+            if not plugin:
+                raise NextApiError("Plugin not found", 404)
+
+            categories = plugin.get("categories") or []
+            is_metadata_plugin = bool(
+                {"metadata_source", "metadata_receiver"}.intersection(set(categories))
+            )
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    if is_metadata_plugin and table_exists(conn, "metadata_plugins"):
+                        assignments = []
+                        params: list[Any] = []
+                        if has_enabled:
+                            assignments.append("enabled=%s")
+                            params.append(enabled)
+                        if has_order:
+                            assignments.append("order_index=%s")
+                            params.append(order_index)
+                        if assignments:
+                            cur.execute(
+                                f"""
+                                UPDATE metadata_plugins
+                                SET {', '.join(assignments)}, updated_at=now()
+                                WHERE id=%s
+                                """,
+                                (*params, plugin_id),
+                            )
+
+                    assignments = []
+                    params = []
+                    if has_enabled:
+                        assignments.append("enabled=%s")
+                        params.append(enabled)
+                    if has_order:
+                        assignments.append("order_index=%s")
+                        params.append(order_index)
+                    if assignments:
+                        cur.execute(
+                            f"""
+                            UPDATE plugins
+                            SET {', '.join(assignments)}, updated_at=now()
+                            WHERE id=%s
+                            """,
+                            (*params, plugin_id),
+                        )
+
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            updated = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+        return response({"status": "ok", "plugin": updated, "registry": registry})
 
     @flask_app.get("/api/next/metadata/plugins")
     def metadata_plugins():
