@@ -428,6 +428,85 @@ def register_next_auth_routes(
         user["role"] = role
         return user
 
+    def require_owner(conn) -> dict[str, Any]:
+        user = current_user(conn)
+        if not user:
+            raise next_api_error("Unauthorized", 401)
+        role = primary_role(conn, user["id"])
+        if role != "owner":
+            raise next_api_error("Owner access required", 403)
+        user["role"] = role
+        return user
+
+    def ownership_transfer_target(conn, owner: dict[str, Any], target_user_id: UUID) -> dict[str, Any]:
+        if str(owner["id"]) == str(target_user_id):
+            raise next_api_error("Ownership can only be transferred to another user", 400)
+        target = user_admin_row(conn, target_user_id)
+        if not target:
+            raise next_api_error("Target user not found", 404)
+        if target.get("status") != "active":
+            raise next_api_error("Ownership can only be transferred to an active user", 400)
+        if target.get("role") not in {"admin", "owner"}:
+            raise next_api_error("Target user must have an admin-like role before ownership transfer", 400)
+        return target
+
+    def verify_step_up_assertion(
+        conn,
+        *,
+        challenge_key: str,
+        expected_user_id: UUID | str,
+        credential: dict[str, Any],
+    ) -> dict[str, Any]:
+        credential_id = str(credential.get("id") or "")
+        if not credential_id:
+            raise next_api_error("Credential id is required", 400)
+        challenge = pop_challenge(conn, challenge_key)
+        if not challenge:
+            raise next_api_error("No pending ownership transfer challenge", 400)
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT c.*, u.username, u.status AS user_status
+                FROM passkey_credentials c
+                JOIN users u ON u.id = c.user_id
+                WHERE c.id=%s
+                """,
+                (credential_id,),
+            )
+            stored = cur.fetchone()
+        if not stored:
+            raise next_api_error("Unknown credential", 400)
+        if stored["user_status"] != "active":
+            raise next_api_error("User is disabled", 403)
+        if str(stored["user_id"]) != str(expected_user_id):
+            raise next_api_error("Ownership transfer must be approved with the current owner's passkey", 403)
+
+        try:
+            client_data_raw = _b64url_decode(credential["response"]["clientDataJSON"])
+            client_data = json.loads(client_data_raw)
+            if client_data.get("type") != "webauthn.get":
+                raise ValueError("Wrong type in clientDataJSON")
+            if _b64url_decode(client_data["challenge"]) != challenge:
+                raise ValueError("Challenge mismatch")
+            incoming_origin = str(client_data.get("origin") or "").rstrip("/")
+            if incoming_origin not in _rp_origins():
+                raise ValueError(f"Origin not allowed: {incoming_origin}")
+
+            auth_data = _b64url_decode(credential["response"]["authenticatorData"])
+            signature = _b64url_decode(credential["response"]["signature"])
+            client_data_hash = hashlib.sha256(client_data_raw).digest()
+            expected_rp_hash = hashlib.sha256(_rp_id().encode("utf-8")).digest()
+            if auth_data[:32] != expected_rp_hash:
+                raise ValueError("RP ID hash mismatch")
+            _verify_signature(bytes(stored["public_key"]), auth_data, client_data_hash, signature)
+            _, _, new_sign_count = _parse_auth_data(auth_data)
+        except Exception as exc:
+            raise next_api_error(f"Verification failed: {exc}", 400) from exc
+
+        stored["new_sign_count"] = new_sign_count
+        return stored
+
     def can_register_for_existing_user(conn, caller: dict[str, Any] | None, target_user_id: UUID) -> bool:
         if not caller:
             return False
@@ -515,6 +594,9 @@ def register_next_auth_routes(
             "rp_name": _rp_name(),
             "rp_origins": _rp_origins(),
             "authenticated": bool(user),
+            "user_id": user["id"] if user else None,
+            "username": user["username"] if user else None,
+            "display_name": user.get("display_name") if user else None,
             "role": role,
         }
 
@@ -844,6 +926,110 @@ def register_next_auth_routes(
 
         token = _create_token(str(stored["user_id"]), stored["username"])
         return response({"status": "ok", "token": token, "username": stored["username"]})
+
+    @route("/api/next/auth/owner/transfer/options", "/api/auth/owner/transfer/options", methods=["POST"])
+    def ownership_transfer_options():
+        body = request.get_json(silent=True) or {}
+        target_user_id = _parse_uuid(body.get("target_user_id") or body.get("targetUserId"))
+        if not target_user_id:
+            raise next_api_error("target_user_id is required", 400)
+
+        with connect() as conn:
+            owner = require_owner(conn)
+            target = ownership_transfer_target(conn, owner, target_user_id)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM passkey_credentials
+                    WHERE user_id=%s
+                    ORDER BY created_at
+                    """,
+                    (owner["id"],),
+                )
+                credentials = cur.fetchall()
+            if not credentials:
+                raise next_api_error("Current owner has no passkeys to approve the transfer", 400)
+            challenge = _make_challenge()
+            challenge_key = f"owner_transfer:{owner['id']}:{target_user_id}"
+            with conn.transaction():
+                store_challenge(conn, challenge_key, challenge)
+
+        options = {
+            "challenge": _b64url_encode(challenge),
+            "timeout": 60000,
+            "rpId": _rp_id(),
+            "allowCredentials": [
+                {"type": "public-key", "id": row["id"]} for row in credentials
+            ],
+            "userVerification": "preferred",
+        }
+        return response(
+            {
+                "status": "ok",
+                "target_user": {
+                    "id": target["id"],
+                    "username": target["username"],
+                    "display_name": target.get("display_name"),
+                    "role": target.get("role"),
+                },
+                "options": options,
+            }
+        )
+
+    @route("/api/next/auth/owner/transfer/verify", "/api/auth/owner/transfer/verify", methods=["POST"])
+    def ownership_transfer_verify():
+        body = request.get_json(silent=True) or {}
+        target_user_id = _parse_uuid(body.get("target_user_id") or body.get("targetUserId"))
+        if not target_user_id:
+            raise next_api_error("target_user_id is required", 400)
+        credential = body.get("credential") or {}
+
+        with connect() as conn:
+            owner = require_owner(conn)
+            target = ownership_transfer_target(conn, owner, target_user_id)
+            challenge_key = f"owner_transfer:{owner['id']}:{target_user_id}"
+            stored = verify_step_up_assertion(
+                conn,
+                challenge_key=challenge_key,
+                expected_user_id=owner["id"],
+                credential=credential,
+            )
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE passkey_credentials
+                        SET sign_count=%s, last_used_at=now()
+                        WHERE id=%s
+                        """,
+                        (stored["new_sign_count"], stored["id"]),
+                    )
+                    cur.execute(
+                        """
+                        DELETE FROM user_roles
+                        WHERE user_id=%s
+                          AND role_id IN (SELECT id FROM roles WHERE key='owner')
+                          AND scope_type='global'
+                          AND scope_id=''
+                        """,
+                        (owner["id"],),
+                    )
+                    cur.execute("UPDATE users SET updated_at=now() WHERE id IN (%s, %s)", (owner["id"], target_user_id))
+                assign_role(conn, target_user_id, "owner")
+                assign_role(conn, owner["id"], "admin")
+            updated_owner = user_admin_row(conn, owner["id"])
+            updated_target = user_admin_row(conn, target_user_id)
+            payload = auth_status_payload(conn)
+        return response(
+            {
+                "status": "ok",
+                "message": "Ownership transferred",
+                "previous_owner": updated_owner,
+                "new_owner": updated_target,
+                "auth": payload,
+            }
+        )
 
     @route("/api/next/auth/roles", "/api/auth/roles", methods=["GET"])
     def roles():

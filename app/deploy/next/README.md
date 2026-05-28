@@ -93,6 +93,11 @@ passkey login. Owners and admins can view users, change roles, disable or delete
 users, remove passkeys, toggle authentication, toggle invite-only registration,
 and create 48-hour invite codes for new accounts.
 
+Ownership transfer is owner-only and requires step-up authentication. The
+target user must be active and already have an admin-like role. During transfer,
+the current owner must approve with their passkey again; the target becomes
+owner and the previous owner is kept as admin.
+
 Logs:
 
 ```bash

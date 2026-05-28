@@ -2211,6 +2211,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!list) return;
       list.innerHTML = users.length ? users.map((user) => {
         const disabled = user.status !== "active";
+        const canReceiveOwnership = authState.role === "owner"
+          && user.id !== authState.user_id
+          && user.status === "active"
+          && ["admin", "owner"].includes(user.role || "");
         return `
           <div class="admin-row">
             <div class="admin-row-head">
@@ -2221,6 +2225,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <div class="admin-controls">
               <select data-admin-user-role="${escapeHtml(user.id)}">${adminRoleOptions(user.role, roles)}</select>
               <button type="button" data-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${disabled ? "Enable" : "Disable"}</button>
+              ${canReceiveOwnership ? `<button type="button" data-admin-owner-transfer="${escapeHtml(user.id)}" data-username="${escapeHtml(user.display_name || user.username)}">Transfer Owner</button>` : ""}
               <button type="button" data-admin-user-delete="${escapeHtml(user.id)}">Delete</button>
             </div>
           </div>
@@ -2335,6 +2340,41 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       await authJson(`/api/next/auth/users/${encodeURIComponent(userId)}`, {method: "DELETE"});
       await loadAdmin();
     }
+    async function transferOwnership(userId, username) {
+      if (!confirm(`Transfer ownership to ${username || "this user"}? You will be changed to admin.`)) return;
+      setAdminStatus("Waiting for owner passkey confirmation...", "info");
+      const optionsPayload = await authJson("/api/next/auth/owner/transfer/options", {
+        method: "POST",
+        body: JSON.stringify({target_user_id: userId})
+      });
+      const options = optionsPayload.options;
+      options.challenge = base64urlToBuffer(options.challenge);
+      options.allowCredentials = (options.allowCredentials || []).map((credential) => ({
+        ...credential,
+        id: base64urlToBuffer(credential.id)
+      }));
+      const assertion = await navigator.credentials.get({publicKey: options});
+      const credential = {
+        id: assertion.id,
+        rawId: bufferToBase64url(assertion.rawId),
+        response: {
+          authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+          clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+          signature: bufferToBase64url(assertion.response.signature),
+          userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+        },
+        type: assertion.type,
+        authenticatorAttachment: assertion.authenticatorAttachment
+      };
+      const payload = await authJson("/api/next/auth/owner/transfer/verify", {
+        method: "POST",
+        body: JSON.stringify({target_user_id: userId, credential})
+      });
+      authState = payload.auth || authState;
+      renderAuthStatus();
+      await loadAdmin();
+      setAdminStatus("Ownership transferred.", "good");
+    }
     async function deleteAdminCredential(credentialId) {
       if (!confirm("Delete this passkey?")) return;
       await authJson(`/api/next/auth/credentials/${encodeURIComponent(credentialId)}`, {method: "DELETE"});
@@ -2349,7 +2389,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!panel || panel.dataset.bound === "true") return;
       panel.dataset.bound = "true";
       panel.addEventListener("click", (event) => {
-        const target = event.target.closest("[data-admin-action], [data-admin-user-status], [data-admin-user-delete], [data-admin-credential-delete], [data-admin-invite-delete]");
+        const target = event.target.closest("[data-admin-action], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
         if (!target) return;
         event.preventDefault();
         const action = target.dataset.adminAction;
@@ -2365,11 +2405,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
                   ? updateAdminUserStatus(target.dataset.adminUserStatus, target.dataset.status)
                   : target.dataset.adminUserDelete
                     ? deleteAdminUser(target.dataset.adminUserDelete)
-                    : target.dataset.adminCredentialDelete
-                      ? deleteAdminCredential(target.dataset.adminCredentialDelete)
-                      : target.dataset.adminInviteDelete
-                        ? deleteAdminInvite(target.dataset.adminInviteDelete)
-                        : Promise.resolve();
+                    : target.dataset.adminOwnerTransfer
+                      ? transferOwnership(target.dataset.adminOwnerTransfer, target.dataset.username)
+                      : target.dataset.adminCredentialDelete
+                        ? deleteAdminCredential(target.dataset.adminCredentialDelete)
+                        : target.dataset.adminInviteDelete
+                          ? deleteAdminInvite(target.dataset.adminInviteDelete)
+                          : Promise.resolve();
         Promise.resolve(task).catch((error) => setAdminStatus(error.message, "bad"));
       });
       panel.addEventListener("change", (event) => {
