@@ -26,6 +26,37 @@ from typing import Any
 IMPORT_NAMESPACE = uuid.UUID("7c76309b-063d-4c63-b925-2f49fdad332c")
 LOCALIZED_LANGS = ("nl", "fr", "de", "es", "pt", "it", "sv", "da", "no", "fi")
 SECRET_SETTING_HINTS = ("secret", "token", "private_key", "password", "_enc")
+LEGACY_METADATA_PLUGIN_FLAGS = {
+    "tmdb": ("tmdb_enabled",),
+    "omdb": ("omdb_enabled",),
+    "movievault": ("movievault_enabled",),
+    "bluray_com": ("bluray_scrape_enabled", "bluray_com_enabled"),
+    "upcitemdb": ("upcitemdb_enabled",),
+}
+LEGACY_METADATA_SOURCE_ALIASES = {
+    "tmdb": "tmdb",
+    "themoviedb": "tmdb",
+    "omdb": "omdb",
+    "movievault": "movievault",
+    "movie_vault": "movievault",
+    "bluray_com": "bluray_com",
+    "bluray.com": "bluray_com",
+    "blu-ray.com": "bluray_com",
+    "bluray": "bluray_com",
+    "upcitemdb": "upcitemdb",
+    "upc_item_db": "upcitemdb",
+    "upc": "upcitemdb",
+    "bluray_disc_de": "bluray_disc_de",
+    "bluraydiscde": "bluray_disc_de",
+    "bluraydisc.de": "bluray_disc_de",
+}
+CLIENT_SYNC_SETTING_KEYS = {
+    "auth_enabled",
+    "registration_enabled",
+    "show_auto_videos",
+    "show_local_title",
+    "show_search_button",
+}
 
 
 class ImportError(RuntimeError):
@@ -156,6 +187,124 @@ def json_object(value: Any) -> dict[str, Any]:
 def json_value(value: Any) -> Any:
     parsed = parse_json(value)
     return parsed if parsed is not None else clean_text(value)
+
+
+def bool_value(value: Any, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on", "enabled", "active"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled", "inactive"}:
+        return False
+    return default
+
+
+def normalize_metadata_source(value: Any) -> str | None:
+    text = clean_text(value)
+    if not text:
+        return None
+    key = text.strip().lower().replace("-", "_").replace(" ", "_")
+    return LEGACY_METADATA_SOURCE_ALIASES.get(key)
+
+
+def legacy_metadata_source_order(value: Any) -> list[str]:
+    parsed = parse_json(value)
+    raw_items: list[Any]
+    if isinstance(parsed, list):
+        raw_items = parsed
+    else:
+        text = clean_text(value)
+        raw_items = re.split(r"[,>]", text) if text else []
+
+    order: list[str] = []
+    for item in raw_items:
+        plugin_id = normalize_metadata_source(item)
+        if plugin_id and plugin_id not in order:
+            order.append(plugin_id)
+    return order
+
+
+def legacy_metadata_plugin_plan(settings: dict[str, Any]) -> dict[str, Any]:
+    enabled: dict[str, bool] = {}
+    for plugin_id, keys in LEGACY_METADATA_PLUGIN_FLAGS.items():
+        for key in keys:
+            if key in settings:
+                enabled[plugin_id] = bool_value(settings.get(key), default=False)
+                break
+
+    # UPCItemDB was used implicitly by the legacy barcode flow. Keep that
+    # behavior unless a future legacy export explicitly disables it.
+    enabled.setdefault("upcitemdb", True)
+
+    order = legacy_metadata_source_order(settings.get("metadata_source_order"))
+    if enabled.get("upcitemdb") and "upcitemdb" not in order:
+        order.insert(0, "upcitemdb")
+    for plugin_id in LEGACY_METADATA_PLUGIN_FLAGS:
+        if plugin_id not in order:
+            order.append(plugin_id)
+
+    unsupported = [plugin_id for plugin_id in order if plugin_id not in LEGACY_METADATA_PLUGIN_FLAGS]
+    order = [plugin_id for plugin_id in order if plugin_id in LEGACY_METADATA_PLUGIN_FLAGS]
+
+    return {
+        "enabled": enabled,
+        "order": order,
+        "unsupported": unsupported,
+    }
+
+
+def apply_legacy_metadata_plugin_plan(conn, settings: dict[str, Any], Jsonb, summary: ImportSummary | None = None) -> dict[str, Any]:
+    plan = legacy_metadata_plugin_plan(settings)
+    enabled = plan["enabled"]
+    order = plan["order"]
+    applied: dict[str, dict[str, Any]] = {}
+    with conn.cursor() as cur:
+        for index, plugin_id in enumerate(order, start=1):
+            plugin_enabled = bool(enabled.get(plugin_id, False))
+            order_index = index * 10
+            cur.execute(
+                """
+                UPDATE metadata_plugins
+                SET enabled=%s,
+                    order_index=%s,
+                    updated_at=now()
+                WHERE id=%s
+                """,
+                (plugin_enabled, order_index, plugin_id),
+            )
+            if cur.rowcount:
+                applied[plugin_id] = {
+                    "enabled": plugin_enabled,
+                    "orderIndex": order_index,
+                }
+                if summary is not None:
+                    summary.counters["metadata_plugins_mapped"] += 1
+        cur.execute(
+            """
+            INSERT INTO app_settings (key, value, is_secret)
+            VALUES ('legacy_metadata_plugins_reconciled', %s, false)
+            ON CONFLICT (key) DO UPDATE SET
+                value=EXCLUDED.value,
+                updated_at=now()
+            """,
+            (
+                Jsonb(
+                    {
+                        "applied": applied,
+                        "unsupported": plan["unsupported"],
+                    }
+                ),
+            ),
+        )
+    if summary is not None:
+        for plugin_id in plan["unsupported"]:
+            summary.skipped[f"metadata_plugin_unsupported_{plugin_id}"] += 1
+    return {"applied": applied, "unsupported": plan["unsupported"]}
 
 
 def row_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -381,6 +530,7 @@ class NextImporter:
             )
 
     def import_settings(self, conn) -> None:
+        imported_settings: dict[str, Any] = {}
         for row in rows(self.sqlite, "settings"):
             key = clean_text(row["key"])
             if not key:
@@ -388,6 +538,8 @@ class NextImporter:
             if any(hint in key.lower() for hint in SECRET_SETTING_HINTS):
                 self.summary.skipped["settings_secret"] += 1
                 continue
+            value = json_value(row["value"])
+            imported_settings[key] = value
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -397,9 +549,10 @@ class NextImporter:
                         value=EXCLUDED.value,
                         updated_at=now()
                     """,
-                    (key, self.Jsonb(json_value(row["value"])),),
+                    (key, self.Jsonb(value),),
                 )
             self.summary.counters["settings"] += 1
+        apply_legacy_metadata_plugin_plan(conn, imported_settings, self.Jsonb, self.summary)
 
     def import_users(self, conn, run_id: uuid.UUID) -> None:
         user_rows = rows(self.sqlite, "users")
