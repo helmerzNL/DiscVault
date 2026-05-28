@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: discvault-next-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-discvault_next}
@@ -24,7 +23,6 @@ services:
       args:
         - BUILD_VERSION=${BUILD_VERSION:-next-dev}
         - BUILD_SHA=${BUILD_SHA:-unknown}
-    container_name: discvault-next-api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -57,7 +55,6 @@ services:
       args:
         - BUILD_VERSION=${BUILD_VERSION:-next-dev}
         - BUILD_SHA=${BUILD_SHA:-unknown}
-    container_name: discvault-next-worker
     restart: unless-stopped
     depends_on:
       next-api:
@@ -80,7 +77,6 @@ services:
       args:
         - BUILD_VERSION=${BUILD_VERSION:-next-dev}
         - BUILD_SHA=${BUILD_SHA:-unknown}
-    container_name: discvault-next-migrate
     profiles: ["tools"]
     depends_on:
       postgres:
@@ -98,7 +94,6 @@ services:
       args:
         - BUILD_VERSION=${BUILD_VERSION:-next-dev}
         - BUILD_SHA=${BUILD_SHA:-unknown}
-    container_name: discvault-next-migration-status
     profiles: ["tools"]
     depends_on:
       postgres:
@@ -116,7 +111,6 @@ services:
       args:
         - BUILD_VERSION=${BUILD_VERSION:-next-dev}
         - BUILD_SHA=${BUILD_SHA:-unknown}
-    container_name: discvault-next-import-sqlite
     profiles: ["tools"]
     depends_on:
       postgres:

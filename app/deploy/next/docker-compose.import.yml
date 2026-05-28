@@ -1,7 +1,6 @@
 services:
   import-sqlite:
     image: ${DISCVAULT_NEXT_IMAGE}
-    container_name: discvault-next-import-sqlite
     restart: "no"
     working_dir: /opt/discvault/backend
     command:
@@ -24,4 +23,4 @@ services:
 networks:
   discvault-next:
     external: true
-    name: discvault-next
+    name: discvault_next_deploy_discvault-next

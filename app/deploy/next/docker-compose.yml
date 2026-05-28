@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: discvault-next-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -24,7 +23,6 @@ services:
 
   next-api:
     image: ${DISCVAULT_NEXT_IMAGE}
-    container_name: discvault-next-api
     restart: unless-stopped
     working_dir: /opt/discvault/backend
     command:
@@ -63,7 +61,6 @@ services:
 
   next-worker:
     image: ${DISCVAULT_NEXT_IMAGE}
-    container_name: discvault-next-worker
     restart: unless-stopped
     working_dir: /opt/discvault/backend
     command: ["python", "next_worker.py", "work"]
@@ -83,9 +80,33 @@ services:
     networks:
       - discvault-next
 
+  import-sqlite:
+    image: ${DISCVAULT_NEXT_IMAGE}
+    profiles: ["tools"]
+    restart: "no"
+    working_dir: /opt/discvault/backend
+    command:
+      [
+        "python",
+        "next_import.py",
+        "--db",
+        "/data/discvault.db",
+        "--data-dir",
+        "/data"
+      ]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TZ: ${TZ}
+    volumes:
+      - ${DISCVAULT_DATA_DIR}:/data:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - discvault-next
+
 volumes:
   postgres-data:
 
 networks:
   discvault-next:
-    name: discvault-next
