@@ -1736,7 +1736,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       return "";
     }
     function cssUrl(url) {
-      return String(url || "").replace(/["\\]/g, "");
+      return String(url || "").replace(/["\\\\]/g, "");
     }
     function valueOrDash(value) {
       if (value === null || value === undefined || value === "") return "-";
