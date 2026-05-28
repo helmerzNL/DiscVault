@@ -98,6 +98,10 @@ target user must be active and already have an admin-like role. During transfer,
 the current owner must approve with their passkey again; the target becomes
 owner and the previous owner is kept as admin.
 
+MovieVault metadata receiving/contribution is separate from using MovieVault as
+a lookup plugin. The owner can toggle `movievault_contribution_enabled` from
+the admin panel; normal admins cannot change this receiver mode.
+
 Logs:
 
 ```bash

@@ -1247,6 +1247,23 @@ def register_next_auth_routes(
             payload = auth_status_payload(conn)
         return response({"status": "ok", **payload})
 
+    @route("/api/next/auth/owner/settings", "/api/auth/owner/settings", methods=["GET", "POST"])
+    def owner_settings():
+        with connect() as conn:
+            require_owner(conn)
+            if request.method == "POST":
+                body = request.get_json(silent=True) or {}
+                if "movievault_contribution_enabled" in body:
+                    enabled = bool(body.get("movievault_contribution_enabled"))
+                    with conn.transaction():
+                        set_setting(conn, "movievault_contribution_enabled", enabled)
+            settings = {
+                "movievault_contribution_enabled": bool(
+                    setting_value(conn, "movievault_contribution_enabled", False)
+                )
+            }
+        return response({"status": "ok", "settings": settings})
+
     @route("/api/next/auth/invite", "/api/auth/invite", methods=["POST"])
     def create_invite():
         body = request.get_json(silent=True) or {}
