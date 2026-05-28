@@ -910,6 +910,10 @@ def first_usable_image(*values: Any) -> str:
     return ""
 
 
+def app_href(path: str = "") -> str:
+    return f"/api/next/app{path}"
+
+
 def server_movie_cards(movies: list[dict[str, Any]]) -> str:
     if not movies:
         return '<div class="empty">No movies imported yet.</div>'
@@ -927,13 +931,13 @@ def server_movie_cards(movies: list[dict[str, Any]]) -> str:
         movie_id = h(movie.get("id"))
         cards.append(
             f"""
-          <article class="movie" role="button" tabindex="0" onclick="openMovieDetail('{movie_id}')" onkeydown="if(event.key==='Enter'||event.key===' '){{event.preventDefault();openMovieDetail('{movie_id}')}}">
+          <a class="movie" href="{h(app_href(f'/movies/{movie_id}'))}">
             <div class="poster">{poster_html}</div>
             <div class="movie-body">
               <div class="movie-title">{h(movie.get("title") or "Untitled")}</div>
               <div class="tags">{''.join(tags)}</div>
             </div>
-          </article>
+          </a>
             """.strip()
         )
     return "\n".join(cards)
@@ -953,7 +957,7 @@ def server_container_cards(containers: list[dict[str, Any]]) -> str:
         container_id = h(container.get("id"))
         cards.append(
             f"""
-        <a class="container-card" href="/api/next/containers/{container_id}/view">
+        <a class="container-card" href="{h(app_href(f'/containers/{container_id}'))}">
           <strong>{h(container.get("title") or "Untitled")}</strong>
           <div class="tags">{''.join(tags)}</div>
         </a>
@@ -1107,7 +1111,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       border-radius: 8px;
       overflow: hidden;
       background: var(--surface);
+      color: inherit;
+      display: block;
       min-width: 0;
+      text-decoration: none;
     }
     .poster {
       aspect-ratio: 2 / 3;
@@ -1552,7 +1559,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           ? `<img src="${escapeHtml(poster)}" alt="">`
           : `<span>No poster</span>`;
         return `
-          <article class="movie" role="button" tabindex="0" onclick="openMovieDetail('${escapeHtml(movie.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMovieDetail('${escapeHtml(movie.id)}')}">
+          <a class="movie" href="/api/next/app/movies/${encodeURIComponent(movie.id)}">
             <div class="poster">${posterHtml}</div>
             <div class="movie-body">
               <div class="movie-title">${escapeHtml(movie.title || "Untitled")}</div>
@@ -1562,14 +1569,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
                 ${movie.barcode ? `<span class="tag">${escapeHtml(movie.barcode)}</span>` : ""}
               </div>
             </div>
-          </article>
+          </a>
         `;
       }).join("") : `<div class="empty">No movies match the current filter.</div>`;
     }
     function renderContainers() {
       document.getElementById("containerCount").textContent = number(state.containers.length);
       document.getElementById("containerList").innerHTML = state.containers.length ? state.containers.map((container) => `
-        <a class="container-card" href="/api/next/containers/${encodeURIComponent(container.id)}/view">
+        <a class="container-card" href="/api/next/app/containers/${encodeURIComponent(container.id)}">
           <strong>${escapeHtml(container.title || "Untitled")}</strong>
           <div class="tags">
             <span class="tag blue">${escapeHtml((container.container_type || "container").replaceAll("_", " "))}</span>
@@ -1768,6 +1775,10 @@ def container_detail_image(media_assets: list[dict[str, Any]], metadata: dict[st
     return first_usable_image(*metadata_values, *primary_assets, *other_assets)
 
 
+def movie_detail_image(media_assets: list[dict[str, Any]], metadata: dict[str, Any], kind: str) -> str:
+    return container_detail_image(media_assets, metadata, kind)
+
+
 def detail_value(value: Any) -> str:
     if value in (None, ""):
         return ""
@@ -1812,9 +1823,10 @@ def container_detail_movie_cards(movies: list[dict[str, Any]]) -> str:
             metadata.get("posters"),
         )
         poster_html = f'<img src="{h(poster)}" alt="">' if poster else "<span>No poster</span>"
+        movie_href = h(app_href(f"/movies/{movie.get('id')}"))
         cards.append(
             f"""
-          <a class="item-card" href="/api/next/movies/{h(movie.get('id'))}">
+          <a class="item-card" href="{movie_href}">
             <div class="thumb">{poster_html}</div>
             <div class="item-body">
               <strong>{h(movie.get("title") or "Untitled")}</strong>
@@ -1843,13 +1855,13 @@ def container_detail_collection_item_cards(items: list[dict[str, Any]]) -> str:
         )
         poster_html = f'<img src="{h(poster)}" alt="">' if poster else "<span>No poster</span>"
         entity_type = item.get("entity_type")
-        href = f"/api/next/movies/{h(item.get('entity_id'))}"
+        href = app_href(f"/movies/{item.get('entity_id')}")
         if entity_type == "container":
-            href = f"/api/next/containers/{h(item.get('entity_id'))}/view"
+            href = app_href(f"/containers/{item.get('entity_id')}")
         type_label = item.get("container_type") or item.get("item_type") or entity_type
         cards.append(
             f"""
-          <a class="item-card" href="{href}">
+          <a class="item-card" href="{h(href)}">
             <div class="thumb">{poster_html}</div>
             <div class="item-body">
               <strong>{h(item.get("title") or "Untitled")}</strong>
@@ -1876,6 +1888,362 @@ def container_detail_media_rows(media_assets: list[dict[str, Any]]) -> str:
         value = asset.get("source_url") or asset.get("storage_key") or asset.get("sha256")
         rows.append(f'<div class="field"><span>{h(label)}</span><strong>{h(value)}</strong></div>')
     return "".join(rows)
+
+
+def movie_detail_credit_cards(credits: list[dict[str, Any]]) -> str:
+    if not credits:
+        return '<div class="empty">No credits imported yet.</div>'
+    cards = []
+    for credit in credits:
+        role = credit.get("character") or credit.get("job") or credit.get("credit_type")
+        cards.append(
+            f"""
+          <div class="item-card plain">
+            <div class="item-body">
+              <strong>{h(credit.get("name") or "Unknown")}</strong>
+              <div class="tags">{detail_tags(role, credit.get("known_for"))}</div>
+            </div>
+          </div>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def movie_detail_container_cards(containers: list[dict[str, Any]]) -> str:
+    if not containers:
+        return '<div class="empty small">No containers linked yet.</div>'
+    cards = []
+    for container in containers:
+        container_href = h(app_href(f"/containers/{container.get('id')}"))
+        label = str(container.get("container_type") or "container").replace("_", " ")
+        cards.append(
+            f"""
+          <a class="item-card plain" href="{container_href}">
+            <div class="item-body">
+              <strong>{h(container.get("title") or "Untitled")}</strong>
+              <div class="tags">{detail_tags(label, container.get("relationship"), container.get("year"))}</div>
+            </div>
+          </a>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def movie_detail_html(detail: dict[str, Any]) -> str:
+    movie = detail.get("movie") or {}
+    metadata = movie.get("metadata") or {}
+    specs = detail.get("technicalSpecs") or {}
+    identifiers = detail.get("identifiers") or []
+    containers = detail.get("containers") or []
+    credits = detail.get("credits") or []
+    media_assets = detail.get("mediaAssets") or []
+    title = movie.get("title") or "Untitled"
+    poster = movie_detail_image(media_assets, metadata, "poster")
+    backdrop = movie_detail_image(media_assets, metadata, "backdrop")
+    poster_html = f'<img src="{h(poster)}" alt="">' if poster else "<span>No poster</span>"
+    hero_style = ""
+    if backdrop:
+        hero_style = (
+            ' style="background-image: linear-gradient(180deg, rgba(16,17,22,.18), '
+            f'var(--surface)), url(&quot;{h(backdrop)}&quot;)"'
+        )
+    identifier_html = (
+        "".join(
+            f'<div class="field"><span>{h(item.get("provider_id"))} {h(item.get("identifier_type"))}</span>'
+            f'<strong>{h(item.get("identifier"))}</strong></div>'
+            for item in identifiers
+        )
+        or '<div class="empty small">No identifiers imported yet.</div>'
+    )
+    metadata_text = json_lib.dumps(json_ready(metadata), indent=2, sort_keys=True, ensure_ascii=True)
+
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>""" + h(title) + """ - DiscVault Next</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101116;
+      --surface: #191c24;
+      --surface-2: #222633;
+      --line: #343a4c;
+      --text: #f4f5f8;
+      --muted: #aab0bd;
+      --accent: #e8c547;
+      --blue: #82aaff;
+      --green: #48c78e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1220px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 22px 0 46px;
+    }
+    a { color: inherit; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      min-height: 38px;
+      padding: 0 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      background: var(--surface-2);
+      white-space: nowrap;
+    }
+    .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+    .hero {
+      min-height: 270px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: linear-gradient(135deg, #242938, #11141d);
+      background-size: cover;
+      background-position: center;
+      overflow: hidden;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 18px;
+      margin-top: -112px;
+      padding: 0 18px 18px;
+      position: relative;
+    }
+    .poster {
+      aspect-ratio: 2 / 3;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      overflow: hidden;
+    }
+    .poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .summary-main {
+      min-width: 0;
+      padding-top: 110px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 {
+      font-size: clamp(1.7rem, 4vw, 3rem);
+      line-height: 1.05;
+      overflow-wrap: anywhere;
+    }
+    h2 { font-size: 1rem; }
+    p {
+      color: var(--muted);
+      line-height: 1.58;
+      margin-top: 12px;
+      max-width: 78ch;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 9px;
+    }
+    .tag {
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .74rem;
+      padding: 3px 8px;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-width: 0;
+    }
+    .panel.full { grid-column: 1 / -1; }
+    .items {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .item-card {
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr);
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      padding: 9px;
+      color: inherit;
+      text-decoration: none;
+      min-width: 0;
+    }
+    .item-card.plain {
+      display: block;
+    }
+    .item-body { min-width: 0; }
+    .item-body strong {
+      display: block;
+      line-height: 1.28;
+      overflow-wrap: anywhere;
+    }
+    .field-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .field {
+      display: grid;
+      grid-template-columns: minmax(110px, .7fr) minmax(0, 1.3fr);
+      gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding-bottom: 8px;
+    }
+    .field:last-child { border-bottom: 0; padding-bottom: 0; }
+    .field span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .field strong {
+      font-weight: 560;
+      overflow-wrap: anywhere;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font-size: .78rem;
+      margin: 12px 0 0;
+      max-height: 420px;
+      overflow: auto;
+    }
+    .empty {
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      text-align: center;
+    }
+    .empty.small { min-height: 48px; }
+    @media (max-width: 860px) {
+      main { width: min(100vw - 20px, 720px); padding-top: 12px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .summary { grid-template-columns: 108px minmax(0, 1fr); gap: 12px; margin-top: -70px; padding: 0 12px 14px; }
+      .summary-main { padding-top: 74px; }
+      .layout { grid-template-columns: 1fr; }
+      .panel.full { grid-column: auto; }
+      .field { grid-template-columns: 1fr; gap: 3px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="topbar">
+      <a class="button" href="/api/next/app">Back to collection</a>
+      <div class="actions">
+        <a class="button" href="/api/next/movies/""" + h(movie.get("id")) + """">JSON</a>
+        <a class="button" href="/api/next/migration">Migration</a>
+      </div>
+    </div>
+    <section class="hero" """ + hero_style + """></section>
+    <section class="summary">
+      <div class="poster">""" + poster_html + """</div>
+      <div class="summary-main">
+        <h1>""" + h(title) + """</h1>
+        <div class="tags">""" + detail_tags(movie.get("year"), movie.get("format"), movie.get("runtime_minutes") and f"{movie.get('runtime_minutes')} min", movie.get("rating") and f"Rating {movie.get('rating')}") + """</div>
+        <p>""" + h(movie.get("overview") or "No overview imported yet.") + """</p>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="panel">
+        <h2>Release</h2>
+        <div class="field-list">""" + detail_fields([
+            ("Original title", movie.get("original_title")),
+            ("Barcode", movie.get("barcode")),
+            ("Format", movie.get("format")),
+            ("Edition", movie.get("edition")),
+            ("Edition type", movie.get("edition_type")),
+            ("Release date", movie.get("release_date")),
+            ("Country", movie.get("country")),
+            ("Language", movie.get("language")),
+            ("Location", movie.get("location")),
+            ("Director", metadata.get("director")),
+            ("Producer", metadata.get("producer")),
+            ("Studios", metadata.get("studios")),
+            ("Genre", metadata.get("genre")),
+            ("Distributor", metadata.get("distributor")),
+            ("Trailer", metadata.get("trailer_url")),
+        ]) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Technical Specs</h2>
+        <div class="field-list">""" + detail_fields([
+            ("HDR", specs.get("hdr") or metadata.get("hdr")),
+            ("Packaging", specs.get("packaging") or metadata.get("packaging")),
+            ("Screen ratio", specs.get("screen_ratios") or metadata.get("screen_ratios")),
+            ("Audio", specs.get("audio_tracks") or metadata.get("audio_tracks")),
+            ("Subtitles", specs.get("subtitles") or metadata.get("subtitles")),
+            ("Regions", specs.get("regions") or metadata.get("regions")),
+            ("Content ratings", specs.get("content_ratings") or metadata.get("content_ratings")),
+        ]) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Containers</h2>
+        <div class="items">""" + movie_detail_container_cards(containers) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Identifiers</h2>
+        <div class="field-list">""" + identifier_html + """</div>
+      </div>
+      <div class="panel full">
+        <h2>Cast & Crew (""" + h(len(credits)) + """)</h2>
+        <div class="items">""" + movie_detail_credit_cards(credits) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Media Assets</h2>
+        <div class="field-list">""" + container_detail_media_rows(media_assets) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Metadata</h2>
+        <pre>""" + h(metadata_text) + """</pre>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+"""
 
 
 def container_detail_html(detail: dict[str, Any]) -> str:
@@ -2127,7 +2495,7 @@ def container_detail_html(detail: dict[str, Any]) -> str:
 <body>
   <main>
     <div class="topbar">
-      <a class="button" href="/api/next/collection">Back to collection</a>
+      <a class="button" href="/api/next/app">Back to collection</a>
       <div class="actions">
         <a class="button" href="/api/next/containers/""" + h(container.get("id")) + """">JSON</a>
         <a class="button" href="/api/next/migration">Migration</a>
@@ -3464,6 +3832,18 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Movie not found", 404)
         return response({"status": "ok", "detail": detail})
 
+    @flask_app.get("/api/next/movies/<movie_id>/view")
+    @flask_app.get("/api/next/app/movies/<movie_id>")
+    def movie_detail_view(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            detail = movie_detail_entity(conn, movie_uuid)
+        if not detail:
+            raise NextApiError("Movie not found", 404)
+        return html_response(movie_detail_html(detail))
+
     @flask_app.get("/api/next/containers")
     def containers():
         container_type = (request.args.get("type") or "").strip()
@@ -3512,6 +3892,7 @@ def register_routes(flask_app: Flask) -> None:
         return response({"status": "ok", "detail": detail})
 
     @flask_app.get("/api/next/containers/<container_id>/view")
+    @flask_app.get("/api/next/app/containers/<container_id>")
     def container_detail_view(container_id: str):
         container_uuid = parse_uuid(container_id, "containerId")
         with connect() as conn:
@@ -3648,6 +4029,8 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/collection")
     @flask_app.get("/api/next/collection/")
+    @flask_app.get("/api/next/app")
+    @flask_app.get("/api/next/app/")
     def collection_dashboard():
         with connect() as conn:
             snapshot = collection_dashboard_snapshot(conn)
