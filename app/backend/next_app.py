@@ -1569,6 +1569,76 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .auth-status.good { color: var(--green); }
     .auth-status.bad { color: var(--red); }
     .auth-status.info { color: var(--blue); }
+    .admin-panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 16px;
+    }
+    .admin-panel h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .admin-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .admin-card {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px;
+      background: var(--surface-2);
+      padding: 12px;
+      min-width: 0;
+    }
+    .admin-card h3 {
+      margin: 0 0 9px;
+      font-size: .9rem;
+    }
+    .admin-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .admin-row {
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 8px;
+      padding: 9px;
+      display: grid;
+      gap: 8px;
+      background: rgba(255,255,255,.025);
+      min-width: 0;
+    }
+    .admin-row-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+    .admin-row-head strong {
+      overflow-wrap: anywhere;
+    }
+    .admin-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .admin-controls select,
+    .admin-controls input {
+      min-width: 150px;
+    }
+    .admin-code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      background: rgba(0,0,0,.22);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 6px;
+      padding: 7px 8px;
+      overflow-wrap: anywhere;
+    }
     .hidden {
       display: none !important;
     }
@@ -1576,6 +1646,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       main { width: min(100vw - 20px, 760px); padding-top: 18px; }
       header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
       .auth-panel { grid-template-columns: 1fr; }
+      .admin-grid { grid-template-columns: 1fr; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .layout { grid-template-columns: 1fr; }
       .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
@@ -1652,14 +1723,56 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <label>Passkey name
             <input id="authCredentialName" type="text" value="Owner passkey" autocomplete="off">
           </label>
+          <label id="authInviteLabel">Invite code
+            <input id="authInviteCode" type="text" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX">
+          </label>
         </div>
         <div class="actions">
           <button type="button" id="authSetupButton" data-auth-action="setup">Create owner passkey</button>
+          <button type="button" id="authJoinButton" data-auth-action="join">Create account</button>
           <button type="button" id="authLoginButton" data-auth-action="login">Sign in</button>
           <button type="button" id="authLogoutButton" data-auth-action="logout">Sign out</button>
         </div>
         <div class="auth-status" id="authStatusLine"></div>
       </div>
+    </section>
+
+    <section class="admin-panel hidden" id="adminPanel">
+      <div class="section-head">
+        <div>
+          <h2>User & Admin Management</h2>
+          <p class="muted">Manage passkey users, roles, authentication and invite-only access.</p>
+        </div>
+        <button type="button" data-admin-action="refresh">Refresh Admin</button>
+      </div>
+      <div class="admin-grid">
+        <div class="admin-card">
+          <h3>Security</h3>
+          <div class="admin-controls">
+            <button type="button" id="adminAuthToggle" data-admin-action="toggle-auth">Toggle Authentication</button>
+            <button type="button" id="adminInviteOnlyToggle" data-admin-action="toggle-invite-only">Toggle Invite-only</button>
+          </div>
+          <p class="muted" id="adminSecurityState">-</p>
+        </div>
+        <div class="admin-card">
+          <h3>Create Invite</h3>
+          <div class="admin-controls">
+            <input id="adminInviteUsername" type="text" placeholder="username">
+            <button type="button" data-admin-action="create-invite">Create Invite</button>
+          </div>
+          <div class="admin-code hidden" id="adminInviteCodeOutput"></div>
+        </div>
+        <div class="admin-card">
+          <h3>Users</h3>
+          <div class="admin-list" id="adminUsersList"><div class="empty">No users loaded.</div></div>
+        </div>
+        <div class="admin-card">
+          <h3>Passkeys & Invites</h3>
+          <div class="admin-list" id="adminCredentialsList"><div class="empty">No passkeys loaded.</div></div>
+          <div class="admin-list" id="adminInvitesList"><div class="empty">No invites loaded.</div></div>
+        </div>
+      </div>
+      <div class="auth-status" id="adminStatusLine"></div>
     </section>
 
     <div class="toolbar">
@@ -1823,23 +1936,31 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const meta = document.getElementById("authMeta");
       const setupFields = document.getElementById("authSetupFields");
       const setupButton = document.getElementById("authSetupButton");
+      const joinButton = document.getElementById("authJoinButton");
       const loginButton = document.getElementById("authLoginButton");
       const logoutButton = document.getElementById("authLogoutButton");
+      const inviteLabel = document.getElementById("authInviteLabel");
       const unavailable = webauthnUnavailableReason();
       const setupRequired = !!authState.setup_required;
       const authenticated = !!authState.authenticated;
+      const joinAllowed = !setupRequired && !authenticated && !!authState.auth_enabled;
       title.textContent = authenticated ? "Signed in" : setupRequired ? "First passkey" : "Passkeys";
       description.textContent = authenticated
         ? `Signed in${authState.role ? ` as ${authState.role}` : ""}.`
         : setupRequired
           ? "Create the first owner passkey for this DiscVault Next instance."
-          : "Sign in with your passkey.";
+          : authState.registration_enabled
+            ? "Sign in with your passkey or create a new account."
+            : "Sign in with your passkey or create an account with an invite code.";
       meta.textContent = `RP ID: ${authState.rp_id || "-"}; origins: ${(authState.rp_origins || []).join(", ") || "-"}`;
-      setupFields.classList.toggle("hidden", !setupRequired);
+      setupFields.classList.toggle("hidden", !(setupRequired || joinAllowed));
+      inviteLabel.classList.toggle("hidden", !joinAllowed || !!authState.registration_enabled);
       setupButton.classList.toggle("hidden", !setupRequired);
+      joinButton.classList.toggle("hidden", !joinAllowed);
       loginButton.classList.toggle("hidden", setupRequired || authenticated);
       logoutButton.classList.toggle("hidden", !authenticated);
       setupButton.disabled = !!unavailable;
+      joinButton.disabled = !!unavailable;
       loginButton.disabled = !!unavailable;
       if (unavailable) {
         setAuthStatus(unavailable, "bad");
@@ -1851,6 +1972,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       try {
         authState = await authJson("/api/next/auth/status", {headers: authHeaders()});
         renderAuthStatus();
+        renderAdminVisibility();
       } catch (error) {
         setAuthStatus(error.message, "bad");
       }
@@ -1903,6 +2025,72 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         authToken = verified.token || "";
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         setAuthStatus("Passkey created. You are signed in.", "good");
+        await refreshAuthStatus();
+        await loadCollection();
+      } catch (error) {
+        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+      } finally {
+        button.disabled = false;
+      }
+    }
+    async function registerInvitedPasskey() {
+      setAuthStatus("Create account clicked.", "info");
+      const unavailable = webauthnUnavailableReason();
+      if (unavailable) {
+        setAuthStatus(unavailable, "bad");
+        return;
+      }
+      const username = document.getElementById("authUsername").value.trim();
+      const credentialName = document.getElementById("authCredentialName").value.trim() || "Passkey";
+      const inviteCode = document.getElementById("authInviteCode").value.trim();
+      if (!username) {
+        setAuthStatus("Username is required.", "bad");
+        return;
+      }
+      if (!authState.registration_enabled && !inviteCode) {
+        setAuthStatus("Invite code is required.", "bad");
+        return;
+      }
+      const button = document.getElementById("authJoinButton");
+      button.disabled = true;
+      setAuthStatus("Waiting for your passkey prompt...", "info");
+      try {
+        const optionsPayload = await authJson("/api/next/auth/register/options", {
+          method: "POST",
+          body: JSON.stringify({username, display_name: username, invite_code: inviteCode})
+        });
+        const options = optionsPayload.options;
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.user.id = base64urlToBuffer(options.user.id);
+        options.excludeCredentials = (options.excludeCredentials || []).map((credential) => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id)
+        }));
+        const attestation = await navigator.credentials.create({publicKey: options});
+        const credential = {
+          id: attestation.id,
+          rawId: bufferToBase64url(attestation.rawId),
+          response: {
+            attestationObject: bufferToBase64url(attestation.response.attestationObject),
+            clientDataJSON: bufferToBase64url(attestation.response.clientDataJSON)
+          },
+          type: attestation.type,
+          authenticatorAttachment: attestation.authenticatorAttachment
+        };
+        const verified = await authJson("/api/next/auth/register/verify", {
+          method: "POST",
+          body: JSON.stringify({
+            user_id: optionsPayload.user_id,
+            username,
+            display_name: username,
+            credential_name: credentialName,
+            invite_code: inviteCode,
+            credential
+          })
+        });
+        authToken = verified.token || "";
+        if (authToken) localStorage.setItem("dv_next_token", authToken);
+        setAuthStatus("Account created. You are signed in.", "good");
         await refreshAuthStatus();
         await loadCollection();
       } catch (error) {
@@ -1964,6 +2152,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       authToken = "";
       localStorage.removeItem("dv_next_token");
       setAuthStatus("Signed out.", "info");
+      const adminPanel = document.getElementById("adminPanel");
+      if (adminPanel) {
+        adminPanel.dataset.loaded = "false";
+        adminPanel.classList.add("hidden");
+      }
       refreshAuthStatus();
       clearProtectedCollection("Sign in with your passkey to load the collection.");
     }
@@ -1975,6 +2168,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           event.preventDefault();
           const action = button.dataset.authAction;
           if (action === "setup") registerOwnerPasskey().catch(reportClientError);
+          if (action === "join") registerInvitedPasskey().catch(reportClientError);
           if (action === "login") loginPasskey().catch(reportClientError);
           if (action === "logout") logoutPasskey();
         });
@@ -1990,7 +2184,202 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         openMovieDetail(movieLink.dataset.movieId);
       });
     }
+    function setAdminStatus(message, tone) {
+      const node = document.getElementById("adminStatusLine");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `auth-status ${tone || ""}`.trim();
+    }
+    function isAdminUser() {
+      return !!authState.authenticated && ["owner", "admin"].includes(authState.role || "");
+    }
+    function renderAdminVisibility() {
+      const panel = document.getElementById("adminPanel");
+      if (!panel) return;
+      panel.classList.toggle("hidden", !isAdminUser());
+      if (isAdminUser() && panel.dataset.loaded !== "true") {
+        loadAdmin().catch((error) => setAdminStatus(error.message, "bad"));
+      }
+    }
+    function adminRoleOptions(selectedRole, roles) {
+      return (roles || []).map((role) => `
+        <option value="${escapeHtml(role.key)}" ${role.key === selectedRole ? "selected" : ""}>${escapeHtml(role.name || role.key)}</option>
+      `).join("");
+    }
+    function renderAdminUsers(users, roles) {
+      const list = document.getElementById("adminUsersList");
+      if (!list) return;
+      list.innerHTML = users.length ? users.map((user) => {
+        const disabled = user.status !== "active";
+        return `
+          <div class="admin-row">
+            <div class="admin-row-head">
+              <strong>${escapeHtml(user.display_name || user.username)}</strong>
+              <span class="tag ${disabled ? "" : "good"}">${escapeHtml(user.status || "active")}</span>
+            </div>
+            <div class="muted">${escapeHtml(user.username)} · ${number(user.credential_count)} passkeys · role ${escapeHtml(user.role || "-")}</div>
+            <div class="admin-controls">
+              <select data-admin-user-role="${escapeHtml(user.id)}">${adminRoleOptions(user.role, roles)}</select>
+              <button type="button" data-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${disabled ? "Enable" : "Disable"}</button>
+              <button type="button" data-admin-user-delete="${escapeHtml(user.id)}">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join("") : `<div class="empty">No users found.</div>`;
+    }
+    function renderAdminCredentials(credentials) {
+      const list = document.getElementById("adminCredentialsList");
+      if (!list) return;
+      list.innerHTML = credentials.length ? credentials.map((credential) => `
+        <div class="admin-row">
+          <div class="admin-row-head">
+            <strong>${escapeHtml(credential.credential_name || "Passkey")}</strong>
+            <button type="button" data-admin-credential-delete="${escapeHtml(credential.id)}">Delete</button>
+          </div>
+          <div class="muted">${escapeHtml(credential.username)} · created ${escapeHtml((credential.created_at || "").slice(0, 10))} · last used ${escapeHtml((credential.last_used_at || "-").slice(0, 19))}</div>
+        </div>
+      `).join("") : `<div class="empty">No passkeys found.</div>`;
+    }
+    function renderAdminInvites(invites) {
+      const list = document.getElementById("adminInvitesList");
+      if (!list) return;
+      list.innerHTML = invites.length ? invites.map((invite) => {
+        const used = !!invite.used_at;
+        return `
+          <div class="admin-row">
+            <div class="admin-row-head">
+              <strong>${escapeHtml(invite.username)}</strong>
+              <span class="tag ${used ? "good" : "blue"}">${used ? "used" : "open"}</span>
+            </div>
+            <div class="muted">expires ${escapeHtml((invite.expires_at || "").slice(0, 19))}</div>
+            ${used ? "" : `<button type="button" data-admin-invite-delete="${escapeHtml(invite.id)}">Delete invite</button>`}
+          </div>
+        `;
+      }).join("") : `<div class="empty">No invites created.</div>`;
+    }
+    function renderAdminSecurity() {
+      const stateLine = document.getElementById("adminSecurityState");
+      const authButton = document.getElementById("adminAuthToggle");
+      const inviteButton = document.getElementById("adminInviteOnlyToggle");
+      if (stateLine) {
+        stateLine.textContent = `Auth ${authState.configured_auth_enabled ? "configured on" : "configured off"}; active ${authState.auth_enabled ? "yes" : "no"}; registration ${authState.registration_enabled ? "open" : "invite-only"}.`;
+      }
+      if (authButton) authButton.textContent = authState.configured_auth_enabled ? "Disable Auth" : "Enable Auth";
+      if (inviteButton) inviteButton.textContent = authState.registration_enabled ? "Require Invites" : "Allow Open Registration";
+    }
+    async function loadAdmin() {
+      if (!isAdminUser()) return;
+      setAdminStatus("Loading admin data...", "info");
+      const [usersPayload, credentialsPayload, invitesPayload] = await Promise.all([
+        authJson("/api/next/auth/users", {headers: authHeaders()}),
+        authJson("/api/next/auth/credentials", {headers: authHeaders()}),
+        authJson("/api/next/auth/invite", {headers: authHeaders()})
+      ]);
+      renderAdminSecurity();
+      renderAdminUsers(usersPayload.users || [], usersPayload.roles || []);
+      renderAdminCredentials(credentialsPayload.credentials || []);
+      renderAdminInvites(invitesPayload.invites || []);
+      document.getElementById("adminPanel").dataset.loaded = "true";
+      setAdminStatus("Admin data loaded.", "good");
+    }
+    async function setAuthConfigured(enabled) {
+      await authJson("/api/next/auth/toggle", {
+        method: "POST",
+        body: JSON.stringify({enabled})
+      });
+      await refreshAuthStatus();
+      await loadAdmin();
+    }
+    async function setInviteOnly(inviteOnly) {
+      authState = await authJson("/api/next/auth/registration", {
+        method: "POST",
+        body: JSON.stringify({enabled: !inviteOnly})
+      });
+      renderAuthStatus();
+      renderAdminSecurity();
+      await loadAdmin();
+    }
+    async function createAdminInvite() {
+      const input = document.getElementById("adminInviteUsername");
+      const username = input.value.trim();
+      if (!username) {
+        setAdminStatus("Username is required for an invite.", "bad");
+        return;
+      }
+      const payload = await authJson("/api/next/auth/invite", {
+        method: "POST",
+        body: JSON.stringify({username})
+      });
+      const output = document.getElementById("adminInviteCodeOutput");
+      output.classList.remove("hidden");
+      output.textContent = `Invite for ${payload.username}: ${payload.code}`;
+      input.value = "";
+      await loadAdmin();
+    }
+    async function updateAdminUserRole(userId, role) {
+      await authJson(`/api/next/auth/users/${encodeURIComponent(userId)}/role`, {
+        method: "PUT",
+        body: JSON.stringify({role})
+      });
+      await loadAdmin();
+    }
+    async function updateAdminUserStatus(userId, status) {
+      await authJson(`/api/next/auth/users/${encodeURIComponent(userId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({status})
+      });
+      await loadAdmin();
+    }
+    async function deleteAdminUser(userId) {
+      if (!confirm("Delete this user and all passkeys?")) return;
+      await authJson(`/api/next/auth/users/${encodeURIComponent(userId)}`, {method: "DELETE"});
+      await loadAdmin();
+    }
+    async function deleteAdminCredential(credentialId) {
+      if (!confirm("Delete this passkey?")) return;
+      await authJson(`/api/next/auth/credentials/${encodeURIComponent(credentialId)}`, {method: "DELETE"});
+      await loadAdmin();
+    }
+    async function deleteAdminInvite(inviteId) {
+      await authJson(`/api/next/auth/invite/${encodeURIComponent(inviteId)}`, {method: "DELETE"});
+      await loadAdmin();
+    }
+    function bindAdminActions() {
+      const panel = document.getElementById("adminPanel");
+      if (!panel || panel.dataset.bound === "true") return;
+      panel.dataset.bound = "true";
+      panel.addEventListener("click", (event) => {
+        const target = event.target.closest("[data-admin-action], [data-admin-user-status], [data-admin-user-delete], [data-admin-credential-delete], [data-admin-invite-delete]");
+        if (!target) return;
+        event.preventDefault();
+        const action = target.dataset.adminAction;
+        const task = action === "refresh"
+          ? loadAdmin()
+          : action === "toggle-auth"
+            ? setAuthConfigured(!authState.configured_auth_enabled)
+            : action === "toggle-invite-only"
+              ? setInviteOnly(!!authState.registration_enabled)
+              : action === "create-invite"
+                ? createAdminInvite()
+                : target.dataset.adminUserStatus
+                  ? updateAdminUserStatus(target.dataset.adminUserStatus, target.dataset.status)
+                  : target.dataset.adminUserDelete
+                    ? deleteAdminUser(target.dataset.adminUserDelete)
+                    : target.dataset.adminCredentialDelete
+                      ? deleteAdminCredential(target.dataset.adminCredentialDelete)
+                      : target.dataset.adminInviteDelete
+                        ? deleteAdminInvite(target.dataset.adminInviteDelete)
+                        : Promise.resolve();
+        Promise.resolve(task).catch((error) => setAdminStatus(error.message, "bad"));
+      });
+      panel.addEventListener("change", (event) => {
+        const target = event.target.closest("[data-admin-user-role]");
+        if (!target) return;
+        updateAdminUserRole(target.dataset.adminUserRole, target.value).catch((error) => setAdminStatus(error.message, "bad"));
+      });
+    }
     window.registerOwnerPasskey = registerOwnerPasskey;
+    window.registerInvitedPasskey = registerInvitedPasskey;
     window.loginPasskey = loginPasskey;
     window.logoutPasskey = logoutPasskey;
     window.addEventListener("error", (event) => reportClientError(event.error || event.message));
@@ -2230,6 +2619,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       setClientStatus("Client script started.");
       bindAuthButtons();
       bindCollectionLinks();
+      bindAdminActions();
       await refreshAuthStatus();
       if (authState.auth_enabled && !authState.authenticated) {
         clearProtectedCollection("Sign in with your passkey to load the collection.");
