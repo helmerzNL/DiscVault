@@ -10,6 +10,7 @@ on:
       - "app/backend/next_database.py"
       - "app/backend/next_import.py"
       - "app/backend/next_app.py"
+      - "app/backend/next_auth.py"
       - "app/backend/next_plugin_runtime.py"
       - "app/backend/next_plugins/**"
       - "app/backend/next_worker.py"
@@ -55,7 +56,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile next_database.py next_import.py next_app.py next_plugin_runtime.py next_worker.py
+        run: python -m py_compile next_database.py next_import.py next_app.py next_auth.py next_plugin_runtime.py next_worker.py
 
       - name: Apply Next migrations
         run: python next_database.py migrate
@@ -176,4 +177,67 @@ jobs:
           assert payload["jobs"][0]["jobType"] == "sync.noop", payload
           assert payload["jobs"][0]["result"]["workerId"] == "ci-worker", payload
           print("/api/next/jobs?status=completed", "ok")
+          PY
+
+      - name: Smoke passkey session cookie auth
+        run: |
+          python - <<'PY'
+          from uuid import uuid4
+
+          from psycopg.types.json import Jsonb
+
+          from next_app import app, connect
+          from next_auth import SESSION_COOKIE_NAME, _create_token
+
+          user_id = uuid4()
+          with connect() as conn:
+              with conn.transaction():
+                  with conn.cursor() as cur:
+                      cur.execute(
+                          """
+                          INSERT INTO users (id, username, display_name, status)
+                          VALUES (%s, 'ci-cookie-owner', 'CI Cookie Owner', 'active')
+                          """,
+                          (user_id,),
+                      )
+                      cur.execute(
+                          """
+                          INSERT INTO user_roles (user_id, role_id, scope_type, scope_id)
+                          SELECT %s, id, 'global', ''
+                          FROM roles
+                          WHERE key='owner'
+                          """,
+                          (user_id,),
+                      )
+                      cur.execute(
+                          """
+                          INSERT INTO passkey_credentials (
+                              id,
+                              user_id,
+                              public_key,
+                              sign_count,
+                              credential_name,
+                              transports
+                          )
+                          VALUES ('ci-cookie-passkey', %s, %s, 0, 'CI cookie passkey', %s)
+                          """,
+                          (user_id, b"fake-public-key", Jsonb([])),
+                      )
+                      cur.execute(
+                          """
+                          INSERT INTO app_settings (key, value, is_secret)
+                          VALUES ('auth_enabled', 'true'::jsonb, false)
+                          ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value
+                          """
+                      )
+
+          client = app.test_client()
+          token = _create_token(str(user_id), "ci-cookie-owner")
+          client.set_cookie(SESSION_COOKIE_NAME, token)
+          response = client.get("/api/next/plugins/registry")
+          assert response.status_code == 200, response.data[:500]
+          payload = response.get_json()
+          assert payload["status"] == "ok", payload
+          assert any(plugin["id"] == "movievault" for plugin in payload["plugins"]), payload
+          print("/api/next/plugins/registry", "session-cookie-ok")
           PY
