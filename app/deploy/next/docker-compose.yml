@@ -4,17 +4,17 @@ services:
     container_name: discvault-next-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-discvault_next}
-      POSTGRES_USER: ${POSTGRES_USER:-discvault_next}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      TZ: ${TZ:-Europe/Amsterdam}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-discvault_next} -d ${POSTGRES_DB:-discvault_next}"
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
         ]
       interval: 10s
       timeout: 5s
@@ -23,34 +23,26 @@ services:
       - discvault-next
 
   next-api:
-    image: ${DISCVAULT_NEXT_IMAGE:-ghcr.io/helmerznl/discvault:dev}
-    pull_policy: always
+    image: ${DISCVAULT_NEXT_IMAGE}
     container_name: discvault-next-api
     restart: unless-stopped
     working_dir: /opt/discvault/backend
     command:
       [
-        "gunicorn",
-        "--bind",
-        "0.0.0.0:5000",
-        "--workers",
-        "${DISCVAULT_NEXT_API_WORKERS:-2}",
-        "--timeout",
-        "${DISCVAULT_NEXT_API_TIMEOUT:-180}",
-        "next_app:app"
+        "sh",
+        "-c",
+        "python next_database.py migrate && exec gunicorn --bind 0.0.0.0:5000 --workers ${DISCVAULT_NEXT_API_WORKERS} --timeout ${DISCVAULT_NEXT_API_TIMEOUT} next_app:app"
       ]
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discvault_next}
-      TZ: ${TZ:-Europe/Amsterdam}
-      BUILD_VERSION: ${BUILD_VERSION:-next-dev}
-      DISCVAULT_BACKEND_VERSION: ${BUILD_VERSION:-next-dev}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TZ: ${TZ}
+      BUILD_VERSION: ${BUILD_VERSION}
+      DISCVAULT_BACKEND_VERSION: ${BUILD_VERSION}
     ports:
-      - "${DISCVAULT_NEXT_API_PORT:-6180}:5000"
+      - "${DISCVAULT_NEXT_API_PORT}:5000"
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -67,39 +59,18 @@ services:
       - discvault-next
 
   next-worker:
-    image: ${DISCVAULT_NEXT_IMAGE:-ghcr.io/helmerznl/discvault:dev}
-    pull_policy: always
+    image: ${DISCVAULT_NEXT_IMAGE}
     container_name: discvault-next-worker
     restart: unless-stopped
     working_dir: /opt/discvault/backend
     command: ["python", "next_worker.py", "work"]
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discvault_next}
-      TZ: ${TZ:-Europe/Amsterdam}
-      DISCVAULT_WORKER_ID: ${DISCVAULT_WORKER_ID:-next-worker-1}
-      DISCVAULT_WORKER_POLL_INTERVAL: ${DISCVAULT_WORKER_POLL_INTERVAL:-2}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TZ: ${TZ}
+      DISCVAULT_WORKER_ID: ${DISCVAULT_WORKER_ID}
+      DISCVAULT_WORKER_POLL_INTERVAL: ${DISCVAULT_WORKER_POLL_INTERVAL}
     depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    healthcheck:
-      disable: true
-    networks:
-      - discvault-next
-
-  migrate:
-    image: ${DISCVAULT_NEXT_IMAGE:-ghcr.io/helmerznl/discvault:dev}
-    pull_policy: always
-    container_name: discvault-next-migrate
-    restart: "no"
-    working_dir: /opt/discvault/backend
-    command: ["python", "next_database.py", "migrate"]
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discvault_next}
-      TZ: ${TZ:-Europe/Amsterdam}
-    depends_on:
-      postgres:
+      next-api:
         condition: service_healthy
     healthcheck:
       disable: true

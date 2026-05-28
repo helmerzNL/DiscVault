@@ -26,13 +26,12 @@ The default stack starts:
 
 ```text
 postgres
-migrate
 next-api
 next-worker
 ```
 
-`migrate` is a one-shot service. It runs the PostgreSQL migrations and exits with
-status 0. `next-api` and `next-worker` wait until it completed successfully.
+`next-api` runs pending PostgreSQL migrations during container startup before
+Gunicorn starts. `next-worker` waits until `next-api` is healthy.
 
 Health check:
 

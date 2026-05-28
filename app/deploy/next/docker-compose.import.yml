@@ -1,7 +1,6 @@
 services:
   import-sqlite:
-    image: ${DISCVAULT_NEXT_IMAGE:-ghcr.io/helmerznl/discvault:dev}
-    pull_policy: always
+    image: ${DISCVAULT_NEXT_IMAGE}
     container_name: discvault-next-import-sqlite
     restart: "no"
     working_dir: /opt/discvault/backend
@@ -15,10 +14,10 @@ services:
         "/import"
       ]
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discvault_next}
-      TZ: ${TZ:-Europe/Amsterdam}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TZ: ${TZ}
     volumes:
-      - ${DISCVAULT_SQLITE_IMPORT_DATA:-./import-data}:/import:ro
+      - ${DISCVAULT_SQLITE_IMPORT_DATA}:/import:ro
     networks:
       - discvault-next
 
