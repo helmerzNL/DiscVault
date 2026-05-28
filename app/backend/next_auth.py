@@ -335,6 +335,87 @@ def register_next_auth_routes(
                 return preferred
         return roles[0]["key"] if roles else None
 
+    def role_exists(conn, role_key: str) -> bool:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM roles WHERE key=%s", (role_key,))
+            return cur.fetchone() is not None
+
+    def active_owner_count(conn) -> int:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(DISTINCT u.id) AS count
+                FROM users u
+                JOIN user_roles ur ON ur.user_id = u.id
+                JOIN roles r ON r.id = ur.role_id
+                WHERE u.status = 'active'
+                  AND r.key = 'owner'
+                """
+            )
+            row = cur.fetchone()
+        return int(row["count"] if row else 0)
+
+    def user_admin_row(conn, user_id: UUID | str) -> dict[str, Any] | None:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    u.id,
+                    u.username,
+                    u.display_name,
+                    u.first_name,
+                    u.last_name,
+                    u.status,
+                    u.created_at,
+                    u.updated_at,
+                    COUNT(c.id)::int AS credential_count,
+                    MAX(c.last_used_at) AS last_credential_used_at
+                FROM users u
+                LEFT JOIN passkey_credentials c ON c.user_id = u.id
+                WHERE u.id=%s
+                GROUP BY u.id
+                """,
+                (user_id,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        row["roles"] = user_roles(conn, row["id"])
+        row["role"] = primary_role(conn, row["id"])
+        row["permissions"] = user_permissions(conn, row["id"])
+        return row
+
+    def managed_roles(conn) -> list[dict[str, Any]]:
+        if not table_exists(conn, "roles"):
+            return []
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT r.id, r.key, r.name, r.description, r.system, rp.permission_key
+                FROM roles r
+                LEFT JOIN role_permissions rp ON rp.role_id = r.id
+                ORDER BY r.system DESC, r.name, rp.permission_key
+                """
+            )
+            rows = cur.fetchall()
+        by_id: dict[Any, dict[str, Any]] = {}
+        for row in rows:
+            role_id = row["id"]
+            role = by_id.setdefault(
+                role_id,
+                {
+                    "id": role_id,
+                    "key": row["key"],
+                    "name": row["name"],
+                    "description": row["description"],
+                    "system": row["system"],
+                    "permissions": [],
+                },
+            )
+            if row.get("permission_key"):
+                role["permissions"].append(row["permission_key"])
+        return list(by_id.values())
+
     def require_admin(conn) -> dict[str, Any]:
         if not auth_enabled(conn):
             return {"id": None, "username": "system", "role": "owner"}
@@ -764,6 +845,150 @@ def register_next_auth_routes(
         token = _create_token(str(stored["user_id"]), stored["username"])
         return response({"status": "ok", "token": token, "username": stored["username"]})
 
+    @route("/api/next/auth/roles", "/api/auth/roles", methods=["GET"])
+    def roles():
+        with connect() as conn:
+            require_admin(conn)
+            return response({"status": "ok", "roles": managed_roles(conn)})
+
+    @route("/api/next/auth/users", "/api/auth/users", methods=["GET"])
+    def users():
+        with connect() as conn:
+            require_admin(conn)
+            if not table_exists(conn, "users"):
+                return response({"status": "ok", "users": []})
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        u.id,
+                        u.username,
+                        u.display_name,
+                        u.first_name,
+                        u.last_name,
+                        u.status,
+                        u.created_at,
+                        u.updated_at,
+                        COUNT(c.id)::int AS credential_count,
+                        MAX(c.last_used_at) AS last_credential_used_at
+                    FROM users u
+                    LEFT JOIN passkey_credentials c ON c.user_id = u.id
+                    GROUP BY u.id
+                    ORDER BY lower(u.username)
+                    """
+                )
+                rows = cur.fetchall()
+            for row in rows:
+                row["roles"] = user_roles(conn, row["id"])
+                row["role"] = primary_role(conn, row["id"])
+                row["permissions"] = user_permissions(conn, row["id"])
+            return response({"status": "ok", "users": rows, "roles": managed_roles(conn)})
+
+    @route("/api/next/auth/users/<user_id>", "/api/auth/users/<user_id>", methods=["PATCH"])
+    def update_user(user_id: str):
+        user_uuid = _parse_uuid(user_id)
+        if not user_uuid:
+            raise next_api_error("Invalid user id", 400)
+        body = request.get_json(silent=True) or {}
+        status = str(body.get("status") or "").strip().lower()
+        display_name = body.get("display_name")
+
+        with connect() as conn:
+            admin = require_admin(conn)
+            target = user_admin_row(conn, user_uuid)
+            if not target:
+                raise next_api_error("User not found", 404)
+            target_role = target.get("role")
+            if target_role == "owner" and admin.get("role") != "owner":
+                raise next_api_error("Only owners can modify owner accounts", 403)
+            if str(admin.get("id")) == str(user_uuid) and status and status != "active":
+                raise next_api_error("You cannot disable your own account", 400)
+            if target_role == "owner" and status and status != "active" and active_owner_count(conn) <= 1:
+                raise next_api_error("The last active owner cannot be disabled", 400)
+
+            assignments: list[str] = []
+            params: list[Any] = []
+            if status:
+                if status not in {"active", "disabled"}:
+                    raise next_api_error("Status must be active or disabled", 400)
+                assignments.append("status=%s")
+                params.append(status)
+            if display_name is not None:
+                assignments.append("display_name=%s")
+                params.append(str(display_name or "").strip() or target["username"])
+            if not assignments:
+                raise next_api_error("No user fields supplied", 400)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"UPDATE users SET {', '.join(assignments)}, updated_at=now() WHERE id=%s",
+                        (*params, user_uuid),
+                    )
+            updated = user_admin_row(conn, user_uuid)
+        return response({"status": "ok", "user": updated})
+
+    @route("/api/next/auth/users/<user_id>/role", "/api/auth/users/<user_id>/role", methods=["PUT", "PATCH"])
+    def update_user_role(user_id: str):
+        user_uuid = _parse_uuid(user_id)
+        if not user_uuid:
+            raise next_api_error("Invalid user id", 400)
+        body = request.get_json(silent=True) or {}
+        role_key = str(body.get("role") or body.get("role_key") or "").strip().lower()
+        if not role_key:
+            raise next_api_error("role is required", 400)
+
+        with connect() as conn:
+            admin = require_admin(conn)
+            if not role_exists(conn, role_key):
+                raise next_api_error("Unknown role", 400)
+            target = user_admin_row(conn, user_uuid)
+            if not target:
+                raise next_api_error("User not found", 404)
+            target_role = target.get("role")
+            if str(admin.get("id")) == str(user_uuid) and role_key not in {"owner", "admin"}:
+                raise next_api_error("You cannot remove your own admin access", 400)
+            if role_key == "owner" and admin.get("role") != "owner":
+                raise next_api_error("Only owners can assign the owner role", 403)
+            if target_role == "owner" and admin.get("role") != "owner":
+                raise next_api_error("Only owners can modify owner accounts", 403)
+            if target_role == "owner" and role_key != "owner" and active_owner_count(conn) <= 1:
+                raise next_api_error("The last active owner cannot be demoted", 400)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM user_roles WHERE user_id=%s AND scope_type='global' AND scope_id=''",
+                        (user_uuid,),
+                    )
+                assign_role(conn, user_uuid, role_key)
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE users SET updated_at=now() WHERE id=%s", (user_uuid,))
+            updated = user_admin_row(conn, user_uuid)
+        return response({"status": "ok", "user": updated})
+
+    @route("/api/next/auth/users/<user_id>", "/api/auth/users/<user_id>", methods=["DELETE"])
+    def delete_user(user_id: str):
+        user_uuid = _parse_uuid(user_id)
+        if not user_uuid:
+            raise next_api_error("Invalid user id", 400)
+        with connect() as conn:
+            admin = require_admin(conn)
+            target = user_admin_row(conn, user_uuid)
+            if not target:
+                raise next_api_error("User not found", 404)
+            target_role = target.get("role")
+            if str(admin.get("id")) == str(user_uuid):
+                raise next_api_error("You cannot delete your own account", 400)
+            if target_role == "owner" and admin.get("role") != "owner":
+                raise next_api_error("Only owners can delete owner accounts", 403)
+            if target_role == "owner" and active_owner_count(conn) <= 1:
+                raise next_api_error("The last active owner cannot be deleted", 400)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM users WHERE id=%s", (user_uuid,))
+        return response({"status": "deleted"})
+
     @route("/api/next/auth/credentials", "/api/auth/credentials", methods=["GET"])
     def credentials():
         with connect() as conn:
@@ -824,6 +1049,17 @@ def register_next_auth_routes(
             with conn.transaction():
                 set_setting(conn, "auth_enabled", enabled)
         return response({"status": "ok", "auth_enabled": enabled})
+
+    @route("/api/next/auth/registration", "/api/auth/registration", methods=["POST"])
+    def toggle_registration():
+        body = request.get_json(silent=True) or {}
+        enabled = bool(body.get("enabled", False))
+        with connect() as conn:
+            require_admin(conn)
+            with conn.transaction():
+                set_setting(conn, "registration_enabled", enabled)
+            payload = auth_status_payload(conn)
+        return response({"status": "ok", **payload})
 
     @route("/api/next/auth/invite", "/api/auth/invite", methods=["POST"])
     def create_invite():
