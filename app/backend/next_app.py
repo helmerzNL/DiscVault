@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -439,6 +439,346 @@ def migration_report(conn) -> dict[str, Any]:
         "metadataPlugins": plugin_summary(conn),
         "requiredActions": readiness["requiredActions"],
     }
+
+
+def migration_dashboard_html() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DiscVault Next Migration</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111217;
+      --panel: #1a1d25;
+      --panel-2: #222632;
+      --line: #343949;
+      --text: #f3f4f8;
+      --muted: #a9afbf;
+      --accent: #e8c547;
+      --blue: #7aa7ff;
+      --green: #48c78e;
+      --red: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(1.7rem, 3vw, 2.5rem); font-weight: 760; letter-spacing: 0; }
+    h2 { font-size: 1rem; margin-bottom: 12px; }
+    p { color: var(--muted); line-height: 1.55; }
+    button, a.button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 14px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #111217;
+      font-weight: 700;
+    }
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .48;
+    }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+    .card {
+      grid-column: span 4;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      min-width: 0;
+    }
+    .wide { grid-column: span 8; }
+    .full { grid-column: 1 / -1; }
+    .metric {
+      color: var(--text);
+      font-size: 2rem;
+      font-weight: 780;
+      line-height: 1.1;
+    }
+    .label {
+      color: var(--muted);
+      font-size: .82rem;
+      margin-top: 6px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 4px 10px;
+      font-size: .8rem;
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+    }
+    .badge.ok { color: var(--green); border-color: rgba(72,199,142,.45); }
+    .badge.warn { color: var(--accent); border-color: rgba(232,197,71,.45); }
+    .badge.error { color: var(--red); border-color: rgba(255,107,107,.45); }
+    .list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: minmax(120px, .8fr) minmax(0, 1.3fr);
+      gap: 12px;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      color: var(--muted);
+      min-width: 0;
+    }
+    .row:last-child { border-bottom: 0; }
+    .row strong {
+      color: var(--text);
+      font-weight: 620;
+      overflow-wrap: anywhere;
+    }
+    .plugins {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+    }
+    .plugin {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 12px;
+    }
+    .plugin strong { display: block; margin-bottom: 6px; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .82rem;
+      overflow-wrap: anywhere;
+    }
+    #message {
+      margin-top: 12px;
+      min-height: 20px;
+      color: var(--muted);
+    }
+    @media (max-width: 860px) {
+      main { width: min(100vw - 20px, 720px); padding-top: 18px; }
+      header { flex-direction: column; }
+      .actions { justify-content: flex-start; }
+      .card, .wide { grid-column: 1 / -1; }
+      .row { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>DiscVault Next Migration</h1>
+        <p>PostgreSQL import status, legacy data checks, and metadata plugin readiness.</p>
+      </div>
+      <div class="actions">
+        <button type="button" onclick="loadReport()">Refresh</button>
+        <button type="button" class="primary" id="startButton" onclick="startMigration()" disabled>Start Migration</button>
+        <a class="button" href="/api/next/migration/report">JSON</a>
+      </div>
+    </header>
+
+    <section class="grid" aria-live="polite">
+      <div class="card">
+        <h2>State</h2>
+        <div id="stateBadge" class="badge">Loading</div>
+        <div id="message"></div>
+      </div>
+      <div class="card">
+        <h2>Movies</h2>
+        <div class="metric" id="moviesCount">-</div>
+        <div class="label">Imported movie records</div>
+      </div>
+      <div class="card">
+        <h2>People</h2>
+        <div class="metric" id="peopleCount">-</div>
+        <div class="label">Imported people records</div>
+      </div>
+      <div class="card">
+        <h2>Media Assets</h2>
+        <div class="metric" id="mediaCount">-</div>
+        <div class="label">References to existing filesystem media</div>
+      </div>
+      <div class="card">
+        <h2>Containers</h2>
+        <div class="metric" id="containerCount">-</div>
+        <div class="label">Box-sets and collections</div>
+      </div>
+      <div class="card">
+        <h2>Plugins</h2>
+        <div class="metric" id="pluginCount">-</div>
+        <div class="label">Enabled metadata plugins</div>
+      </div>
+
+      <div class="card wide">
+        <h2>Source</h2>
+        <div class="list" id="sourceList"></div>
+      </div>
+      <div class="card">
+        <h2>Skipped</h2>
+        <div class="list" id="skippedList"></div>
+      </div>
+      <div class="card full">
+        <h2>Metadata Plugins</h2>
+        <div class="plugins" id="pluginsList"></div>
+      </div>
+      <div class="card full">
+        <h2>Required Actions</h2>
+        <div class="list" id="actionsList"></div>
+      </div>
+      <div class="card full" id="warningsCard" hidden>
+        <h2>Warnings</h2>
+        <div class="list" id="warningsList"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, function (char) {
+        const escapes = {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+        return escapes[char] || char;
+      });
+    }
+    function formatNumber(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      return Number(value).toLocaleString();
+    }
+    function statusClass(state) {
+      if (state === "already_completed" || state === "ready_for_confirmation") return "ok";
+      if (String(state || "").startsWith("blocked")) return "error";
+      return "warn";
+    }
+    function row(label, value) {
+      return `<div class="row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+    }
+    function rowsFromObject(data) {
+      const entries = Object.entries(data || {});
+      if (!entries.length) return row("None", "-");
+      return entries.map(([key, value]) => row(key, typeof value === "object" ? JSON.stringify(value) : value)).join("");
+    }
+    function renderList(id, items) {
+      const node = document.getElementById(id);
+      const values = Array.isArray(items) ? items : [];
+      node.innerHTML = values.length
+        ? values.map((item) => row("", item)).join("")
+        : row("None", "-");
+    }
+    async function loadReport() {
+      const message = document.getElementById("message");
+      message.textContent = "Loading report...";
+      const response = await fetch("/api/next/migration/report", {cache: "no-store"});
+      if (!response.ok) throw new Error(`Report failed: HTTP ${response.status}`);
+      const payload = await response.json();
+      const report = payload.report || {};
+      const imported = report.summary?.imported || {};
+      const target = report.target?.counts || {};
+      const source = report.source || {};
+      const plugins = report.metadataPlugins || {};
+      const state = report.state || "unknown";
+
+      const stateBadge = document.getElementById("stateBadge");
+      stateBadge.className = `badge ${statusClass(state)}`;
+      stateBadge.textContent = state.replaceAll("_", " ");
+      document.getElementById("startButton").disabled = !report.canStart;
+      message.textContent = report.latestRun?.status
+        ? `Latest run: ${report.latestRun.status}`
+        : "No migration run has been recorded yet.";
+
+      document.getElementById("moviesCount").textContent = formatNumber(imported.movies ?? target.movies);
+      document.getElementById("peopleCount").textContent = formatNumber(imported.people ?? target.people);
+      document.getElementById("mediaCount").textContent = formatNumber(imported.media_assets ?? target.media_assets);
+      document.getElementById("containerCount").textContent = formatNumber(target.containers);
+      document.getElementById("pluginCount").textContent = formatNumber(plugins.enabled);
+
+      document.getElementById("sourceList").innerHTML = [
+        row("Legacy data", source.found ? "found" : "not found"),
+        row("Data directory", source.dataDir || "-"),
+        row("SQLite database", source.sqliteDb || "-"),
+        row("Database hash", source.sourceDatabaseHash || "-"),
+        row("Media mode", source.mediaMigrationMode || "-"),
+        row("Source counts", JSON.stringify(source.counts || {})),
+        row("Media extensions", JSON.stringify(source.mediaExtensions || {}))
+      ].join("");
+      document.getElementById("skippedList").innerHTML = rowsFromObject(report.summary?.skipped || {});
+      document.getElementById("pluginsList").innerHTML = (plugins.items || []).map((plugin) => `
+        <div class="plugin">
+          <strong>${escapeHtml(plugin.name)}</strong>
+          <span class="badge ${plugin.enabled ? "ok" : "warn"}">${plugin.enabled ? "enabled" : "disabled"}</span>
+          <div class="label mono">${escapeHtml(plugin.id)} / order ${escapeHtml(plugin.orderIndex)}</div>
+        </div>
+      `).join("") || row("No plugins", "-");
+      renderList("actionsList", report.requiredActions || []);
+
+      const warnings = report.summary?.warnings || [];
+      document.getElementById("warningsCard").hidden = warnings.length === 0;
+      renderList("warningsList", warnings);
+    }
+    async function startMigration() {
+      const button = document.getElementById("startButton");
+      const message = document.getElementById("message");
+      button.disabled = true;
+      message.textContent = "Starting migration...";
+      const response = await fetch("/api/next/migration/start", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: "{}"
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Migration start failed: HTTP ${response.status} ${text}`);
+      }
+      message.textContent = "Migration job queued.";
+      await loadReport();
+    }
+    window.addEventListener("load", () => {
+      loadReport().catch((error) => {
+        document.getElementById("message").textContent = error.message;
+        document.getElementById("stateBadge").className = "badge error";
+        document.getElementById("stateBadge").textContent = "error";
+      });
+    });
+  </script>
+</body>
+</html>
+"""
 
 
 def parse_int_arg(name: str, default: int, *, minimum: int = 0, maximum: int = 1000) -> int:
@@ -1523,6 +1863,11 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             report = migration_report(conn)
         return response({"status": "ok", "report": report})
+
+    @flask_app.get("/api/next/migration")
+    @flask_app.get("/api/next/migration/")
+    def migration_dashboard():
+        return Response(migration_dashboard_html(), mimetype="text/html")
 
     @flask_app.get("/api/next/migration/jobs/<job_id>")
     def migration_job(job_id: str):
