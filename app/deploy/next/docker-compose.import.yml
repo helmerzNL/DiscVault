@@ -9,15 +9,15 @@ services:
         "python",
         "next_import.py",
         "--db",
-        "/import/discvault.db",
+        "/data/discvault.db",
         "--data-dir",
-        "/import"
+        "/data"
       ]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       TZ: ${TZ}
     volumes:
-      - ${DISCVAULT_SQLITE_IMPORT_DATA}:/import:ro
+      - ${DISCVAULT_DATA_DIR}:/data:ro
     networks:
       - discvault-next
 

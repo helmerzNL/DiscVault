@@ -12,6 +12,7 @@ import os
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -22,8 +23,27 @@ from psycopg.types.json import Jsonb
 
 try:
     from .next_database import discover_migrations
+    from .next_import import ImportError as NextImportError
+    from .next_import import NextImporter
+    from .next_import import clean_text
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
+    from next_import import ImportError as NextImportError
+    from next_import import NextImporter
+    from next_import import clean_text
+
+
+MIGRATION_JOB_TYPE = "migration.import_sqlite"
+TARGET_DATA_TABLES = (
+    "movies",
+    "people",
+    "movie_credits",
+    "containers",
+    "container_movies",
+    "collection_items",
+    "media_assets",
+    "users",
+)
 
 
 def create_app() -> Flask:
@@ -101,6 +121,218 @@ def count_table(conn, table_name: str) -> int:
     return int(row["count"] if row else 0)
 
 
+def legacy_data_dir() -> Path:
+    raw = (
+        os.environ.get("DISCVAULT_LEGACY_DATA_DIR")
+        or os.environ.get("DISCVAULT_SQLITE_IMPORT_DATA")
+        or "/data"
+    )
+    return Path(raw).expanduser()
+
+
+def legacy_sqlite_db(data_dir: Path) -> Path:
+    raw = os.environ.get("DISCVAULT_LEGACY_SQLITE_DB")
+    if raw:
+        return Path(raw).expanduser()
+    return data_dir / "discvault.db"
+
+
+def target_data_counts(conn) -> dict[str, int]:
+    return {table: count_table(conn, table) for table in TARGET_DATA_TABLES}
+
+
+def target_database_empty(counts: dict[str, int]) -> bool:
+    return all(value == 0 for value in counts.values())
+
+
+def migration_run_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    return {
+        "id": row["id"],
+        "sourceKind": row["source_kind"],
+        "sourceVersion": row.get("source_version"),
+        "sourceDatabaseHash": row.get("source_database_hash"),
+        "exportManifest": row.get("export_manifest") or {},
+        "status": row["status"],
+        "result": row.get("result") or {},
+        "error": row.get("error"),
+        "startedAt": row.get("started_at"),
+        "completedAt": row.get("completed_at"),
+    }
+
+
+def latest_migration_run(conn, source_hash: str | None = None) -> dict[str, Any] | None:
+    if not table_exists(conn, "migration_runs"):
+        return None
+    params: list[Any] = []
+    where = ""
+    if source_hash:
+        where = "WHERE source_database_hash = %s"
+        params.append(source_hash)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                id,
+                source_kind,
+                source_version,
+                source_database_hash,
+                export_manifest,
+                status,
+                result,
+                error,
+                started_at,
+                completed_at
+            FROM migration_runs
+            {where}
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            params,
+        )
+        return cur.fetchone()
+
+
+def active_migration_job(conn, source_hash: str | None = None) -> dict[str, Any] | None:
+    if not table_exists(conn, "background_jobs"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                job_type,
+                status,
+                requested_by,
+                payload,
+                result,
+                error,
+                created_at,
+                started_at,
+                finished_at
+            FROM background_jobs
+            WHERE job_type=%s AND status IN ('pending', 'running')
+            ORDER BY created_at DESC
+            LIMIT 20
+            """,
+            (MIGRATION_JOB_TYPE,),
+        )
+        rows = cur.fetchall()
+    if not source_hash:
+        return rows[0] if rows else None
+    for row in rows:
+        payload = row.get("payload") or {}
+        if payload.get("sourceDatabaseHash") == source_hash:
+            return row
+    return None
+
+
+def sqlite_readiness_probe(data_dir: Path, sqlite_db: Path) -> dict[str, Any]:
+    found = sqlite_db.exists() and sqlite_db.is_file()
+    source: dict[str, Any] = {
+        "dataDir": str(data_dir),
+        "sqliteDb": str(sqlite_db),
+        "found": found,
+        "readable": False,
+        "sourceDatabaseHash": None,
+        "sourceCounts": {},
+        "mediaExtensions": {},
+        "mediaMigrationMode": "reference_existing_files",
+        "options": {
+            "includeSecurity": False,
+            "includePersonal": False,
+            "importMediaReferences": True,
+        },
+    }
+    warnings: list[str] = []
+    if not found:
+        warnings.append(f"No legacy SQLite database found at {sqlite_db}.")
+        return {"source": source, "warnings": warnings}
+
+    importer: NextImporter | None = None
+    try:
+        importer = NextImporter(
+            sqlite_db,
+            data_dir,
+            include_security=False,
+            include_personal=False,
+            import_media=True,
+            owner_username=None,
+        )
+        dry_run = importer.dry_run()
+        source.update(
+            {
+                "readable": True,
+                "sourceDatabaseHash": dry_run.get("source_database_sha256"),
+                "sourceCounts": dry_run.get("source_counts") or {},
+                "mediaExtensions": dry_run.get("media_extensions") or {},
+            }
+        )
+    except (NextImportError, OSError, RuntimeError, ValueError) as exc:
+        warnings.append(f"Legacy SQLite database could not be inspected: {exc}")
+    finally:
+        if importer is not None:
+            importer.sqlite.close()
+    return {"source": source, "warnings": warnings}
+
+
+def migration_readiness(conn) -> dict[str, Any]:
+    migrations = migration_overview(conn)
+    data_dir = legacy_data_dir()
+    sqlite_db = legacy_sqlite_db(data_dir)
+    probe = sqlite_readiness_probe(data_dir, sqlite_db)
+    source = probe["source"]
+    warnings = list(probe["warnings"])
+    target_counts = target_data_counts(conn)
+    target_empty = target_database_empty(target_counts)
+    source_hash = clean_text(source.get("sourceDatabaseHash"))
+    latest_run = latest_migration_run(conn, source_hash)
+    active_job = active_migration_job(conn, source_hash)
+    latest = migration_run_row(latest_run)
+    active = job_row(active_job) if active_job else None
+    required_actions: list[str] = []
+
+    if migrations["state"] != "ready":
+        state = "blocked_schema_not_ready"
+        required_actions.append("Apply pending PostgreSQL migrations before starting import.")
+    elif active:
+        state = "running"
+        required_actions.append("Wait for the active migration job to finish.")
+    elif not source["found"]:
+        state = "not_required"
+        required_actions.append("Mount the legacy DiscVault data directory at /data if migration is expected.")
+    elif not source["readable"]:
+        state = "blocked_source_unreadable"
+        required_actions.append("Fix the legacy SQLite database path or file permissions.")
+    elif latest and latest["status"] == "completed":
+        state = "already_completed"
+        required_actions.append("A completed migration for this source database already exists.")
+    elif not target_empty:
+        state = "blocked_target_not_empty"
+        required_actions.append("Use an empty PostgreSQL target database or start an explicit conflict-aware import later.")
+    else:
+        state = "ready_for_confirmation"
+        required_actions.append("Confirm the migration in the UI or call the migration start endpoint.")
+
+    can_start = state == "ready_for_confirmation"
+    return {
+        "state": state,
+        "canStart": can_start,
+        "requiresConfirmation": can_start,
+        "legacyData": source,
+        "targetDatabase": {
+            "empty": target_empty,
+            "counts": target_counts,
+        },
+        "migrations": migrations,
+        "activeJob": active,
+        "latestRun": latest,
+        "warnings": warnings,
+        "requiredActions": required_actions,
+    }
+
+
 def parse_int_arg(name: str, default: int, *, minimum: int = 0, maximum: int = 1000) -> int:
     raw = request.args.get(name, str(default))
     try:
@@ -117,6 +349,21 @@ def parse_uuid(value: Any, field_name: str) -> UUID | None:
         return UUID(str(value))
     except ValueError as exc:
         raise NextApiError(f"Invalid UUID for {field_name}", 400) from exc
+
+
+def parse_bool_value(value: Any, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def ensure_sync_state(conn) -> int:
@@ -1068,6 +1315,97 @@ def register_routes(flask_app: Flask) -> None:
             with conn.transaction():
                 job = create_background_job(conn, job_type=job_type, payload=payload)
         return response({"status": "ok", "job": job}, 201)
+
+    @flask_app.get("/api/next/migration/readiness")
+    def get_migration_readiness():
+        with connect() as conn:
+            readiness = migration_readiness(conn)
+        return response({"status": "ok", "readiness": readiness})
+
+    @flask_app.post("/api/next/migration/start")
+    def start_migration():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Migration request body must be an object", 400)
+
+        include_security = parse_bool_value(body.get("includeSecurity", body.get("include_security")), default=False)
+        include_personal = parse_bool_value(body.get("includePersonal", body.get("include_personal")), default=False)
+        if include_personal and not include_security:
+            raise NextApiError("includePersonal requires includeSecurity", 400)
+        owner_username = clean_text(body.get("ownerUsername") or body.get("owner_username"))
+        import_media_references = body.get("importMediaReferences", body.get("import_media_references", True))
+        import_media_references = parse_bool_value(import_media_references, default=True)
+
+        with connect() as conn:
+            readiness = migration_readiness(conn)
+            active = readiness.get("activeJob")
+            if active:
+                return response({"status": "ok", "job": active, "readiness": readiness, "replayed": True}, 200)
+            if not readiness["canStart"]:
+                raise NextApiError(
+                    f"Migration cannot start while readiness state is {readiness['state']}",
+                    409,
+                )
+            legacy = readiness["legacyData"]
+            payload = {
+                "dataDir": legacy["dataDir"],
+                "sqliteDb": legacy["sqliteDb"],
+                "sourceDatabaseHash": legacy.get("sourceDatabaseHash"),
+                "includeSecurity": include_security,
+                "includePersonal": include_personal,
+                "ownerUsername": owner_username,
+                "importMediaReferences": import_media_references,
+                "mediaMigrationMode": "reference_existing_files",
+            }
+            with conn.transaction():
+                job = create_background_job(conn, job_type=MIGRATION_JOB_TYPE, payload=payload)
+        return response({"status": "ok", "job": job, "readiness": readiness}, 201)
+
+    @flask_app.get("/api/next/migration/status")
+    def migration_status():
+        with connect() as conn:
+            readiness = migration_readiness(conn)
+        return response(
+            {
+                "status": "ok",
+                "state": readiness["state"],
+                "canStart": readiness["canStart"],
+                "activeJob": readiness["activeJob"],
+                "latestRun": readiness["latestRun"],
+                "warnings": readiness["warnings"],
+                "requiredActions": readiness["requiredActions"],
+            }
+        )
+
+    @flask_app.get("/api/next/migration/jobs/<job_id>")
+    def migration_job(job_id: str):
+        job_uuid = parse_uuid(job_id, "jobId")
+        with connect() as conn:
+            if not table_exists(conn, "background_jobs"):
+                raise NextApiError("Background job table is not available", 503)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        job_type,
+                        status,
+                        requested_by,
+                        payload,
+                        result,
+                        error,
+                        created_at,
+                        started_at,
+                        finished_at
+                    FROM background_jobs
+                    WHERE id=%s AND job_type=%s
+                    """,
+                    (job_uuid, MIGRATION_JOB_TYPE),
+                )
+                row = cur.fetchone()
+        if not row:
+            raise NextApiError("Migration job not found", 404)
+        return response({"status": "ok", "job": job_row(row)})
 
     @flask_app.get("/api/next/jobs/<job_id>")
     def get_job(job_id: str):
