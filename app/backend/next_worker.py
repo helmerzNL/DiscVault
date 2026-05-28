@@ -229,7 +229,7 @@ def process_sqlite_import(payload: dict[str, Any], worker_id: str) -> dict[str, 
     }
 
 
-def run_once(worker_id: str) -> int:
+def run_once(worker_id: str, *, quiet_idle: bool = False) -> int:
     with connect() as conn:
         if not background_jobs_ready(conn):
             print(
@@ -244,7 +244,8 @@ def run_once(worker_id: str) -> int:
             return 2
         job = claim_job(conn, worker_id)
         if not job:
-            print("No pending jobs.")
+            if not quiet_idle:
+                print("No pending jobs.")
             return 0
         try:
             result = process_job(job, worker_id)
@@ -259,7 +260,7 @@ def run_once(worker_id: str) -> int:
 
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
-        run_once(worker_id)
+        run_once(worker_id, quiet_idle=True)
         if STOP:
             break
         time.sleep(poll_interval)
