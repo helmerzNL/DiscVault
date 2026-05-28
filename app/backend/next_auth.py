@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import struct
 from datetime import datetime, timedelta, timezone
@@ -31,6 +32,11 @@ TableExists = Callable[[Any, str], bool]
 
 SESSION_COOKIE_NAME = "dv_next_session"
 SESSION_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60
+RBAC_MODE_SETTING = "rbac_mode"
+RBAC_MODES = {"basic", "advanced"}
+RBAC_BASIC_ROLE_KEYS = ("admin", "media_editor", "media_fan", "media_viewer")
+RBAC_PROTECTED_ROLE_KEYS = ("owner", "admin", "media_editor", "media_fan", "media_viewer")
+ROLE_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 
 
 def _utcnow() -> datetime:
@@ -317,6 +323,52 @@ def register_next_auth_routes(
     def registration_enabled(conn) -> bool:
         return bool(setting_value(conn, "registration_enabled", True))
 
+    def rbac_mode(conn) -> str:
+        mode = str(setting_value(conn, RBAC_MODE_SETTING, "basic") or "basic").strip().lower()
+        return mode if mode in RBAC_MODES else "basic"
+
+    def set_rbac_mode(conn, mode: str) -> None:
+        normalized = str(mode or "").strip().lower()
+        if normalized not in RBAC_MODES:
+            raise next_api_error("RBAC mode must be basic or advanced", 400)
+        set_setting(conn, RBAC_MODE_SETTING, normalized)
+
+    def feature_enabled(conn, feature_key: str, default: bool = True) -> bool:
+        if not table_exists(conn, "feature_entitlements"):
+            return default
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT enabled
+                FROM feature_entitlements
+                WHERE feature_key=%s
+                  AND (expires_at IS NULL OR expires_at > now())
+                """,
+                (feature_key,),
+            )
+            row = cur.fetchone()
+        return bool(row["enabled"]) if row else default
+
+    def normalize_role_key(value: Any) -> str:
+        role_key = str(value or "").strip().lower().replace("-", "_")
+        if not ROLE_KEY_PATTERN.match(role_key):
+            raise next_api_error(
+                "Role key must start with a letter and contain only lowercase letters, numbers and underscores",
+                400,
+            )
+        return role_key
+
+    def basic_visible_role_keys() -> set[str]:
+        return {"owner", *RBAC_BASIC_ROLE_KEYS}
+
+    def basic_assignable_role_keys() -> set[str]:
+        return set(RBAC_BASIC_ROLE_KEYS)
+
+    def default_registration_role(conn) -> str:
+        if role_exists(conn, "media_viewer"):
+            return "media_viewer"
+        return "member"
+
     def count_table(conn, table_name: str) -> int:
         if not table_exists(conn, table_name):
             return 0
@@ -430,9 +482,26 @@ def register_next_auth_routes(
         row["permissions"] = user_permissions(conn, row["id"])
         return row
 
-    def managed_roles(conn) -> list[dict[str, Any]]:
+    def permission_catalog(conn) -> list[dict[str, Any]]:
+        if not table_exists(conn, "permissions"):
+            return []
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT key, domain, description
+                FROM permissions
+                ORDER BY domain, key
+                """
+            )
+            return cur.fetchall()
+
+    def permission_keys(conn) -> set[str]:
+        return {row["key"] for row in permission_catalog(conn)}
+
+    def managed_roles(conn, *, include_all: bool = False) -> list[dict[str, Any]]:
         if not table_exists(conn, "roles"):
             return []
+        mode = rbac_mode(conn)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -459,7 +528,140 @@ def register_next_auth_routes(
             )
             if row.get("permission_key"):
                 role["permissions"].append(row["permission_key"])
-        return list(by_id.values())
+        roles = []
+        for role in by_id.values():
+            key = role["key"]
+            is_basic_visible = key in basic_visible_role_keys()
+            role["basicRole"] = is_basic_visible
+            role["custom"] = not bool(role["system"])
+            role["protected"] = key in RBAC_PROTECTED_ROLE_KEYS or key == "owner"
+            role["assignable"] = (mode == "advanced" and key != "owner") or (
+                mode == "basic" and key in basic_assignable_role_keys()
+            )
+            if include_all or is_basic_visible or role["assignable"]:
+                roles.append(role)
+        return roles
+
+    def role_by_identifier(conn, identifier: str) -> dict[str, Any] | None:
+        value = str(identifier or "").strip()
+        role_uuid = _parse_uuid(value)
+        if role_uuid:
+            query = "r.id=%s"
+            params: tuple[Any, ...] = (role_uuid,)
+        else:
+            query = "r.key=%s"
+            params = (value.lower(),)
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT r.id, r.key, r.name, r.description, r.system, rp.permission_key
+                FROM roles r
+                LEFT JOIN role_permissions rp ON rp.role_id = r.id
+                WHERE {query}
+                ORDER BY rp.permission_key
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+        if not rows:
+            return None
+        row = rows[0]
+        permissions = [item["permission_key"] for item in rows if item.get("permission_key")]
+        key = row["key"]
+        return {
+            "id": row["id"],
+            "key": key,
+            "name": row["name"],
+            "description": row["description"],
+            "system": row["system"],
+            "permissions": permissions,
+            "basicRole": key in basic_visible_role_keys(),
+            "custom": not bool(row["system"]),
+            "protected": key in RBAC_PROTECTED_ROLE_KEYS or key == "owner",
+            "assignable": (rbac_mode(conn) == "advanced" and key != "owner")
+            or (rbac_mode(conn) == "basic" and key in basic_assignable_role_keys()),
+        }
+
+    def validate_permission_selection(conn, values: Any) -> list[str]:
+        if not isinstance(values, list):
+            raise next_api_error("permissions must be an array", 400)
+        known = permission_keys(conn)
+        selected: list[str] = []
+        for raw in values:
+            key = str(raw or "").strip()
+            if key not in known:
+                raise next_api_error(f"Unknown permission: {key}", 400)
+            if key not in selected:
+                selected.append(key)
+        return selected
+
+    def custom_role_mutations_allowed(conn) -> None:
+        if rbac_mode(conn) != "advanced":
+            raise next_api_error("Switch to Advanced RBAC mode before managing custom roles", 400)
+        if not feature_enabled(conn, "rbac.custom_roles", True):
+            raise next_api_error("Custom roles are not enabled by the current license", 403)
+
+    def role_assignable(conn, role_key: str, actor_role: str | None) -> bool:
+        if role_key == "owner":
+            return False
+        if rbac_mode(conn) == "basic":
+            return role_key in RBAC_BASIC_ROLE_KEYS
+        return True
+
+    def normalize_role_key_list(values: Any) -> list[str]:
+        if not isinstance(values, list):
+            raise next_api_error("roles must be an array", 400)
+        role_keys: list[str] = []
+        for value in values:
+            role_key = normalize_role_key(value)
+            if role_key not in role_keys:
+                role_keys.append(role_key)
+        if not role_keys:
+            raise next_api_error("At least one role is required", 400)
+        return role_keys
+
+    def set_user_global_roles(
+        conn,
+        *,
+        actor: dict[str, Any],
+        user_id: UUID,
+        role_keys: list[str],
+    ) -> dict[str, Any]:
+        target = user_admin_row(conn, user_id)
+        if not target:
+            raise next_api_error("User not found", 404)
+        actor_role = actor.get("role")
+        target_role = target.get("role")
+
+        if "owner" in role_keys or target_role == "owner":
+            raise next_api_error("Owner role changes must use the ownership transfer flow", 400)
+
+        for role_key in role_keys:
+            if not role_exists(conn, role_key):
+                raise next_api_error(f"Unknown role: {role_key}", 400)
+            if not role_assignable(conn, role_key, actor_role):
+                raise next_api_error(f"Role is not assignable in the current RBAC mode: {role_key}", 400)
+
+        if str(actor.get("id")) == str(user_id) and not {"owner", "admin"}.intersection(role_keys):
+            raise next_api_error("You cannot remove your own admin access", 400)
+        if "owner" in role_keys and actor_role != "owner":
+            raise next_api_error("Only owners can assign the owner role", 403)
+        if target_role == "owner" and actor_role != "owner":
+            raise next_api_error("Only owners can modify owner accounts", 403)
+        if target_role == "owner" and "owner" not in role_keys and active_owner_count(conn) <= 1:
+            raise next_api_error("The last active owner cannot be demoted", 400)
+
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM user_roles WHERE user_id=%s AND scope_type='global' AND scope_id=''",
+                    (user_id,),
+                )
+            for role_key in role_keys:
+                assign_role(conn, user_id, role_key)
+            with conn.cursor() as cur:
+                cur.execute("UPDATE users SET updated_at=now() WHERE id=%s", (user_id,))
+        return user_admin_row(conn, user_id)
 
     def require_admin(conn) -> dict[str, Any]:
         if not auth_enabled(conn):
@@ -643,6 +845,7 @@ def register_next_auth_routes(
             "username": user["username"] if user else None,
             "display_name": user.get("display_name") if user else None,
             "role": role,
+            "rbac_mode": rbac_mode(conn),
         }
 
     def route(*rules: str, methods: list[str] | None = None):
@@ -683,6 +886,7 @@ def register_next_auth_routes(
                     "role": role,
                     "roles": roles,
                     "permissions": permissions,
+                    "rbac_mode": rbac_mode(conn),
                 }
             )
 
@@ -823,7 +1027,7 @@ def register_next_auth_routes(
                         raise next_api_error("Invalid or expired invite code", 403)
 
                 if not existing_user:
-                    role_key = "owner" if not has_users or not has_credentials else "member"
+                    role_key = "owner" if not has_users or not has_credentials else default_registration_role(conn)
                     with conn.cursor() as cur:
                         cur.execute(
                             """
@@ -1080,11 +1284,169 @@ def register_next_auth_routes(
             }
         )
 
+    @route("/api/next/auth/rbac", "/api/auth/rbac", methods=["GET"])
+    def rbac_status():
+        with connect() as conn:
+            admin = require_admin(conn)
+            mode = rbac_mode(conn)
+            return response(
+                {
+                    "status": "ok",
+                    "mode": mode,
+                    "basicRoleKeys": list(RBAC_BASIC_ROLE_KEYS),
+                    "advancedEnabled": feature_enabled(conn, "rbac.advanced_mode", True),
+                    "customRolesEnabled": feature_enabled(conn, "rbac.custom_roles", True),
+                    "canSwitchMode": admin.get("role") == "owner",
+                    "permissions": permission_catalog(conn),
+                    "roles": managed_roles(conn, include_all=True),
+                    "assignableRoles": [
+                        role for role in managed_roles(conn) if role["assignable"]
+                    ],
+                }
+            )
+
+    @route("/api/next/auth/rbac", "/api/auth/rbac", methods=["PATCH"])
+    def update_rbac_status():
+        body = request.get_json(silent=True) or {}
+        mode = str(body.get("mode") or "").strip().lower()
+        with connect() as conn:
+            require_owner(conn)
+            if mode == "advanced" and not feature_enabled(conn, "rbac.advanced_mode", True):
+                raise next_api_error("Advanced RBAC mode is not enabled by the current license", 403)
+            with conn.transaction():
+                set_rbac_mode(conn, mode)
+            return response(
+                {
+                    "status": "ok",
+                    "mode": rbac_mode(conn),
+                    "permissions": permission_catalog(conn),
+                    "roles": managed_roles(conn, include_all=True),
+                    "assignableRoles": [
+                        role for role in managed_roles(conn) if role["assignable"]
+                    ],
+                }
+            )
+
     @route("/api/next/auth/roles", "/api/auth/roles", methods=["GET"])
     def roles():
         with connect() as conn:
             require_admin(conn)
-            return response({"status": "ok", "roles": managed_roles(conn)})
+            include_all = str(request.args.get("all") or "").strip().lower() in {"1", "true", "yes"}
+            return response(
+                {
+                    "status": "ok",
+                    "mode": rbac_mode(conn),
+                    "roles": managed_roles(conn, include_all=include_all),
+                    "permissions": permission_catalog(conn),
+                }
+            )
+
+    @route("/api/next/auth/roles", "/api/auth/roles", methods=["POST"])
+    def create_role():
+        body = request.get_json(silent=True) or {}
+        if not body.get("key"):
+            raise next_api_error("key is required", 400)
+        role_key = normalize_role_key(body.get("key"))
+        name = str(body.get("name") or "").strip()
+        description = str(body.get("description") or "").strip()
+        if not name:
+            raise next_api_error("name is required", 400)
+
+        with connect() as conn:
+            owner = require_owner(conn)
+            custom_role_mutations_allowed(conn)
+            if role_exists(conn, role_key):
+                raise next_api_error("Role key already exists", 409)
+            permissions = validate_permission_selection(conn, body.get("permissions") or [])
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO roles (key, name, description, system, created_by, created_at, updated_at)
+                        VALUES (%s, %s, %s, false, %s, now(), now())
+                        RETURNING id
+                        """,
+                        (role_key, name, description or None, owner.get("id")),
+                    )
+                    role_id = cur.fetchone()["id"]
+                    for permission_key in permissions:
+                        cur.execute(
+                            """
+                            INSERT INTO role_permissions (role_id, permission_key)
+                            VALUES (%s, %s)
+                            ON CONFLICT DO NOTHING
+                            """,
+                            (role_id, permission_key),
+                        )
+            return response({"status": "ok", "role": role_by_identifier(conn, role_key)}, 201)
+
+    @route("/api/next/auth/roles/<role_id>", "/api/auth/roles/<role_id>", methods=["PATCH"])
+    def update_role(role_id: str):
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            require_owner(conn)
+            custom_role_mutations_allowed(conn)
+            role = role_by_identifier(conn, role_id)
+            if not role:
+                raise next_api_error("Role not found", 404)
+            if role["system"]:
+                raise next_api_error("System roles cannot be edited through the custom role API", 400)
+            assignments: list[str] = []
+            params: list[Any] = []
+            if "name" in body:
+                name = str(body.get("name") or "").strip()
+                if not name:
+                    raise next_api_error("name cannot be empty", 400)
+                assignments.append("name=%s")
+                params.append(name)
+            if "description" in body:
+                assignments.append("description=%s")
+                params.append(str(body.get("description") or "").strip() or None)
+            permissions = None
+            if "permissions" in body:
+                permissions = validate_permission_selection(conn, body.get("permissions"))
+            if not assignments and permissions is None:
+                raise next_api_error("Supply name, description and/or permissions", 400)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    if assignments:
+                        cur.execute(
+                            f"UPDATE roles SET {', '.join(assignments)}, updated_at=now() WHERE id=%s",
+                            (*params, role["id"]),
+                        )
+                    if permissions is not None:
+                        cur.execute("DELETE FROM role_permissions WHERE role_id=%s", (role["id"],))
+                        for permission_key in permissions:
+                            cur.execute(
+                                """
+                                INSERT INTO role_permissions (role_id, permission_key)
+                                VALUES (%s, %s)
+                                ON CONFLICT DO NOTHING
+                                """,
+                                (role["id"], permission_key),
+                            )
+            return response({"status": "ok", "role": role_by_identifier(conn, str(role["id"]))})
+
+    @route("/api/next/auth/roles/<role_id>", "/api/auth/roles/<role_id>", methods=["DELETE"])
+    def delete_role(role_id: str):
+        with connect() as conn:
+            require_owner(conn)
+            custom_role_mutations_allowed(conn)
+            role = role_by_identifier(conn, role_id)
+            if not role:
+                raise next_api_error("Role not found", 404)
+            if role["system"]:
+                raise next_api_error("System roles cannot be deleted", 400)
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) AS count FROM user_roles WHERE role_id=%s", (role["id"],))
+                assigned_count = int(cur.fetchone()["count"])
+            if assigned_count:
+                raise next_api_error("Role is assigned to users and cannot be deleted", 409)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM roles WHERE id=%s", (role["id"],))
+            return response({"status": "deleted"})
 
     @route("/api/next/auth/users", "/api/auth/users", methods=["GET"])
     def users():
@@ -1169,37 +1531,27 @@ def register_next_auth_routes(
         if not user_uuid:
             raise next_api_error("Invalid user id", 400)
         body = request.get_json(silent=True) or {}
-        role_key = str(body.get("role") or body.get("role_key") or "").strip().lower()
-        if not role_key:
+        raw_role_key = body.get("role") or body.get("role_key")
+        if not raw_role_key:
             raise next_api_error("role is required", 400)
+        role_key = normalize_role_key(raw_role_key)
 
         with connect() as conn:
             admin = require_admin(conn)
-            if not role_exists(conn, role_key):
-                raise next_api_error("Unknown role", 400)
-            target = user_admin_row(conn, user_uuid)
-            if not target:
-                raise next_api_error("User not found", 404)
-            target_role = target.get("role")
-            if str(admin.get("id")) == str(user_uuid) and role_key not in {"owner", "admin"}:
-                raise next_api_error("You cannot remove your own admin access", 400)
-            if role_key == "owner" and admin.get("role") != "owner":
-                raise next_api_error("Only owners can assign the owner role", 403)
-            if target_role == "owner" and admin.get("role") != "owner":
-                raise next_api_error("Only owners can modify owner accounts", 403)
-            if target_role == "owner" and role_key != "owner" and active_owner_count(conn) <= 1:
-                raise next_api_error("The last active owner cannot be demoted", 400)
+            updated = set_user_global_roles(conn, actor=admin, user_id=user_uuid, role_keys=[role_key])
+        return response({"status": "ok", "user": updated})
 
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "DELETE FROM user_roles WHERE user_id=%s AND scope_type='global' AND scope_id=''",
-                        (user_uuid,),
-                    )
-                assign_role(conn, user_uuid, role_key)
-                with conn.cursor() as cur:
-                    cur.execute("UPDATE users SET updated_at=now() WHERE id=%s", (user_uuid,))
-            updated = user_admin_row(conn, user_uuid)
+    @route("/api/next/auth/users/<user_id>/roles", "/api/auth/users/<user_id>/roles", methods=["PUT", "PATCH"])
+    def update_user_roles(user_id: str):
+        user_uuid = _parse_uuid(user_id)
+        if not user_uuid:
+            raise next_api_error("Invalid user id", 400)
+        body = request.get_json(silent=True) or {}
+        role_keys = normalize_role_key_list(body.get("roles"))
+
+        with connect() as conn:
+            admin = require_admin(conn)
+            updated = set_user_global_roles(conn, actor=admin, user_id=user_uuid, role_keys=role_keys)
         return response({"status": "ok", "user": updated})
 
     @route("/api/next/auth/users/<user_id>", "/api/auth/users/<user_id>", methods=["DELETE"])

@@ -2219,7 +2219,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     function adminRoleOptions(selectedRole, roles) {
       return (roles || []).map((role) => `
-        <option value="${escapeHtml(role.key)}" ${role.key === selectedRole ? "selected" : ""}>${escapeHtml(role.name || role.key)}</option>
+        <option value="${escapeHtml(role.key)}" ${role.key === selectedRole ? "selected" : ""} ${role.assignable === false && role.key !== selectedRole ? "disabled" : ""}>${escapeHtml(role.name || role.key)}</option>
       `).join("");
     }
     function renderAdminUsers(users, roles) {

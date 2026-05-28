@@ -270,4 +270,74 @@ jobs:
           health_payload = health.get_json()
           assert health_payload["health"]["state"] == "available", health_payload
           print("/api/next/plugins/plex/health", "admin-health-ok")
+
+          rbac = client.get("/api/next/auth/rbac")
+          assert rbac.status_code == 200, rbac.data[:500]
+          rbac_payload = rbac.get_json()
+          assert rbac_payload["mode"] == "basic", rbac_payload
+          assert any(role["key"] == "media_viewer" for role in rbac_payload["assignableRoles"]), rbac_payload
+          assert any(permission["key"] == "roles.manage" for permission in rbac_payload["permissions"]), rbac_payload
+          print("/api/next/auth/rbac", "basic-ok")
+
+          mode = client.patch("/api/next/auth/rbac", json={"mode": "advanced"})
+          assert mode.status_code == 200, mode.data[:500]
+          mode_payload = mode.get_json()
+          assert mode_payload["mode"] == "advanced", mode_payload
+          print("/api/next/auth/rbac", "advanced-ok")
+
+          custom = client.post(
+              "/api/next/auth/roles",
+              json={
+                  "key": "ci_curator",
+                  "name": "CI Curator",
+                  "description": "CI custom role",
+                  "permissions": ["collection.view", "metadata.search"],
+              },
+          )
+          assert custom.status_code == 201, custom.data[:500]
+          custom_payload = custom.get_json()
+          assert custom_payload["role"]["key"] == "ci_curator", custom_payload
+          assert custom_payload["role"]["system"] is False, custom_payload
+          assert custom_payload["role"]["permissions"] == ["collection.view", "metadata.search"], custom_payload
+          print("/api/next/auth/roles", "custom-create-ok")
+
+          patched_role = client.patch(
+              "/api/next/auth/roles/ci_curator",
+              json={"permissions": ["collection.view", "metadata.search", "watchlist.manage"]},
+          )
+          assert patched_role.status_code == 200, patched_role.data[:500]
+          patched_payload = patched_role.get_json()
+          assert "watchlist.manage" in patched_payload["role"]["permissions"], patched_payload
+          print("/api/next/auth/roles/ci_curator", "custom-patch-ok")
+
+          second_user_id = uuid4()
+          with connect() as conn:
+              with conn.transaction():
+                  with conn.cursor() as cur:
+                      cur.execute(
+                          """
+                          INSERT INTO users (id, username, display_name, status)
+                          VALUES (%s, 'ci-rbac-user', 'CI RBAC User', 'active')
+                          """,
+                          (second_user_id,),
+                      )
+          assigned = client.patch(f"/api/next/auth/users/{second_user_id}/role", json={"role": "ci_curator"})
+          assert assigned.status_code == 200, assigned.data[:500]
+          assert assigned.get_json()["user"]["role"] == "ci_curator", assigned.get_json()
+          print("/api/next/auth/users/<id>/role", "custom-assign-ok")
+
+          multi = client.patch(
+              f"/api/next/auth/users/{second_user_id}/roles",
+              json={"roles": ["ci_curator", "media_viewer"]},
+          )
+          assert multi.status_code == 200, multi.data[:500]
+          multi_roles = {role["key"] for role in multi.get_json()["user"]["roles"]}
+          assert {"ci_curator", "media_viewer"}.issubset(multi_roles), multi.get_json()
+          print("/api/next/auth/users/<id>/roles", "multi-assign-ok")
+
+          reassigned = client.patch(f"/api/next/auth/users/{second_user_id}/role", json={"role": "media_viewer"})
+          assert reassigned.status_code == 200, reassigned.data[:500]
+          deleted = client.delete("/api/next/auth/roles/ci_curator")
+          assert deleted.status_code == 200, deleted.data[:500]
+          print("/api/next/auth/roles/ci_curator", "custom-delete-ok")
           PY
