@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html as html_lib
 import json as json_lib
+import mimetypes
 import os
 import uuid
 from datetime import date, datetime
@@ -18,7 +19,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, send_file
 from flask_cors import CORS
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -795,6 +796,59 @@ def migration_dashboard_html() -> str:
 def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
     if not table_exists(conn, "movies"):
         return []
+    if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    m.id,
+                    m.public_id,
+                    m.barcode,
+                    m.title,
+                    m.sort_title,
+                    m.original_title,
+                    m.year,
+                    m.format,
+                    m.edition,
+                    COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
+                    COALESCE(m.metadata->>'backdrop_url', backdrop_asset.source_url) AS backdrop_url,
+                    poster_asset.id AS poster_asset_id,
+                    poster_asset.storage_backend AS poster_asset_storage_backend,
+                    poster_asset.storage_key AS poster_asset_storage_key,
+                    poster_asset.source_url AS poster_asset_source_url,
+                    backdrop_asset.id AS backdrop_asset_id,
+                    backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
+                    backdrop_asset.storage_key AS backdrop_asset_storage_key,
+                    backdrop_asset.source_url AS backdrop_asset_source_url,
+                    m.created_at,
+                    m.updated_at
+                FROM movies m
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='poster'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) poster_asset ON true
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='backdrop'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) backdrop_asset ON true
+                ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return [with_preview_media_urls(row) for row in cur.fetchall()]
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -824,6 +878,57 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
 def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
     if not table_exists(conn, "containers"):
         return []
+    if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    c.id,
+                    c.public_id,
+                    c.container_type,
+                    c.title,
+                    c.barcode,
+                    c.badge_label,
+                    c.year,
+                    c.description,
+                    c.metadata,
+                    poster_asset.id AS poster_asset_id,
+                    poster_asset.storage_backend AS poster_asset_storage_backend,
+                    poster_asset.storage_key AS poster_asset_storage_key,
+                    poster_asset.source_url AS poster_asset_source_url,
+                    backdrop_asset.id AS backdrop_asset_id,
+                    backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
+                    backdrop_asset.storage_key AS backdrop_asset_storage_key,
+                    backdrop_asset.source_url AS backdrop_asset_source_url,
+                    c.created_at,
+                    c.updated_at
+                FROM containers c
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='container'
+                      AND em.entity_id=c.id
+                      AND ma.kind='poster'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) poster_asset ON true
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='container'
+                      AND em.entity_id=c.id
+                      AND ma.kind='backdrop'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) backdrop_asset ON true
+                ORDER BY c.container_type, lower(c.title)
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return [with_preview_media_urls(row) for row in cur.fetchall()]
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -894,6 +999,8 @@ def server_usable_image(value: Any) -> str:
     text = str(value or "")
     if text.startswith("http://") or text.startswith("https://"):
         return text
+    if text.startswith("/api/next/media/"):
+        return text
     return ""
 
 
@@ -912,6 +1019,55 @@ def first_usable_image(*values: Any) -> str:
 
 def app_href(path: str = "") -> str:
     return f"/api/next/app{path}"
+
+
+def media_asset_public_url(asset: dict[str, Any] | None) -> str:
+    if not asset:
+        return ""
+    asset_id = asset.get("id")
+    storage_backend = str(asset.get("storage_backend") or "")
+    storage_key = str(asset.get("storage_key") or "")
+    if (
+        asset_id
+        and storage_backend == "local"
+        and storage_key
+        and not storage_key.startswith("remote/")
+    ):
+        return f"/api/next/media/assets/{asset_id}"
+    return server_usable_image(asset.get("source_url"))
+
+
+def with_preview_media_urls(row: dict[str, Any]) -> dict[str, Any]:
+    data = dict(row)
+    for kind in ("poster", "backdrop"):
+        asset = {
+            "id": data.pop(f"{kind}_asset_id", None),
+            "storage_backend": data.pop(f"{kind}_asset_storage_backend", None),
+            "storage_key": data.pop(f"{kind}_asset_storage_key", None),
+            "source_url": data.pop(f"{kind}_asset_source_url", None),
+        }
+        url = media_asset_public_url(asset)
+        if url:
+            data[f"{kind}_url"] = url
+    return data
+
+
+def local_media_asset_path(storage_key: Any) -> Path | None:
+    text = str(storage_key or "").replace("\\", "/").strip()
+    if not text or text.startswith("/") or text.startswith("remote/"):
+        return None
+    parts = [part for part in text.split("/") if part]
+    if any(part == ".." for part in parts):
+        return None
+    data_dir = legacy_data_dir().resolve()
+    candidate = (data_dir / Path(*parts)).resolve()
+    try:
+        candidate.relative_to(data_dir)
+    except ValueError:
+        return None
+    if not candidate.exists() or not candidate.is_file():
+        return None
+    return candidate
 
 
 def server_movie_cards(movies: list[dict[str, Any]]) -> str:
@@ -1748,12 +1904,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
 
 def container_detail_image(media_assets: list[dict[str, Any]], metadata: dict[str, Any], kind: str) -> str:
     primary_assets = [
-        asset.get("source_url")
+        media_asset_public_url(asset)
         for asset in media_assets
         if asset.get("kind") == kind and asset.get("is_primary")
     ]
     other_assets = [
-        asset.get("source_url")
+        media_asset_public_url(asset)
         for asset in media_assets
         if asset.get("kind") == kind and not asset.get("is_primary")
     ]
@@ -1886,6 +2042,9 @@ def container_detail_media_rows(media_assets: list[dict[str, Any]]) -> str:
             if detail_value(value)
         )
         value = asset.get("source_url") or asset.get("storage_key") or asset.get("sha256")
+        display_url = media_asset_public_url(asset)
+        if display_url:
+            value = display_url
         rows.append(f'<div class="field"><span>{h(label)}</span><strong>{h(value)}</strong></div>')
     return "".join(rows)
 
@@ -2960,6 +3119,35 @@ def movie_container_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
     return links
 
 
+def media_asset_entity(conn, media_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "media_assets"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata,
+                created_at
+            FROM media_assets
+            WHERE id=%s
+            """,
+            (media_id,),
+        )
+        return cur.fetchone()
+
+
 def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list[dict[str, Any]]:
     if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         return []
@@ -2990,7 +3178,10 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
             """,
             (entity_type, entity_id),
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+    for row in rows:
+        row["url"] = media_asset_public_url(row)
+    return rows
 
 
 def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
@@ -3902,6 +4093,21 @@ def register_routes(flask_app: Flask) -> None:
         if not detail:
             raise NextApiError("Container not found", 404)
         return html_response(container_detail_html(detail))
+
+    @flask_app.get("/api/next/media/assets/<media_id>")
+    def media_asset(media_id: str):
+        media_uuid = parse_uuid(media_id, "mediaId")
+        with connect() as conn:
+            asset = media_asset_entity(conn, media_uuid)
+        if not asset:
+            raise NextApiError("Media asset not found", 404)
+        path = local_media_asset_path(asset.get("storage_key"))
+        if not path:
+            raise NextApiError("Local media file not found", 404)
+        mimetype = asset.get("content_type") or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        result = send_file(path, mimetype=mimetype, conditional=True, max_age=86400)
+        result.headers["Cache-Control"] = "public, max-age=86400"
+        return result
 
     @flask_app.get("/api/next/jobs")
     def jobs():
