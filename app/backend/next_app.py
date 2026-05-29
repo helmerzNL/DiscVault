@@ -7068,33 +7068,87 @@ def register_routes(flask_app: Flask) -> None:
             params: list[Any] = []
             where = ""
             if query:
-                where = "WHERE lower(title) LIKE lower(%s)"
+                where = "WHERE lower(m.title) LIKE lower(%s)"
                 params.append(f"%{query}%")
             with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    SELECT
-                        id,
-                        public_id,
-                        barcode,
-                        title,
-                        sort_title,
-                        original_title,
-                        year,
-                        format,
-                        edition,
-                        metadata->>'poster_url' AS poster_url,
-                        metadata->>'backdrop_url' AS backdrop_url,
-                        created_at,
-                        updated_at
-                    FROM movies
-                    {where}
-                    ORDER BY lower(COALESCE(sort_title, title)), year NULLS LAST
-                    LIMIT %s OFFSET %s
-                    """,
-                    (*params, limit, offset),
-                )
-                items = cur.fetchall()
+                if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+                    cur.execute(
+                        f"""
+                        SELECT
+                            m.id,
+                            m.public_id,
+                            m.barcode,
+                            m.title,
+                            m.sort_title,
+                            m.original_title,
+                            m.year,
+                            m.format,
+                            m.edition,
+                            m.metadata->>'poster_url' AS poster_url,
+                            m.metadata->>'backdrop_url' AS backdrop_url,
+                            poster_asset.id AS poster_asset_id,
+                            poster_asset.storage_backend AS poster_asset_storage_backend,
+                            poster_asset.storage_key AS poster_asset_storage_key,
+                            poster_asset.source_url AS poster_asset_source_url,
+                            backdrop_asset.id AS backdrop_asset_id,
+                            backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
+                            backdrop_asset.storage_key AS backdrop_asset_storage_key,
+                            backdrop_asset.source_url AS backdrop_asset_source_url,
+                            m.created_at,
+                            m.updated_at
+                        FROM movies m
+                        LEFT JOIN LATERAL (
+                            SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                            FROM entity_media em
+                            JOIN media_assets ma ON ma.id = em.media_id
+                            WHERE em.entity_type='movie'
+                              AND em.entity_id=m.id
+                              AND ma.kind='poster'
+                            ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                            LIMIT 1
+                        ) poster_asset ON true
+                        LEFT JOIN LATERAL (
+                            SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                            FROM entity_media em
+                            JOIN media_assets ma ON ma.id = em.media_id
+                            WHERE em.entity_type='movie'
+                              AND em.entity_id=m.id
+                              AND ma.kind='backdrop'
+                            ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                            LIMIT 1
+                        ) backdrop_asset ON true
+                        {where}
+                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                        LIMIT %s OFFSET %s
+                        """,
+                        (*params, limit, offset),
+                    )
+                    items = [with_preview_media_urls(row) for row in cur.fetchall()]
+                else:
+                    cur.execute(
+                        f"""
+                        SELECT
+                            id,
+                            public_id,
+                            barcode,
+                            title,
+                            sort_title,
+                            original_title,
+                            year,
+                            format,
+                            edition,
+                            metadata->>'poster_url' AS poster_url,
+                            metadata->>'backdrop_url' AS backdrop_url,
+                            created_at,
+                            updated_at
+                        FROM movies m
+                        {where}
+                        ORDER BY lower(COALESCE(sort_title, title)), year NULLS LAST
+                        LIMIT %s OFFSET %s
+                        """,
+                        (*params, limit, offset),
+                    )
+                    items = cur.fetchall()
             items = attach_digital_availability(conn, items)
         return response({"status": "ok", "items": items, "limit": limit, "offset": offset})
 
