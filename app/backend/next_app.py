@@ -1594,6 +1594,47 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       gap: 12px;
       margin-top: 12px;
     }
+    .admin-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .admin-metric {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px;
+      background: rgba(255,255,255,.03);
+      padding: 10px;
+      min-width: 0;
+    }
+    .admin-metric strong {
+      display: block;
+      font-size: 1.2rem;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+    }
+    .admin-metric span {
+      display: block;
+      color: var(--muted);
+      font-size: .75rem;
+      margin-top: 4px;
+    }
+    .admin-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 4px 0 12px;
+    }
+    .admin-tabs button {
+      min-height: 34px;
+      padding: 0 11px;
+    }
+    .admin-view {
+      display: none;
+    }
+    .admin-view.active {
+      display: block;
+    }
     .admin-card {
       border: 1px solid rgba(255,255,255,.1);
       border-radius: 8px;
@@ -1601,9 +1642,16 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       padding: 12px;
       min-width: 0;
     }
+    .admin-card.wide {
+      grid-column: 1 / -1;
+    }
     .admin-card h3 {
       margin: 0 0 9px;
       font-size: .9rem;
+    }
+    .admin-card p + .admin-controls,
+    .admin-card .admin-list + .admin-list {
+      margin-top: 10px;
     }
     .admin-list {
       display: grid;
@@ -1639,6 +1687,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .admin-controls input {
       min-width: 150px;
     }
+    .admin-controls select {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 0 11px;
+      font: inherit;
+    }
     .admin-code {
       font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
       background: rgba(0,0,0,.22);
@@ -1646,6 +1703,36 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       border-radius: 6px;
       padding: 7px 8px;
       overflow-wrap: anywhere;
+    }
+    .admin-mode {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 8px 0 12px;
+    }
+    .admin-permission-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .admin-plugin-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+    .admin-plugin-head strong,
+    .admin-plugin-head span {
+      overflow-wrap: anywhere;
+    }
+    .admin-plugin-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
     }
     .hidden {
       display: none !important;
@@ -1655,6 +1742,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
       .auth-panel { grid-template-columns: 1fr; }
       .admin-grid { grid-template-columns: 1fr; }
+      .admin-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .layout { grid-template-columns: 1fr; }
       .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
@@ -1676,6 +1764,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     @media (max-width: 520px) {
       .stats { grid-template-columns: 1fr; }
+      .admin-summary { grid-template-columns: 1fr; }
       .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .detail-overlay {
         padding: 0;
@@ -1748,37 +1837,80 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     <section class="admin-panel hidden" id="adminPanel">
       <div class="section-head">
         <div>
-          <h2>User & Admin Management</h2>
-          <p class="muted">Manage passkey users, roles, authentication and invite-only access.</p>
+          <h2>Admin Console</h2>
+          <p class="muted" id="adminSummaryLine">Security, users, roles and plugins.</p>
         </div>
         <button type="button" data-admin-action="refresh">Refresh Admin</button>
       </div>
-      <div class="admin-grid">
-        <div class="admin-card">
-          <h3>Security</h3>
-          <div class="admin-controls">
-            <button type="button" id="adminAuthToggle" data-admin-action="toggle-auth">Toggle Authentication</button>
-            <button type="button" id="adminInviteOnlyToggle" data-admin-action="toggle-invite-only">Toggle Invite-only</button>
-            <button type="button" id="adminMovieVaultReceiverToggle" data-admin-action="toggle-movievault-receiver">Toggle MovieVault Receiver</button>
+      <div class="admin-summary">
+        <div class="admin-metric"><strong id="adminMetricUsers">-</strong><span>Users</span></div>
+        <div class="admin-metric"><strong id="adminMetricPasskeys">-</strong><span>Passkeys</span></div>
+        <div class="admin-metric"><strong id="adminMetricRbac">-</strong><span>RBAC mode</span></div>
+        <div class="admin-metric"><strong id="adminMetricPlugins">-</strong><span>Enabled plugins</span></div>
+      </div>
+      <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+        <button type="button" class="active" data-admin-tab="security">Security</button>
+        <button type="button" data-admin-tab="users">Users</button>
+        <button type="button" data-admin-tab="roles">Roles</button>
+        <button type="button" data-admin-tab="plugins">Plugins</button>
+      </div>
+      <div class="admin-view active" data-admin-view="security">
+        <div class="admin-grid">
+          <div class="admin-card">
+            <h3>Security</h3>
+            <div class="admin-controls">
+              <button type="button" id="adminAuthToggle" data-admin-action="toggle-auth">Toggle Authentication</button>
+              <button type="button" id="adminInviteOnlyToggle" data-admin-action="toggle-invite-only">Toggle Invite-only</button>
+              <button type="button" id="adminMovieVaultReceiverToggle" data-admin-action="toggle-movievault-receiver">Toggle MovieVault Receiver</button>
+            </div>
+            <p class="muted" id="adminSecurityState">-</p>
           </div>
-          <p class="muted" id="adminSecurityState">-</p>
-        </div>
-        <div class="admin-card">
-          <h3>Create Invite</h3>
-          <div class="admin-controls">
-            <input id="adminInviteUsername" type="text" placeholder="username">
-            <button type="button" data-admin-action="create-invite">Create Invite</button>
+          <div class="admin-card">
+            <h3>Create Invite</h3>
+            <div class="admin-controls">
+              <input id="adminInviteUsername" type="text" placeholder="username">
+              <button type="button" data-admin-action="create-invite">Create Invite</button>
+            </div>
+            <div class="admin-code hidden" id="adminInviteCodeOutput"></div>
           </div>
-          <div class="admin-code hidden" id="adminInviteCodeOutput"></div>
+          <div class="admin-card wide">
+            <h3>Passkeys & Invites</h3>
+            <div class="admin-list" id="adminCredentialsList"><div class="empty">No passkeys loaded.</div></div>
+            <div class="admin-list" id="adminInvitesList"><div class="empty">No invites loaded.</div></div>
+          </div>
         </div>
+      </div>
+      <div class="admin-view" data-admin-view="users">
         <div class="admin-card">
           <h3>Users</h3>
           <div class="admin-list" id="adminUsersList"><div class="empty">No users loaded.</div></div>
         </div>
+      </div>
+      <div class="admin-view" data-admin-view="roles">
+        <div class="admin-grid">
+          <div class="admin-card">
+            <h3>RBAC Mode</h3>
+            <div class="admin-mode">
+              <button type="button" id="adminRbacBasicButton" data-admin-rbac-mode="basic">Basic</button>
+              <button type="button" id="adminRbacAdvancedButton" data-admin-rbac-mode="advanced">Advanced</button>
+            </div>
+            <p class="muted" id="adminRbacModeState">-</p>
+          </div>
+          <div class="admin-card">
+            <h3>Permission Catalog</h3>
+            <p class="muted" id="adminPermissionSummary">-</p>
+            <div class="admin-permission-cloud" id="adminPermissionPreview"></div>
+          </div>
+          <div class="admin-card wide">
+            <h3>Roles</h3>
+            <div class="admin-list" id="adminRolesList"><div class="empty">No roles loaded.</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="admin-view" data-admin-view="plugins">
         <div class="admin-card">
-          <h3>Passkeys & Invites</h3>
-          <div class="admin-list" id="adminCredentialsList"><div class="empty">No passkeys loaded.</div></div>
-          <div class="admin-list" id="adminInvitesList"><div class="empty">No invites loaded.</div></div>
+          <h3>Plugin Registry</h3>
+          <div class="admin-list" id="adminPluginsList"><div class="empty">No plugins loaded.</div></div>
         </div>
       </div>
       <div class="auth-status" id="adminStatusLine"></div>
@@ -1857,6 +1989,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     var authToken = localStorage.getItem("dv_next_token") || "";
     var authState = {};
     var ownerSettings = {};
+    var adminState = {
+      users: [],
+      credentials: [],
+      invites: [],
+      rbac: {},
+      plugins: [],
+      pluginHealth: {}
+    };
 
     function escapeHtml(value) {
       return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
@@ -2217,8 +2357,39 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         loadAdmin().catch((error) => setAdminStatus(error.message, "bad"));
       }
     }
+    function setAdminText(id, value) {
+      const node = document.getElementById(id);
+      if (node) node.textContent = value;
+    }
+    function setAdminTab(tab) {
+      const selected = tab || "security";
+      document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.adminTab === selected);
+      });
+      document.querySelectorAll("[data-admin-view]").forEach((view) => {
+        view.classList.toggle("active", view.dataset.adminView === selected);
+      });
+    }
+    function renderAdminSummary() {
+      const enabledPlugins = adminState.plugins.filter((plugin) => plugin.enabled).length;
+      const mode = adminState.rbac.mode || "-";
+      setAdminText("adminMetricUsers", number(adminState.users.length));
+      setAdminText("adminMetricPasskeys", number(adminState.credentials.length));
+      setAdminText("adminMetricRbac", mode);
+      setAdminText("adminMetricPlugins", `${number(enabledPlugins)}/${number(adminState.plugins.length)}`);
+      setAdminText(
+        "adminSummaryLine",
+        `${number(adminState.users.length)} users, ${number(adminState.credentials.length)} passkeys, ${number(enabledPlugins)} enabled plugins.`
+      );
+    }
     function adminRoleOptions(selectedRole, roles) {
-      return (roles || []).map((role) => `
+      const options = [...(roles || [])];
+      if (selectedRole && !options.some((role) => role.key === selectedRole)) {
+        const allRoles = adminState.rbac.roles || [];
+        const selected = allRoles.find((role) => role.key === selectedRole) || {key: selectedRole, name: selectedRole, assignable: false};
+        options.unshift({...selected, assignable: false});
+      }
+      return options.map((role) => `
         <option value="${escapeHtml(role.key)}" ${role.key === selectedRole ? "selected" : ""} ${role.assignable === false && role.key !== selectedRole ? "disabled" : ""}>${escapeHtml(role.name || role.key)}</option>
       `).join("");
     }
@@ -2227,6 +2398,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!list) return;
       list.innerHTML = users.length ? users.map((user) => {
         const disabled = user.status !== "active";
+        const roleLocked = user.role === "owner";
         const canReceiveOwnership = authState.role === "owner"
           && user.id !== authState.user_id
           && user.status === "active"
@@ -2237,9 +2409,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               <strong>${escapeHtml(user.display_name || user.username)}</strong>
               <span class="tag ${disabled ? "" : "good"}">${escapeHtml(user.status || "active")}</span>
             </div>
-            <div class="muted">${escapeHtml(user.username)} · ${number(user.credential_count)} passkeys · role ${escapeHtml(user.role || "-")}</div>
+            <div class="muted">${escapeHtml(user.username)} &middot; ${number(user.credential_count)} passkeys &middot; role ${escapeHtml(user.role || "-")}</div>
             <div class="admin-controls">
-              <select data-admin-user-role="${escapeHtml(user.id)}">${adminRoleOptions(user.role, roles)}</select>
+              <select data-admin-user-role="${escapeHtml(user.id)}" ${roleLocked ? "disabled" : ""}>${adminRoleOptions(user.role, roles)}</select>
               <button type="button" data-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${disabled ? "Enable" : "Disable"}</button>
               ${canReceiveOwnership ? `<button type="button" data-admin-owner-transfer="${escapeHtml(user.id)}" data-username="${escapeHtml(user.display_name || user.username)}">Transfer Owner</button>` : ""}
               <button type="button" data-admin-user-delete="${escapeHtml(user.id)}">Delete</button>
@@ -2257,7 +2429,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <strong>${escapeHtml(credential.credential_name || "Passkey")}</strong>
             <button type="button" data-admin-credential-delete="${escapeHtml(credential.id)}">Delete</button>
           </div>
-          <div class="muted">${escapeHtml(credential.username)} · created ${escapeHtml((credential.created_at || "").slice(0, 10))} · last used ${escapeHtml((credential.last_used_at || "-").slice(0, 19))}</div>
+          <div class="muted">${escapeHtml(credential.username)} &middot; created ${escapeHtml((credential.created_at || "").slice(0, 10))} &middot; last used ${escapeHtml((credential.last_used_at || "-").slice(0, 19))}</div>
         </div>
       `).join("") : `<div class="empty">No passkeys found.</div>`;
     }
@@ -2277,6 +2449,87 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           </div>
         `;
       }).join("") : `<div class="empty">No invites created.</div>`;
+    }
+    function permissionTags(permissions, limit) {
+      const values = permissions || [];
+      const shown = values.slice(0, limit || 8).map((permission) => `<span class="tag">${escapeHtml(permission)}</span>`);
+      if (values.length > shown.length) {
+        shown.push(`<span class="tag blue">+${number(values.length - shown.length)}</span>`);
+      }
+      return shown.join("") || `<span class="tag">No permissions</span>`;
+    }
+    function renderAdminRbac(rbac) {
+      const mode = rbac.mode || "basic";
+      const roles = rbac.roles || [];
+      const permissions = rbac.permissions || [];
+      const customRoles = roles.filter((role) => role.custom).length;
+      const basicButton = document.getElementById("adminRbacBasicButton");
+      const advancedButton = document.getElementById("adminRbacAdvancedButton");
+      if (basicButton) {
+        basicButton.classList.toggle("active", mode === "basic");
+        basicButton.disabled = !rbac.canSwitchMode || mode === "basic";
+      }
+      if (advancedButton) {
+        advancedButton.classList.toggle("active", mode === "advanced");
+        advancedButton.disabled = !rbac.canSwitchMode || mode === "advanced" || !rbac.advancedEnabled;
+      }
+      setAdminText(
+        "adminRbacModeState",
+        `${mode} mode. ${number((rbac.assignableRoles || []).length)} assignable roles, ${number(customRoles)} custom roles.`
+      );
+      setAdminText("adminPermissionSummary", `${number(permissions.length)} permissions across ${number(new Set(permissions.map((item) => item.domain || "core")).size)} domains.`);
+      const preview = document.getElementById("adminPermissionPreview");
+      if (preview) {
+        preview.innerHTML = permissions.slice(0, 14).map((permission) => `<span class="tag">${escapeHtml(permission.key)}</span>`).join("")
+          || `<span class="tag">No permissions</span>`;
+      }
+      const list = document.getElementById("adminRolesList");
+      if (!list) return;
+      list.innerHTML = roles.length ? roles.map((role) => `
+        <div class="admin-row">
+          <div class="admin-row-head">
+            <strong>${escapeHtml(role.name || role.key)}</strong>
+            <span class="tag ${role.assignable ? "good" : ""}">${role.assignable ? "assignable" : "protected"}</span>
+          </div>
+          <div class="muted">${escapeHtml(role.key)} &middot; ${role.system ? "system" : "custom"} &middot; ${number((role.permissions || []).length)} permissions</div>
+          <div class="admin-permission-cloud">${permissionTags(role.permissions || [], 10)}</div>
+        </div>
+      `).join("") : `<div class="empty">No roles found.</div>`;
+    }
+    function pluginCategoryLabel(plugin) {
+      return (plugin.categories || []).map((category) => category.replaceAll("_", " ")).join(", ") || "plugin";
+    }
+    function renderAdminPlugins(plugins) {
+      const list = document.getElementById("adminPluginsList");
+      if (!list) return;
+      list.innerHTML = plugins.length ? plugins.map((plugin) => {
+        const health = adminState.pluginHealth[plugin.id] || {};
+        const runtime = plugin.runtime || {};
+        const runtimeState = health.state || (runtime.loaded ? "loaded" : "not loaded");
+        const needsConfig = plugin.requiresSecrets && !plugin.secretsConfigured;
+        return `
+          <div class="admin-row">
+            <div class="admin-plugin-head">
+              <div>
+                <strong>${escapeHtml(plugin.name || plugin.id)}</strong>
+                <div class="muted">${escapeHtml(plugin.id)} &middot; ${escapeHtml(pluginCategoryLabel(plugin))} &middot; order ${escapeHtml(plugin.orderIndex || "-")}</div>
+              </div>
+              <span class="tag ${plugin.enabled ? "good" : ""}">${plugin.enabled ? "enabled" : "disabled"}</span>
+            </div>
+            <div class="admin-plugin-meta">
+              <span class="tag ${runtime.loaded ? "good" : ""}">runtime ${escapeHtml(runtimeState)}</span>
+              ${plugin.requiresSecrets ? `<span class="tag ${plugin.secretsConfigured ? "good" : ""}">secrets ${plugin.secretsConfigured ? "set" : "missing"}</span>` : `<span class="tag good">no secrets</span>`}
+              ${plugin.settingsConfigured ? `<span class="tag good">settings set</span>` : `<span class="tag">default settings</span>`}
+              ${needsConfig ? `<span class="tag blue">configuration needed</span>` : ""}
+              ${plugin.premiumFeatureKey ? `<span class="tag blue">${escapeHtml(plugin.premiumFeatureKey)}</span>` : ""}
+            </div>
+            <div class="admin-controls">
+              <button type="button" data-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${plugin.enabled ? "Disable" : "Enable"}</button>
+              <button type="button" data-admin-plugin-health="${escapeHtml(plugin.id)}">Check Health</button>
+            </div>
+          </div>
+        `;
+      }).join("") : `<div class="empty">No plugins found.</div>`;
     }
     function renderAdminSecurity() {
       const stateLine = document.getElementById("adminSecurityState");
@@ -2301,19 +2554,29 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     async function loadAdmin() {
       if (!isAdminUser()) return;
       setAdminStatus("Loading admin data...", "info");
-      const [usersPayload, credentialsPayload, invitesPayload, ownerSettingsPayload] = await Promise.all([
+      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, ownerSettingsPayload] = await Promise.all([
         authJson("/api/next/auth/users", {headers: authHeaders()}),
         authJson("/api/next/auth/credentials", {headers: authHeaders()}),
         authJson("/api/next/auth/invite", {headers: authHeaders()}),
+        authJson("/api/next/auth/rbac", {headers: authHeaders()}),
+        authJson("/api/next/plugins/registry", {headers: authHeaders()}),
         authState.role === "owner"
           ? authJson("/api/next/auth/owner/settings", {headers: authHeaders()})
           : Promise.resolve({settings: {}})
       ]);
       ownerSettings = ownerSettingsPayload.settings || {};
+      adminState.users = usersPayload.users || [];
+      adminState.credentials = credentialsPayload.credentials || [];
+      adminState.invites = invitesPayload.invites || [];
+      adminState.rbac = rbacPayload || {};
+      adminState.plugins = pluginsPayload.plugins || [];
       renderAdminSecurity();
-      renderAdminUsers(usersPayload.users || [], usersPayload.roles || []);
-      renderAdminCredentials(credentialsPayload.credentials || []);
-      renderAdminInvites(invitesPayload.invites || []);
+      renderAdminUsers(adminState.users, rbacPayload.assignableRoles || usersPayload.roles || []);
+      renderAdminCredentials(adminState.credentials);
+      renderAdminInvites(adminState.invites);
+      renderAdminRbac(adminState.rbac);
+      renderAdminPlugins(adminState.plugins);
+      renderAdminSummary();
       document.getElementById("adminPanel").dataset.loaded = "true";
       setAdminStatus("Admin data loaded.", "good");
     }
@@ -2346,6 +2609,32 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       ownerSettings = payload.settings || {};
       renderAdminSecurity();
       setAdminStatus(`MovieVault receiver ${enabled ? "enabled" : "disabled"}.`, "good");
+    }
+    async function setRbacMode(mode) {
+      await authJson("/api/next/auth/rbac", {
+        method: "PATCH",
+        body: JSON.stringify({mode})
+      });
+      await loadAdmin();
+      setAdminStatus(`RBAC switched to ${mode}.`, "good");
+    }
+    async function setPluginEnabled(pluginId, enabled) {
+      const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({enabled})
+      });
+      adminState.plugins = (payload.registry && payload.registry.plugins) || adminState.plugins;
+      renderAdminPlugins(adminState.plugins);
+      renderAdminSummary();
+      setAdminStatus(`${pluginId} ${enabled ? "enabled" : "disabled"}.`, "good");
+    }
+    async function checkPluginHealth(pluginId) {
+      const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/health`, {
+        headers: authHeaders()
+      });
+      adminState.pluginHealth[pluginId] = payload.health || {};
+      renderAdminPlugins(adminState.plugins);
+      setAdminStatus(`${pluginId} health: ${(payload.health && payload.health.state) || "unknown"}.`, "info");
     }
     async function createAdminInvite() {
       const input = document.getElementById("adminInviteUsername");
@@ -2432,11 +2721,19 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!panel || panel.dataset.bound === "true") return;
       panel.dataset.bound = "true";
       panel.addEventListener("click", (event) => {
-        const target = event.target.closest("[data-admin-action], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
+        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-plugin-enable], [data-admin-plugin-health], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
         if (!target) return;
         event.preventDefault();
         const action = target.dataset.adminAction;
-        const task = action === "refresh"
+        const task = target.dataset.adminTab
+          ? (setAdminTab(target.dataset.adminTab), Promise.resolve())
+          : target.dataset.adminRbacMode
+            ? setRbacMode(target.dataset.adminRbacMode)
+            : target.dataset.adminPluginEnable
+              ? setPluginEnabled(target.dataset.adminPluginEnable, target.dataset.enabled === "true")
+              : target.dataset.adminPluginHealth
+                ? checkPluginHealth(target.dataset.adminPluginHealth)
+                : action === "refresh"
           ? loadAdmin()
           : action === "toggle-auth"
             ? setAuthConfigured(!authState.configured_auth_enabled)
