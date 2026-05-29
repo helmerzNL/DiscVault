@@ -4075,6 +4075,89 @@ def container_detail_media_rows(media_assets: list[dict[str, Any]]) -> str:
     return "".join(rows)
 
 
+def movie_artwork_upload_form(kind: str) -> str:
+    label = "Poster" if kind == "poster" else "Backdrop"
+    return f"""
+      <form class="upload-form" data-upload-kind="{h(kind)}">
+        <label class="file-input">
+          <span>{h(label)} file</span>
+          <input type="file" name="file" accept="image/*" required>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" name="primary" checked>
+          <span>Set as primary</span>
+        </label>
+        <button class="button" type="submit">Upload {h(label.lower())}</button>
+      </form>
+    """.strip()
+
+
+def movie_artwork_asset_cards(media_assets: list[dict[str, Any]], kind: str) -> str:
+    assets = [asset for asset in media_assets if asset.get("kind") == kind]
+    if not assets:
+        return '<div class="empty small">No artwork options linked yet.</div>'
+    cards = []
+    for asset in assets:
+        display_url = media_asset_public_url(asset)
+        preview = f'<img src="{h(display_url)}" alt="">' if display_url else "<span>No preview</span>"
+        is_primary = bool(asset.get("is_primary"))
+        tags = [
+            asset.get("provider_id") or asset.get("storage_backend"),
+            asset.get("variant"),
+            "Primary" if is_primary else None,
+        ]
+        tags_html = "".join(f'<span class="tag">{h(tag)}</span>' for tag in tags if tag)
+        action_html = (
+            '<button class="button" type="button" disabled>Primary</button>'
+            if is_primary
+            else (
+                f'<button class="button" type="button" data-media-primary '
+                f'data-kind="{h(kind)}" data-media-id="{h(asset.get("id"))}">Set primary</button>'
+            )
+        )
+        storage_label = asset.get("source_url") or asset.get("storage_key") or asset.get("sha256")
+        cards.append(
+            f"""
+        <article class="art-card">
+          <div class="art-preview">{preview}</div>
+          <div class="art-body">
+            <div class="tags">{tags_html}</div>
+            <strong>{h(storage_label or "Local media asset")}</strong>
+            {action_html}
+          </div>
+        </article>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def movie_artwork_manager_html(movie: dict[str, Any], media_assets: list[dict[str, Any]]) -> str:
+    movie_id = h(movie.get("id") or "")
+    return f"""
+      <div class="media-message" id="mediaMessage" role="status" aria-live="polite"></div>
+      <div class="artwork-columns" data-movie-id="{movie_id}">
+        <section class="artwork-column">
+          <div class="section-head">
+            <h3>Posters</h3>
+            {movie_artwork_upload_form("poster")}
+          </div>
+          <div class="art-grid">
+            {movie_artwork_asset_cards(media_assets, "poster")}
+          </div>
+        </section>
+        <section class="artwork-column">
+          <div class="section-head">
+            <h3>Backdrops</h3>
+            {movie_artwork_upload_form("backdrop")}
+          </div>
+          <div class="art-grid backdrops">
+            {movie_artwork_asset_cards(media_assets, "backdrop")}
+          </div>
+        </section>
+      </div>
+    """.strip()
+
+
 def movie_detail_credit_cards(credits: list[dict[str, Any]]) -> str:
     if not credits:
         return '<div class="empty">No credits imported yet.</div>'
@@ -4223,6 +4306,15 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
       background: var(--surface-2);
       white-space: nowrap;
     }
+    button.button {
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+    .button:disabled {
+      opacity: .58;
+      cursor: default;
+    }
     .actions { display: flex; gap: 9px; flex-wrap: wrap; }
     .hero {
       min-height: 270px;
@@ -4323,6 +4415,10 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
     .item-card.plain {
       display: block;
     }
+    h3 {
+      margin: 0;
+      font-size: .9rem;
+    }
     .item-body { min-width: 0; }
     .item-body strong {
       display: block;
@@ -4350,6 +4446,102 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
       font-weight: 560;
       overflow-wrap: anywhere;
     }
+    .artwork-columns {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .artwork-column {
+      min-width: 0;
+    }
+    .section-head {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .upload-form {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) auto auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .file-input,
+    .check-row {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .file-input input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 7px;
+    }
+    .check-row {
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      min-height: 38px;
+    }
+    .art-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .art-grid.backdrops {
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    }
+    .art-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      overflow: hidden;
+      min-width: 0;
+    }
+    .art-preview {
+      aspect-ratio: 2 / 3;
+      background: #151923;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: .78rem;
+      overflow: hidden;
+    }
+    .backdrops .art-preview {
+      aspect-ratio: 16 / 9;
+    }
+    .art-preview img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+    .art-body {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      min-width: 0;
+    }
+    .art-body strong {
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 520;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+    }
+    .media-message {
+      min-height: 24px;
+      color: var(--muted);
+      margin-top: 10px;
+      font-size: .86rem;
+    }
+    .media-message.error { color: #ff9b9b; }
+    .media-message.ok { color: var(--green); }
     pre {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
@@ -4378,6 +4570,8 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
       .layout { grid-template-columns: 1fr; }
       .panel.full { grid-column: auto; }
       .field { grid-template-columns: 1fr; gap: 3px; }
+      .artwork-columns { grid-template-columns: 1fr; }
+      .upload-form { grid-template-columns: 1fr; align-items: stretch; }
     }
   </style>
 </head>
@@ -4451,7 +4645,7 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
       </div>
       <div class="panel">
         <h2>Media Assets</h2>
-        <div class="field-list">""" + container_detail_media_rows(media_assets) + """</div>
+        """ + movie_artwork_manager_html(movie, media_assets) + """
       </div>
       <div class="panel">
         <h2>Metadata</h2>
@@ -4459,6 +4653,87 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
       </div>
     </section>
   </main>
+  <script>
+    (function () {
+      const root = document.querySelector("[data-movie-id]");
+      const message = document.getElementById("mediaMessage");
+      if (!root || !message) return;
+      const movieId = root.dataset.movieId;
+
+      function setMessage(text, type) {
+        message.textContent = text || "";
+        message.className = "media-message" + (type ? " " + type : "");
+      }
+
+      async function parseResponse(response) {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || body.status === "error") {
+          throw new Error(body.error || "Request failed");
+        }
+        return body;
+      }
+
+      async function setPrimary(button) {
+        const mediaId = button.dataset.mediaId;
+        const kind = button.dataset.kind;
+        if (!mediaId || !kind) return;
+        button.disabled = true;
+        setMessage("Updating artwork...", "");
+        try {
+          const response = await fetch(`/api/next/movies/${movieId}/media/primary`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({mediaId, kind})
+          });
+          await parseResponse(response);
+          setMessage("Artwork updated.", "ok");
+          window.location.reload();
+        } catch (error) {
+          button.disabled = false;
+          setMessage(error.message || String(error), "error");
+        }
+      }
+
+      async function uploadArtwork(form) {
+        const kind = form.dataset.uploadKind;
+        const file = form.querySelector("input[type=file]");
+        const primary = form.querySelector("input[name=primary]");
+        if (!kind || !file || !file.files.length) return;
+        const submit = form.querySelector("button[type=submit]");
+        submit.disabled = true;
+        setMessage("Uploading artwork...", "");
+        const data = new FormData();
+        data.append("file", file.files[0]);
+        data.append("kind", kind);
+        data.append("primary", primary && primary.checked ? "true" : "false");
+        try {
+          const response = await fetch(`/api/next/movies/${movieId}/media/upload`, {
+            method: "POST",
+            credentials: "same-origin",
+            body: data
+          });
+          await parseResponse(response);
+          setMessage("Artwork uploaded.", "ok");
+          window.location.reload();
+        } catch (error) {
+          submit.disabled = false;
+          setMessage(error.message || String(error), "error");
+        }
+      }
+
+      root.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-media-primary]");
+        if (button) setPrimary(button);
+      });
+      root.querySelectorAll("[data-upload-kind]").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          uploadArtwork(form);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
 """
