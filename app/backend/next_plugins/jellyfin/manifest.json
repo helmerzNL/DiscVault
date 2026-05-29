@@ -17,7 +17,8 @@
         "label": "Server URL",
         "type": "url",
         "required": true,
-        "placeholder": "https://jellyfin.example"
+        "placeholder": "https://jellyfin.example",
+        "description": "Jellyfin server URL reachable by the DiscVault container."
       }
     ],
     "secrets": [
@@ -25,7 +26,8 @@
         "name": "token",
         "label": "API key",
         "type": "password",
-        "required": true
+        "required": true,
+        "description": "Jellyfin API key used for library discovery and sync."
       }
     ]
   },

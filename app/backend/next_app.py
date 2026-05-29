@@ -1759,11 +1759,43 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       gap: 6px;
       margin-top: 8px;
     }
+    .admin-plugin-section {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .admin-plugin-section + .admin-plugin-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .admin-plugin-section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+    .admin-plugin-section-head h4 {
+      margin: 0;
+      font-size: .88rem;
+    }
+    .admin-plugin-config-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 10px;
+      min-width: 0;
+    }
+    .admin-plugin-config-head strong {
+      font-size: .82rem;
+    }
     .admin-plugin-config {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
-      margin-top: 10px;
+      margin-top: 8px;
     }
     .admin-plugin-config label {
       color: var(--muted);
@@ -1771,6 +1803,19 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       font-size: .78rem;
       gap: 5px;
       min-width: 0;
+    }
+    .admin-plugin-config label span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .admin-plugin-config small {
+      color: var(--muted);
+      font-size: .72rem;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
     }
     .admin-plugin-config input {
       min-height: 38px;
@@ -2641,10 +2686,35 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (field.type === "number") return "number";
       return "text";
     }
+    function pluginHasCategory(plugin, category) {
+      return (plugin.categories || []).includes(category);
+    }
+    function pluginConfigStatus(plugin, config) {
+      const secretNames = (config && config.secretNames) || [];
+      const settingKeys = Object.keys((config && config.settings) || {});
+      return [
+        plugin.requiresSecrets ? `${number(secretNames.length)} secret${secretNames.length === 1 ? "" : "s"}` : "no secrets",
+        `${number(settingKeys.length)} setting${settingKeys.length === 1 ? "" : "s"}`
+      ].join(" / ");
+    }
+    function pluginHealthDetails(pluginId) {
+      const health = adminState.pluginHealth[pluginId] || {};
+      if (!Object.keys(health).length) return "";
+      const runtime = health.runtime || {};
+      const nested = runtime.health || {};
+      const message = health.error || runtime.error || nested.message || nested.error || "";
+      return `
+        <div class="auth-status ${metadataStateClass(health.state)}">
+          Health: ${escapeHtml((health.state || "unknown").replaceAll("_", " "))}${message ? ` - ${escapeHtml(message)}` : ""}
+        </div>
+      `;
+    }
     function renderPluginConfig(plugin, config) {
       const settings = pluginSchemaItems(plugin, "settings");
       const secrets = pluginSchemaItems(plugin, "secrets");
-      if (!settings.length && !secrets.length) return "";
+      if (!settings.length && !secrets.length) {
+        return `<div class="auth-status info">No configuration required.</div>`;
+      }
       const currentSettings = (config && config.settings) || {};
       const secretNames = new Set((config && config.secretNames) || []);
       const settingFields = settings.map((field) => {
@@ -2652,8 +2722,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         const value = currentSettings[name];
         const display = Array.isArray(value) ? value.join(", ") : (value || "");
         return `
-          <label>${escapeHtml(field.label || name)}
-            <input data-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(pluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}">
+          <label>
+            <span>${escapeHtml(field.label || name)} ${field.required ? `<span class="tag blue">required</span>` : ""}</span>
+            <input data-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(pluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}" ${field.required ? "required" : ""}>
+            ${field.description ? `<small>${escapeHtml(field.description)}</small>` : ""}
           </label>
         `;
       }).join("");
@@ -2661,12 +2733,18 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         const name = field.name || field.key;
         const configured = secretNames.has(name);
         return `
-          <label>${escapeHtml(field.label || name)}
-            <input data-plugin-secret="${escapeHtml(name)}" type="password" value="" placeholder="${configured ? "Configured - leave blank to keep" : ""}">
+          <label>
+            <span>${escapeHtml(field.label || name)} ${field.required ? `<span class="tag blue">required</span>` : ""} ${configured ? `<span class="tag good">configured</span>` : `<span class="tag">missing</span>`}</span>
+            <input data-plugin-secret="${escapeHtml(name)}" type="password" value="" placeholder="${configured ? "Configured - leave blank to keep" : ""}" ${field.required && !configured ? "required" : ""}>
+            ${field.description ? `<small>${escapeHtml(field.description)}</small>` : ""}
           </label>
         `;
       }).join("");
       return `
+        <div class="admin-plugin-config-head">
+          <strong>Configuration</strong>
+          <span class="tag ${plugin.requiresSecrets && !secretNames.size ? "blue" : "good"}">${escapeHtml(pluginConfigStatus(plugin, config))}</span>
+        </div>
         <div class="admin-plugin-config">
           ${settingFields}
           ${secretFields}
@@ -2676,10 +2754,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         </div>
       `;
     }
-    function renderAdminPlugins(plugins) {
-      const list = document.getElementById("adminPluginsList");
-      if (!list) return;
-      list.innerHTML = plugins.length ? plugins.map((plugin) => {
+    function renderPluginCard(plugin) {
         const health = adminState.pluginHealth[plugin.id] || {};
         const config = adminState.pluginConfigs[plugin.id] || {};
         const execution = adminState.pluginExecutions[plugin.id] || null;
@@ -2702,6 +2777,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               <span class="tag ${runtime.loaded ? "good" : ""}">runtime ${escapeHtml(runtimeState)}</span>
               ${plugin.requiresSecrets ? `<span class="tag ${plugin.secretsConfigured ? "good" : ""}">secrets ${plugin.secretsConfigured ? "set" : "missing"}</span>` : `<span class="tag good">no secrets</span>`}
               ${plugin.settingsConfigured ? `<span class="tag good">settings set</span>` : `<span class="tag">default settings</span>`}
+              ${pluginHasCategory(plugin, "metadata_source") ? `<span class="tag blue">metadata source</span>` : ""}
+              ${pluginHasCategory(plugin, "metadata_receiver") ? `<span class="tag blue">metadata receiver</span>` : ""}
+              ${pluginHasCategory(plugin, "digital_media_source") ? `<span class="tag blue">digital source</span>` : ""}
               ${digitalSource ? `<span class="tag good">${number(digitalSource.itemCount || digitalSource.item_count)} digital items</span>` : ""}
               ${digitalSource && digitalSource.last_status ? `<span class="tag">${escapeHtml(digitalSource.last_status)}</span>` : ""}
               ${latestJob ? `<span class="tag ${jobStatusClass(latestJob.status)}">job ${escapeHtml(latestJob.status || "-")}</span>` : ""}
@@ -2716,9 +2794,39 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               ${capabilities.includes("sync_library") ? `<button type="button" data-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">Queue Sync</button>` : ""}
             </div>
             ${renderPluginConfig(plugin, config)}
+            ${pluginHealthDetails(plugin.id)}
           </div>
         `;
-      }).join("") : `<div class="empty">No plugins found.</div>`;
+    }
+    function renderPluginSection(title, subtitle, plugins) {
+      if (!plugins.length) return "";
+      return `
+        <div class="admin-plugin-section">
+          <div class="admin-plugin-section-head">
+            <h4>${escapeHtml(title)}</h4>
+            <span class="muted">${number(plugins.length)} plugin${plugins.length === 1 ? "" : "s"}</span>
+          </div>
+          ${subtitle ? `<p class="muted">${escapeHtml(subtitle)}</p>` : ""}
+          ${plugins.map(renderPluginCard).join("")}
+        </div>
+      `;
+    }
+    function renderAdminPlugins(plugins) {
+      const list = document.getElementById("adminPluginsList");
+      if (!list) return;
+      if (!plugins.length) {
+        list.innerHTML = `<div class="empty">No plugins found.</div>`;
+        return;
+      }
+      const metadataPlugins = plugins.filter((plugin) => pluginHasCategory(plugin, "metadata_source") || pluginHasCategory(plugin, "metadata_receiver"));
+      const digitalPlugins = plugins.filter((plugin) => pluginHasCategory(plugin, "digital_media_source"));
+      const shown = new Set([...metadataPlugins, ...digitalPlugins].map((plugin) => plugin.id));
+      const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
+      list.innerHTML = [
+        renderPluginSection("Metadata Plugins", "", metadataPlugins),
+        renderPluginSection("Digital Media Sources", "", digitalPlugins),
+        renderPluginSection("Other Plugins", "", otherPlugins)
+      ].filter(Boolean).join("");
     }
     function jobStatusClass(status) {
       if (status === "completed") return "good";
@@ -2757,7 +2865,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       `).join("") : `<div class="empty">No plugin execution jobs yet.</div>`;
     }
     function metadataStateClass(state) {
-      if (["applied", "hit", "completed", "ok"].includes(state)) return "good";
+      if (["applied", "available", "hit", "completed", "ok"].includes(state)) return "good";
       if (["pending", "running", "needs_configuration", "blocked_by_format_policy", "retained_existing"].includes(state)) return "blue";
       if (["error", "failed"].includes(state)) return "bad";
       return "";
@@ -3197,6 +3305,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       return trimmed;
     }
     async function savePluginConfig(pluginId, row) {
+      const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) => !String(input.value || "").trim());
+      if (missingRequired.length) {
+        throw new Error("Fill the required plugin configuration fields first.");
+      }
       const settings = {};
       const secrets = {};
       row.querySelectorAll("[data-plugin-setting]").forEach((input) => {
