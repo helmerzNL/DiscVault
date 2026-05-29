@@ -9,6 +9,8 @@ collection summary from the new schema.
 from __future__ import annotations
 
 import html as html_lib
+import hashlib
+import io
 import json as json_lib
 import mimetypes
 import os
@@ -25,6 +27,7 @@ from flask_cors import CORS
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from werkzeug.exceptions import HTTPException
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 try:
     from .next_database import discover_migrations
@@ -38,6 +41,7 @@ try:
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
     from .next_metadata import preview_movie_metadata
     from .next_metadata import record_sync_change
@@ -61,6 +65,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
     from next_metadata import METADATA_REFRESH_JOB_TYPE
+    from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
     from next_metadata import preview_movie_metadata
     from next_metadata import record_sync_change
@@ -87,6 +92,8 @@ TARGET_DATA_TABLES = (
     "users",
 )
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
+MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
+MOVIE_ARTWORK_KINDS = {"poster", "backdrop"}
 
 
 def create_app() -> Flask:
@@ -5914,6 +5921,223 @@ def set_primary_movie_media_asset(
     return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
 
 
+def uploaded_artwork_file() -> tuple[Any, str | None]:
+    inferred_kind = None
+    upload = request.files.get("file")
+    if not upload:
+        upload = request.files.get("poster")
+        inferred_kind = "poster" if upload else None
+    if not upload:
+        upload = request.files.get("backdrop")
+        inferred_kind = "backdrop" if upload else None
+    if not upload or not upload.filename:
+        raise NextApiError("Upload artwork as multipart field 'file'", 400)
+    return upload, inferred_kind
+
+
+def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
+    if kind not in MOVIE_ARTWORK_KINDS:
+        raise NextApiError("kind must be poster or backdrop", 400)
+    try:
+        upload.stream.seek(0)
+        image = Image.open(upload.stream)
+        image = ImageOps.exif_transpose(image)
+        if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+            alpha_image = image.convert("RGBA")
+            background = Image.new("RGBA", alpha_image.size, (255, 255, 255, 255))
+            background.alpha_composite(alpha_image)
+            image = background.convert("RGB")
+        elif image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+        elif image.mode == "L":
+            image = image.convert("RGB")
+        width, height = image.size
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=90, optimize=True)
+        data = buffer.getvalue()
+    except UnidentifiedImageError as exc:
+        raise NextApiError("Uploaded file is not a valid image", 400) from exc
+    except Exception as exc:
+        raise NextApiError(f"Artwork upload failed: {exc}", 400) from exc
+    if len(data) > MAX_ARTWORK_UPLOAD_BYTES:
+        raise NextApiError("Artwork upload may not exceed 20 MB after processing", 413)
+
+    digest = hashlib.sha256(data).hexdigest()
+    folder = "posters" if kind == "poster" else "backdrops"
+    data_dir = legacy_data_dir().resolve()
+    target_dir = data_dir / "media" / folder / "original" / digest[:2] / digest[2:4]
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{digest}.jpg"
+    if not target.exists():
+        target.write_bytes(data)
+    storage_key = target.relative_to(data_dir).as_posix()
+    return {
+        "path": target,
+        "storageKey": storage_key,
+        "sha256": digest,
+        "sizeBytes": len(data),
+        "contentType": "image/jpeg",
+        "width": width,
+        "height": height,
+        "originalFilename": os.path.basename(str(upload.filename or "")),
+    }
+
+
+def create_uploaded_movie_media_asset(
+    conn,
+    *,
+    movie_id: UUID,
+    kind: str,
+    upload_info: dict[str, Any],
+    primary: bool,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not table_exists(conn, "movies") or not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
+        raise NextApiError("Media asset tables are not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM movies WHERE id=%s", (movie_id,))
+        if not cur.fetchone():
+            raise NextApiError("Movie not found", 404)
+
+        storage_key = clean_text(upload_info.get("storageKey")) or ""
+        if not storage_key:
+            raise NextApiError("Uploaded artwork did not produce a storage key", 500)
+        media_id = media_asset_uuid(storage_key)
+        cur.execute(
+            """
+            INSERT INTO media_assets (
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata
+            )
+            VALUES (%s, %s, 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (kind, variant, sha256) DO UPDATE SET
+                kind=EXCLUDED.kind,
+                storage_backend=EXCLUDED.storage_backend,
+                storage_key=EXCLUDED.storage_key,
+                source_url=COALESCE(media_assets.source_url, EXCLUDED.source_url),
+                provider_id=EXCLUDED.provider_id,
+                content_type=EXCLUDED.content_type,
+                width=EXCLUDED.width,
+                height=EXCLUDED.height,
+                size_bytes=EXCLUDED.size_bytes,
+                sha256=EXCLUDED.sha256,
+                metadata=EXCLUDED.metadata
+            RETURNING
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata,
+                created_at
+            """,
+            (
+                media_id,
+                kind,
+                storage_key,
+                upload_info.get("contentType"),
+                upload_info.get("width"),
+                upload_info.get("height"),
+                upload_info.get("sizeBytes"),
+                upload_info.get("sha256"),
+                Jsonb(
+                    {
+                        "source": "upload",
+                        "originalFilename": upload_info.get("originalFilename"),
+                        "uploadedBy": actor_job_payload(actor or {}) if actor else None,
+                    }
+                ),
+            ),
+        )
+        media = cur.fetchone()
+
+        if primary:
+            cur.execute(
+                """
+                UPDATE entity_media em
+                SET is_primary=false,
+                    sort_order=GREATEST(em.sort_order, 1)
+                FROM media_assets ma
+                WHERE ma.id = em.media_id
+                  AND em.entity_type='movie'
+                  AND em.entity_id=%s
+                  AND ma.kind=%s
+                  AND em.is_primary=true
+                """,
+                (movie_id, kind),
+            )
+            sort_order = 0
+        else:
+            cur.execute(
+                """
+                SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='movie'
+                  AND em.entity_id=%s
+                  AND ma.kind=%s
+                """,
+                (movie_id, kind),
+            )
+            row = cur.fetchone()
+            sort_order = int(row["next_sort"] if row else 1)
+
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type,
+                entity_id,
+                media_id,
+                role,
+                is_primary,
+                sort_order
+            )
+            VALUES ('movie', %s, %s, %s, %s, %s)
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                is_primary=EXCLUDED.is_primary,
+                sort_order=EXCLUDED.sort_order
+            """,
+            (movie_id, media["id"], kind, primary, sort_order),
+        )
+        cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+
+    media["role"] = kind
+    media["is_primary"] = primary
+    media["sort_order"] = sort_order
+    media["url"] = media_asset_public_url(media)
+    revision = record_sync_change(
+        conn,
+        movie_id,
+        {
+            "movieId": str(movie_id),
+            "operation": "movie.media_uploaded",
+            "kind": kind,
+            "mediaId": str(media["id"]),
+            "primary": primary,
+            "actor": actor_job_payload(actor or {}) if actor else None,
+        },
+    )
+    return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
+
+
 def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
     if not table_exists(conn, "containers"):
         return None
@@ -7278,6 +7502,34 @@ def register_routes(flask_app: Flask) -> None:
                     actor=actor,
                 )
         return response({"status": "ok", **result})
+
+    @flask_app.post("/api/next/movies/<movie_id>/media/upload")
+    def movie_media_upload(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
+            raise NextApiError("Artwork upload may not exceed 20 MB", 413)
+        upload, inferred_kind = uploaded_artwork_file()
+        kind = clean_text(request.form.get("kind") or request.args.get("kind") or inferred_kind) or ""
+        primary_value = request.form.get("primary")
+        if primary_value is None:
+            primary_value = request.args.get("primary")
+        primary = parse_bool_value(primary_value, default=True)
+
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not movie_entity(conn, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            upload_info = save_uploaded_artwork_file(upload, kind=kind)
+            with conn.transaction():
+                result = create_uploaded_movie_media_asset(
+                    conn,
+                    movie_id=movie_uuid,
+                    kind=kind,
+                    upload_info=upload_info,
+                    primary=primary,
+                    actor=actor,
+                )
+        return response({"status": "ok", **result}, 201)
 
     @flask_app.post("/api/next/metadata/lookup")
     def metadata_lookup():
