@@ -1886,6 +1886,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         <button type="button" data-admin-tab="users">Users</button>
         <button type="button" data-admin-tab="roles">Roles</button>
         <button type="button" data-admin-tab="plugins">Plugins</button>
+        <button type="button" data-admin-tab="backups">Backups</button>
       </div>
       <div class="admin-view active" data-admin-view="security">
         <div class="admin-grid">
@@ -1944,6 +1945,32 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         <div class="admin-card">
           <h3>Plugin Registry</h3>
           <div class="admin-list" id="adminPluginsList"><div class="empty">No plugins loaded.</div></div>
+        </div>
+      </div>
+      <div class="admin-view" data-admin-view="backups">
+        <div class="admin-grid">
+          <div class="admin-card">
+            <h3>Functional Collection Backup</h3>
+            <p class="muted" id="adminBackupState">No backup status loaded.</p>
+            <div class="admin-controls">
+              <button type="button" data-admin-action="backup-refresh">Refresh Backup Status</button>
+              <button type="button" data-admin-action="backup-export">Export ZIP</button>
+            </div>
+          </div>
+          <div class="admin-card">
+            <h3>Validate or Restore ZIP</h3>
+            <div class="admin-controls">
+              <input id="adminBackupFile" type="file" accept=".zip,application/zip">
+              <button type="button" data-admin-action="backup-validate">Validate ZIP</button>
+              <button type="button" data-admin-action="backup-restore">Restore ZIP</button>
+            </div>
+            <p class="muted">Restore replaces functional collection data only. Auth, passkeys, plugins and secrets are excluded.</p>
+          </div>
+          <div class="admin-card wide">
+            <h3>Backup Report</h3>
+            <div class="admin-list" id="adminBackupReport"><div class="empty">No backup report yet.</div></div>
+            <div class="admin-list" id="adminBackupJobs"><div class="empty">No restore jobs loaded.</div></div>
+          </div>
         </div>
       </div>
       <div class="auth-status" id="adminStatusLine"></div>
@@ -2034,7 +2061,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       plugins: [],
       pluginConfigs: {},
       pluginHealth: {},
-      digitalSources: []
+      digitalSources: [],
+      backup: {},
+      backupReport: null
     };
 
     function escapeHtml(value) {
@@ -2103,11 +2132,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       return "";
     }
     async function authJson(url, options) {
+      const body = options && options.body;
       const headers = {
-        "Content-Type": "application/json",
         ...authHeaders(),
         ...((options && options.headers) || {})
       };
+      if (!(body instanceof FormData) && !headers["Content-Type"]) {
+        headers["Content-Type"] = "application/json";
+      }
       const response = await fetch(url, {
         cache: "no-store",
         credentials: "same-origin",
@@ -2628,6 +2660,69 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         `;
       }).join("") : `<div class="empty">No plugins found.</div>`;
     }
+    function backupCountsLine(counts) {
+      const values = counts || {};
+      return [
+        `${number(values.movies)} movies`,
+        `${number(values.containers)} containers`,
+        `${number(values.mediaAssets || values.media_assets)} media assets`,
+        `${number(values.collection_items)} collection items`,
+        `${number(values.container_movies)} container movies`
+      ].join(", ");
+    }
+    function renderBackupReport(report) {
+      const node = document.getElementById("adminBackupReport");
+      if (!node) return;
+      if (!report) {
+        node.innerHTML = `<div class="empty">No backup report yet.</div>`;
+        return;
+      }
+      const tables = report.tables || {};
+      const tableTags = Object.entries(tables).slice(0, 12).map(([name, item]) =>
+        `<span class="tag">${escapeHtml(name)} ${number(item.count)}</span>`
+      ).join("");
+      const errors = (report.errors || []).map((item) => `<div class="auth-status bad">${escapeHtml(item)}</div>`).join("");
+      const warnings = (report.warnings || []).map((item) => `<div class="auth-status info">${escapeHtml(item)}</div>`).join("");
+      const media = report.media || {};
+      node.innerHTML = `
+        <div class="admin-row">
+          <div class="admin-row-head">
+            <strong>${report.valid ? "ZIP is valid" : "ZIP has issues"}</strong>
+            <span class="tag ${report.valid ? "good" : ""}">${escapeHtml(report.scope || "unknown scope")}</span>
+          </div>
+          <div class="muted">Format ${escapeHtml(report.format || "-")} v${escapeHtml(report.formatVersion || "-")} &middot; created ${escapeHtml(report.createdAt || "-")}</div>
+          <div class="admin-plugin-meta">
+            <span class="tag ${media.missing ? "blue" : "good"}">${number(media.embedded)} embedded media</span>
+            <span class="tag ${media.missing ? "blue" : "good"}">${number(media.missing)} missing media</span>
+          </div>
+          <div class="admin-permission-cloud">${tableTags || `<span class="tag">No table counts</span>`}</div>
+          ${errors}
+          ${warnings}
+        </div>
+      `;
+    }
+    function renderAdminBackups(backup) {
+      const statusNode = document.getElementById("adminBackupState");
+      if (statusNode) {
+        statusNode.textContent = backup && backup.status === "ok"
+          ? `${backup.scope || "functional_collection"} in ${backup.backupDir || "-"}; ${backupCountsLine(backup.counts || {})}.`
+          : "No backup status loaded.";
+      }
+      renderBackupReport(adminState.backupReport);
+      const jobsNode = document.getElementById("adminBackupJobs");
+      if (!jobsNode) return;
+      const jobs = (backup && backup.latestJobs) || [];
+      jobsNode.innerHTML = jobs.length ? jobs.map((job) => `
+        <div class="admin-row">
+          <div class="admin-row-head">
+            <strong>${escapeHtml(job.jobType || "backup job")}</strong>
+            <span class="tag ${job.status === "completed" ? "good" : job.status === "failed" ? "" : "blue"}">${escapeHtml(job.status || "-")}</span>
+          </div>
+          <div class="muted">created ${escapeHtml((job.createdAt || "").slice(0, 19))} &middot; finished ${escapeHtml((job.finishedAt || "-").slice(0, 19))}</div>
+          ${job.error ? `<div class="auth-status bad">${escapeHtml(job.error)}</div>` : ""}
+        </div>
+      `).join("") : `<div class="empty">No restore jobs yet.</div>`;
+    }
     function renderAdminSecurity() {
       const stateLine = document.getElementById("adminSecurityState");
       const authButton = document.getElementById("adminAuthToggle");
@@ -2651,13 +2746,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     async function loadAdmin() {
       if (!isAdminUser()) return;
       setAdminStatus("Loading admin data...", "info");
-      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, ownerSettingsPayload] = await Promise.all([
+      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, backupPayload, ownerSettingsPayload] = await Promise.all([
         authJson("/api/next/auth/users", {headers: authHeaders()}),
         authJson("/api/next/auth/credentials", {headers: authHeaders()}),
         authJson("/api/next/auth/invite", {headers: authHeaders()}),
         authJson("/api/next/auth/rbac", {headers: authHeaders()}),
         authJson("/api/next/plugins/registry", {headers: authHeaders()}),
         authJson("/api/next/digital-sources", {headers: authHeaders()}).catch(() => ({items: []})),
+        authJson("/api/next/backup/status", {headers: authHeaders()}).catch((error) => ({status: "error", error: error.message})),
         authState.role === "owner"
           ? authJson("/api/next/auth/owner/settings", {headers: authHeaders()})
           : Promise.resolve({settings: {}})
@@ -2669,6 +2765,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       adminState.rbac = rbacPayload || {};
       adminState.plugins = pluginsPayload.plugins || [];
       adminState.digitalSources = digitalSourcesPayload.items || [];
+      adminState.backup = backupPayload || {};
       const configPayloads = await Promise.all(adminState.plugins.map((plugin) =>
         authJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`, {headers: authHeaders()})
           .catch((error) => ({plugin, error: error.message, config: {}}))
@@ -2685,6 +2782,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAdminInvites(adminState.invites);
       renderAdminRbac(adminState.rbac);
       renderAdminPlugins(adminState.plugins);
+      renderAdminBackups(adminState.backup);
       renderAdminSummary();
       document.getElementById("adminPanel").dataset.loaded = "true";
       setAdminStatus("Admin data loaded.", "good");
@@ -2792,6 +2890,83 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         body: JSON.stringify({entrypoint, payload: {dryRun: true}})
       });
       setAdminStatus(`${pluginId} ${entrypoint} queued: ${payload.job ? payload.job.id : "-"}.`, "good");
+    }
+    async function loadBackupStatus() {
+      adminState.backup = await authJson("/api/next/backup/status", {headers: authHeaders()});
+      renderAdminBackups(adminState.backup);
+      setAdminStatus("Backup status loaded.", "good");
+    }
+    function selectedBackupFile() {
+      const input = document.getElementById("adminBackupFile");
+      const file = input && input.files && input.files[0];
+      if (!file) {
+        throw new Error("Select a DiscVault backup ZIP first.");
+      }
+      return file;
+    }
+    async function uploadBackupZip(url) {
+      const formData = new FormData();
+      formData.append("file", selectedBackupFile());
+      const response = await fetch(url, {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: authHeaders(),
+        body: formData
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok && !payload.report) {
+        throw new Error(payload.error || `${url} failed with HTTP ${response.status}`);
+      }
+      return payload;
+    }
+    function backupDownloadName(response) {
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1].replace(/"/g, ""));
+      }
+      return `discvault-next-functional-${new Date().toISOString().slice(0, 10)}.zip`;
+    }
+    async function exportBackupZip() {
+      setAdminStatus("Creating functional collection backup...", "info");
+      const response = await fetch("/api/next/backup/export", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: authHeaders()
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Backup export failed with HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = backupDownloadName(response);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      await loadBackupStatus();
+      setAdminStatus("Functional collection backup downloaded.", "good");
+    }
+    async function validateBackupZip() {
+      setAdminStatus("Validating backup ZIP...", "info");
+      const payload = await uploadBackupZip("/api/next/backup/validate");
+      adminState.backupReport = payload.report || null;
+      renderAdminBackups(adminState.backup);
+      const valid = !!(payload.report && payload.report.valid);
+      setAdminStatus(valid ? "Backup ZIP is valid." : "Backup ZIP has validation issues.", valid ? "good" : "bad");
+    }
+    async function restoreBackupZip() {
+      if (!confirm("Restore this ZIP and replace the functional collection data? Auth, passkeys, plugins and secrets are not restored.")) return;
+      setAdminStatus("Validating and queueing restore job...", "info");
+      const payload = await uploadBackupZip("/api/next/backup/restore?confirm=restore-functional-collection");
+      adminState.backupReport = payload.report || null;
+      await loadBackupStatus();
+      setAdminStatus(`Restore queued: ${payload.job ? payload.job.id : "-"}.`, "good");
     }
     async function createAdminInvite() {
       const input = document.getElementById("adminInviteUsername");
@@ -2907,6 +3082,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           task = setMovieVaultReceiver(!ownerSettings.movievault_contribution_enabled);
         } else if (action === "create-invite") {
           task = createAdminInvite();
+        } else if (action === "backup-refresh") {
+          task = loadBackupStatus();
+        } else if (action === "backup-export") {
+          task = exportBackupZip();
+        } else if (action === "backup-validate") {
+          task = validateBackupZip();
+        } else if (action === "backup-restore") {
+          task = restoreBackupZip();
         } else if (target.dataset.adminUserStatus) {
           task = updateAdminUserStatus(target.dataset.adminUserStatus, target.dataset.status);
         } else if (target.dataset.adminUserDelete) {
