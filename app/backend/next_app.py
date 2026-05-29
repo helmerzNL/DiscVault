@@ -1034,15 +1034,42 @@ def migration_dashboard_html() -> str:
     }
     .auth-gate {
       display: grid;
+      gap: 18px;
+      max-width: 580px;
+      margin: 42px auto 18px;
+      padding: 28px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)),
+        var(--panel);
+      border-color: rgba(255,255,255,.14);
+      box-shadow: 0 24px 70px rgba(0,0,0,.28);
+    }
+    .auth-gate-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
       gap: 14px;
-      margin-bottom: 14px;
     }
     .auth-gate h2 {
       margin: 0;
-      font-size: 1.35rem;
+      font-size: clamp(1.55rem, 4vw, 2.25rem);
+      letter-spacing: 0;
     }
     .auth-gate p {
       max-width: 70ch;
+    }
+    .auth-gate .language-control {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.035);
+      padding: 6px 8px 6px 12px;
+      font-size: .78rem;
+    }
+    .auth-gate .language-control select {
+      border-radius: 999px;
+      min-width: 148px;
+      min-height: 32px;
+      background: rgba(255,255,255,.04);
     }
     .auth-message {
       color: var(--muted);
@@ -1427,6 +1454,8 @@ def migration_dashboard_html() -> str:
       header { flex-direction: column; }
       .actions { justify-content: flex-start; }
       .card, .wide { grid-column: 1 / -1; }
+      .auth-gate { margin-top: 20px; padding: 20px; }
+      .auth-gate-top { flex-direction: column; }
       .wizard-head, .wizard-panel-header, .details-header { flex-direction: column; }
       .migration-intro-list { grid-template-columns: 1fr; }
       .wizard-steps { grid-template-columns: 1fr; }
@@ -1445,7 +1474,7 @@ def migration_dashboard_html() -> str:
       <div class="actions">
         <label class="language-control">
           <span data-next-i18n="language.label">Language</span>
-          <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+          <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label" data-next-language-select></select>
         </label>
         <button type="button" onclick="loadReport()" data-next-i18n="common.refresh">Refresh</button>
         <button type="button" class="primary hidden" id="startButton" onclick="startMigration()" disabled data-next-i18n="migration.start">Start Migration</button>
@@ -1454,8 +1483,12 @@ def migration_dashboard_html() -> str:
     </header>
 
     <section class="card full auth-gate hidden" id="migrationAuthGate" aria-live="polite">
-      <div>
+      <div class="auth-gate-top">
         <span class="badge warn" data-next-i18n="auth.passkey">Passkey</span>
+        <label class="language-control">
+          <span data-next-i18n="language.label">Language</span>
+          <select id="migrationAuthLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label" data-next-language-select></select>
+        </label>
       </div>
       <div>
         <h2 data-next-i18n="startup.phase.sign_in_required">Sign in required</h2>
@@ -1801,17 +1834,19 @@ def migration_dashboard_html() -> str:
       document.querySelectorAll("[data-next-i18n-aria]").forEach((node) => {
         node.setAttribute("aria-label", tNext(node.dataset.nextI18nAria, node.getAttribute("aria-label") || ""));
       });
-      const select = document.getElementById("nextLanguageSelect");
-      if (select) select.value = nextI18n.locale;
+      document.querySelectorAll("[data-next-language-select]").forEach((select) => {
+        select.value = nextI18n.locale;
+      });
       updateTechnicalDetailsButton();
     }
     function renderLanguageOptions() {
-      const select = document.getElementById("nextLanguageSelect");
-      if (!select) return;
-      select.innerHTML = nextI18n.locales.map((item) => {
+      const options = nextI18n.locales.map((item) => {
         return `<option value="${escapeHtml(item.locale)}">${escapeHtml(item.nativeName || item.locale)}</option>`;
       }).join("");
-      select.value = nextI18n.locale;
+      document.querySelectorAll("[data-next-language-select]").forEach((select) => {
+        select.innerHTML = options;
+        select.value = nextI18n.locale;
+      });
     }
     async function setNextLocale(locale, options) {
       const normalized = normalizeNextLocale(locale);
@@ -1842,11 +1877,15 @@ def migration_dashboard_html() -> str:
         console.warn("Next i18n manifest unavailable", error);
       }
       renderLanguageOptions();
-      const select = document.getElementById("nextLanguageSelect");
-      if (select && select.dataset.bound !== "true") {
+      document.querySelectorAll("[data-next-language-select]").forEach((select) => {
+        if (select.dataset.bound === "true") return;
         select.dataset.bound = "true";
-        select.addEventListener("change", () => setNextLocale(select.value, {persist: true}).then(loadReport));
-      }
+        select.addEventListener("change", () => setNextLocale(select.value, {persist: true}).then(() => {
+          const authGate = document.getElementById("migrationAuthGate");
+          if (authGate && !authGate.classList.contains("hidden")) return null;
+          return loadReport();
+        }));
+      });
       await setNextLocale(preferredNextLocale(), {persist: false});
     }
     function statusClass(state) {
