@@ -3058,7 +3058,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         ? detail.containers.map((container) => field(`${container.container_type} / ${container.relationship}`, container.title)).join("")
         : field("None", "-");
       document.getElementById("detailDigital").innerHTML = (detail.digitalItems || []).length
-        ? detail.digitalItems.map((item) => field(item.source_name || item.plugin_id || "Digital source", [item.title, item.year, item.playback_url].filter(Boolean).join(" / "))).join("")
+        ? detail.digitalItems.map((item) => {
+            const variantCount = Number(item.variant_count || item.variantCount || 0);
+            return field(
+              item.source_name || item.plugin_id || "Digital source",
+              [item.title, item.year, variantCount > 1 ? `${variantCount} variants` : "", item.playback_url].filter(Boolean).join(" / ")
+            );
+          }).join("")
         : field("None", "-");
       document.getElementById("detailCredits").innerHTML = (detail.credits || []).length
         ? detail.credits.map((credit) => `
@@ -3387,10 +3393,12 @@ def movie_detail_digital_cards(items: list[dict[str, Any]]) -> str:
     cards = []
     for item in items:
         href = item.get("playback_url") or ""
+        variant_count = int(item.get("variant_count") or item.get("variantCount") or 0)
         tag_html = detail_tags(
             item.get("source_name"),
             item.get("media_type"),
             item.get("year"),
+            variant_count > 1 and f"{variant_count} variants",
             item.get("tmdb_id") and f"TMDb {item.get('tmdb_id')}",
             item.get("imdb_id"),
         )
@@ -4715,7 +4723,7 @@ def attach_digital_availability(conn, rows: list[dict[str, Any]]) -> list[dict[s
             """
             SELECT
                 dmi.matched_movie_id AS movie_id,
-                COUNT(*)::int AS digital_count,
+                COUNT(DISTINCT dms.id)::int AS digital_count,
                 jsonb_agg(DISTINCT jsonb_build_object(
                     'pluginId', dms.plugin_id,
                     'name', dms.name,
@@ -4742,25 +4750,59 @@ def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute(
             """
+            WITH ranked AS (
+                SELECT
+                    dmi.id,
+                    dmi.external_id,
+                    dmi.media_type,
+                    dmi.title,
+                    dmi.year,
+                    dmi.tmdb_id,
+                    dmi.imdb_id,
+                    dmi.playback_url,
+                    dmi.metadata,
+                    dmi.synced_at,
+                    dms.plugin_id,
+                    dms.name AS source_name,
+                    dms.source_type,
+                    dms.base_url,
+                    COUNT(*) OVER (
+                        PARTITION BY dms.id, dmi.matched_movie_id
+                    )::int AS variant_count,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY dms.id, dmi.matched_movie_id
+                        ORDER BY
+                            CASE
+                                WHEN dmi.playback_url IS NULL OR dmi.playback_url = '' THEN 1
+                                ELSE 0
+                            END,
+                            dmi.synced_at DESC,
+                            dmi.title,
+                            dmi.external_id
+                    ) AS source_rank
+                FROM digital_media_items dmi
+                JOIN digital_media_sources dms ON dms.id = dmi.source_id
+                WHERE dmi.matched_movie_id=%s
+            )
             SELECT
-                dmi.id,
-                dmi.external_id,
-                dmi.media_type,
-                dmi.title,
-                dmi.year,
-                dmi.tmdb_id,
-                dmi.imdb_id,
-                dmi.playback_url,
-                dmi.metadata,
-                dmi.synced_at,
-                dms.plugin_id,
-                dms.name AS source_name,
-                dms.source_type,
-                dms.base_url
-            FROM digital_media_items dmi
-            JOIN digital_media_sources dms ON dms.id = dmi.source_id
-            WHERE dmi.matched_movie_id=%s
-            ORDER BY dms.name, dmi.title
+                id,
+                external_id,
+                media_type,
+                title,
+                year,
+                tmdb_id,
+                imdb_id,
+                playback_url,
+                metadata,
+                synced_at,
+                plugin_id,
+                source_name,
+                source_type,
+                base_url,
+                variant_count
+            FROM ranked
+            WHERE source_rank = 1
+            ORDER BY source_name, title
             """,
             (movie_id,),
         )

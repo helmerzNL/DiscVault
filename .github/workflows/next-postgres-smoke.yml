@@ -317,6 +317,54 @@ jobs:
           assert plex_source["last_status"] == "configured", digital_payload
           print("/api/next/digital-sources", "worker-persistence-ok")
 
+          with connect() as conn:
+              with conn.transaction():
+                  with conn.cursor() as cur:
+                      cur.execute(
+                          """
+                          INSERT INTO movies (public_id, title, sort_title, year, metadata)
+                          VALUES ('ci-digital-duplicate-movie', 'CI Digital Duplicate', 'CI Digital Duplicate', '2026', '{}'::jsonb)
+                          ON CONFLICT (public_id) DO UPDATE SET title=EXCLUDED.title
+                          RETURNING id
+                          """
+                      )
+                      duplicate_movie_id = cur.fetchone()["id"]
+                      cur.execute("SELECT id FROM digital_media_sources WHERE plugin_id='plex'")
+                      source_id = cur.fetchone()["id"]
+                      cur.execute("DELETE FROM digital_media_items WHERE source_id=%s", (source_id,))
+                      for index in (1, 2):
+                          cur.execute(
+                              """
+                              INSERT INTO digital_media_items (
+                                  source_id,
+                                  external_id,
+                                  media_type,
+                                  title,
+                                  year,
+                                  playback_url,
+                                  matched_movie_id,
+                                  metadata
+                              )
+                              VALUES (%s, %s, 'movie', 'CI Digital Duplicate', '2026', %s, %s, '{}'::jsonb)
+                              """,
+                              (
+                                  source_id,
+                                  f"ci-digital-duplicate-{index}",
+                                  f"https://jellyfin.example/web/index.html#!/details?id=duplicate-{index}",
+                                  duplicate_movie_id,
+                              ),
+                          )
+          duplicate_detail = client.get(f"/api/next/movies/{duplicate_movie_id}")
+          assert duplicate_detail.status_code == 200, duplicate_detail.data[:500]
+          duplicate_payload = duplicate_detail.get_json()
+          digital_items = duplicate_payload["detail"]["digitalItems"]
+          assert len(digital_items) == 1, duplicate_payload
+          assert digital_items[0]["variant_count"] == 2, duplicate_payload
+          duplicate_movies = client.get("/api/next/movies?q=CI%20Digital%20Duplicate&limit=1")
+          assert duplicate_movies.status_code == 200, duplicate_movies.data[:500]
+          assert duplicate_movies.get_json()["items"][0]["digital_count"] == 1, duplicate_movies.get_json()
+          print("/api/next/movies/<id>", "digital-dedupe-ok")
+
           rbac = client.get("/api/next/auth/rbac")
           assert rbac.status_code == 200, rbac.data[:500]
           rbac_payload = rbac.get_json()
