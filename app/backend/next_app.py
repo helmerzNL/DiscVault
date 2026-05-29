@@ -611,12 +611,60 @@ def startup_status_payload(conn) -> dict[str, Any]:
         phase = "owner_setup"
         message = "Create the first owner passkey to finish setup."
 
+    source_counts = readiness["legacyData"]["sourceCounts"] or {}
+    legacy_found = bool(readiness["legacyData"]["found"])
+    steps = [
+        {
+            "key": "auth",
+            "label": "Owner passkey",
+            "state": "complete" if auth_ready else ("active" if phase == "owner_setup" else "pending"),
+            "detail": (
+                f"{user_count} user(s), {credential_count} passkey(s)"
+                if auth_ready
+                else "Import legacy users or create the first owner after migration."
+            ),
+        },
+        {
+            "key": "source",
+            "label": "Legacy data",
+            "state": "complete" if legacy_found else "skipped",
+            "detail": (
+                f"{source_counts.get('movies', 0)} movies, {source_counts.get('users', 0)} users, "
+                f"{source_counts.get('groups', 0)} groups"
+                if legacy_found
+                else "No legacy SQLite database detected."
+            ),
+        },
+        {
+            "key": "migration",
+            "label": "Migration",
+            "state": (
+                "complete"
+                if readiness["state"] in {"already_completed", "not_required"}
+                else "active"
+                if readiness["state"] in {"running", "ready_for_confirmation", "ready_for_security_backfill"}
+                else "blocked"
+            ),
+            "detail": readiness["state"],
+        },
+        {
+            "key": "collection",
+            "label": "Collection",
+            "state": "complete" if phase == "ready" else "pending",
+            "detail": "Ready to browse." if phase == "ready" else "Available after setup is complete.",
+        },
+    ]
+
     return {
         "phase": phase,
         "ready": phase == "ready",
         "message": message,
         "canUseCollection": phase == "ready",
         "canStartMigration": bool(readiness["canStart"] and can_manage_migration),
+        "canCreateOwner": phase == "owner_setup",
+        "canSignIn": bool(auth_effective and not user),
+        "canSwitchAccount": bool(auth_effective and user and migration_blocks_collection and not can_manage_migration),
+        "steps": steps,
         "auth": {
             "effective": auth_effective,
             "ready": auth_ready,
@@ -1763,14 +1811,20 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .auth-status.info { color: var(--blue); }
     .startup-panel {
       display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr);
-      gap: 14px;
-      align-items: center;
+      grid-template-columns: 1fr;
+      gap: 13px;
+      align-items: start;
       background: rgba(88,166,255,.08);
       border: 1px solid rgba(88,166,255,.28);
       border-radius: 8px;
       padding: 15px;
       margin-bottom: 16px;
+    }
+    .startup-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: start;
     }
     .startup-copy {
       min-width: 0;
@@ -1779,6 +1833,73 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       display: block;
       font-size: 1rem;
       margin-bottom: 5px;
+    }
+    .startup-steps {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      border-top: 1px solid rgba(88,166,255,.22);
+      border-bottom: 1px solid rgba(88,166,255,.22);
+    }
+    .startup-step {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 9px;
+      padding: 11px 10px;
+      border-right: 1px solid rgba(88,166,255,.18);
+      min-width: 0;
+    }
+    .startup-step:last-child {
+      border-right: 0;
+    }
+    .startup-step-marker {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 700;
+    }
+    .startup-step strong {
+      display: block;
+      font-size: .84rem;
+      overflow-wrap: anywhere;
+    }
+    .startup-step span {
+      display: block;
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.3;
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+    }
+    .startup-step.complete .startup-step-marker {
+      border-color: rgba(63,185,80,.55);
+      color: var(--green);
+    }
+    .startup-step.active .startup-step-marker {
+      border-color: rgba(88,166,255,.75);
+      background: rgba(88,166,255,.12);
+      color: var(--blue);
+    }
+    .startup-step.blocked .startup-step-marker {
+      border-color: rgba(248,81,73,.65);
+      color: var(--red);
+    }
+    .startup-facts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .startup-facts strong {
+      color: var(--text);
+      font-size: .9rem;
+      margin-right: 4px;
     }
     .startup-actions {
       display: flex;
@@ -2012,7 +2133,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       main { width: min(100vw - 20px, 760px); padding-top: 18px; }
       header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
       .auth-panel { grid-template-columns: 1fr; }
-      .startup-panel { grid-template-columns: 1fr; }
+      .startup-head { grid-template-columns: 1fr; }
+      .startup-steps { grid-template-columns: 1fr; }
+      .startup-step { border-right: 0; border-bottom: 1px solid rgba(88,166,255,.18); }
+      .startup-step:last-child { border-bottom: 0; }
       .startup-actions { justify-content: flex-start; }
       .admin-grid { grid-template-columns: 1fr; }
       .admin-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2109,16 +2233,22 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     </section>
 
     <section class="startup-panel hidden" id="startupPanel">
-      <div class="startup-copy">
-        <strong id="startupTitle">Setup</strong>
-        <p id="startupDescription">Checking startup state...</p>
-        <p class="muted" id="startupMeta"></p>
-        <div class="auth-status" id="startupStatusLine"></div>
+      <div class="startup-head">
+        <div class="startup-copy">
+          <strong id="startupTitle">Setup</strong>
+          <p id="startupDescription">Checking startup state...</p>
+          <p class="muted" id="startupMeta"></p>
+          <div class="auth-status" id="startupStatusLine"></div>
+        </div>
+        <div class="startup-actions">
+          <button type="button" id="startupAuthButton" data-startup-action="auth">Passkey</button>
+          <button type="button" id="startupStartMigrationButton" data-startup-action="start-migration">Start Migration</button>
+          <button type="button" id="startupMigrationButton" data-startup-action="migration">Migration Details</button>
+          <button type="button" id="startupRefreshButton" data-startup-action="refresh">Refresh</button>
+        </div>
       </div>
-      <div class="startup-actions">
-        <button type="button" id="startupMigrationButton" data-startup-action="migration">Migration</button>
-        <button type="button" id="startupStartMigrationButton" data-startup-action="start-migration">Start Migration</button>
-      </div>
+      <div class="startup-steps" id="startupSteps"></div>
+      <div class="startup-facts" id="startupFacts"></div>
     </section>
 
     <section class="admin-panel hidden" id="adminPanel">
@@ -2346,6 +2476,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     var authToken = localStorage.getItem("dv_next_token") || "";
     var authState = {};
     var startupState = {};
+    var startupPollTimer = null;
     var ownerSettings = {};
     var adminState = {
       users: [],
@@ -2532,12 +2663,63 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       };
       return titles[phase] || "Setup";
     }
+    function startupTone(phase) {
+      if (phase === "schema_blocked") return "bad";
+      if (phase === "migration_pending_non_admin") return "bad";
+      if (phase === "migration_running") return "info";
+      return "info";
+    }
+    function renderStartupSteps(steps) {
+      const node = document.getElementById("startupSteps");
+      if (!node) return;
+      const rows = Array.isArray(steps) ? steps : [];
+      node.innerHTML = rows.map((step, index) => {
+        const state = step.state || "pending";
+        return `
+          <div class="startup-step ${escapeHtml(state)}">
+            <div class="startup-step-marker">${index + 1}</div>
+            <div>
+              <strong>${escapeHtml(step.label || step.key || "Step")}</strong>
+              <span>${escapeHtml(step.detail || state)}</span>
+            </div>
+          </div>
+        `;
+      }).join("") || '<div class="startup-step"><div class="startup-step-marker">1</div><div><strong>Setup</strong><span>Checking startup state...</span></div></div>';
+    }
+    function renderStartupFacts(startup) {
+      const node = document.getElementById("startupFacts");
+      if (!node) return;
+      const migration = startup.migration || {};
+      const sourceCounts = (migration.legacyData && migration.legacyData.sourceCounts) || {};
+      const mediaExtensions = (migration.legacyData && migration.legacyData.mediaExtensions) || {};
+      const facts = [
+        ["Movies", sourceCounts.movies],
+        ["People", sourceCounts.people],
+        ["Users", sourceCounts.users],
+        ["Groups", sourceCounts.groups],
+        ["Passkeys", sourceCounts.credentials],
+        ["Images", Object.values(mediaExtensions).reduce((total, value) => total + Number(value || 0), 0)]
+      ].filter((item) => Number(item[1] || 0) > 0);
+      node.innerHTML = facts.map(([label, value]) => `<span><strong>${number(value)}</strong>${escapeHtml(label)}</span>`).join("");
+      node.classList.toggle("hidden", facts.length === 0);
+    }
+    function scheduleStartupPoll(phase) {
+      if (startupPollTimer) {
+        clearTimeout(startupPollTimer);
+        startupPollTimer = null;
+      }
+      if (phase !== "migration_running") return;
+      startupPollTimer = setTimeout(() => {
+        resumeStartupOrCollection().catch(reportClientError);
+      }, 3000);
+    }
     function renderStartupStatus() {
       const panel = document.getElementById("startupPanel");
       if (!panel) return;
       const startup = startupState.startup || startupState || {};
       const phase = startup.phase || "ready";
       panel.classList.toggle("hidden", phase === "ready");
+      scheduleStartupPoll(phase);
       if (phase === "ready") return;
       document.getElementById("startupTitle").textContent = startupTitle(phase);
       document.getElementById("startupDescription").textContent = startup.message || "DiscVault Next is preparing startup.";
@@ -2552,9 +2734,20 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         auth.role ? `signed in as ${auth.role}` : "",
         actionText
       ].filter(Boolean).join(" / ");
+      renderStartupSteps(startup.steps);
+      renderStartupFacts(startup);
+      const authButton = document.getElementById("startupAuthButton");
+      authButton.classList.toggle("hidden", !(startup.canCreateOwner || startup.canSignIn || startup.canSwitchAccount));
+      authButton.textContent = startup.canCreateOwner ? "Create Owner Passkey" : startup.canSwitchAccount ? "Switch Account" : "Sign In";
       document.getElementById("startupStartMigrationButton").classList.toggle("hidden", !startup.canStartMigration);
       document.getElementById("startupMigrationButton").classList.toggle("hidden", !migration.state);
-      setStartupStatus(phase === "migration_pending_non_admin" ? "Ask the owner or administrator to finish migration." : "", phase === "schema_blocked" ? "bad" : "info");
+      document.getElementById("startupRefreshButton").classList.toggle("hidden", phase === "ready");
+      const statusMessage = phase === "migration_pending_non_admin"
+        ? "Ask the owner or administrator to finish migration, or switch to an account with migration rights."
+        : phase === "migration_running"
+          ? "Migration is running. This panel refreshes automatically."
+          : "";
+      setStartupStatus(statusMessage, startupTone(phase));
     }
     async function refreshStartupStatus() {
       startupState = await authJson("/api/next/startup/status", {headers: authHeaders()});
@@ -2568,7 +2761,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       try {
         await authJson("/api/next/migration/start", {method: "POST", body: "{}"});
         setStartupStatus("Migration queued. Refreshing status...", "good");
-        await refreshStartupStatus();
+        await resumeStartupOrCollection();
       } catch (error) {
         setStartupStatus(error.message, "bad");
       } finally {
@@ -2787,8 +2980,27 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           if (action === "migration") {
             window.location.href = "/api/next/migration";
           }
+          if (action === "auth") {
+            const startup = startupState.startup || startupState || {};
+            if (startup.canCreateOwner) {
+              registerOwnerPasskey().catch(reportClientError);
+              return;
+            }
+            if (startup.canSwitchAccount) {
+              logoutPasskey().catch(reportClientError);
+              return;
+            }
+            if (startup.canSignIn) {
+              loginPasskey().catch(reportClientError);
+              return;
+            }
+            document.getElementById("authPanel").scrollIntoView({behavior: "smooth", block: "start"});
+          }
           if (action === "start-migration") {
             startStartupMigration().catch(reportClientError);
+          }
+          if (action === "refresh") {
+            resumeStartupOrCollection().catch(reportClientError);
           }
         });
       });
