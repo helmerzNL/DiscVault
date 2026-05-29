@@ -3035,87 +3035,134 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0f1115;
-      --bg-elevated: #14171d;
-      --surface: rgba(27,30,38,.92);
-      --surface-2: rgba(37,42,54,.92);
-      --chrome: rgba(21,24,31,.78);
-      --line: rgba(126,136,158,.28);
-      --soft-line: rgba(229,233,240,.1);
-      --soft-bg: rgba(255,255,255,.035);
-      --empty-bg: rgba(255,255,255,.025);
-      --text: #f6f7fb;
-      --muted: #a7adba;
-      --accent: #d7a93a;
-      --accent-soft: rgba(215,169,58,.14);
-      --blue: #6ea8fe;
-      --blue-soft: rgba(110,168,254,.12);
-      --green: #34c759;
-      --green-soft: rgba(52,199,89,.14);
+      --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      --radius-xs: 5px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --bg: #101010;
+      --bg-elevated: #171717;
+      --surface: rgba(31,31,33,.88);
+      --surface-2: rgba(42,42,45,.9);
+      --surface-3: rgba(55,55,59,.82);
+      --chrome: rgba(24,24,26,.72);
+      --line: rgba(235,235,245,.18);
+      --soft-line: rgba(235,235,245,.09);
+      --soft-bg: rgba(255,255,255,.045);
+      --empty-bg: rgba(255,255,255,.028);
+      --text: #f5f5f7;
+      --text-strong: #ffffff;
+      --muted: #a1a1a6;
+      --muted-2: #7d7d84;
+      --accent: #f5c451;
+      --accent-soft: rgba(245,196,81,.15);
+      --blue: #0a84ff;
+      --blue-soft: rgba(10,132,255,.16);
+      --green: #32d74b;
+      --green-soft: rgba(50,215,75,.14);
       --red: #ff453a;
       --red-soft: rgba(255,69,58,.14);
-      --button-bg: rgba(255,255,255,.06);
-      --button-hover: rgba(255,255,255,.1);
-      --poster-gradient: linear-gradient(145deg, #242a36, #12151c);
-      --hero-fade: rgba(15,17,21,.2);
+      --button-bg: rgba(255,255,255,.065);
+      --button-hover: rgba(255,255,255,.105);
+      --poster-gradient: linear-gradient(145deg, #2b2b2f, #151517);
+      --hero-fade: rgba(16,16,16,.16);
       --overlay: rgba(0,0,0,.68);
-      --shadow: 0 24px 80px rgba(0,0,0,.45);
-      --control-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+      --shadow: 0 24px 80px rgba(0,0,0,.42);
+      --shadow-soft: 0 12px 34px rgba(0,0,0,.22);
+      --control-shadow: inset 0 1px 0 rgba(255,255,255,.055);
+      --focus-ring: 0 0 0 3px rgba(10,132,255,.32);
+      --material-blur: saturate(160%) blur(20px);
     }
     :root[data-theme="light"] {
       color-scheme: light;
       --bg: #f5f5f7;
       --bg-elevated: #ffffff;
-      --surface: rgba(255,255,255,.86);
-      --surface-2: rgba(248,249,252,.94);
-      --chrome: rgba(255,255,255,.78);
+      --surface: rgba(255,255,255,.82);
+      --surface-2: rgba(247,247,250,.92);
+      --surface-3: rgba(238,239,243,.88);
+      --chrome: rgba(255,255,255,.76);
       --line: rgba(60,60,67,.16);
-      --soft-line: rgba(60,60,67,.12);
+      --soft-line: rgba(60,60,67,.1);
       --soft-bg: rgba(60,60,67,.045);
       --empty-bg: rgba(60,60,67,.035);
       --text: #1d1d1f;
+      --text-strong: #000000;
       --muted: #6e6e73;
-      --accent: #9a6a00;
-      --accent-soft: rgba(154,106,0,.12);
+      --muted-2: #8e8e93;
+      --accent: #a36b00;
+      --accent-soft: rgba(163,107,0,.12);
       --blue: #0066cc;
-      --blue-soft: rgba(0,102,204,.1);
+      --blue-soft: rgba(0,102,204,.11);
       --green: #248a3d;
       --green-soft: rgba(36,138,61,.1);
       --red: #d70015;
       --red-soft: rgba(215,0,21,.1);
-      --button-bg: rgba(255,255,255,.72);
+      --button-bg: rgba(255,255,255,.68);
       --button-hover: rgba(255,255,255,.96);
-      --poster-gradient: linear-gradient(145deg, #e4e8ef, #f7f8fb);
+      --poster-gradient: linear-gradient(145deg, #e2e5eb, #f8f9fb);
       --hero-fade: rgba(245,245,247,.16);
       --overlay: rgba(20,22,28,.46);
       --shadow: 0 22px 70px rgba(0,0,0,.16);
+      --shadow-soft: 0 10px 30px rgba(0,0,0,.1);
       --control-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+      --focus-ring: 0 0 0 3px rgba(0,102,204,.22);
     }
     * { box-sizing: border-box; }
+    *::before, *::after { box-sizing: border-box; }
+    html {
+      background: var(--bg);
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
     body {
       margin: 0;
       min-height: 100vh;
-      background: linear-gradient(180deg, var(--bg-elevated), var(--bg) 260px);
+      background:
+        linear-gradient(180deg, var(--bg-elevated), var(--bg) 310px),
+        var(--bg);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: var(--font-sans);
+    }
+    ::selection {
+      background: var(--blue-soft);
+      color: var(--text-strong);
     }
     main {
-      width: min(1360px, calc(100vw - 32px));
+      width: min(1400px, calc(100vw - 32px));
       margin: 0 auto;
-      padding: 28px 0 48px;
+      padding: 28px 0 56px;
+    }
+    :focus-visible {
+      outline: none;
+      box-shadow: var(--focus-ring);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+      }
     }
     .app-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 18px;
-      margin-bottom: 18px;
+      gap: var(--space-5);
+      margin-bottom: var(--space-5);
       position: sticky;
       top: 0;
       z-index: 8;
-      padding: 14px 0 12px;
-      background: linear-gradient(180deg, var(--bg-elevated), rgba(0,0,0,0));
-      backdrop-filter: blur(18px);
+      padding: 14px 0;
+      background: linear-gradient(180deg, var(--bg-elevated) 0%, color-mix(in srgb, var(--bg-elevated) 74%, transparent) 62%, transparent 100%);
+      backdrop-filter: var(--material-blur);
     }
     .app-brand { min-width: 0; }
     .eyebrow {
@@ -3133,8 +3180,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       min-width: 0;
     }
     h1, h2, h3, p { margin: 0; }
-    h1 { font-size: clamp(1.7rem, 2.2vw, 2.35rem); letter-spacing: 0; }
-    h2 { font-size: 1rem; }
+    h1 {
+      color: var(--text-strong);
+      font-size: clamp(1.7rem, 2.2vw, 2.35rem);
+      font-weight: 760;
+      letter-spacing: 0;
+      line-height: 1.08;
+    }
+    h2 { color: var(--text-strong); font-size: 1rem; font-weight: 720; }
+    h3 { color: var(--text-strong); font-size: .92rem; font-weight: 700; }
     p { color: var(--muted); line-height: 1.5; }
     a, button {
       color: inherit;
@@ -3142,7 +3196,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     button, a.button {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--button-bg);
       color: var(--text);
       cursor: pointer;
@@ -3154,10 +3208,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       justify-content: center;
       white-space: nowrap;
       box-shadow: var(--control-shadow);
-      transition: background .16s ease, border-color .16s ease, color .16s ease;
+      transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
     }
     button:hover, a.button:hover {
       background: var(--button-hover);
+    }
+    button:active, a.button:active {
+      transform: translateY(1px);
     }
     button.active {
       background: var(--accent-soft);
@@ -3170,14 +3227,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       gap: 3px;
       padding: 3px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--chrome);
       box-shadow: var(--control-shadow);
+      backdrop-filter: var(--material-blur);
     }
     .theme-toggle button {
       min-height: 30px;
       border: 0;
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       padding: 0 10px;
       background: transparent;
       color: var(--muted);
@@ -3206,15 +3264,18 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       width: 100%;
       min-height: 42px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--surface);
       color: var(--text);
       padding: 0 13px;
       font: inherit;
+      box-shadow: var(--control-shadow);
+      transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
     }
     input:focus, select:focus {
       border-color: var(--blue);
       outline: none;
+      box-shadow: var(--focus-ring);
     }
     .language-control {
       display: inline-flex;
@@ -3239,10 +3300,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .stat, .panel {
       background: var(--surface);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       padding: 15px;
       min-width: 0;
-      box-shadow: var(--control-shadow);
+      box-shadow: var(--control-shadow), var(--shadow-soft);
+      backdrop-filter: var(--material-blur);
     }
     .stat strong {
       display: block;
@@ -3266,7 +3328,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .movie {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       overflow: hidden;
       background: var(--surface);
       color: inherit;
@@ -3274,6 +3336,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       min-width: 0;
       text-decoration: none;
       box-shadow: var(--control-shadow);
+      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    .movie:hover {
+      border-color: color-mix(in srgb, var(--blue) 46%, var(--line));
+      box-shadow: var(--control-shadow), var(--shadow-soft);
+      transform: translateY(-1px);
     }
     .poster {
       aspect-ratio: 2 / 3;
@@ -3332,13 +3400,19 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .container-card {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       padding: 11px;
       background: var(--surface-2);
       color: inherit;
       display: block;
       text-decoration: none;
       box-shadow: var(--control-shadow);
+      transition: border-color .18s ease, background .18s ease, transform .18s ease;
+    }
+    .container-card:hover {
+      border-color: color-mix(in srgb, var(--blue) 42%, var(--line));
+      background: var(--surface-3);
+      transform: translateY(-1px);
     }
     .container-card strong {
       display: block;
@@ -3353,7 +3427,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       text-align: center;
       color: var(--muted);
       border: 1px dashed var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--empty-bg);
     }
     .detail-overlay {
@@ -3373,9 +3447,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       margin: 0 auto;
       background: var(--surface);
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: var(--radius-md);
       overflow: hidden;
       box-shadow: var(--shadow);
+      backdrop-filter: var(--material-blur);
     }
     .detail-hero {
       min-height: 210px;
@@ -3411,7 +3486,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .detail-poster {
       aspect-ratio: 2 / 3;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       overflow: hidden;
       background: var(--surface-2);
       display: flex;
@@ -3449,7 +3524,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .detail-section {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--soft-bg);
       padding: 14px;
       min-width: 0;
@@ -3489,7 +3564,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .credit {
       border: 1px solid var(--soft-line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       padding: 9px;
       background: var(--surface-2);
       min-width: 0;
@@ -3516,9 +3591,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       align-items: start;
       background: var(--surface);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       padding: 15px;
       margin-bottom: 16px;
+      box-shadow: var(--control-shadow), var(--shadow-soft);
+      backdrop-filter: var(--material-blur);
     }
     .auth-copy {
       min-width: 0;
@@ -3561,9 +3638,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       align-items: start;
       background: var(--blue-soft);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       padding: 15px;
       margin-bottom: 16px;
+      box-shadow: var(--control-shadow);
     }
     .startup-head {
       display: grid;
@@ -3683,9 +3761,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .admin-panel {
       background: var(--surface);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       padding: 15px;
       margin-bottom: 16px;
+      box-shadow: var(--control-shadow), var(--shadow-soft);
+      backdrop-filter: var(--material-blur);
     }
     .admin-panel h2 {
       margin: 0;
@@ -3705,7 +3785,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .admin-metric {
       border: 1px solid var(--soft-line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--soft-bg);
       padding: 10px;
       min-width: 0;
@@ -3740,7 +3820,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .admin-card {
       border: 1px solid var(--soft-line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--surface-2);
       padding: 12px;
       min-width: 0;
@@ -3763,7 +3843,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .admin-row {
       border: 1px solid var(--soft-line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       padding: 9px;
       display: grid;
       gap: 8px;
@@ -3793,17 +3873,17 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .admin-controls select {
       min-height: 38px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--surface);
       color: var(--text);
       padding: 0 11px;
       font: inherit;
     }
     .admin-code {
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-family: var(--font-mono);
       background: var(--soft-bg);
       border: 1px solid var(--soft-line);
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       padding: 7px 8px;
       overflow-wrap: anywhere;
     }
@@ -3897,6 +3977,53 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .admin-plugin-config input {
       min-height: 38px;
+    }
+    .surface-card,
+    .glass-card,
+    .empty-state {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      min-width: 0;
+    }
+    .surface-card {
+      background: var(--surface);
+      box-shadow: var(--control-shadow), var(--shadow-soft);
+    }
+    .glass-card {
+      background: var(--chrome);
+      box-shadow: var(--control-shadow), var(--shadow-soft);
+      backdrop-filter: var(--material-blur);
+    }
+    .control-row,
+    .split-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-width: 0;
+    }
+    .split-row {
+      justify-content: space-between;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted-2);
+      flex: 0 0 auto;
+    }
+    .status-dot.good { background: var(--green); }
+    .status-dot.info { background: var(--blue); }
+    .status-dot.bad { background: var(--red); }
+    .visually-hidden {
+      position: absolute !important;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .hidden {
       display: none !important;
