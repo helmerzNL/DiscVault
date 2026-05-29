@@ -28,6 +28,8 @@ try:
     from .next_import import NextImporter
     from .next_import import clean_text
     from .next_plugin_runtime import run_plugin_entrypoint
+    from .next_metadata import METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import restore_functional_backup
@@ -36,6 +38,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import NextImporter
     from next_import import clean_text
     from next_plugin_runtime import run_plugin_entrypoint
+    from next_metadata import METADATA_REFRESH_JOB_TYPE
+    from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import restore_functional_backup
@@ -316,10 +320,33 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == "plugin.execute":
         return process_plugin_execute(payload, worker_id)
 
+    if job_type == METADATA_REFRESH_JOB_TYPE:
+        return process_metadata_refresh(payload, worker_id)
+
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
     raise RuntimeError(f"Unsupported job type: {job_type}")
+
+
+def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    movie_id = clean_text(payload.get("movieId") or payload.get("movie_id"))
+    if not movie_id:
+        raise RuntimeError("movieId is required for metadata refresh jobs")
+    dry_run = bool_value(payload.get("dryRun", payload.get("dry_run")), default=False)
+    actor = payload.get("requestedBy") or payload.get("requested_by") or {}
+    if not isinstance(actor, dict):
+        actor = {}
+    with connect() as conn:
+        result = refresh_movie_metadata(conn, movie_id, dry_run=dry_run, actor=actor)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": METADATA_REFRESH_JOB_TYPE,
+        "movieId": movie_id,
+        "dryRun": dry_run,
+        "result": result,
+    }
 
 
 def process_functional_restore(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:

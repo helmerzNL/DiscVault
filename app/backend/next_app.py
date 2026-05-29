@@ -37,6 +37,10 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
+    from .next_metadata import METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import lookup_metadata_sources
+    from .next_metadata import preview_movie_metadata
+    from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
@@ -55,6 +59,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
+    from next_metadata import METADATA_REFRESH_JOB_TYPE
+    from next_metadata import lookup_metadata_sources
+    from next_metadata import preview_movie_metadata
+    from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
@@ -6629,6 +6637,71 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Movie not found", 404)
         return response({"status": "ok", "detail": detail})
 
+    @flask_app.post("/api/next/metadata/lookup")
+    def metadata_lookup():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Metadata lookup body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.search")
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            result = lookup_metadata_sources(conn, body, actor)
+        return response({"status": "ok", "metadata": result})
+
+    @flask_app.post("/api/next/movies/<movie_id>/metadata/preview")
+    def movie_metadata_preview(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            result = preview_movie_metadata(conn, movie_uuid, actor)
+        return response({"status": "ok", "metadata": result})
+
+    @flask_app.post("/api/next/movies/<movie_id>/metadata/refresh")
+    def movie_metadata_refresh(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Metadata refresh body must be an object", 400)
+        dry_run = parse_bool_value(body.get("dryRun", body.get("dry_run")), default=False)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
+        return response({"status": "ok", "metadata": result})
+
+    @flask_app.post("/api/next/movies/<movie_id>/metadata/jobs")
+    def queue_movie_metadata_refresh(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Metadata refresh body must be an object", 400)
+        dry_run = parse_bool_value(body.get("dryRun", body.get("dry_run")), default=False)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            if not movie_entity(conn, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                job = create_background_job(
+                    conn,
+                    job_type=METADATA_REFRESH_JOB_TYPE,
+                    payload={
+                        "movieId": str(movie_uuid),
+                        "dryRun": dry_run,
+                        "requestedBy": {
+                            "id": str(actor.get("id")) if actor.get("id") else None,
+                            "username": actor.get("username"),
+                            "role": actor.get("role"),
+                        },
+                    },
+                )
+        return response({"status": "ok", "job": job}, 201)
+
     @flask_app.get("/api/next/movies/<movie_id>/view")
     @flask_app.get("/api/next/app/movies/<movie_id>")
     def movie_detail_view(movie_id: str):
@@ -6724,7 +6797,15 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
-                ("admin.view_jobs", "metadata.view_plugin_health", "digital_sources.view", "digital_sources.sync", "digital_sources.manage"),
+                (
+                    "admin.view_jobs",
+                    "metadata.view_plugin_health",
+                    "metadata.refresh_one",
+                    "metadata.refresh_bulk",
+                    "digital_sources.view",
+                    "digital_sources.sync",
+                    "digital_sources.manage",
+                ),
             )
             if not table_exists(conn, "background_jobs"):
                 return response({"status": "ok", "jobs": []})
@@ -6733,7 +6814,18 @@ def register_routes(flask_app: Flask) -> None:
             permissions = set(actor.get("permissions") or [])
             role = actor.get("role")
             if role != "owner" and "admin.view_jobs" not in permissions:
-                job_type = PLUGIN_EXECUTION_JOB_TYPE
+                allowed_types = []
+                if permissions.intersection({"metadata.view_plugin_health", "digital_sources.view", "digital_sources.sync", "digital_sources.manage"}):
+                    allowed_types.append(PLUGIN_EXECUTION_JOB_TYPE)
+                if permissions.intersection({"metadata.refresh_one", "metadata.refresh_bulk"}):
+                    allowed_types.append(METADATA_REFRESH_JOB_TYPE)
+                if job_type and job_type not in allowed_types:
+                    raise NextApiError(f"Permission required for job type: {job_type}", 403)
+                if not job_type and len(allowed_types) == 1:
+                    job_type = allowed_types[0]
+                elif not job_type and allowed_types:
+                    clauses.append("job_type = ANY(%s)")
+                    params.append(allowed_types)
             if status:
                 clauses.append("status = %s")
                 params.append(status)
@@ -6908,7 +7000,15 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
-                ("admin.view_jobs", "metadata.view_plugin_health", "digital_sources.view", "digital_sources.sync", "digital_sources.manage"),
+                (
+                    "admin.view_jobs",
+                    "metadata.view_plugin_health",
+                    "metadata.refresh_one",
+                    "metadata.refresh_bulk",
+                    "digital_sources.view",
+                    "digital_sources.sync",
+                    "digital_sources.manage",
+                ),
             )
             if not table_exists(conn, "background_jobs"):
                 raise NextApiError("Background job table is not available", 503)
@@ -6936,8 +7036,21 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Job not found", 404)
         permissions = set(actor.get("permissions") or [])
         role = actor.get("role")
-        if role != "owner" and "admin.view_jobs" not in permissions and row["job_type"] != PLUGIN_EXECUTION_JOB_TYPE:
-            raise NextApiError("Permission required: admin.view_jobs", 403)
+        if role != "owner" and "admin.view_jobs" not in permissions:
+            if row["job_type"] == PLUGIN_EXECUTION_JOB_TYPE:
+                plugin_job_permissions = {
+                    "metadata.view_plugin_health",
+                    "digital_sources.view",
+                    "digital_sources.sync",
+                    "digital_sources.manage",
+                }
+                if not permissions.intersection(plugin_job_permissions):
+                    raise NextApiError("Permission required: admin.view_jobs", 403)
+            elif row["job_type"] == METADATA_REFRESH_JOB_TYPE:
+                if not permissions.intersection({"metadata.refresh_one", "metadata.refresh_bulk"}):
+                    raise NextApiError("Permission required: admin.view_jobs", 403)
+            else:
+                raise NextApiError("Permission required: admin.view_jobs", 403)
         return response({"status": "ok", "job": job_row(row)})
 
     @flask_app.get("/api/next/backup/status")
