@@ -114,6 +114,14 @@ def _normalize_details(data):
         key=lambda item: item.get("vote_average") or 0,
         reverse=True,
     )
+    posters = sorted(
+        (data.get("images") or {}).get("posters") or [],
+        key=lambda item: item.get("vote_average") or 0,
+        reverse=True,
+    )
+    poster_urls = [_image(item.get("file_path")) for item in posters[:10] if item.get("file_path")]
+    if not poster_urls and data.get("poster_path"):
+        poster_urls = [_image(data.get("poster_path"))]
     backdrop_urls = [_image(item.get("file_path")) for item in backdrops[:10] if item.get("file_path")]
     if not backdrop_urls and data.get("backdrop_path"):
         backdrop_urls = [_image(data.get("backdrop_path"))]
@@ -138,7 +146,8 @@ def _normalize_details(data):
             "actor": ", ".join(actors),
             "producer": ", ".join(producers),
             "studios": ", ".join(studios),
-            "posterUrl": _image(data.get("poster_path")),
+            "posterUrl": poster_urls[0] if poster_urls else "",
+            "posters": poster_urls,
             "backdropUrl": backdrop_urls[0] if backdrop_urls else "",
             "backdropUrls": backdrop_urls,
             "trailerUrl": trailer,

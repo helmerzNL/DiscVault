@@ -2183,6 +2183,19 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function usableImage(url) {
       if (!url) return "";
       if (String(url).startsWith("http://") || String(url).startsWith("https://")) return url;
+      if (String(url).startsWith("/api/next/media/")) return url;
+      return "";
+    }
+    function mediaAssetImage(assets, kind) {
+      const rows = Array.isArray(assets) ? assets : [];
+      const ordered = [
+        ...rows.filter((asset) => asset.kind === kind && asset.is_primary),
+        ...rows.filter((asset) => asset.kind === kind && !asset.is_primary)
+      ];
+      for (const asset of ordered) {
+        const url = usableImage(asset.url || asset.source_url);
+        if (url) return url;
+      }
       return "";
     }
     function cssUrl(url) {
@@ -3713,8 +3726,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const movie = detail.movie || {};
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
-      const poster = usableImage(metadata.poster_url || metadata.posterUrl || metadata.poster);
-      const backdrop = usableImage(metadata.backdrop_url || metadata.backdropUrl || metadata.backdrop);
+      const poster = mediaAssetImage(detail.mediaAssets, "poster") || usableImage(metadata.poster_url || metadata.posterUrl || metadata.poster);
+      const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop") || usableImage(metadata.backdrop_url || metadata.backdropUrl || metadata.backdrop);
       document.getElementById("detailHero").style.backgroundImage = backdrop
         ? `linear-gradient(180deg, rgba(16,17,22,.18), var(--surface)), url("${cssUrl(backdrop)}")`
         : "";
@@ -3932,7 +3945,7 @@ def container_detail_image(media_assets: list[dict[str, Any]], metadata: dict[st
             metadata.get("backdrop_urls"),
             metadata.get("backdropUrls"),
         ]
-    return first_usable_image(*metadata_values, *primary_assets, *other_assets)
+    return first_usable_image(*primary_assets, *metadata_values, *other_assets)
 
 
 def movie_detail_image(media_assets: list[dict[str, Any]], metadata: dict[str, Any], kind: str) -> str:
