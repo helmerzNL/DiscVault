@@ -1267,7 +1267,10 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                 """,
                 (limit,),
             )
-            return attach_digital_availability(conn, [with_preview_media_urls(row) for row in cur.fetchall()])
+            return attach_media_group_availability(
+                conn,
+                attach_digital_availability(conn, [with_preview_media_urls(row) for row in cur.fetchall()]),
+            )
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -1291,7 +1294,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
             """,
             (limit,),
         )
-        return attach_digital_availability(conn, cur.fetchall())
+        return attach_media_group_availability(conn, attach_digital_availability(conn, cur.fetchall()))
 
 
 def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
@@ -1518,6 +1521,9 @@ def server_movie_cards(movies: list[dict[str, Any]]) -> str:
             tags.append(f'<span class="tag good">{h(movie.get("year"))}</span>')
         if movie.get("format"):
             tags.append(f'<span class="tag blue">{h(movie.get("format"))}</span>')
+        if movie.get("media_group_count"):
+            label = "Group" if int(movie.get("media_group_count") or 0) == 1 else f"{movie.get('media_group_count')} groups"
+            tags.append(f'<span class="tag good">{h(label)}</span>')
         if movie.get("digital_count"):
             label = "Digital" if int(movie.get("digital_count") or 0) == 1 else f"{movie.get('digital_count')} digital"
             tags.append(f'<span class="tag good">{h(label)}</span>')
@@ -2779,6 +2785,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <section class="detail-section">
             <h3>Containers</h3>
             <div class="field-list" id="detailContainers"></div>
+          </section>
+          <section class="detail-section">
+            <h3>Groups</h3>
+            <div class="field-list" id="detailGroups"></div>
           </section>
           <section class="detail-section">
             <h3>Digital Sources</h3>
@@ -4699,6 +4709,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               <div class="tags">
                 ${movie.year ? `<span class="tag good">${escapeHtml(movie.year)}</span>` : ""}
                 ${movie.format ? `<span class="tag blue">${escapeHtml(movie.format)}</span>` : ""}
+                ${movie.media_group_count ? `<span class="tag good">${escapeHtml(movie.media_group_count === 1 ? "Group" : `${movie.media_group_count} groups`)}</span>` : ""}
                 ${movie.digital_count ? `<span class="tag good">${escapeHtml(movie.digital_count === 1 ? "Digital" : `${movie.digital_count} digital`)}</span>` : ""}
                 ${movie.barcode ? `<span class="tag">${escapeHtml(movie.barcode)}</span>` : ""}
               </div>
@@ -4739,6 +4750,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
         movie.rating ? `Rating ${movie.rating}` : "",
+        (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} groups` : "",
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} digital` : ""
       ].filter(Boolean).map((item) => `<span class="tag good">${escapeHtml(item)}</span>`).join("");
       document.getElementById("detailRelease").innerHTML = fieldsFromObject([
@@ -4773,6 +4785,16 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailContainers").innerHTML = (detail.containers || []).length
         ? detail.containers.map((container) => field(`${container.container_type} / ${container.relationship}`, container.title)).join("")
         : field("None", "-");
+      document.getElementById("detailGroups").innerHTML = (detail.mediaGroups || []).length
+        ? detail.mediaGroups.map((group) => field(
+            group.name || "Media group",
+            [
+              group.member_count ? `${group.member_count} members` : "",
+              group.movie_count ? `${group.movie_count} movies` : "",
+              group.hide_digital ? "digital hidden" : "digital visible"
+            ].filter(Boolean).join(" / ")
+          )).join("")
+        : field("None", "-");
       document.getElementById("detailDigital").innerHTML = (detail.digitalItems || []).length
         ? detail.digitalItems.map((item) => {
             const variantCount = Number(item.variant_count || item.variantCount || 0);
@@ -4806,6 +4828,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailIdentifiers").innerHTML = field("None", "-");
       document.getElementById("detailSpecs").innerHTML = field("None", "-");
       document.getElementById("detailContainers").innerHTML = field("None", "-");
+      document.getElementById("detailGroups").innerHTML = field("None", "-");
       document.getElementById("detailDigital").innerHTML = field("None", "-");
       document.getElementById("detailCredits").innerHTML = `<div class="empty">No credits loaded.</div>`;
     }
@@ -4816,6 +4839,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailOverview").textContent = "";
       document.getElementById("detailPoster").textContent = "Loading";
       document.getElementById("detailTags").innerHTML = "";
+      document.getElementById("detailGroups").innerHTML = "";
       try {
         const payload = await json(`/api/next/movies/${encodeURIComponent(movieId)}`, 15000);
         renderMovieDetail(payload.detail || {});
@@ -5227,12 +5251,39 @@ def movie_detail_digital_cards(items: list[dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
+def movie_detail_group_cards(groups: list[dict[str, Any]]) -> str:
+    if not groups:
+        return '<div class="empty small">No media groups linked yet.</div>'
+    cards = []
+    for group in groups:
+        group_href = f"/api/next/media-groups/{group.get('id')}"
+        owner = group.get("created_by_display_name") or group.get("created_by_username")
+        tag_html = detail_tags(
+            group.get("member_count") and f"{group.get('member_count')} members",
+            group.get("movie_count") and f"{group.get('movie_count')} movies",
+            owner and f"Owner {owner}",
+            group.get("hide_digital") and "digital hidden",
+        )
+        cards.append(
+            f"""
+          <a class="item-card plain" href="{h(group_href)}">
+            <div class="item-body">
+              <strong>{h(group.get("name") or "Untitled group")}</strong>
+              <div class="tags">{tag_html}</div>
+            </div>
+          </a>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
 def movie_detail_html(detail: dict[str, Any]) -> str:
     movie = detail.get("movie") or {}
     metadata = movie.get("metadata") or {}
     specs = detail.get("technicalSpecs") or {}
     identifiers = detail.get("identifiers") or []
     containers = detail.get("containers") or []
+    media_groups = detail.get("mediaGroups") or []
     credits = detail.get("credits") or []
     media_assets = detail.get("mediaAssets") or []
     digital_items = detail.get("digitalItems") or []
@@ -5591,7 +5642,7 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
       <div class="poster">""" + poster_html + """</div>
       <div class="summary-main">
         <h1>""" + h(title) + """</h1>
-        <div class="tags">""" + detail_tags(movie.get("year"), movie.get("format"), movie.get("runtime_minutes") and f"{movie.get('runtime_minutes')} min", movie.get("rating") and f"Rating {movie.get('rating')}") + """</div>
+        <div class="tags">""" + detail_tags(movie.get("year"), movie.get("format"), movie.get("runtime_minutes") and f"{movie.get('runtime_minutes')} min", movie.get("rating") and f"Rating {movie.get('rating')}", media_groups and f"{len(media_groups)} groups") + """</div>
         <p>""" + h(movie.get("overview") or "No overview imported yet.") + """</p>
       </div>
     </section>
@@ -5632,6 +5683,10 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
       <div class="panel">
         <h2>Containers</h2>
         <div class="items">""" + movie_detail_container_cards(containers) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Groups</h2>
+        <div class="items">""" + movie_detail_group_cards(media_groups) + """</div>
       </div>
       <div class="panel">
         <h2>Digital Sources</h2>
@@ -6859,6 +6914,46 @@ def movie_container_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
     return links
 
 
+def movie_media_group_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mg.id,
+                mg.public_id,
+                mg.name,
+                mg.created_by,
+                creator.username AS created_by_username,
+                creator.display_name AS created_by_display_name,
+                mg.hide_digital,
+                mg.metadata,
+                mgm.metadata AS link_metadata,
+                mgm.created_at AS linked_at,
+                mg.created_at,
+                mg.updated_at,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_members member_count
+                    WHERE member_count.group_id = mg.id
+                ) AS member_count,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_movies movie_count
+                    WHERE movie_count.group_id = mg.id
+                ) AS movie_count
+            FROM media_group_movies mgm
+            JOIN media_groups mg ON mg.id = mgm.group_id
+            LEFT JOIN users creator ON creator.id = mg.created_by
+            WHERE mgm.movie_id=%s
+            ORDER BY lower(mg.name), mgm.created_at
+            """,
+            (movie_id,),
+        )
+        return cur.fetchall()
+
+
 def attach_digital_availability(conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not rows or not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
         return rows
@@ -6888,6 +6983,39 @@ def attach_digital_availability(conn, rows: list[dict[str, Any]]) -> list[dict[s
         summary = by_movie.get(row.get("id")) or {}
         row["digital_count"] = int(summary.get("digital_count") or 0)
         row["digital_sources"] = summary.get("digital_sources") or []
+    return rows
+
+
+def attach_media_group_availability(conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows or not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
+        return rows
+    ids = [row["id"] for row in rows if row.get("id")]
+    if not ids:
+        return rows
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mgm.movie_id,
+                COUNT(DISTINCT mg.id)::int AS media_group_count,
+                jsonb_agg(DISTINCT jsonb_build_object(
+                    'id', mg.id,
+                    'publicId', mg.public_id,
+                    'name', mg.name,
+                    'hideDigital', mg.hide_digital
+                )) AS media_groups
+            FROM media_group_movies mgm
+            JOIN media_groups mg ON mg.id = mgm.group_id
+            WHERE mgm.movie_id = ANY(%s)
+            GROUP BY mgm.movie_id
+            """,
+            (ids,),
+        )
+        by_movie = {row["movie_id"]: row for row in cur.fetchall()}
+    for row in rows:
+        summary = by_movie.get(row.get("id")) or {}
+        row["media_group_count"] = int(summary.get("media_group_count") or 0)
+        row["media_groups"] = summary.get("media_groups") or []
     return rows
 
 
@@ -7063,6 +7191,165 @@ def media_group_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
     return groups
 
 
+def media_group_movie_entities(conn, group_id: UUID, *, limit: int = 200) -> list[dict[str, Any]]:
+    if not table_exists(conn, "media_group_movies") or not table_exists(conn, "movies"):
+        return []
+    if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    m.id,
+                    m.public_id,
+                    m.barcode,
+                    m.title,
+                    m.sort_title,
+                    m.original_title,
+                    m.year,
+                    m.format,
+                    m.edition,
+                    COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
+                    COALESCE(m.metadata->>'backdrop_url', backdrop_asset.source_url) AS backdrop_url,
+                    poster_asset.id AS poster_asset_id,
+                    poster_asset.storage_backend AS poster_asset_storage_backend,
+                    poster_asset.storage_key AS poster_asset_storage_key,
+                    poster_asset.source_url AS poster_asset_source_url,
+                    backdrop_asset.id AS backdrop_asset_id,
+                    backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
+                    backdrop_asset.storage_key AS backdrop_asset_storage_key,
+                    backdrop_asset.source_url AS backdrop_asset_source_url,
+                    mgm.metadata AS group_metadata,
+                    mgm.created_at AS group_linked_at,
+                    mgm.updated_at AS group_updated_at,
+                    m.created_at,
+                    m.updated_at
+                FROM media_group_movies mgm
+                JOIN movies m ON m.id = mgm.movie_id
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='poster'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) poster_asset ON true
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='backdrop'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) backdrop_asset ON true
+                WHERE mgm.group_id=%s
+                ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                LIMIT %s
+                """,
+                (group_id, limit),
+            )
+            rows = [with_preview_media_urls(row) for row in cur.fetchall()]
+    else:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    m.id,
+                    m.public_id,
+                    m.barcode,
+                    m.title,
+                    m.sort_title,
+                    m.original_title,
+                    m.year,
+                    m.format,
+                    m.edition,
+                    m.metadata->>'poster_url' AS poster_url,
+                    m.metadata->>'backdrop_url' AS backdrop_url,
+                    mgm.metadata AS group_metadata,
+                    mgm.created_at AS group_linked_at,
+                    mgm.updated_at AS group_updated_at,
+                    m.created_at,
+                    m.updated_at
+                FROM media_group_movies mgm
+                JOIN movies m ON m.id = mgm.movie_id
+                WHERE mgm.group_id=%s
+                ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                LIMIT %s
+                """,
+                (group_id, limit),
+            )
+            rows = cur.fetchall()
+    return attach_media_group_availability(conn, attach_digital_availability(conn, rows))
+
+
+def media_group_detail_entity(conn, group_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "media_groups"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mg.id,
+                mg.public_id,
+                mg.name,
+                mg.created_by,
+                creator.username AS created_by_username,
+                creator.display_name AS created_by_display_name,
+                mg.hide_digital,
+                mg.metadata,
+                mg.created_at,
+                mg.updated_at,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_members mgm
+                    WHERE mgm.group_id = mg.id
+                ) AS member_count,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_movies mgmv
+                    WHERE mgmv.group_id = mg.id
+                ) AS movie_count,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_invites mgi
+                    WHERE mgi.group_id = mg.id AND mgi.status = 'pending'
+                ) AS pending_invite_count
+            FROM media_groups mg
+            LEFT JOIN users creator ON creator.id = mg.created_by
+            WHERE mg.id=%s
+            """,
+            (group_id,),
+        )
+        group = cur.fetchone()
+    if not group:
+        return None
+    group["members"] = []
+    if table_exists(conn, "media_group_members") and table_exists(conn, "users"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    mgm.user_id,
+                    mgm.role,
+                    mgm.created_at,
+                    u.username,
+                    u.display_name,
+                    u.status
+                FROM media_group_members mgm
+                JOIN users u ON u.id = mgm.user_id
+                WHERE mgm.group_id=%s
+                ORDER BY lower(u.username)
+                """,
+                (group_id,),
+            )
+            group["members"] = cur.fetchall()
+    group["movies"] = media_group_movie_entities(conn, group_id, limit=500)
+    return group
+
+
 def digital_item_entities(conn, *, limit: int = 200, offset: int = 0) -> list[dict[str, Any]]:
     if not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
         return []
@@ -7171,6 +7458,7 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "technicalSpecs": movie_technical_spec_entity(conn, movie_id),
         "credits": movie_credit_entities(conn, movie_id),
         "containers": movie_container_entities(conn, movie_id),
+        "mediaGroups": movie_media_group_entities(conn, movie_id),
         "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
         "digitalItems": movie_digital_item_entities(conn, movie_id),
     }
@@ -8394,6 +8682,16 @@ def register_routes(flask_app: Flask) -> None:
             require_next_permission(conn, "groups.view")
             return response({"status": "ok", "groups": media_group_entities(conn, limit=limit)})
 
+    @flask_app.get("/api/next/media-groups/<group_id>")
+    def media_group_detail(group_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        with connect() as conn:
+            require_next_permission(conn, "groups.view")
+            detail = media_group_detail_entity(conn, group_uuid)
+        if not detail:
+            raise NextApiError("Media group not found", 404)
+        return response({"status": "ok", "group": detail})
+
     @flask_app.get("/api/next/digital-items")
     def digital_items():
         limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
@@ -8853,7 +9151,7 @@ def register_routes(flask_app: Flask) -> None:
                         (*params, limit, offset),
                     )
                     items = cur.fetchall()
-            items = attach_digital_availability(conn, items)
+            items = attach_media_group_availability(conn, attach_digital_availability(conn, items))
         return response({"status": "ok", "items": items, "limit": limit, "offset": offset})
 
     @flask_app.get("/api/next/movies/<movie_id>")
