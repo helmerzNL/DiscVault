@@ -465,7 +465,15 @@ def run_once(worker_id: str, *, quiet_idle: bool = False) -> int:
         try:
             result = process_job(job, worker_id)
             complete_job(conn, job["id"], result)
-            print(json.dumps({"status": "completed", "jobId": str(job["id"]), "result": result}))
+            print(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "jobId": str(job["id"]),
+                        "result": json_ready(result),
+                    }
+                )
+            )
             return 0
         except Exception as exc:
             fail_job(conn, job["id"], str(exc), {"workerId": worker_id})
