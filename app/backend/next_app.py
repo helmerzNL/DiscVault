@@ -1032,6 +1032,28 @@ def migration_dashboard_html() -> str:
       font-size: .82rem;
       white-space: nowrap;
     }
+    .auth-gate {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .auth-gate h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+    .auth-gate p {
+      max-width: 70ch;
+    }
+    .auth-message {
+      color: var(--muted);
+      min-height: 20px;
+    }
+    .auth-message.bad {
+      color: var(--red);
+    }
+    .auth-message.good {
+      color: var(--green);
+    }
     button.primary {
       background: var(--accent);
       border-color: var(--accent);
@@ -1431,6 +1453,21 @@ def migration_dashboard_html() -> str:
       </div>
     </header>
 
+    <section class="card full auth-gate hidden" id="migrationAuthGate" aria-live="polite">
+      <div>
+        <span class="badge warn" data-next-i18n="auth.passkey">Passkey</span>
+      </div>
+      <div>
+        <h2 data-next-i18n="startup.phase.sign_in_required">Sign in required</h2>
+        <p data-next-i18n="startup.description.sign_in_required">Sign in with a passkey to continue setup.</p>
+      </div>
+      <div class="actions">
+        <button type="button" class="primary" id="migrationLoginButton" data-next-i18n="auth.signIn">Sign in</button>
+        <a class="button" href="/api/next/app" data-next-i18n="nav.collection">Collection</a>
+      </div>
+      <div class="auth-message" id="migrationAuthMessage" data-next-i18n="auth.checking">Checking authentication status...</div>
+    </section>
+
     <section class="card full migration-intro hidden" id="migrationIntro" aria-live="polite">
       <div>
         <span id="migrationIntroBadge" class="badge warn" data-next-i18n="migration.introBadge">Migration required</span>
@@ -1625,6 +1662,136 @@ def migration_dashboard_html() -> str:
       const token = localStorage.getItem("dv_next_token");
       if (token) headers.Authorization = `Bearer ${token}`;
       return headers;
+    }
+    function setMigrationAuthMessage(message, tone) {
+      const node = document.getElementById("migrationAuthMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `auth-message ${tone || ""}`.trim();
+    }
+    function showMigrationAuthGate(show) {
+      const gate = document.getElementById("migrationAuthGate");
+      const intro = document.getElementById("migrationIntro");
+      const workspace = document.getElementById("migrationWorkspace");
+      if (gate) gate.classList.toggle("hidden", !show);
+      if (intro && show) intro.classList.add("hidden");
+      if (workspace && show) workspace.classList.add("hidden");
+    }
+    function webauthnUnavailableReason() {
+      if (!window.PublicKeyCredential || !navigator.credentials) {
+        return tNext("auth.passkeyUnavailable", "This browser does not support passkeys.");
+      }
+      if (!window.isSecureContext) {
+        return tNext("auth.passkeyHttpsRequired", "Open this app over HTTPS to use passkeys.");
+      }
+      return "";
+    }
+    function base64urlToBuffer(value) {
+      let normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+      while (normalized.length % 4) normalized += "=";
+      const binary = atob(normalized);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return bytes.buffer;
+    }
+    function bufferToBase64url(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+      return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
+    }
+    async function migrationJson(url, options) {
+      const body = options && options.body;
+      const headers = migrationHeaders((options && options.headers) || {});
+      if (!(body instanceof FormData) && !headers["Content-Type"]) {
+        headers["Content-Type"] = "application/json";
+      }
+      const response = await fetch(url, {
+        cache: "no-store",
+        credentials: "same-origin",
+        ...(options || {}),
+        headers
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error || `${url} failed with HTTP ${response.status}`);
+      }
+      return payload;
+    }
+    async function ensureMigrationAuth() {
+      try {
+        const response = await fetch("/api/next/auth/status", {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: migrationHeaders()
+        });
+        const payload = await response.json().catch(() => ({}));
+        const needsAuth = !!payload.auth_enabled && !payload.authenticated;
+        if (needsAuth) {
+          showMigrationAuthGate(true);
+          setMigrationAuthMessage(tNext("startup.description.sign_in_required", "Sign in with a passkey to continue setup."), "info");
+          const loginButton = document.getElementById("migrationLoginButton");
+          if (loginButton) loginButton.disabled = !!webauthnUnavailableReason();
+          const unavailable = webauthnUnavailableReason();
+          if (unavailable) setMigrationAuthMessage(unavailable, "bad");
+          return false;
+        }
+        showMigrationAuthGate(false);
+        return true;
+      } catch (error) {
+        showMigrationAuthGate(true);
+        setMigrationAuthMessage(error.message, "bad");
+        return false;
+      }
+    }
+    async function loginMigrationPasskey() {
+      const button = document.getElementById("migrationLoginButton");
+      const unavailable = webauthnUnavailableReason();
+      if (unavailable) {
+        setMigrationAuthMessage(unavailable, "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      setMigrationAuthMessage(tNext("auth.checking", "Checking authentication status..."), "info");
+      try {
+        const optionsPayload = await migrationJson("/api/next/auth/login/options", {
+          method: "POST",
+          body: "{}"
+        });
+        const options = optionsPayload.options || {};
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.allowCredentials = (options.allowCredentials || []).map((credential) => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id)
+        }));
+        const assertion = await navigator.credentials.get({publicKey: options});
+        const credential = {
+          id: assertion.id,
+          rawId: bufferToBase64url(assertion.rawId),
+          response: {
+            authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+            signature: bufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+          },
+          type: assertion.type,
+          authenticatorAttachment: assertion.authenticatorAttachment
+        };
+        const verified = await migrationJson("/api/next/auth/login/verify", {
+          method: "POST",
+          body: JSON.stringify({credential})
+        });
+        if (verified.token) localStorage.setItem("dv_next_token", verified.token);
+        setMigrationAuthMessage(tNext("auth.signedIn", "Signed in."), "good");
+        showMigrationAuthGate(false);
+        await loadReport();
+      } catch (error) {
+        setMigrationAuthMessage(error.name === "NotAllowedError" ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : error.message, "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
     }
     function applyNextI18n() {
       document.documentElement.lang = nextI18n.locale;
@@ -2020,6 +2187,12 @@ def migration_dashboard_html() -> str:
         cache: "no-store",
         headers: migrationHeaders()
       });
+      if (response.status === 401) {
+        localStorage.removeItem("dv_next_token");
+        showMigrationAuthGate(true);
+        setMigrationAuthMessage(tNext("startup.description.sign_in_required", "Sign in with a passkey to continue setup."), "bad");
+        return;
+      }
       if (!response.ok) throw new Error(`Report failed: HTTP ${response.status}`);
       const payload = await response.json();
       const report = payload.report || {};
@@ -2103,6 +2276,11 @@ def migration_dashboard_html() -> str:
     }
     window.addEventListener("load", async () => {
       await initNextI18n();
+      const loginButton = document.getElementById("migrationLoginButton");
+      if (loginButton && loginButton.dataset.bound !== "true") {
+        loginButton.dataset.bound = "true";
+        loginButton.addEventListener("click", () => loginMigrationPasskey());
+      }
       const confirmCheckbox = document.getElementById("migrationConfirmCheckbox");
       if (confirmCheckbox && confirmCheckbox.dataset.bound !== "true") {
         confirmCheckbox.dataset.bound = "true";
@@ -2133,7 +2311,10 @@ def migration_dashboard_html() -> str:
           renderMigrationIntro(lastMigrationReport || {});
         });
       }
+      const authenticated = await ensureMigrationAuth();
+      if (!authenticated) return;
       loadReport().catch((error) => {
+        showMigrationAuthGate(false);
         document.getElementById("migrationIntro").classList.add("hidden");
         document.getElementById("migrationWorkspace").classList.remove("hidden");
         document.getElementById("startButton").classList.add("hidden");
@@ -9501,6 +9682,8 @@ PUBLIC_NEXT_PATHS = {
     "/api/next/collection/",
     "/api/next/health",
     "/api/next/i18n",
+    "/api/next/migration",
+    "/api/next/migration/",
 }
 PUBLIC_NEXT_PREFIXES = (
     "/.well-known/",
