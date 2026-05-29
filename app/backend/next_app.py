@@ -3798,6 +3798,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               ${pluginHasCategory(plugin, "metadata_source") ? `<span class="tag blue">metadata source</span>` : ""}
               ${pluginHasCategory(plugin, "metadata_receiver") ? `<span class="tag blue">metadata receiver</span>` : ""}
               ${pluginHasCategory(plugin, "digital_media_source") ? `<span class="tag blue">digital source</span>` : ""}
+              ${pluginHasCategory(plugin, "import_source") ? `<span class="tag blue">import source</span>` : ""}
               ${digitalSource ? `<span class="tag good">${number(digitalSource.itemCount || digitalSource.item_count)} digital items</span>` : ""}
               ${digitalSource && digitalSource.last_status ? `<span class="tag">${escapeHtml(digitalSource.last_status)}</span>` : ""}
               ${latestJob ? `<span class="tag ${jobStatusClass(latestJob.status)}">job ${escapeHtml(latestJob.status || "-")}</span>` : ""}
@@ -3809,6 +3810,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               <button type="button" data-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${plugin.enabled ? "Disable" : "Enable"}</button>
               <button type="button" data-admin-plugin-health="${escapeHtml(plugin.id)}">Check Health</button>
               ${capabilities.includes("discover_library") ? `<button type="button" data-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">Discover</button>` : ""}
+              ${capabilities.includes("inspect_source") ? `<button type="button" data-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">Inspect Source</button>` : ""}
               ${capabilities.includes("sync_library") ? `<button type="button" data-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">Queue Sync</button>` : ""}
             </div>
             ${renderPluginConfig(plugin, config)}
@@ -3838,11 +3840,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       }
       const metadataPlugins = plugins.filter((plugin) => pluginHasCategory(plugin, "metadata_source") || pluginHasCategory(plugin, "metadata_receiver"));
       const digitalPlugins = plugins.filter((plugin) => pluginHasCategory(plugin, "digital_media_source"));
-      const shown = new Set([...metadataPlugins, ...digitalPlugins].map((plugin) => plugin.id));
+      const importPlugins = plugins.filter((plugin) => pluginHasCategory(plugin, "import_source"));
+      const shown = new Set([...metadataPlugins, ...digitalPlugins, ...importPlugins].map((plugin) => plugin.id));
       const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
       list.innerHTML = [
         renderPluginSection("Metadata Plugins", "", metadataPlugins),
         renderPluginSection("Digital Media Sources", "", digitalPlugins),
+        renderPluginSection("Import Sources", "Sources that can inspect or import collection data into DiscVault Next.", importPlugins),
         renderPluginSection("Other Plugins", "", otherPlugins)
       ].filter(Boolean).join("");
     }
@@ -6376,6 +6380,7 @@ PLUGIN_REGISTRY_VIEW_PERMISSIONS = (
     "digital_sources.connect",
     "digital_sources.sync",
     "digital_sources.manage",
+    "collection.import",
     "admin.view_settings",
 )
 PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
@@ -6384,6 +6389,7 @@ PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
     "metadata.manage_receivers",
     "digital_sources.connect",
     "digital_sources.manage",
+    "collection.import",
 )
 
 
@@ -6399,13 +6405,19 @@ def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> t
         return ("digital_sources.sync", "digital_sources.manage")
     if entrypoint in {"discover_library", "playback_deeplink"}:
         return ("digital_sources.view", "digital_sources.connect", "digital_sources.manage")
+    if entrypoint in {"inspect_source", "plan_import", "import_source"}:
+        return ("collection.import", "admin.restore_functional")
     if entrypoint == "receive_metadata":
         return ("metadata.manage_receivers", "metadata.manage_plugins")
     if entrypoint == "health_check":
         permissions = ["metadata.view_plugin_health", "metadata.manage_plugins"]
         if "digital_media_source" in categories:
             permissions.extend(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"])
+        if "import_source" in categories:
+            permissions.extend(["collection.import", "admin.restore_functional"])
         return tuple(dict.fromkeys(permissions))
+    if "import_source" in categories:
+        return ("collection.import", "admin.restore_functional")
     if "digital_media_source" in categories:
         return ("digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage")
     return (
@@ -6425,6 +6437,8 @@ def plugin_manage_permissions(plugin: dict[str, Any]) -> tuple[str, ...]:
         permissions.append("metadata.manage_receivers")
     if "digital_media_source" in categories:
         permissions.extend(["digital_sources.connect", "digital_sources.manage"])
+    if "import_source" in categories:
+        permissions.append("collection.import")
     return tuple(dict.fromkeys(permissions or list(PLUGIN_REGISTRY_MANAGE_PERMISSIONS)))
 
 
