@@ -2589,6 +2589,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       <div class="admin-tabs" role="tablist" aria-label="Admin sections">
         <button type="button" class="active" data-admin-tab="security">Security</button>
         <button type="button" data-admin-tab="users">Users</button>
+        <button type="button" data-admin-tab="groups">Groups</button>
         <button type="button" data-admin-tab="roles">Roles</button>
         <button type="button" data-admin-tab="plugins">Plugins</button>
         <button type="button" data-admin-tab="metadata">Metadata</button>
@@ -2624,6 +2625,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         <div class="admin-card">
           <h3>Users</h3>
           <div class="admin-list" id="adminUsersList"><div class="empty">No users loaded.</div></div>
+        </div>
+      </div>
+      <div class="admin-view" data-admin-view="groups">
+        <div class="admin-card">
+          <h3>Media Groups</h3>
+          <p class="muted">Groups imported from legacy sharing data.</p>
+          <div class="admin-list" id="adminMediaGroupsList"><div class="empty">No groups loaded.</div></div>
         </div>
       </div>
       <div class="admin-view" data-admin-view="roles">
@@ -2803,6 +2811,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       users: [],
       credentials: [],
       invites: [],
+      mediaGroups: [],
       rbac: {},
       plugins: [],
       pluginConfigs: {},
@@ -3526,7 +3535,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       setAdminText("adminMetricPlugins", `${number(enabledPlugins)}/${number(adminState.plugins.length)}`);
       setAdminText(
         "adminSummaryLine",
-        `${number(adminState.users.length)} users, ${number(adminState.credentials.length)} passkeys, ${number(enabledPlugins)} enabled plugins.`
+        `${number(adminState.users.length)} users, ${number(adminState.mediaGroups.length)} groups, ${number(adminState.credentials.length)} passkeys, ${number(enabledPlugins)} enabled plugins.`
       );
     }
     function adminRoleOptions(selectedRole, roles) {
@@ -3596,6 +3605,30 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           </div>
         `;
       }).join("") : `<div class="empty">No invites created.</div>`;
+    }
+    function renderAdminMediaGroups(groups) {
+      const list = document.getElementById("adminMediaGroupsList");
+      if (!list) return;
+      list.innerHTML = groups.length ? groups.map((group) => {
+        const members = group.members || [];
+        const owner = group.created_by_display_name || group.created_by_username || "-";
+        const memberTags = members.slice(0, 8).map((member) => `
+          <span class="tag ${member.role === "owner" || member.role === "manager" ? "good" : ""}">
+            ${escapeHtml(member.display_name || member.username || member.user_id)} ${escapeHtml(member.role || "member")}
+          </span>
+        `).join("");
+        const overflow = members.length > 8 ? `<span class="tag blue">+${number(members.length - 8)}</span>` : "";
+        return `
+          <div class="admin-row">
+            <div class="admin-row-head">
+              <strong>${escapeHtml(group.name || "Untitled group")}</strong>
+              <span class="tag ${group.hide_digital ? "blue" : "good"}">${group.hide_digital ? "digital hidden" : "digital visible"}</span>
+            </div>
+            <div class="muted">${escapeHtml(group.public_id || group.id)} &middot; owner ${escapeHtml(owner)} &middot; ${number(group.member_count)} members &middot; ${number(group.movie_count)} movies &middot; ${number(group.pending_invite_count)} pending invites</div>
+            <div class="admin-permission-cloud">${memberTags || `<span class="tag">No members</span>`}${overflow}</div>
+          </div>
+        `;
+      }).join("") : `<div class="empty">No media groups found.</div>`;
     }
     function permissionTags(permissions, limit) {
       const values = permissions || [];
@@ -4163,10 +4196,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     async function loadAdmin() {
       if (!isAdminUser()) return;
       setAdminStatus("Loading admin data...", "info");
-      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, ownerSettingsPayload] = await Promise.all([
+      const [usersPayload, credentialsPayload, invitesPayload, mediaGroupsPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, ownerSettingsPayload] = await Promise.all([
         authJson("/api/next/auth/users", {headers: authHeaders()}),
         authJson("/api/next/auth/credentials", {headers: authHeaders()}),
         authJson("/api/next/auth/invite", {headers: authHeaders()}),
+        authJson("/api/next/media-groups?limit=500", {headers: authHeaders()}).catch(() => ({groups: []})),
         authJson("/api/next/auth/rbac", {headers: authHeaders()}),
         authJson("/api/next/plugins/registry", {headers: authHeaders()}),
         authJson("/api/next/digital-sources", {headers: authHeaders()}).catch(() => ({items: []})),
@@ -4181,6 +4215,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       adminState.users = usersPayload.users || [];
       adminState.credentials = credentialsPayload.credentials || [];
       adminState.invites = invitesPayload.invites || [];
+      adminState.mediaGroups = mediaGroupsPayload.groups || [];
       adminState.rbac = rbacPayload || {};
       adminState.plugins = pluginsPayload.plugins || [];
       adminState.digitalSources = digitalSourcesPayload.items || [];
@@ -4201,6 +4236,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAdminUsers(adminState.users, rbacPayload.assignableRoles || usersPayload.roles || []);
       renderAdminCredentials(adminState.credentials);
       renderAdminInvites(adminState.invites);
+      renderAdminMediaGroups(adminState.mediaGroups);
       renderAdminRbac(adminState.rbac);
       renderAdminPlugins(adminState.plugins);
       renderAdminPluginJobs();
@@ -6957,6 +6993,76 @@ def digital_source_entities(conn) -> list[dict[str, Any]]:
         return rows
 
 
+def media_group_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
+    if not table_exists(conn, "media_groups"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mg.id,
+                mg.public_id,
+                mg.name,
+                mg.created_by,
+                creator.username AS created_by_username,
+                creator.display_name AS created_by_display_name,
+                mg.hide_digital,
+                mg.metadata,
+                mg.created_at,
+                mg.updated_at,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_members mgm
+                    WHERE mgm.group_id = mg.id
+                ) AS member_count,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_movies mgmv
+                    WHERE mgmv.group_id = mg.id
+                ) AS movie_count,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_invites mgi
+                    WHERE mgi.group_id = mg.id AND mgi.status = 'pending'
+                ) AS pending_invite_count
+            FROM media_groups mg
+            LEFT JOIN users creator ON creator.id = mg.created_by
+            ORDER BY lower(mg.name), mg.created_at
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        groups = cur.fetchall()
+    if not groups or not table_exists(conn, "media_group_members") or not table_exists(conn, "users"):
+        return groups
+
+    group_ids = [group["id"] for group in groups]
+    members_by_group: dict[str, list[dict[str, Any]]] = {str(group_id): [] for group_id in group_ids}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mgm.group_id,
+                mgm.user_id,
+                mgm.role,
+                mgm.created_at,
+                u.username,
+                u.display_name,
+                u.status
+            FROM media_group_members mgm
+            JOIN users u ON u.id = mgm.user_id
+            WHERE mgm.group_id = ANY(%s)
+            ORDER BY lower(u.username)
+            """,
+            (group_ids,),
+        )
+        for member in cur.fetchall():
+            members_by_group.setdefault(str(member["group_id"]), []).append(member)
+    for group in groups:
+        group["members"] = members_by_group.get(str(group["id"]), [])
+    return groups
+
+
 def digital_item_entities(conn, *, limit: int = 200, offset: int = 0) -> list[dict[str, Any]]:
     if not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
         return []
@@ -8280,6 +8386,13 @@ def register_routes(flask_app: Flask) -> None:
     def digital_sources():
         with connect() as conn:
             return response({"status": "ok", "items": digital_source_entities(conn)})
+
+    @flask_app.get("/api/next/media-groups")
+    def media_groups():
+        limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
+        with connect() as conn:
+            require_next_permission(conn, "groups.view")
+            return response({"status": "ok", "groups": media_group_entities(conn, limit=limit)})
 
     @flask_app.get("/api/next/digital-items")
     def digital_items():
