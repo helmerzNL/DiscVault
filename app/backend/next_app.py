@@ -1063,6 +1063,42 @@ def migration_dashboard_html() -> str:
       display: grid;
       gap: 16px;
     }
+    .migration-intro {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    .migration-intro h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+    .migration-intro p {
+      max-width: 78ch;
+      color: var(--muted);
+      line-height: 1.58;
+      margin: 0;
+    }
+    .migration-intro-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .migration-intro-list div {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.025);
+      padding: 13px;
+      min-width: 0;
+    }
+    .migration-intro-list strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .migration-intro-list span {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.45;
+    }
     .wizard-head {
       display: flex;
       align-items: flex-start;
@@ -1284,6 +1320,7 @@ def migration_dashboard_html() -> str:
       .actions { justify-content: flex-start; }
       .card, .wide { grid-column: 1 / -1; }
       .wizard-head, .details-header { flex-direction: column; }
+      .migration-intro-list { grid-template-columns: 1fr; }
       .wizard-steps { grid-template-columns: 1fr; }
       .technical-panel { grid-column: 1 / -1; }
       .row { grid-template-columns: 1fr; gap: 4px; }
@@ -1303,12 +1340,40 @@ def migration_dashboard_html() -> str:
           <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
         </label>
         <button type="button" onclick="loadReport()" data-next-i18n="common.refresh">Refresh</button>
-        <button type="button" class="primary" id="startButton" onclick="startMigration()" disabled data-next-i18n="migration.start">Start Migration</button>
+        <button type="button" class="primary hidden" id="startButton" onclick="startMigration()" disabled data-next-i18n="migration.start">Start Migration</button>
         <a class="button" href="/api/next/migration/report" data-next-i18n="common.json">JSON</a>
       </div>
     </header>
 
-    <section class="grid" aria-live="polite">
+    <section class="card full migration-intro hidden" id="migrationIntro" aria-live="polite">
+      <div>
+        <span id="migrationIntroBadge" class="badge warn" data-next-i18n="migration.introBadge">Migration required</span>
+      </div>
+      <div>
+        <h2 data-next-i18n="migration.introTitle">We will guide you through this migration</h2>
+        <p data-next-i18n="migration.introLead">DiscVault Next uses an improved PostgreSQL database model. Before you can use the new version, your existing DiscVault data needs to be checked and imported carefully.</p>
+      </div>
+      <div class="migration-intro-list">
+        <div>
+          <strong data-next-i18n="migration.introStepReview">Review</strong>
+          <span data-next-i18n="migration.introStepReviewText">We first inspect the legacy data source and show what can be imported.</span>
+        </div>
+        <div>
+          <strong data-next-i18n="migration.introStepImport">Import</strong>
+          <span data-next-i18n="migration.introStepImportText">Movies, collections, box-sets, users, groups and passkeys are moved into the new database.</span>
+        </div>
+        <div>
+          <strong data-next-i18n="migration.introStepSafe">Safe start</strong>
+          <span data-next-i18n="migration.introStepSafeText">Existing posters, backdrops and profile images stay on the filesystem and are referenced from their current location.</span>
+        </div>
+      </div>
+      <p data-next-i18n="migration.introOnlyWhenNeeded">You will only see this page when this DiscVault environment still needs a migration.</p>
+      <div class="actions">
+        <button type="button" class="primary" id="migrationIntroContinueButton" data-next-i18n="migration.introContinue">Continue to migration wizard</button>
+      </div>
+    </section>
+
+    <section class="grid hidden" id="migrationWorkspace" aria-live="polite">
       <div class="card full wizard-card">
         <div class="wizard-head">
           <div>
@@ -1418,6 +1483,7 @@ def migration_dashboard_html() -> str:
     let selectedImportSourceId = null;
     let lastMigrationReport = null;
     let showTechnicalDetails = false;
+    let migrationIntroAccepted = false;
     function normalizeNextLocale(value) {
       const raw = String(value || "").trim().replace("_", "-").toLowerCase();
       const aliases = {};
@@ -1635,6 +1701,25 @@ def migration_dashboard_html() -> str:
         badge.textContent = translatedState(report.state);
       }
     }
+    function migrationNeedsIntro(report) {
+      const state = report?.state || "unknown";
+      return !["already_completed", "not_required", "running"].includes(state);
+    }
+    function renderMigrationIntro(report) {
+      const needsIntro = migrationNeedsIntro(report);
+      const showIntro = needsIntro && !migrationIntroAccepted;
+      const intro = document.getElementById("migrationIntro");
+      const workspace = document.getElementById("migrationWorkspace");
+      const startButton = document.getElementById("startButton");
+      if (intro) intro.classList.toggle("hidden", !showIntro);
+      if (workspace) workspace.classList.toggle("hidden", showIntro);
+      if (startButton) startButton.classList.toggle("hidden", showIntro);
+      const badge = document.getElementById("migrationIntroBadge");
+      if (badge && report?.state) {
+        badge.textContent = translatedState(report.state);
+        badge.className = `badge ${statusClass(report.state)}`;
+      }
+    }
     function importSourceCounts(source) {
       return source?.counts || source?.sourceCounts || {};
     }
@@ -1725,6 +1810,7 @@ def migration_dashboard_html() -> str:
         ? `${tNext("migration.latestRun", "Latest run")}: ${report.latestRun.status}`
         : tNext("migration.noRun", "No migration run has been recorded yet.");
       renderWizard(report);
+      renderMigrationIntro(report);
 
       document.getElementById("moviesCount").textContent = formatNumber(imported.movies ?? target.movies);
       document.getElementById("peopleCount").textContent = formatNumber(imported.people ?? target.people);
@@ -1765,6 +1851,8 @@ def migration_dashboard_html() -> str:
     async function startMigration() {
       const button = document.getElementById("startButton");
       const message = document.getElementById("message");
+      migrationIntroAccepted = true;
+      renderMigrationIntro(lastMigrationReport || {});
       button.disabled = true;
       message.textContent = tNext("migration.starting", "Starting migration...");
       const response = await fetch("/api/next/migration/start", {
@@ -1781,7 +1869,18 @@ def migration_dashboard_html() -> str:
     }
     window.addEventListener("load", async () => {
       await initNextI18n();
+      const introButton = document.getElementById("migrationIntroContinueButton");
+      if (introButton && introButton.dataset.bound !== "true") {
+        introButton.dataset.bound = "true";
+        introButton.addEventListener("click", () => {
+          migrationIntroAccepted = true;
+          renderMigrationIntro(lastMigrationReport || {});
+        });
+      }
       loadReport().catch((error) => {
+        document.getElementById("migrationIntro").classList.add("hidden");
+        document.getElementById("migrationWorkspace").classList.remove("hidden");
+        document.getElementById("startButton").classList.add("hidden");
         document.getElementById("message").textContent = error.message;
         document.getElementById("stateBadge").className = "badge error";
         document.getElementById("stateBadge").textContent = tNext("common.error", "error");
@@ -3877,7 +3976,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         : startup.canSwitchAccount
           ? tNext("startup.switchAccount", "Switch Account")
           : tNext("auth.signIn", "Sign in");
-      document.getElementById("startupStartMigrationButton").classList.toggle("hidden", !startup.canStartMigration);
+      const startupMigrationButton = document.getElementById("startupStartMigrationButton");
+      startupMigrationButton.classList.toggle("hidden", !startup.canStartMigration);
+      startupMigrationButton.textContent = tNext("startup.openMigrationGuide", "Open migration guide");
       document.getElementById("startupMigrationButton").classList.toggle("hidden", !migration.state);
       document.getElementById("startupRefreshButton").classList.toggle("hidden", phase === "ready");
       const statusMessage = phase === "migration_pending_non_admin"
@@ -4135,7 +4236,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             document.getElementById("authPanel").scrollIntoView({behavior: "smooth", block: "start"});
           }
           if (action === "start-migration") {
-            startStartupMigration().catch(reportClientError);
+            window.location.href = "/api/next/migration";
           }
           if (action === "refresh") {
             resumeStartupOrCollection().catch(reportClientError);

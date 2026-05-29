@@ -49,6 +49,17 @@
   "migration.dataDirectory": "R\u00e9pertoire de donn\u00e9es",
   "migration.databaseHash": "Hash de base de donn\u00e9es",
   "migration.groups": "Groupes",
+  "migration.introBadge": "Migration requise",
+  "migration.introContinue": "Continuer vers l'assistant de migration",
+  "migration.introLead": "DiscVault Next utilise un mod\u00e8le de base de donn\u00e9es PostgreSQL am\u00e9lior\u00e9. Avant d'utiliser la nouvelle version, vos donn\u00e9es DiscVault existantes doivent \u00eatre v\u00e9rifi\u00e9es et import\u00e9es avec soin.",
+  "migration.introOnlyWhenNeeded": "Cette page appara\u00eet uniquement lorsque cet environnement DiscVault doit encore \u00eatre migr\u00e9.",
+  "migration.introStepImport": "Importer",
+  "migration.introStepImportText": "Les films, collections, box-sets, utilisateurs, groupes et cl\u00e9s d'acc\u00e8s sont transf\u00e9r\u00e9s dans la nouvelle base.",
+  "migration.introStepReview": "V\u00e9rifier",
+  "migration.introStepReviewText": "Nous inspectons d'abord la source legacy et montrons ce qui peut \u00eatre import\u00e9.",
+  "migration.introStepSafe": "D\u00e9marrage s\u00fbr",
+  "migration.introStepSafeText": "Les posters, backdrops et photos de profil existants restent sur le syst\u00e8me de fichiers et sont r\u00e9f\u00e9renc\u00e9s depuis leur emplacement actuel.",
+  "migration.introTitle": "Nous vous guidons dans cette migration",
   "migration.images": "Images",
   "migration.importSource": "Source d'import",
   "migration.importSourceHelp": "Choisissez la source que DiscVault Next doit inspecter et importer.",
@@ -153,5 +164,6 @@
   "startup.checking": "Vérification du démarrage...",
   "startup.migrationDetails": "Détails de migration",
   "startup.setup": "Configuration",
-  "startup.startMigration": "Démarrer la migration"
+  "startup.startMigration": "Démarrer la migration",
+  "startup.openMigrationGuide": "Ouvrir le guide de migration"
 }

@@ -49,6 +49,17 @@
   "migration.dataDirectory": "Directory dati",
   "migration.databaseHash": "Hash database",
   "migration.groups": "Gruppi",
+  "migration.introBadge": "Migrazione richiesta",
+  "migration.introContinue": "Continua alla procedura guidata",
+  "migration.introLead": "DiscVault Next usa un modello di database PostgreSQL migliorato. Prima di usare la nuova versione, i dati DiscVault esistenti devono essere controllati e importati con cura.",
+  "migration.introOnlyWhenNeeded": "Vedrai questa pagina solo quando questo ambiente DiscVault deve ancora essere migrato.",
+  "migration.introStepImport": "Importa",
+  "migration.introStepImportText": "Film, collezioni, box-set, utenti, gruppi e passkey vengono trasferiti nel nuovo database.",
+  "migration.introStepReview": "Controlla",
+  "migration.introStepReviewText": "Prima controlliamo l'origine legacy e mostriamo cosa pu\u00f2 essere importato.",
+  "migration.introStepSafe": "Avvio sicuro",
+  "migration.introStepSafeText": "Poster, backdrop e immagini profilo esistenti restano sul filesystem e sono referenziati dalla posizione attuale.",
+  "migration.introTitle": "Ti guideremo in questa migrazione",
   "migration.images": "Immagini",
   "migration.importSource": "Origine import",
   "migration.importSourceHelp": "Scegli l'origine che DiscVault Next deve controllare e importare.",
@@ -153,5 +164,6 @@
   "startup.checking": "Controllo stato avvio...",
   "startup.migrationDetails": "Dettagli migrazione",
   "startup.setup": "Configurazione",
-  "startup.startMigration": "Avvia migrazione"
+  "startup.startMigration": "Avvia migrazione",
+  "startup.openMigrationGuide": "Apri guida migrazione"
 }
