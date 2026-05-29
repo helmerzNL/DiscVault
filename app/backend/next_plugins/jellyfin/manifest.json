@@ -10,7 +10,25 @@
   ],
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
-  "settingsSchema": {},
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "baseUrl",
+        "label": "Server URL",
+        "type": "url",
+        "required": true,
+        "placeholder": "https://jellyfin.example"
+      }
+    ],
+    "secrets": [
+      {
+        "name": "token",
+        "label": "API key",
+        "type": "password",
+        "required": true
+      }
+    ]
+  },
   "orderIndex": 120,
   "entitlements": {
     "connect": "digital_source.jellyfin.connect",

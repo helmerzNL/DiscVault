@@ -274,6 +274,9 @@ Initial endpoints:
 GET http://localhost:6180/api/next/health
 GET http://localhost:6180/api/next/stats
 GET http://localhost:6180/api/next/settings
+GET http://localhost:6180/api/next/digital-sources
+GET http://localhost:6180/api/next/digital-items
+GET http://localhost:6180/api/next/plugins/registry
 GET http://localhost:6180/api/next/metadata/plugins
 GET http://localhost:6180/api/next/movies
 GET http://localhost:6180/api/next/containers
@@ -287,17 +290,19 @@ GET http://localhost:6180/api/next/jobs/<jobId>
 ```
 
 The first migration set creates the PostgreSQL foundation for users/passkeys,
-RBAC, movies, people, containers, media assets, metadata plugins, events,
-offline sync, push notifications, entitlements and migration import state.
+RBAC, movies, people, containers, media assets, metadata plugins, plugin
+runtime state, digital media source sync, events, offline sync, push
+notifications, entitlements and migration import state.
 
 The initial sync API is shared by future PWA, iOS and Android clients. Clients
 use bootstrap to fill a local cache, delta to catch up by revision, and
 mutations to send idempotent offline changes back to the server.
 
-The first worker foundation uses `background_jobs` and row locks. API requests
-create jobs and return quickly; `next-worker` claims pending jobs with
-`FOR UPDATE SKIP LOCKED`. The initial implemented job type is `sync.noop`, used
-to verify the runtime path before metadata refresh/import work is attached.
+The worker foundation uses `background_jobs` and row locks. API requests create
+jobs and return quickly; `next-worker` claims pending jobs with `FOR UPDATE SKIP
+LOCKED`. Implemented job types include `sync.noop`, SQLite import, and generic
+plugin execution. Digital media source sync jobs persist Plex/Jellyfin items and
+match them to imported movies by TMDb, IMDb or title/year.
 
 Run a read-only dry-run against a copied legacy data directory:
 

@@ -865,7 +865,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                 """,
                 (limit,),
             )
-            return [with_preview_media_urls(row) for row in cur.fetchall()]
+            return attach_digital_availability(conn, [with_preview_media_urls(row) for row in cur.fetchall()])
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -889,7 +889,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
             """,
             (limit,),
         )
-        return cur.fetchall()
+        return attach_digital_availability(conn, cur.fetchall())
 
 
 def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
@@ -993,6 +993,8 @@ def collection_dashboard_snapshot(conn) -> dict[str, Any]:
         "containers": count_table(conn, "containers"),
         "mediaAssets": count_table(conn, "media_assets"),
         "metadataPlugins": count_table(conn, "metadata_plugins"),
+        "digitalMediaSources": count_table(conn, "digital_media_sources"),
+        "digitalMediaItems": count_table(conn, "digital_media_items"),
         "users": count_table(conn, "users"),
     }
     return {
@@ -1113,6 +1115,9 @@ def server_movie_cards(movies: list[dict[str, Any]]) -> str:
             tags.append(f'<span class="tag good">{h(movie.get("year"))}</span>')
         if movie.get("format"):
             tags.append(f'<span class="tag blue">{h(movie.get("format"))}</span>')
+        if movie.get("digital_count"):
+            label = "Digital" if int(movie.get("digital_count") or 0) == 1 else f"{movie.get('digital_count')} digital"
+            tags.append(f'<span class="tag good">{h(label)}</span>')
         if movie.get("barcode"):
             tags.append(f'<span class="tag">{h(movie.get("barcode"))}</span>')
         movie_id = h(movie.get("id"))
@@ -1737,6 +1742,22 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       gap: 6px;
       margin-top: 8px;
     }
+    .admin-plugin-config {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .admin-plugin-config label {
+      color: var(--muted);
+      display: grid;
+      font-size: .78rem;
+      gap: 5px;
+      min-width: 0;
+    }
+    .admin-plugin-config input {
+      min-height: 38px;
+    }
     .hidden {
       display: none !important;
     }
@@ -1746,6 +1767,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       .auth-panel { grid-template-columns: 1fr; }
       .admin-grid { grid-template-columns: 1fr; }
       .admin-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .admin-plugin-config { grid-template-columns: 1fr; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .layout { grid-template-columns: 1fr; }
       .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
@@ -1971,6 +1993,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <h3>Containers</h3>
             <div class="field-list" id="detailContainers"></div>
           </section>
+          <section class="detail-section">
+            <h3>Digital Sources</h3>
+            <div class="field-list" id="detailDigital"></div>
+          </section>
           <section class="detail-section full">
             <h3>Cast & Crew</h3>
             <div class="credit-list" id="detailCredits"></div>
@@ -1998,7 +2024,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       invites: [],
       rbac: {},
       plugins: [],
-      pluginHealth: {}
+      pluginConfigs: {},
+      pluginHealth: {},
+      digitalSources: []
     };
 
     function escapeHtml(value) {
@@ -2502,11 +2530,63 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function pluginCategoryLabel(plugin) {
       return (plugin.categories || []).map((category) => category.replaceAll("_", " ")).join(", ") || "plugin";
     }
+    function pluginSchemaItems(plugin, kind) {
+      const schema = plugin.settingsSchema || {};
+      const values = schema[kind];
+      if (Array.isArray(values)) return values;
+      if (values && typeof values === "object") {
+        return Object.entries(values).map(([name, value]) => ({name, ...(value || {})}));
+      }
+      return [];
+    }
+    function pluginInputType(field) {
+      if (field.type === "password") return "password";
+      if (field.type === "url") return "url";
+      if (field.type === "number") return "number";
+      return "text";
+    }
+    function renderPluginConfig(plugin, config) {
+      const settings = pluginSchemaItems(plugin, "settings");
+      const secrets = pluginSchemaItems(plugin, "secrets");
+      if (!settings.length && !secrets.length) return "";
+      const currentSettings = (config && config.settings) || {};
+      const secretNames = new Set((config && config.secretNames) || []);
+      const settingFields = settings.map((field) => {
+        const name = field.name || field.key;
+        const value = currentSettings[name];
+        const display = Array.isArray(value) ? value.join(", ") : (value || "");
+        return `
+          <label>${escapeHtml(field.label || name)}
+            <input data-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(pluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}">
+          </label>
+        `;
+      }).join("");
+      const secretFields = secrets.map((field) => {
+        const name = field.name || field.key;
+        const configured = secretNames.has(name);
+        return `
+          <label>${escapeHtml(field.label || name)}
+            <input data-plugin-secret="${escapeHtml(name)}" type="password" value="" placeholder="${configured ? "Configured - leave blank to keep" : ""}">
+          </label>
+        `;
+      }).join("");
+      return `
+        <div class="admin-plugin-config">
+          ${settingFields}
+          ${secretFields}
+        </div>
+        <div class="admin-controls">
+          <button type="button" data-admin-plugin-save="${escapeHtml(plugin.id)}">Save Config</button>
+        </div>
+      `;
+    }
     function renderAdminPlugins(plugins) {
       const list = document.getElementById("adminPluginsList");
       if (!list) return;
       list.innerHTML = plugins.length ? plugins.map((plugin) => {
         const health = adminState.pluginHealth[plugin.id] || {};
+        const config = adminState.pluginConfigs[plugin.id] || {};
+        const digitalSource = (adminState.digitalSources || []).find((source) => source.plugin_id === plugin.id);
         const runtime = plugin.runtime || {};
         const capabilities = plugin.capabilities || [];
         const runtimeState = health.state || (runtime.loaded ? "loaded" : "not loaded");
@@ -2524,6 +2604,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               <span class="tag ${runtime.loaded ? "good" : ""}">runtime ${escapeHtml(runtimeState)}</span>
               ${plugin.requiresSecrets ? `<span class="tag ${plugin.secretsConfigured ? "good" : ""}">secrets ${plugin.secretsConfigured ? "set" : "missing"}</span>` : `<span class="tag good">no secrets</span>`}
               ${plugin.settingsConfigured ? `<span class="tag good">settings set</span>` : `<span class="tag">default settings</span>`}
+              ${digitalSource ? `<span class="tag good">${number(digitalSource.itemCount || digitalSource.item_count)} digital items</span>` : ""}
+              ${digitalSource && digitalSource.last_status ? `<span class="tag">${escapeHtml(digitalSource.last_status)}</span>` : ""}
               ${needsConfig ? `<span class="tag blue">configuration needed</span>` : ""}
               ${plugin.premiumFeatureKey ? `<span class="tag blue">${escapeHtml(plugin.premiumFeatureKey)}</span>` : ""}
             </div>
@@ -2533,6 +2615,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               ${capabilities.includes("discover_library") ? `<button type="button" data-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">Discover</button>` : ""}
               ${capabilities.includes("sync_library") ? `<button type="button" data-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">Queue Sync</button>` : ""}
             </div>
+            ${renderPluginConfig(plugin, config)}
           </div>
         `;
       }).join("") : `<div class="empty">No plugins found.</div>`;
@@ -2560,12 +2643,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     async function loadAdmin() {
       if (!isAdminUser()) return;
       setAdminStatus("Loading admin data...", "info");
-      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, ownerSettingsPayload] = await Promise.all([
+      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, ownerSettingsPayload] = await Promise.all([
         authJson("/api/next/auth/users", {headers: authHeaders()}),
         authJson("/api/next/auth/credentials", {headers: authHeaders()}),
         authJson("/api/next/auth/invite", {headers: authHeaders()}),
         authJson("/api/next/auth/rbac", {headers: authHeaders()}),
         authJson("/api/next/plugins/registry", {headers: authHeaders()}),
+        authJson("/api/next/digital-sources", {headers: authHeaders()}).catch(() => ({items: []})),
         authState.role === "owner"
           ? authJson("/api/next/auth/owner/settings", {headers: authHeaders()})
           : Promise.resolve({settings: {}})
@@ -2576,6 +2660,17 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       adminState.invites = invitesPayload.invites || [];
       adminState.rbac = rbacPayload || {};
       adminState.plugins = pluginsPayload.plugins || [];
+      adminState.digitalSources = digitalSourcesPayload.items || [];
+      const configPayloads = await Promise.all(adminState.plugins.map((plugin) =>
+        authJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`, {headers: authHeaders()})
+          .catch((error) => ({plugin, error: error.message, config: {}}))
+      ));
+      adminState.pluginConfigs = {};
+      configPayloads.forEach((payload) => {
+        if (payload.plugin && payload.plugin.id) {
+          adminState.pluginConfigs[payload.plugin.id] = payload.config || {};
+        }
+      });
       renderAdminSecurity();
       renderAdminUsers(adminState.users, rbacPayload.assignableRoles || usersPayload.roles || []);
       renderAdminCredentials(adminState.credentials);
@@ -2641,6 +2736,39 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       adminState.pluginHealth[pluginId] = payload.health || {};
       renderAdminPlugins(adminState.plugins);
       setAdminStatus(`${pluginId} health: ${(payload.health && payload.health.state) || "unknown"}.`, "info");
+    }
+    function coercePluginValue(value, type) {
+      const trimmed = String(value || "").trim();
+      if (type === "array") {
+        return trimmed ? trimmed.split(",").map((item) => item.trim()).filter(Boolean) : [];
+      }
+      if (type === "number") {
+        return trimmed ? Number(trimmed) : null;
+      }
+      if (type === "boolean") {
+        return ["1", "true", "yes", "on"].includes(trimmed.toLowerCase());
+      }
+      return trimmed;
+    }
+    async function savePluginConfig(pluginId, row) {
+      const settings = {};
+      const secrets = {};
+      row.querySelectorAll("[data-plugin-setting]").forEach((input) => {
+        settings[input.dataset.pluginSetting] = coercePluginValue(input.value, input.dataset.valueType || "text");
+      });
+      row.querySelectorAll("[data-plugin-secret]").forEach((input) => {
+        if (input.value) secrets[input.dataset.pluginSecret] = input.value;
+      });
+      const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/config`, {
+        method: "PATCH",
+        body: JSON.stringify({settings, secrets})
+      });
+      adminState.pluginConfigs[pluginId] = payload.config || {};
+      if (payload.plugin) {
+        adminState.plugins = adminState.plugins.map((plugin) => plugin.id === pluginId ? payload.plugin : plugin);
+      }
+      renderAdminPlugins(adminState.plugins);
+      setAdminStatus(`${pluginId} configuration saved.`, "good");
     }
     async function executePlugin(pluginId, entrypoint) {
       const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/execute`, {
@@ -2742,7 +2870,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!panel || panel.dataset.bound === "true") return;
       panel.dataset.bound = "true";
       panel.addEventListener("click", (event) => {
-        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-plugin-enable], [data-admin-plugin-health], [data-admin-plugin-execute], [data-admin-plugin-job], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
+        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-plugin-enable], [data-admin-plugin-health], [data-admin-plugin-execute], [data-admin-plugin-job], [data-admin-plugin-save], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
         if (!target) return;
         event.preventDefault();
         const action = target.dataset.adminAction;
@@ -2759,6 +2887,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           task = executePlugin(target.dataset.adminPluginExecute, target.dataset.entrypoint);
         } else if (target.dataset.adminPluginJob) {
           task = queuePluginExecution(target.dataset.adminPluginJob, target.dataset.entrypoint);
+        } else if (target.dataset.adminPluginSave) {
+          task = savePluginConfig(target.dataset.adminPluginSave, target.closest(".admin-row"));
         } else if (action === "refresh") {
           task = loadAdmin();
         } else if (action === "toggle-auth") {
@@ -2853,6 +2983,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               <div class="tags">
                 ${movie.year ? `<span class="tag good">${escapeHtml(movie.year)}</span>` : ""}
                 ${movie.format ? `<span class="tag blue">${escapeHtml(movie.format)}</span>` : ""}
+                ${movie.digital_count ? `<span class="tag good">${escapeHtml(movie.digital_count === 1 ? "Digital" : `${movie.digital_count} digital`)}</span>` : ""}
                 ${movie.barcode ? `<span class="tag">${escapeHtml(movie.barcode)}</span>` : ""}
               </div>
             </div>
@@ -2891,7 +3022,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         movie.year,
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
-        movie.rating ? `Rating ${movie.rating}` : ""
+        movie.rating ? `Rating ${movie.rating}` : "",
+        (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} digital` : ""
       ].filter(Boolean).map((item) => `<span class="tag good">${escapeHtml(item)}</span>`).join("");
       document.getElementById("detailRelease").innerHTML = fieldsFromObject([
         ["Original title", movie.original_title],
@@ -2925,6 +3057,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailContainers").innerHTML = (detail.containers || []).length
         ? detail.containers.map((container) => field(`${container.container_type} / ${container.relationship}`, container.title)).join("")
         : field("None", "-");
+      document.getElementById("detailDigital").innerHTML = (detail.digitalItems || []).length
+        ? detail.digitalItems.map((item) => field(item.source_name || item.plugin_id || "Digital source", [item.title, item.year, item.playback_url].filter(Boolean).join(" / "))).join("")
+        : field("None", "-");
       document.getElementById("detailCredits").innerHTML = (detail.credits || []).length
         ? detail.credits.map((credit) => `
           <div class="credit">
@@ -2949,6 +3084,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailIdentifiers").innerHTML = field("None", "-");
       document.getElementById("detailSpecs").innerHTML = field("None", "-");
       document.getElementById("detailContainers").innerHTML = field("None", "-");
+      document.getElementById("detailDigital").innerHTML = field("None", "-");
       document.getElementById("detailCredits").innerHTML = `<div class="empty">No credits loaded.</div>`;
     }
     async function openMovieDetail(movieId) {
@@ -3245,6 +3381,32 @@ def movie_detail_container_cards(containers: list[dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
+def movie_detail_digital_cards(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return '<div class="empty small">No digital source matches yet.</div>'
+    cards = []
+    for item in items:
+        href = item.get("playback_url") or ""
+        tag_html = detail_tags(
+            item.get("source_name"),
+            item.get("media_type"),
+            item.get("year"),
+            item.get("tmdb_id") and f"TMDb {item.get('tmdb_id')}",
+            item.get("imdb_id"),
+        )
+        body = f"""
+            <div class="item-body">
+              <strong>{h(item.get("title") or "Untitled")}</strong>
+              <div class="tags">{tag_html}</div>
+            </div>
+        """.strip()
+        if href:
+            cards.append(f'<a class="item-card plain" href="{h(href)}">{body}</a>')
+        else:
+            cards.append(f'<div class="item-card plain">{body}</div>')
+    return "\n".join(cards)
+
+
 def movie_detail_html(detail: dict[str, Any]) -> str:
     movie = detail.get("movie") or {}
     metadata = movie.get("metadata") or {}
@@ -3253,6 +3415,7 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
     containers = detail.get("containers") or []
     credits = detail.get("credits") or []
     media_assets = detail.get("mediaAssets") or []
+    digital_items = detail.get("digitalItems") or []
     title = movie.get("title") or "Untitled"
     poster = movie_detail_image(media_assets, metadata, "poster")
     backdrop = movie_detail_image(media_assets, metadata, "backdrop")
@@ -3538,6 +3701,10 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
       <div class="panel">
         <h2>Containers</h2>
         <div class="items">""" + movie_detail_container_cards(containers) + """</div>
+      </div>
+      <div class="panel">
+        <h2>Digital Sources</h2>
+        <div class="items">""" + movie_detail_digital_cards(digital_items) + """</div>
       </div>
       <div class="panel">
         <h2>Identifiers</h2>
@@ -4129,7 +4296,35 @@ def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
     )
 
 
-def plugin_execution_context(plugin: dict[str, Any], config: dict[str, Any], actor: dict[str, Any] | None = None) -> dict[str, Any]:
+def plugin_secret_values(conn, config: dict[str, Any]) -> dict[str, Any]:
+    refs = config.get("secretsRef") or {}
+    keys = [
+        str(ref.get("key"))
+        for ref in refs.values()
+        if isinstance(ref, dict) and ref.get("key")
+    ]
+    if not keys or not table_exists(conn, "app_settings"):
+        return {}
+    values: dict[str, Any] = {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT key, value
+            FROM app_settings
+            WHERE key = ANY(%s) AND is_secret = true
+            """,
+            (keys,),
+        )
+        rows = cur.fetchall()
+    by_key = {row["key"]: row["value"] for row in rows}
+    for name, ref in refs.items():
+        key = ref.get("key") if isinstance(ref, dict) else None
+        if key in by_key:
+            values[str(name)] = by_key[key]
+    return values
+
+
+def plugin_execution_context(conn, plugin: dict[str, Any], config: dict[str, Any], actor: dict[str, Any] | None = None) -> dict[str, Any]:
     manifest = plugin.get("manifest") or {}
     return {
         "pluginId": plugin.get("id"),
@@ -4138,6 +4333,7 @@ def plugin_execution_context(plugin: dict[str, Any], config: dict[str, Any], act
         "categories": plugin.get("categories") or manifest.get("categories") or [],
         "capabilities": plugin.get("capabilities") or manifest.get("capabilities") or [],
         "settings": config.get("settings") or {},
+        "secrets": plugin_secret_values(conn, config),
         "settingsConfigured": bool(config.get("settingsConfigured")),
         "secretNames": config.get("secretNames") or [],
         "secretsConfigured": bool(config.get("secretsConfigured")),
@@ -4508,6 +4704,139 @@ def movie_container_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
     return links
 
 
+def attach_digital_availability(conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows or not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
+        return rows
+    ids = [row["id"] for row in rows if row.get("id")]
+    if not ids:
+        return rows
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                dmi.matched_movie_id AS movie_id,
+                COUNT(*)::int AS digital_count,
+                jsonb_agg(DISTINCT jsonb_build_object(
+                    'pluginId', dms.plugin_id,
+                    'name', dms.name,
+                    'sourceType', dms.source_type
+                )) AS digital_sources
+            FROM digital_media_items dmi
+            JOIN digital_media_sources dms ON dms.id = dmi.source_id
+            WHERE dmi.matched_movie_id = ANY(%s)
+            GROUP BY dmi.matched_movie_id
+            """,
+            (ids,),
+        )
+        by_movie = {row["movie_id"]: row for row in cur.fetchall()}
+    for row in rows:
+        summary = by_movie.get(row.get("id")) or {}
+        row["digital_count"] = int(summary.get("digital_count") or 0)
+        row["digital_sources"] = summary.get("digital_sources") or []
+    return rows
+
+
+def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                dmi.id,
+                dmi.external_id,
+                dmi.media_type,
+                dmi.title,
+                dmi.year,
+                dmi.tmdb_id,
+                dmi.imdb_id,
+                dmi.playback_url,
+                dmi.metadata,
+                dmi.synced_at,
+                dms.plugin_id,
+                dms.name AS source_name,
+                dms.source_type,
+                dms.base_url
+            FROM digital_media_items dmi
+            JOIN digital_media_sources dms ON dms.id = dmi.source_id
+            WHERE dmi.matched_movie_id=%s
+            ORDER BY dms.name, dmi.title
+            """,
+            (movie_id,),
+        )
+        return cur.fetchall()
+
+
+def digital_source_entities(conn) -> list[dict[str, Any]]:
+    if not table_exists(conn, "digital_media_sources"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                dms.id,
+                dms.plugin_id,
+                dms.name,
+                dms.source_type,
+                dms.base_url,
+                dms.machine_id,
+                dms.enabled,
+                dms.last_synced_at,
+                dms.item_count,
+                dms.last_status,
+                dms.last_error,
+                dms.metadata,
+                dms.created_at,
+                dms.updated_at,
+                COUNT(dmi.id)::int AS stored_item_count,
+                COUNT(dmi.matched_movie_id)::int AS matched_item_count
+            FROM digital_media_sources dms
+            LEFT JOIN digital_media_items dmi ON dmi.source_id = dms.id
+            GROUP BY dms.id
+            ORDER BY lower(dms.name), dms.plugin_id
+            """
+        )
+        rows = []
+        for row in cur.fetchall():
+            row["itemCount"] = int(row.get("stored_item_count") or row.get("item_count") or 0)
+            row["matchedItemCount"] = int(row.get("matched_item_count") or 0)
+            rows.append(row)
+        return rows
+
+
+def digital_item_entities(conn, *, limit: int = 200, offset: int = 0) -> list[dict[str, Any]]:
+    if not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                dmi.id,
+                dmi.external_id,
+                dmi.media_type,
+                dmi.title,
+                dmi.year,
+                dmi.tmdb_id,
+                dmi.imdb_id,
+                dmi.playback_url,
+                dmi.matched_movie_id,
+                dmi.metadata,
+                dmi.synced_at,
+                dms.plugin_id,
+                dms.name AS source_name,
+                dms.source_type,
+                m.title AS matched_movie_title
+            FROM digital_media_items dmi
+            JOIN digital_media_sources dms ON dms.id = dmi.source_id
+            LEFT JOIN movies m ON m.id = dmi.matched_movie_id
+            ORDER BY dms.name, lower(dmi.title)
+            LIMIT %s OFFSET %s
+            """,
+            (limit, offset),
+        )
+        return cur.fetchall()
+
+
 def media_asset_entity(conn, media_id: UUID) -> dict[str, Any] | None:
     if not table_exists(conn, "media_assets"):
         return None
@@ -4584,6 +4913,7 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "credits": movie_credit_entities(conn, movie_id),
         "containers": movie_container_entities(conn, movie_id),
         "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
+        "digitalItems": movie_digital_item_entities(conn, movie_id),
     }
 
 
@@ -5173,13 +5503,35 @@ def plugin_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def redact_sensitive_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            lowered = str(key).lower()
+            if lowered in {"secret", "secrets", "token", "password", "apikey", "api_key"}:
+                if isinstance(item, dict):
+                    redacted[key] = {name: "***" for name in item}
+                elif isinstance(item, list):
+                    redacted[key] = ["***" for _ in item]
+                elif item in (None, ""):
+                    redacted[key] = item
+                else:
+                    redacted[key] = "***"
+            else:
+                redacted[key] = redact_sensitive_payload(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact_sensitive_payload(item) for item in value]
+    return value
+
+
 def job_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
         "jobType": row["job_type"],
         "status": row["status"],
         "requestedBy": row.get("requested_by"),
-        "payload": row.get("payload") or {},
+        "payload": redact_sensitive_payload(row.get("payload") or {}),
         "result": row.get("result") or {},
         "error": row.get("error"),
         "createdAt": row.get("created_at"),
@@ -5328,6 +5680,8 @@ def register_routes(flask_app: Flask) -> None:
                 "containers": count_table(conn, "containers"),
                 "mediaAssets": count_table(conn, "media_assets"),
                 "metadataPlugins": count_table(conn, "metadata_plugins"),
+                "digitalMediaSources": count_table(conn, "digital_media_sources"),
+                "digitalMediaItems": count_table(conn, "digital_media_items"),
                 "users": count_table(conn, "users"),
             }
             container_counts = []
@@ -5376,6 +5730,25 @@ def register_routes(flask_app: Flask) -> None:
                 "latestImport": latest_import,
             }
         )
+
+    @flask_app.get("/api/next/digital-sources")
+    def digital_sources():
+        with connect() as conn:
+            return response({"status": "ok", "items": digital_source_entities(conn)})
+
+    @flask_app.get("/api/next/digital-items")
+    def digital_items():
+        limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
+        offset = max(int(request.args.get("offset", 0)), 0)
+        with connect() as conn:
+            return response(
+                {
+                    "status": "ok",
+                    "items": digital_item_entities(conn, limit=limit, offset=offset),
+                    "limit": limit,
+                    "offset": offset,
+                }
+            )
 
     @flask_app.get("/api/next/settings")
     def settings():
@@ -5435,7 +5808,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("orderIndex must be an integer", 400) from exc
 
         with connect() as conn:
-            require_next_admin_user(conn)
+            actor = require_next_admin_user(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -5509,7 +5882,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Plugin id is required", 400)
 
         with connect() as conn:
-            require_next_admin_user(conn)
+            actor = require_next_admin_user(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -5576,7 +5949,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Plugin id is required", 400)
 
         with connect() as conn:
-            require_next_admin_user(conn)
+            actor = require_next_admin_user(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -5589,20 +5962,11 @@ def register_routes(flask_app: Flask) -> None:
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
             config = plugin_config_from_db(conn, plugin_id)
+            context = plugin_execution_context(conn, plugin, config, actor)
 
         manifest = plugin.get("manifest") or {}
         requires_secrets = bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets"))
-        runtime = run_plugin_health(
-            plugin_id,
-            {
-                "pluginId": plugin_id,
-                "enabled": plugin["enabled"],
-                "settings": config["settings"],
-                "settingsConfigured": config["settingsConfigured"],
-                "secretNames": config["secretNames"],
-                "secretsConfigured": config["secretsConfigured"],
-            },
-        )
+        runtime = run_plugin_health(plugin_id, context)
         state = str(runtime.get("state") or "unknown")
         if runtime.get("status") == "error":
             state = str(runtime.get("state") or "runtime_error")
@@ -5649,7 +6013,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Plugin not found", 404)
             entrypoint, payload = validate_plugin_execution_request(plugin, body)
             config = plugin_config_from_db(conn, plugin_id)
-            context = plugin_execution_context(plugin, config, actor)
+            context = plugin_execution_context(conn, plugin, config, actor)
 
         execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
         status_code = 200 if execution.get("status") == "ok" else 422
@@ -5689,7 +6053,7 @@ def register_routes(flask_app: Flask) -> None:
                 "pluginId": plugin_id,
                 "entrypoint": entrypoint,
                 "payload": payload,
-                "context": plugin_execution_context(plugin, config, actor),
+                "context": plugin_execution_context(conn, plugin, config, actor),
             }
             with conn.transaction():
                 job = create_background_job(conn, job_type=PLUGIN_EXECUTION_JOB_TYPE, payload=job_payload)
@@ -5763,6 +6127,7 @@ def register_routes(flask_app: Flask) -> None:
                     (*params, limit, offset),
                 )
                 items = cur.fetchall()
+            items = attach_digital_availability(conn, items)
         return response({"status": "ok", "items": items, "limit": limit, "offset": offset})
 
     @flask_app.get("/api/next/movies/<movie_id>")

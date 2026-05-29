@@ -10,7 +10,33 @@
   ],
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
-  "settingsSchema": {},
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "baseUrl",
+        "label": "Server URL",
+        "type": "url",
+        "required": true,
+        "placeholder": "https://plex.example"
+      },
+      {
+        "name": "libraryIds",
+        "label": "Library IDs",
+        "type": "array",
+        "required": false,
+        "placeholder": "1, 2",
+        "description": "Optional comma-separated Plex movie library section ids."
+      }
+    ],
+    "secrets": [
+      {
+        "name": "token",
+        "label": "Plex token",
+        "type": "password",
+        "required": true
+      }
+    ]
+  },
   "orderIndex": 110,
   "entitlements": {
     "connect": "digital_source.plex.connect",
