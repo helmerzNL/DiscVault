@@ -967,7 +967,7 @@ def migration_dashboard_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DiscVault Next Migration</title>
+  <title>DiscVault Data Migration</title>
   <style>
     :root {
       color-scheme: dark;
@@ -1034,10 +1034,10 @@ def migration_dashboard_html() -> str:
     }
     .auth-gate {
       display: grid;
-      gap: 18px;
-      max-width: 580px;
-      margin: 42px auto 18px;
-      padding: 28px;
+      gap: 20px;
+      max-width: 520px;
+      margin: 72px auto 18px;
+      padding: 30px;
       background:
         linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)),
         var(--panel);
@@ -1050,13 +1050,39 @@ def migration_dashboard_html() -> str:
       justify-content: space-between;
       gap: 14px;
     }
+    .login-brand {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 14px;
+    }
+    .login-mark {
+      width: 54px;
+      height: 54px;
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.045));
+      border: 1px solid rgba(255,255,255,.16);
+      color: var(--text);
+      font-weight: 780;
+      letter-spacing: 0;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 14px 38px rgba(0,0,0,.2);
+    }
+    .login-copy {
+      display: grid;
+      gap: 6px;
+    }
     .auth-gate h2 {
       margin: 0;
-      font-size: clamp(1.55rem, 4vw, 2.25rem);
+      font-size: clamp(2rem, 6vw, 3rem);
+      font-weight: 780;
       letter-spacing: 0;
     }
     .auth-gate p {
       max-width: 70ch;
+      font-size: .98rem;
     }
     .auth-gate .language-control {
       border: 1px solid var(--line);
@@ -1085,6 +1111,19 @@ def migration_dashboard_html() -> str:
     }
     .auth-message.good {
       color: var(--green);
+    }
+    .auth-secondary {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-top: 2px;
+    }
+    .auth-secondary button {
+      min-height: 34px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.035);
+      color: var(--muted);
+      font-size: .82rem;
     }
     button.primary {
       background: var(--accent);
@@ -1459,7 +1498,7 @@ def migration_dashboard_html() -> str:
       header { flex-direction: column; }
       .actions { justify-content: flex-start; }
       .card, .wide { grid-column: 1 / -1; }
-      .auth-gate { margin-top: 20px; padding: 20px; }
+      .auth-gate { margin-top: 28px; padding: 22px; }
       .auth-gate-top { flex-direction: column; }
       .wizard-head, .wizard-panel-header, .details-header { flex-direction: column; }
       .migration-intro-list { grid-template-columns: 1fr; }
@@ -1471,10 +1510,10 @@ def migration_dashboard_html() -> str:
 </head>
 <body>
   <main>
-    <header>
+    <header id="migrationHeader">
       <div>
-        <h1 data-next-i18n="migration.title">DiscVault Next Migration</h1>
-        <p data-next-i18n="migration.description">PostgreSQL import status, legacy data checks, and metadata plugin readiness.</p>
+        <h1 data-next-i18n="migration.title">DiscVault Data Migration</h1>
+        <p data-next-i18n="migration.description">Review the detected legacy data and finish setup.</p>
       </div>
       <div class="actions">
         <label class="language-control">
@@ -1489,18 +1528,24 @@ def migration_dashboard_html() -> str:
 
     <section class="card full auth-gate hidden" id="migrationAuthGate" aria-live="polite">
       <div class="auth-gate-top">
-        <span class="badge warn" data-next-i18n="auth.passkey">Passkey</span>
+        <div class="login-brand">
+          <span class="login-mark" aria-hidden="true">DV</span>
+          <div class="login-copy">
+            <h2 data-next-i18n="auth.loginTitle">DiscVault</h2>
+            <p data-next-i18n="auth.loginDescription">Sign in to DiscVault with your passkey.</p>
+          </div>
+        </div>
         <label class="language-control">
           <span data-next-i18n="language.label">Language</span>
           <select id="migrationAuthLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label" data-next-language-select></select>
         </label>
       </div>
-      <div>
-        <h2 data-next-i18n="startup.phase.sign_in_required">Sign in required</h2>
-        <p data-next-i18n="startup.description.sign_in_required">Sign in with a passkey to continue setup.</p>
-      </div>
       <div class="actions">
         <button type="button" class="primary" id="migrationLoginButton" data-next-i18n="auth.signIn">Sign in</button>
+      </div>
+      <div class="auth-secondary" aria-label="Additional access options">
+        <button type="button" disabled data-next-i18n="auth.inviteOnly">Invite-only access</button>
+        <button type="button" disabled data-next-i18n="auth.recovery">Recovery</button>
       </div>
       <div class="auth-message" id="migrationAuthMessage" data-next-i18n="auth.checking">Checking authentication status...</div>
     </section>
@@ -1708,9 +1753,11 @@ def migration_dashboard_html() -> str:
     }
     function showMigrationAuthGate(show) {
       const gate = document.getElementById("migrationAuthGate");
+      const header = document.getElementById("migrationHeader");
       const intro = document.getElementById("migrationIntro");
       const workspace = document.getElementById("migrationWorkspace");
       if (gate) gate.classList.toggle("hidden", !show);
+      if (header) header.classList.toggle("hidden", !!show);
       if (intro && show) intro.classList.add("hidden");
       if (workspace && show) workspace.classList.add("hidden");
     }
@@ -1768,7 +1815,7 @@ def migration_dashboard_html() -> str:
         const needsAuth = !!payload.auth_enabled && !payload.authenticated;
         if (needsAuth) {
           showMigrationAuthGate(true);
-          setMigrationAuthMessage(tNext("startup.description.sign_in_required", "Sign in with a passkey to continue setup."), "info");
+          setMigrationAuthMessage(tNext("auth.loginDescription", "Sign in to DiscVault with your passkey."), "info");
           const loginButton = document.getElementById("migrationLoginButton");
           if (loginButton) loginButton.disabled = !!webauthnUnavailableReason();
           const unavailable = webauthnUnavailableReason();
@@ -2233,7 +2280,7 @@ def migration_dashboard_html() -> str:
       if (response.status === 401) {
         localStorage.removeItem("dv_next_token");
         showMigrationAuthGate(true);
-        setMigrationAuthMessage(tNext("startup.description.sign_in_required", "Sign in with a passkey to continue setup."), "bad");
+        setMigrationAuthMessage(tNext("auth.loginDescription", "Sign in to DiscVault with your passkey."), "bad");
         return;
       }
       if (!response.ok) throw new Error(`Report failed: HTTP ${response.status}`);
