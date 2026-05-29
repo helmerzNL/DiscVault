@@ -84,3 +84,14 @@ migration readiness into one phase:
 The collection UI must use this startup state before loading collection data.
 Only `ready` permits the normal collection view. All other phases show a setup
 or migration panel and keep the collection area blocked.
+
+The payload also includes `steps`, `canCreateOwner`, `canSignIn`,
+`canSwitchAccount` and `canStartMigration`. The PWA shell uses those fields to
+render a first-run setup rail:
+
+- Owner passkey: create the first owner or wait for legacy users/passkeys to be
+  imported.
+- Legacy data: show source counts for movies, users, groups and passkeys when a
+  legacy database is mounted.
+- Migration: start, follow or block migration according to the readiness state.
+- Collection: remains unavailable until startup reaches `ready`.
