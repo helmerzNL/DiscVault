@@ -2728,6 +2728,24 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       font-size: 1rem;
       margin-bottom: 5px;
     }
+    .startup-copy p {
+      max-width: 78ch;
+    }
+    .startup-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 9px;
+    }
+    .startup-meta span {
+      border: 1px solid var(--soft-line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+      padding: 4px 9px;
+      font-size: .78rem;
+      overflow-wrap: anywhere;
+    }
     .startup-steps {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2774,14 +2792,23 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       border-color: var(--green);
       color: var(--green);
     }
+    .startup-step.complete {
+      background: rgba(58, 201, 146, .06);
+    }
     .startup-step.active .startup-step-marker {
       border-color: var(--blue);
       background: var(--blue-soft);
       color: var(--blue);
     }
+    .startup-step.active {
+      background: rgba(96, 165, 250, .07);
+    }
     .startup-step.blocked .startup-step-marker {
       border-color: var(--red);
       color: var(--red);
+    }
+    .startup-step.blocked {
+      background: rgba(251, 113, 133, .07);
     }
     .startup-facts {
       display: flex;
@@ -3145,7 +3172,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         <div class="startup-copy">
           <strong id="startupTitle" data-next-i18n="startup.setup">Setup</strong>
           <p id="startupDescription" data-next-i18n="startup.checking">Checking startup state...</p>
-          <p class="muted" id="startupMeta"></p>
+          <p class="muted startup-meta" id="startupMeta"></p>
           <div class="auth-status" id="startupStatusLine"></div>
         </div>
         <div class="startup-actions">
@@ -3482,6 +3509,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function tNext(key, fallback) {
       return nextI18n.messages[key] || fallback || key;
     }
+    function translatedState(state) {
+      const key = `migration.state.${state || "unknown"}`;
+      return tNext(key, String(state || "unknown").replaceAll("_", " "));
+    }
     function applyNextI18n() {
       document.documentElement.lang = nextI18n.locale;
       document.querySelectorAll("[data-next-i18n]").forEach((node) => {
@@ -3498,6 +3529,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderFormatFilters();
       renderMovies();
       renderContainers();
+      if (startupState && Object.keys(startupState).length) renderStartupStatus();
     }
     function renderLanguageOptions() {
       const select = document.getElementById("nextLanguageSelect");
@@ -3725,15 +3757,27 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     function startupTitle(phase) {
       const titles = {
-        owner_setup: "First owner",
-        migration_required: "Migration required",
-        migration_running: "Migration running",
-        migration_pending_non_admin: "Migration pending",
-        schema_blocked: "Schema update required",
-        sign_in_required: "Sign in required",
-        ready: "Ready"
+        owner_setup: tNext("startup.phase.owner_setup", "First owner"),
+        migration_required: tNext("startup.phase.migration_required", "Migration required"),
+        migration_running: tNext("startup.phase.migration_running", "Migration running"),
+        migration_pending_non_admin: tNext("startup.phase.migration_pending_non_admin", "Migration pending"),
+        schema_blocked: tNext("startup.phase.schema_blocked", "Schema update required"),
+        sign_in_required: tNext("startup.phase.sign_in_required", "Sign in required"),
+        ready: tNext("startup.phase.ready", "Ready")
       };
-      return titles[phase] || "Setup";
+      return titles[phase] || tNext("startup.setup", "Setup");
+    }
+    function startupDescription(phase, fallback) {
+      const descriptions = {
+        owner_setup: tNext("startup.description.owner_setup", "Create the first owner passkey to finish setup."),
+        migration_required: tNext("startup.description.migration_required", "Legacy DiscVault data is ready to migrate."),
+        migration_running: tNext("startup.description.migration_running", "Legacy migration is running."),
+        migration_pending_non_admin: tNext("startup.description.migration_pending_non_admin", "DiscVault Next is waiting for an owner or administrator to complete migration."),
+        schema_blocked: tNext("startup.description.schema_blocked", "PostgreSQL migrations must finish before DiscVault Next can start."),
+        sign_in_required: tNext("startup.description.sign_in_required", "Sign in with a passkey to continue setup."),
+        ready: tNext("startup.description.ready", "DiscVault Next is ready.")
+      };
+      return descriptions[phase] || fallback || tNext("startup.checking", "Checking startup state...");
     }
     function startupTone(phase) {
       if (phase === "schema_blocked") return "bad";
@@ -3745,18 +3789,31 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const node = document.getElementById("startupSteps");
       if (!node) return;
       const rows = Array.isArray(steps) ? steps : [];
+      const labels = {
+        auth: tNext("startup.step.auth", "Owner passkey"),
+        source: tNext("startup.step.source", "Legacy data"),
+        migration: tNext("startup.step.migration", "Migration"),
+        collection: tNext("startup.step.collection", "Collection")
+      };
+      const details = {
+        auth: tNext("startup.step.authDetail", "Passkeys protect this DiscVault Next environment."),
+        source: tNext("startup.step.sourceDetail", "DiscVault checks the configured import source."),
+        migration: tNext("startup.step.migrationDetail", "Import the legacy database into PostgreSQL."),
+        collection: tNext("startup.step.collectionDetail", "Browse the collection after setup is complete.")
+      };
       node.innerHTML = rows.map((step, index) => {
         const state = step.state || "pending";
+        const marker = state === "complete" ? "OK" : String(index + 1);
         return `
           <div class="startup-step ${escapeHtml(state)}">
-            <div class="startup-step-marker">${index + 1}</div>
+            <div class="startup-step-marker">${escapeHtml(marker)}</div>
             <div>
-              <strong>${escapeHtml(step.label || step.key || "Step")}</strong>
-              <span>${escapeHtml(step.detail || state)}</span>
+              <strong>${escapeHtml(labels[step.key] || step.label || step.key || tNext("startup.step", "Step"))}</strong>
+              <span>${escapeHtml(details[step.key] || step.detail || state)}</span>
             </div>
           </div>
         `;
-      }).join("") || '<div class="startup-step"><div class="startup-step-marker">1</div><div><strong>Setup</strong><span>Checking startup state...</span></div></div>';
+      }).join("") || `<div class="startup-step"><div class="startup-step-marker">1</div><div><strong>${escapeHtml(tNext("startup.setup", "Setup"))}</strong><span>${escapeHtml(tNext("startup.checking", "Checking startup state..."))}</span></div></div>`;
     }
     function renderStartupFacts(startup) {
       const node = document.getElementById("startupFacts");
@@ -3799,32 +3856,34 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       scheduleStartupPoll(phase);
       if (phase === "ready") return;
       document.getElementById("startupTitle").textContent = startupTitle(phase);
-      document.getElementById("startupDescription").textContent = startup.message || "DiscVault Next is preparing startup.";
+      document.getElementById("startupDescription").textContent = startupDescription(phase, startup.message);
       const migration = startup.migration || {};
       const auth = startup.auth || {};
       const legacyData = migration.legacyData || {};
       const sourceCounts = legacyData.sourceCounts || {};
-      const actionText = (migration.requiredActions || []).join(" ");
-      document.getElementById("startupMeta").textContent = [
-        migration.state ? `migration: ${migration.state}` : "",
-        legacyData.pluginName ? `source: ${legacyData.pluginName}` : "",
-        Number(sourceCounts.movies || 0) ? `${number(sourceCounts.movies)} legacy movies` : "",
-        Number(sourceCounts.groups || 0) ? `${number(sourceCounts.groups)} legacy groups` : "",
-        auth.role ? `signed in as ${auth.role}` : "",
-        actionText
-      ].filter(Boolean).join(" / ");
+      document.getElementById("startupMeta").innerHTML = [
+        migration.state ? `${tNext("startup.metaMigration", "Migration")}: ${translatedState(migration.state)}` : "",
+        legacyData.pluginName ? `${tNext("startup.metaSource", "Source")}: ${legacyData.pluginName}` : "",
+        Number(sourceCounts.movies || 0) ? `${number(sourceCounts.movies)} ${tNext("startup.metaLegacyMovies", "legacy movies")}` : "",
+        Number(sourceCounts.groups || 0) ? `${number(sourceCounts.groups)} ${tNext("startup.metaLegacyGroups", "legacy groups")}` : "",
+        auth.role ? `${tNext("startup.metaSignedIn", "Signed in")}: ${auth.role}` : ""
+      ].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("");
       renderStartupSteps(startup.steps);
       renderStartupFacts(startup);
       const authButton = document.getElementById("startupAuthButton");
       authButton.classList.toggle("hidden", !(startup.canCreateOwner || startup.canSignIn || startup.canSwitchAccount));
-      authButton.textContent = startup.canCreateOwner ? "Create Owner Passkey" : startup.canSwitchAccount ? "Switch Account" : "Sign In";
+      authButton.textContent = startup.canCreateOwner
+        ? tNext("auth.createOwnerPasskey", "Create owner passkey")
+        : startup.canSwitchAccount
+          ? tNext("startup.switchAccount", "Switch Account")
+          : tNext("auth.signIn", "Sign in");
       document.getElementById("startupStartMigrationButton").classList.toggle("hidden", !startup.canStartMigration);
       document.getElementById("startupMigrationButton").classList.toggle("hidden", !migration.state);
       document.getElementById("startupRefreshButton").classList.toggle("hidden", phase === "ready");
       const statusMessage = phase === "migration_pending_non_admin"
-        ? "Ask the owner or administrator to finish migration, or switch to an account with migration rights."
+        ? tNext("startup.status.pendingNonAdmin", "Ask the owner or administrator to finish migration, or switch to an account with migration rights.")
         : phase === "migration_running"
-          ? "Migration is running. This panel refreshes automatically."
+          ? tNext("startup.status.running", "Migration is running. This panel refreshes automatically.")
           : "";
       setStartupStatus(statusMessage, startupTone(phase));
     }
@@ -3836,10 +3895,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     async function startStartupMigration() {
       const button = document.getElementById("startupStartMigrationButton");
       button.disabled = true;
-      setStartupStatus("Starting migration...", "info");
+      setStartupStatus(tNext("migration.starting", "Starting migration..."), "info");
       try {
         await authJson("/api/next/migration/start", {method: "POST", body: "{}"});
-        setStartupStatus("Migration queued. Refreshing status...", "good");
+        setStartupStatus(tNext("startup.status.migrationQueued", "Migration queued. Refreshing status..."), "good");
         await resumeStartupOrCollection();
       } catch (error) {
         setStartupStatus(error.message, "bad");
