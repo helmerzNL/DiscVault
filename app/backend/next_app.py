@@ -1366,6 +1366,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .tag.good { color: var(--green); border-color: rgba(72,199,142,.38); }
     .tag.blue { color: var(--blue); border-color: rgba(130,170,255,.38); }
+    .tag.bad { color: var(--red); border-color: rgba(255,107,107,.38); }
     .section-head {
       display: flex;
       justify-content: space-between;
@@ -1894,6 +1895,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         <button type="button" data-admin-tab="users">Users</button>
         <button type="button" data-admin-tab="roles">Roles</button>
         <button type="button" data-admin-tab="plugins">Plugins</button>
+        <button type="button" data-admin-tab="metadata">Metadata</button>
         <button type="button" data-admin-tab="backups">Backups</button>
       </div>
       <div class="admin-view active" data-admin-view="security">
@@ -1958,6 +1960,38 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <div class="admin-card wide">
             <h3>Execution Jobs</h3>
             <div class="admin-list" id="adminPluginJobsList"><div class="empty">No plugin jobs loaded.</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="admin-view" data-admin-view="metadata">
+        <div class="admin-grid">
+          <div class="admin-card wide">
+            <h3>Metadata Refresh</h3>
+            <div class="admin-controls">
+              <input id="adminMetadataMovieId" type="text" placeholder="movie UUID">
+              <button type="button" data-admin-action="metadata-use-first">Use First Movie</button>
+              <button type="button" data-admin-action="metadata-preview">Preview</button>
+              <button type="button" data-admin-action="metadata-dry-run">Dry Run</button>
+              <button type="button" data-admin-action="metadata-apply">Apply</button>
+              <button type="button" data-admin-action="metadata-queue-dry-run">Queue Dry Run</button>
+              <button type="button" data-admin-action="metadata-queue-apply">Queue Apply</button>
+            </div>
+            <p class="muted" id="adminMetadataState">No metadata refresh run yet.</p>
+          </div>
+          <div class="admin-card">
+            <h3>Source Summary</h3>
+            <div class="admin-list" id="adminMetadataSources"><div class="empty">No source result yet.</div></div>
+          </div>
+          <div class="admin-card">
+            <h3>Proposal</h3>
+            <div class="admin-list" id="adminMetadataProposal"><div class="empty">No proposal yet.</div></div>
+          </div>
+          <div class="admin-card wide">
+            <div class="admin-row-head">
+              <h3>Metadata Jobs</h3>
+              <button type="button" data-admin-action="metadata-jobs-refresh">Refresh Jobs</button>
+            </div>
+            <div class="admin-list" id="adminMetadataJobs"><div class="empty">No metadata jobs loaded.</div></div>
           </div>
         </div>
       </div>
@@ -2078,6 +2112,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       pluginExecutions: {},
       pluginJobs: [],
       digitalSources: [],
+      metadata: {
+        jobs: [],
+        lastApplied: null,
+        lastPreview: null,
+        movieId: ""
+      },
       backup: {},
       backupReport: null
     };
@@ -2683,6 +2723,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function jobStatusClass(status) {
       if (status === "completed") return "good";
       if (status === "pending" || status === "running") return "blue";
+      if (status === "failed") return "bad";
       return "";
     }
     function pluginJobSummary(job) {
@@ -2714,6 +2755,244 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           ${job.error ? `<div class="auth-status bad">${escapeHtml(job.error)}</div>` : ""}
         </div>
       `).join("") : `<div class="empty">No plugin execution jobs yet.</div>`;
+    }
+    function metadataStateClass(state) {
+      if (["applied", "hit", "completed", "ok"].includes(state)) return "good";
+      if (["pending", "running", "needs_configuration", "blocked_by_format_policy", "retained_existing"].includes(state)) return "blue";
+      if (["error", "failed"].includes(state)) return "bad";
+      return "";
+    }
+    function metadataValuePreview(value) {
+      let text = "";
+      if (value === null || value === undefined || value === "") return "-";
+      if (Array.isArray(value)) {
+        text = value.join(", ");
+      } else if (typeof value === "object") {
+        text = JSON.stringify(value);
+      } else {
+        text = String(value);
+      }
+      return text.length > 96 ? `${text.slice(0, 93)}...` : text;
+    }
+    function metadataBucketTags(bucket) {
+      const entries = Object.entries(bucket || {});
+      return entries.length ? entries.map(([key, value]) =>
+        `<span class="tag" title="${escapeHtml(metadataValuePreview(value))}">${escapeHtml(key)}: ${escapeHtml(metadataValuePreview(value))}</span>`
+      ).join("") : `<span class="tag">No fields</span>`;
+    }
+    function metadataCurrentMovieId() {
+      const input = document.getElementById("adminMetadataMovieId");
+      const movieId = (input && input.value ? input.value : adminState.metadata.movieId || "").trim();
+      if (!movieId) throw new Error("Movie ID is required.");
+      adminState.metadata.movieId = movieId;
+      return movieId;
+    }
+    function normalizeMetadataPayload(payload) {
+      const metadata = (payload && payload.metadata) || payload || {};
+      if (metadata.preview) {
+        return {preview: metadata.preview, applied: metadata.applied || null, dryRun: !!metadata.dryRun};
+      }
+      if (metadata.proposal) {
+        return {preview: metadata, applied: null, dryRun: true};
+      }
+      return {preview: null, applied: null, dryRun: false};
+    }
+    function rememberMetadataResult(payload, movieId) {
+      const normalized = normalizeMetadataPayload(payload);
+      adminState.metadata.lastPreview = normalized.preview;
+      adminState.metadata.lastApplied = normalized.applied;
+      adminState.metadata.movieId = movieId || adminState.metadata.movieId || "";
+      renderAdminMetadata();
+      return normalized;
+    }
+    function renderMetadataSources(preview) {
+      const node = document.getElementById("adminMetadataSources");
+      if (!node) return;
+      const sources = (preview && preview.sourceSummary) || [];
+      node.innerHTML = sources.length ? sources.map((source) => `
+        <div class="admin-row">
+          <div class="admin-row-head">
+            <strong>${escapeHtml(source.name || source.pluginId)}</strong>
+            <span class="tag ${metadataStateClass(source.state)}">${escapeHtml((source.state || "-").replaceAll("_", " "))}</span>
+          </div>
+          <div class="muted">${escapeHtml(source.reason || "-")}</div>
+          <div class="admin-plugin-meta">
+            <span class="tag">${number(source.acceptedFields || 0)} accepted</span>
+            <span class="tag">${number(source.skippedFields || 0)} skipped</span>
+            <span class="tag ${source.formatBlockedFields ? "blue" : ""}">${number(source.formatBlockedFields || 0)} format blocked</span>
+            <span class="tag">${number(source.resultCount || 0)} results</span>
+            <span class="tag">${number(source.elapsedMs || 0)} ms</span>
+          </div>
+        </div>
+      `).join("") : `<div class="empty">Run a preview or refresh to see source decisions.</div>`;
+    }
+    function renderMetadataProposal(preview, applied) {
+      const node = document.getElementById("adminMetadataProposal");
+      if (!node) return;
+      if (!preview) {
+        node.innerHTML = `<div class="empty">No proposal yet.</div>`;
+        return;
+      }
+      const proposal = preview.proposal || {};
+      const stats = preview.proposalStats || {};
+      const appliedState = applied || {};
+      const appliedChanged = appliedState.changed === true;
+      const appliedLabel = appliedState.changed === undefined ? "preview only" : appliedChanged ? "applied" : "no changes";
+      node.innerHTML = `
+        <div class="admin-row">
+          <div class="admin-row-head">
+            <strong>${escapeHtml(preview.movie && preview.movie.title ? preview.movie.title : "Metadata proposal")}</strong>
+            <span class="tag ${appliedChanged ? "good" : "blue"}">${escapeHtml(appliedLabel)}</span>
+          </div>
+          <div class="admin-plugin-meta">
+            <span class="tag good">${number(stats.acceptedFields || 0)} accepted</span>
+            <span class="tag">${number(stats.updateFields || 0)} update fields</span>
+            <span class="tag ${stats.skippedFields ? "blue" : ""}">${number(stats.skippedFields || 0)} skipped</span>
+            <span class="tag ${stats.formatBlockedFields ? "blue" : ""}">${number(stats.formatBlockedFields || 0)} format blocked</span>
+            ${appliedState.revision ? `<span class="tag good">revision ${escapeHtml(appliedState.revision)}</span>` : ""}
+          </div>
+        </div>
+        <div class="admin-row">
+          <strong>Movie Fields</strong>
+          <div class="admin-permission-cloud">${metadataBucketTags(proposal.movieUpdates)}</div>
+        </div>
+        <div class="admin-row">
+          <strong>Metadata Fields</strong>
+          <div class="admin-permission-cloud">${metadataBucketTags(proposal.metadataUpdates)}</div>
+        </div>
+        <div class="admin-row">
+          <strong>Technical Fields</strong>
+          <div class="admin-permission-cloud">${metadataBucketTags(proposal.technicalUpdates)}</div>
+        </div>
+        <div class="admin-row">
+          <strong>Identifiers</strong>
+          <div class="admin-permission-cloud">${metadataBucketTags(proposal.identifiers)}</div>
+        </div>
+      `;
+    }
+    function metadataJobSummary(job) {
+      const payload = job.payload || {};
+      const result = job.result || {};
+      const run = result.result || {};
+      const preview = run.preview || {};
+      const stats = preview.proposalStats || {};
+      const movieId = payload.movieId || result.movieId || "-";
+      const dryRun = payload.dryRun !== undefined ? payload.dryRun : run.dryRun;
+      const bits = [
+        movieId,
+        dryRun ? "dry run" : "apply",
+        stats.updateFields != null ? `${number(stats.updateFields)} update fields` : "",
+        stats.acceptedFields != null ? `${number(stats.acceptedFields)} accepted` : ""
+      ].filter(Boolean);
+      return bits.join(" &middot; ");
+    }
+    function renderAdminMetadataJobs() {
+      const node = document.getElementById("adminMetadataJobs");
+      if (!node) return;
+      const jobs = adminState.metadata.jobs || [];
+      node.innerHTML = jobs.length ? jobs.map((job) => `
+        <div class="admin-row">
+          <div class="admin-row-head">
+            <strong>${escapeHtml(job.jobType || "metadata job")}</strong>
+            <span class="tag ${jobStatusClass(job.status)}">${escapeHtml(job.status || "-")}</span>
+          </div>
+          <div class="muted">${metadataJobSummary(job)}</div>
+          <div class="muted">created ${escapeHtml((job.createdAt || "").slice(0, 19))} &middot; finished ${escapeHtml((job.finishedAt || "-").slice(0, 19))}</div>
+          ${job.error ? `<div class="auth-status bad">${escapeHtml(job.error)}</div>` : ""}
+        </div>
+      `).join("") : `<div class="empty">No metadata jobs yet.</div>`;
+    }
+    function renderAdminMetadata() {
+      const input = document.getElementById("adminMetadataMovieId");
+      if (input && adminState.metadata.movieId && input.value !== adminState.metadata.movieId) {
+        input.value = adminState.metadata.movieId;
+      }
+      const preview = adminState.metadata.lastPreview;
+      const applied = adminState.metadata.lastApplied;
+      const state = document.getElementById("adminMetadataState");
+      if (state) {
+        if (preview) {
+          const stats = preview.proposalStats || {};
+          const title = preview.movie && preview.movie.title ? preview.movie.title : adminState.metadata.movieId || "-";
+          const mode = applied && applied.changed !== undefined ? (applied.changed ? "applied" : "no changes") : "preview ready";
+          state.textContent = `${title}: ${mode}; ${number(stats.updateFields || 0)} update fields, ${number(stats.skippedFields || 0)} skipped.`;
+        } else {
+          state.textContent = "No metadata refresh run yet.";
+        }
+      }
+      renderMetadataSources(preview);
+      renderMetadataProposal(preview, applied);
+      renderAdminMetadataJobs();
+    }
+    async function useFirstMetadataMovie() {
+      const payload = await authJson("/api/next/movies?limit=1", {headers: authHeaders()});
+      const movie = (payload.items || [])[0];
+      if (!movie || !movie.id) {
+        throw new Error("No movie found.");
+      }
+      adminState.metadata.movieId = movie.id;
+      const input = document.getElementById("adminMetadataMovieId");
+      if (input) input.value = movie.id;
+      setAdminStatus(`Selected ${movie.title || movie.id}.`, "good");
+    }
+    async function runAdminMetadata(mode) {
+      const movieId = metadataCurrentMovieId();
+      if (mode === "apply" && !confirm("Apply this metadata refresh to the selected movie?")) return;
+      setAdminStatus(`Metadata ${mode} started...`, "info");
+      const url = mode === "preview"
+        ? `/api/next/movies/${encodeURIComponent(movieId)}/metadata/preview`
+        : `/api/next/movies/${encodeURIComponent(movieId)}/metadata/refresh`;
+      const body = mode === "preview" ? "{}" : JSON.stringify({dryRun: mode !== "apply"});
+      const payload = await authJson(url, {method: "POST", body});
+      const normalized = rememberMetadataResult(payload, movieId);
+      const stats = normalized.preview ? normalized.preview.proposalStats || {} : {};
+      setAdminStatus(`Metadata ${mode} complete: ${number(stats.updateFields || 0)} update fields.`, "good");
+    }
+    function upsertMetadataJob(job) {
+      if (!job || !job.id) return;
+      const rest = (adminState.metadata.jobs || []).filter((item) => item.id !== job.id);
+      adminState.metadata.jobs = [job, ...rest].slice(0, 25);
+      renderAdminMetadataJobs();
+    }
+    async function refreshAdminMetadataJobs() {
+      const movieId = (document.getElementById("adminMetadataMovieId") || {}).value || adminState.metadata.movieId || "";
+      const suffix = movieId.trim() ? `?movieId=${encodeURIComponent(movieId.trim())}&limit=25` : "?limit=25";
+      const payload = await authJson(`/api/next/metadata/jobs${suffix}`, {headers: authHeaders()});
+      adminState.metadata.jobs = payload.jobs || [];
+      renderAdminMetadataJobs();
+      setAdminStatus("Metadata jobs loaded.", "good");
+    }
+    async function pollMetadataJob(jobId) {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 4 ? 1000 : 2000));
+        const payload = await authJson(`/api/next/jobs/${encodeURIComponent(jobId)}`, {headers: authHeaders()});
+        const job = payload.job || {};
+        upsertMetadataJob(job);
+        if (job.status === "completed") {
+          const result = job.result && job.result.result ? job.result.result : null;
+          if (result) rememberMetadataResult({metadata: result}, (job.payload || {}).movieId || job.result.movieId);
+          setAdminStatus("Metadata job completed.", "good");
+          return job;
+        }
+        if (job.status === "failed") {
+          setAdminStatus(`Metadata job failed: ${job.error || "unknown error"}.`, "bad");
+          return job;
+        }
+      }
+      setAdminStatus("Metadata job is still running. Refresh jobs for the latest status.", "info");
+    }
+    async function queueAdminMetadata(dryRun) {
+      const movieId = metadataCurrentMovieId();
+      if (!dryRun && !confirm("Queue an applying metadata refresh for this movie?")) return;
+      const payload = await authJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/jobs`, {
+        method: "POST",
+        body: JSON.stringify({dryRun})
+      });
+      if (payload.job) upsertMetadataJob(payload.job);
+      setAdminStatus(`Metadata ${dryRun ? "dry run" : "apply"} queued: ${payload.job ? payload.job.id : "-"}.`, "good");
+      if (payload.job && payload.job.id) {
+        pollMetadataJob(payload.job.id).catch((error) => setAdminStatus(error.message, "bad"));
+      }
     }
     function backupCountsLine(counts) {
       const values = counts || {};
@@ -2801,7 +3080,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     async function loadAdmin() {
       if (!isAdminUser()) return;
       setAdminStatus("Loading admin data...", "info");
-      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, ownerSettingsPayload] = await Promise.all([
+      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, ownerSettingsPayload] = await Promise.all([
         authJson("/api/next/auth/users", {headers: authHeaders()}),
         authJson("/api/next/auth/credentials", {headers: authHeaders()}),
         authJson("/api/next/auth/invite", {headers: authHeaders()}),
@@ -2810,6 +3089,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         authJson("/api/next/digital-sources", {headers: authHeaders()}).catch(() => ({items: []})),
         authJson("/api/next/backup/status", {headers: authHeaders()}).catch((error) => ({status: "error", error: error.message})),
         authJson("/api/next/jobs?jobType=plugin.execute&limit=10", {headers: authHeaders()}).catch(() => ({jobs: []})),
+        authJson("/api/next/metadata/jobs?limit=10", {headers: authHeaders()}).catch(() => ({jobs: []})),
         authState.role === "owner"
           ? authJson("/api/next/auth/owner/settings", {headers: authHeaders()})
           : Promise.resolve({settings: {}})
@@ -2823,6 +3103,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       adminState.digitalSources = digitalSourcesPayload.items || [];
       adminState.backup = backupPayload || {};
       adminState.pluginJobs = pluginJobsPayload.jobs || [];
+      adminState.metadata.jobs = metadataJobsPayload.jobs || [];
       const configPayloads = await Promise.all(adminState.plugins.map((plugin) =>
         authJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`, {headers: authHeaders()})
           .catch((error) => ({plugin, error: error.message, config: {}}))
@@ -2840,6 +3121,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAdminRbac(adminState.rbac);
       renderAdminPlugins(adminState.plugins);
       renderAdminPluginJobs();
+      renderAdminMetadata();
       renderAdminBackups(adminState.backup);
       renderAdminSummary();
       document.getElementById("adminPanel").dataset.loaded = "true";
@@ -3188,6 +3470,20 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           task = setMovieVaultReceiver(!ownerSettings.movievault_contribution_enabled);
         } else if (action === "create-invite") {
           task = createAdminInvite();
+        } else if (action === "metadata-use-first") {
+          task = useFirstMetadataMovie();
+        } else if (action === "metadata-preview") {
+          task = runAdminMetadata("preview");
+        } else if (action === "metadata-dry-run") {
+          task = runAdminMetadata("dry run");
+        } else if (action === "metadata-apply") {
+          task = runAdminMetadata("apply");
+        } else if (action === "metadata-queue-dry-run") {
+          task = queueAdminMetadata(true);
+        } else if (action === "metadata-queue-apply") {
+          task = queueAdminMetadata(false);
+        } else if (action === "metadata-jobs-refresh") {
+          task = refreshAdminMetadataJobs();
         } else if (action === "backup-refresh") {
           task = loadBackupStatus();
         } else if (action === "backup-export") {
