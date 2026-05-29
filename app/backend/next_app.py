@@ -220,7 +220,12 @@ def migration_security_backfill_required(
     source_counts: dict[str, int],
     latest: dict[str, Any] | None,
 ) -> bool:
-    if not latest or latest.get("status") != "completed" or latest_run_included_security(latest):
+    latest_supports_backfill = (
+        bool(latest)
+        and latest.get("status") == "completed"
+        and not latest_run_included_security(latest)
+    )
+    if not latest_supports_backfill and not target_has_legacy_collection_import(conn):
         return False
     source_has_security = any(
         int(source_counts.get(table) or 0) > 0
@@ -239,6 +244,29 @@ def migration_security_backfill_required(
         int(source_counts.get(source_table) or 0) > count_table(conn, target_table)
         for source_table, target_table in source_to_target
     )
+
+
+def target_has_legacy_collection_import(conn) -> bool:
+    legacy_checks = (
+        ("movies", "public_id", "legacy-movie-%"),
+        ("containers", "public_id", "legacy-%"),
+    )
+    with conn.cursor() as cur:
+        for table_name, column_name, pattern in legacy_checks:
+            if not table_exists(conn, table_name):
+                continue
+            cur.execute(
+                f"""
+                SELECT 1
+                FROM "{table_name}"
+                WHERE "{column_name}" LIKE %s
+                LIMIT 1
+                """,
+                (pattern,),
+            )
+            if cur.fetchone():
+                return True
+    return False
 
 
 def migration_run_row(row: dict[str, Any] | None) -> dict[str, Any] | None:

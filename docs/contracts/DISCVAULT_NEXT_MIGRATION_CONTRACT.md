@@ -48,3 +48,9 @@ If a beta instance already completed an older collection migration without
 security data, the readiness API may expose a security/group backfill state. That
 backfill imports missing users, passkeys and media groups for the same legacy
 source without requiring the PostgreSQL collection tables to be emptied first.
+
+When an older migration run cannot be matched by source hash, the readiness API
+may still allow this backfill if the target database clearly contains a legacy
+DiscVault import, for example `legacy-movie-*` or `legacy-*` public identifiers,
+and the target security/group counts are lower than the detected legacy source
+counts.
