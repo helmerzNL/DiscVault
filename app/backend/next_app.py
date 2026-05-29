@@ -40,6 +40,7 @@ try:
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import lookup_metadata_sources
     from .next_metadata import preview_movie_metadata
+    from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import backup_storage_dir
@@ -62,6 +63,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import lookup_metadata_sources
     from next_metadata import preview_movie_metadata
+    from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import backup_storage_dir
@@ -5820,6 +5822,98 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     }
 
 
+def set_primary_movie_media_asset(
+    conn,
+    *,
+    movie_id: UUID,
+    media_id: UUID,
+    kind: str,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if kind not in {"poster", "backdrop"}:
+        raise NextApiError("kind must be poster or backdrop", 400)
+    if not table_exists(conn, "movies") or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM movies WHERE id=%s", (movie_id,))
+        if not cur.fetchone():
+            raise NextApiError("Movie not found", 404)
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='movie'
+              AND em.entity_id=%s
+              AND em.media_id=%s
+              AND ma.kind=%s
+            """,
+            (movie_id, media_id, kind),
+        )
+        media = cur.fetchone()
+        if not media:
+            raise NextApiError("Media asset is not linked to this movie", 404)
+        cur.execute(
+            """
+            UPDATE entity_media em
+            SET is_primary=false,
+                sort_order=GREATEST(em.sort_order, 1)
+            FROM media_assets ma
+            WHERE ma.id = em.media_id
+              AND em.entity_type='movie'
+              AND em.entity_id=%s
+              AND ma.kind=%s
+              AND em.is_primary=true
+            """,
+            (movie_id, kind),
+        )
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET is_primary=true,
+                sort_order=0
+            WHERE entity_type='movie'
+              AND entity_id=%s
+              AND media_id=%s
+            """,
+            (movie_id, media_id),
+        )
+        cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+
+    revision = record_sync_change(
+        conn,
+        movie_id,
+        {
+            "movieId": str(movie_id),
+            "operation": "movie.media_primary_set",
+            "kind": kind,
+            "mediaId": str(media_id),
+            "actor": actor_job_payload(actor or {}) if actor else None,
+        },
+    )
+    media["is_primary"] = True
+    media["sort_order"] = 0
+    media["url"] = media_asset_public_url(media)
+    return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
+
+
 def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
     if not table_exists(conn, "containers"):
         return None
@@ -7162,6 +7256,28 @@ def register_routes(flask_app: Flask) -> None:
         if not detail:
             raise NextApiError("Movie not found", 404)
         return response({"status": "ok", "detail": detail})
+
+    @flask_app.post("/api/next/movies/<movie_id>/media/primary")
+    def movie_media_primary(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media selection body must be an object", 400)
+        media_uuid = parse_uuid(body.get("mediaId") or body.get("media_id") or body.get("mediaAssetId"), "mediaId")
+        if not media_uuid:
+            raise NextApiError("mediaId is required", 400)
+        kind = clean_text(body.get("kind") or body.get("role")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            with conn.transaction():
+                result = set_primary_movie_media_asset(
+                    conn,
+                    movie_id=movie_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    actor=actor,
+                )
+        return response({"status": "ok", **result})
 
     @flask_app.post("/api/next/metadata/lookup")
     def metadata_lookup():
