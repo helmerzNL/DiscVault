@@ -571,6 +571,79 @@ def migration_report(conn) -> dict[str, Any]:
     }
 
 
+def startup_status_payload(conn) -> dict[str, Any]:
+    readiness = migration_readiness(conn)
+    auth_effective = next_auth_effective_enabled(conn, table_exists)
+    user_count = count_table(conn, "users")
+    credential_count = count_table(conn, "passkey_credentials")
+    auth_ready = user_count > 0 and credential_count > 0
+    user = next_auth_current_user(conn) if auth_effective else None
+    role = next_user_primary_role(conn, user["id"]) if user else None
+    permissions = next_user_permission_keys(conn, user["id"]) if user else set()
+    migration_blocks_collection = readiness["state"] not in {"already_completed", "not_required"}
+    can_manage_migration = (
+        not auth_effective
+        or (
+            bool(user)
+            and (role == "owner" or "collection.import" in permissions)
+        )
+    )
+
+    phase = "ready"
+    message = "DiscVault Next is ready."
+    if readiness["migrations"]["state"] != "ready":
+        phase = "schema_blocked"
+        message = "PostgreSQL migrations must finish before DiscVault Next can start."
+    elif migration_blocks_collection:
+        if readiness["state"] == "running":
+            phase = "migration_running"
+            message = "Legacy migration is running."
+        elif auth_effective and not user:
+            phase = "sign_in_required"
+            message = "Sign in with a passkey to continue setup."
+        elif auth_effective and user and not can_manage_migration:
+            phase = "migration_pending_non_admin"
+            message = "DiscVault Next is waiting for an owner or administrator to complete migration."
+        else:
+            phase = "migration_required"
+            message = "Legacy DiscVault data is ready to migrate."
+    elif not auth_ready:
+        phase = "owner_setup"
+        message = "Create the first owner passkey to finish setup."
+
+    return {
+        "phase": phase,
+        "ready": phase == "ready",
+        "message": message,
+        "canUseCollection": phase == "ready",
+        "canStartMigration": bool(readiness["canStart"] and can_manage_migration),
+        "auth": {
+            "effective": auth_effective,
+            "ready": auth_ready,
+            "setupRequired": not auth_ready,
+            "authenticated": bool(user),
+            "role": role,
+            "username": user.get("username") if user else None,
+            "userCount": user_count,
+            "credentialCount": credential_count,
+        },
+        "migration": {
+            "state": readiness["state"],
+            "canStart": readiness["canStart"],
+            "requiresConfirmation": readiness["requiresConfirmation"],
+            "requiredActions": readiness["requiredActions"],
+            "activeJob": readiness["activeJob"],
+            "latestRun": readiness["latestRun"],
+            "legacyData": {
+                "found": readiness["legacyData"]["found"],
+                "readable": readiness["legacyData"]["readable"],
+                "sourceCounts": readiness["legacyData"]["sourceCounts"],
+                "mediaExtensions": readiness["legacyData"]["mediaExtensions"],
+            },
+        },
+    }
+
+
 def migration_dashboard_html() -> str:
     return """<!doctype html>
 <html lang="en">
@@ -1688,6 +1761,32 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .auth-status.good { color: var(--green); }
     .auth-status.bad { color: var(--red); }
     .auth-status.info { color: var(--blue); }
+    .startup-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr);
+      gap: 14px;
+      align-items: center;
+      background: rgba(88,166,255,.08);
+      border: 1px solid rgba(88,166,255,.28);
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 16px;
+    }
+    .startup-copy {
+      min-width: 0;
+    }
+    .startup-copy strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 5px;
+    }
+    .startup-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
     .admin-panel {
       background: var(--surface);
       border: 1px solid var(--line);
@@ -1913,6 +2012,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       main { width: min(100vw - 20px, 760px); padding-top: 18px; }
       header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
       .auth-panel { grid-template-columns: 1fr; }
+      .startup-panel { grid-template-columns: 1fr; }
+      .startup-actions { justify-content: flex-start; }
       .admin-grid { grid-template-columns: 1fr; }
       .admin-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .admin-plugin-config { grid-template-columns: 1fr; }
@@ -2004,6 +2105,19 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <button type="button" id="authLogoutButton" data-auth-action="logout">Sign out</button>
         </div>
         <div class="auth-status" id="authStatusLine"></div>
+      </div>
+    </section>
+
+    <section class="startup-panel hidden" id="startupPanel">
+      <div class="startup-copy">
+        <strong id="startupTitle">Setup</strong>
+        <p id="startupDescription">Checking startup state...</p>
+        <p class="muted" id="startupMeta"></p>
+        <div class="auth-status" id="startupStatusLine"></div>
+      </div>
+      <div class="startup-actions">
+        <button type="button" id="startupMigrationButton" data-startup-action="migration">Migration</button>
+        <button type="button" id="startupStartMigrationButton" data-startup-action="start-migration">Start Migration</button>
       </div>
     </section>
 
@@ -2231,6 +2345,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     };
     var authToken = localStorage.getItem("dv_next_token") || "";
     var authState = {};
+    var startupState = {};
     var ownerSettings = {};
     var adminState = {
       users: [],
@@ -2399,6 +2514,67 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         setAuthStatus(error.message, "bad");
       }
     }
+    function setStartupStatus(message, tone) {
+      const node = document.getElementById("startupStatusLine");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `auth-status ${tone || ""}`.trim();
+    }
+    function startupTitle(phase) {
+      const titles = {
+        owner_setup: "First owner",
+        migration_required: "Migration required",
+        migration_running: "Migration running",
+        migration_pending_non_admin: "Migration pending",
+        schema_blocked: "Schema update required",
+        sign_in_required: "Sign in required",
+        ready: "Ready"
+      };
+      return titles[phase] || "Setup";
+    }
+    function renderStartupStatus() {
+      const panel = document.getElementById("startupPanel");
+      if (!panel) return;
+      const startup = startupState.startup || startupState || {};
+      const phase = startup.phase || "ready";
+      panel.classList.toggle("hidden", phase === "ready");
+      if (phase === "ready") return;
+      document.getElementById("startupTitle").textContent = startupTitle(phase);
+      document.getElementById("startupDescription").textContent = startup.message || "DiscVault Next is preparing startup.";
+      const migration = startup.migration || {};
+      const auth = startup.auth || {};
+      const sourceCounts = (migration.legacyData && migration.legacyData.sourceCounts) || {};
+      const actionText = (migration.requiredActions || []).join(" ");
+      document.getElementById("startupMeta").textContent = [
+        migration.state ? `migration: ${migration.state}` : "",
+        Number(sourceCounts.movies || 0) ? `${number(sourceCounts.movies)} legacy movies` : "",
+        Number(sourceCounts.groups || 0) ? `${number(sourceCounts.groups)} legacy groups` : "",
+        auth.role ? `signed in as ${auth.role}` : "",
+        actionText
+      ].filter(Boolean).join(" / ");
+      document.getElementById("startupStartMigrationButton").classList.toggle("hidden", !startup.canStartMigration);
+      document.getElementById("startupMigrationButton").classList.toggle("hidden", !migration.state);
+      setStartupStatus(phase === "migration_pending_non_admin" ? "Ask the owner or administrator to finish migration." : "", phase === "schema_blocked" ? "bad" : "info");
+    }
+    async function refreshStartupStatus() {
+      startupState = await authJson("/api/next/startup/status", {headers: authHeaders()});
+      renderStartupStatus();
+      return startupState.startup || startupState || {};
+    }
+    async function startStartupMigration() {
+      const button = document.getElementById("startupStartMigrationButton");
+      button.disabled = true;
+      setStartupStatus("Starting migration...", "info");
+      try {
+        await authJson("/api/next/migration/start", {method: "POST", body: "{}"});
+        setStartupStatus("Migration queued. Refreshing status...", "good");
+        await refreshStartupStatus();
+      } catch (error) {
+        setStartupStatus(error.message, "bad");
+      } finally {
+        button.disabled = false;
+      }
+    }
     async function registerOwnerPasskey() {
       setAuthStatus("Create owner passkey clicked.", "info");
       const unavailable = webauthnUnavailableReason();
@@ -2448,7 +2624,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         setAuthStatus("Passkey created. You are signed in.", "good");
         await refreshAuthStatus();
-        await loadCollection();
+        await resumeStartupOrCollection();
       } catch (error) {
         setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
       } finally {
@@ -2514,7 +2690,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         setAuthStatus("Account created. You are signed in.", "good");
         await refreshAuthStatus();
-        await loadCollection();
+        await resumeStartupOrCollection();
       } catch (error) {
         setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
       } finally {
@@ -2563,7 +2739,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         setAuthStatus("Signed in.", "good");
         await refreshAuthStatus();
-        await loadCollection();
+        await resumeStartupOrCollection();
       } catch (error) {
         setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
       } finally {
@@ -2598,6 +2774,22 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           if (action === "join") registerInvitedPasskey().catch(reportClientError);
           if (action === "login") loginPasskey().catch(reportClientError);
           if (action === "logout") logoutPasskey().catch(reportClientError);
+        });
+      });
+    }
+    function bindStartupActions() {
+      document.querySelectorAll("[data-startup-action]").forEach((button) => {
+        if (button.dataset.bound === "true") return;
+        button.dataset.bound = "true";
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          const action = button.dataset.startupAction;
+          if (action === "migration") {
+            window.location.href = "/api/next/migration";
+          }
+          if (action === "start-migration") {
+            startStartupMigration().catch(reportClientError);
+          }
         });
       });
     }
@@ -3971,28 +4163,18 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("resultCount").textContent = authState.authenticated ? "Blocked" : "Sign in required";
       setClientStatus(message);
     }
-    function migrationBlocksNonAdmin(status) {
-      if (!status || !status.state) return false;
-      return !["already_completed", "not_required"].includes(status.state);
-    }
-    function migrationBlockedMessage(status) {
-      if (status && status.state === "running") {
-        return "DiscVault Next is still migrating the legacy library. Please wait for the owner to finish setup.";
+    async function resumeStartupOrCollection() {
+      const startup = await refreshStartupStatus();
+      if (!startup.canUseCollection) {
+        clearProtectedCollection(startup.message || "DiscVault Next setup is not complete.");
+        return;
       }
-      return "DiscVault Next is waiting for the owner to complete the legacy migration. You cannot use the collection until that is finished.";
-    }
-    async function migrationGateStatus() {
-      if (!authState.auth_enabled || !authState.authenticated) return null;
-      try {
-        return await authJson("/api/next/migration/status", {headers: authHeaders()});
-      } catch (error) {
-        console.warn("Migration status check failed", error);
-        return null;
-      }
+      await loadCollection();
     }
     async function bootCollection() {
       setClientStatus("Client script started.");
       bindAuthButtons();
+      bindStartupActions();
       bindCollectionLinks();
       bindAdminActions();
       await refreshAuthStatus();
@@ -4000,12 +4182,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         clearProtectedCollection("Sign in with your passkey to load the collection.");
         return;
       }
-      const migrationStatus = await migrationGateStatus();
-      if (authState.authenticated && !isAdminUser() && migrationBlocksNonAdmin(migrationStatus)) {
-        clearProtectedCollection(migrationBlockedMessage(migrationStatus));
-        return;
-      }
-      loadCollection().catch((error) => {
+      resumeStartupOrCollection().catch((error) => {
         if (error.status === 401) {
           clearProtectedCollection("Sign in with your passkey to load the collection.");
           return;
@@ -7317,6 +7494,11 @@ def register_routes(flask_app: Flask) -> None:
             },
             200 if is_ready else 503,
         )
+
+    @flask_app.get("/api/next/startup/status")
+    def startup_status():
+        with connect() as conn:
+            return response({"status": "ok", "startup": startup_status_payload(conn)})
 
     @flask_app.get("/api/next/stats")
     def stats():
