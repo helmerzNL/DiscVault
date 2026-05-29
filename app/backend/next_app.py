@@ -89,7 +89,9 @@ TARGET_DATA_TABLES = (
     "container_movies",
     "collection_items",
     "media_assets",
-    "users",
+    "media_groups",
+    "media_group_members",
+    "media_group_movies",
 )
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -201,6 +203,42 @@ def target_data_counts(conn) -> dict[str, int]:
 
 def target_database_empty(counts: dict[str, int]) -> bool:
     return all(value == 0 for value in counts.values())
+
+
+def latest_run_included_security(latest: dict[str, Any] | None) -> bool:
+    if not latest:
+        return False
+    manifest = latest.get("exportManifest") or latest.get("export_manifest") or {}
+    options = manifest.get("options") if isinstance(manifest, dict) else {}
+    if not isinstance(options, dict):
+        return False
+    return bool(options.get("include_security") or options.get("includeSecurity"))
+
+
+def migration_security_backfill_required(
+    conn,
+    source_counts: dict[str, int],
+    latest: dict[str, Any] | None,
+) -> bool:
+    if not latest or latest.get("status") != "completed" or latest_run_included_security(latest):
+        return False
+    source_has_security = any(
+        int(source_counts.get(table) or 0) > 0
+        for table in ("users", "credentials", "groups", "user_groups", "movie_groups")
+    )
+    if not source_has_security:
+        return False
+    source_to_target = (
+        ("users", "users"),
+        ("credentials", "passkey_credentials"),
+        ("groups", "media_groups"),
+        ("user_groups", "media_group_members"),
+        ("movie_groups", "media_group_movies"),
+    )
+    return any(
+        int(source_counts.get(source_table) or 0) > count_table(conn, target_table)
+        for source_table, target_table in source_to_target
+    )
 
 
 def migration_run_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -357,7 +395,7 @@ def sqlite_readiness_probe(data_dir: Path, sqlite_db: Path) -> dict[str, Any]:
         "mediaExtensions": {},
         "mediaMigrationMode": "reference_existing_files",
         "options": {
-            "includeSecurity": False,
+            "includeSecurity": True,
             "includePersonal": False,
             "importMediaReferences": True,
         },
@@ -372,7 +410,7 @@ def sqlite_readiness_probe(data_dir: Path, sqlite_db: Path) -> dict[str, Any]:
         importer = NextImporter(
             sqlite_db,
             data_dir,
-            include_security=False,
+            include_security=True,
             include_personal=False,
             import_media=True,
             owner_username=None,
@@ -408,6 +446,11 @@ def migration_readiness(conn) -> dict[str, Any]:
     active_job = active_migration_job(conn, source_hash)
     latest = migration_run_row(latest_run)
     active = job_row(active_job) if active_job else None
+    security_backfill_required = migration_security_backfill_required(
+        conn,
+        source.get("sourceCounts") or {},
+        latest,
+    )
     required_actions: list[str] = []
 
     if migrations["state"] != "ready":
@@ -422,6 +465,9 @@ def migration_readiness(conn) -> dict[str, Any]:
     elif not source["readable"]:
         state = "blocked_source_unreadable"
         required_actions.append("Fix the legacy SQLite database path or file permissions.")
+    elif security_backfill_required:
+        state = "ready_for_security_backfill"
+        required_actions.append("Import legacy users, passkeys and media groups for the completed collection migration.")
     elif latest and latest["status"] == "completed":
         state = "already_completed"
         required_actions.append("A completed migration for this source database already exists.")
@@ -432,7 +478,7 @@ def migration_readiness(conn) -> dict[str, Any]:
         state = "ready_for_confirmation"
         required_actions.append("Confirm the migration in the UI or call the migration start endpoint.")
 
-    can_start = state == "ready_for_confirmation"
+    can_start = state in {"ready_for_confirmation", "ready_for_security_backfill"}
     return {
         "state": state,
         "canStart": can_start,
@@ -1016,6 +1062,7 @@ def collection_dashboard_snapshot(conn) -> dict[str, Any]:
         "people": count_table(conn, "people"),
         "movieCredits": count_table(conn, "movie_credits"),
         "containers": count_table(conn, "containers"),
+        "mediaGroups": count_table(conn, "media_groups"),
         "mediaAssets": count_table(conn, "media_assets"),
         "metadataPlugins": count_table(conn, "metadata_plugins"),
         "digitalMediaSources": count_table(conn, "digital_media_sources"),
@@ -3891,8 +3938,27 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderMovies();
       renderContainers();
       document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
-      document.getElementById("resultCount").textContent = "Sign in required";
+      document.getElementById("resultCount").textContent = authState.authenticated ? "Blocked" : "Sign in required";
       setClientStatus(message);
+    }
+    function migrationBlocksNonAdmin(status) {
+      if (!status || !status.state) return false;
+      return !["already_completed", "not_required"].includes(status.state);
+    }
+    function migrationBlockedMessage(status) {
+      if (status && status.state === "running") {
+        return "DiscVault Next is still migrating the legacy library. Please wait for the owner to finish setup.";
+      }
+      return "DiscVault Next is waiting for the owner to complete the legacy migration. You cannot use the collection until that is finished.";
+    }
+    async function migrationGateStatus() {
+      if (!authState.auth_enabled || !authState.authenticated) return null;
+      try {
+        return await authJson("/api/next/migration/status", {headers: authHeaders()});
+      } catch (error) {
+        console.warn("Migration status check failed", error);
+        return null;
+      }
     }
     async function bootCollection() {
       setClientStatus("Client script started.");
@@ -3902,6 +3968,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       await refreshAuthStatus();
       if (authState.auth_enabled && !authState.authenticated) {
         clearProtectedCollection("Sign in with your passkey to load the collection.");
+        return;
+      }
+      const migrationStatus = await migrationGateStatus();
+      if (authState.authenticated && !isAdminUser() && migrationBlocksNonAdmin(migrationStatus)) {
+        clearProtectedCollection(migrationBlockedMessage(migrationStatus));
         return;
       }
       loadCollection().catch((error) => {
@@ -7225,6 +7296,7 @@ def register_routes(flask_app: Flask) -> None:
                 "people": count_table(conn, "people"),
                 "movieCredits": count_table(conn, "movie_credits"),
                 "containers": count_table(conn, "containers"),
+                "mediaGroups": count_table(conn, "media_groups"),
                 "mediaAssets": count_table(conn, "media_assets"),
                 "metadataPlugins": count_table(conn, "metadata_plugins"),
                 "digitalMediaSources": count_table(conn, "digital_media_sources"),
@@ -8118,7 +8190,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Migration request body must be an object", 400)
 
-        include_security = parse_bool_value(body.get("includeSecurity", body.get("include_security")), default=False)
+        include_security = parse_bool_value(body.get("includeSecurity", body.get("include_security")), default=True)
         include_personal = parse_bool_value(body.get("includePersonal", body.get("include_personal")), default=False)
         if include_personal and not include_security:
             raise NextApiError("includePersonal requires includeSecurity", 400)
@@ -8127,6 +8199,7 @@ def register_routes(flask_app: Flask) -> None:
         import_media_references = parse_bool_value(import_media_references, default=True)
 
         with connect() as conn:
+            actor = require_next_permission(conn, "collection.import")
             readiness = migration_readiness(conn)
             active = readiness.get("activeJob")
             if active:
@@ -8146,6 +8219,7 @@ def register_routes(flask_app: Flask) -> None:
                 "ownerUsername": owner_username,
                 "importMediaReferences": import_media_references,
                 "mediaMigrationMode": "reference_existing_files",
+                "requestedBy": actor_job_payload(actor),
             }
             with conn.transaction():
                 job = create_background_job(conn, job_type=MIGRATION_JOB_TYPE, payload=payload)
