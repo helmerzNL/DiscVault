@@ -37,6 +37,10 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
+    from .next_backup import BACKUP_RESTORE_JOB_TYPE
+    from .next_backup import backup_storage_dir
+    from .next_backup import export_functional_backup
+    from .next_backup import validate_backup_zip
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_effective_enabled
     from .next_auth import register_next_auth_routes
@@ -51,6 +55,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
+    from next_backup import BACKUP_RESTORE_JOB_TYPE
+    from next_backup import backup_storage_dir
+    from next_backup import export_functional_backup
+    from next_backup import validate_backup_zip
     from next_auth import next_auth_current_user
     from next_auth import next_auth_effective_enabled
     from next_auth import register_next_auth_routes
@@ -4249,6 +4257,74 @@ def require_next_admin_user(conn) -> dict[str, Any]:
     return user
 
 
+def next_user_permission_keys(conn, user_id: UUID | str) -> set[str]:
+    if not table_exists(conn, "user_roles") or not table_exists(conn, "role_permissions"):
+        return set()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT rp.permission_key
+            FROM user_roles ur
+            JOIN role_permissions rp ON rp.role_id = ur.role_id
+            WHERE ur.user_id=%s
+            """,
+            (user_id,),
+        )
+        return {str(row["permission_key"]) for row in cur.fetchall()}
+
+
+def require_next_permission(conn, permission_key: str) -> dict[str, Any]:
+    if not next_auth_effective_enabled(conn, table_exists):
+        return {
+            "id": None,
+            "username": "system",
+            "role": "owner",
+            "permissions": ["*"],
+        }
+    user = next_auth_current_user(conn)
+    if not user:
+        raise NextApiError("Unauthorized", 401)
+    role = next_user_primary_role(conn, user["id"])
+    permissions = next_user_permission_keys(conn, user["id"])
+    if role != "owner" and permission_key not in permissions:
+        raise NextApiError(f"Permission required: {permission_key}", 403)
+    user["role"] = role
+    user["permissions"] = sorted(permissions)
+    return user
+
+
+def require_any_next_permission(conn, permission_keys: tuple[str, ...]) -> dict[str, Any]:
+    if not next_auth_effective_enabled(conn, table_exists):
+        return {
+            "id": None,
+            "username": "system",
+            "role": "owner",
+            "permissions": ["*"],
+        }
+    user = next_auth_current_user(conn)
+    if not user:
+        raise NextApiError("Unauthorized", 401)
+    role = next_user_primary_role(conn, user["id"])
+    permissions = next_user_permission_keys(conn, user["id"])
+    if role != "owner" and not permissions.intersection(permission_keys):
+        raise NextApiError(f"One of these permissions is required: {', '.join(permission_keys)}", 403)
+    user["role"] = role
+    user["permissions"] = sorted(permissions)
+    return user
+
+
+def uploaded_backup_file_path(destination_dir: Path) -> Path:
+    upload = request.files.get("file") or request.files.get("backup")
+    if not upload or not upload.filename:
+        raise NextApiError("Upload a backup ZIP as multipart field 'file'", 400)
+    if not upload.filename.lower().endswith(".zip"):
+        raise NextApiError("Backup upload must be a .zip file", 400)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    target = destination_dir / f"{uuid.uuid4()}.zip"
+    upload.save(target)
+    return target
+
+
 def plugin_secret_key(plugin_id: str, secret_name: str) -> str:
     name = str(secret_name or "").strip()
     if not PLUGIN_SECRET_NAME_PATTERN.match(name):
@@ -6466,6 +6542,168 @@ def register_routes(flask_app: Flask) -> None:
                 row = cur.fetchone()
         if not row:
             raise NextApiError("Job not found", 404)
+        return response({"status": "ok", "job": job_row(row)})
+
+    @flask_app.get("/api/next/backup/status")
+    def backup_status():
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.export_functional", "collection.import", "admin.restore_functional", "admin.view_jobs"),
+            )
+            counts = {table: count_table(conn, table) for table in TARGET_DATA_TABLES if table != "users"}
+            counts["entity_media"] = count_table(conn, "entity_media")
+            counts["movie_identifiers"] = count_table(conn, "movie_identifiers")
+            counts["container_identifiers"] = count_table(conn, "container_identifiers")
+            latest_jobs = []
+            if table_exists(conn, "background_jobs"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            id,
+                            job_type,
+                            status,
+                            requested_by,
+                            payload,
+                            result,
+                            error,
+                            created_at,
+                            started_at,
+                            finished_at
+                        FROM background_jobs
+                        WHERE job_type=%s
+                        ORDER BY created_at DESC
+                        LIMIT 5
+                        """,
+                        (BACKUP_RESTORE_JOB_TYPE,),
+                    )
+                    latest_jobs = [job_row(row) for row in cur.fetchall()]
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        return response(
+            {
+                "status": "ok",
+                "scope": "functional_collection",
+                "actor": {"role": actor.get("role"), "username": actor.get("username")},
+                "dataDir": str(data_dir),
+                "backupDir": str(backup_dir),
+                "counts": counts,
+                "latestJobs": latest_jobs,
+            }
+        )
+
+    @flask_app.get("/api/next/backup/export")
+    def backup_export():
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        file_name = f"discvault-next-functional-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.zip"
+        output_path = backup_dir / file_name
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.export_functional")
+            summary = export_functional_backup(
+                conn,
+                output_path,
+                data_dir=data_dir,
+                generator={
+                    "service": "DiscVault Next",
+                    "version": build_version(),
+                    "sha": build_sha(),
+                },
+                requested_by=actor,
+            )
+        result = send_file(
+            output_path,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=file_name,
+            conditional=False,
+        )
+        result.headers["X-DiscVault-Backup-Sha256"] = summary["sha256"]
+        result.headers["X-DiscVault-Backup-Scope"] = "functional_collection"
+        return result
+
+    @flask_app.post("/api/next/backup/validate")
+    def backup_validate():
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        with connect() as conn:
+            require_any_next_permission(conn, ("collection.import", "admin.restore_functional"))
+        upload_path = uploaded_backup_file_path(backup_dir / "uploads" / "validate")
+        report = validate_backup_zip(upload_path)
+        status_code = 200 if report.get("valid") else 422
+        return response(
+            {
+                "status": "ok" if report.get("valid") else "error",
+                "report": report,
+            },
+            status_code,
+        )
+
+    @flask_app.post("/api/next/backup/restore")
+    def backup_restore():
+        confirmation = request.form.get("confirm") or request.args.get("confirm")
+        if confirmation != "restore-functional-collection":
+            raise NextApiError(
+                "Restore requires confirm=restore-functional-collection",
+                400,
+            )
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        with connect() as conn:
+            actor = require_next_permission(conn, "admin.restore_functional")
+        upload_path = uploaded_backup_file_path(backup_dir / "uploads" / "restore")
+        report = validate_backup_zip(upload_path)
+        if not report.get("valid"):
+            return response({"status": "error", "report": report}, 422)
+        with connect() as conn:
+            with conn.transaction():
+                job = create_background_job(
+                    conn,
+                    job_type=BACKUP_RESTORE_JOB_TYPE,
+                    payload={
+                        "backupZip": str(upload_path),
+                        "dataDir": str(data_dir),
+                        "validatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                        "requestedBy": {
+                            "id": str(actor.get("id")) if actor.get("id") else None,
+                            "username": actor.get("username"),
+                            "role": actor.get("role"),
+                        },
+                        "validation": report,
+                    },
+                )
+        return response({"status": "ok", "job": job, "report": report}, 201)
+
+    @flask_app.get("/api/next/backup/jobs/<job_id>")
+    def backup_job(job_id: str):
+        job_uuid = parse_uuid(job_id, "jobId")
+        with connect() as conn:
+            require_any_next_permission(conn, ("admin.restore_functional", "admin.view_jobs"))
+            if not table_exists(conn, "background_jobs"):
+                raise NextApiError("Background job table is not available", 503)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        job_type,
+                        status,
+                        requested_by,
+                        payload,
+                        result,
+                        error,
+                        created_at,
+                        started_at,
+                        finished_at
+                    FROM background_jobs
+                    WHERE id=%s AND job_type=%s
+                    """,
+                    (job_uuid, BACKUP_RESTORE_JOB_TYPE),
+                )
+                row = cur.fetchone()
+        if not row:
+            raise NextApiError("Backup restore job not found", 404)
         return response({"status": "ok", "job": job_row(row)})
 
     @flask_app.get("/api/next/sync/state")

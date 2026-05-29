@@ -28,11 +28,17 @@ try:
     from .next_import import NextImporter
     from .next_import import clean_text
     from .next_plugin_runtime import run_plugin_entrypoint
+    from .next_backup import BACKUP_RESTORE_JOB_TYPE
+    from .next_backup import BackupError as NextBackupError
+    from .next_backup import restore_functional_backup
 except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
     from next_import import clean_text
     from next_plugin_runtime import run_plugin_entrypoint
+    from next_backup import BACKUP_RESTORE_JOB_TYPE
+    from next_backup import BackupError as NextBackupError
+    from next_backup import restore_functional_backup
 
 
 STOP = False
@@ -177,7 +183,35 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == "plugin.execute":
         return process_plugin_execute(payload, worker_id)
 
+    if job_type == BACKUP_RESTORE_JOB_TYPE:
+        return process_functional_restore(payload, worker_id)
+
     raise RuntimeError(f"Unsupported job type: {job_type}")
+
+
+def process_functional_restore(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    backup_zip = Path(str(payload.get("backupZip") or "")).expanduser()
+    data_dir = Path(str(payload.get("dataDir") or "/data")).expanduser()
+    if not backup_zip.exists() or not backup_zip.is_file():
+        raise RuntimeError(f"Backup ZIP not found: {backup_zip}")
+    if not data_dir.exists() or not data_dir.is_dir():
+        raise RuntimeError(f"DiscVault data directory not found: {data_dir}")
+    try:
+        with connect() as conn:
+            summary = restore_functional_backup(conn, backup_zip, data_dir=data_dir)
+    except NextBackupError as exc:
+        raise RuntimeError(str(exc)) from exc
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": BACKUP_RESTORE_JOB_TYPE,
+        "phase": "completed",
+        "source": {
+            "backupZip": str(backup_zip),
+            "dataDir": str(data_dir),
+        },
+        "summary": summary,
+    }
 
 
 def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
