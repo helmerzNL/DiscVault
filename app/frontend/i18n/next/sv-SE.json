@@ -49,6 +49,17 @@
   "migration.dataDirectory": "Datakatalog",
   "migration.databaseHash": "Databashash",
   "migration.groups": "Grupper",
+  "migration.introBadge": "Migrering kr\u00e4vs",
+  "migration.introContinue": "Forts\u00e4tt till migreringsguiden",
+  "migration.introLead": "DiscVault Next anv\u00e4nder en f\u00f6rb\u00e4ttrad PostgreSQL-databasmodell. Innan du kan anv\u00e4nda den nya versionen m\u00e5ste dina befintliga DiscVault-data kontrolleras och importeras noggrant.",
+  "migration.introOnlyWhenNeeded": "Den h\u00e4r sidan visas bara n\u00e4r denna DiscVault-milj\u00f6 fortfarande beh\u00f6ver migreras.",
+  "migration.introStepImport": "Importera",
+  "migration.introStepImportText": "Filmer, samlingar, box-sets, anv\u00e4ndare, grupper och passkeys flyttas till den nya databasen.",
+  "migration.introStepReview": "Granska",
+  "migration.introStepReviewText": "F\u00f6rst inspekterar vi legacy-datak\u00e4llan och visar vad som kan importeras.",
+  "migration.introStepSafe": "S\u00e4ker start",
+  "migration.introStepSafeText": "Befintliga affischer, bakgrunder och profilbilder ligger kvar i filsystemet och refereras fr\u00e5n sin nuvarande plats.",
+  "migration.introTitle": "Vi guidar dig genom den h\u00e4r migreringen",
   "migration.images": "Bilder",
   "migration.importSource": "Importk\u00e4lla",
   "migration.importSourceHelp": "V\u00e4lj k\u00e4llan som DiscVault Next ska kontrollera och importera fr\u00e5n.",
@@ -153,5 +164,6 @@
   "startup.checking": "Kontrollerar startstatus...",
   "startup.migrationDetails": "Migreringsdetaljer",
   "startup.setup": "Inställning",
-  "startup.startMigration": "Starta migrering"
+  "startup.startMigration": "Starta migrering",
+  "startup.openMigrationGuide": "\u00d6ppna migreringsguide"
 }

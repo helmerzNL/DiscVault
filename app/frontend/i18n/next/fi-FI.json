@@ -49,6 +49,17 @@
   "migration.dataDirectory": "Datakansio",
   "migration.databaseHash": "Tietokantahajautus",
   "migration.groups": "Ryhm\u00e4t",
+  "migration.introBadge": "Siirto vaaditaan",
+  "migration.introContinue": "Jatka migraatiowizardiin",
+  "migration.introLead": "DiscVault Next k\u00e4ytt\u00e4\u00e4 parannettua PostgreSQL-tietokantamallia. Ennen uuden version k\u00e4ytt\u00f6\u00e4 olemassa oleva DiscVault-data on tarkistettava ja tuotava huolellisesti.",
+  "migration.introOnlyWhenNeeded": "T\u00e4m\u00e4 sivu n\u00e4ytet\u00e4\u00e4n vain, kun t\u00e4m\u00e4 DiscVault-ymp\u00e4rist\u00f6 tarvitsee viel\u00e4 migraation.",
+  "migration.introStepImport": "Tuo",
+  "migration.introStepImportText": "Elokuvat, kokoelmat, box-setit, k\u00e4ytt\u00e4j\u00e4t, ryhm\u00e4t ja passkeyt siirret\u00e4\u00e4n uuteen tietokantaan.",
+  "migration.introStepReview": "Tarkista",
+  "migration.introStepReviewText": "Tarkistamme ensin legacy-datal\u00e4hteen ja n\u00e4yt\u00e4mme, mit\u00e4 voidaan tuoda.",
+  "migration.introStepSafe": "Turvallinen aloitus",
+  "migration.introStepSafeText": "Olemassa olevat posterit, taustakuvat ja profiilikuvat pysyv\u00e4t tiedostoj\u00e4rjestelm\u00e4ss\u00e4 ja niihin viitataan nykyisest\u00e4 sijainnista.",
+  "migration.introTitle": "Opastamme sinut t\u00e4m\u00e4n migraation l\u00e4pi",
   "migration.images": "Kuvat",
   "migration.importSource": "Tuontil\u00e4hde",
   "migration.importSourceHelp": "Valitse l\u00e4hde, jonka DiscVault Next tarkistaa ja tuo.",
@@ -153,5 +164,6 @@
   "startup.checking": "Tarkistetaan käynnistystilaa...",
   "startup.migrationDetails": "Migraation tiedot",
   "startup.setup": "Asetukset",
-  "startup.startMigration": "Aloita migraatio"
+  "startup.startMigration": "Aloita migraatio",
+  "startup.openMigrationGuide": "Avaa migraatio-opas"
 }

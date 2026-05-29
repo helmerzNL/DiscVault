@@ -49,6 +49,17 @@
   "migration.dataDirectory": "Datamappe",
   "migration.databaseHash": "Database-hash",
   "migration.groups": "Grupper",
+  "migration.introBadge": "Migrering kr\u00e6ves",
+  "migration.introContinue": "Forts\u00e6t til migreringsguiden",
+  "migration.introLead": "DiscVault Next bruger en forbedret PostgreSQL-databasemodel. F\u00f8r du kan bruge den nye version, skal dine eksisterende DiscVault-data kontrolleres og importeres omhyggeligt.",
+  "migration.introOnlyWhenNeeded": "Denne side vises kun, n\u00e5r dette DiscVault-milj\u00f8 stadig skal migreres.",
+  "migration.introStepImport": "Importer",
+  "migration.introStepImportText": "Film, samlinger, box-sets, brugere, grupper og passkeys flyttes til den nye database.",
+  "migration.introStepReview": "Gennemg\u00e5",
+  "migration.introStepReviewText": "F\u00f8rst kontrollerer vi legacy-datakilden og viser, hvad der kan importeres.",
+  "migration.introStepSafe": "Sikker start",
+  "migration.introStepSafeText": "Eksisterende plakater, baggrunde og profilbilleder bliver p\u00e5 filsystemet og refereres fra deres nuv\u00e6rende placering.",
+  "migration.introTitle": "Vi guider dig gennem denne migrering",
   "migration.images": "Billeder",
   "migration.importSource": "Importkilde",
   "migration.importSourceHelp": "V\u00e6lg kilden, som DiscVault Next skal kontrollere og importere fra.",
@@ -153,5 +164,6 @@
   "startup.checking": "Kontrollerer opstartstatus...",
   "startup.migrationDetails": "Migreringsdetaljer",
   "startup.setup": "Opsætning",
-  "startup.startMigration": "Start migrering"
+  "startup.startMigration": "Start migrering",
+  "startup.openMigrationGuide": "\u00c5bn migreringsguide"
 }
