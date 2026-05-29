@@ -199,9 +199,25 @@ curl -X POST http://localhost:6180/api/next/plugins/plex/jobs \
   -d '{"entrypoint":"sync_library","payload":{"dryRun":true}}'
 ```
 
-The built-in Plex and Jellyfin modules currently expose safe connector stubs for
-`discover_library` and `sync_library`; real API reconciliation is the next
-connector slice.
+The built-in Plex and Jellyfin modules now use their configured server URLs and
+tokens/API keys for connector calls. Example `.example` URLs are accepted without
+network access for smoke tests; real URLs perform live discovery/sync calls.
+Queued `sync_library` jobs persist normalized digital items in PostgreSQL,
+match them to imported movies by TMDb, IMDb or title/year, and expose the result
+through the collection APIs.
+
+Digital source inspection:
+
+```bash
+curl http://localhost:6180/api/next/digital-sources
+curl http://localhost:6180/api/next/digital-items?limit=200
+```
+
+The collection movie list includes `digital_count` and `digital_sources` when a
+movie is matched by a digital source. Movie detail JSON includes `digitalItems`.
+The current admin panel reads plugin manifest schemas, renders settings/secrets
+fields, saves configuration, runs health checks, and can discover or queue sync
+jobs from the Plugins tab.
 
 Logs:
 

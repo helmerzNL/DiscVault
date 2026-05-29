@@ -101,6 +101,8 @@ jobs:
               "/api/next/health",
               "/api/next/stats",
               "/api/next/settings",
+              "/api/next/digital-sources",
+              "/api/next/digital-items",
               "/api/next/plugins/registry",
               "/api/next/metadata/plugins",
               "/api/next/movies",
@@ -281,7 +283,7 @@ jobs:
           health = client.get("/api/next/plugins/plex/health")
           assert health.status_code == 200, health.data[:500]
           health_payload = health.get_json()
-          assert health_payload["health"]["state"] == "available", health_payload
+          assert health_payload["health"]["state"] in {"available", "configured"}, health_payload
           print("/api/next/plugins/plex/health", "admin-health-ok")
 
           execute = client.post(
@@ -301,7 +303,19 @@ jobs:
           assert queued.status_code == 201, queued.data[:500]
           queued_payload = queued.get_json()
           assert queued_payload["job"]["jobType"] == "plugin.execute", queued_payload
+          assert "ci-secret-token" not in queued.get_data(as_text=True), queued_payload
           print("/api/next/plugins/plex/jobs", "admin-queue-ok")
+
+          from next_worker import run_once
+
+          assert run_once("ci-worker") == 0
+          digital_sources = client.get("/api/next/digital-sources")
+          assert digital_sources.status_code == 200, digital_sources.data[:500]
+          digital_payload = digital_sources.get_json()
+          plex_source = next((item for item in digital_payload["items"] if item["plugin_id"] == "plex"), None)
+          assert plex_source is not None, digital_payload
+          assert plex_source["last_status"] == "configured", digital_payload
+          print("/api/next/digital-sources", "worker-persistence-ok")
 
           rbac = client.get("/api/next/auth/rbac")
           assert rbac.status_code == 200, rbac.data[:500]

@@ -202,6 +202,9 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
     execution = run_plugin_entrypoint(plugin_id, entrypoint, execution_payload, context)
     if execution.get("status") != "ok":
         raise RuntimeError(str(execution.get("error") or execution.get("state") or "Plugin execution failed"))
+    persist_summary = {}
+    if entrypoint == "sync_library":
+        persist_summary = persist_digital_sync(plugin_id, execution.get("result") or {})
     return {
         "workerId": worker_id,
         "handled": True,
@@ -209,7 +212,182 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
         "pluginId": plugin_id,
         "entrypoint": entrypoint,
         "execution": execution,
+        "persistence": persist_summary,
     }
+
+
+def match_digital_movie(conn, *, tmdb_id: str = "", imdb_id: str = "", title: str = "", year: str = ""):
+    with conn.cursor() as cur:
+        if tmdb_id:
+            cur.execute(
+                """
+                SELECT movie_id
+                FROM movie_identifiers
+                WHERE provider_id='tmdb'
+                  AND identifier_type='movie_id'
+                  AND identifier=%s
+                LIMIT 1
+                """,
+                (str(tmdb_id),),
+            )
+            row = cur.fetchone()
+            if row:
+                return row["movie_id"]
+        if imdb_id:
+            cur.execute(
+                """
+                SELECT movie_id
+                FROM movie_identifiers
+                WHERE provider_id='imdb'
+                  AND identifier_type='movie_id'
+                  AND identifier=%s
+                LIMIT 1
+                """,
+                (str(imdb_id),),
+            )
+            row = cur.fetchone()
+            if row:
+                return row["movie_id"]
+        if title and year:
+            cur.execute(
+                """
+                SELECT id
+                FROM movies
+                WHERE lower(title)=lower(%s)
+                  AND year=%s
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (title, str(year)),
+            )
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+    return None
+
+
+def persist_digital_sync(plugin_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    source = result.get("source") or {}
+    items = result.get("items") or []
+    if not isinstance(items, list):
+        items = []
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('public.digital_media_sources') AS table_name")
+            ready = cur.fetchone()
+        if not ready or not ready.get("table_name"):
+            return {"skipped": True, "reason": "digital media tables are not initialized"}
+
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO digital_media_sources (
+                        plugin_id,
+                        name,
+                        source_type,
+                        base_url,
+                        machine_id,
+                        enabled,
+                        last_synced_at,
+                        item_count,
+                        last_status,
+                        last_error,
+                        metadata,
+                        updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, true, now(), %s, %s, NULL, %s, now())
+                    ON CONFLICT (plugin_id) DO UPDATE SET
+                        name=EXCLUDED.name,
+                        source_type=EXCLUDED.source_type,
+                        base_url=EXCLUDED.base_url,
+                        machine_id=EXCLUDED.machine_id,
+                        enabled=true,
+                        last_synced_at=now(),
+                        item_count=EXCLUDED.item_count,
+                        last_status=EXCLUDED.last_status,
+                        last_error=NULL,
+                        metadata=EXCLUDED.metadata,
+                        updated_at=now()
+                    RETURNING id
+                    """,
+                    (
+                        plugin_id,
+                        str(source.get("name") or plugin_id),
+                        str(source.get("type") or result.get("connector") or plugin_id),
+                        source.get("baseUrl"),
+                        source.get("machineId"),
+                        len(items),
+                        str(result.get("status") or "completed"),
+                        Jsonb(json_ready({"libraries": result.get("libraries") or []})),
+                    ),
+                )
+                source_id = cur.fetchone()["id"]
+                cur.execute("DELETE FROM digital_media_items WHERE source_id=%s", (source_id,))
+
+                matched = 0
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    external_id = clean_text(item.get("externalId") or item.get("external_id"))
+                    title = clean_text(item.get("title"))
+                    if not external_id or not title:
+                        continue
+                    tmdb_id = clean_text(item.get("tmdbId") or item.get("tmdb_id"))
+                    imdb_id = clean_text(item.get("imdbId") or item.get("imdb_id"))
+                    year = clean_text(item.get("year"))
+                    movie_id = match_digital_movie(
+                        conn,
+                        tmdb_id=tmdb_id,
+                        imdb_id=imdb_id,
+                        title=title,
+                        year=year,
+                    )
+                    if movie_id:
+                        matched += 1
+                    cur.execute(
+                        """
+                        INSERT INTO digital_media_items (
+                            source_id,
+                            external_id,
+                            media_type,
+                            title,
+                            year,
+                            tmdb_id,
+                            imdb_id,
+                            playback_url,
+                            matched_movie_id,
+                            metadata,
+                            synced_at,
+                            updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        ON CONFLICT (source_id, external_id) DO UPDATE SET
+                            media_type=EXCLUDED.media_type,
+                            title=EXCLUDED.title,
+                            year=EXCLUDED.year,
+                            tmdb_id=EXCLUDED.tmdb_id,
+                            imdb_id=EXCLUDED.imdb_id,
+                            playback_url=EXCLUDED.playback_url,
+                            matched_movie_id=EXCLUDED.matched_movie_id,
+                            metadata=EXCLUDED.metadata,
+                            synced_at=now(),
+                            updated_at=now()
+                        """,
+                        (
+                            source_id,
+                            external_id,
+                            clean_text(item.get("mediaType") or item.get("media_type")) or "movie",
+                            title,
+                            year or None,
+                            tmdb_id or None,
+                            imdb_id or None,
+                            clean_text(item.get("playbackUrl") or item.get("playback_url")) or None,
+                            movie_id,
+                            Jsonb(json_ready(item.get("metadata") or {})),
+                        ),
+                    )
+    return {"sourceId": source_id, "items": len(items), "matched": matched}
 
 
 def process_sqlite_import(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
