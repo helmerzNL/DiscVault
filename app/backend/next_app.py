@@ -1942,9 +1942,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         </div>
       </div>
       <div class="admin-view" data-admin-view="plugins">
-        <div class="admin-card">
-          <h3>Plugin Registry</h3>
-          <div class="admin-list" id="adminPluginsList"><div class="empty">No plugins loaded.</div></div>
+        <div class="admin-grid">
+          <div class="admin-card wide">
+            <h3>Plugin Registry</h3>
+            <div class="admin-list" id="adminPluginsList"><div class="empty">No plugins loaded.</div></div>
+          </div>
+          <div class="admin-card wide">
+            <h3>Execution Jobs</h3>
+            <div class="admin-list" id="adminPluginJobsList"><div class="empty">No plugin jobs loaded.</div></div>
+          </div>
         </div>
       </div>
       <div class="admin-view" data-admin-view="backups">
@@ -2061,6 +2067,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       plugins: [],
       pluginConfigs: {},
       pluginHealth: {},
+      pluginExecutions: {},
+      pluginJobs: [],
       digitalSources: [],
       backup: {},
       backupReport: null
@@ -2626,6 +2634,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       list.innerHTML = plugins.length ? plugins.map((plugin) => {
         const health = adminState.pluginHealth[plugin.id] || {};
         const config = adminState.pluginConfigs[plugin.id] || {};
+        const execution = adminState.pluginExecutions[plugin.id] || null;
+        const latestJob = (adminState.pluginJobs || []).find((job) => (job.payload || {}).pluginId === plugin.id);
         const digitalSource = (adminState.digitalSources || []).find((source) => source.plugin_id === plugin.id);
         const runtime = plugin.runtime || {};
         const capabilities = plugin.capabilities || [];
@@ -2646,6 +2656,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               ${plugin.settingsConfigured ? `<span class="tag good">settings set</span>` : `<span class="tag">default settings</span>`}
               ${digitalSource ? `<span class="tag good">${number(digitalSource.itemCount || digitalSource.item_count)} digital items</span>` : ""}
               ${digitalSource && digitalSource.last_status ? `<span class="tag">${escapeHtml(digitalSource.last_status)}</span>` : ""}
+              ${latestJob ? `<span class="tag ${jobStatusClass(latestJob.status)}">job ${escapeHtml(latestJob.status || "-")}</span>` : ""}
+              ${execution ? `<span class="tag blue">${escapeHtml(execution.entrypoint || "execution")} ${escapeHtml(execution.state || execution.status || "-")}</span>` : ""}
               ${needsConfig ? `<span class="tag blue">configuration needed</span>` : ""}
               ${plugin.premiumFeatureKey ? `<span class="tag blue">${escapeHtml(plugin.premiumFeatureKey)}</span>` : ""}
             </div>
@@ -2659,6 +2671,41 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           </div>
         `;
       }).join("") : `<div class="empty">No plugins found.</div>`;
+    }
+    function jobStatusClass(status) {
+      if (status === "completed") return "good";
+      if (status === "pending" || status === "running") return "blue";
+      return "";
+    }
+    function pluginJobSummary(job) {
+      const result = job.result || {};
+      const execution = result.execution || {};
+      const persistence = result.persistence || {};
+      const pluginId = (job.payload || {}).pluginId || result.pluginId || "-";
+      const entrypoint = (job.payload || {}).entrypoint || result.entrypoint || job.jobType || "-";
+      const bits = [
+        `${escapeHtml(pluginId)} / ${escapeHtml(entrypoint)}`,
+        persistence.items != null ? `${number(persistence.items)} items` : "",
+        persistence.matched != null ? `${number(persistence.matched)} matched` : "",
+        execution.elapsedMs != null ? `${number(execution.elapsedMs)} ms` : ""
+      ].filter(Boolean);
+      return bits.join(" &middot; ");
+    }
+    function renderAdminPluginJobs() {
+      const node = document.getElementById("adminPluginJobsList");
+      if (!node) return;
+      const jobs = adminState.pluginJobs || [];
+      node.innerHTML = jobs.length ? jobs.map((job) => `
+        <div class="admin-row">
+          <div class="admin-row-head">
+            <strong>${escapeHtml(job.jobType || "plugin job")}</strong>
+            <span class="tag ${jobStatusClass(job.status)}">${escapeHtml(job.status || "-")}</span>
+          </div>
+          <div class="muted">${pluginJobSummary(job)}</div>
+          <div class="muted">created ${escapeHtml((job.createdAt || "").slice(0, 19))} &middot; finished ${escapeHtml((job.finishedAt || "-").slice(0, 19))}</div>
+          ${job.error ? `<div class="auth-status bad">${escapeHtml(job.error)}</div>` : ""}
+        </div>
+      `).join("") : `<div class="empty">No plugin execution jobs yet.</div>`;
     }
     function backupCountsLine(counts) {
       const values = counts || {};
@@ -2746,7 +2793,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     async function loadAdmin() {
       if (!isAdminUser()) return;
       setAdminStatus("Loading admin data...", "info");
-      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, backupPayload, ownerSettingsPayload] = await Promise.all([
+      const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, ownerSettingsPayload] = await Promise.all([
         authJson("/api/next/auth/users", {headers: authHeaders()}),
         authJson("/api/next/auth/credentials", {headers: authHeaders()}),
         authJson("/api/next/auth/invite", {headers: authHeaders()}),
@@ -2754,6 +2801,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         authJson("/api/next/plugins/registry", {headers: authHeaders()}),
         authJson("/api/next/digital-sources", {headers: authHeaders()}).catch(() => ({items: []})),
         authJson("/api/next/backup/status", {headers: authHeaders()}).catch((error) => ({status: "error", error: error.message})),
+        authJson("/api/next/jobs?jobType=plugin.execute&limit=10", {headers: authHeaders()}).catch(() => ({jobs: []})),
         authState.role === "owner"
           ? authJson("/api/next/auth/owner/settings", {headers: authHeaders()})
           : Promise.resolve({settings: {}})
@@ -2766,6 +2814,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       adminState.plugins = pluginsPayload.plugins || [];
       adminState.digitalSources = digitalSourcesPayload.items || [];
       adminState.backup = backupPayload || {};
+      adminState.pluginJobs = pluginJobsPayload.jobs || [];
       const configPayloads = await Promise.all(adminState.plugins.map((plugin) =>
         authJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`, {headers: authHeaders()})
           .catch((error) => ({plugin, error: error.message, config: {}}))
@@ -2782,6 +2831,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAdminInvites(adminState.invites);
       renderAdminRbac(adminState.rbac);
       renderAdminPlugins(adminState.plugins);
+      renderAdminPluginJobs();
       renderAdminBackups(adminState.backup);
       renderAdminSummary();
       document.getElementById("adminPanel").dataset.loaded = "true";
@@ -2876,20 +2926,68 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAdminPlugins(adminState.plugins);
       setAdminStatus(`${pluginId} configuration saved.`, "good");
     }
+    function summarizePluginExecution(pluginId, entrypoint, execution) {
+      const result = (execution && execution.result) || {};
+      const parts = [
+        `${pluginId} ${entrypoint}`,
+        execution && execution.state ? execution.state : "",
+        Array.isArray(result.libraries) ? `${number(result.libraries.length)} libraries` : "",
+        Array.isArray(result.items) ? `${number(result.items.length)} items` : "",
+        execution && execution.elapsedMs != null ? `${number(execution.elapsedMs)} ms` : ""
+      ].filter(Boolean);
+      return parts.join(" - ");
+    }
     async function executePlugin(pluginId, entrypoint) {
       const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/execute`, {
         method: "POST",
-        body: JSON.stringify({entrypoint, payload: {dryRun: true}})
+        body: JSON.stringify({entrypoint, payload: {}})
       });
       const execution = payload.execution || {};
-      setAdminStatus(`${pluginId} ${entrypoint}: ${execution.state || "completed"}.`, execution.status === "ok" ? "good" : "bad");
+      adminState.pluginExecutions[pluginId] = {entrypoint, ...(execution || {})};
+      renderAdminPlugins(adminState.plugins);
+      setAdminStatus(summarizePluginExecution(pluginId, entrypoint, execution), execution.status === "ok" ? "good" : "bad");
+    }
+    function upsertPluginJob(job) {
+      if (!job || !job.id) return;
+      const rest = (adminState.pluginJobs || []).filter((item) => item.id !== job.id);
+      adminState.pluginJobs = [job, ...rest].slice(0, 10);
+      renderAdminPluginJobs();
+      renderAdminPlugins(adminState.plugins);
+    }
+    async function refreshDigitalSourcesForPlugins() {
+      const payload = await authJson("/api/next/digital-sources", {headers: authHeaders()}).catch(() => ({items: []}));
+      adminState.digitalSources = payload.items || [];
+      renderAdminPlugins(adminState.plugins);
+    }
+    async function pollPluginJob(jobId, pluginId) {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 4 ? 1000 : 2000));
+        const payload = await authJson(`/api/next/jobs/${encodeURIComponent(jobId)}`, {headers: authHeaders()});
+        const job = payload.job || {};
+        upsertPluginJob(job);
+        if (job.status === "completed") {
+          await refreshDigitalSourcesForPlugins();
+          const persistence = (job.result && job.result.persistence) || {};
+          setAdminStatus(`${pluginId} sync completed: ${number(persistence.items || 0)} items, ${number(persistence.matched || 0)} matched.`, "good");
+          return job;
+        }
+        if (job.status === "failed") {
+          setAdminStatus(`${pluginId} sync failed: ${job.error || "unknown error"}.`, "bad");
+          return job;
+        }
+      }
+      setAdminStatus(`${pluginId} sync is still running. Refresh Admin for the latest status.`, "info");
     }
     async function queuePluginExecution(pluginId, entrypoint) {
       const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/jobs`, {
         method: "POST",
-        body: JSON.stringify({entrypoint, payload: {dryRun: true}})
+        body: JSON.stringify({entrypoint, payload: {}})
       });
+      if (payload.job) upsertPluginJob(payload.job);
       setAdminStatus(`${pluginId} ${entrypoint} queued: ${payload.job ? payload.job.id : "-"}.`, "good");
+      if (payload.job && payload.job.id) {
+        pollPluginJob(payload.job.id, pluginId).catch((error) => setAdminStatus(error.message, "bad"));
+      }
     }
     async function loadBackupStatus() {
       adminState.backup = await authJson("/api/next/backup/status", {headers: authHeaders()});
@@ -4496,6 +4594,81 @@ def require_any_next_permission(conn, permission_keys: tuple[str, ...]) -> dict[
     return user
 
 
+PLUGIN_REGISTRY_VIEW_PERMISSIONS = (
+    "metadata.manage_plugins",
+    "metadata.view_plugin_health",
+    "metadata.manage_plugin_settings",
+    "metadata.manage_receivers",
+    "metadata.search",
+    "metadata.refresh_one",
+    "metadata.refresh_bulk",
+    "digital_sources.view",
+    "digital_sources.connect",
+    "digital_sources.sync",
+    "digital_sources.manage",
+    "admin.view_settings",
+)
+PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
+    "metadata.manage_plugins",
+    "metadata.manage_plugin_settings",
+    "metadata.manage_receivers",
+    "digital_sources.connect",
+    "digital_sources.manage",
+)
+
+
+def plugin_category_set(plugin: dict[str, Any]) -> set[str]:
+    manifest = plugin.get("manifest") or {}
+    categories = plugin.get("categories") or manifest.get("categories") or []
+    return {str(item) for item in categories}
+
+
+def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> tuple[str, ...]:
+    categories = plugin_category_set(plugin)
+    if entrypoint == "sync_library":
+        return ("digital_sources.sync", "digital_sources.manage")
+    if entrypoint in {"discover_library", "playback_deeplink"}:
+        return ("digital_sources.view", "digital_sources.connect", "digital_sources.manage")
+    if entrypoint == "receive_metadata":
+        return ("metadata.manage_receivers", "metadata.manage_plugins")
+    if entrypoint == "health_check":
+        permissions = ["metadata.view_plugin_health", "metadata.manage_plugins"]
+        if "digital_media_source" in categories:
+            permissions.extend(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"])
+        return tuple(dict.fromkeys(permissions))
+    if "digital_media_source" in categories:
+        return ("digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage")
+    return (
+        "metadata.search",
+        "metadata.refresh_one",
+        "metadata.refresh_bulk",
+        "metadata.manage_plugins",
+    )
+
+
+def plugin_manage_permissions(plugin: dict[str, Any]) -> tuple[str, ...]:
+    categories = plugin_category_set(plugin)
+    permissions: list[str] = []
+    if {"metadata_source", "metadata_receiver"}.intersection(categories):
+        permissions.extend(["metadata.manage_plugins", "metadata.manage_plugin_settings"])
+    if "metadata_receiver" in categories:
+        permissions.append("metadata.manage_receivers")
+    if "digital_media_source" in categories:
+        permissions.extend(["digital_sources.connect", "digital_sources.manage"])
+    return tuple(dict.fromkeys(permissions or list(PLUGIN_REGISTRY_MANAGE_PERMISSIONS)))
+
+
+def require_plugin_action_permission(conn, plugin: dict[str, Any], entrypoint: str = "") -> dict[str, Any]:
+    return require_any_next_permission(conn, plugin_action_permissions(plugin, entrypoint))
+
+
+def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
+    if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
+        return False
+    manifest = plugin.get("manifest") or {}
+    return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
+
+
 def uploaded_backup_file_path(destination_dir: Path) -> Path:
     upload = request.files.get("file") or request.files.get("backup")
     if not upload or not upload.filename:
@@ -6071,6 +6244,7 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/plugins/registry")
     def plugins_registry():
         with connect() as conn:
+            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
             if not table_exists(conn, "plugins"):
                 return response(
                     {
@@ -6109,7 +6283,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("orderIndex must be an integer", 400) from exc
 
         with connect() as conn:
-            actor = require_next_admin_user(conn)
+            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -6125,6 +6299,7 @@ def register_routes(flask_app: Flask) -> None:
                 plugin = cur.fetchone()
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
+            require_any_next_permission(conn, plugin_manage_permissions(plugin))
 
             categories = plugin.get("categories") or []
             is_metadata_plugin = bool(
@@ -6183,7 +6358,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Plugin id is required", 400)
 
         with connect() as conn:
-            actor = require_next_admin_user(conn)
+            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -6210,7 +6385,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Supply settings and/or secrets", 400)
 
         with connect() as conn:
-            actor = require_next_admin_user(conn)
+            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -6226,6 +6401,7 @@ def register_routes(flask_app: Flask) -> None:
                 plugin_row = cur.fetchone()
             if not plugin_row:
                 raise NextApiError("Plugin not found", 404)
+            actor = require_any_next_permission(conn, plugin_manage_permissions(plugin_row))
 
             update_plugin_config(
                 conn,
@@ -6250,7 +6426,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Plugin id is required", 400)
 
         with connect() as conn:
-            actor = require_next_admin_user(conn)
+            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -6262,6 +6438,7 @@ def register_routes(flask_app: Flask) -> None:
             plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
+            actor = require_plugin_action_permission(conn, plugin, "health_check")
             config = plugin_config_from_db(conn, plugin_id)
             context = plugin_execution_context(conn, plugin, config, actor)
 
@@ -6301,7 +6478,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Plugin execution body must be an object", 400)
 
         with connect() as conn:
-            actor = require_next_admin_user(conn)
+            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -6313,7 +6490,10 @@ def register_routes(flask_app: Flask) -> None:
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
             entrypoint, payload = validate_plugin_execution_request(plugin, body)
+            actor = require_plugin_action_permission(conn, plugin, entrypoint)
             config = plugin_config_from_db(conn, plugin_id)
+            if plugin_requires_config_for_entrypoint(plugin, config, entrypoint):
+                raise NextApiError("Plugin configuration is incomplete", 409)
             context = plugin_execution_context(conn, plugin, config, actor)
 
         execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
@@ -6337,7 +6517,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Plugin execution body must be an object", 400)
 
         with connect() as conn:
-            actor = require_next_admin_user(conn)
+            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             if table_exists(conn, "metadata_plugins"):
@@ -6349,12 +6529,19 @@ def register_routes(flask_app: Flask) -> None:
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
             entrypoint, payload = validate_plugin_execution_request(plugin, body)
+            actor = require_plugin_action_permission(conn, plugin, entrypoint)
             config = plugin_config_from_db(conn, plugin_id)
+            if plugin_requires_config_for_entrypoint(plugin, config, entrypoint):
+                raise NextApiError("Plugin configuration is incomplete", 409)
             job_payload = {
                 "pluginId": plugin_id,
                 "entrypoint": entrypoint,
                 "payload": payload,
-                "context": plugin_execution_context(conn, plugin, config, actor),
+                "requestedBy": {
+                    "id": str(actor.get("id")) if actor.get("id") else None,
+                    "username": actor.get("username"),
+                    "role": actor.get("role"),
+                },
             }
             with conn.transaction():
                 job = create_background_job(conn, job_type=PLUGIN_EXECUTION_JOB_TYPE, payload=job_payload)
@@ -6532,14 +6719,31 @@ def register_routes(flask_app: Flask) -> None:
     def jobs():
         limit = parse_int_arg("limit", 100, minimum=1, maximum=500)
         status = (request.args.get("status") or "").strip()
+        job_type = (request.args.get("jobType") or request.args.get("job_type") or "").strip()
+        plugin_id = (request.args.get("pluginId") or request.args.get("plugin_id") or "").strip()
         with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("admin.view_jobs", "metadata.view_plugin_health", "digital_sources.view", "digital_sources.sync", "digital_sources.manage"),
+            )
             if not table_exists(conn, "background_jobs"):
                 return response({"status": "ok", "jobs": []})
             params: list[Any] = []
-            where = ""
+            clauses: list[str] = []
+            permissions = set(actor.get("permissions") or [])
+            role = actor.get("role")
+            if role != "owner" and "admin.view_jobs" not in permissions:
+                job_type = PLUGIN_EXECUTION_JOB_TYPE
             if status:
-                where = "WHERE status = %s"
+                clauses.append("status = %s")
                 params.append(status)
+            if job_type:
+                clauses.append("job_type = %s")
+                params.append(job_type)
+            if plugin_id:
+                clauses.append("payload->>'pluginId' = %s")
+                params.append(plugin_id)
+            where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
@@ -6576,6 +6780,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(payload, dict):
             raise NextApiError("payload must be an object", 400)
         with connect() as conn:
+            require_next_permission(conn, "admin.view_jobs")
             with conn.transaction():
                 job = create_background_job(conn, job_type=job_type, payload=payload)
         return response({"status": "ok", "job": job}, 201)
@@ -6701,6 +6906,10 @@ def register_routes(flask_app: Flask) -> None:
     def get_job(job_id: str):
         job_uuid = parse_uuid(job_id, "jobId")
         with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("admin.view_jobs", "metadata.view_plugin_health", "digital_sources.view", "digital_sources.sync", "digital_sources.manage"),
+            )
             if not table_exists(conn, "background_jobs"):
                 raise NextApiError("Background job table is not available", 503)
             with conn.cursor() as cur:
@@ -6725,6 +6934,10 @@ def register_routes(flask_app: Flask) -> None:
                 row = cur.fetchone()
         if not row:
             raise NextApiError("Job not found", 404)
+        permissions = set(actor.get("permissions") or [])
+        role = actor.get("role")
+        if role != "owner" and "admin.view_jobs" not in permissions and row["job_type"] != PLUGIN_EXECUTION_JOB_TYPE:
+            raise NextApiError("Permission required: admin.view_jobs", 403)
         return response({"status": "ok", "job": job_row(row)})
 
     @flask_app.get("/api/next/backup/status")
