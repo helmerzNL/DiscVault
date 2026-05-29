@@ -596,6 +596,9 @@ def import_source_summary(source: dict[str, Any], execution: dict[str, Any]) -> 
         "pluginName": source.get("pluginName"),
         "sourceKind": source.get("sourceKind"),
         "status": source.get("status"),
+        "dataDir": source.get("dataDir"),
+        "sqliteDb": source.get("sqliteDb"),
+        "mediaMigrationMode": source.get("mediaMigrationMode"),
         "runtimeStatus": execution.get("status"),
         "runtimeState": execution.get("state"),
         "found": bool(source.get("found")),
@@ -605,6 +608,13 @@ def import_source_summary(source: dict[str, Any], execution: dict[str, Any]) -> 
         "mediaExtensions": source.get("mediaExtensions") or {},
         "warnings": source.get("warnings") or [],
     }
+
+
+def inspect_import_source_plugin(conn, plugin: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    config = plugin_config_from_db(conn, str(plugin.get("id")))
+    context = plugin_execution_context(conn, plugin, config)
+    execution = run_plugin_entrypoint(str(plugin.get("id")), "inspect_source", {}, context)
+    return normalize_import_source_result(plugin, execution), execution
 
 
 def import_source_readiness_probe(conn) -> dict[str, Any]:
@@ -619,10 +629,7 @@ def import_source_readiness_probe(conn) -> dict[str, Any]:
         return probe
 
     for plugin in plugins:
-        config = plugin_config_from_db(conn, str(plugin.get("id")))
-        context = plugin_execution_context(conn, plugin, config)
-        execution = run_plugin_entrypoint(str(plugin.get("id")), "inspect_source", {}, context)
-        source = normalize_import_source_result(plugin, execution)
+        source, execution = inspect_import_source_plugin(conn, plugin)
         import_sources.append(import_source_summary(source, execution))
         for warning in source.get("warnings") or []:
             warnings.append(f"{plugin.get('name') or plugin.get('id')}: {warning}")
@@ -1080,6 +1087,60 @@ def migration_dashboard_html() -> str:
       gap: 8px;
       margin-top: 10px;
     }
+    .section-help {
+      font-size: .9rem;
+      margin-bottom: 12px;
+    }
+    .source-chooser {
+      display: grid;
+      gap: 10px;
+    }
+    .source-option {
+      width: 100%;
+      height: auto;
+      min-height: 0;
+      padding: 13px;
+      display: grid;
+      gap: 10px;
+      justify-content: stretch;
+      text-align: left;
+      white-space: normal;
+      background: rgba(255,255,255,.025);
+    }
+    .source-option.selected {
+      border-color: rgba(232,197,71,.85);
+      box-shadow: 0 0 0 1px rgba(232,197,71,.28);
+    }
+    .source-option-main {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .source-option-title {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .source-option-title strong {
+      color: var(--text);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .source-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+      gap: 8px;
+    }
+    .source-stat {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .source-stat strong {
+      color: var(--text);
+      display: block;
+      font-size: 1.02rem;
+    }
     .row {
       display: grid;
       grid-template-columns: minmax(120px, .8fr) minmax(0, 1.3fr);
@@ -1176,6 +1237,11 @@ def migration_dashboard_html() -> str:
         <div class="label" data-next-i18n="migration.pluginsHelp">Enabled metadata plugins</div>
       </div>
 
+      <div class="card full">
+        <h2 data-next-i18n="migration.importSource">Import Source</h2>
+        <p class="section-help" data-next-i18n="migration.importSourceHelp">Choose the source that DiscVault Next should inspect and import from.</p>
+        <div class="source-chooser" id="importSourceList"></div>
+      </div>
       <div class="card wide">
         <h2 data-next-i18n="migration.source">Source</h2>
         <div class="list" id="sourceList"></div>
@@ -1224,6 +1290,8 @@ def migration_dashboard_html() -> str:
       {locale: "fi-FI", legacy: "fi", nativeName: "Suomi"}
     ];
     const nextI18n = {locale: "nl-NL", messages: {}, locales: NEXT_I18N_FALLBACK_LOCALES};
+    let selectedImportSourceId = null;
+    let lastMigrationReport = null;
     function normalizeNextLocale(value) {
       const raw = String(value || "").trim().replace("_", "-").toLowerCase();
       const aliases = {};
@@ -1249,6 +1317,12 @@ def migration_dashboard_html() -> str:
     }
     function tNext(key, fallback) {
       return nextI18n.messages[key] || fallback || key;
+    }
+    function migrationHeaders(extra) {
+      const headers = {...(extra || {})};
+      const token = localStorage.getItem("dv_next_token");
+      if (token) headers.Authorization = `Bearer ${token}`;
+      return headers;
     }
     function applyNextI18n() {
       document.documentElement.lang = nextI18n.locale;
@@ -1325,13 +1399,83 @@ def migration_dashboard_html() -> str:
         ? values.map((item) => row("", item)).join("")
         : row(tNext("common.none", "None"), "-");
     }
+    function importSourceCounts(source) {
+      return source?.counts || source?.sourceCounts || {};
+    }
+    function importSourceBadge(source) {
+      if (source?.readable && source?.found) {
+        return {tone: "ok", text: tNext("migration.sourceReady", "Ready")};
+      }
+      if (source?.found) {
+        return {tone: "warn", text: tNext("migration.sourceUnreadable", "Found, not readable")};
+      }
+      return {tone: "error", text: tNext("migration.sourceMissing", "Not found")};
+    }
+    function renderImportSources(report) {
+      const node = document.getElementById("importSourceList");
+      if (!node) return;
+      const sources = Array.isArray(report.importSources) ? report.importSources : [];
+      const selectedSource = report.source || {};
+      if (!selectedImportSourceId) {
+        selectedImportSourceId = selectedSource.pluginId
+          || (sources.find((source) => source.readable && source.found) || {}).pluginId
+          || (sources[0] || {}).pluginId
+          || null;
+      }
+      if (!sources.length) {
+        node.innerHTML = row(tNext("common.none", "None"), "-");
+        return;
+      }
+      node.innerHTML = sources.map((source) => {
+        const pluginId = source.pluginId || "";
+        const counts = importSourceCounts(source);
+        const mediaExtensions = source.mediaExtensions || {};
+        const imageCount = Object.values(mediaExtensions).reduce((total, value) => total + Number(value || 0), 0);
+        const badge = importSourceBadge(source);
+        const selected = pluginId && pluginId === selectedImportSourceId;
+        const warnings = Array.isArray(source.warnings) && source.warnings.length
+          ? `<div class="label">${escapeHtml(source.warnings.join(" / "))}</div>`
+          : "";
+        return `
+          <button type="button" class="source-option ${selected ? "selected" : ""}" data-import-source-id="${escapeHtml(pluginId)}">
+            <div class="source-option-main">
+              <div class="source-option-title">
+                <strong>${escapeHtml(source.pluginName || source.name || pluginId || tNext("migration.importSource", "Import Source"))}</strong>
+                <span class="label mono">${escapeHtml(pluginId || "-")}${source.sourceKind ? ` / ${escapeHtml(source.sourceKind)}` : ""}</span>
+              </div>
+              <span class="badge ${badge.tone}">${escapeHtml(selected ? tNext("migration.selectedSource", "Selected") : badge.text)}</span>
+            </div>
+            <div class="source-stats">
+              <span class="source-stat"><strong>${formatNumber(counts.movies)}</strong>${escapeHtml(tNext("collection.movies", "Movies"))}</span>
+              <span class="source-stat"><strong>${formatNumber(counts.people)}</strong>${escapeHtml(tNext("migration.people", "People"))}</span>
+              <span class="source-stat"><strong>${formatNumber(counts.users)}</strong>${escapeHtml(tNext("migration.users", "Users"))}</span>
+              <span class="source-stat"><strong>${formatNumber(counts.groups)}</strong>${escapeHtml(tNext("migration.groups", "Groups"))}</span>
+              <span class="source-stat"><strong>${formatNumber(counts.credentials)}</strong>${escapeHtml(tNext("migration.passkeys", "Passkeys"))}</span>
+              <span class="source-stat"><strong>${formatNumber(imageCount)}</strong>${escapeHtml(tNext("migration.images", "Images"))}</span>
+            </div>
+            <div class="label mono">${escapeHtml(source.sqliteDb || source.dataDir || "-")}</div>
+            ${warnings}
+          </button>
+        `;
+      }).join("");
+      node.querySelectorAll("[data-import-source-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+          selectedImportSourceId = button.dataset.importSourceId || null;
+          renderImportSources(lastMigrationReport || report);
+        });
+      });
+    }
     async function loadReport() {
       const message = document.getElementById("message");
       message.textContent = tNext("migration.loadingReport", "Loading report...");
-      const response = await fetch("/api/next/migration/report", {cache: "no-store"});
+      const response = await fetch("/api/next/migration/report", {
+        cache: "no-store",
+        headers: migrationHeaders()
+      });
       if (!response.ok) throw new Error(`Report failed: HTTP ${response.status}`);
       const payload = await response.json();
       const report = payload.report || {};
+      lastMigrationReport = report;
       const imported = report.summary?.imported || {};
       const target = report.target?.counts || {};
       const source = report.source || {};
@@ -1352,17 +1496,18 @@ def migration_dashboard_html() -> str:
       document.getElementById("containerCount").textContent = formatNumber(target.containers);
       document.getElementById("pluginCount").textContent = formatNumber(plugins.enabled);
 
+      renderImportSources(report);
       document.getElementById("sourceList").innerHTML = [
-        row("Import source", source.pluginName ? `${source.pluginName} (${source.pluginId})` : "-"),
-        row("Source kind", source.sourceKind || "-"),
-        row("Source status", source.status || "-"),
-        row("Legacy data", source.found ? "found" : "not found"),
-        row("Data directory", source.dataDir || "-"),
-        row("SQLite database", source.sqliteDb || "-"),
-        row("Database hash", source.sourceDatabaseHash || "-"),
-        row("Media mode", source.mediaMigrationMode || "-"),
-        row("Source counts", JSON.stringify(source.counts || {})),
-        row("Media extensions", JSON.stringify(source.mediaExtensions || {}))
+        row(tNext("migration.importSource", "Import source"), source.pluginName ? `${source.pluginName} (${source.pluginId})` : "-"),
+        row(tNext("migration.sourceKind", "Source kind"), source.sourceKind || "-"),
+        row(tNext("migration.sourceStatus", "Source status"), source.status || "-"),
+        row(tNext("migration.legacyData", "Legacy data"), source.found ? tNext("migration.sourceFound", "found") : tNext("migration.sourceMissing", "not found")),
+        row(tNext("migration.dataDirectory", "Data directory"), source.dataDir || "-"),
+        row(tNext("migration.sqliteDatabase", "SQLite database"), source.sqliteDb || "-"),
+        row(tNext("migration.databaseHash", "Database hash"), source.sourceDatabaseHash || "-"),
+        row(tNext("migration.mediaMode", "Media mode"), source.mediaMigrationMode || "-"),
+        row(tNext("migration.sourceCounts", "Source counts"), JSON.stringify(source.counts || {})),
+        row(tNext("migration.mediaExtensions", "Media extensions"), JSON.stringify(source.mediaExtensions || {}))
       ].join("");
       document.getElementById("skippedList").innerHTML = rowsFromObject(report.summary?.skipped || {});
       document.getElementById("pluginsList").innerHTML = (plugins.items || []).map((plugin) => `
@@ -1385,8 +1530,8 @@ def migration_dashboard_html() -> str:
       message.textContent = tNext("migration.starting", "Starting migration...");
       const response = await fetch("/api/next/migration/start", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: "{}"
+        headers: migrationHeaders({"Content-Type": "application/json"}),
+        body: JSON.stringify(selectedImportSourceId ? {importSourceId: selectedImportSourceId} : {})
       });
       if (!response.ok) {
         const text = await response.text();
@@ -3378,18 +3523,23 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const node = document.getElementById("startupFacts");
       if (!node) return;
       const migration = startup.migration || {};
-      const sourceCounts = (migration.legacyData && migration.legacyData.sourceCounts) || {};
-      const mediaExtensions = (migration.legacyData && migration.legacyData.mediaExtensions) || {};
+      const legacyData = migration.legacyData || {};
+      const sourceCounts = legacyData.sourceCounts || {};
+      const mediaExtensions = legacyData.mediaExtensions || {};
+      const sourceLabel = legacyData.pluginName || ((migration.importSources || [])[0] || {}).pluginName;
       const facts = [
-        ["Movies", sourceCounts.movies],
-        ["People", sourceCounts.people],
-        ["Users", sourceCounts.users],
-        ["Groups", sourceCounts.groups],
-        ["Passkeys", sourceCounts.credentials],
-        ["Images", Object.values(mediaExtensions).reduce((total, value) => total + Number(value || 0), 0)]
+        [tNext("collection.movies", "Movies"), sourceCounts.movies],
+        [tNext("migration.people", "People"), sourceCounts.people],
+        [tNext("migration.users", "Users"), sourceCounts.users],
+        [tNext("migration.groups", "Groups"), sourceCounts.groups],
+        [tNext("migration.passkeys", "Passkeys"), sourceCounts.credentials],
+        [tNext("migration.images", "Images"), Object.values(mediaExtensions).reduce((total, value) => total + Number(value || 0), 0)]
       ].filter((item) => Number(item[1] || 0) > 0);
-      node.innerHTML = facts.map(([label, value]) => `<span><strong>${number(value)}</strong>${escapeHtml(label)}</span>`).join("");
-      node.classList.toggle("hidden", facts.length === 0);
+      const sourceFact = sourceLabel
+        ? `<span><strong>${escapeHtml(sourceLabel)}</strong>${escapeHtml(tNext("migration.importSource", "Import Source"))}</span>`
+        : "";
+      node.innerHTML = [sourceFact, ...facts.map(([label, value]) => `<span><strong>${number(value)}</strong>${escapeHtml(label)}</span>`)].filter(Boolean).join("");
+      node.classList.toggle("hidden", !sourceFact && facts.length === 0);
     }
     function scheduleStartupPoll(phase) {
       if (startupPollTimer) {
@@ -3413,10 +3563,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("startupDescription").textContent = startup.message || "DiscVault Next is preparing startup.";
       const migration = startup.migration || {};
       const auth = startup.auth || {};
-      const sourceCounts = (migration.legacyData && migration.legacyData.sourceCounts) || {};
+      const legacyData = migration.legacyData || {};
+      const sourceCounts = legacyData.sourceCounts || {};
       const actionText = (migration.requiredActions || []).join(" ");
       document.getElementById("startupMeta").textContent = [
         migration.state ? `migration: ${migration.state}` : "",
+        legacyData.pluginName ? `source: ${legacyData.pluginName}` : "",
         Number(sourceCounts.movies || 0) ? `${number(sourceCounts.movies)} legacy movies` : "",
         Number(sourceCounts.groups || 0) ? `${number(sourceCounts.groups)} legacy groups` : "",
         auth.role ? `signed in as ${auth.role}` : "",
@@ -9763,6 +9915,19 @@ def register_routes(flask_app: Flask) -> None:
                 or body.get("import_source_id")
                 or legacy.get("pluginId")
             )
+            selected_source = legacy
+            if import_source_id and import_source_id != legacy.get("pluginId"):
+                plugin = import_source_plugin_by_id(conn, import_source_id)
+                if not plugin:
+                    raise NextApiError(f"Import source plugin is not available: {import_source_id}", 409)
+                selected_source, execution = inspect_import_source_plugin(conn, plugin)
+                if execution.get("status") != "ok":
+                    raise NextApiError(
+                        f"Import source inspection failed: {execution.get('error') or execution.get('state')}",
+                        502,
+                    )
+                if not selected_source.get("found") or not selected_source.get("readable"):
+                    raise NextApiError(f"Import source is not ready: {import_source_id}", 409)
             options = {
                 "includeSecurity": include_security,
                 "includePersonal": include_personal,
@@ -9772,7 +9937,7 @@ def register_routes(flask_app: Flask) -> None:
             job_type, payload, import_plan = plan_migration_import_job(
                 conn,
                 plugin_id=import_source_id,
-                source=legacy,
+                source=selected_source,
                 options=options,
                 actor=actor,
             )
