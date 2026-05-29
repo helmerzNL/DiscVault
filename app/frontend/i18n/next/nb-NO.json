@@ -9,7 +9,7 @@
   "auth.createOwnerPasskey": "Opprett Owner-passkey",
   "auth.inviteCode": "Invitasjonskode",
   "auth.inviteOnly": "Kun med invitasjon",
-  "auth.loginDescription": "Logg inn i DiscVault med passkeyen din.",
+  "auth.loginDescription": "Logg inn med din Passkey",
   "auth.loginTitle": "DiscVault",
   "auth.passkey": "Passkey",
   "auth.passkeyCancelled": "Passkey-forespørselen ble avbrutt.",
@@ -193,5 +193,10 @@
   "startup.migrationDetails": "Migreringsdetaljer",
   "startup.setup": "Oppsett",
   "startup.startMigration": "Start migrering",
-  "startup.openMigrationGuide": "Åpne migreringsveiviser"
+  "startup.openMigrationGuide": "Åpne migreringsveiviser",
+  "migration.testResetButton": "Tilbakestill testdatabase",
+  "migration.testResetConfirm": "Tilbakestill PostgreSQL-testdatabasen slik at du kan teste migreringen på nytt?",
+  "migration.testResetDone": "Testdatabasen er tilbakestilt. Laster migreringsstatus på nytt...",
+  "migration.testResetPrompt": "Skriv {confirmation} for å tilbakestille testdatabasen.",
+  "migration.testResetting": "Tilbakestiller testdatabase..."
 }

@@ -9,7 +9,7 @@
   "auth.createOwnerPasskey": "Skapa Owner-passkey",
   "auth.inviteCode": "Inbjudningskod",
   "auth.inviteOnly": "Endast inbjudan",
-  "auth.loginDescription": "Logga in i DiscVault med din passkey.",
+  "auth.loginDescription": "Logga in med din Passkey",
   "auth.loginTitle": "DiscVault",
   "auth.passkey": "Passkey",
   "auth.passkeyCancelled": "Passkey-prompten avbröts.",
@@ -193,5 +193,10 @@
   "startup.migrationDetails": "Migreringsdetaljer",
   "startup.setup": "Inställning",
   "startup.startMigration": "Starta migrering",
-  "startup.openMigrationGuide": "Öppna migreringsguide"
+  "startup.openMigrationGuide": "Öppna migreringsguide",
+  "migration.testResetButton": "Återställ testdatabas",
+  "migration.testResetConfirm": "Återställ PostgreSQL-testdatabasen så att du kan testa migreringen igen?",
+  "migration.testResetDone": "Testdatabasen är återställd. Läser in migreringsstatus igen...",
+  "migration.testResetPrompt": "Skriv {confirmation} för att återställa testdatabasen.",
+  "migration.testResetting": "Återställer testdatabas..."
 }
