@@ -96,6 +96,27 @@ TARGET_DATA_TABLES = (
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
 MOVIE_ARTWORK_KINDS = {"poster", "backdrop"}
+NEXT_I18N_SOURCE_LOCALE = "en-US"
+NEXT_I18N_DEFAULT_LOCALE = "nl-NL"
+NEXT_I18N_LOCALES: tuple[dict[str, str], ...] = (
+    {"locale": "nl-NL", "legacy": "nl", "nativeName": "Nederlands", "englishName": "Dutch"},
+    {"locale": "en-US", "legacy": "en", "nativeName": "English", "englishName": "English"},
+    {"locale": "fr-FR", "legacy": "fr", "nativeName": "Français", "englishName": "French"},
+    {"locale": "de-DE", "legacy": "de", "nativeName": "Deutsch", "englishName": "German"},
+    {"locale": "es-ES", "legacy": "es", "nativeName": "Español", "englishName": "Spanish"},
+    {"locale": "pt-PT", "legacy": "pt", "nativeName": "Português", "englishName": "Portuguese"},
+    {"locale": "it-IT", "legacy": "it", "nativeName": "Italiano", "englishName": "Italian"},
+    {"locale": "sv-SE", "legacy": "sv", "nativeName": "Svenska", "englishName": "Swedish"},
+    {"locale": "da-DK", "legacy": "da", "nativeName": "Dansk", "englishName": "Danish"},
+    {"locale": "nb-NO", "legacy": "no", "nativeName": "Norsk", "englishName": "Norwegian"},
+    {"locale": "fi-FI", "legacy": "fi", "nativeName": "Suomi", "englishName": "Finnish"},
+)
+NEXT_I18N_ALIASES = {
+    item["legacy"].lower(): item["locale"] for item in NEXT_I18N_LOCALES
+} | {
+    item["locale"].lower(): item["locale"] for item in NEXT_I18N_LOCALES
+}
+NEXT_I18N_ALIASES.update({"nb": "nb-NO", "no-no": "nb-NO", "en-gb": "en-US"})
 
 
 def create_app() -> Flask:
@@ -163,6 +184,53 @@ def html_response(html: str):
     result.headers["Pragma"] = "no-cache"
     result.headers["Expires"] = "0"
     return result
+
+
+def next_i18n_dir() -> Path:
+    configured = os.environ.get("DISCVAULT_NEXT_I18N_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+    return Path(__file__).resolve().parent.parent / "frontend" / "i18n" / "next"
+
+
+def supported_next_locales() -> list[dict[str, str]]:
+    return [dict(item) for item in NEXT_I18N_LOCALES]
+
+
+def normalize_next_locale(value: str | None) -> str:
+    normalized = str(value or "").strip().replace("_", "-").lower()
+    if not normalized:
+        return NEXT_I18N_DEFAULT_LOCALE
+    if normalized in NEXT_I18N_ALIASES:
+        return NEXT_I18N_ALIASES[normalized]
+    language = normalized.split("-", 1)[0]
+    return NEXT_I18N_ALIASES.get(language, NEXT_I18N_DEFAULT_LOCALE)
+
+
+def load_next_locale_file(locale: str) -> dict[str, Any]:
+    path = next_i18n_dir() / f"{locale}.json"
+    if not path.exists():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json_lib.load(handle)
+    except OSError as exc:
+        raise NextApiError(f"Unable to read locale catalog {locale}", 500) from exc
+    except json_lib.JSONDecodeError as exc:
+        raise NextApiError(f"Invalid locale catalog {locale}", 500) from exc
+    if not isinstance(data, dict):
+        raise NextApiError(f"Locale catalog {locale} must be a JSON object", 500)
+    return data
+
+
+def next_i18n_messages(locale: str) -> dict[str, Any]:
+    normalized = normalize_next_locale(locale)
+    messages = load_next_locale_file(NEXT_I18N_SOURCE_LOCALE)
+    if normalized != NEXT_I18N_SOURCE_LOCALE:
+        messages.update(load_next_locale_file(normalized))
+    if not messages:
+        raise NextApiError("Next i18n catalogs are not available", 500)
+    return messages
 
 
 def table_exists(conn, table_name: str) -> bool:
@@ -737,7 +805,7 @@ def migration_dashboard_html() -> str:
     h1 { font-size: clamp(1.7rem, 3vw, 2.5rem); font-weight: 760; letter-spacing: 0; }
     h2 { font-size: 1rem; margin-bottom: 12px; }
     p { color: var(--muted); line-height: 1.55; }
-    button, a.button {
+    button, a.button, select {
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel-2);
@@ -749,6 +817,18 @@ def migration_dashboard_html() -> str:
       min-height: 38px;
       padding: 0 14px;
       text-decoration: none;
+      white-space: nowrap;
+    }
+    select {
+      padding: 0 10px;
+      min-width: 132px;
+    }
+    .language-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: .82rem;
       white-space: nowrap;
     }
     button.primary {
@@ -856,66 +936,70 @@ def migration_dashboard_html() -> str:
   <main>
     <header>
       <div>
-        <h1>DiscVault Next Migration</h1>
-        <p>PostgreSQL import status, legacy data checks, and metadata plugin readiness.</p>
+        <h1 data-next-i18n="migration.title">DiscVault Next Migration</h1>
+        <p data-next-i18n="migration.description">PostgreSQL import status, legacy data checks, and metadata plugin readiness.</p>
       </div>
       <div class="actions">
-        <button type="button" onclick="loadReport()">Refresh</button>
-        <button type="button" class="primary" id="startButton" onclick="startMigration()" disabled>Start Migration</button>
-        <a class="button" href="/api/next/migration/report">JSON</a>
+        <label class="language-control">
+          <span data-next-i18n="language.label">Language</span>
+          <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+        </label>
+        <button type="button" onclick="loadReport()" data-next-i18n="common.refresh">Refresh</button>
+        <button type="button" class="primary" id="startButton" onclick="startMigration()" disabled data-next-i18n="migration.start">Start Migration</button>
+        <a class="button" href="/api/next/migration/report" data-next-i18n="common.json">JSON</a>
       </div>
     </header>
 
     <section class="grid" aria-live="polite">
       <div class="card">
-        <h2>State</h2>
-        <div id="stateBadge" class="badge">Loading</div>
+        <h2 data-next-i18n="migration.state">State</h2>
+        <div id="stateBadge" class="badge" data-next-i18n="common.loading">Loading</div>
         <div id="message"></div>
       </div>
       <div class="card">
-        <h2>Movies</h2>
+        <h2 data-next-i18n="collection.movies">Movies</h2>
         <div class="metric" id="moviesCount">-</div>
-        <div class="label">Imported movie records</div>
+        <div class="label" data-next-i18n="migration.importedMovies">Imported movie records</div>
       </div>
       <div class="card">
-        <h2>People</h2>
+        <h2 data-next-i18n="migration.people">People</h2>
         <div class="metric" id="peopleCount">-</div>
-        <div class="label">Imported people records</div>
+        <div class="label" data-next-i18n="migration.importedPeople">Imported people records</div>
       </div>
       <div class="card">
-        <h2>Media Assets</h2>
+        <h2 data-next-i18n="migration.mediaAssets">Media Assets</h2>
         <div class="metric" id="mediaCount">-</div>
-        <div class="label">References to existing filesystem media</div>
+        <div class="label" data-next-i18n="migration.mediaAssetsHelp">References to existing filesystem media</div>
       </div>
       <div class="card">
-        <h2>Containers</h2>
+        <h2 data-next-i18n="migration.containers">Containers</h2>
         <div class="metric" id="containerCount">-</div>
-        <div class="label">Box-sets and collections</div>
+        <div class="label" data-next-i18n="migration.containersHelp">Box-sets and collections</div>
       </div>
       <div class="card">
-        <h2>Plugins</h2>
+        <h2 data-next-i18n="migration.plugins">Plugins</h2>
         <div class="metric" id="pluginCount">-</div>
-        <div class="label">Enabled metadata plugins</div>
+        <div class="label" data-next-i18n="migration.pluginsHelp">Enabled metadata plugins</div>
       </div>
 
       <div class="card wide">
-        <h2>Source</h2>
+        <h2 data-next-i18n="migration.source">Source</h2>
         <div class="list" id="sourceList"></div>
       </div>
       <div class="card">
-        <h2>Skipped</h2>
+        <h2 data-next-i18n="migration.skipped">Skipped</h2>
         <div class="list" id="skippedList"></div>
       </div>
       <div class="card full">
-        <h2>Metadata Plugins</h2>
+        <h2 data-next-i18n="migration.metadataPlugins">Metadata Plugins</h2>
         <div class="plugins" id="pluginsList"></div>
       </div>
       <div class="card full">
-        <h2>Required Actions</h2>
+        <h2 data-next-i18n="migration.requiredActions">Required Actions</h2>
         <div class="list" id="actionsList"></div>
       </div>
       <div class="card full" id="warningsCard" hidden>
-        <h2>Warnings</h2>
+        <h2 data-next-i18n="migration.warnings">Warnings</h2>
         <div class="list" id="warningsList"></div>
       </div>
     </section>
@@ -932,6 +1016,101 @@ def migration_dashboard_html() -> str:
       if (value === null || value === undefined || value === "") return "-";
       return Number(value).toLocaleString();
     }
+    const NEXT_I18N_FALLBACK_LOCALES = [
+      {locale: "nl-NL", legacy: "nl", nativeName: "Nederlands"},
+      {locale: "en-US", legacy: "en", nativeName: "English"},
+      {locale: "fr-FR", legacy: "fr", nativeName: "Francais"},
+      {locale: "de-DE", legacy: "de", nativeName: "Deutsch"},
+      {locale: "es-ES", legacy: "es", nativeName: "Espanol"},
+      {locale: "pt-PT", legacy: "pt", nativeName: "Portugues"},
+      {locale: "it-IT", legacy: "it", nativeName: "Italiano"},
+      {locale: "sv-SE", legacy: "sv", nativeName: "Svenska"},
+      {locale: "da-DK", legacy: "da", nativeName: "Dansk"},
+      {locale: "nb-NO", legacy: "no", nativeName: "Norsk"},
+      {locale: "fi-FI", legacy: "fi", nativeName: "Suomi"}
+    ];
+    const nextI18n = {locale: "nl-NL", messages: {}, locales: NEXT_I18N_FALLBACK_LOCALES};
+    function normalizeNextLocale(value) {
+      const raw = String(value || "").trim().replace("_", "-").toLowerCase();
+      const aliases = {};
+      nextI18n.locales.forEach((item) => {
+        aliases[String(item.locale).toLowerCase()] = item.locale;
+        aliases[String(item.legacy).toLowerCase()] = item.locale;
+      });
+      aliases.nb = "nb-NO";
+      aliases["no-no"] = "nb-NO";
+      aliases["en-gb"] = "en-US";
+      if (raw && aliases[raw]) return aliases[raw];
+      return aliases[raw.split("-", 1)[0]] || "nl-NL";
+    }
+    function legacyLocale(locale) {
+      const found = nextI18n.locales.find((item) => item.locale === locale);
+      return found ? found.legacy : String(locale || "nl-NL").split("-", 1)[0];
+    }
+    function preferredNextLocale() {
+      if (localStorage.getItem("dv_lang")) return normalizeNextLocale(localStorage.getItem("dv_lang"));
+      const browserLocales = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+      for (const locale of browserLocales) return normalizeNextLocale(locale);
+      return "nl-NL";
+    }
+    function tNext(key, fallback) {
+      return nextI18n.messages[key] || fallback || key;
+    }
+    function applyNextI18n() {
+      document.documentElement.lang = nextI18n.locale;
+      document.querySelectorAll("[data-next-i18n]").forEach((node) => {
+        node.textContent = tNext(node.dataset.nextI18n, node.textContent);
+      });
+      document.querySelectorAll("[data-next-i18n-aria]").forEach((node) => {
+        node.setAttribute("aria-label", tNext(node.dataset.nextI18nAria, node.getAttribute("aria-label") || ""));
+      });
+      const select = document.getElementById("nextLanguageSelect");
+      if (select) select.value = nextI18n.locale;
+    }
+    function renderLanguageOptions() {
+      const select = document.getElementById("nextLanguageSelect");
+      if (!select) return;
+      select.innerHTML = nextI18n.locales.map((item) => {
+        return `<option value="${escapeHtml(item.locale)}">${escapeHtml(item.nativeName || item.locale)}</option>`;
+      }).join("");
+      select.value = nextI18n.locale;
+    }
+    async function setNextLocale(locale, options) {
+      const normalized = normalizeNextLocale(locale);
+      nextI18n.locale = normalized;
+      if (options && options.persist) localStorage.setItem("dv_lang", legacyLocale(normalized));
+      try {
+        const response = await fetch(`/api/next/i18n/${encodeURIComponent(normalized)}`, {cache: "no-store"});
+        if (response.ok) {
+          const payload = await response.json();
+          nextI18n.locale = payload.locale || normalized;
+          nextI18n.messages = payload.messages || {};
+          if (Array.isArray(payload.locales) && payload.locales.length) nextI18n.locales = payload.locales;
+        }
+      } catch (error) {
+        console.warn("Next i18n catalog unavailable", error);
+      }
+      renderLanguageOptions();
+      applyNextI18n();
+    }
+    async function initNextI18n() {
+      try {
+        const response = await fetch("/api/next/i18n", {cache: "no-store"});
+        if (response.ok) {
+          const payload = await response.json();
+          if (Array.isArray(payload.locales) && payload.locales.length) nextI18n.locales = payload.locales;
+        }
+      } catch (error) {
+        console.warn("Next i18n manifest unavailable", error);
+      }
+      renderLanguageOptions();
+      const select = document.getElementById("nextLanguageSelect");
+      if (select && select.dataset.bound !== "true") {
+        select.dataset.bound = "true";
+        select.addEventListener("change", () => setNextLocale(select.value, {persist: true}).then(loadReport));
+      }
+      await setNextLocale(preferredNextLocale(), {persist: false});
+    }
     function statusClass(state) {
       if (state === "already_completed" || state === "ready_for_confirmation") return "ok";
       if (String(state || "").startsWith("blocked")) return "error";
@@ -942,7 +1121,7 @@ def migration_dashboard_html() -> str:
     }
     function rowsFromObject(data) {
       const entries = Object.entries(data || {});
-      if (!entries.length) return row("None", "-");
+      if (!entries.length) return row(tNext("common.none", "None"), "-");
       return entries.map(([key, value]) => row(key, typeof value === "object" ? JSON.stringify(value) : value)).join("");
     }
     function renderList(id, items) {
@@ -950,11 +1129,11 @@ def migration_dashboard_html() -> str:
       const values = Array.isArray(items) ? items : [];
       node.innerHTML = values.length
         ? values.map((item) => row("", item)).join("")
-        : row("None", "-");
+        : row(tNext("common.none", "None"), "-");
     }
     async function loadReport() {
       const message = document.getElementById("message");
-      message.textContent = "Loading report...";
+      message.textContent = tNext("migration.loadingReport", "Loading report...");
       const response = await fetch("/api/next/migration/report", {cache: "no-store"});
       if (!response.ok) throw new Error(`Report failed: HTTP ${response.status}`);
       const payload = await response.json();
@@ -970,8 +1149,8 @@ def migration_dashboard_html() -> str:
       stateBadge.textContent = state.replaceAll("_", " ");
       document.getElementById("startButton").disabled = !report.canStart;
       message.textContent = report.latestRun?.status
-        ? `Latest run: ${report.latestRun.status}`
-        : "No migration run has been recorded yet.";
+        ? `${tNext("migration.latestRun", "Latest run")}: ${report.latestRun.status}`
+        : tNext("migration.noRun", "No migration run has been recorded yet.");
 
       document.getElementById("moviesCount").textContent = formatNumber(imported.movies ?? target.movies);
       document.getElementById("peopleCount").textContent = formatNumber(imported.people ?? target.people);
@@ -992,10 +1171,10 @@ def migration_dashboard_html() -> str:
       document.getElementById("pluginsList").innerHTML = (plugins.items || []).map((plugin) => `
         <div class="plugin">
           <strong>${escapeHtml(plugin.name)}</strong>
-          <span class="badge ${plugin.enabled ? "ok" : "warn"}">${plugin.enabled ? "enabled" : "disabled"}</span>
+          <span class="badge ${plugin.enabled ? "ok" : "warn"}">${plugin.enabled ? escapeHtml(tNext("common.enabled", "enabled")) : escapeHtml(tNext("common.disabled", "disabled"))}</span>
           <div class="label mono">${escapeHtml(plugin.id)} / order ${escapeHtml(plugin.orderIndex)}</div>
         </div>
-      `).join("") || row("No plugins", "-");
+      `).join("") || row(tNext("migration.plugins", "Plugins"), "-");
       renderList("actionsList", report.requiredActions || []);
 
       const warnings = report.summary?.warnings || [];
@@ -1006,7 +1185,7 @@ def migration_dashboard_html() -> str:
       const button = document.getElementById("startButton");
       const message = document.getElementById("message");
       button.disabled = true;
-      message.textContent = "Starting migration...";
+      message.textContent = tNext("migration.starting", "Starting migration...");
       const response = await fetch("/api/next/migration/start", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -1016,14 +1195,15 @@ def migration_dashboard_html() -> str:
         const text = await response.text();
         throw new Error(`Migration start failed: HTTP ${response.status} ${text}`);
       }
-      message.textContent = "Migration job queued.";
+      message.textContent = tNext("migration.queued", "Migration job queued.");
       await loadReport();
     }
-    window.addEventListener("load", () => {
+    window.addEventListener("load", async () => {
+      await initNextI18n();
       loadReport().catch((error) => {
         document.getElementById("message").textContent = error.message;
         document.getElementById("stateBadge").className = "badge error";
-        document.getElementById("stateBadge").textContent = "error";
+        document.getElementById("stateBadge").textContent = tNext("common.error", "error");
       });
     });
   </script>
@@ -1584,7 +1764,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       margin-bottom: 16px;
       align-items: center;
     }
-    input {
+    input, select {
       width: 100%;
       min-height: 42px;
       border: 1px solid var(--line);
@@ -1594,9 +1774,23 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       padding: 0 13px;
       font: inherit;
     }
-    input:focus {
+    input:focus, select:focus {
       border-color: var(--blue);
       outline: none;
+    }
+    .language-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: .8rem;
+      white-space: nowrap;
+    }
+    .language-control select {
+      width: auto;
+      min-width: 142px;
+      min-height: 34px;
+      padding: 0 9px;
     }
     .stats {
       display: grid;
@@ -2301,55 +2495,59 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
   <main>
     <header class="app-header">
       <div class="app-brand">
-        <span class="eyebrow">DiscVault Next</span>
-        <h1>Collection</h1>
-        <p>PostgreSQL collection view for validating the migrated library.</p>
+        <span class="eyebrow" data-next-i18n="shell.product">DiscVault Next</span>
+        <h1 data-next-i18n="collection.title">Collection</h1>
+        <p data-next-i18n="collection.description">PostgreSQL collection view for validating the migrated library.</p>
         <p class="muted" id="clientStatus">""" + h(client_status) + """</p>
       </div>
       <div class="header-controls">
-        <div class="theme-toggle" role="group" aria-label="Appearance">
-          <button type="button" data-theme-choice="system">System</button>
-          <button type="button" data-theme-choice="light">Light</button>
-          <button type="button" data-theme-choice="dark">Dark</button>
+        <div class="theme-toggle" role="group" aria-label="Appearance" data-next-i18n-aria="appearance.label">
+          <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
+          <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
+          <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
         </div>
+        <label class="language-control">
+          <span data-next-i18n="language.label">Language</span>
+          <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+        </label>
         <div class="actions">
-          <button type="button" onclick="loadCollection()">Refresh</button>
-          <a class="button" href="/api/next/migration">Migration</a>
-          <a class="button" href="/api/next/movies?limit=200">Movies JSON</a>
+          <button type="button" onclick="loadCollection()" data-next-i18n="common.refresh">Refresh</button>
+          <a class="button" href="/api/next/migration" data-next-i18n="nav.migration">Migration</a>
+          <a class="button" href="/api/next/movies?limit=200" data-next-i18n="nav.moviesJson">Movies JSON</a>
         </div>
       </div>
     </header>
 
     <section class="stats">
-      <div class="stat"><strong id="movieCount">""" + h(counts.get("movies", 0)) + """</strong><span>Movies</span></div>
-      <div class="stat"><strong id="peopleCount">""" + h(counts.get("people", 0)) + """</strong><span>People</span></div>
-      <div class="stat"><strong id="assetCount">""" + h(counts.get("mediaAssets", 0)) + """</strong><span>Media assets</span></div>
-      <div class="stat"><strong id="pluginCount">""" + h(len(enabled_plugins)) + """</strong><span>Enabled plugins</span></div>
+      <div class="stat"><strong id="movieCount">""" + h(counts.get("movies", 0)) + """</strong><span data-next-i18n="collection.movies">Movies</span></div>
+      <div class="stat"><strong id="peopleCount">""" + h(counts.get("people", 0)) + """</strong><span data-next-i18n="collection.people">People</span></div>
+      <div class="stat"><strong id="assetCount">""" + h(counts.get("mediaAssets", 0)) + """</strong><span data-next-i18n="collection.mediaAssets">Media assets</span></div>
+      <div class="stat"><strong id="pluginCount">""" + h(len(enabled_plugins)) + """</strong><span data-next-i18n="collection.enabledPlugins">Enabled plugins</span></div>
     </section>
 
     <section class="auth-panel" id="authPanel">
       <div class="auth-copy">
-        <strong id="authTitle">Passkeys</strong>
-        <p id="authDescription">Checking authentication status...</p>
+        <strong id="authTitle" data-next-i18n="auth.passkeys">Passkeys</strong>
+        <p id="authDescription" data-next-i18n="auth.checking">Checking authentication status...</p>
         <p class="muted" id="authMeta"></p>
       </div>
       <div class="auth-form">
         <div id="authSetupFields">
-          <label>Username
+          <label><span data-next-i18n="auth.username">Username</span>
             <input id="authUsername" type="text" value="admin" autocomplete="username">
           </label>
-          <label>Passkey name
+          <label><span data-next-i18n="auth.passkeyName">Passkey name</span>
             <input id="authCredentialName" type="text" value="Owner passkey" autocomplete="off">
           </label>
-          <label id="authInviteLabel">Invite code
+          <label id="authInviteLabel"><span data-next-i18n="auth.inviteCode">Invite code</span>
             <input id="authInviteCode" type="text" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX">
           </label>
         </div>
         <div class="actions">
-          <button type="button" id="authSetupButton" data-auth-action="setup">Create owner passkey</button>
-          <button type="button" id="authJoinButton" data-auth-action="join">Create account</button>
-          <button type="button" id="authLoginButton" data-auth-action="login">Sign in</button>
-          <button type="button" id="authLogoutButton" data-auth-action="logout">Sign out</button>
+          <button type="button" id="authSetupButton" data-auth-action="setup" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
+          <button type="button" id="authJoinButton" data-auth-action="join" data-next-i18n="auth.createAccount">Create account</button>
+          <button type="button" id="authLoginButton" data-auth-action="login" data-next-i18n="auth.signIn">Sign in</button>
+          <button type="button" id="authLogoutButton" data-auth-action="logout" data-next-i18n="auth.signOut">Sign out</button>
         </div>
         <div class="auth-status" id="authStatusLine"></div>
       </div>
@@ -2358,16 +2556,16 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     <section class="startup-panel hidden" id="startupPanel">
       <div class="startup-head">
         <div class="startup-copy">
-          <strong id="startupTitle">Setup</strong>
-          <p id="startupDescription">Checking startup state...</p>
+          <strong id="startupTitle" data-next-i18n="startup.setup">Setup</strong>
+          <p id="startupDescription" data-next-i18n="startup.checking">Checking startup state...</p>
           <p class="muted" id="startupMeta"></p>
           <div class="auth-status" id="startupStatusLine"></div>
         </div>
         <div class="startup-actions">
-          <button type="button" id="startupAuthButton" data-startup-action="auth">Passkey</button>
-          <button type="button" id="startupStartMigrationButton" data-startup-action="start-migration">Start Migration</button>
-          <button type="button" id="startupMigrationButton" data-startup-action="migration">Migration Details</button>
-          <button type="button" id="startupRefreshButton" data-startup-action="refresh">Refresh</button>
+          <button type="button" id="startupAuthButton" data-startup-action="auth" data-next-i18n="auth.passkey">Passkey</button>
+          <button type="button" id="startupStartMigrationButton" data-startup-action="start-migration" data-next-i18n="startup.startMigration">Start Migration</button>
+          <button type="button" id="startupMigrationButton" data-startup-action="migration" data-next-i18n="startup.migrationDetails">Migration Details</button>
+          <button type="button" id="startupRefreshButton" data-startup-action="refresh" data-next-i18n="common.refresh">Refresh</button>
         </div>
       </div>
       <div class="startup-steps" id="startupSteps"></div>
@@ -2523,21 +2721,21 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     </section>
 
     <div class="toolbar">
-      <input id="searchInput" type="search" placeholder="Search title, barcode, format..." oninput="renderMovies()">
+      <input id="searchInput" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder" oninput="renderMovies()">
       <div class="filters" id="formatFilters"></div>
     </div>
 
     <section class="layout">
       <div class="panel">
         <div class="section-head">
-          <h2>Movies</h2>
+          <h2 data-next-i18n="collection.movies">Movies</h2>
           <span class="muted" id="resultCount">""" + h(len(movies)) + """ server rendered</span>
         </div>
         <div class="grid" id="movieGrid">""" + movie_cards + """</div>
       </div>
       <aside class="panel">
         <div class="section-head">
-          <h2>Containers</h2>
+          <h2 data-next-i18n="collection.containers">Containers</h2>
           <span class="muted" id="containerCount">""" + h(len(containers)) + """</span>
         </div>
         <div class="containers" id="containerList">""" + container_cards + """</div>
@@ -2634,6 +2832,122 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     function number(value) {
       return Number(value || 0).toLocaleString();
+    }
+    const NEXT_I18N_FALLBACK_LOCALES = [
+      {locale: "nl-NL", legacy: "nl", nativeName: "Nederlands"},
+      {locale: "en-US", legacy: "en", nativeName: "English"},
+      {locale: "fr-FR", legacy: "fr", nativeName: "Francais"},
+      {locale: "de-DE", legacy: "de", nativeName: "Deutsch"},
+      {locale: "es-ES", legacy: "es", nativeName: "Espanol"},
+      {locale: "pt-PT", legacy: "pt", nativeName: "Portugues"},
+      {locale: "it-IT", legacy: "it", nativeName: "Italiano"},
+      {locale: "sv-SE", legacy: "sv", nativeName: "Svenska"},
+      {locale: "da-DK", legacy: "da", nativeName: "Dansk"},
+      {locale: "nb-NO", legacy: "no", nativeName: "Norsk"},
+      {locale: "fi-FI", legacy: "fi", nativeName: "Suomi"}
+    ];
+    const nextI18n = {
+      locale: "nl-NL",
+      messages: {},
+      locales: NEXT_I18N_FALLBACK_LOCALES
+    };
+    function normalizeNextLocale(value) {
+      const raw = String(value || "").trim().replace("_", "-").toLowerCase();
+      const aliases = {};
+      nextI18n.locales.forEach((item) => {
+        aliases[String(item.locale).toLowerCase()] = item.locale;
+        aliases[String(item.legacy).toLowerCase()] = item.locale;
+      });
+      aliases.nb = "nb-NO";
+      aliases["no-no"] = "nb-NO";
+      aliases["en-gb"] = "en-US";
+      if (raw && aliases[raw]) return aliases[raw];
+      const language = raw.split("-", 1)[0];
+      return aliases[language] || "nl-NL";
+    }
+    function legacyLocale(locale) {
+      const found = nextI18n.locales.find((item) => item.locale === locale);
+      return found ? found.legacy : String(locale || "nl-NL").split("-", 1)[0];
+    }
+    function preferredNextLocale() {
+      const stored = localStorage.getItem("dv_lang");
+      if (stored) return normalizeNextLocale(stored);
+      const browserLocales = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+      for (const locale of browserLocales) {
+        const normalized = normalizeNextLocale(locale);
+        if (normalized) return normalized;
+      }
+      return "nl-NL";
+    }
+    function tNext(key, fallback) {
+      return nextI18n.messages[key] || fallback || key;
+    }
+    function applyNextI18n() {
+      document.documentElement.lang = nextI18n.locale;
+      document.querySelectorAll("[data-next-i18n]").forEach((node) => {
+        node.textContent = tNext(node.dataset.nextI18n, node.textContent);
+      });
+      document.querySelectorAll("[data-next-i18n-placeholder]").forEach((node) => {
+        node.setAttribute("placeholder", tNext(node.dataset.nextI18nPlaceholder, node.getAttribute("placeholder") || ""));
+      });
+      document.querySelectorAll("[data-next-i18n-aria]").forEach((node) => {
+        node.setAttribute("aria-label", tNext(node.dataset.nextI18nAria, node.getAttribute("aria-label") || ""));
+      });
+      const select = document.getElementById("nextLanguageSelect");
+      if (select) select.value = nextI18n.locale;
+      renderFormatFilters();
+      renderMovies();
+      renderContainers();
+    }
+    function renderLanguageOptions() {
+      const select = document.getElementById("nextLanguageSelect");
+      if (!select) return;
+      select.innerHTML = nextI18n.locales.map((item) => {
+        return `<option value="${escapeHtml(item.locale)}">${escapeHtml(item.nativeName || item.locale)}</option>`;
+      }).join("");
+      select.value = nextI18n.locale;
+    }
+    async function setNextLocale(locale, options) {
+      const normalized = normalizeNextLocale(locale);
+      nextI18n.locale = normalized;
+      if (options && options.persist) {
+        localStorage.setItem("dv_lang", legacyLocale(normalized));
+      }
+      try {
+        const response = await fetch(`/api/next/i18n/${encodeURIComponent(normalized)}`, {cache: "no-store"});
+        if (response.ok) {
+          const payload = await response.json();
+          nextI18n.locale = payload.locale || normalized;
+          nextI18n.messages = payload.messages || {};
+          if (Array.isArray(payload.locales) && payload.locales.length) {
+            nextI18n.locales = payload.locales;
+          }
+        }
+      } catch (error) {
+        console.warn("Next i18n catalog unavailable", error);
+      }
+      renderLanguageOptions();
+      applyNextI18n();
+    }
+    async function initNextI18n() {
+      try {
+        const response = await fetch("/api/next/i18n", {cache: "no-store"});
+        if (response.ok) {
+          const payload = await response.json();
+          if (Array.isArray(payload.locales) && payload.locales.length) {
+            nextI18n.locales = payload.locales;
+          }
+        }
+      } catch (error) {
+        console.warn("Next i18n manifest unavailable", error);
+      }
+      renderLanguageOptions();
+      const select = document.getElementById("nextLanguageSelect");
+      if (select && select.dataset.bound !== "true") {
+        select.dataset.bound = "true";
+        select.addEventListener("change", () => setNextLocale(select.value, {persist: true}));
+      }
+      await setNextLocale(preferredNextLocale(), {persist: false});
     }
     function systemTheme() {
       return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -4312,7 +4626,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function renderFormatFilters() {
       const formats = Array.from(new Set(state.movies.map((movie) => movie.format).filter(Boolean))).sort();
       const buttons = ["all", ...formats].map((format) => {
-        const label = format === "all" ? "All formats" : format;
+        const label = format === "all" ? tNext("common.allFormats", "All formats") : format;
         return `<button type="button" class="${state.activeFormat === format ? "active" : ""}" onclick="setFormat('${escapeHtml(format)}')">${escapeHtml(label)}</button>`;
       });
       document.getElementById("formatFilters").innerHTML = buttons.join("");
@@ -4335,17 +4649,17 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         const formatOk = state.activeFormat === "all" || movie.format === state.activeFormat;
         return formatOk && movieMatches(movie, query);
       });
-      document.getElementById("resultCount").textContent = `${number(filtered.length)} shown`;
+      document.getElementById("resultCount").textContent = `${number(filtered.length)} ${tNext("collection.shown", "shown")}`;
       document.getElementById("movieGrid").innerHTML = filtered.length ? filtered.map((movie) => {
         const poster = usableImage(movie.poster_url);
         const posterHtml = poster
           ? `<img src="${escapeHtml(poster)}" alt="">`
-          : `<span>No poster</span>`;
+          : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
         return `
           <a class="movie" href="/api/next/app/movies/${encodeURIComponent(movie.id)}" data-movie-id="${escapeHtml(movie.id)}">
             <div class="poster">${posterHtml}</div>
             <div class="movie-body">
-              <div class="movie-title">${escapeHtml(movie.title || "Untitled")}</div>
+              <div class="movie-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</div>
               <div class="tags">
                 ${movie.year ? `<span class="tag good">${escapeHtml(movie.year)}</span>` : ""}
                 ${movie.format ? `<span class="tag blue">${escapeHtml(movie.format)}</span>` : ""}
@@ -4355,20 +4669,20 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             </div>
           </a>
         `;
-      }).join("") : `<div class="empty">No movies match the current filter.</div>`;
+      }).join("") : `<div class="empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
     }
     function renderContainers() {
       document.getElementById("containerCount").textContent = number(state.containers.length);
       document.getElementById("containerList").innerHTML = state.containers.length ? state.containers.map((container) => `
         <a class="container-card" href="/api/next/app/containers/${encodeURIComponent(container.id)}">
-          <strong>${escapeHtml(container.title || "Untitled")}</strong>
+          <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
           <div class="tags">
             <span class="tag blue">${escapeHtml((container.container_type || "container").replaceAll("_", " "))}</span>
             ${container.year ? `<span class="tag good">${escapeHtml(container.year)}</span>` : ""}
             ${container.barcode ? `<span class="tag">${escapeHtml(container.barcode)}</span>` : ""}
           </div>
         </a>
-      `).join("") : `<div class="empty">No containers imported yet.</div>`;
+      `).join("") : `<div class="empty">${escapeHtml(tNext("collection.emptyContainers", "No containers imported yet."))}</div>`;
     }
     function renderMovieDetail(detail) {
       const movie = detail.movie || {};
@@ -4501,14 +4815,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       return response.json();
     }
     async function loadCollection() {
-      setClientStatus("Loading collection data...");
-      document.getElementById("resultCount").textContent = "Loading...";
+      setClientStatus(tNext("collection.loadingCollection", "Loading collection data..."));
+      document.getElementById("resultCount").textContent = tNext("collection.loading", "Loading...");
       const stats = await json("/api/next/stats");
-      setClientStatus("Stats loaded; loading movies...");
+      setClientStatus(tNext("collection.loadingMovies", "Stats loaded; loading movies..."));
       const movies = await json("/api/next/movies?limit=200");
-      setClientStatus("Movies loaded; loading containers...");
+      setClientStatus(tNext("collection.loadingPlugins", "Movies loaded; loading containers..."));
       const containers = await json("/api/next/containers");
-      setClientStatus("Containers loaded; loading metadata plugins...");
+      setClientStatus(tNext("collection.loadingContainers", "Containers loaded; loading metadata plugins..."));
       const plugins = await json("/api/next/metadata/plugins");
       state.stats = stats || {};
       state.movies = movies.items || [];
@@ -4530,7 +4844,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderMovies();
       renderContainers();
       document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
-      document.getElementById("resultCount").textContent = authState.authenticated ? "Blocked" : "Sign in required";
+      document.getElementById("resultCount").textContent = authState.authenticated
+        ? tNext("collection.blocked", "Blocked")
+        : tNext("collection.signInRequired", "Sign in required");
       setClientStatus(message);
     }
     async function resumeStartupOrCollection() {
@@ -4544,22 +4860,23 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     async function bootCollection() {
       setClientStatus("Client script started.");
       bindThemeControls();
+      await initNextI18n();
       bindAuthButtons();
       bindStartupActions();
       bindCollectionLinks();
       bindAdminActions();
       await refreshAuthStatus();
       if (authState.auth_enabled && !authState.authenticated) {
-        clearProtectedCollection("Sign in with your passkey to load the collection.");
+        clearProtectedCollection(tNext("collection.signInRequiredMessage", "Sign in with your passkey to load the collection."));
         return;
       }
       resumeStartupOrCollection().catch((error) => {
         if (error.status === 401) {
-          clearProtectedCollection("Sign in with your passkey to load the collection.");
+          clearProtectedCollection(tNext("collection.signInRequiredMessage", "Sign in with your passkey to load the collection."));
           return;
         }
         document.getElementById("movieGrid").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
-        document.getElementById("resultCount").textContent = "Error";
+        document.getElementById("resultCount").textContent = tNext("common.error", "Error");
         setClientStatus(`Load failed: ${error.message}`);
       });
     }
@@ -7771,11 +8088,13 @@ PUBLIC_NEXT_PATHS = {
     "/api/next/collection",
     "/api/next/collection/",
     "/api/next/health",
+    "/api/next/i18n",
 }
 PUBLIC_NEXT_PREFIXES = (
     "/.well-known/",
     "/api/auth/",
     "/api/next/auth/",
+    "/api/next/i18n/",
     "/api/next/media/assets/",
 )
 
@@ -7864,6 +8183,30 @@ def register_routes(flask_app: Flask) -> None:
                 "migrations": migrations,
             },
             200 if is_ready else 503,
+        )
+
+    @flask_app.get("/api/next/i18n")
+    def next_i18n_manifest():
+        return response(
+            {
+                "status": "ok",
+                "sourceLocale": NEXT_I18N_SOURCE_LOCALE,
+                "defaultLocale": NEXT_I18N_DEFAULT_LOCALE,
+                "locales": supported_next_locales(),
+            }
+        )
+
+    @flask_app.get("/api/next/i18n/<path:locale>")
+    def next_i18n_catalog(locale: str):
+        normalized = normalize_next_locale(locale)
+        return response(
+            {
+                "status": "ok",
+                "locale": normalized,
+                "sourceLocale": NEXT_I18N_SOURCE_LOCALE,
+                "messages": next_i18n_messages(normalized),
+                "locales": supported_next_locales(),
+            }
         )
 
     @flask_app.get("/api/next/startup/status")
