@@ -220,6 +220,8 @@ def migration_security_backfill_required(
     source_counts: dict[str, int],
     latest: dict[str, Any] | None,
 ) -> bool:
+    if latest and latest.get("status") == "completed" and latest_run_included_security(latest):
+        return False
     latest_supports_backfill = (
         bool(latest)
         and latest.get("status") == "completed"

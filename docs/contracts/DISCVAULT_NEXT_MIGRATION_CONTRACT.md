@@ -54,3 +54,6 @@ may still allow this backfill if the target database clearly contains a legacy
 DiscVault import, for example `legacy-movie-*` or `legacy-*` public identifiers,
 and the target security/group counts are lower than the detected legacy source
 counts.
+
+Once a completed migration run records `include_security = true`, the backfill is
+considered closed and readiness must stop offering `ready_for_security_backfill`.
