@@ -57,3 +57,30 @@ counts.
 
 Once a completed migration run records `include_security = true`, the backfill is
 considered closed and readiness must stop offering `ready_for_security_backfill`.
+
+## Startup Orchestration
+
+DiscVault Next exposes a startup status endpoint for the PWA shell:
+
+```txt
+GET /api/next/startup/status
+```
+
+The endpoint combines auth readiness, current user role, schema state and
+migration readiness into one phase:
+
+- `owner_setup`: no usable owner/passkey exists and no migration is blocking
+  startup.
+- `migration_required`: legacy data is detected and the current actor may start
+  or continue migration.
+- `migration_running`: a migration job is active.
+- `migration_pending_non_admin`: a non-admin user is signed in before migration
+  has completed.
+- `schema_blocked`: PostgreSQL schema migrations are pending or unhealthy.
+- `sign_in_required`: authentication is active and setup requires a signed-in
+  user.
+- `ready`: normal collection UI may load.
+
+The collection UI must use this startup state before loading collection data.
+Only `ready` permits the normal collection view. All other phases show a setup
+or migration panel and keep the collection area blocked.
