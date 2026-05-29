@@ -2999,6 +2999,840 @@ def server_container_cards(containers: list[dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
+def ui_preview_movie_cards(movies: list[dict[str, Any]]) -> str:
+    if not movies:
+        return '<div class="preview-empty" data-next-i18n="collection.emptyMovies">No movies match the current filter.</div>'
+    cards = []
+    for index, movie in enumerate(movies[:24]):
+        poster = server_usable_image(movie.get("poster_url"))
+        poster_html = f'<img src="{h(poster)}" alt="">' if poster else '<span data-next-i18n="collection.noPoster">No poster</span>'
+        meta = " ".join(str(value) for value in (movie.get("year"), movie.get("format")) if value)
+        selected = " selected" if index == 0 else ""
+        cards.append(
+            f"""
+            <button type="button" class="preview-poster{selected}" data-preview-movie="{h(movie.get("id"))}">
+              <span class="preview-poster-art">{poster_html}</span>
+              <span class="preview-poster-title">{h(movie.get("title") or "Untitled")}</span>
+              <span class="preview-poster-meta">{h(meta or movie.get("barcode") or "")}</span>
+            </button>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def ui_preview_container_cards(containers: list[dict[str, Any]]) -> str:
+    if not containers:
+        return '<div class="preview-empty" data-next-i18n="collection.emptyContainers">No containers imported yet.</div>'
+    cards = []
+    for container in containers[:8]:
+        label = str(container.get("container_type") or "container").replace("_", " ")
+        container_href = h(app_href(f"/containers/{container.get('id')}"))
+        cards.append(
+            f"""
+            <a class="preview-collection" href="{container_href}">
+              <span>{h(label)}</span>
+              <strong>{h(container.get("title") or "Untitled")}</strong>
+            </a>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
+    snapshot = snapshot or empty_collection_dashboard_snapshot()
+    counts = snapshot.get("counts") or {}
+    movies = snapshot.get("movies") or []
+    containers = snapshot.get("containers") or []
+    featured = movies[0] if movies else {}
+    featured_backdrop = server_usable_image(featured.get("backdrop_url"))
+    featured_poster = server_usable_image(featured.get("poster_url"))
+    featured_id = featured.get("id")
+    featured_href = app_href(f"/movies/{featured_id}") if featured_id else app_href()
+    featured_backdrop_html = (
+        f'<img class="hero-backdrop" id="heroBackdrop" src="{h(featured_backdrop)}" alt="">'
+        if featured_backdrop
+        else '<img class="hero-backdrop" id="heroBackdrop" alt="">'
+    )
+    initial_state_json = html_lib.escape(json_lib.dumps(json_ready(snapshot), separators=(",", ":")), quote=False)
+    locales_json = html_lib.escape(json_lib.dumps(supported_next_locales(), separators=(",", ":")), quote=False)
+    movie_cards = ui_preview_movie_cards(movies)
+    container_cards = ui_preview_container_cards(containers)
+    build = snapshot.get("build") or {}
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DiscVault UI Preview</title>
+  <script>
+    (function () {
+      try {
+        const preference = localStorage.getItem("dv_next_theme") || "system";
+        const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.dataset.theme = preference === "system" ? (dark ? "dark" : "light") : preference;
+      } catch (error) {
+        document.documentElement.dataset.theme = "dark";
+        document.documentElement.dataset.themePreference = "system";
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #f4f5f7;
+      --bg-elevated: rgba(255, 255, 255, 0.78);
+      --bg-solid: #ffffff;
+      --text: #17181c;
+      --muted: #6b7280;
+      --subtle: #8b93a1;
+      --line: rgba(25, 28, 36, 0.12);
+      --line-strong: rgba(25, 28, 36, 0.18);
+      --accent: #0a84ff;
+      --accent-contrast: #ffffff;
+      --green: #34c759;
+      --amber: #ff9f0a;
+      --red: #ff453a;
+      --shadow: 0 18px 55px rgba(26, 31, 42, 0.14);
+      --shadow-soft: 0 10px 28px rgba(26, 31, 42, 0.10);
+      --radius: 8px;
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #111214;
+      --bg-elevated: rgba(31, 33, 38, 0.76);
+      --bg-solid: #1c1d21;
+      --text: #f5f6f8;
+      --muted: #a5acb8;
+      --subtle: #798191;
+      --line: rgba(244, 247, 255, 0.12);
+      --line-strong: rgba(244, 247, 255, 0.20);
+      --accent: #5ac8fa;
+      --accent-contrast: #071014;
+      --shadow: 0 22px 70px rgba(0, 0, 0, 0.36);
+      --shadow-soft: 0 12px 34px rgba(0, 0, 0, 0.26);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.48), transparent 32rem),
+        var(--bg);
+      letter-spacing: 0;
+    }
+    html[data-theme="dark"] body {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.05), transparent 30rem),
+        var(--bg);
+    }
+    button, input, select {
+      font: inherit;
+      letter-spacing: 0;
+    }
+    button, a {
+      -webkit-tap-highlight-color: transparent;
+    }
+    a { color: inherit; text-decoration: none; }
+    .preview-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+    }
+    .preview-sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 22px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      background: color-mix(in srgb, var(--bg-elevated) 86%, transparent);
+      border-right: 1px solid var(--line);
+      backdrop-filter: blur(24px) saturate(160%);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+      padding: 0 8px 8px;
+    }
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: var(--accent-contrast);
+      background: linear-gradient(145deg, var(--accent), #30d158);
+      box-shadow: var(--shadow-soft);
+      font-weight: 800;
+    }
+    .brand strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.1;
+    }
+    .brand span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .nav-section {
+      display: grid;
+      gap: 6px;
+    }
+    .nav-item {
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      border-radius: 8px;
+      min-height: 40px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      text-align: left;
+    }
+    .nav-item.active {
+      color: var(--text);
+      background: var(--bg-solid);
+      box-shadow: var(--shadow-soft);
+    }
+    .nav-item small {
+      color: var(--subtle);
+      font-size: 11px;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .preview-main {
+      min-width: 0;
+      padding: 22px clamp(18px, 3vw, 34px) 40px;
+      display: grid;
+      gap: 20px;
+      align-content: start;
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+    }
+    .searchbox {
+      min-width: 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      backdrop-filter: blur(20px) saturate(160%);
+    }
+    .searchbox span {
+      color: var(--subtle);
+    }
+    .searchbox input {
+      min-width: 0;
+      flex: 1;
+      border: 0;
+      outline: 0;
+      color: var(--text);
+      background: transparent;
+    }
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .segmented, select {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      color: var(--text);
+      backdrop-filter: blur(20px) saturate(160%);
+    }
+    .segmented {
+      display: inline-flex;
+      padding: 3px;
+      gap: 3px;
+    }
+    .segmented button {
+      min-width: 54px;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 10px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+    }
+    .segmented button.active {
+      color: var(--text);
+      background: var(--bg-solid);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    select {
+      padding: 0 12px;
+      max-width: 180px;
+    }
+    .hero {
+      position: relative;
+      min-height: clamp(320px, 42vw, 480px);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(210px, 280px);
+      align-items: end;
+      gap: clamp(18px, 3vw, 34px);
+      padding: clamp(20px, 4vw, 42px);
+      overflow: hidden;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: #17181c;
+      color: #fff;
+      box-shadow: var(--shadow);
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,0.78), rgba(0,0,0,0.30) 54%, rgba(0,0,0,0.10)),
+        linear-gradient(0deg, rgba(0,0,0,0.72), rgba(0,0,0,0.06) 55%);
+      z-index: 1;
+    }
+    .hero-backdrop {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: .82;
+    }
+    .hero-content, .hero-poster {
+      position: relative;
+      z-index: 2;
+    }
+    .eyebrow {
+      color: rgba(255,255,255,0.76);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .hero h1 {
+      margin: 8px 0 10px;
+      max-width: 760px;
+      font-size: clamp(38px, 6vw, 78px);
+      line-height: .94;
+      letter-spacing: 0;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .pill {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 999px;
+      color: rgba(255,255,255,0.88);
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.18);
+      backdrop-filter: blur(16px);
+      font-size: 12px;
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .action {
+      min-height: 40px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #111214;
+      background: rgba(255,255,255,0.92);
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .action.secondary {
+      color: #fff;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.18);
+    }
+    .hero-poster {
+      justify-self: end;
+      width: min(100%, 238px);
+      aspect-ratio: 2 / 3;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: rgba(255,255,255,0.12);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.38);
+    }
+    .hero-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .preview-stat, .preview-panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: var(--shadow-soft);
+    }
+    .preview-stat {
+      min-height: 86px;
+      padding: 16px;
+    }
+    .preview-stat strong {
+      display: block;
+      font-size: clamp(26px, 3vw, 40px);
+      line-height: 1;
+    }
+    .preview-stat span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .preview-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 18px;
+      align-items: start;
+    }
+    .preview-panel {
+      padding: 18px;
+      min-width: 0;
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .panel-head h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .panel-head span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .poster-rail {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+      gap: 14px;
+    }
+    .preview-poster {
+      width: 100%;
+      min-width: 0;
+      border: 0;
+      border-radius: var(--radius);
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      color: var(--text);
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+    .preview-poster-art {
+      aspect-ratio: 2 / 3;
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #30343c, #181a1f);
+      color: rgba(255,255,255,.68);
+      box-shadow: var(--shadow-soft);
+      border: 1px solid var(--line);
+    }
+    .preview-poster-art img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 180ms ease;
+    }
+    .preview-poster:hover .preview-poster-art img,
+    .preview-poster.selected .preview-poster-art img {
+      transform: scale(1.035);
+    }
+    .preview-poster.selected .preview-poster-art {
+      outline: 3px solid color-mix(in srgb, var(--accent) 82%, transparent);
+      outline-offset: 2px;
+    }
+    .preview-poster-title {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
+      min-height: 2.4em;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .preview-poster-meta {
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 1.2em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .side-stack {
+      display: grid;
+      gap: 14px;
+    }
+    .preview-collections {
+      display: grid;
+      gap: 10px;
+    }
+    .preview-collection {
+      min-height: 64px;
+      padding: 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--bg-solid);
+      display: grid;
+      align-content: center;
+      gap: 4px;
+    }
+    .preview-collection span {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: capitalize;
+    }
+    .preview-collection strong {
+      font-size: 14px;
+      line-height: 1.25;
+    }
+    .activity-list {
+      display: grid;
+      gap: 10px;
+    }
+    .activity {
+      display: grid;
+      grid-template-columns: 9px minmax(0, 1fr);
+      align-items: start;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .activity::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      margin-top: 4px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .preview-empty {
+      padding: 18px;
+      border-radius: var(--radius);
+      border: 1px dashed var(--line-strong);
+      color: var(--muted);
+    }
+    @media (max-width: 1060px) {
+      .preview-shell { grid-template-columns: 1fr; }
+      .preview-sidebar {
+        position: static;
+        height: auto;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .nav-section {
+        grid-auto-flow: column;
+        grid-auto-columns: max-content;
+        overflow-x: auto;
+      }
+      .sidebar-footer { display: none; }
+      .preview-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 760px) {
+      .preview-main { padding: 14px 12px 28px; }
+      .topbar { grid-template-columns: 1fr; }
+      .top-actions { justify-content: stretch; }
+      .segmented { flex: 1; }
+      .segmented button { flex: 1; }
+      select { flex: 1; max-width: none; }
+      .hero {
+        min-height: 560px;
+        grid-template-columns: 1fr;
+        align-items: end;
+      }
+      .hero h1 { font-size: clamp(34px, 13vw, 56px); }
+      .hero-poster {
+        justify-self: start;
+        width: min(44vw, 170px);
+      }
+      .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .poster-rail { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <script id="initialState" type="application/json">""" + initial_state_json + """</script>
+  <script id="nextLocales" type="application/json">""" + locales_json + """</script>
+  <div class="preview-shell">
+    <aside class="preview-sidebar">
+      <div class="brand">
+        <div class="brand-mark">D</div>
+        <div>
+          <strong>DiscVault</strong>
+          <span data-next-i18n="uiPreview.preview">UI Preview</span>
+        </div>
+      </div>
+      <nav class="nav-section" aria-label="Primary">
+        <button type="button" class="nav-item active"><span data-next-i18n="uiPreview.navLibrary">Library</span><small>""" + h(counts.get("movies", 0)) + """</small></button>
+        <button type="button" class="nav-item"><span data-next-i18n="collection.containers">Containers</span><small>""" + h(counts.get("containers", 0)) + """</small></button>
+        <button type="button" class="nav-item"><span data-next-i18n="migration.groups">Groups</span><small>""" + h(counts.get("mediaGroups", 0)) + """</small></button>
+        <a class="nav-item" href="/api/next/app"><span data-next-i18n="uiPreview.admin">Admin</span><small>Next</small></a>
+      </nav>
+      <div class="sidebar-footer">
+        <strong data-next-i18n="uiPreview.build">Build</strong><br>
+        """ + h((build.get("sha") or "unknown")[:12]) + """
+      </div>
+    </aside>
+    <main class="preview-main">
+      <div class="topbar">
+        <label class="searchbox">
+          <span aria-hidden="true">/</span>
+          <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
+        </label>
+        <div class="top-actions">
+          <div class="segmented" role="group" aria-label="Appearance" data-next-i18n-aria="appearance.label">
+            <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
+            <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
+            <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
+          </div>
+          <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+        </div>
+      </div>
+      <section class="hero" id="previewHero">
+        """ + featured_backdrop_html + """
+        <div class="hero-content">
+          <span class="eyebrow" data-next-i18n="uiPreview.featured">Featured</span>
+          <h1 id="heroTitle">""" + h(featured.get("title") or "DiscVault") + """</h1>
+          <div class="hero-meta" id="heroMeta">
+            """ + (f'<span class="pill">{h(featured.get("year"))}</span>' if featured.get("year") else "") + """
+            """ + (f'<span class="pill">{h(featured.get("format"))}</span>' if featured.get("format") else "") + """
+            """ + (f'<span class="pill">{h(featured.get("barcode"))}</span>' if featured.get("barcode") else "") + """
+          </div>
+          <div class="hero-actions">
+            <a class="action" id="heroDetailLink" href=\"""" + h(featured_href) + """\" data-next-i18n="uiPreview.openDetails">Open details</a>
+            <button type="button" class="action secondary" id="shuffleButton" data-next-i18n="uiPreview.shuffle">Shuffle</button>
+          </div>
+        </div>
+        <div class="hero-poster" id="heroPoster">""" + (f'<img src="{h(featured_poster)}" alt="">' if featured_poster else '<span data-next-i18n="collection.noPoster">No poster</span>') + """</div>
+      </section>
+      <section class="stats-row">
+        <div class="preview-stat"><strong>""" + h(counts.get("movies", 0)) + """</strong><span data-next-i18n="collection.movies">Movies</span></div>
+        <div class="preview-stat"><strong>""" + h(counts.get("containers", 0)) + """</strong><span data-next-i18n="collection.containers">Containers</span></div>
+        <div class="preview-stat"><strong>""" + h(counts.get("mediaAssets", 0)) + """</strong><span data-next-i18n="collection.mediaAssets">Media assets</span></div>
+        <div class="preview-stat"><strong>""" + h(counts.get("digitalMediaItems", 0)) + """</strong><span data-next-i18n="uiPreview.digitalItems">Digital links</span></div>
+      </section>
+      <section class="preview-layout">
+        <div class="preview-panel">
+          <div class="panel-head">
+            <h2 data-next-i18n="uiPreview.recentlyAdded">Recently added</h2>
+            <span id="shownCount">""" + h(min(len(movies), 24)) + """</span>
+          </div>
+          <div class="poster-rail" id="posterRail">""" + movie_cards + """</div>
+        </div>
+        <div class="side-stack">
+          <div class="preview-panel">
+            <div class="panel-head">
+              <h2 data-next-i18n="uiPreview.collections">Collections</h2>
+              <span>""" + h(len(containers)) + """</span>
+            </div>
+            <div class="preview-collections">""" + container_cards + """</div>
+          </div>
+          <div class="preview-panel">
+            <div class="panel-head">
+              <h2 data-next-i18n="uiPreview.activity">Activity</h2>
+              <span data-next-i18n="uiPreview.live">Live</span>
+            </div>
+            <div class="activity-list">
+              <div class="activity"><span data-next-i18n="uiPreview.activityMigration">Migrated collection data is available in PostgreSQL.</span></div>
+              <div class="activity"><span data-next-i18n="uiPreview.activityPlugins">Metadata and digital source plugins are ready for the new app shell.</span></div>
+              <div class="activity"><span data-next-i18n="uiPreview.activityDesign">Light and dark appearance modes are enabled for preview.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    const state = JSON.parse(document.getElementById("initialState").textContent || "{}");
+    const movies = state.movies || [];
+    const localeState = {
+      locale: localStorage.getItem("dv_next_locale") || "nl-NL",
+      messages: {},
+      locales: JSON.parse(document.getElementById("nextLocales").textContent || "[]")
+    };
+    function usableImage(value) {
+      const text = String(value || "");
+      return text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/api/next/media/") ? text : "";
+    }
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[char]);
+    }
+    function tNext(key, fallback) {
+      return localeState.messages[key] || fallback || key;
+    }
+    function applyTranslations() {
+      document.documentElement.lang = localeState.locale;
+      document.querySelectorAll("[data-next-i18n]").forEach((node) => {
+        node.textContent = tNext(node.dataset.nextI18n, node.textContent);
+      });
+      document.querySelectorAll("[data-next-i18n-placeholder]").forEach((node) => {
+        node.setAttribute("placeholder", tNext(node.dataset.nextI18nPlaceholder, node.getAttribute("placeholder") || ""));
+      });
+      document.querySelectorAll("[data-next-i18n-aria]").forEach((node) => {
+        node.setAttribute("aria-label", tNext(node.dataset.nextI18nAria, node.getAttribute("aria-label") || ""));
+      });
+    }
+    async function loadLocale(locale) {
+      const normalized = locale || "nl-NL";
+      try {
+        const response = await fetch(`/api/next/i18n/${encodeURIComponent(normalized)}`, {cache: "no-store"});
+        if (!response.ok) throw new Error(`i18n ${response.status}`);
+        const payload = await response.json();
+        localeState.locale = payload.locale || normalized;
+        localeState.messages = payload.messages || {};
+        localStorage.setItem("dv_next_locale", localeState.locale);
+      } catch (error) {
+        console.warn("Next i18n catalog unavailable", error);
+      }
+      applyTranslations();
+      renderLanguageSelect();
+    }
+    function renderLanguageSelect() {
+      const select = document.getElementById("nextLanguageSelect");
+      if (!select) return;
+      select.innerHTML = localeState.locales.map((item) => (
+        `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+      )).join("");
+    }
+    function setTheme(preference) {
+      const selected = preference || "system";
+      const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.themePreference = selected;
+      document.documentElement.dataset.theme = selected === "system" ? (dark ? "dark" : "light") : selected;
+      localStorage.setItem("dv_next_theme", selected);
+      document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.themeChoice === selected);
+      });
+    }
+    function movieMeta(movie) {
+      return [movie.year, movie.format, movie.barcode].filter(Boolean);
+    }
+    function selectMovie(movieId) {
+      const movie = movies.find((item) => String(item.id) === String(movieId)) || movies[0] || {};
+      const title = movie.title || tNext("common.untitled", "Untitled");
+      const backdrop = usableImage(movie.backdrop_url);
+      const poster = usableImage(movie.poster_url);
+      document.getElementById("heroTitle").textContent = title;
+      document.getElementById("heroMeta").innerHTML = movieMeta(movie).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
+      document.getElementById("heroDetailLink").href = `/api/next/app/movies/${encodeURIComponent(movie.id || "")}`;
+      const backdropNode = document.getElementById("heroBackdrop");
+      if (backdropNode && backdropNode.tagName === "IMG") {
+        backdropNode.src = backdrop || "";
+      }
+      const posterNode = document.getElementById("heroPoster");
+      posterNode.innerHTML = poster
+        ? `<img src="${escapeHtml(poster)}" alt="">`
+        : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      document.querySelectorAll("[data-preview-movie]").forEach((node) => {
+        node.classList.toggle("selected", String(node.dataset.previewMovie) === String(movie.id));
+      });
+    }
+    function filterMovies() {
+      const query = document.getElementById("previewSearch").value.trim().toLowerCase();
+      let shown = 0;
+      document.querySelectorAll("[data-preview-movie]").forEach((node) => {
+        const movie = movies.find((item) => String(item.id) === String(node.dataset.previewMovie)) || {};
+        const haystack = [movie.title, movie.original_title, movie.year, movie.format, movie.barcode].join(" ").toLowerCase();
+        const visible = !query || haystack.includes(query);
+        node.style.display = visible ? "" : "none";
+        if (visible) shown += 1;
+      });
+      document.getElementById("shownCount").textContent = shown;
+    }
+    document.addEventListener("DOMContentLoaded", () => {
+      renderLanguageSelect();
+      loadLocale(localeState.locale);
+      setTheme(localStorage.getItem("dv_next_theme") || "system");
+      document.getElementById("nextLanguageSelect")?.addEventListener("change", (event) => loadLocale(event.target.value));
+      document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+        button.addEventListener("click", () => setTheme(button.dataset.themeChoice));
+      });
+      document.querySelectorAll("[data-preview-movie]").forEach((button) => {
+        button.addEventListener("click", () => selectMovie(button.dataset.previewMovie));
+      });
+      document.getElementById("previewSearch")?.addEventListener("input", filterMovies);
+      document.getElementById("shuffleButton")?.addEventListener("click", () => {
+        if (!movies.length) return;
+        selectMovie(movies[Math.floor(Math.random() * movies.length)].id);
+      });
+      if (movies[0]) selectMovie(movies[0].id);
+    });
+  </script>
+</body>
+</html>
+"""
+
+
 def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     snapshot = snapshot or {"counts": {}, "movies": [], "containers": [], "plugins": [], "build": {}}
     counts = snapshot.get("counts") or {}
@@ -10118,12 +10952,16 @@ PUBLIC_NEXT_PATHS = {
     "/",
     "/app",
     "/app/",
+    "/ui-preview",
+    "/ui-preview/",
     "/api/next/app",
     "/api/next/app/",
     "/api/next/collection",
     "/api/next/collection/",
     "/api/next/health",
     "/api/next/i18n",
+    "/api/next/ui-preview",
+    "/api/next/ui-preview/",
     "/api/next/migration",
     "/api/next/migration/",
 }
@@ -11294,6 +12132,18 @@ def register_routes(flask_app: Flask) -> None:
             else:
                 snapshot = collection_dashboard_snapshot(conn)
         return html_response(collection_dashboard_html(snapshot))
+
+    @flask_app.get("/ui-preview")
+    @flask_app.get("/ui-preview/")
+    @flask_app.get("/api/next/ui-preview")
+    @flask_app.get("/api/next/ui-preview/")
+    def ui_preview():
+        with connect() as conn:
+            if next_auth_effective_enabled(conn, table_exists) and not next_auth_current_user(conn):
+                snapshot = empty_collection_dashboard_snapshot()
+            else:
+                snapshot = collection_dashboard_snapshot(conn)
+        return html_response(ui_preview_html(snapshot))
 
     @flask_app.get("/api/next/migration/jobs/<job_id>")
     def migration_job(job_id: str):
