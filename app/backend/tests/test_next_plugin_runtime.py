@@ -59,6 +59,38 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(result["mediaExtensions"][".jpg"], 1)
         self.assertIsNotNone(result["sourceDatabaseHash"])
 
+    def test_legacy_import_plugin_plans_sqlite_import_job(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            sqlite_db = data_dir / "discvault.db"
+            conn = sqlite3.connect(sqlite_db)
+            try:
+                conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY)")
+                conn.commit()
+            finally:
+                conn.close()
+
+            execution = run_plugin_entrypoint(
+                "discvault_legacy_import",
+                "plan_import",
+                {
+                    "dataDir": str(data_dir),
+                    "includeSecurity": False,
+                    "includePersonal": False,
+                    "importMediaReferences": True,
+                    "ownerUsername": "admin",
+                },
+                {},
+            )
+
+        plan = execution["result"]
+        self.assertEqual(execution["status"], "ok")
+        self.assertTrue(plan["canStart"])
+        self.assertEqual(plan["jobType"], "migration.import_sqlite")
+        self.assertEqual(plan["jobPayload"]["includeSecurity"], False)
+        self.assertEqual(plan["jobPayload"]["ownerUsername"], "admin")
+        self.assertEqual(plan["jobPayload"]["importSource"]["pluginId"], "discvault_legacy_import")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,8 +32,6 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 try:
     from .next_database import discover_migrations
     from .next_import import CLIENT_SYNC_SETTING_KEYS
-    from .next_import import ImportError as NextImportError
-    from .next_import import NextImporter
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
     from .next_plugin_runtime import plugin_registry_snapshot
@@ -56,8 +54,6 @@ try:
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
-    from next_import import ImportError as NextImportError
-    from next_import import NextImporter
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
     from next_plugin_runtime import plugin_registry_snapshot
@@ -299,7 +295,15 @@ def migration_security_backfill_required(
         return False
     source_has_security = any(
         int(source_counts.get(table) or 0) > 0
-        for table in ("users", "credentials", "groups", "user_groups", "movie_groups")
+        for table in (
+            "users",
+            "credentials",
+            "groups",
+            "user_groups",
+            "group_members",
+            "movie_groups",
+            "group_movies",
+        )
     )
     if not source_has_security:
         return False
@@ -308,7 +312,9 @@ def migration_security_backfill_required(
         ("credentials", "passkey_credentials"),
         ("groups", "media_groups"),
         ("user_groups", "media_group_members"),
+        ("group_members", "media_group_members"),
         ("movie_groups", "media_group_movies"),
+        ("group_movies", "media_group_movies"),
     )
     return any(
         int(source_counts.get(source_table) or 0) > count_table(conn, target_table)
@@ -481,12 +487,17 @@ def plugin_summary(conn) -> dict[str, Any]:
     }
 
 
-def sqlite_readiness_probe(data_dir: Path, sqlite_db: Path) -> dict[str, Any]:
-    found = sqlite_db.exists() and sqlite_db.is_file()
+def empty_import_source_probe() -> dict[str, Any]:
+    data_dir = legacy_data_dir()
+    sqlite_db = legacy_sqlite_db(data_dir)
     source: dict[str, Any] = {
+        "pluginId": None,
+        "pluginName": None,
+        "sourceKind": None,
+        "status": "not_configured",
         "dataDir": str(data_dir),
         "sqliteDb": str(sqlite_db),
-        "found": found,
+        "found": False,
         "readable": False,
         "sourceDatabaseHash": None,
         "sourceCounts": {},
@@ -497,46 +508,215 @@ def sqlite_readiness_probe(data_dir: Path, sqlite_db: Path) -> dict[str, Any]:
             "includePersonal": False,
             "importMediaReferences": True,
         },
+        "warnings": [],
     }
-    warnings: list[str] = []
-    if not found:
-        warnings.append(f"No legacy SQLite database found at {sqlite_db}.")
-        return {"source": source, "warnings": warnings}
+    return {"source": source, "warnings": [], "importSources": []}
 
-    importer: NextImporter | None = None
-    try:
-        importer = NextImporter(
-            sqlite_db,
-            data_dir,
-            include_security=True,
-            include_personal=False,
-            import_media=True,
-            owner_username=None,
+
+def plugin_categories(plugin: dict[str, Any]) -> set[str]:
+    manifest = plugin.get("manifest") or {}
+    return {str(item) for item in (plugin.get("categories") or manifest.get("categories") or [])}
+
+
+def plugin_runtime_entrypoints(plugin: dict[str, Any]) -> set[str]:
+    runtime = plugin.get("runtime") or {}
+    return {str(item) for item in (runtime.get("entrypoints") or [])}
+
+
+def import_source_plugins(conn) -> list[dict[str, Any]]:
+    if not table_exists(conn, "plugins"):
+        return []
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins = []
+    for plugin in registry.get("plugins") or []:
+        if not plugin.get("installed") or not plugin.get("enabled"):
+            continue
+        if "import_source" not in plugin_categories(plugin):
+            continue
+        if "inspect_source" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def normalize_import_source_result(
+    plugin: dict[str, Any],
+    execution: dict[str, Any],
+) -> dict[str, Any]:
+    result = execution.get("result") if execution.get("status") == "ok" else {}
+    if not isinstance(result, dict):
+        result = {}
+    data_dir = legacy_data_dir()
+    sqlite_db = legacy_sqlite_db(data_dir)
+    warnings = result.get("warnings") if isinstance(result.get("warnings"), list) else []
+    source_counts = result.get("sourceCounts") or result.get("source_counts") or {}
+    media_extensions = result.get("mediaExtensions") or result.get("media_extensions") or {}
+    options = result.get("options") if isinstance(result.get("options"), dict) else {}
+    return {
+        "pluginId": plugin.get("id"),
+        "pluginName": plugin.get("name"),
+        "sourceKind": clean_text(result.get("sourceKind") or result.get("source_kind")),
+        "status": clean_text(result.get("status") or execution.get("state") or "unknown"),
+        "dataDir": str(result.get("dataDir") or result.get("data_dir") or data_dir),
+        "sqliteDb": str(result.get("sqliteDb") or result.get("sqlite_db") or sqlite_db),
+        "found": bool(result.get("found")),
+        "readable": bool(result.get("readable")),
+        "sourceDatabaseHash": clean_text(
+            result.get("sourceDatabaseHash") or result.get("source_database_hash")
+        ),
+        "sourceCounts": source_counts if isinstance(source_counts, dict) else {},
+        "mediaExtensions": media_extensions if isinstance(media_extensions, dict) else {},
+        "mediaMigrationMode": clean_text(
+            result.get("mediaMigrationMode") or result.get("media_migration_mode")
+        ) or "reference_existing_files",
+        "options": {
+            "includeSecurity": parse_bool_value(
+                options.get("includeSecurity", options.get("include_security")),
+                default=True,
+            ),
+            "includePersonal": parse_bool_value(
+                options.get("includePersonal", options.get("include_personal")),
+                default=False,
+            ),
+            "importMediaReferences": parse_bool_value(
+                options.get(
+                    "importMediaReferences",
+                    options.get("import_media_references", options.get("import_media")),
+                ),
+                default=True,
+            ),
+        },
+        "warnings": [str(item) for item in warnings],
+    }
+
+
+def import_source_summary(source: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "pluginId": source.get("pluginId"),
+        "pluginName": source.get("pluginName"),
+        "sourceKind": source.get("sourceKind"),
+        "status": source.get("status"),
+        "runtimeStatus": execution.get("status"),
+        "runtimeState": execution.get("state"),
+        "found": bool(source.get("found")),
+        "readable": bool(source.get("readable")),
+        "sourceDatabaseHash": source.get("sourceDatabaseHash"),
+        "sourceCounts": source.get("sourceCounts") or {},
+        "mediaExtensions": source.get("mediaExtensions") or {},
+        "warnings": source.get("warnings") or [],
+    }
+
+
+def import_source_readiness_probe(conn) -> dict[str, Any]:
+    probe = empty_import_source_probe()
+    warnings: list[str] = []
+    selected: dict[str, Any] | None = None
+    import_sources: list[dict[str, Any]] = []
+    plugins = import_source_plugins(conn)
+    if not plugins:
+        warnings.append("No enabled import source plugin is available.")
+        probe["warnings"] = warnings
+        return probe
+
+    for plugin in plugins:
+        config = plugin_config_from_db(conn, str(plugin.get("id")))
+        context = plugin_execution_context(conn, plugin, config)
+        execution = run_plugin_entrypoint(str(plugin.get("id")), "inspect_source", {}, context)
+        source = normalize_import_source_result(plugin, execution)
+        import_sources.append(import_source_summary(source, execution))
+        for warning in source.get("warnings") or []:
+            warnings.append(f"{plugin.get('name') or plugin.get('id')}: {warning}")
+        if execution.get("status") != "ok":
+            warnings.append(
+                f"{plugin.get('name') or plugin.get('id')}: {execution.get('error') or execution.get('state')}"
+            )
+        if selected is None and source.get("found") and source.get("readable"):
+            selected = source
+        elif selected is None and source.get("found"):
+            selected = source
+        elif selected is None:
+            selected = source
+
+    probe["source"] = selected or probe["source"]
+    probe["warnings"] = warnings
+    probe["importSources"] = import_sources
+    return probe
+
+
+def import_source_plugin_by_id(conn, plugin_id: str | None) -> dict[str, Any] | None:
+    if not plugin_id:
+        return None
+    for plugin in import_source_plugins(conn):
+        if plugin.get("id") == plugin_id:
+            return plugin
+    return None
+
+
+def plan_migration_import_job(
+    conn,
+    *,
+    plugin_id: str | None,
+    source: dict[str, Any],
+    options: dict[str, Any],
+    actor: dict[str, Any],
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    plugin = import_source_plugin_by_id(conn, plugin_id)
+    if not plugin:
+        raise NextApiError(f"Import source plugin is not available: {plugin_id}", 409)
+    if "plan_import" not in plugin_runtime_entrypoints(plugin):
+        raise NextApiError(f"Import source plugin cannot plan imports: {plugin_id}", 409)
+
+    config = plugin_config_from_db(conn, plugin_id)
+    context = plugin_execution_context(conn, plugin, config, actor)
+    payload = {
+        "dataDir": source.get("dataDir"),
+        "sqliteDb": source.get("sqliteDb"),
+        "sourceDatabaseHash": source.get("sourceDatabaseHash"),
+        "includeSecurity": options.get("includeSecurity"),
+        "includePersonal": options.get("includePersonal"),
+        "importMediaReferences": options.get("importMediaReferences"),
+        "ownerUsername": options.get("ownerUsername"),
+    }
+    execution = run_plugin_entrypoint(plugin_id, "plan_import", payload, context)
+    if execution.get("status") != "ok":
+        raise NextApiError(
+            f"Import source planning failed: {execution.get('error') or execution.get('state')}",
+            502,
         )
-        dry_run = importer.dry_run()
-        source.update(
-            {
-                "readable": True,
-                "sourceDatabaseHash": dry_run.get("source_database_sha256"),
-                "sourceCounts": dry_run.get("source_counts") or {},
-                "mediaExtensions": dry_run.get("media_extensions") or {},
-            }
+    plan = execution.get("result") or {}
+    if not isinstance(plan, dict):
+        raise NextApiError("Import source plan must return an object", 502)
+    if not parse_bool_value(plan.get("canStart"), default=False):
+        raise NextApiError(
+            f"Import source cannot start: {plan.get('status') or 'blocked'}",
+            409,
         )
-    except (NextImportError, OSError, RuntimeError, ValueError) as exc:
-        warnings.append(f"Legacy SQLite database could not be inspected: {exc}")
-    finally:
-        if importer is not None:
-            importer.sqlite.close()
-    return {"source": source, "warnings": warnings}
+    job_type = clean_text(plan.get("jobType")) or MIGRATION_JOB_TYPE
+    if job_type != MIGRATION_JOB_TYPE:
+        raise NextApiError(f"Unsupported import job type from plugin: {job_type}", 409)
+    job_payload = plan.get("jobPayload") or {}
+    if not isinstance(job_payload, dict):
+        raise NextApiError("Import source jobPayload must be an object", 502)
+    job_payload = dict(job_payload)
+    job_payload["requestedBy"] = actor_job_payload(actor)
+    job_payload["importSource"] = {
+        "pluginId": plugin_id,
+        "pluginName": plugin.get("name"),
+        "sourceKind": source.get("sourceKind"),
+    }
+    return job_type, job_payload, plan
 
 
 def migration_readiness(conn) -> dict[str, Any]:
     migrations = migration_overview(conn)
-    data_dir = legacy_data_dir()
-    sqlite_db = legacy_sqlite_db(data_dir)
-    probe = sqlite_readiness_probe(data_dir, sqlite_db)
+    probe = (
+        import_source_readiness_probe(conn)
+        if migrations["state"] == "ready"
+        else empty_import_source_probe()
+    )
     source = probe["source"]
     warnings = list(probe["warnings"])
+    import_sources = list(probe.get("importSources") or [])
     target_counts = target_data_counts(conn)
     target_empty = target_database_empty(target_counts)
     source_hash = clean_text(source.get("sourceDatabaseHash"))
@@ -557,9 +737,12 @@ def migration_readiness(conn) -> dict[str, Any]:
     elif active:
         state = "running"
         required_actions.append("Wait for the active migration job to finish.")
+    elif not source.get("pluginId"):
+        state = "not_required"
+        required_actions.append("Enable and configure an import source plugin if migration is expected.")
     elif not source["found"]:
         state = "not_required"
-        required_actions.append("Mount the legacy DiscVault data directory at /data if migration is expected.")
+        required_actions.append("Configure the selected import source or mount the legacy DiscVault data directory at /data if migration is expected.")
     elif not source["readable"]:
         state = "blocked_source_unreadable"
         required_actions.append("Fix the legacy SQLite database path or file permissions.")
@@ -582,6 +765,7 @@ def migration_readiness(conn) -> dict[str, Any]:
         "canStart": can_start,
         "requiresConfirmation": can_start,
         "legacyData": source,
+        "importSources": import_sources,
         "targetDatabase": {
             "empty": target_empty,
             "counts": target_counts,
@@ -617,6 +801,10 @@ def migration_report(conn) -> dict[str, Any]:
         "canStart": readiness["canStart"],
         "requiresConfirmation": readiness["requiresConfirmation"],
         "source": {
+            "pluginId": readiness["legacyData"].get("pluginId"),
+            "pluginName": readiness["legacyData"].get("pluginName"),
+            "sourceKind": readiness["legacyData"].get("sourceKind"),
+            "status": readiness["legacyData"].get("status"),
             "found": readiness["legacyData"]["found"],
             "readable": readiness["legacyData"]["readable"],
             "dataDir": readiness["legacyData"]["dataDir"],
@@ -629,6 +817,7 @@ def migration_report(conn) -> dict[str, Any]:
         "target": readiness["targetDatabase"],
         "latestRun": latest_run,
         "latestJob": latest_job,
+        "importSources": readiness.get("importSources") or [],
         "summary": {
             "imported": imported or {},
             "skipped": skipped or {},
@@ -751,11 +940,16 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "activeJob": readiness["activeJob"],
             "latestRun": readiness["latestRun"],
             "legacyData": {
+                "pluginId": readiness["legacyData"].get("pluginId"),
+                "pluginName": readiness["legacyData"].get("pluginName"),
+                "sourceKind": readiness["legacyData"].get("sourceKind"),
+                "status": readiness["legacyData"].get("status"),
                 "found": readiness["legacyData"]["found"],
                 "readable": readiness["legacyData"]["readable"],
                 "sourceCounts": readiness["legacyData"]["sourceCounts"],
                 "mediaExtensions": readiness["legacyData"]["mediaExtensions"],
             },
+            "importSources": readiness.get("importSources") or [],
         },
     }
 
@@ -1159,6 +1353,9 @@ def migration_dashboard_html() -> str:
       document.getElementById("pluginCount").textContent = formatNumber(plugins.enabled);
 
       document.getElementById("sourceList").innerHTML = [
+        row("Import source", source.pluginName ? `${source.pluginName} (${source.pluginId})` : "-"),
+        row("Source kind", source.sourceKind || "-"),
+        row("Source status", source.status || "-"),
         row("Legacy data", source.found ? "found" : "not found"),
         row("Data directory", source.dataDir || "-"),
         row("SQLite database", source.sqliteDb || "-"),
@@ -9561,20 +9758,27 @@ def register_routes(flask_app: Flask) -> None:
                     409,
                 )
             legacy = readiness["legacyData"]
-            payload = {
-                "dataDir": legacy["dataDir"],
-                "sqliteDb": legacy["sqliteDb"],
-                "sourceDatabaseHash": legacy.get("sourceDatabaseHash"),
+            import_source_id = clean_text(
+                body.get("importSourceId")
+                or body.get("import_source_id")
+                or legacy.get("pluginId")
+            )
+            options = {
                 "includeSecurity": include_security,
                 "includePersonal": include_personal,
                 "ownerUsername": owner_username,
                 "importMediaReferences": import_media_references,
-                "mediaMigrationMode": "reference_existing_files",
-                "requestedBy": actor_job_payload(actor),
             }
+            job_type, payload, import_plan = plan_migration_import_job(
+                conn,
+                plugin_id=import_source_id,
+                source=legacy,
+                options=options,
+                actor=actor,
+            )
             with conn.transaction():
-                job = create_background_job(conn, job_type=MIGRATION_JOB_TYPE, payload=payload)
-        return response({"status": "ok", "job": job, "readiness": readiness}, 201)
+                job = create_background_job(conn, job_type=job_type, payload=payload)
+        return response({"status": "ok", "job": job, "readiness": readiness, "importPlan": import_plan}, 201)
 
     @flask_app.get("/api/next/migration/status")
     def migration_status():
