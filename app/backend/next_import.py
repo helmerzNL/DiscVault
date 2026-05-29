@@ -1,9 +1,8 @@
 """Import a copied DiscVault SQLite data directory into DiscVault Next PostgreSQL.
 
 This tool is intentionally standalone. It reads the legacy SQLite database and
-media files directly, writes into the PostgreSQL schema created by
-``next_database.py``, and avoids importing security/device data unless the
-operator explicitly asks for it.
+media files directly, and writes into the PostgreSQL schema created by
+``next_database.py``.
 """
 
 from __future__ import annotations
@@ -56,6 +55,35 @@ CLIENT_SYNC_SETTING_KEYS = {
     "show_auto_videos",
     "show_local_title",
     "show_search_button",
+}
+LEGACY_ROLE_ALIASES = {
+    "administrator": "admin",
+    "admins": "admin",
+    "admin": "admin",
+    "owner": "owner",
+    "collection_manager": "media_editor",
+    "collectionmanager": "media_editor",
+    "media_editor": "media_editor",
+    "mediaeditor": "media_editor",
+    "editor": "media_editor",
+    "media_fan": "media_fan",
+    "mediafan": "media_fan",
+    "fan": "media_fan",
+    "membergroups": "media_viewer",
+    "member_groups": "media_viewer",
+    "group_member": "media_viewer",
+    "viewer": "media_viewer",
+    "member": "media_viewer",
+    "user": "media_viewer",
+}
+LEGACY_GROUP_MEMBER_ROLES = {
+    "admin": "admin",
+    "administrator": "admin",
+    "manager": "manager",
+    "owner": "owner",
+    "editor": "editor",
+    "member": "member",
+    "viewer": "viewer",
 }
 
 
@@ -202,6 +230,20 @@ def bool_value(value: Any, *, default: bool = False) -> bool:
     if text in {"0", "false", "no", "off", "disabled", "inactive"}:
         return False
     return default
+
+
+def normalized_key(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def legacy_role_key(value: Any, *, is_owner: bool = False) -> str:
+    if is_owner:
+        return "owner"
+    return LEGACY_ROLE_ALIASES.get(normalized_key(value), "media_viewer")
+
+
+def legacy_group_member_role(value: Any) -> str:
+    return LEGACY_GROUP_MEMBER_ROLES.get(normalized_key(value), "member")
 
 
 def normalize_metadata_source(value: Any) -> str | None:
@@ -379,6 +421,7 @@ class NextImporter:
         self.person_ids: dict[str, uuid.UUID] = {}
         self.container_ids: dict[tuple[str, str], uuid.UUID] = {}
         self.user_ids: dict[str, uuid.UUID] = {}
+        self.group_ids: dict[str, uuid.UUID] = {}
         self.Jsonb = lambda value: value
 
     def source_counts(self) -> dict[str, int]:
@@ -386,6 +429,9 @@ class NextImporter:
             "settings",
             "users",
             "credentials",
+            "custom_roles",
+            "user_roles",
+            "role_permissions",
             "movies",
             "people",
             "movie_people",
@@ -395,6 +441,11 @@ class NextImporter:
             "collection_items",
             "vaults",
             "vault_movies",
+            "groups",
+            "user_groups",
+            "group_invites",
+            "movie_groups",
+            "user_digital_group_access",
             "watchlist",
             "watch_history",
         )
@@ -446,6 +497,8 @@ class NextImporter:
                     self.import_movie_credits(conn)
                     self.import_containers(conn, run_id)
                     self.import_container_memberships(conn)
+                    if self.include_security:
+                        self.import_media_groups(conn, run_id)
                     if self.include_personal:
                         self.import_personal_data(conn)
                 self.finish_migration_run(conn, run_id, "completed", self.summary.as_dict(), None)
@@ -529,6 +582,14 @@ class NextImporter:
                 (run_id, source_table, str(source_id), target_table, target_id),
             )
 
+    def existing_user_id_by_username(self, conn, username: str) -> uuid.UUID | None:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE lower(username)=lower(%s)", (username,))
+            row = cur.fetchone()
+        if not row:
+            return None
+        return row["id"] if isinstance(row, dict) else row[0]
+
     def import_settings(self, conn) -> None:
         imported_settings: dict[str, Any] = {}
         for row in rows(self.sqlite, "settings"):
@@ -568,7 +629,7 @@ class NextImporter:
             if not source_id or not username:
                 self.summary.skipped["users_missing_id_or_username"] += 1
                 continue
-            user_id = legacy_user_uuid(source_id)
+            user_id = self.existing_user_id_by_username(conn, username) or legacy_user_uuid(source_id)
             avatar_asset_id = None
             if self.import_media:
                 avatar_asset_id = self.ensure_media_asset(
@@ -612,9 +673,10 @@ class NextImporter:
                         clean_text(row["created_at"]),
                     ),
                 )
-                role_key = "owner" if username == owner_username else (clean_text(row["role"]) or "member")
-                if role_key == "admin" and username != owner_username:
-                    role_key = "admin"
+                role_key = legacy_role_key(row["role"], is_owner=username == owner_username)
+                cur.execute("SELECT 1 FROM roles WHERE key=%s", (role_key,))
+                if cur.fetchone() is None:
+                    role_key = "member"
                 cur.execute(
                     """
                     INSERT INTO user_roles (user_id, role_id, scope_type, scope_id)
@@ -1183,6 +1245,154 @@ class NextImporter:
                     ),
                 )
             self.summary.counters["collection_items"] += 1
+
+    def import_media_groups(self, conn, run_id: uuid.UUID) -> None:
+        for row in rows(self.sqlite, "groups"):
+            source_id = str(row["id"])
+            group_id = stable_uuid("groups", source_id)
+            created_by = self.user_ids.get(clean_text(row["created_by"]) or "")
+            metadata = metadata_subset(row, ("sync_revision",))
+            metadata["legacy_group_id"] = source_id
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO media_groups (
+                        id,
+                        public_id,
+                        name,
+                        created_by,
+                        hide_digital,
+                        metadata,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, now()), COALESCE(%s, now()))
+                    ON CONFLICT (public_id) DO UPDATE SET
+                        name=EXCLUDED.name,
+                        created_by=COALESCE(EXCLUDED.created_by, media_groups.created_by),
+                        hide_digital=EXCLUDED.hide_digital,
+                        metadata=EXCLUDED.metadata,
+                        updated_at=now()
+                    """,
+                    (
+                        group_id,
+                        f"legacy-group-{source_id}",
+                        clean_text(row["name"]) or f"Legacy group {source_id}",
+                        created_by,
+                        bool_value(row["hide_digital"], default=False) if "hide_digital" in row.keys() else False,
+                        self.Jsonb(metadata),
+                        clean_text(row["created_at"]) if "created_at" in row.keys() else None,
+                        clean_text(row["updated_at"]) if "updated_at" in row.keys() else None,
+                    ),
+                )
+            self.group_ids[source_id] = group_id
+            self.record_mapping(conn, run_id, "groups", source_id, "media_groups", group_id)
+            self.summary.counters["media_groups"] += 1
+
+        for row in rows(self.sqlite, "user_groups"):
+            group_id = self.group_ids.get(str(row["group_id"]))
+            user_id = self.user_ids.get(clean_text(row["user_id"]) or "")
+            if not group_id or not user_id:
+                self.summary.skipped["media_group_members_missing_reference"] += 1
+                continue
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO media_group_members (group_id, user_id, role)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (group_id, user_id) DO UPDATE SET
+                        role=EXCLUDED.role
+                    """,
+                    (group_id, user_id, legacy_group_member_role(row["role"] if "role" in row.keys() else None)),
+                )
+            self.summary.counters["media_group_members"] += 1
+
+        for row in rows(self.sqlite, "movie_groups"):
+            group_id = self.group_ids.get(str(row["group_id"]))
+            movie_id = self.movie_ids.get(str(row["movie_id"]))
+            if not group_id or not movie_id:
+                self.summary.skipped["media_group_movies_missing_reference"] += 1
+                continue
+            metadata = metadata_subset(row, ("sync_revision",))
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO media_group_movies (
+                        group_id,
+                        movie_id,
+                        metadata,
+                        updated_at
+                    )
+                    VALUES (%s, %s, %s, COALESCE(%s, now()))
+                    ON CONFLICT (group_id, movie_id) DO UPDATE SET
+                        metadata=EXCLUDED.metadata,
+                        updated_at=EXCLUDED.updated_at
+                    """,
+                    (
+                        group_id,
+                        movie_id,
+                        self.Jsonb(metadata),
+                        clean_text(row["updated_at"]) if "updated_at" in row.keys() else None,
+                    ),
+                )
+            self.summary.counters["media_group_movies"] += 1
+
+        for row in rows(self.sqlite, "group_invites"):
+            source_id = str(row["id"])
+            group_id = self.group_ids.get(str(row["group_id"]))
+            inviter_id = self.user_ids.get(clean_text(row["inviter_id"]) or "")
+            invitee_id = self.user_ids.get(clean_text(row["invitee_id"]) or "")
+            if not group_id:
+                self.summary.skipped["media_group_invites_missing_group"] += 1
+                continue
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO media_group_invites (
+                        id,
+                        group_id,
+                        inviter_id,
+                        invitee_id,
+                        status,
+                        metadata,
+                        created_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, now()))
+                    ON CONFLICT (id) DO UPDATE SET
+                        group_id=EXCLUDED.group_id,
+                        inviter_id=EXCLUDED.inviter_id,
+                        invitee_id=EXCLUDED.invitee_id,
+                        status=EXCLUDED.status,
+                        metadata=EXCLUDED.metadata
+                    """,
+                    (
+                        stable_uuid("group_invites", source_id),
+                        group_id,
+                        inviter_id,
+                        invitee_id,
+                        clean_text(row["status"]) or "pending",
+                        self.Jsonb({"legacy_invite_id": source_id}),
+                        clean_text(row["created_at"]) if "created_at" in row.keys() else None,
+                    ),
+                )
+            self.summary.counters["media_group_invites"] += 1
+
+        for row in rows(self.sqlite, "user_digital_group_access"):
+            group_id = self.group_ids.get(str(row["group_id"]))
+            user_id = self.user_ids.get(clean_text(row["user_id"]) or "")
+            if not group_id or not user_id:
+                self.summary.skipped["media_group_digital_access_missing_reference"] += 1
+                continue
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO media_group_digital_access (group_id, user_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (group_id, user_id),
+                )
+            self.summary.counters["media_group_digital_access"] += 1
 
     def insert_container_movie(
         self,

@@ -601,7 +601,7 @@ def process_sqlite_import(payload: dict[str, Any], worker_id: str) -> dict[str, 
         raise RuntimeError(f"Legacy SQLite database not found: {sqlite_db}")
     if not data_dir.exists() or not data_dir.is_dir():
         raise RuntimeError(f"Legacy data directory not found: {data_dir}")
-    include_security = bool_value(payload.get("includeSecurity"), default=False)
+    include_security = bool_value(payload.get("includeSecurity"), default=True)
     include_personal = bool_value(payload.get("includePersonal"), default=False)
     if include_personal and not include_security:
         raise RuntimeError("includePersonal requires includeSecurity")
