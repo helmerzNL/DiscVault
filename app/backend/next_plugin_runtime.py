@@ -17,7 +17,7 @@ JsonbFactory = Callable[[Any], Any]
 TableExists = Callable[[Any, str], bool]
 
 DEFAULT_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
-VALID_CATEGORIES = {"metadata_source", "metadata_receiver", "digital_media_source"}
+VALID_CATEGORIES = {"metadata_source", "metadata_receiver", "digital_media_source", "import_source"}
 PLUGIN_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,80}$")
 PLUGIN_ENTRYPOINTS = (
     "health_check",
@@ -34,6 +34,9 @@ PLUGIN_ENTRYPOINTS = (
     "discover_library",
     "sync_library",
     "playback_deeplink",
+    "inspect_source",
+    "plan_import",
+    "import_source",
 )
 
 
