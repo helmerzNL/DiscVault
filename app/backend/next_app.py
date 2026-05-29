@@ -990,10 +990,19 @@ def migration_dashboard_html() -> str:
       color: var(--text);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    body.auth-mode {
+      min-height: 100vh;
+    }
     main {
       width: min(1180px, calc(100vw - 32px));
       margin: 0 auto;
       padding: 32px 0 48px;
+    }
+    body.auth-mode main {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 0;
     }
     header {
       display: flex;
@@ -1035,18 +1044,23 @@ def migration_dashboard_html() -> str:
     .auth-gate {
       display: grid;
       gap: 20px;
-      max-width: 520px;
+      width: min(660px, calc(100vw - 32px));
+      max-width: 660px;
       margin: 72px auto 18px;
       padding: 30px;
+      box-sizing: border-box;
       background:
         linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)),
         var(--panel);
       border-color: rgba(255,255,255,.14);
       box-shadow: 0 24px 70px rgba(0,0,0,.28);
     }
+    body.auth-mode .auth-gate {
+      margin: 0 auto;
+    }
     .auth-gate-top {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
       gap: 14px;
     }
@@ -1055,6 +1069,8 @@ def migration_dashboard_html() -> str:
       grid-template-columns: auto 1fr;
       align-items: center;
       gap: 14px;
+      min-width: 0;
+      flex: 1 1 auto;
     }
     .login-mark {
       width: 54px;
@@ -1073,6 +1089,7 @@ def migration_dashboard_html() -> str:
     .login-copy {
       display: grid;
       gap: 6px;
+      min-width: 0;
     }
     .auth-gate h2 {
       margin: 0;
@@ -1090,10 +1107,15 @@ def migration_dashboard_html() -> str:
       background: rgba(255,255,255,.035);
       padding: 6px 8px 6px 12px;
       font-size: .78rem;
+      flex: 0 1 auto;
+      max-width: 100%;
     }
     .auth-gate .language-control select {
+      flex: 1 1 148px;
       border-radius: 999px;
-      min-width: 148px;
+      min-width: 0;
+      width: clamp(148px, 18vw, 230px);
+      max-width: 100%;
       min-height: 32px;
       background: var(--panel-2);
       color: var(--text);
@@ -1118,12 +1140,20 @@ def migration_dashboard_html() -> str:
       flex-wrap: wrap;
       padding-top: 2px;
     }
+    .auth-gate button {
+      white-space: normal;
+      text-align: center;
+    }
     .auth-secondary button {
+      flex: 1 1 180px;
+      min-width: 0;
       min-height: 34px;
       border-radius: 999px;
       background: rgba(255,255,255,.035);
       color: var(--muted);
       font-size: .82rem;
+      padding-top: 8px;
+      padding-bottom: 8px;
     }
     button.primary {
       background: var(--accent);
@@ -1495,11 +1525,30 @@ def migration_dashboard_html() -> str:
     }
     @media (max-width: 860px) {
       main { width: min(100vw - 20px, 720px); padding-top: 18px; }
+      body.auth-mode main { width: min(100vw - 20px, 720px); padding: 16px 0; }
       header { flex-direction: column; }
       .actions { justify-content: flex-start; }
       .card, .wide { grid-column: 1 / -1; }
-      .auth-gate { margin-top: 28px; padding: 22px; }
-      .auth-gate-top { flex-direction: column; }
+      .auth-gate { width: 100%; margin-top: 28px; padding: 22px; }
+      .auth-gate-top { flex-direction: column; align-items: stretch; }
+      .auth-gate .language-control {
+        width: 100%;
+        box-sizing: border-box;
+        justify-content: space-between;
+        white-space: normal;
+      }
+      .auth-gate .language-control select {
+        flex: 1 1 120px;
+        width: 100%;
+      }
+      .auth-gate .actions,
+      .auth-secondary {
+        width: 100%;
+      }
+      .auth-gate .actions button,
+      .auth-secondary button {
+        width: 100%;
+      }
       .wizard-head, .wizard-panel-header, .details-header { flex-direction: column; }
       .migration-intro-list { grid-template-columns: 1fr; }
       .wizard-steps { grid-template-columns: 1fr; }
@@ -1756,6 +1805,7 @@ def migration_dashboard_html() -> str:
       const header = document.getElementById("migrationHeader");
       const intro = document.getElementById("migrationIntro");
       const workspace = document.getElementById("migrationWorkspace");
+      document.body.classList.toggle("auth-mode", !!show);
       if (gate) gate.classList.toggle("hidden", !show);
       if (header) header.classList.toggle("hidden", !!show);
       if (intro && show) intro.classList.add("hidden");
