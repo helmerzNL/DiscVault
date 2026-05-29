@@ -284,6 +284,25 @@ jobs:
           assert health_payload["health"]["state"] == "available", health_payload
           print("/api/next/plugins/plex/health", "admin-health-ok")
 
+          execute = client.post(
+              "/api/next/plugins/plex/execute",
+              json={"entrypoint": "discover_library", "payload": {"dryRun": True}},
+          )
+          assert execute.status_code == 200, execute.data[:500]
+          execute_payload = execute.get_json()
+          assert execute_payload["execution"]["status"] == "ok", execute_payload
+          assert execute_payload["execution"]["result"]["connector"] == "plex", execute_payload
+          print("/api/next/plugins/plex/execute", "admin-execute-ok")
+
+          queued = client.post(
+              "/api/next/plugins/plex/jobs",
+              json={"entrypoint": "sync_library", "payload": {"dryRun": True}},
+          )
+          assert queued.status_code == 201, queued.data[:500]
+          queued_payload = queued.get_json()
+          assert queued_payload["job"]["jobType"] == "plugin.execute", queued_payload
+          print("/api/next/plugins/plex/jobs", "admin-queue-ok")
+
           rbac = client.get("/api/next/auth/rbac")
           assert rbac.status_code == 200, rbac.data[:500]
           rbac_payload = rbac.get_json()

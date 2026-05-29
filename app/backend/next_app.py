@@ -34,6 +34,7 @@ try:
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
     from .next_plugin_runtime import plugin_registry_snapshot
+    from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
     from .next_auth import next_auth_current_user
@@ -47,6 +48,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
     from next_plugin_runtime import plugin_registry_snapshot
+    from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
     from next_auth import next_auth_current_user
@@ -55,6 +57,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
+PLUGIN_EXECUTION_JOB_TYPE = "plugin.execute"
 TARGET_DATA_TABLES = (
     "movies",
     "people",
@@ -2505,6 +2508,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       list.innerHTML = plugins.length ? plugins.map((plugin) => {
         const health = adminState.pluginHealth[plugin.id] || {};
         const runtime = plugin.runtime || {};
+        const capabilities = plugin.capabilities || [];
         const runtimeState = health.state || (runtime.loaded ? "loaded" : "not loaded");
         const needsConfig = plugin.requiresSecrets && !plugin.secretsConfigured;
         return `
@@ -2526,6 +2530,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <div class="admin-controls">
               <button type="button" data-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${plugin.enabled ? "Disable" : "Enable"}</button>
               <button type="button" data-admin-plugin-health="${escapeHtml(plugin.id)}">Check Health</button>
+              ${capabilities.includes("discover_library") ? `<button type="button" data-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">Discover</button>` : ""}
+              ${capabilities.includes("sync_library") ? `<button type="button" data-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">Queue Sync</button>` : ""}
             </div>
           </div>
         `;
@@ -2636,6 +2642,21 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAdminPlugins(adminState.plugins);
       setAdminStatus(`${pluginId} health: ${(payload.health && payload.health.state) || "unknown"}.`, "info");
     }
+    async function executePlugin(pluginId, entrypoint) {
+      const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/execute`, {
+        method: "POST",
+        body: JSON.stringify({entrypoint, payload: {dryRun: true}})
+      });
+      const execution = payload.execution || {};
+      setAdminStatus(`${pluginId} ${entrypoint}: ${execution.state || "completed"}.`, execution.status === "ok" ? "good" : "bad");
+    }
+    async function queuePluginExecution(pluginId, entrypoint) {
+      const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/jobs`, {
+        method: "POST",
+        body: JSON.stringify({entrypoint, payload: {dryRun: true}})
+      });
+      setAdminStatus(`${pluginId} ${entrypoint} queued: ${payload.job ? payload.job.id : "-"}.`, "good");
+    }
     async function createAdminInvite() {
       const input = document.getElementById("adminInviteUsername");
       const username = input.value.trim();
@@ -2721,39 +2742,44 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!panel || panel.dataset.bound === "true") return;
       panel.dataset.bound = "true";
       panel.addEventListener("click", (event) => {
-        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-plugin-enable], [data-admin-plugin-health], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
+        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-plugin-enable], [data-admin-plugin-health], [data-admin-plugin-execute], [data-admin-plugin-job], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
         if (!target) return;
         event.preventDefault();
         const action = target.dataset.adminAction;
-        const task = target.dataset.adminTab
-          ? (setAdminTab(target.dataset.adminTab), Promise.resolve())
-          : target.dataset.adminRbacMode
-            ? setRbacMode(target.dataset.adminRbacMode)
-            : target.dataset.adminPluginEnable
-              ? setPluginEnabled(target.dataset.adminPluginEnable, target.dataset.enabled === "true")
-              : target.dataset.adminPluginHealth
-                ? checkPluginHealth(target.dataset.adminPluginHealth)
-                : action === "refresh"
-          ? loadAdmin()
-          : action === "toggle-auth"
-            ? setAuthConfigured(!authState.configured_auth_enabled)
-            : action === "toggle-invite-only"
-              ? setInviteOnly(!!authState.registration_enabled)
-              : action === "toggle-movievault-receiver"
-                ? setMovieVaultReceiver(!ownerSettings.movievault_contribution_enabled)
-                : action === "create-invite"
-                  ? createAdminInvite()
-                  : target.dataset.adminUserStatus
-                    ? updateAdminUserStatus(target.dataset.adminUserStatus, target.dataset.status)
-                    : target.dataset.adminUserDelete
-                      ? deleteAdminUser(target.dataset.adminUserDelete)
-                      : target.dataset.adminOwnerTransfer
-                        ? transferOwnership(target.dataset.adminOwnerTransfer, target.dataset.username)
-                        : target.dataset.adminCredentialDelete
-                          ? deleteAdminCredential(target.dataset.adminCredentialDelete)
-                          : target.dataset.adminInviteDelete
-                            ? deleteAdminInvite(target.dataset.adminInviteDelete)
-                            : Promise.resolve();
+        let task = Promise.resolve();
+        if (target.dataset.adminTab) {
+          setAdminTab(target.dataset.adminTab);
+        } else if (target.dataset.adminRbacMode) {
+          task = setRbacMode(target.dataset.adminRbacMode);
+        } else if (target.dataset.adminPluginEnable) {
+          task = setPluginEnabled(target.dataset.adminPluginEnable, target.dataset.enabled === "true");
+        } else if (target.dataset.adminPluginHealth) {
+          task = checkPluginHealth(target.dataset.adminPluginHealth);
+        } else if (target.dataset.adminPluginExecute) {
+          task = executePlugin(target.dataset.adminPluginExecute, target.dataset.entrypoint);
+        } else if (target.dataset.adminPluginJob) {
+          task = queuePluginExecution(target.dataset.adminPluginJob, target.dataset.entrypoint);
+        } else if (action === "refresh") {
+          task = loadAdmin();
+        } else if (action === "toggle-auth") {
+          task = setAuthConfigured(!authState.configured_auth_enabled);
+        } else if (action === "toggle-invite-only") {
+          task = setInviteOnly(!!authState.registration_enabled);
+        } else if (action === "toggle-movievault-receiver") {
+          task = setMovieVaultReceiver(!ownerSettings.movievault_contribution_enabled);
+        } else if (action === "create-invite") {
+          task = createAdminInvite();
+        } else if (target.dataset.adminUserStatus) {
+          task = updateAdminUserStatus(target.dataset.adminUserStatus, target.dataset.status);
+        } else if (target.dataset.adminUserDelete) {
+          task = deleteAdminUser(target.dataset.adminUserDelete);
+        } else if (target.dataset.adminOwnerTransfer) {
+          task = transferOwnership(target.dataset.adminOwnerTransfer, target.dataset.username);
+        } else if (target.dataset.adminCredentialDelete) {
+          task = deleteAdminCredential(target.dataset.adminCredentialDelete);
+        } else if (target.dataset.adminInviteDelete) {
+          task = deleteAdminInvite(target.dataset.adminInviteDelete);
+        }
         Promise.resolve(task).catch((error) => setAdminStatus(error.message, "bad"));
       });
       panel.addEventListener("change", (event) => {
@@ -4101,6 +4127,42 @@ def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
         row.get("settings") if row else {},
         row.get("secrets_ref") if row else {},
     )
+
+
+def plugin_execution_context(plugin: dict[str, Any], config: dict[str, Any], actor: dict[str, Any] | None = None) -> dict[str, Any]:
+    manifest = plugin.get("manifest") or {}
+    return {
+        "pluginId": plugin.get("id"),
+        "pluginName": plugin.get("name"),
+        "enabled": bool(plugin.get("enabled")),
+        "categories": plugin.get("categories") or manifest.get("categories") or [],
+        "capabilities": plugin.get("capabilities") or manifest.get("capabilities") or [],
+        "settings": config.get("settings") or {},
+        "settingsConfigured": bool(config.get("settingsConfigured")),
+        "secretNames": config.get("secretNames") or [],
+        "secretsConfigured": bool(config.get("secretsConfigured")),
+        "actor": {
+            "id": str(actor.get("id")) if actor and actor.get("id") else None,
+            "username": actor.get("username") if actor else None,
+            "role": actor.get("role") if actor else None,
+        },
+    }
+
+
+def validate_plugin_execution_request(plugin: dict[str, Any], body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    entrypoint = str(body.get("entrypoint") or "").strip()
+    if not entrypoint:
+        raise NextApiError("entrypoint is required", 400)
+    runtime = plugin.get("runtime") or {}
+    entrypoints = runtime.get("entrypoints") or []
+    if entrypoint not in entrypoints:
+        raise NextApiError(f"Plugin entrypoint is not available: {entrypoint}", 400)
+    if entrypoint != "health_check" and not plugin.get("enabled"):
+        raise NextApiError("Plugin must be enabled before execution", 409)
+    payload = body.get("payload") or {}
+    if not isinstance(payload, dict):
+        raise NextApiError("payload must be an object", 400)
+    return entrypoint, payload
 
 
 def update_plugin_config(
@@ -5563,6 +5625,75 @@ def register_routes(flask_app: Flask) -> None:
                 },
             }
         )
+
+    @flask_app.post("/api/next/plugins/<plugin_id>/execute")
+    def execute_plugin(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Plugin execution body must be an object", 400)
+
+        with connect() as conn:
+            actor = require_next_admin_user(conn)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+            if not plugin:
+                raise NextApiError("Plugin not found", 404)
+            entrypoint, payload = validate_plugin_execution_request(plugin, body)
+            config = plugin_config_from_db(conn, plugin_id)
+            context = plugin_execution_context(plugin, config, actor)
+
+        execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
+        status_code = 200 if execution.get("status") == "ok" else 422
+        return response(
+            {
+                "status": "ok" if execution.get("status") == "ok" else "error",
+                "plugin": plugin,
+                "execution": execution,
+            },
+            status_code,
+        )
+
+    @flask_app.post("/api/next/plugins/<plugin_id>/jobs")
+    def queue_plugin_execution(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Plugin execution body must be an object", 400)
+
+        with connect() as conn:
+            actor = require_next_admin_user(conn)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+            if not plugin:
+                raise NextApiError("Plugin not found", 404)
+            entrypoint, payload = validate_plugin_execution_request(plugin, body)
+            config = plugin_config_from_db(conn, plugin_id)
+            job_payload = {
+                "pluginId": plugin_id,
+                "entrypoint": entrypoint,
+                "payload": payload,
+                "context": plugin_execution_context(plugin, config, actor),
+            }
+            with conn.transaction():
+                job = create_background_job(conn, job_type=PLUGIN_EXECUTION_JOB_TYPE, payload=job_payload)
+        return response({"status": "ok", "plugin": plugin, "job": job}, 201)
 
     @flask_app.get("/api/next/metadata/plugins")
     def metadata_plugins():
