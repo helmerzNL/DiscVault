@@ -1069,7 +1069,12 @@ def migration_dashboard_html() -> str:
       border-radius: 999px;
       min-width: 148px;
       min-height: 32px;
-      background: rgba(255,255,255,.04);
+      background: var(--panel-2);
+      color: var(--text);
+    }
+    .auth-gate .language-control select option {
+      background: var(--panel-2);
+      color: var(--text);
     }
     .auth-message {
       color: var(--muted);
@@ -1496,7 +1501,6 @@ def migration_dashboard_html() -> str:
       </div>
       <div class="actions">
         <button type="button" class="primary" id="migrationLoginButton" data-next-i18n="auth.signIn">Sign in</button>
-        <a class="button" href="/api/next/app" data-next-i18n="nav.collection">Collection</a>
       </div>
       <div class="auth-message" id="migrationAuthMessage" data-next-i18n="auth.checking">Checking authentication status...</div>
     </section>
