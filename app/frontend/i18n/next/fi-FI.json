@@ -9,7 +9,7 @@
   "auth.createOwnerPasskey": "Luo Owner-passkey",
   "auth.inviteCode": "Kutsukoodi",
   "auth.inviteOnly": "Vain kutsulla",
-  "auth.loginDescription": "Kirjaudu DiscVaultiin passkeyll?si.",
+  "auth.loginDescription": "Kirjaudu sisään Passkeylläsi",
   "auth.loginTitle": "DiscVault",
   "auth.passkey": "Passkey",
   "auth.passkeyCancelled": "Passkey-kehote peruttiin.",
@@ -193,5 +193,10 @@
   "startup.migrationDetails": "Migraation tiedot",
   "startup.setup": "Asetukset",
   "startup.startMigration": "Aloita migraatio",
-  "startup.openMigrationGuide": "Avaa migraatio-opas"
+  "startup.openMigrationGuide": "Avaa migraatio-opas",
+  "migration.testResetButton": "Tyhjennä testitietokanta",
+  "migration.testResetConfirm": "Tyhjennetäänkö PostgreSQL-testitietokanta, jotta voit testata migraation uudelleen?",
+  "migration.testResetDone": "Testitietokanta tyhjennetty. Ladataan migraation tila uudelleen...",
+  "migration.testResetPrompt": "Kirjoita {confirmation} tyhjentääksesi testitietokannan.",
+  "migration.testResetting": "Tyhjennetään testitietokantaa..."
 }

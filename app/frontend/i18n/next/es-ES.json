@@ -9,7 +9,7 @@
   "auth.createOwnerPasskey": "Crear passkey de Owner",
   "auth.inviteCode": "Código de invitación",
   "auth.inviteOnly": "Acceso solo con invitación",
-  "auth.loginDescription": "Inicia sesi?n en DiscVault con tu passkey.",
+  "auth.loginDescription": "Inicia sesión con tu Passkey",
   "auth.loginTitle": "DiscVault",
   "auth.passkey": "Passkey",
   "auth.passkeyCancelled": "La solicitud de passkey se canceló.",
@@ -193,5 +193,10 @@
   "startup.migrationDetails": "Detalles de migración",
   "startup.setup": "Configuración",
   "startup.startMigration": "Iniciar migración",
-  "startup.openMigrationGuide": "Abrir guía de migración"
+  "startup.openMigrationGuide": "Abrir guía de migración",
+  "migration.testResetButton": "Restablecer base de prueba",
+  "migration.testResetConfirm": "¿Restablecer la base de datos de prueba PostgreSQL para volver a probar la migración?",
+  "migration.testResetDone": "Base de prueba restablecida. Recargando estado de migración...",
+  "migration.testResetPrompt": "Escribe {confirmation} para restablecer la base de prueba.",
+  "migration.testResetting": "Restableciendo base de prueba..."
 }

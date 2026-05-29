@@ -9,7 +9,7 @@
   "auth.createOwnerPasskey": "Owner-Passkey erstellen",
   "auth.inviteCode": "Einladungscode",
   "auth.inviteOnly": "Zugang nur mit Einladung",
-  "auth.loginDescription": "Melde dich mit deinem Passkey bei DiscVault an.",
+  "auth.loginDescription": "Mit deinem Passkey anmelden",
   "auth.loginTitle": "DiscVault",
   "auth.passkey": "Passkey",
   "auth.passkeyCancelled": "Passkey-Abfrage wurde abgebrochen.",
@@ -193,5 +193,10 @@
   "startup.step.migrationDetail": "Importiere die Legacy-Datenbank nach PostgreSQL.",
   "startup.step.source": "Legacy-Daten",
   "startup.step.sourceDetail": "DiscVault prüft die konfigurierte Importquelle.",
-  "startup.switchAccount": "Konto wechseln"
+  "startup.switchAccount": "Konto wechseln",
+  "migration.testResetButton": "Testdatenbank zurücksetzen",
+  "migration.testResetConfirm": "PostgreSQL-Testdatenbank zurücksetzen, damit du die Migration erneut testen kannst?",
+  "migration.testResetDone": "Testdatenbank zurückgesetzt. Migrationsstatus wird neu geladen...",
+  "migration.testResetPrompt": "Gib {confirmation} ein, um die Testdatenbank zurückzusetzen.",
+  "migration.testResetting": "Testdatenbank wird zurückgesetzt..."
 }

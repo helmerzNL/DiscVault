@@ -89,6 +89,48 @@ TARGET_DATA_TABLES = (
     "media_group_members",
     "media_group_movies",
 )
+TEST_DATABASE_RESET_CONFIRMATION = "RESET TEST DATABASE"
+TEST_DATABASE_RESET_TABLES = (
+    "media_group_digital_access",
+    "media_group_invites",
+    "media_group_members",
+    "media_group_movies",
+    "watchlist_items",
+    "watch_history",
+    "push_subscriptions",
+    "notification_preferences",
+    "user_notifications",
+    "user_preferences",
+    "client_id_mappings",
+    "idempotency_records",
+    "collection_items",
+    "container_movies",
+    "container_identifiers",
+    "movie_credits",
+    "movie_technical_specs",
+    "movie_localizations",
+    "movie_identifiers",
+    "person_localizations",
+    "person_identifiers",
+    "entity_media",
+    "metadata_field_provenance",
+    "metadata_lookup_cache",
+    "import_id_mappings",
+    "migration_runs",
+    "background_jobs",
+    "domain_events",
+    "digital_media_items",
+    "media_groups",
+    "containers",
+    "movies",
+    "people",
+    "passkey_credentials",
+    "auth_challenges",
+    "user_roles",
+    "invite_codes",
+    "users",
+    "media_assets",
+)
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
 MOVIE_ARTWORK_KINDS = {"poster", "backdrop"}
@@ -267,6 +309,74 @@ def target_data_counts(conn) -> dict[str, int]:
 
 def target_database_empty(counts: dict[str, int]) -> bool:
     return all(value == 0 for value in counts.values())
+
+
+def test_database_reset_enabled() -> bool:
+    raw = os.environ.get("DISCVAULT_NEXT_ENABLE_TEST_RESET")
+    if raw is None:
+        raw = os.environ.get("DISCVAULT_NEXT_ALLOW_TEST_RESET")
+    return parse_bool_value(raw, default=False)
+
+
+def reset_next_test_database(conn) -> dict[str, Any]:
+    deleted: dict[str, int] = {}
+    for table_name in TEST_DATABASE_RESET_TABLES:
+        if not table_exists(conn, table_name):
+            continue
+        with conn.cursor() as cur:
+            cur.execute(f'DELETE FROM "{table_name}"')
+            deleted[table_name] = max(int(cur.rowcount or 0), 0)
+
+    if table_exists(conn, "sync_changes"):
+        with conn.cursor() as cur:
+            cur.execute('DELETE FROM "sync_changes"')
+            deleted["sync_changes"] = max(int(cur.rowcount or 0), 0)
+
+    if table_exists(conn, "sync_state"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO sync_state (id, revision, updated_at)
+                VALUES ('global', 0, now())
+                ON CONFLICT (id) DO UPDATE SET
+                    revision = 0,
+                    updated_at = now()
+                """
+            )
+
+    if table_exists(conn, "digital_media_sources"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE digital_media_sources
+                SET
+                    item_count = 0,
+                    last_synced_at = NULL,
+                    last_status = NULL,
+                    last_error = NULL,
+                    updated_at = now()
+                """
+            )
+
+    if table_exists(conn, "app_settings"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM app_settings
+                WHERE is_secret = false
+                """
+            )
+            deleted["app_settings"] = max(int(cur.rowcount or 0), 0)
+
+    target_counts = target_data_counts(conn)
+    return {
+        "confirmation": TEST_DATABASE_RESET_CONFIRMATION,
+        "deleted": deleted,
+        "targetDatabase": {
+            "empty": target_database_empty(target_counts),
+            "counts": target_counts,
+        },
+    }
 
 
 def latest_run_included_security(latest: dict[str, Any] | None) -> bool:
@@ -831,6 +941,10 @@ def migration_report(conn) -> dict[str, Any]:
             "warnings": warnings,
         },
         "metadataPlugins": plugin_summary(conn),
+        "testReset": {
+            "enabled": test_database_reset_enabled(),
+            "confirmation": TEST_DATABASE_RESET_CONFIRMATION,
+        },
         "requiredActions": readiness["requiredActions"],
     }
 
@@ -1160,6 +1274,14 @@ def migration_dashboard_html() -> str:
       border-color: var(--accent);
       color: #111217;
       font-weight: 700;
+    }
+    button.danger {
+      background: rgba(255,107,107,.08);
+      border-color: rgba(255,107,107,.45);
+      color: var(--red);
+    }
+    button.danger:hover {
+      background: rgba(255,107,107,.14);
     }
     button:disabled {
       cursor: not-allowed;
@@ -1581,7 +1703,7 @@ def migration_dashboard_html() -> str:
           <span class="login-mark" aria-hidden="true">DV</span>
           <div class="login-copy">
             <h2 data-next-i18n="auth.loginTitle">DiscVault</h2>
-            <p data-next-i18n="auth.loginDescription">Sign in to DiscVault with your passkey.</p>
+            <p data-next-i18n="auth.loginDescription">Log in with your Passkey</p>
           </div>
         </div>
         <label class="language-control">
@@ -1659,6 +1781,7 @@ def migration_dashboard_html() -> str:
           <button type="button" class="primary" id="migrationFlowStartButton" disabled data-next-i18n="migration.start">Start Migration</button>
           <a class="button hidden" id="migrationFlowAppButton" href="/api/next/app" data-next-i18n="migration.openApp">Open DiscVault Next</a>
           <button type="button" id="migrationFlowRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+          <button type="button" class="danger hidden" id="migrationTestResetButton" data-next-i18n="migration.testResetButton">Reset test database</button>
         </div>
       </div>
       <div class="card">
@@ -1865,7 +1988,7 @@ def migration_dashboard_html() -> str:
         const needsAuth = !!payload.auth_enabled && !payload.authenticated;
         if (needsAuth) {
           showMigrationAuthGate(true);
-          setMigrationAuthMessage(tNext("auth.loginDescription", "Sign in to DiscVault with your passkey."), "info");
+          setMigrationAuthMessage(tNext("auth.loginDescription", "Log in with your Passkey"), "info");
           const loginButton = document.getElementById("migrationLoginButton");
           if (loginButton) loginButton.disabled = !!webauthnUnavailableReason();
           const unavailable = webauthnUnavailableReason();
@@ -2234,6 +2357,48 @@ def migration_dashboard_html() -> str:
         }), 3000);
       }
     }
+    function renderTestReset(report) {
+      const button = document.getElementById("migrationTestResetButton");
+      if (!button) return;
+      const enabled = !!report?.testReset?.enabled;
+      button.classList.toggle("hidden", !enabled);
+      button.disabled = !enabled;
+    }
+    function translatedResetPrompt(key, fallback, confirmation) {
+      return tNext(key, fallback).replace("{confirmation}", confirmation);
+    }
+    async function resetTestDatabase() {
+      const reset = lastMigrationReport?.testReset || {};
+      const confirmation = reset.confirmation || "RESET TEST DATABASE";
+      const confirmed = window.confirm(
+        tNext("migration.testResetConfirm", "Reset the PostgreSQL test database so you can test migration again?")
+      );
+      if (!confirmed) return;
+      const typed = window.prompt(
+        translatedResetPrompt("migration.testResetPrompt", "Type {confirmation} to reset the test database.", confirmation),
+        ""
+      );
+      if (typed !== confirmation) return;
+      const button = document.getElementById("migrationTestResetButton");
+      if (button) button.disabled = true;
+      const message = document.getElementById("message");
+      if (message) message.textContent = tNext("migration.testResetting", "Resetting test database...");
+      const response = await fetch("/api/next/migration/test-reset", {
+        method: "POST",
+        headers: migrationHeaders({"Content-Type": "application/json"}),
+        body: JSON.stringify({confirmation})
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error || `Test database reset failed: HTTP ${response.status}`);
+      }
+      localStorage.removeItem("dv_next_token");
+      migrationConfirmed = false;
+      migrationIntroAccepted = false;
+      selectedImportSourceId = null;
+      if (message) message.textContent = tNext("migration.testResetDone", "Test database reset. Reloading migration status...");
+      await loadReport();
+    }
     function migrationNeedsIntro(report) {
       const state = report?.state || "unknown";
       return !["already_completed", "not_required", "running"].includes(state);
@@ -2330,7 +2495,7 @@ def migration_dashboard_html() -> str:
       if (response.status === 401) {
         localStorage.removeItem("dv_next_token");
         showMigrationAuthGate(true);
-        setMigrationAuthMessage(tNext("auth.loginDescription", "Sign in to DiscVault with your passkey."), "bad");
+        setMigrationAuthMessage(tNext("auth.loginDescription", "Log in with your Passkey"), "bad");
         return;
       }
       if (!response.ok) throw new Error(`Report failed: HTTP ${response.status}`);
@@ -2360,6 +2525,7 @@ def migration_dashboard_html() -> str:
 
       renderImportSources(report);
       renderMigrationFlow(report);
+      renderTestReset(report);
       document.getElementById("sourceList").innerHTML = [
         row(tNext("migration.importSource", "Import source"), source.pluginName ? `${source.pluginName} (${source.pluginId})` : "-"),
         row(tNext("migration.sourceKind", "Source kind"), source.sourceKind || "-"),
@@ -2441,6 +2607,15 @@ def migration_dashboard_html() -> str:
         flowRefreshButton.dataset.bound = "true";
         flowRefreshButton.addEventListener("click", () => loadReport().catch((error) => {
           document.getElementById("message").textContent = error.message;
+        }));
+      }
+      const testResetButton = document.getElementById("migrationTestResetButton");
+      if (testResetButton && testResetButton.dataset.bound !== "true") {
+        testResetButton.dataset.bound = "true";
+        testResetButton.addEventListener("click", () => resetTestDatabase().catch((error) => {
+          const message = document.getElementById("message");
+          if (message) message.textContent = error.message;
+          renderTestReset(lastMigrationReport || {});
         }));
       }
       const introButton = document.getElementById("migrationIntroContinueButton");
@@ -10922,6 +11097,34 @@ def register_routes(flask_app: Flask) -> None:
             with conn.transaction():
                 job = create_background_job(conn, job_type=job_type, payload=payload)
         return response({"status": "ok", "job": job, "readiness": readiness, "importPlan": import_plan}, 201)
+
+    @flask_app.post("/api/next/migration/test-reset")
+    def reset_migration_test_database():
+        if not test_database_reset_enabled():
+            raise NextApiError(
+                "Test database reset is disabled. Set DISCVAULT_NEXT_ENABLE_TEST_RESET=true to enable it.",
+                403,
+            )
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Reset request body must be an object", 400)
+        confirmation = clean_text(body.get("confirmation") or body.get("confirm"))
+        if confirmation != TEST_DATABASE_RESET_CONFIRMATION:
+            raise NextApiError(f"Confirmation required: {TEST_DATABASE_RESET_CONFIRMATION}", 400)
+
+        with connect() as conn:
+            actor = require_next_admin_user(conn)
+            with conn.transaction():
+                reset = reset_next_test_database(conn)
+            readiness = migration_readiness(conn)
+        return response(
+            {
+                "status": "ok",
+                "reset": reset,
+                "actor": actor_job_payload(actor),
+                "readiness": readiness,
+            }
+        )
 
     @flask_app.get("/api/next/migration/status")
     def migration_status():

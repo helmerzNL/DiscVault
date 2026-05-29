@@ -261,6 +261,13 @@ curl -X POST http://localhost:6180/api/next/migration/start \
   -d '{}'
 ```
 
+For repeated migration testing, set `DISCVAULT_NEXT_ENABLE_TEST_RESET=true` in
+`.env` and recreate `next-api`. The migration wizard then shows a guarded
+test-reset button. It clears imported PostgreSQL collection, users, groups,
+passkeys, non-secret app settings, jobs and migration history, but keeps the
+schema, roles, permissions, plugin registry/configuration and filesystem media
+under `/data`.
+
 ## Optional One-Off CLI Import
 
 The normal path is the API-driven migration assistant above. A one-off CLI
