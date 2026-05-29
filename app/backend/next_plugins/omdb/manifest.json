@@ -11,7 +11,16 @@
   ],
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
-  "settingsSchema": {},
+  "settingsSchema": {
+    "secrets": [
+      {
+        "name": "apiKey",
+        "label": "OMDb API key",
+        "type": "password",
+        "required": true
+      }
+    ]
+  },
   "orderIndex": 20,
   "entitlements": {
     "source_use": "metadata.source.omdb.use"

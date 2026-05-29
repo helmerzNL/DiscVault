@@ -12,7 +12,25 @@
   ],
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
-  "settingsSchema": {},
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "baseUrl",
+        "label": "MovieVault URL",
+        "type": "url",
+        "required": false,
+        "placeholder": "https://search.discvault.eu"
+      }
+    ],
+    "secrets": [
+      {
+        "name": "token",
+        "label": "MovieVault token",
+        "type": "password",
+        "required": true
+      }
+    ]
+  },
   "orderIndex": 50,
   "premiumFeatureKey": "metadata.source.movievault.use",
   "entitlements": {

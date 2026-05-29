@@ -13,7 +13,25 @@
   ],
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
-  "settingsSchema": {},
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "language",
+        "label": "Language",
+        "type": "text",
+        "required": false,
+        "placeholder": "en-US"
+      }
+    ],
+    "secrets": [
+      {
+        "name": "apiKey",
+        "label": "TMDb API key",
+        "type": "password",
+        "required": true
+      }
+    ]
+  },
   "orderIndex": 10,
   "entitlements": {
     "source_use": "metadata.source.tmdb.use",
