@@ -1401,25 +1401,83 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DiscVault Next Collection</title>
+  <script>
+    (function () {
+      try {
+        const preference = localStorage.getItem("dv_next_theme") || "system";
+        const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.dataset.theme = preference === "system" ? (dark ? "dark" : "light") : preference;
+      } catch (error) {
+        document.documentElement.dataset.theme = "dark";
+        document.documentElement.dataset.themePreference = "system";
+      }
+    })();
+  </script>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #101116;
-      --surface: #191c24;
-      --surface-2: #222633;
-      --line: #343a4c;
-      --text: #f4f5f8;
-      --muted: #aab0bd;
-      --accent: #e8c547;
-      --blue: #82aaff;
-      --green: #48c78e;
-      --red: #ff6b6b;
+      --bg: #0f1115;
+      --bg-elevated: #14171d;
+      --surface: rgba(27,30,38,.92);
+      --surface-2: rgba(37,42,54,.92);
+      --chrome: rgba(21,24,31,.78);
+      --line: rgba(126,136,158,.28);
+      --soft-line: rgba(229,233,240,.1);
+      --soft-bg: rgba(255,255,255,.035);
+      --empty-bg: rgba(255,255,255,.025);
+      --text: #f6f7fb;
+      --muted: #a7adba;
+      --accent: #d7a93a;
+      --accent-soft: rgba(215,169,58,.14);
+      --blue: #6ea8fe;
+      --blue-soft: rgba(110,168,254,.12);
+      --green: #34c759;
+      --green-soft: rgba(52,199,89,.14);
+      --red: #ff453a;
+      --red-soft: rgba(255,69,58,.14);
+      --button-bg: rgba(255,255,255,.06);
+      --button-hover: rgba(255,255,255,.1);
+      --poster-gradient: linear-gradient(145deg, #242a36, #12151c);
+      --hero-fade: rgba(15,17,21,.2);
+      --overlay: rgba(0,0,0,.68);
+      --shadow: 0 24px 80px rgba(0,0,0,.45);
+      --control-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f5f5f7;
+      --bg-elevated: #ffffff;
+      --surface: rgba(255,255,255,.86);
+      --surface-2: rgba(248,249,252,.94);
+      --chrome: rgba(255,255,255,.78);
+      --line: rgba(60,60,67,.16);
+      --soft-line: rgba(60,60,67,.12);
+      --soft-bg: rgba(60,60,67,.045);
+      --empty-bg: rgba(60,60,67,.035);
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --accent: #9a6a00;
+      --accent-soft: rgba(154,106,0,.12);
+      --blue: #0066cc;
+      --blue-soft: rgba(0,102,204,.1);
+      --green: #248a3d;
+      --green-soft: rgba(36,138,61,.1);
+      --red: #d70015;
+      --red-soft: rgba(215,0,21,.1);
+      --button-bg: rgba(255,255,255,.72);
+      --button-hover: rgba(255,255,255,.96);
+      --poster-gradient: linear-gradient(145deg, #e4e8ef, #f7f8fb);
+      --hero-fade: rgba(245,245,247,.16);
+      --overlay: rgba(20,22,28,.46);
+      --shadow: 0 22px 70px rgba(0,0,0,.16);
+      --control-shadow: inset 0 1px 0 rgba(255,255,255,.72);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background: linear-gradient(180deg, var(--bg-elevated), var(--bg) 260px);
       color: var(--text);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
@@ -1428,15 +1486,36 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       margin: 0 auto;
       padding: 28px 0 48px;
     }
-    header {
+    .app-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       gap: 18px;
       margin-bottom: 18px;
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      padding: 14px 0 12px;
+      background: linear-gradient(180deg, var(--bg-elevated), rgba(0,0,0,0));
+      backdrop-filter: blur(18px);
+    }
+    .app-brand { min-width: 0; }
+    .eyebrow {
+      display: block;
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 3px;
+    }
+    .header-controls {
+      display: grid;
+      gap: 9px;
+      justify-items: end;
+      min-width: 0;
     }
     h1, h2, h3, p { margin: 0; }
-    h1 { font-size: clamp(1.7rem, 3vw, 2.5rem); letter-spacing: 0; }
+    h1 { font-size: clamp(1.7rem, 2.2vw, 2.35rem); letter-spacing: 0; }
     h2 { font-size: 1rem; }
     p { color: var(--muted); line-height: 1.5; }
     a, button {
@@ -1446,7 +1525,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     button, a.button {
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: var(--surface-2);
+      background: var(--button-bg);
       color: var(--text);
       cursor: pointer;
       min-height: 38px;
@@ -1456,10 +1535,41 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       align-items: center;
       justify-content: center;
       white-space: nowrap;
+      box-shadow: var(--control-shadow);
+      transition: background .16s ease, border-color .16s ease, color .16s ease;
+    }
+    button:hover, a.button:hover {
+      background: var(--button-hover);
     }
     button.active {
-      border-color: rgba(232,197,71,.65);
+      background: var(--accent-soft);
+      border-color: var(--accent);
       color: var(--accent);
+    }
+    .theme-toggle {
+      display: inline-grid;
+      grid-template-columns: repeat(3, minmax(0, auto));
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--chrome);
+      box-shadow: var(--control-shadow);
+    }
+    .theme-toggle button {
+      min-height: 30px;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 10px;
+      background: transparent;
+      color: var(--muted);
+      box-shadow: none;
+      font-size: .8rem;
+    }
+    .theme-toggle button.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--control-shadow);
     }
     .actions, .filters {
       display: flex;
@@ -1485,7 +1595,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       font: inherit;
     }
     input:focus {
-      border-color: rgba(130,170,255,.75);
+      border-color: var(--blue);
       outline: none;
     }
     .stats {
@@ -1500,6 +1610,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       border-radius: 8px;
       padding: 15px;
       min-width: 0;
+      box-shadow: var(--control-shadow);
     }
     .stat strong {
       display: block;
@@ -1530,10 +1641,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       display: block;
       min-width: 0;
       text-decoration: none;
+      box-shadow: var(--control-shadow);
     }
     .poster {
       aspect-ratio: 2 / 3;
-      background: linear-gradient(145deg, #232836, #141720);
+      background: var(--poster-gradient);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1564,16 +1676,16 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       margin-top: 8px;
     }
     .tag {
-      border: 1px solid rgba(255,255,255,.13);
+      border: 1px solid var(--soft-line);
       border-radius: 999px;
       padding: 3px 7px;
       color: var(--muted);
       font-size: .72rem;
       line-height: 1.2;
     }
-    .tag.good { color: var(--green); border-color: rgba(72,199,142,.38); }
-    .tag.blue { color: var(--blue); border-color: rgba(130,170,255,.38); }
-    .tag.bad { color: var(--red); border-color: rgba(255,107,107,.38); }
+    .tag.good { color: var(--green); border-color: var(--green-soft); }
+    .tag.blue { color: var(--blue); border-color: var(--blue-soft); }
+    .tag.bad { color: var(--red); border-color: var(--red-soft); }
     .section-head {
       display: flex;
       justify-content: space-between;
@@ -1594,6 +1706,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       color: inherit;
       display: block;
       text-decoration: none;
+      box-shadow: var(--control-shadow);
     }
     .container-card strong {
       display: block;
@@ -1609,14 +1722,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       color: var(--muted);
       border: 1px dashed var(--line);
       border-radius: 8px;
-      background: rgba(255,255,255,.02);
+      background: var(--empty-bg);
     }
     .detail-overlay {
       position: fixed;
       inset: 0;
       z-index: 20;
       display: none;
-      background: rgba(0,0,0,.68);
+      background: var(--overlay);
       padding: 18px;
       overflow-y: auto;
     }
@@ -1630,11 +1743,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       border: 1px solid var(--line);
       border-radius: 10px;
       overflow: hidden;
-      box-shadow: 0 24px 80px rgba(0,0,0,.45);
+      box-shadow: var(--shadow);
     }
     .detail-hero {
       min-height: 210px;
-      background: linear-gradient(135deg, #242938, #11141d);
+      background: var(--poster-gradient);
       background-size: cover;
       background-position: center;
       position: relative;
@@ -1643,7 +1756,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(180deg, rgba(16,17,22,.2), var(--surface));
+      background: linear-gradient(180deg, var(--hero-fade), var(--surface));
     }
     .detail-close {
       position: absolute;
@@ -1705,7 +1818,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .detail-section {
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: rgba(255,255,255,.025);
+      background: var(--soft-bg);
       padding: 14px;
       min-width: 0;
     }
@@ -1721,7 +1834,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       display: grid;
       grid-template-columns: minmax(110px, .6fr) minmax(0, 1.4fr);
       gap: 10px;
-      border-bottom: 1px solid rgba(255,255,255,.07);
+      border-bottom: 1px solid var(--soft-line);
       padding-bottom: 8px;
     }
     .field:last-child {
@@ -1743,7 +1856,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       margin-top: 10px;
     }
     .credit {
-      border: 1px solid rgba(255,255,255,.1);
+      border: 1px solid var(--soft-line);
       border-radius: 8px;
       padding: 9px;
       background: var(--surface-2);
@@ -1814,8 +1927,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       grid-template-columns: 1fr;
       gap: 13px;
       align-items: start;
-      background: rgba(88,166,255,.08);
-      border: 1px solid rgba(88,166,255,.28);
+      background: var(--blue-soft);
+      border: 1px solid var(--line);
       border-radius: 8px;
       padding: 15px;
       margin-bottom: 16px;
@@ -1838,15 +1951,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 0;
-      border-top: 1px solid rgba(88,166,255,.22);
-      border-bottom: 1px solid rgba(88,166,255,.22);
+      border-top: 1px solid var(--soft-line);
+      border-bottom: 1px solid var(--soft-line);
     }
     .startup-step {
       display: grid;
       grid-template-columns: 28px minmax(0, 1fr);
       gap: 9px;
       padding: 11px 10px;
-      border-right: 1px solid rgba(88,166,255,.18);
+      border-right: 1px solid var(--soft-line);
       min-width: 0;
     }
     .startup-step:last-child {
@@ -1877,16 +1990,16 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       overflow-wrap: anywhere;
     }
     .startup-step.complete .startup-step-marker {
-      border-color: rgba(63,185,80,.55);
+      border-color: var(--green);
       color: var(--green);
     }
     .startup-step.active .startup-step-marker {
-      border-color: rgba(88,166,255,.75);
-      background: rgba(88,166,255,.12);
+      border-color: var(--blue);
+      background: var(--blue-soft);
       color: var(--blue);
     }
     .startup-step.blocked .startup-step-marker {
-      border-color: rgba(248,81,73,.65);
+      border-color: var(--red);
       color: var(--red);
     }
     .startup-facts {
@@ -1932,9 +2045,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       margin: 12px 0;
     }
     .admin-metric {
-      border: 1px solid rgba(255,255,255,.1);
+      border: 1px solid var(--soft-line);
       border-radius: 8px;
-      background: rgba(255,255,255,.03);
+      background: var(--soft-bg);
       padding: 10px;
       min-width: 0;
     }
@@ -1967,7 +2080,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       display: block;
     }
     .admin-card {
-      border: 1px solid rgba(255,255,255,.1);
+      border: 1px solid var(--soft-line);
       border-radius: 8px;
       background: var(--surface-2);
       padding: 12px;
@@ -1990,12 +2103,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       margin-top: 10px;
     }
     .admin-row {
-      border: 1px solid rgba(255,255,255,.09);
+      border: 1px solid var(--soft-line);
       border-radius: 8px;
       padding: 9px;
       display: grid;
       gap: 8px;
-      background: rgba(255,255,255,.025);
+      background: var(--soft-bg);
       min-width: 0;
     }
     .admin-row-head {
@@ -2029,8 +2142,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     .admin-code {
       font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      background: rgba(0,0,0,.22);
-      border: 1px solid rgba(255,255,255,.1);
+      background: var(--soft-bg);
+      border: 1px solid var(--soft-line);
       border-radius: 6px;
       padding: 7px 8px;
       overflow-wrap: anywhere;
@@ -2073,7 +2186,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .admin-plugin-section + .admin-plugin-section {
       margin-top: 14px;
       padding-top: 12px;
-      border-top: 1px solid rgba(255,255,255,.08);
+      border-top: 1px solid var(--soft-line);
     }
     .admin-plugin-section-head {
       display: flex;
@@ -2131,11 +2244,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     @media (max-width: 980px) {
       main { width: min(100vw - 20px, 760px); padding-top: 18px; }
-      header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+      .app-header, .toolbar { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+      .header-controls { justify-items: stretch; }
+      .theme-toggle { width: max-content; }
       .auth-panel { grid-template-columns: 1fr; }
       .startup-head { grid-template-columns: 1fr; }
       .startup-steps { grid-template-columns: 1fr; }
-      .startup-step { border-right: 0; border-bottom: 1px solid rgba(88,166,255,.18); }
+      .startup-step { border-right: 0; border-bottom: 1px solid var(--soft-line); }
       .startup-step:last-child { border-bottom: 0; }
       .startup-actions { justify-content: flex-start; }
       .admin-grid { grid-template-columns: 1fr; }
@@ -2184,16 +2299,24 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
 </head>
 <body>
   <main>
-    <header>
-      <div>
-        <h1>DiscVault Next Collection</h1>
-        <p>Read-only PostgreSQL collection view for validating the migrated library.</p>
+    <header class="app-header">
+      <div class="app-brand">
+        <span class="eyebrow">DiscVault Next</span>
+        <h1>Collection</h1>
+        <p>PostgreSQL collection view for validating the migrated library.</p>
         <p class="muted" id="clientStatus">""" + h(client_status) + """</p>
       </div>
-      <div class="actions">
-        <button type="button" onclick="loadCollection()">Refresh</button>
-        <a class="button" href="/api/next/migration">Migration</a>
-        <a class="button" href="/api/next/movies?limit=200">Movies JSON</a>
+      <div class="header-controls">
+        <div class="theme-toggle" role="group" aria-label="Appearance">
+          <button type="button" data-theme-choice="system">System</button>
+          <button type="button" data-theme-choice="light">Light</button>
+          <button type="button" data-theme-choice="dark">Dark</button>
+        </div>
+        <div class="actions">
+          <button type="button" onclick="loadCollection()">Refresh</button>
+          <a class="button" href="/api/next/migration">Migration</a>
+          <a class="button" href="/api/next/movies?limit=200">Movies JSON</a>
+        </div>
       </div>
     </header>
 
@@ -2511,6 +2634,41 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     function number(value) {
       return Number(value || 0).toLocaleString();
+    }
+    function systemTheme() {
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    function currentThemePreference() {
+      return localStorage.getItem("dv_next_theme") || "system";
+    }
+    function applyTheme(preference) {
+      const theme = preference === "system" ? systemTheme() : preference;
+      document.documentElement.dataset.themePreference = preference;
+      document.documentElement.dataset.theme = theme;
+      document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.themeChoice === preference);
+        button.setAttribute("aria-pressed", button.dataset.themeChoice === preference ? "true" : "false");
+      });
+    }
+    function setThemePreference(preference) {
+      localStorage.setItem("dv_next_theme", preference);
+      applyTheme(preference);
+    }
+    function bindThemeControls() {
+      applyTheme(currentThemePreference());
+      document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+        if (button.dataset.bound === "true") return;
+        button.dataset.bound = "true";
+        button.addEventListener("click", () => setThemePreference(button.dataset.themeChoice || "system"));
+      });
+      if (window.matchMedia) {
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        const handler = () => {
+          if (currentThemePreference() === "system") applyTheme("system");
+        };
+        if (media.addEventListener) media.addEventListener("change", handler);
+        else if (media.addListener) media.addListener(handler);
+      }
     }
     function usableImage(url) {
       if (!url) return "";
@@ -4385,6 +4543,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     async function bootCollection() {
       setClientStatus("Client script started.");
+      bindThemeControls();
       bindAuthButtons();
       bindStartupActions();
       bindCollectionLinks();
