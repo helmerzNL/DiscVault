@@ -231,6 +231,13 @@ def next_i18n_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "frontend" / "i18n" / "next"
 
 
+def next_frontend_dir() -> Path:
+    configured = os.environ.get("DISCVAULT_NEXT_FRONTEND_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+    return Path(__file__).resolve().parent.parent / "frontend"
+
+
 def supported_next_locales() -> list[dict[str, str]]:
     return [dict(item) for item in NEXT_I18N_LOCALES]
 
@@ -3142,6 +3149,9 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       display: grid;
       grid-template-columns: 248px minmax(0, 1fr);
     }
+    .mobile-tabbar {
+      display: none;
+    }
     .preview-sidebar {
       position: sticky;
       top: 0;
@@ -3167,10 +3177,15 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       border-radius: 8px;
       display: grid;
       place-items: center;
-      color: var(--accent-contrast);
-      background: linear-gradient(145deg, var(--accent), #30d158);
+      overflow: hidden;
+      background: #12121a;
       box-shadow: var(--shadow-soft);
-      font-weight: 800;
+    }
+    .brand-mark img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
     }
     .brand strong {
       display: block;
@@ -3208,6 +3223,77 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
     .nav-item small {
       color: var(--subtle);
       font-size: 11px;
+    }
+    .nav-symbol {
+      width: 20px;
+      height: 20px;
+      display: inline-block;
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .nav-symbol.library {
+      border: 2px solid currentColor;
+      border-radius: 5px;
+    }
+    .nav-symbol.library::before,
+    .nav-symbol.library::after {
+      content: "";
+      position: absolute;
+      left: 3px;
+      right: 3px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+    }
+    .nav-symbol.library::before { top: 5px; }
+    .nav-symbol.library::after { bottom: 5px; }
+    .nav-symbol.containers {
+      border: 2px solid currentColor;
+      border-radius: 5px;
+      box-shadow: 5px -5px 0 -2px var(--bg-solid), 5px -5px 0 0 currentColor;
+    }
+    .nav-symbol.groups::before,
+    .nav-symbol.groups::after,
+    .nav-symbol.admin::before,
+    .nav-symbol.admin::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .nav-symbol.groups::before {
+      width: 9px;
+      height: 9px;
+      left: 2px;
+      top: 4px;
+      box-shadow: 8px 0 0 currentColor;
+    }
+    .nav-symbol.groups::after {
+      width: 18px;
+      height: 7px;
+      left: 1px;
+      bottom: 2px;
+      border-radius: 9px 9px 4px 4px;
+      opacity: .82;
+    }
+    .nav-symbol.admin::before {
+      width: 6px;
+      height: 6px;
+      left: 7px;
+      top: 7px;
+      box-shadow:
+        0 -8px 0 -1px currentColor,
+        0 8px 0 -1px currentColor,
+        -8px 0 0 -1px currentColor,
+        8px 0 0 -1px currentColor;
+    }
+    .nav-symbol.admin::after {
+      width: 12px;
+      height: 12px;
+      left: 4px;
+      top: 4px;
+      border: 2px solid currentColor;
+      background: transparent;
     }
     .sidebar-footer {
       margin-top: auto;
@@ -3265,7 +3351,7 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       min-height: 36px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: var(--bg-elevated);
+      background-color: var(--bg-solid);
       color: var(--text);
       backdrop-filter: blur(20px) saturate(160%);
     }
@@ -3291,6 +3377,23 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
     select {
       padding: 0 12px;
       max-width: 180px;
+      color: var(--text);
+      background-color: var(--bg-solid);
+      color-scheme: light;
+      appearance: auto;
+    }
+    select option {
+      color: #17181c;
+      background-color: #ffffff;
+    }
+    html[data-theme="dark"] select {
+      color: var(--text);
+      background-color: #24262b;
+      color-scheme: dark;
+    }
+    html[data-theme="dark"] select option {
+      color: #f5f6f8;
+      background-color: #24262b;
     }
     .hero {
       position: relative;
@@ -3586,7 +3689,76 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       .preview-layout { grid-template-columns: 1fr; }
     }
     @media (max-width: 760px) {
-      .preview-main { padding: 14px 12px 28px; }
+      body {
+        padding-bottom: calc(86px + env(safe-area-inset-bottom));
+      }
+      .preview-main {
+        padding: 14px 12px 28px;
+      }
+      .preview-sidebar {
+        justify-content: center;
+        padding: 12px;
+      }
+      .preview-sidebar .nav-section {
+        display: none;
+      }
+      .brand {
+        padding: 0;
+      }
+      .mobile-tabbar {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        bottom: calc(10px + env(safe-area-inset-bottom));
+        z-index: 20;
+        min-height: 66px;
+        padding: 7px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+        border: 1px solid color-mix(in srgb, var(--line-strong) 80%, transparent);
+        border-radius: 22px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.70), rgba(255,255,255,.46)),
+          color-mix(in srgb, var(--bg-elevated) 84%, transparent);
+        box-shadow: 0 18px 52px rgba(0,0,0,.24);
+        backdrop-filter: blur(28px) saturate(190%);
+        -webkit-backdrop-filter: blur(28px) saturate(190%);
+      }
+      html[data-theme="dark"] .mobile-tabbar {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06)),
+          color-mix(in srgb, var(--bg-elevated) 76%, transparent);
+        box-shadow: 0 20px 60px rgba(0,0,0,.46);
+      }
+      .mobile-tab {
+        min-width: 0;
+        min-height: 52px;
+        border: 0;
+        border-radius: 16px;
+        padding: 5px 4px 4px;
+        display: grid;
+        justify-items: center;
+        align-content: center;
+        gap: 3px;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+        text-align: center;
+      }
+      .mobile-tab.active {
+        color: var(--text);
+        background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      }
+      .mobile-tab span:last-child {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1.1;
+      }
       .topbar { grid-template-columns: 1fr; }
       .top-actions { justify-content: stretch; }
       .segmented { flex: 1; }
@@ -3620,7 +3792,7 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
   <div class="preview-shell">
     <aside class="preview-sidebar">
       <div class="brand">
-        <div class="brand-mark">D</div>
+        <div class="brand-mark"><img src="/api/next/assets/logo.svg" alt="DiscVault"></div>
         <div>
           <strong>DiscVault</strong>
           <span data-next-i18n="uiPreview.preview">UI Preview</span>
@@ -3706,6 +3878,24 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       </section>
     </main>
   </div>
+  <nav class="mobile-tabbar" aria-label="Mobile">
+    <button type="button" class="mobile-tab active">
+      <span class="nav-symbol library" aria-hidden="true"></span>
+      <span data-next-i18n="uiPreview.navLibrary">Library</span>
+    </button>
+    <button type="button" class="mobile-tab">
+      <span class="nav-symbol containers" aria-hidden="true"></span>
+      <span data-next-i18n="collection.containers">Containers</span>
+    </button>
+    <button type="button" class="mobile-tab">
+      <span class="nav-symbol groups" aria-hidden="true"></span>
+      <span data-next-i18n="migration.groups">Groups</span>
+    </button>
+    <a class="mobile-tab" href="/api/next/app">
+      <span class="nav-symbol admin" aria-hidden="true"></span>
+      <span data-next-i18n="uiPreview.admin">Admin</span>
+    </a>
+  </nav>
   <script>
     const state = JSON.parse(document.getElementById("initialState").textContent || "{}");
     const movies = state.movies || [];
@@ -10969,6 +11159,7 @@ PUBLIC_NEXT_PREFIXES = (
     "/.well-known/",
     "/api/auth/",
     "/api/next/auth/",
+    "/api/next/assets/",
     "/api/next/i18n/",
     "/api/next/media/assets/",
 )
@@ -11059,6 +11250,24 @@ def register_routes(flask_app: Flask) -> None:
             },
             200 if is_ready else 503,
         )
+
+    @flask_app.get("/api/next/assets/<path:asset_name>")
+    def next_frontend_asset(asset_name: str):
+        allowed_assets = {
+            "apple-touch-icon.png",
+            "favicon-32.png",
+            "favicon-192.png",
+            "header-logo.svg",
+            "icon.svg",
+            "logo.svg",
+        }
+        safe_name = Path(asset_name).name
+        if safe_name != asset_name or safe_name not in allowed_assets:
+            raise NextApiError("Asset not found", 404)
+        path = next_frontend_dir() / safe_name
+        if not path.exists() or not path.is_file():
+            raise NextApiError("Asset not found", 404)
+        return send_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
 
     @flask_app.get("/api/next/i18n")
     def next_i18n_manifest():
