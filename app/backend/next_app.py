@@ -156,6 +156,29 @@ NEXT_I18N_ALIASES = {
 }
 NEXT_I18N_ALIASES.update({"nb": "nb-NO", "no-no": "nb-NO", "en-gb": "en-US"})
 
+APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
+    "theme": "system",
+    "show_featured_hero": True,
+    "show_collection_search": True,
+    "show_auto_videos": True,
+    "show_local_title": True,
+    "show_extended_people_pages": False,
+    "default_media_group_id": "",
+}
+APP_PREFERENCE_ALIASES = {
+    "show_search_button": "show_collection_search",
+}
+APP_BOOLEAN_PREFERENCES = {
+    "show_featured_hero",
+    "show_collection_search",
+    "show_auto_videos",
+    "show_local_title",
+    "show_extended_people_pages",
+}
+APP_CHOICE_PREFERENCES = {
+    "theme": {"system", "light", "dark"},
+}
+
 
 def create_app() -> Flask:
     flask_app = Flask(__name__)
@@ -2829,7 +2852,7 @@ def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
-def collection_dashboard_snapshot(conn) -> dict[str, Any]:
+def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
     counts = {
         "movies": count_table(conn, "movies"),
         "people": count_table(conn, "people"),
@@ -2846,7 +2869,17 @@ def collection_dashboard_snapshot(conn) -> dict[str, Any]:
         "counts": counts,
         "movies": collection_movie_preview_entities(conn),
         "containers": collection_container_preview_entities(conn),
+        "mediaGroups": media_group_entities(conn, limit=200),
         "plugins": collection_plugin_preview_entities(conn),
+        "preferences": app_effective_preferences(conn, user.get("id") if user else None),
+        "user": {
+            "id": user.get("id"),
+            "username": user.get("username"),
+            "displayName": user.get("display_name") or user.get("username"),
+            "role": user.get("role"),
+        }
+        if user
+        else None,
         "build": {
             "version": build_version(),
             "sha": build_sha(),
@@ -2860,7 +2893,10 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "counts": {},
         "movies": [],
         "containers": [],
+        "mediaGroups": [],
         "plugins": [],
+        "preferences": dict(APP_PREFERENCE_DEFAULTS),
+        "user": None,
         "build": {
             "version": build_version(),
             "sha": build_sha(),
@@ -3045,11 +3081,14 @@ def ui_preview_container_cards(containers: list[dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
-def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
+def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = False) -> str:
     snapshot = snapshot or empty_collection_dashboard_snapshot()
     counts = snapshot.get("counts") or {}
     movies = snapshot.get("movies") or []
     containers = snapshot.get("containers") or []
+    media_groups = snapshot.get("mediaGroups") or []
+    preferences = snapshot.get("preferences") or dict(APP_PREFERENCE_DEFAULTS)
+    app_mode_json = "true" if app_mode else "false"
     featured = movies[0] if movies else {}
     featured_backdrop = server_usable_image(featured.get("backdrop_url"))
     featured_poster = server_usable_image(featured.get("poster_url"))
@@ -3065,12 +3104,17 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
     movie_cards = ui_preview_movie_cards(movies)
     container_cards = ui_preview_container_cards(containers)
     build = snapshot.get("build") or {}
+    mode_label_key = "uiPreview.app" if app_mode else "uiPreview.preview"
+    mode_label_fallback = "Library" if app_mode else "UI Preview"
+    title = "DiscVault" if app_mode else "DiscVault UI Preview"
+    shell_class = "preview-shell app-shell-hidden" if app_mode else "preview-shell"
+    mobile_class = "mobile-tabbar hidden" if app_mode else "mobile-tabbar"
     return """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DiscVault UI Preview</title>
+  <title>""" + h(title) + """</title>
   <script>
     (function () {
       try {
@@ -3144,6 +3188,123 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       -webkit-tap-highlight-color: transparent;
     }
     a { color: inherit; text-decoration: none; }
+    .app-gate {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .app-gate.hidden,
+    .hidden {
+      display: none !important;
+    }
+    .login-card,
+    .startup-card,
+    .preferences-panel {
+      width: min(680px, 100%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(28px) saturate(180%);
+      padding: clamp(22px, 4vw, 34px);
+    }
+    .login-brand-large {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 26px;
+    }
+    .login-brand-copy {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .login-card h1,
+    .startup-card h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2.2rem, 8vw, 4rem);
+      line-height: .96;
+      letter-spacing: 0;
+    }
+    .login-card p,
+    .startup-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .login-actions,
+    .startup-actions,
+    .bulk-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 22px;
+    }
+    .login-primary,
+    .primary-button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 16px;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .secondary-button {
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 14px;
+      background: var(--bg-solid);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .login-message,
+    .startup-message {
+      min-height: 22px;
+      margin-top: 14px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .login-message.bad,
+    .startup-message.bad {
+      color: var(--red);
+    }
+    .startup-steps {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 22px;
+    }
+    .startup-step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 12px;
+      min-width: 0;
+    }
+    .startup-step strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: .9rem;
+    }
+    .startup-step span {
+      display: block;
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.35;
+    }
+    .startup-step.complete { border-color: color-mix(in srgb, var(--green) 50%, var(--line)); }
+    .startup-step.active { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+    .startup-step.blocked { border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
+    .app-shell-hidden {
+      display: none !important;
+    }
     .preview-shell {
       min-height: 100vh;
       display: grid;
@@ -3395,6 +3556,18 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       color: #f5f6f8;
       background-color: #24262b;
     }
+    .icon-button {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      cursor: pointer;
+    }
+    .hero.hidden {
+      display: none;
+    }
     .hero {
       position: relative;
       min-height: clamp(320px, 42vw, 480px);
@@ -3501,11 +3674,6 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       object-fit: cover;
       display: block;
     }
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
     .preview-stat, .preview-panel {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -3527,6 +3695,54 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       margin-top: 8px;
       color: var(--muted);
       font-size: 13px;
+    }
+    .library-tools {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .filter-row select {
+      min-width: 190px;
+    }
+    .bulk-bar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: var(--shadow-soft);
+      padding: 12px 14px;
+    }
+    .bulk-bar.visible {
+      display: flex;
+    }
+    .bulk-count {
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    .bulk-action {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 11px;
+      cursor: pointer;
+      font-size: .86rem;
+    }
+    .bulk-action:disabled {
+      cursor: not-allowed;
+      opacity: .48;
     }
     .preview-layout {
       display: grid;
@@ -3570,6 +3786,31 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       background: transparent;
       text-align: left;
       cursor: pointer;
+      position: relative;
+    }
+    .preview-poster::after {
+      content: "";
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.82);
+      background: rgba(0,0,0,.32);
+      opacity: 0;
+      transform: scale(.85);
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+    body.select-mode .preview-poster::after,
+    .preview-poster.bulk-selected::after {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .preview-poster.bulk-selected::after {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 5px var(--accent-contrast);
     }
     .preview-poster-art {
       aspect-ratio: 2 / 3;
@@ -3669,6 +3910,79 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       border: 1px dashed var(--line-strong);
       color: var(--muted);
     }
+    .preferences-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0,0,0,.42);
+      backdrop-filter: blur(18px);
+    }
+    .preferences-panel {
+      width: min(720px, 100%);
+      max-height: min(760px, calc(100vh - 36px));
+      overflow: auto;
+      display: grid;
+      gap: 16px;
+    }
+    .preferences-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .preferences-head h2 {
+      margin: 0 0 5px;
+      font-size: 1.35rem;
+    }
+    .preference-list {
+      display: grid;
+      gap: 10px;
+    }
+    .preference-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 12px;
+    }
+    .preference-row strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+    .preference-row span {
+      color: var(--muted);
+      font-size: .84rem;
+      line-height: 1.4;
+    }
+    .switch {
+      width: 48px;
+      height: 28px;
+      border: 0;
+      border-radius: 999px;
+      padding: 3px;
+      background: var(--line-strong);
+      cursor: pointer;
+      display: flex;
+      justify-content: flex-start;
+    }
+    .switch::before {
+      content: "";
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--bg-solid);
+      box-shadow: var(--shadow-soft);
+    }
+    .switch.on {
+      justify-content: flex-end;
+      background: var(--accent);
+    }
     @media (max-width: 1060px) {
       .preview-shell { grid-template-columns: 1fr; }
       .preview-sidebar {
@@ -3691,6 +4005,28 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
     @media (max-width: 760px) {
       body {
         padding-bottom: calc(86px + env(safe-area-inset-bottom));
+      }
+      .app-gate {
+        padding: 14px;
+        align-items: center;
+      }
+      .login-brand-large {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .login-actions,
+      .startup-actions,
+      .bulk-actions {
+        align-items: stretch;
+      }
+      .login-primary,
+      .secondary-button,
+      .primary-button,
+      .bulk-action {
+        width: 100%;
+      }
+      .startup-steps {
+        grid-template-columns: 1fr;
       }
       .preview-main {
         padding: 14px 12px 28px;
@@ -3764,6 +4100,15 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       .segmented { flex: 1; }
       .segmented button { flex: 1; }
       select { flex: 1; max-width: none; }
+      .library-tools {
+        grid-template-columns: 1fr;
+      }
+      .filter-row select {
+        min-width: 0;
+      }
+      .bulk-bar.visible {
+        display: grid;
+      }
       .hero {
         min-height: 560px;
         grid-template-columns: 1fr;
@@ -3774,7 +4119,6 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
         justify-self: start;
         width: min(44vw, 170px);
       }
-      .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .poster-rail { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -3786,22 +4130,60 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
     }
   </style>
 </head>
-<body>
+<body data-app-mode=""" + '"' + app_mode_json + '"' + """>
   <script id="initialState" type="application/json">""" + initial_state_json + """</script>
   <script id="nextLocales" type="application/json">""" + locales_json + """</script>
-  <div class="preview-shell">
+  <section class="app-gate hidden" id="authScreen" aria-live="polite">
+    <div class="login-card">
+      <div class="login-brand-large">
+        <div class="login-brand-copy">
+          <div class="brand-mark"><img src="/api/next/assets/logo.svg" alt="DiscVault"></div>
+          <div>
+            <h1>DiscVault</h1>
+            <p data-next-i18n="auth.loginDescription">Log in with your Passkey</p>
+          </div>
+        </div>
+        <select id="authLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+      </div>
+      <div class="login-actions">
+        <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
+        <button type="button" class="secondary-button" disabled data-next-i18n="auth.inviteOnly">Invite-only access</button>
+        <button type="button" class="secondary-button" disabled data-next-i18n="auth.recovery">Recovery</button>
+      </div>
+      <div class="login-message" id="appLoginMessage" data-next-i18n="auth.checking">Checking authentication status...</div>
+    </div>
+  </section>
+  <section class="app-gate hidden" id="startupScreen" aria-live="polite">
+    <div class="startup-card">
+      <div class="login-brand-copy">
+        <div class="brand-mark"><img src="/api/next/assets/logo.svg" alt="DiscVault"></div>
+        <div>
+          <h1 id="startupTitle">DiscVault</h1>
+          <p id="startupDescription" data-next-i18n="startup.checking">Checking startup state...</p>
+        </div>
+      </div>
+      <div class="startup-steps" id="startupSteps"></div>
+      <div class="startup-actions">
+        <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
+        <button type="button" class="secondary-button" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+        <button type="button" class="secondary-button" id="startupLogoutButton" data-next-i18n="auth.signOut">Sign out</button>
+      </div>
+      <div class="startup-message" id="startupMessage"></div>
+    </div>
+  </section>
+  <div class=\"""" + shell_class + """\" id="libraryShell">
     <aside class="preview-sidebar">
       <div class="brand">
         <div class="brand-mark"><img src="/api/next/assets/logo.svg" alt="DiscVault"></div>
         <div>
           <strong>DiscVault</strong>
-          <span data-next-i18n="uiPreview.preview">UI Preview</span>
+          <span data-next-i18n=""" + '"' + mode_label_key + '"' + """>""" + h(mode_label_fallback) + """</span>
         </div>
       </div>
       <nav class="nav-section" aria-label="Primary">
-        <button type="button" class="nav-item active"><span data-next-i18n="uiPreview.navLibrary">Library</span><small>""" + h(counts.get("movies", 0)) + """</small></button>
-        <button type="button" class="nav-item"><span data-next-i18n="collection.containers">Containers</span><small>""" + h(counts.get("containers", 0)) + """</small></button>
-        <button type="button" class="nav-item"><span data-next-i18n="migration.groups">Groups</span><small>""" + h(counts.get("mediaGroups", 0)) + """</small></button>
+        <button type="button" class="nav-item active"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
+        <button type="button" class="nav-item"><span data-next-i18n="collection.containers">Containers</span><small id="navContainerCount">""" + h(counts.get("containers", 0)) + """</small></button>
+        <button type="button" class="nav-item"><span data-next-i18n="migration.groups">Groups</span><small id="navGroupCount">""" + h(counts.get("mediaGroups", 0)) + """</small></button>
         <a class="nav-item" href="/api/next/app"><span data-next-i18n="uiPreview.admin">Admin</span><small>Next</small></a>
       </nav>
       <div class="sidebar-footer">
@@ -3822,6 +4204,7 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
             <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
           </div>
           <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+          <button type="button" class="icon-button" id="preferencesButton" data-next-i18n="preferences.title">Preferences</button>
         </div>
       </div>
       <section class="hero" id="previewHero">
@@ -3841,11 +4224,23 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
         </div>
         <div class="hero-poster" id="heroPoster">""" + (f'<img src="{h(featured_poster)}" alt="">' if featured_poster else '<span data-next-i18n="collection.noPoster">No poster</span>') + """</div>
       </section>
-      <section class="stats-row">
-        <div class="preview-stat"><strong>""" + h(counts.get("movies", 0)) + """</strong><span data-next-i18n="collection.movies">Movies</span></div>
-        <div class="preview-stat"><strong>""" + h(counts.get("containers", 0)) + """</strong><span data-next-i18n="collection.containers">Containers</span></div>
-        <div class="preview-stat"><strong>""" + h(counts.get("mediaAssets", 0)) + """</strong><span data-next-i18n="collection.mediaAssets">Media assets</span></div>
-        <div class="preview-stat"><strong>""" + h(counts.get("digitalMediaItems", 0)) + """</strong><span data-next-i18n="uiPreview.digitalItems">Digital links</span></div>
+      <section class="library-tools">
+        <div class="filter-row">
+          <select id="groupFilter" aria-label="Group filter" data-next-i18n-aria="groups.filterLabel"></select>
+          <button type="button" class="icon-button" id="selectModeButton" data-next-i18n="bulk.select">Select</button>
+        </div>
+        <div class="filter-row">
+          <span class="bulk-count" id="librarySummary">""" + h(counts.get("movies", 0)) + """ movies</span>
+        </div>
+      </section>
+      <section class="bulk-bar" id="bulkBar">
+        <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
+        <div class="bulk-actions">
+          <button type="button" class="bulk-action" disabled data-bulk-action="metadata" data-next-i18n="bulk.refreshMetadata">Refresh metadata</button>
+          <button type="button" class="bulk-action" disabled data-bulk-action="boxset" data-next-i18n="bulk.addToBoxSet">Add to box-set</button>
+          <button type="button" class="bulk-action" disabled data-bulk-action="collection" data-next-i18n="bulk.addToCollection">Add to collection</button>
+          <button type="button" class="bulk-action" disabled data-bulk-action="vault" data-next-i18n="bulk.addToVault">Add to Vault</button>
+        </div>
       </section>
       <section class="preview-layout">
         <div class="preview-panel">
@@ -3859,7 +4254,7 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
           <div class="preview-panel">
             <div class="panel-head">
               <h2 data-next-i18n="uiPreview.collections">Collections</h2>
-              <span>""" + h(len(containers)) + """</span>
+              <span id="containerPanelCount">""" + h(len(containers)) + """</span>
             </div>
             <div class="preview-collections">""" + container_cards + """</div>
           </div>
@@ -3878,7 +4273,20 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       </section>
     </main>
   </div>
-  <nav class="mobile-tabbar" aria-label="Mobile">
+  <section class="preferences-backdrop hidden" id="preferencesBackdrop" aria-modal="true" role="dialog" aria-labelledby="preferencesTitle">
+    <div class="preferences-panel">
+      <div class="preferences-head">
+        <div>
+          <h2 id="preferencesTitle" data-next-i18n="preferences.title">Preferences</h2>
+          <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
+        </div>
+        <button type="button" class="icon-button" id="preferencesCloseButton" aria-label="Close">×</button>
+      </div>
+      <div class="preference-list" id="preferenceList"></div>
+      <div class="login-message" id="preferencesMessage"></div>
+    </div>
+  </section>
+  <nav class=\"""" + mobile_class + """\" aria-label="Mobile">
     <button type="button" class="mobile-tab active">
       <span class="nav-symbol library" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLibrary">Library</span>
@@ -3897,8 +4305,14 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
     </a>
   </nav>
   <script>
-    const state = JSON.parse(document.getElementById("initialState").textContent || "{}");
-    const movies = state.movies || [];
+    const appMode = document.body.dataset.appMode === "true";
+    let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
+    let movies = state.movies || [];
+    let containers = state.containers || [];
+    let mediaGroups = state.mediaGroups || [];
+    let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
+    let selectionMode = false;
+    const selectedMovieIds = new Set();
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
       messages: {},
@@ -3919,6 +4333,104 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     function tNext(key, fallback) {
       return localeState.messages[key] || fallback || key;
+    }
+    function authHeaders(extra) {
+      const headers = Object.assign({}, extra || {});
+      const token = localStorage.getItem("dv_next_token");
+      if (token) headers.Authorization = `Bearer ${token}`;
+      return headers;
+    }
+    async function apiJson(url, options) {
+      const response = await fetch(url, Object.assign({cache: "no-store"}, options || {}));
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(payload.error || `HTTP ${response.status}`);
+        error.payload = payload;
+        error.status = response.status;
+        throw error;
+      }
+      return payload;
+    }
+    function base64urlToBuffer(base64url) {
+      let text = String(base64url || "").replace(/-/g, "+").replace(/_/g, "/");
+      while (text.length % 4) text += "=";
+      const raw = atob(text);
+      const bytes = new Uint8Array(raw.length);
+      for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+      return bytes.buffer;
+    }
+    function bufferToBase64url(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+      return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
+    }
+    function setGate(name) {
+      const authScreen = document.getElementById("authScreen");
+      const startupScreen = document.getElementById("startupScreen");
+      const shell = document.getElementById("libraryShell");
+      const mobile = document.querySelector(".mobile-tabbar");
+      authScreen?.classList.toggle("hidden", name !== "auth");
+      startupScreen?.classList.toggle("hidden", name !== "startup");
+      shell?.classList.toggle("app-shell-hidden", appMode && name !== "library");
+      mobile?.classList.toggle("hidden", appMode && name !== "library");
+    }
+    function setLoginMessage(message, tone) {
+      const node = document.getElementById("appLoginMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    async function loginPasskey() {
+      const button = document.getElementById("appLoginButton");
+      if (button) button.disabled = true;
+      setLoginMessage(tNext("auth.waitingPasskey", "Waiting for your passkey..."));
+      try {
+        const optionsPayload = await apiJson("/api/next/auth/login/options", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: "{}"
+        });
+        const options = optionsPayload.options || {};
+        options.challenge = base64urlToBuffer(options.challenge);
+        if (Array.isArray(options.allowCredentials)) {
+          options.allowCredentials = options.allowCredentials.map((credential) => ({
+            ...credential,
+            id: base64urlToBuffer(credential.id)
+          }));
+        }
+        const assertion = await navigator.credentials.get({publicKey: options});
+        const credential = {
+          id: assertion.id,
+          rawId: bufferToBase64url(assertion.rawId),
+          response: {
+            authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+            signature: bufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+          },
+          type: assertion.type,
+          authenticatorAttachment: assertion.authenticatorAttachment
+        };
+        const verified = await apiJson("/api/next/auth/login/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({credential})
+        });
+        if (verified.token) localStorage.setItem("dv_next_token", verified.token);
+        setLoginMessage(tNext("auth.signedIn", "Signed in."), "good");
+        await refreshAppFlow();
+      } catch (error) {
+        const cancelled = error && error.name === "NotAllowedError";
+        setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : String(error.message || error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function logoutApp() {
+      localStorage.removeItem("dv_next_token");
+      await fetch("/api/next/auth/logout", {method: "POST", headers: authHeaders()}).catch(() => {});
+      await refreshAppFlow();
     }
     function applyTranslations() {
       document.documentElement.lang = localeState.locale;
@@ -3946,13 +4458,15 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       }
       applyTranslations();
       renderLanguageSelect();
+      renderPreferences();
+      renderLibrary();
     }
     function renderLanguageSelect() {
-      const select = document.getElementById("nextLanguageSelect");
-      if (!select) return;
-      select.innerHTML = localeState.locales.map((item) => (
-        `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(item.label)}</option>`
-      )).join("");
+      document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect").forEach((select) => {
+        select.innerHTML = localeState.locales.map((item) => (
+          `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+        )).join("");
+      });
     }
     function setTheme(preference) {
       const selected = preference || "system";
@@ -3963,6 +4477,233 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       document.querySelectorAll("[data-theme-choice]").forEach((button) => {
         button.classList.toggle("active", button.dataset.themeChoice === selected);
       });
+    }
+    function groupOptionsHtml() {
+      const selected = preferences.default_media_group_id || "";
+      const options = [
+        `<option value=""${!selected ? " selected" : ""}>${escapeHtml(tNext("groups.all", "All groups"))}</option>`,
+        `<option value="__ungrouped"${selected === "__ungrouped" ? " selected" : ""}>${escapeHtml(tNext("groups.ungrouped", "Not in a group"))}</option>`
+      ];
+      mediaGroups.forEach((group) => {
+        options.push(`<option value="${escapeHtml(group.id)}"${String(group.id) === String(selected) ? " selected" : ""}>${escapeHtml(group.name || group.public_id || group.id)}</option>`);
+      });
+      return options.join("");
+    }
+    function renderGroupFilter() {
+      const select = document.getElementById("groupFilter");
+      if (!select) return;
+      select.innerHTML = groupOptionsHtml();
+    }
+    function movieMatchesGroup(movie) {
+      const selected = preferences.default_media_group_id || "";
+      const groups = Array.isArray(movie.media_groups) ? movie.media_groups : [];
+      if (!selected) return true;
+      if (selected === "__ungrouped") return groups.length === 0;
+      return groups.some((group) => String(group.id) === String(selected) || String(group.publicId) === String(selected));
+    }
+    function movieMatchesSearch(movie) {
+      const search = document.getElementById("previewSearch");
+      const query = search ? search.value.trim().toLowerCase() : "";
+      if (!query) return true;
+      const groups = (movie.media_groups || []).map((group) => group.name).join(" ");
+      const haystack = [movie.title, movie.original_title, movie.year, movie.format, movie.barcode, groups].join(" ").toLowerCase();
+      return haystack.includes(query);
+    }
+    function posterCardHtml(movie, index) {
+      const poster = usableImage(movie.poster_url);
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const meta = [movie.year, movie.format].filter(Boolean).join(" ") || movie.barcode || "";
+      const selected = index === 0 ? " selected" : "";
+      return `
+        <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
+          <span class="preview-poster-art">${posterHtml}</span>
+          <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
+          <span class="preview-poster-meta">${escapeHtml(meta)}</span>
+        </button>
+      `;
+    }
+    function containerCardHtml(container) {
+      const label = String(container.container_type || "container").replace(/_/g, " ");
+      return `
+        <a class="preview-collection" href="/api/next/app/containers/${encodeURIComponent(container.id)}">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
+        </a>
+      `;
+    }
+    function renderLibrary() {
+      renderGroupFilter();
+      const search = document.getElementById("previewSearch");
+      if (search) {
+        search.closest(".searchbox")?.classList.toggle("hidden", preferences.show_collection_search === false);
+      }
+      const hero = document.getElementById("previewHero");
+      if (hero) hero.classList.toggle("hidden", preferences.show_featured_hero === false || movies.length === 0);
+      const visibleMovies = movies.filter((movie) => movieMatchesGroup(movie) && movieMatchesSearch(movie));
+      const rail = document.getElementById("posterRail");
+      if (rail) {
+        rail.innerHTML = visibleMovies.length
+          ? visibleMovies.slice(0, 80).map((movie, index) => posterCardHtml(movie, index)).join("")
+          : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
+      }
+      document.querySelectorAll("[data-preview-movie]").forEach((button) => {
+        button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
+        button.addEventListener("click", () => {
+          if (selectionMode) {
+            toggleMovieSelection(button.dataset.previewMovie);
+            return;
+          }
+          selectMovie(button.dataset.previewMovie);
+        });
+      });
+      const collectionNode = document.querySelector(".preview-collections");
+      if (collectionNode) {
+        collectionNode.innerHTML = containers.length
+          ? containers.slice(0, 10).map(containerCardHtml).join("")
+          : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyContainers", "No containers imported yet."))}</div>`;
+      }
+      const shownCount = document.getElementById("shownCount");
+      if (shownCount) shownCount.textContent = String(visibleMovies.length);
+      const summary = document.getElementById("librarySummary");
+      if (summary) {
+        summary.textContent = `${visibleMovies.length} / ${movies.length} ${tNext("collection.movies", "Movies").toLowerCase()}`;
+      }
+      const navMovieCount = document.getElementById("navMovieCount");
+      const navContainerCount = document.getElementById("navContainerCount");
+      const navGroupCount = document.getElementById("navGroupCount");
+      const containerPanelCount = document.getElementById("containerPanelCount");
+      if (navMovieCount) navMovieCount.textContent = String(movies.length);
+      if (navContainerCount) navContainerCount.textContent = String(containers.length);
+      if (navGroupCount) navGroupCount.textContent = String(mediaGroups.length);
+      if (containerPanelCount) containerPanelCount.textContent = String(containers.length);
+      if (visibleMovies[0]) selectMovie(visibleMovies[0].id);
+      updateBulkBar();
+    }
+    function toggleSelectMode(force) {
+      selectionMode = typeof force === "boolean" ? force : !selectionMode;
+      document.body.classList.toggle("select-mode", selectionMode);
+      const button = document.getElementById("selectModeButton");
+      if (button) button.textContent = selectionMode ? tNext("bulk.done", "Done") : tNext("bulk.select", "Select");
+      if (!selectionMode) selectedMovieIds.clear();
+      updateBulkBar();
+      document.querySelectorAll("[data-preview-movie]").forEach((node) => node.classList.toggle("bulk-selected", selectedMovieIds.has(node.dataset.previewMovie)));
+    }
+    function toggleMovieSelection(movieId) {
+      if (!movieId) return;
+      if (selectedMovieIds.has(movieId)) selectedMovieIds.delete(movieId);
+      else selectedMovieIds.add(movieId);
+      document.querySelectorAll("[data-preview-movie]").forEach((node) => {
+        if (String(node.dataset.previewMovie) === String(movieId)) {
+          node.classList.toggle("bulk-selected", selectedMovieIds.has(movieId));
+        }
+      });
+      updateBulkBar();
+    }
+    function updateBulkBar() {
+      const bar = document.getElementById("bulkBar");
+      const count = selectedMovieIds.size;
+      if (bar) bar.classList.toggle("visible", selectionMode || count > 0);
+      const label = document.getElementById("bulkCount");
+      if (label) label.textContent = count ? `${count} ${tNext("bulk.selected", "selected")}` : tNext("bulk.noneSelected", "No movies selected");
+      document.querySelectorAll("[data-bulk-action]").forEach((button) => {
+        button.disabled = count === 0;
+      });
+    }
+    const preferenceLabels = [
+      ["show_featured_hero", "preferences.showFeaturedHero", "preferences.showFeaturedHeroHelp"],
+      ["show_collection_search", "preferences.showCollectionSearch", "preferences.showCollectionSearchHelp"],
+      ["show_auto_videos", "preferences.showAutoVideos", "preferences.showAutoVideosHelp"],
+      ["show_local_title", "preferences.showLocalTitle", "preferences.showLocalTitleHelp"],
+      ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"]
+    ];
+    function renderPreferences() {
+      const list = document.getElementById("preferenceList");
+      if (!list) return;
+      list.innerHTML = preferenceLabels.map(([key, labelKey, helpKey]) => `
+        <div class="preference-row">
+          <span>
+            <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+            <span>${escapeHtml(tNext(helpKey, ""))}</span>
+          </span>
+          <button type="button" class="switch ${preferences[key] ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${preferences[key] ? "true" : "false"}"></button>
+        </div>
+      `).join("");
+      list.querySelectorAll("[data-preference-toggle]").forEach((button) => {
+        button.addEventListener("click", () => updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]));
+      });
+    }
+    async function updatePreference(key, value) {
+      preferences[key] = value;
+      renderPreferences();
+      renderLibrary();
+      const message = document.getElementById("preferencesMessage");
+      if (message) message.textContent = tNext("preferences.saving", "Saving...");
+      try {
+        const payload = await apiJson("/api/next/preferences", {
+          method: "PATCH",
+          headers: authHeaders({"Content-Type": "application/json"}),
+          body: JSON.stringify({preferences: {[key]: value}})
+        });
+        preferences = Object.assign({}, preferences, payload.preferences || {});
+        if (message) message.textContent = tNext("preferences.saved", "Saved.");
+      } catch (error) {
+        if (message) message.textContent = error.message || String(error);
+      }
+    }
+    function renderStartup(startup) {
+      const phase = startup.phase || "ready";
+      const title = document.getElementById("startupTitle");
+      const description = document.getElementById("startupDescription");
+      if (title) title.textContent = tNext(`startup.phase.${phase}`, startup.message || "DiscVault");
+      if (description) description.textContent = tNext(`startup.description.${phase}`, startup.message || "");
+      const steps = document.getElementById("startupSteps");
+      if (steps) {
+        steps.innerHTML = (startup.steps || []).map((step) => `
+          <div class="startup-step ${escapeHtml(step.state || "")}">
+            <strong>${escapeHtml(tNext(`startup.step.${step.key}`, step.label || step.key))}</strong>
+            <span>${escapeHtml(tNext(`startup.step.${step.key}Detail`, step.detail || ""))}</span>
+          </div>
+        `).join("");
+      }
+      const migrationLink = document.getElementById("startupMigrationLink");
+      if (migrationLink) migrationLink.classList.toggle("hidden", !startup.canStartMigration && !["migration_required", "migration_running", "migration_pending_non_admin"].includes(phase));
+      const message = document.getElementById("startupMessage");
+      if (message) message.textContent = startup.message || "";
+    }
+    async function loadAppSnapshot() {
+      const payload = await apiJson("/api/next/app/snapshot", {headers: authHeaders()});
+      state = payload.snapshot || {};
+      movies = state.movies || [];
+      containers = state.containers || [];
+      mediaGroups = state.mediaGroups || [];
+      preferences = Object.assign({}, preferences, state.preferences || {});
+      setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
+      renderPreferences();
+      renderLibrary();
+    }
+    async function refreshAppFlow() {
+      if (!appMode) {
+        setGate("library");
+        renderPreferences();
+        renderLibrary();
+        return;
+      }
+      setGate("auth");
+      const auth = await apiJson("/api/next/auth/status", {headers: authHeaders()}).catch((error) => ({error: error.message}));
+      if (auth.auth_enabled && !auth.authenticated) {
+        setLoginMessage(tNext("auth.loginDescription", "Log in with your Passkey"));
+        setGate("auth");
+        return;
+      }
+      const startupPayload = await apiJson("/api/next/startup/status", {headers: authHeaders()});
+      const startup = startupPayload.startup || {};
+      if (!startup.ready) {
+        renderStartup(startup);
+        setGate("startup");
+        return;
+      }
+      await loadAppSnapshot();
+      setGate("library");
     }
     function movieMeta(movie) {
       return [movie.year, movie.format, movie.barcode].filter(Boolean);
@@ -3988,34 +4729,76 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None) -> str:
       });
     }
     function filterMovies() {
-      const query = document.getElementById("previewSearch").value.trim().toLowerCase();
-      let shown = 0;
-      document.querySelectorAll("[data-preview-movie]").forEach((node) => {
-        const movie = movies.find((item) => String(item.id) === String(node.dataset.previewMovie)) || {};
-        const haystack = [movie.title, movie.original_title, movie.year, movie.format, movie.barcode].join(" ").toLowerCase();
-        const visible = !query || haystack.includes(query);
-        node.style.display = visible ? "" : "none";
-        if (visible) shown += 1;
-      });
-      document.getElementById("shownCount").textContent = shown;
+      renderLibrary();
     }
     document.addEventListener("DOMContentLoaded", () => {
       renderLanguageSelect();
       loadLocale(localeState.locale);
-      setTheme(localStorage.getItem("dv_next_theme") || "system");
-      document.getElementById("nextLanguageSelect")?.addEventListener("change", (event) => loadLocale(event.target.value));
+      setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
+      document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect").forEach((select) => {
+        select.addEventListener("change", (event) => loadLocale(event.target.value));
+      });
       document.querySelectorAll("[data-theme-choice]").forEach((button) => {
-        button.addEventListener("click", () => setTheme(button.dataset.themeChoice));
+        button.addEventListener("click", () => {
+          setTheme(button.dataset.themeChoice);
+          preferences.theme = button.dataset.themeChoice || "system";
+          if (appMode) {
+            updatePreference("theme", preferences.theme);
+          }
+        });
       });
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
         button.addEventListener("click", () => selectMovie(button.dataset.previewMovie));
       });
       document.getElementById("previewSearch")?.addEventListener("input", filterMovies);
+      document.getElementById("groupFilter")?.addEventListener("change", (event) => {
+        preferences.default_media_group_id = event.target.value || "";
+        if (appMode) {
+          updatePreference("default_media_group_id", preferences.default_media_group_id);
+        } else {
+          renderLibrary();
+        }
+      });
+      document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
+      document.getElementById("preferencesButton")?.addEventListener("click", () => {
+        renderPreferences();
+        document.getElementById("preferencesBackdrop")?.classList.remove("hidden");
+      });
+      document.getElementById("preferencesCloseButton")?.addEventListener("click", () => {
+        document.getElementById("preferencesBackdrop")?.classList.add("hidden");
+      });
+      document.getElementById("preferencesBackdrop")?.addEventListener("click", (event) => {
+        if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
+      });
+      document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
+      document.getElementById("startupRefreshButton")?.addEventListener("click", () => refreshAppFlow().catch((error) => {
+        const node = document.getElementById("startupMessage");
+        if (node) node.textContent = error.message || String(error);
+      }));
+      document.getElementById("startupLogoutButton")?.addEventListener("click", () => logoutApp());
+      document.querySelectorAll("[data-bulk-action]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const count = selectedMovieIds.size;
+          const message = count
+            ? tNext("bulk.notBuiltYet", "This bulk action is ready in the UI and will be connected to the backend next.")
+            : tNext("bulk.noneSelected", "No movies selected");
+          const summary = document.getElementById("librarySummary");
+          if (summary) summary.textContent = message;
+        });
+      });
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
         if (!movies.length) return;
         selectMovie(movies[Math.floor(Math.random() * movies.length)].id);
       });
-      if (movies[0]) selectMovie(movies[0].id);
+      refreshAppFlow().catch((error) => {
+        if (appMode) {
+          setGate("auth");
+          setLoginMessage(error.message || String(error), "bad");
+        } else {
+          setGate("library");
+          renderLibrary();
+        }
+      });
     });
   </script>
 </body>
@@ -8899,6 +9682,91 @@ def app_settings_map(conn) -> dict[str, Any]:
         return {row["key"]: row["value"] for row in cur.fetchall()}
 
 
+def normalized_app_preference_key(key: Any) -> str:
+    text = str(key or "").strip()
+    return APP_PREFERENCE_ALIASES.get(text, text)
+
+
+def validate_app_preference(key: str, value: Any) -> Any:
+    key = normalized_app_preference_key(key)
+    if key not in APP_PREFERENCE_DEFAULTS:
+        raise NextApiError(f"Unknown preference: {key}", 400)
+    if key in APP_BOOLEAN_PREFERENCES:
+        return parse_bool_value(value, default=bool(APP_PREFERENCE_DEFAULTS[key]))
+    if key in APP_CHOICE_PREFERENCES:
+        text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip().lower()
+        if text not in APP_CHOICE_PREFERENCES[key]:
+            raise NextApiError(f"Invalid value for preference {key}", 400)
+        return text
+    if key == "default_media_group_id":
+        text = str(value or "").strip()
+        if text:
+            parse_uuid(text, "defaultMediaGroupId")
+        return text
+    return value
+
+
+def app_global_preferences(conn) -> dict[str, Any]:
+    values = dict(APP_PREFERENCE_DEFAULTS)
+    settings = app_settings_map(conn)
+    for key in APP_PREFERENCE_DEFAULTS:
+        if key in settings:
+            values[key] = validate_app_preference(key, settings[key])
+    if "show_search_button" in settings and "show_collection_search" not in settings:
+        values["show_collection_search"] = validate_app_preference("show_collection_search", settings["show_search_button"])
+    return values
+
+
+def app_user_preferences(conn, user_id: UUID | str | None) -> dict[str, Any]:
+    if not user_id or not table_exists(conn, "user_preferences"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT key, value
+            FROM user_preferences
+            WHERE user_id=%s
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    values: dict[str, Any] = {}
+    for row in rows:
+        key = normalized_app_preference_key(row["key"])
+        if key not in APP_PREFERENCE_DEFAULTS:
+            continue
+        values[key] = validate_app_preference(key, row["value"])
+    return values
+
+
+def app_effective_preferences(conn, user_id: UUID | str | None = None) -> dict[str, Any]:
+    values = app_global_preferences(conn)
+    values.update(app_user_preferences(conn, user_id))
+    return values
+
+
+def set_app_user_preferences(conn, user_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any]:
+    if not table_exists(conn, "user_preferences"):
+        raise NextApiError("User preferences table is not available", 503)
+    normalized: dict[str, Any] = {}
+    for raw_key, raw_value in updates.items():
+        key = normalized_app_preference_key(raw_key)
+        normalized[key] = validate_app_preference(key, raw_value)
+    with conn.cursor() as cur:
+        for key, value in normalized.items():
+            cur.execute(
+                """
+                INSERT INTO user_preferences (user_id, key, value, updated_at)
+                VALUES (%s, %s, %s, now())
+                ON CONFLICT (user_id, key) DO UPDATE SET
+                    value=EXCLUDED.value,
+                    updated_at=now()
+                """,
+                (user_id, key, Jsonb(json_ready(value))),
+            )
+    return app_effective_preferences(conn, user_id)
+
+
 def reconcile_legacy_metadata_plugins(conn) -> dict[str, Any] | None:
     if not table_exists(conn, "app_settings") or not table_exists(conn, "metadata_plugins"):
         return None
@@ -11298,6 +12166,54 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             return response({"status": "ok", "startup": startup_status_payload(conn)})
 
+    @flask_app.get("/api/next/app/snapshot")
+    def app_snapshot():
+        with connect() as conn:
+            user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
+            if user:
+                user["role"] = next_user_primary_role(conn, user["id"])
+            return response({"status": "ok", "snapshot": collection_dashboard_snapshot(conn, user)})
+
+    @flask_app.get("/api/next/preferences")
+    def get_app_preferences():
+        with connect() as conn:
+            user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
+            return response(
+                {
+                    "status": "ok",
+                    "preferences": app_effective_preferences(conn, user.get("id") if user else None),
+                    "defaults": APP_PREFERENCE_DEFAULTS,
+                    "userScoped": bool(user),
+                }
+            )
+
+    @flask_app.patch("/api/next/preferences")
+    def patch_app_preferences():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Preferences request body must be an object", 400)
+        updates = body.get("preferences", body)
+        if not isinstance(updates, dict):
+            raise NextApiError("preferences must be an object", 400)
+        with connect() as conn:
+            user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
+            if next_auth_effective_enabled(conn, table_exists) and not user:
+                raise NextApiError("Unauthorized", 401)
+            if not user:
+                # In unauthenticated development setups we keep the endpoint readable but do
+                # not mutate global defaults from the app shell.
+                return response(
+                    {
+                        "status": "ok",
+                        "preferences": app_effective_preferences(conn),
+                        "userScoped": False,
+                        "updated": False,
+                    }
+                )
+            with conn.transaction():
+                preferences = set_app_user_preferences(conn, user["id"], updates)
+        return response({"status": "ok", "preferences": preferences, "userScoped": True, "updated": True})
+
     @flask_app.get("/api/next/stats")
     def stats():
         with connect() as conn:
@@ -12331,9 +13247,6 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/collection/")
     @flask_app.get("/api/next/app")
     @flask_app.get("/api/next/app/")
-    @flask_app.get("/")
-    @flask_app.get("/app")
-    @flask_app.get("/app/")
     def collection_dashboard():
         with connect() as conn:
             if next_auth_effective_enabled(conn, table_exists):
@@ -12341,6 +13254,19 @@ def register_routes(flask_app: Flask) -> None:
             else:
                 snapshot = collection_dashboard_snapshot(conn)
         return html_response(collection_dashboard_html(snapshot))
+
+    @flask_app.get("/")
+    @flask_app.get("/app")
+    @flask_app.get("/app/")
+    def next_app_shell():
+        with connect() as conn:
+            user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
+            if user:
+                user["role"] = next_user_primary_role(conn, user["id"])
+                snapshot = collection_dashboard_snapshot(conn, user)
+            else:
+                snapshot = empty_collection_dashboard_snapshot()
+        return html_response(ui_preview_html(snapshot, app_mode=True))
 
     @flask_app.get("/ui-preview")
     @flask_app.get("/ui-preview/")
@@ -12351,7 +13277,10 @@ def register_routes(flask_app: Flask) -> None:
             if next_auth_effective_enabled(conn, table_exists) and not next_auth_current_user(conn):
                 snapshot = empty_collection_dashboard_snapshot()
             else:
-                snapshot = collection_dashboard_snapshot(conn)
+                user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
+                if user:
+                    user["role"] = next_user_primary_role(conn, user["id"])
+                snapshot = collection_dashboard_snapshot(conn, user)
         return html_response(ui_preview_html(snapshot))
 
     @flask_app.get("/api/next/migration/jobs/<job_id>")
