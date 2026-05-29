@@ -1167,6 +1167,92 @@ def migration_dashboard_html() -> str:
       border-color: rgba(255,107,107,.7);
       color: var(--red);
     }
+    .flow-panel {
+      display: grid;
+      gap: 16px;
+    }
+    .wizard-panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .wizard-panel-header p {
+      max-width: 78ch;
+      margin-top: 4px;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .summary-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.025);
+      padding: 13px;
+      min-width: 0;
+    }
+    .summary-item strong {
+      display: block;
+      color: var(--text);
+      font-size: 1.18rem;
+      line-height: 1.1;
+      margin-bottom: 5px;
+    }
+    .summary-item span {
+      color: var(--muted);
+      font-size: .84rem;
+      overflow-wrap: anywhere;
+    }
+    .option-list {
+      display: grid;
+      gap: 10px;
+    }
+    .option-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.025);
+      padding: 13px;
+    }
+    .option-row input {
+      margin-top: 3px;
+      accent-color: var(--accent);
+    }
+    .option-row strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+    .option-row span {
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.45;
+    }
+    .confirm-box {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      border: 1px solid rgba(232,197,71,.38);
+      border-radius: 8px;
+      background: rgba(232,197,71,.06);
+      padding: 13px;
+    }
+    .confirm-box input {
+      margin-top: 3px;
+      accent-color: var(--accent);
+    }
+    .confirm-box strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+    .confirm-box span {
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.45;
+    }
     .metric {
       color: var(--text);
       font-size: 2rem;
@@ -1319,7 +1405,7 @@ def migration_dashboard_html() -> str:
       header { flex-direction: column; }
       .actions { justify-content: flex-start; }
       .card, .wide { grid-column: 1 / -1; }
-      .wizard-head, .details-header { flex-direction: column; }
+      .wizard-head, .wizard-panel-header, .details-header { flex-direction: column; }
       .migration-intro-list { grid-template-columns: 1fr; }
       .wizard-steps { grid-template-columns: 1fr; }
       .technical-panel { grid-column: 1 / -1; }
@@ -1383,6 +1469,29 @@ def migration_dashboard_html() -> str:
           <span id="wizardModeBadge" class="badge" data-next-i18n="common.loading">Loading</span>
         </div>
         <div class="wizard-steps" id="wizardSteps"></div>
+      </div>
+      <div class="card full flow-panel" id="migrationFlowPanel">
+        <div class="wizard-panel-header">
+          <div>
+            <h2 id="migrationFlowTitle" data-next-i18n="migration.flowTitle">Review migration</h2>
+            <p id="migrationFlowDescription" data-next-i18n="migration.flowDescription">Check the detected data and confirm when you are ready to start.</p>
+          </div>
+          <span id="migrationFlowBadge" class="badge warn" data-next-i18n="common.loading">Loading</span>
+        </div>
+        <div class="summary-grid" id="migrationFlowSummary"></div>
+        <div class="option-list" id="migrationFlowOptions"></div>
+        <label class="confirm-box hidden" id="migrationConfirmBox">
+          <input type="checkbox" id="migrationConfirmCheckbox">
+          <span>
+            <strong data-next-i18n="migration.confirmTitle">I am ready to start migration</strong>
+            <span data-next-i18n="migration.confirmText">DiscVault Next will write the imported collection, users, groups and passkeys to PostgreSQL. Existing media files stay where they are.</span>
+          </span>
+        </label>
+        <div class="actions">
+          <button type="button" class="primary" id="migrationFlowStartButton" disabled data-next-i18n="migration.start">Start Migration</button>
+          <a class="button hidden" id="migrationFlowAppButton" href="/api/next/app" data-next-i18n="migration.openApp">Open DiscVault Next</a>
+          <button type="button" id="migrationFlowRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+        </div>
       </div>
       <div class="card">
         <h2 data-next-i18n="migration.state">State</h2>
@@ -1484,6 +1593,7 @@ def migration_dashboard_html() -> str:
     let lastMigrationReport = null;
     let showTechnicalDetails = false;
     let migrationIntroAccepted = false;
+    let migrationConfirmed = false;
     function normalizeNextLocale(value) {
       const raw = String(value || "").trim().replace("_", "-").toLowerCase();
       const aliases = {};
@@ -1701,6 +1811,122 @@ def migration_dashboard_html() -> str:
         badge.textContent = translatedState(report.state);
       }
     }
+    function imageCountFromSource(source) {
+      const mediaExtensions = source?.mediaExtensions || {};
+      return Object.values(mediaExtensions).reduce((total, value) => total + Number(value || 0), 0);
+    }
+    function flowSummaryItem(value, label) {
+      return `<div class="summary-item"><strong>${escapeHtml(formatNumber(value))}</strong><span>${escapeHtml(label)}</span></div>`;
+    }
+    function selectedImportSource(report) {
+      const sources = Array.isArray(report.importSources) ? report.importSources : [];
+      return sources.find((source) => source.pluginId && source.pluginId === selectedImportSourceId) || report.source || {};
+    }
+    function setMigrationFlowText(titleKey, titleFallback, descriptionKey, descriptionFallback) {
+      const title = document.getElementById("migrationFlowTitle");
+      const description = document.getElementById("migrationFlowDescription");
+      if (title) title.textContent = tNext(titleKey, titleFallback);
+      if (description) description.textContent = tNext(descriptionKey, descriptionFallback);
+    }
+    function renderMigrationFlow(report) {
+      const source = selectedImportSource(report);
+      const counts = importSourceCounts(source);
+      const state = report.state || "unknown";
+      const isComplete = state === "already_completed";
+      const isRunning = state === "running";
+      const isBlocked = String(state).startsWith("blocked") || state === "not_required";
+      const canPrepare = !!report.canStart && !isRunning && !isComplete && !isBlocked;
+      const flowBadge = document.getElementById("migrationFlowBadge");
+      if (flowBadge) {
+        flowBadge.className = `badge ${statusClass(state)}`;
+        flowBadge.textContent = translatedState(state);
+      }
+      if (isComplete) {
+        setMigrationFlowText(
+          "migration.flowCompleteTitle",
+          "Migration complete",
+          "migration.flowCompleteDescription",
+          "The migration is complete. You can open DiscVault Next and continue with the new database."
+        );
+      } else if (isRunning) {
+        setMigrationFlowText(
+          "migration.flowRunningTitle",
+          "Migration is running",
+          "migration.flowRunningDescription",
+          "DiscVault Next is importing the selected data. This page refreshes automatically."
+        );
+      } else if (isBlocked) {
+        setMigrationFlowText(
+          "migration.flowBlockedTitle",
+          "Migration cannot start yet",
+          "migration.flowBlockedDescription",
+          "Resolve the action shown below, then refresh this page."
+        );
+      } else {
+        setMigrationFlowText(
+          "migration.flowTitle",
+          "Review migration",
+          "migration.flowDescription",
+          "Check the detected data and confirm when you are ready to start."
+        );
+      }
+      const summary = document.getElementById("migrationFlowSummary");
+      if (summary) {
+        summary.innerHTML = [
+          flowSummaryItem(counts.movies || report.target?.counts?.movies || 0, tNext("collection.movies", "Movies")),
+          flowSummaryItem(counts.collections || 0, tNext("migration.collections", "Collections")),
+          flowSummaryItem(counts.box_sets || report.target?.counts?.containers || 0, tNext("migration.boxSets", "Box-sets")),
+          flowSummaryItem(counts.users || 0, tNext("migration.users", "Users")),
+          flowSummaryItem(counts.groups || 0, tNext("migration.groups", "Groups")),
+          flowSummaryItem(counts.credentials || 0, tNext("migration.passkeys", "Passkeys")),
+          flowSummaryItem(imageCountFromSource(source), tNext("migration.images", "Images"))
+        ].join("");
+      }
+      const options = document.getElementById("migrationFlowOptions");
+      if (options) {
+        options.innerHTML = [
+          {
+            title: tNext("migration.scopeCollectionTitle", "Collection data"),
+            text: tNext("migration.scopeCollectionText", "Movies, people, credits, collections and box-sets will be imported."),
+            checked: true
+          },
+          {
+            title: tNext("migration.scopeSecurityTitle", "Users, groups and passkeys"),
+            text: tNext("migration.scopeSecurityText", "Legacy users, media groups, group membership and passkeys will be imported when available."),
+            checked: true
+          },
+          {
+            title: tNext("migration.scopeMediaTitle", "Existing media files"),
+            text: tNext("migration.scopeMediaText", "Posters, backdrops and profile images remain on the filesystem; DiscVault Next stores references to the current files."),
+            checked: true
+          }
+        ].map((item) => `
+          <label class="option-row">
+            <input type="checkbox" ${item.checked ? "checked" : ""} disabled>
+            <span><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.text)}</span></span>
+          </label>
+        `).join("");
+      }
+      const confirmBox = document.getElementById("migrationConfirmBox");
+      const checkbox = document.getElementById("migrationConfirmCheckbox");
+      const startButtons = [
+        document.getElementById("startButton"),
+        document.getElementById("migrationFlowStartButton")
+      ].filter(Boolean);
+      const appButton = document.getElementById("migrationFlowAppButton");
+      if (confirmBox) confirmBox.classList.toggle("hidden", !canPrepare);
+      if (checkbox) checkbox.checked = !!migrationConfirmed;
+      startButtons.forEach((button) => {
+        button.classList.toggle("hidden", !canPrepare);
+        button.disabled = !(canPrepare && migrationConfirmed);
+      });
+      if (appButton) appButton.classList.toggle("hidden", !isComplete);
+      if (isRunning) {
+        window.setTimeout(() => loadReport().catch((error) => {
+          document.getElementById("message").textContent = error.message;
+        }), 3000);
+      }
+    }
     function migrationNeedsIntro(report) {
       const state = report?.state || "unknown";
       return !["already_completed", "not_required", "running"].includes(state);
@@ -1781,7 +2007,9 @@ def migration_dashboard_html() -> str:
       node.querySelectorAll("[data-import-source-id]").forEach((button) => {
         button.addEventListener("click", () => {
           selectedImportSourceId = button.dataset.importSourceId || null;
+          migrationConfirmed = false;
           renderImportSources(lastMigrationReport || report);
+          renderMigrationFlow(lastMigrationReport || report);
         });
       });
     }
@@ -1805,7 +2033,6 @@ def migration_dashboard_html() -> str:
       const stateBadge = document.getElementById("stateBadge");
       stateBadge.className = `badge ${statusClass(state)}`;
       stateBadge.textContent = translatedState(state);
-      document.getElementById("startButton").disabled = !report.canStart;
       message.textContent = report.latestRun?.status
         ? `${tNext("migration.latestRun", "Latest run")}: ${report.latestRun.status}`
         : tNext("migration.noRun", "No migration run has been recorded yet.");
@@ -1819,6 +2046,7 @@ def migration_dashboard_html() -> str:
       document.getElementById("pluginCount").textContent = formatNumber(plugins.enabled);
 
       renderImportSources(report);
+      renderMigrationFlow(report);
       document.getElementById("sourceList").innerHTML = [
         row(tNext("migration.importSource", "Import source"), source.pluginName ? `${source.pluginName} (${source.pluginId})` : "-"),
         row(tNext("migration.sourceKind", "Source kind"), source.sourceKind || "-"),
@@ -1828,7 +2056,7 @@ def migration_dashboard_html() -> str:
         row(tNext("migration.sqliteDatabase", "SQLite database"), source.sqliteDb || "-"),
         row(tNext("migration.databaseHash", "Database hash"), source.sourceDatabaseHash || "-"),
         row(tNext("migration.mediaMode", "Media mode"), source.mediaMigrationMode || "-"),
-        row(tNext("migration.sourceCounts", "Source counts"), JSON.stringify(source.counts || {})),
+        row(tNext("migration.sourceCounts", "Source counts"), JSON.stringify(importSourceCounts(source))),
         row(tNext("migration.mediaExtensions", "Media extensions"), JSON.stringify(source.mediaExtensions || {}))
       ].join("");
       document.getElementById("skippedList").innerHTML = rowsFromObject(report.summary?.skipped || {});
@@ -1850,10 +2078,16 @@ def migration_dashboard_html() -> str:
     }
     async function startMigration() {
       const button = document.getElementById("startButton");
+      const flowButton = document.getElementById("migrationFlowStartButton");
       const message = document.getElementById("message");
       migrationIntroAccepted = true;
       renderMigrationIntro(lastMigrationReport || {});
+      if (!migrationConfirmed) {
+        message.textContent = tNext("migration.confirmRequired", "Confirm that you are ready to start migration.");
+        return;
+      }
       button.disabled = true;
+      if (flowButton) flowButton.disabled = true;
       message.textContent = tNext("migration.starting", "Starting migration...");
       const response = await fetch("/api/next/migration/start", {
         method: "POST",
@@ -1869,6 +2103,28 @@ def migration_dashboard_html() -> str:
     }
     window.addEventListener("load", async () => {
       await initNextI18n();
+      const confirmCheckbox = document.getElementById("migrationConfirmCheckbox");
+      if (confirmCheckbox && confirmCheckbox.dataset.bound !== "true") {
+        confirmCheckbox.dataset.bound = "true";
+        confirmCheckbox.addEventListener("change", () => {
+          migrationConfirmed = !!confirmCheckbox.checked;
+          renderMigrationFlow(lastMigrationReport || {});
+        });
+      }
+      const flowStartButton = document.getElementById("migrationFlowStartButton");
+      if (flowStartButton && flowStartButton.dataset.bound !== "true") {
+        flowStartButton.dataset.bound = "true";
+        flowStartButton.addEventListener("click", () => startMigration().catch((error) => {
+          document.getElementById("message").textContent = error.message;
+        }));
+      }
+      const flowRefreshButton = document.getElementById("migrationFlowRefreshButton");
+      if (flowRefreshButton && flowRefreshButton.dataset.bound !== "true") {
+        flowRefreshButton.dataset.bound = "true";
+        flowRefreshButton.addEventListener("click", () => loadReport().catch((error) => {
+          document.getElementById("message").textContent = error.message;
+        }));
+      }
       const introButton = document.getElementById("migrationIntroContinueButton");
       if (introButton && introButton.dataset.bound !== "true") {
         introButton.dataset.bound = "true";
