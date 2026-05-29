@@ -64,6 +64,13 @@ def background_jobs_ready(conn) -> bool:
     return bool(row and row.get("table_name"))
 
 
+def table_exists(conn, table_name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
+        row = cur.fetchone()
+    return bool(row and row.get("table_name"))
+
+
 def json_ready(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): json_ready(item) for key, item in value.items()}
@@ -93,6 +100,132 @@ def bool_value(value: Any, *, default: bool = False) -> bool:
     if text in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def plugin_config_payload(settings: Any, secrets_ref: Any) -> dict[str, Any]:
+    safe_settings = settings if isinstance(settings, dict) else {}
+    refs = secrets_ref if isinstance(secrets_ref, dict) else {}
+    safe_refs: dict[str, dict[str, Any]] = {}
+    for name, ref in refs.items():
+        key = ref.get("key") if isinstance(ref, dict) else ref
+        item: dict[str, Any] = {"configured": True}
+        if key:
+            item["key"] = str(key)
+        safe_refs[str(name)] = item
+    return {
+        "settings": safe_settings,
+        "settingsConfigured": bool(safe_settings),
+        "secretNames": sorted(safe_refs),
+        "secretsConfigured": bool(safe_refs),
+        "secretsRef": safe_refs,
+    }
+
+
+def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
+    if not table_exists(conn, "plugin_settings"):
+        return plugin_config_payload({}, {})
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT settings, secrets_ref
+            FROM plugin_settings
+            WHERE plugin_id=%s
+            """,
+            (plugin_id,),
+        )
+        row = cur.fetchone()
+    return plugin_config_payload(
+        row.get("settings") if row else {},
+        row.get("secrets_ref") if row else {},
+    )
+
+
+def plugin_secret_values(conn, config: dict[str, Any]) -> dict[str, Any]:
+    refs = config.get("secretsRef") or {}
+    keys = [
+        str(ref.get("key"))
+        for ref in refs.values()
+        if isinstance(ref, dict) and ref.get("key")
+    ]
+    if not keys or not table_exists(conn, "app_settings"):
+        return {}
+    values: dict[str, Any] = {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT key, value
+            FROM app_settings
+            WHERE key = ANY(%s) AND is_secret = true
+            """,
+            (keys,),
+        )
+        rows = cur.fetchall()
+    by_key = {row["key"]: row["value"] for row in rows}
+    for name, ref in refs.items():
+        key = ref.get("key") if isinstance(ref, dict) else None
+        if key in by_key:
+            values[str(name)] = by_key[key]
+    return values
+
+
+def plugin_record(conn, plugin_id: str) -> dict[str, Any]:
+    if not table_exists(conn, "plugins"):
+        return {
+            "id": plugin_id,
+            "name": plugin_id,
+            "enabled": True,
+            "categories": [],
+            "capabilities": [],
+            "manifest": {},
+        }
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, enabled, categories, capabilities, manifest
+            FROM plugins
+            WHERE id=%s
+            """,
+            (plugin_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        raise RuntimeError(f"Plugin not found: {plugin_id}")
+    return row
+
+
+def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
+    if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
+        return False
+    manifest = plugin.get("manifest") or {}
+    return bool(manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
+
+
+def plugin_execution_context_from_db(
+    conn,
+    plugin_id: str,
+    entrypoint: str,
+    queued_actor: dict[str, Any] | None,
+) -> dict[str, Any]:
+    plugin = plugin_record(conn, plugin_id)
+    if entrypoint != "health_check" and not plugin.get("enabled"):
+        raise RuntimeError("Plugin must be enabled before execution")
+    config = plugin_config_from_db(conn, plugin_id)
+    if plugin_requires_config(plugin, config, entrypoint):
+        raise RuntimeError("Plugin configuration is incomplete")
+    manifest = plugin.get("manifest") or {}
+    return {
+        "pluginId": plugin.get("id"),
+        "pluginName": plugin.get("name"),
+        "enabled": bool(plugin.get("enabled")),
+        "categories": plugin.get("categories") or manifest.get("categories") or [],
+        "capabilities": plugin.get("capabilities") or manifest.get("capabilities") or [],
+        "settings": config.get("settings") or {},
+        "secrets": plugin_secret_values(conn, config),
+        "settingsConfigured": bool(config.get("settingsConfigured")),
+        "secretNames": config.get("secretNames") or [],
+        "secretsConfigured": bool(config.get("secretsConfigured")),
+        "actor": queued_actor or {"id": None, "username": None, "role": None},
+    }
 
 
 def claim_job(conn, worker_id: str) -> dict[str, Any] | None:
@@ -225,9 +358,19 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
     execution_payload = payload.get("payload") or {}
     if not isinstance(execution_payload, dict):
         raise RuntimeError("Plugin execution payload must be an object")
-    context = payload.get("context") or {}
-    if not isinstance(context, dict):
-        context = {}
+    queued_actor = payload.get("requestedBy") or payload.get("requested_by") or None
+    if not isinstance(queued_actor, dict):
+        queued_actor = None
+    legacy_context = payload.get("context") or {}
+    if not isinstance(legacy_context, dict):
+        legacy_context = {}
+    with connect() as conn:
+        context = plugin_execution_context_from_db(conn, plugin_id, entrypoint, queued_actor)
+    if legacy_context:
+        # Backward compatibility for jobs queued before context was loaded at worker time.
+        for key, value in legacy_context.items():
+            if key not in {"settings", "secrets", "actor"} and key not in context:
+                context[key] = value
     context = {
         **context,
         "queued": True,
