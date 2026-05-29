@@ -187,6 +187,22 @@ Secret values are stored as secret `app_settings` entries and are never returned
 by the API. Responses only expose configured state, secret names, and internal
 secret references.
 
+Plugin execution uses a generic entrypoint contract. Admins can run a plugin
+entrypoint synchronously for quick validation or queue it for the worker:
+
+```bash
+curl -X POST http://localhost:6180/api/next/plugins/plex/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"entrypoint":"discover_library","payload":{"dryRun":true}}'
+curl -X POST http://localhost:6180/api/next/plugins/plex/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"entrypoint":"sync_library","payload":{"dryRun":true}}'
+```
+
+The built-in Plex and Jellyfin modules currently expose safe connector stubs for
+`discover_library` and `sync_library`; real API reconciliation is the next
+connector slice.
+
 Logs:
 
 ```bash

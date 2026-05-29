@@ -19,6 +19,22 @@ TableExists = Callable[[Any, str], bool]
 DEFAULT_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
 VALID_CATEGORIES = {"metadata_source", "metadata_receiver", "digital_media_source"}
 PLUGIN_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,80}$")
+PLUGIN_ENTRYPOINTS = (
+    "health_check",
+    "search_title",
+    "search_barcode",
+    "lookup_external_id",
+    "movie_details",
+    "box_set_candidates",
+    "people_for_movie",
+    "images_for_movie",
+    "videos_for_movie",
+    "technical_specs",
+    "receive_metadata",
+    "discover_library",
+    "sync_library",
+    "playback_deeplink",
+)
 
 
 @dataclass(frozen=True)
@@ -119,25 +135,7 @@ def load_runtime(manifest: dict[str, Any], plugin_dir: Path) -> tuple[Path | Non
             raise RuntimeError("Could not create module spec")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        entrypoints = [
-            name
-            for name in (
-                "health_check",
-                "search_title",
-                "search_barcode",
-                "lookup_external_id",
-                "movie_details",
-                "box_set_candidates",
-                "people_for_movie",
-                "images_for_movie",
-                "videos_for_movie",
-                "technical_specs",
-                "receive_metadata",
-                "discover_library",
-                "sync_library",
-            )
-            if callable(getattr(module, name, None))
-        ]
+        entrypoints = [name for name in PLUGIN_ENTRYPOINTS if callable(getattr(module, name, None))]
         runtime.update({"loaded": True, "entrypoints": entrypoints})
     except Exception as exc:
         runtime["error"] = str(exc)
@@ -245,6 +243,65 @@ def run_plugin_health(plugin_id: str, context: dict[str, Any] | None = None) -> 
                 "error": str(exc),
             }
         )
+    return result
+
+
+def run_plugin_entrypoint(
+    plugin_id: str,
+    entrypoint: str,
+    payload: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    entrypoint = str(entrypoint or "").strip()
+    plugin, discovery = discovered_plugin(plugin_id)
+    if not plugin:
+        return {
+            "status": "error",
+            "state": "not_found",
+            "pluginId": plugin_id,
+            "entrypoint": entrypoint,
+            "errors": discovery["errors"],
+        }
+
+    runtime = dict(plugin.runtime)
+    result: dict[str, Any] = {
+        "status": "ok",
+        "state": "completed",
+        "pluginId": plugin_id,
+        "entrypoint": entrypoint,
+        "runtime": runtime,
+        "sourcePath": str(plugin.path),
+        "runtimeModule": str(plugin.module_path) if plugin.module_path else None,
+    }
+    if runtime.get("error"):
+        result.update({"status": "error", "state": "runtime_error"})
+        return result
+    if not runtime.get("loaded"):
+        result.update({"status": "error", "state": "manifest_only"})
+        return result
+    if entrypoint not in (runtime.get("entrypoints") or []):
+        result.update({"status": "error", "state": "entrypoint_unavailable"})
+        return result
+
+    started = time.perf_counter()
+    try:
+        module = load_runtime_module(plugin)
+        handler = getattr(module, entrypoint)
+        if entrypoint == "health_check":
+            value = handler(context or {})
+        else:
+            value = handler(payload or {}, context or {})
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        result.update(
+            {
+                "elapsedMs": elapsed_ms,
+                "result": value if isinstance(value, dict) else {"value": value},
+            }
+        )
+    except NotImplementedError as exc:
+        result.update({"status": "error", "state": "not_implemented", "error": str(exc)})
+    except Exception as exc:
+        result.update({"status": "error", "state": "runtime_error", "error": str(exc)})
     return result
 
 

@@ -27,10 +27,12 @@ try:
     from .next_import import ImportError as NextImportError
     from .next_import import NextImporter
     from .next_import import clean_text
+    from .next_plugin_runtime import run_plugin_entrypoint
 except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
     from next_import import clean_text
+    from next_plugin_runtime import run_plugin_entrypoint
 
 
 STOP = False
@@ -172,7 +174,42 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == "migration.import_sqlite":
         return process_sqlite_import(payload, worker_id)
 
+    if job_type == "plugin.execute":
+        return process_plugin_execute(payload, worker_id)
+
     raise RuntimeError(f"Unsupported job type: {job_type}")
+
+
+def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    plugin_id = clean_text(payload.get("pluginId"))
+    entrypoint = clean_text(payload.get("entrypoint"))
+    if not plugin_id:
+        raise RuntimeError("pluginId is required for plugin execution jobs")
+    if not entrypoint:
+        raise RuntimeError("entrypoint is required for plugin execution jobs")
+
+    execution_payload = payload.get("payload") or {}
+    if not isinstance(execution_payload, dict):
+        raise RuntimeError("Plugin execution payload must be an object")
+    context = payload.get("context") or {}
+    if not isinstance(context, dict):
+        context = {}
+    context = {
+        **context,
+        "queued": True,
+        "workerId": worker_id,
+    }
+    execution = run_plugin_entrypoint(plugin_id, entrypoint, execution_payload, context)
+    if execution.get("status") != "ok":
+        raise RuntimeError(str(execution.get("error") or execution.get("state") or "Plugin execution failed"))
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": "plugin.execute",
+        "pluginId": plugin_id,
+        "entrypoint": entrypoint,
+        "execution": execution,
+    }
 
 
 def process_sqlite_import(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
