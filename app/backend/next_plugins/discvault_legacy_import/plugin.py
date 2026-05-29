@@ -37,6 +37,21 @@ def _path_value(payload, context, key, fallback):
     return str(payload.get(key) or settings.get(key) or fallback).strip()
 
 
+def _bool_value(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
 def _data_dir(payload=None, context=None):
     return Path(_path_value(payload, context, "dataDir", os.environ.get("DISCVAULT_DATA_DIR") or "/data"))
 
@@ -94,6 +109,9 @@ def inspect_source(payload=None, context=None):
     context = context or {}
     data_dir = _data_dir(payload, context)
     sqlite_db = _sqlite_db(payload, context)
+    include_security = _bool_value(payload.get("includeSecurity", payload.get("include_security")), True)
+    include_personal = _bool_value(payload.get("includePersonal", payload.get("include_personal")), False)
+    import_media = _bool_value(payload.get("importMediaReferences", payload.get("import_media_references")), True)
     found = sqlite_db.exists() and sqlite_db.is_file()
     result = {
         "status": "ok",
@@ -108,9 +126,9 @@ def inspect_source(payload=None, context=None):
         "mediaExtensions": {},
         "mediaMigrationMode": "reference_existing_files",
         "options": {
-            "includeSecurity": True,
-            "includePersonal": False,
-            "importMediaReferences": True,
+            "includeSecurity": include_security,
+            "includePersonal": include_personal,
+            "importMediaReferences": import_media,
         },
         "warnings": [],
     }
@@ -144,7 +162,9 @@ def health_check(context=None):
 
 
 def plan_import(payload=None, context=None):
-    inspection = inspect_source(payload or {}, context or {})
+    payload = payload or {}
+    inspection = inspect_source(payload, context or {})
+    options = inspection.get("options") or {}
     can_start = bool(inspection.get("found") and inspection.get("readable"))
     return {
         "status": "ready" if can_start else "blocked",
@@ -156,9 +176,13 @@ def plan_import(payload=None, context=None):
             "dataDir": inspection["dataDir"],
             "sourceDatabaseHash": inspection.get("sourceDatabaseHash"),
             "mediaMigrationMode": inspection.get("mediaMigrationMode"),
-            "includeSecurity": True,
-            "includePersonal": False,
-            "importMediaReferences": True,
-            "ownerUsername": None,
+            "includeSecurity": options.get("includeSecurity", True),
+            "includePersonal": options.get("includePersonal", False),
+            "importMediaReferences": options.get("importMediaReferences", True),
+            "ownerUsername": payload.get("ownerUsername") or payload.get("owner_username"),
+            "importSource": {
+                "pluginId": "discvault_legacy_import",
+                "sourceKind": inspection.get("sourceKind"),
+            },
         },
     }
