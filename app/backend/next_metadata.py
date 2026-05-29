@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import uuid
@@ -100,6 +101,11 @@ METADATA_IDENTIFIER_TYPES = {
     "tmdbId": ("tmdb", "movie_id"),
     "imdb_id": ("imdb", "movie_id"),
     "imdbId": ("imdb", "movie_id"),
+}
+
+METADATA_MEDIA_FIELDS = {
+    "poster_url": "poster",
+    "backdrop_url": "backdrop",
 }
 
 MOVIE_FIELD_ALIASES = {
@@ -638,6 +644,38 @@ def normalize_field_value(field: str, value: Any) -> Any:
     return normalize_value(value)
 
 
+def image_url_options(*values: Any) -> list[str]:
+    options: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: Any) -> None:
+        if isinstance(value, list):
+            for item in value:
+                add(item)
+            return
+        if isinstance(value, tuple):
+            for item in value:
+                add(item)
+            return
+        if isinstance(value, dict):
+            for key in ("url", "sourceUrl", "source_url", "posterUrl", "poster_url", "backdropUrl", "backdrop_url"):
+                if value.get(key):
+                    add(value.get(key))
+            return
+        text = clean_text(value) or ""
+        if not text.startswith(("http://", "https://")):
+            return
+        key = text.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        options.append(text)
+
+    for value in values:
+        add(value)
+    return options
+
+
 def metadata_field_name(name: str) -> str:
     return MOVIE_FIELD_ALIASES.get(name, name)
 
@@ -755,6 +793,41 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         or result.get("format")
         or ""
     )
+    media_updates: dict[str, dict[str, Any]] = {}
+    source_label = result.get("sourceLabel") or result.get("providerLabel") or plugin_id
+    source_ref = result.get("sourceRef") or result.get("sourceUrl") or result.get("source_url") or ""
+    poster_options = image_url_options(
+        metadata_updates.get("poster_url"),
+        metadata_updates.get("posters"),
+        result.get("posters"),
+        (result.get("images") or {}).get("posters") if isinstance(result.get("images"), dict) else None,
+    )
+    if poster_options:
+        media_updates["poster"] = {
+            "kind": "poster",
+            "field": "poster_url",
+            "sourceUrl": poster_options[0],
+            "options": poster_options,
+            "providerId": plugin_id,
+            "sourceLabel": source_label,
+            "sourceRef": source_ref,
+        }
+    backdrop_options = image_url_options(
+        metadata_updates.get("backdrop_url"),
+        metadata_updates.get("backdrop_urls"),
+        result.get("backdrops"),
+        (result.get("images") or {}).get("backdrops") if isinstance(result.get("images"), dict) else None,
+    )
+    if backdrop_options:
+        media_updates["backdrop"] = {
+            "kind": "backdrop",
+            "field": "backdrop_url",
+            "sourceUrl": backdrop_options[0],
+            "options": backdrop_options,
+            "providerId": plugin_id,
+            "sourceLabel": source_label,
+            "sourceRef": source_ref,
+        }
     return {
         "pluginId": plugin_id,
         "entrypoint": entrypoint,
@@ -766,6 +839,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
         "technicalUpdates": technical_updates,
+        "mediaUpdates": media_updates,
         "identifiers": identifiers,
         "candidates": result.get("items") or result.get("candidates") or [],
         "boxSetProposal": result.get("boxSetProposal") or result.get("box_set_proposal"),
@@ -844,6 +918,7 @@ def merge_metadata_results(
     movie_updates: dict[str, Any] = {}
     metadata_updates: dict[str, Any] = {}
     technical_updates: dict[str, Any] = {}
+    media_updates: dict[str, dict[str, Any]] = {}
     identifiers: dict[str, str] = {}
     provenance: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
@@ -895,6 +970,35 @@ def merge_metadata_results(
         merge_bucket(result.get("movieUpdates") or {}, "movie", result, release_priority)
         merge_bucket(result.get("metadataUpdates") or {}, "metadata", result, release_priority)
         merge_bucket(result.get("technicalUpdates") or {}, "technical", result, release_priority)
+        for kind, media_update in (result.get("mediaUpdates") or {}).items():
+            source_url = clean_text(media_update.get("sourceUrl") if isinstance(media_update, dict) else "")
+            if kind not in {"poster", "backdrop"} or not source_url:
+                continue
+            options = image_url_options((media_update or {}).get("options"), source_url)
+            item = {
+                "field": kind,
+                "target": "media",
+                "pluginId": result["pluginId"],
+                "entrypoint": result["entrypoint"],
+                "sourceRef": result.get("sourceRef") or "",
+                "sourceLabel": result.get("sourceLabel") or result["pluginId"],
+            }
+            if kind in media_updates:
+                existing_options = image_url_options(media_updates[kind].get("options"))
+                merged_options = image_url_options(existing_options, options)
+                media_updates[kind]["options"] = merged_options
+                skipped.append({**item, "reason": "media already selected from an earlier provider"})
+                continue
+            media_updates[kind] = {
+                **media_update,
+                "kind": kind,
+                "sourceUrl": source_url,
+                "options": options,
+                "providerId": media_update.get("providerId") or result["pluginId"],
+                "sourceLabel": media_update.get("sourceLabel") or result.get("sourceLabel") or result["pluginId"],
+                "sourceRef": media_update.get("sourceRef") or result.get("sourceRef") or "",
+            }
+            provenance.append({**item, "reason": "provider image selected as primary media asset"})
         for provider, identifier in (result.get("identifiers") or {}).items():
             if identifier and provider not in identifiers:
                 identifiers[provider] = identifier
@@ -903,6 +1007,7 @@ def merge_metadata_results(
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
         "technicalUpdates": technical_updates,
+        "mediaUpdates": media_updates,
         "identifiers": identifiers,
         "provenance": provenance,
         "skipped": skipped,
@@ -912,7 +1017,7 @@ def merge_metadata_results(
 def count_update_fields(proposal: dict[str, Any]) -> int:
     return sum(
         len(proposal.get(key) or {})
-        for key in ("movieUpdates", "metadataUpdates", "technicalUpdates", "identifiers")
+        for key in ("movieUpdates", "metadataUpdates", "technicalUpdates", "mediaUpdates", "identifiers")
     )
 
 
@@ -1158,6 +1263,190 @@ def record_sync_change(conn, movie_id: UUID, payload: dict[str, Any]) -> int:
     return revision
 
 
+def media_url_fingerprint(kind: str, variant: str, source_url: str) -> str:
+    return hashlib.sha256(f"{kind}:{variant}:{source_url}".encode("utf-8")).hexdigest()
+
+
+def media_asset_uuid(storage_key: str) -> uuid.UUID:
+    return uuid.uuid5(uuid.UUID("7c76309b-063d-4c63-b925-2f49fdad332c"), f"media_assets:{storage_key}")
+
+
+def ensure_remote_media_asset(conn, *, kind: str, source_url: str, provider_id: str) -> UUID | None:
+    if kind not in {"poster", "backdrop"}:
+        return None
+    source_url = clean_text(source_url) or ""
+    if not source_url.startswith(("http://", "https://")):
+        return None
+    variant = "original"
+    digest = media_url_fingerprint(kind, variant, source_url)
+    storage_key = f"remote/{kind}/{digest}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM media_assets
+            WHERE storage_backend='local' AND storage_key=%s
+            """,
+            (storage_key,),
+        )
+        row = cur.fetchone()
+        if row:
+            return row["id"] if isinstance(row, dict) else row[0]
+        media_id = media_asset_uuid(storage_key)
+        cur.execute(
+            """
+            INSERT INTO media_assets (
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                sha256,
+                metadata
+            )
+            VALUES (%s, %s, %s, 'local', %s, %s, %s, NULL, %s, %s)
+            ON CONFLICT (storage_backend, storage_key) DO UPDATE SET
+                source_url=EXCLUDED.source_url,
+                provider_id=EXCLUDED.provider_id
+            RETURNING id
+            """,
+            (
+                media_id,
+                kind,
+                variant,
+                storage_key,
+                source_url,
+                clean_text(provider_id),
+                digest,
+                Jsonb({"source": "metadata_refresh"}),
+            ),
+        )
+        row = cur.fetchone()
+        return row["id"] if isinstance(row, dict) else row[0]
+
+
+def apply_primary_media_update(
+    conn,
+    *,
+    movie_id: UUID,
+    kind: str,
+    source_url: str,
+    provider_id: str,
+) -> dict[str, Any] | None:
+    media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
+    if not media_id or not table_exists(conn, "entity_media"):
+        return None
+    role = kind
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ma.id, ma.source_url, ma.storage_key
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='movie'
+              AND em.entity_id=%s
+              AND em.role=%s
+              AND ma.kind=%s
+              AND em.is_primary=true
+            ORDER BY em.sort_order, ma.created_at
+            LIMIT 1
+            """,
+            (movie_id, role, kind),
+        )
+        current = cur.fetchone()
+        if current and str(current["id"] if isinstance(current, dict) else current[0]) == str(media_id):
+            return None
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET is_primary=false, sort_order=GREATEST(sort_order, 1)
+            WHERE entity_type='movie'
+              AND entity_id=%s
+              AND role=%s
+              AND is_primary=true
+            """,
+            (movie_id, role),
+        )
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type,
+                entity_id,
+                media_id,
+                role,
+                is_primary,
+                sort_order
+            )
+            VALUES ('movie', %s, %s, %s, true, 0)
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                is_primary=true,
+                sort_order=0
+            """,
+            (movie_id, media_id, role),
+        )
+        cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+    return {
+        "kind": kind,
+        "mediaId": str(media_id),
+        "sourceUrl": source_url,
+        "providerId": provider_id,
+    }
+
+
+def link_media_option(
+    conn,
+    *,
+    movie_id: UUID,
+    kind: str,
+    source_url: str,
+    provider_id: str,
+    sort_order: int,
+) -> dict[str, Any] | None:
+    media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
+    if not media_id or not table_exists(conn, "entity_media"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT is_primary
+            FROM entity_media
+            WHERE entity_type='movie'
+              AND entity_id=%s
+              AND media_id=%s
+              AND role=%s
+            """,
+            (movie_id, media_id, kind),
+        )
+        row = cur.fetchone()
+        if row and bool(row["is_primary"] if isinstance(row, dict) else row[0]):
+            return None
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type,
+                entity_id,
+                media_id,
+                role,
+                is_primary,
+                sort_order
+            )
+            VALUES ('movie', %s, %s, %s, false, %s)
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order)
+            """,
+            (movie_id, media_id, kind, sort_order),
+        )
+    return {
+        "kind": kind,
+        "mediaId": str(media_id),
+        "sourceUrl": source_url,
+        "providerId": provider_id,
+    }
+
+
 def apply_metadata_proposal(
     conn,
     movie_id: UUID | str,
@@ -1169,9 +1458,10 @@ def apply_metadata_proposal(
     movie_updates = proposal.get("movieUpdates") or {}
     metadata_updates = proposal.get("metadataUpdates") or {}
     technical_updates = proposal.get("technicalUpdates") or {}
+    media_updates = proposal.get("mediaUpdates") or {}
     identifiers = proposal.get("identifiers") or {}
     provenance = proposal.get("provenance") or []
-    changed = bool(movie_updates or metadata_updates or technical_updates or identifiers)
+    changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers)
 
     if not changed:
         return {"changed": False, "revision": 0, "applied": {}}
@@ -1252,6 +1542,40 @@ def apply_metadata_proposal(
                     (movie_uuid, provider, str(identifier)),
                 )
 
+        applied_media_updates: dict[str, Any] = {}
+        if media_updates and table_exists(conn, "media_assets") and table_exists(conn, "entity_media"):
+            for kind, media_update in media_updates.items():
+                if kind not in {"poster", "backdrop"} or not isinstance(media_update, dict):
+                    continue
+                source_url = clean_text(media_update.get("sourceUrl")) or ""
+                provider_id = clean_text(media_update.get("providerId")) or "metadata"
+                applied_media = apply_primary_media_update(
+                    conn,
+                    movie_id=movie_uuid,
+                    kind=kind,
+                    source_url=source_url,
+                    provider_id=provider_id,
+                )
+                option_results = []
+                for sort_order, option_url in enumerate(image_url_options(media_update.get("options")), start=1):
+                    if option_url == source_url:
+                        continue
+                    option_result = link_media_option(
+                        conn,
+                        movie_id=movie_uuid,
+                        kind=kind,
+                        source_url=option_url,
+                        provider_id=provider_id,
+                        sort_order=sort_order,
+                    )
+                    if option_result:
+                        option_results.append(option_result)
+                if applied_media:
+                    applied_media_updates[kind] = applied_media
+                if option_results:
+                    applied_media_updates.setdefault(kind, {"kind": kind, "sourceUrl": source_url, "providerId": provider_id})
+                    applied_media_updates[kind]["optionsAdded"] = option_results
+
         if provenance and table_exists(conn, "metadata_field_provenance"):
             for item in provenance:
                 plugin_id = clean_text(item.get("pluginId"))
@@ -1282,6 +1606,7 @@ def apply_metadata_proposal(
             "movieUpdates": movie_updates,
             "metadataUpdates": metadata_updates,
             "technicalUpdates": technical_updates,
+            "mediaUpdates": media_updates,
             "identifiers": identifiers,
         },
     )
@@ -1292,6 +1617,7 @@ def apply_metadata_proposal(
             "movieUpdates": movie_updates,
             "metadataUpdates": metadata_updates,
             "technicalUpdates": technical_updates,
+            "mediaUpdates": applied_media_updates,
             "identifiers": identifiers,
             "provenance": len(provenance),
         },

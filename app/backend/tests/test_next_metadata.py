@@ -108,6 +108,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertNotIn("title", merged["movieUpdates"])
         self.assertNotIn("overview", merged["movieUpdates"])
         self.assertNotIn("poster_url", merged["metadataUpdates"])
+        self.assertEqual(merged["mediaUpdates"]["poster"]["sourceUrl"], "https://provider/poster.jpg")
         self.assertEqual(merged["movieUpdates"]["rating"], "8.1")
 
     def test_preferred_overwrite_allows_provider_to_replace_display_fields(self):
@@ -140,6 +141,38 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["movieUpdates"]["title"], "Provider Title")
         self.assertEqual(merged["movieUpdates"]["overview"], "Provider overview")
         self.assertEqual(merged["metadataUpdates"]["poster_url"], "https://provider/poster.jpg")
+        self.assertEqual(merged["mediaUpdates"]["poster"]["sourceUrl"], "https://provider/poster.jpg")
+
+    def test_provider_image_options_are_kept_as_media_choices(self):
+        current = {"title": "Manual Title", "format": "4K UHD", "metadata": {"poster_url": "https://local/poster.jpg"}}
+        result = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {
+                "status": "hit",
+                "movie": {
+                    "posterUrl": "https://provider/poster-main.jpg",
+                    "posters": [
+                        "https://provider/poster-main.jpg",
+                        "https://provider/poster-alt.jpg",
+                    ],
+                },
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[result],
+            overwrite_enabled=False,
+            target_format="4K UHD",
+        )
+
+        self.assertNotIn("poster_url", merged["metadataUpdates"])
+        self.assertEqual(merged["mediaUpdates"]["poster"]["sourceUrl"], "https://provider/poster-main.jpg")
+        self.assertEqual(
+            merged["mediaUpdates"]["poster"]["options"],
+            ["https://provider/poster-main.jpg", "https://provider/poster-alt.jpg"],
+        )
 
     def test_synthetic_barcodes_are_not_sent_to_external_sources(self):
         self.assertEqual(external_metadata_barcode("IMPORT-BACK_TO_THE_FUTURE-1985"), "")
