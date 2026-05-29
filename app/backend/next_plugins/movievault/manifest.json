@@ -19,7 +19,8 @@
         "label": "MovieVault URL",
         "type": "url",
         "required": false,
-        "placeholder": "https://search.discvault.eu"
+        "placeholder": "https://search.discvault.eu",
+        "description": "MovieVault metadata API base URL."
       }
     ],
     "secrets": [
@@ -27,7 +28,8 @@
         "name": "token",
         "label": "MovieVault token",
         "type": "password",
-        "required": true
+        "required": true,
+        "description": "Bearer token for MovieVault source and receiver access."
       }
     ]
   },

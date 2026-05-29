@@ -17,7 +17,8 @@
         "label": "Server URL",
         "type": "url",
         "required": true,
-        "placeholder": "https://plex.example"
+        "placeholder": "https://plex.example",
+        "description": "Plex server URL reachable by the DiscVault container."
       },
       {
         "name": "libraryIds",
@@ -33,7 +34,8 @@
         "name": "token",
         "label": "Plex token",
         "type": "password",
-        "required": true
+        "required": true,
+        "description": "Plex token used for library discovery and sync."
       }
     ]
   },
