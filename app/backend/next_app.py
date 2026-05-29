@@ -1043,6 +1043,7 @@ def migration_dashboard_html() -> str:
       opacity: .48;
     }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .hidden { display: none !important; }
     .grid {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
@@ -1058,6 +1059,78 @@ def migration_dashboard_html() -> str:
     }
     .wide { grid-column: span 8; }
     .full { grid-column: 1 / -1; }
+    .wizard-card {
+      display: grid;
+      gap: 16px;
+    }
+    .wizard-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .wizard-summary {
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 760px;
+    }
+    .wizard-steps {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .wizard-step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.025);
+      padding: 13px;
+      min-width: 0;
+    }
+    .wizard-step-marker {
+      width: 25px;
+      height: 25px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .78rem;
+      margin-bottom: 10px;
+    }
+    .wizard-step strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+    .wizard-step span {
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.45;
+    }
+    .wizard-step.done {
+      border-color: rgba(72,199,142,.35);
+      background: rgba(72,199,142,.06);
+    }
+    .wizard-step.done .wizard-step-marker {
+      border-color: rgba(72,199,142,.65);
+      color: var(--green);
+    }
+    .wizard-step.active {
+      border-color: rgba(232,197,71,.65);
+      background: rgba(232,197,71,.07);
+    }
+    .wizard-step.active .wizard-step-marker {
+      border-color: rgba(232,197,71,.75);
+      color: var(--accent);
+    }
+    .wizard-step.blocked {
+      border-color: rgba(255,107,107,.55);
+      background: rgba(255,107,107,.06);
+    }
+    .wizard-step.blocked .wizard-step-marker {
+      border-color: rgba(255,107,107,.7);
+      color: var(--red);
+    }
     .metric {
       color: var(--text);
       font-size: 2rem;
@@ -1141,6 +1214,33 @@ def migration_dashboard_html() -> str:
       display: block;
       font-size: 1.02rem;
     }
+    .details-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .technical-details {
+      margin-top: 16px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      padding-top: 12px;
+    }
+    .technical-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+    .technical-panel {
+      grid-column: span 6;
+      min-width: 0;
+    }
+    .technical-panel.full {
+      grid-column: 1 / -1;
+    }
+    .technical-panel h3 {
+      margin: 0 0 8px;
+      font-size: .92rem;
+    }
     .row {
       display: grid;
       grid-template-columns: minmax(120px, .8fr) minmax(0, 1.3fr);
@@ -1183,6 +1283,9 @@ def migration_dashboard_html() -> str:
       header { flex-direction: column; }
       .actions { justify-content: flex-start; }
       .card, .wide { grid-column: 1 / -1; }
+      .wizard-head, .details-header { flex-direction: column; }
+      .wizard-steps { grid-template-columns: 1fr; }
+      .technical-panel { grid-column: 1 / -1; }
       .row { grid-template-columns: 1fr; gap: 4px; }
     }
   </style>
@@ -1206,6 +1309,16 @@ def migration_dashboard_html() -> str:
     </header>
 
     <section class="grid" aria-live="polite">
+      <div class="card full wizard-card">
+        <div class="wizard-head">
+          <div>
+            <h2 data-next-i18n="migration.wizardTitle">Migration Wizard</h2>
+            <p class="wizard-summary" id="wizardSummary" data-next-i18n="migration.loadingReport">Loading report...</p>
+          </div>
+          <span id="wizardModeBadge" class="badge" data-next-i18n="common.loading">Loading</span>
+        </div>
+        <div class="wizard-steps" id="wizardSteps"></div>
+      </div>
       <div class="card">
         <h2 data-next-i18n="migration.state">State</h2>
         <div id="stateBadge" class="badge" data-next-i18n="common.loading">Loading</div>
@@ -1236,31 +1349,43 @@ def migration_dashboard_html() -> str:
         <div class="metric" id="pluginCount">-</div>
         <div class="label" data-next-i18n="migration.pluginsHelp">Enabled metadata plugins</div>
       </div>
-
       <div class="card full">
         <h2 data-next-i18n="migration.importSource">Import Source</h2>
         <p class="section-help" data-next-i18n="migration.importSourceHelp">Choose the source that DiscVault Next should inspect and import from.</p>
         <div class="source-chooser" id="importSourceList"></div>
       </div>
-      <div class="card wide">
-        <h2 data-next-i18n="migration.source">Source</h2>
-        <div class="list" id="sourceList"></div>
-      </div>
-      <div class="card">
-        <h2 data-next-i18n="migration.skipped">Skipped</h2>
-        <div class="list" id="skippedList"></div>
-      </div>
       <div class="card full">
-        <h2 data-next-i18n="migration.metadataPlugins">Metadata Plugins</h2>
-        <div class="plugins" id="pluginsList"></div>
-      </div>
-      <div class="card full">
-        <h2 data-next-i18n="migration.requiredActions">Required Actions</h2>
+        <h2 data-next-i18n="migration.nextAction">Next Action</h2>
         <div class="list" id="actionsList"></div>
       </div>
-      <div class="card full" id="warningsCard" hidden>
-        <h2 data-next-i18n="migration.warnings">Warnings</h2>
-        <div class="list" id="warningsList"></div>
+      <div class="card full">
+        <div class="details-header">
+          <div>
+            <h2 data-next-i18n="migration.technicalDetails">Technical Details</h2>
+            <p class="section-help" data-next-i18n="migration.technicalDetailsHelp">Source paths, plugin readiness and raw migration counters.</p>
+          </div>
+          <button type="button" id="technicalDetailsButton" onclick="toggleTechnicalDetails()"></button>
+        </div>
+        <div class="technical-details hidden" id="technicalDetails">
+          <div class="technical-grid">
+            <section class="technical-panel">
+              <h3 data-next-i18n="migration.source">Source</h3>
+              <div class="list" id="sourceList"></div>
+            </section>
+            <section class="technical-panel">
+              <h3 data-next-i18n="migration.skipped">Skipped</h3>
+              <div class="list" id="skippedList"></div>
+            </section>
+            <section class="technical-panel full">
+              <h3 data-next-i18n="migration.metadataPlugins">Metadata Plugins</h3>
+              <div class="plugins" id="pluginsList"></div>
+            </section>
+            <section class="technical-panel full" id="warningsPanel" hidden>
+              <h3 data-next-i18n="migration.warnings">Warnings</h3>
+              <div class="list" id="warningsList"></div>
+            </section>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -1292,6 +1417,7 @@ def migration_dashboard_html() -> str:
     const nextI18n = {locale: "nl-NL", messages: {}, locales: NEXT_I18N_FALLBACK_LOCALES};
     let selectedImportSourceId = null;
     let lastMigrationReport = null;
+    let showTechnicalDetails = false;
     function normalizeNextLocale(value) {
       const raw = String(value || "").trim().replace("_", "-").toLowerCase();
       const aliases = {};
@@ -1334,6 +1460,7 @@ def migration_dashboard_html() -> str:
       });
       const select = document.getElementById("nextLanguageSelect");
       if (select) select.value = nextI18n.locale;
+      updateTechnicalDetailsButton();
     }
     function renderLanguageOptions() {
       const select = document.getElementById("nextLanguageSelect");
@@ -1399,6 +1526,115 @@ def migration_dashboard_html() -> str:
         ? values.map((item) => row("", item)).join("")
         : row(tNext("common.none", "None"), "-");
     }
+    function updateTechnicalDetailsButton() {
+      const button = document.getElementById("technicalDetailsButton");
+      if (!button) return;
+      button.textContent = showTechnicalDetails
+        ? tNext("migration.hideTechnicalDetails", "Hide Details")
+        : tNext("migration.showTechnicalDetails", "Show Details");
+      button.setAttribute(
+        "aria-expanded",
+        showTechnicalDetails ? "true" : "false"
+      );
+    }
+    function toggleTechnicalDetails() {
+      showTechnicalDetails = !showTechnicalDetails;
+      const details = document.getElementById("technicalDetails");
+      if (details) details.classList.toggle("hidden", !showTechnicalDetails);
+      updateTechnicalDetailsButton();
+    }
+    function translatedState(state) {
+      const key = `migration.state.${state || "unknown"}`;
+      return tNext(key, String(state || "unknown").replaceAll("_", " "));
+    }
+    function wizardSummary(report) {
+      const state = report.state || "unknown";
+      const summaries = {
+        ready_for_confirmation: tNext("migration.summaryReady", "The source is ready. Review the import source and start migration when you are ready."),
+        ready_for_security_backfill: tNext("migration.summarySecurityBackfill", "The collection is present. Import legacy users, passkeys and media groups to complete migration."),
+        blocked_target_not_empty: tNext("migration.summaryTargetNotEmpty", "This PostgreSQL database already contains collection data. Use an empty target database or wait for conflict-aware import."),
+        already_completed: tNext("migration.summaryCompleted", "Migration is complete for this source."),
+        not_required: tNext("migration.summaryNoSource", "No readable legacy source was found. Configure or mount a source to migrate data."),
+        running: tNext("migration.summaryRunning", "Migration is running. Refresh to follow the latest status."),
+        blocked_source_unreadable: tNext("migration.summarySourceUnreadable", "A legacy source was found, but DiscVault Next cannot read it yet."),
+        blocked_schema_not_ready: tNext("migration.summarySchemaBlocked", "PostgreSQL schema migration must complete before import can start.")
+      };
+      return summaries[state] || (report.requiredActions || []).join(" ") || translatedState(state);
+    }
+    function stepState(report, key) {
+      const state = report.state || "";
+      const source = report.source || {};
+      if (key === "source") {
+        if (source.found && source.readable) return "done";
+        return source.found ? "blocked" : "active";
+      }
+      if (key === "security") {
+        if (state === "ready_for_security_backfill") return "active";
+        if (state === "already_completed") return "done";
+        return "pending";
+      }
+      if (key === "import") {
+        if (state === "already_completed") return "done";
+        if (state === "running" || state === "ready_for_confirmation") return "active";
+        if (String(state).startsWith("blocked")) return "blocked";
+        return "pending";
+      }
+      if (key === "done") {
+        return state === "already_completed" ? "done" : "pending";
+      }
+      return "pending";
+    }
+    function renderWizard(report) {
+      const source = report.source || {};
+      const counts = importSourceCounts(source);
+      const sourceDetail = source.pluginName || tNext("migration.importSource", "Import Source");
+      const securityCount = Number(counts.users || 0) + Number(counts.credentials || 0) + Number(counts.groups || 0);
+      const steps = [
+        {
+          key: "source",
+          label: tNext("migration.stepSource", "Source"),
+          detail: source.found ? sourceDetail : tNext("migration.summaryNoSource", "No readable legacy source was found.")
+        },
+        {
+          key: "security",
+          label: tNext("migration.stepSecurity", "Users & Groups"),
+          detail: securityCount
+            ? `${formatNumber(counts.users)} ${tNext("migration.users", "Users")} / ${formatNumber(counts.groups)} ${tNext("migration.groups", "Groups")}`
+            : tNext("migration.noSecurityData", "No legacy security data detected.")
+        },
+        {
+          key: "import",
+          label: tNext("migration.stepImport", "Import"),
+          detail: translatedState(report.state)
+        },
+        {
+          key: "done",
+          label: tNext("migration.stepComplete", "Complete"),
+          detail: report.latestRun?.status || tNext("migration.noRun", "No migration run has been recorded yet.")
+        }
+      ];
+      const node = document.getElementById("wizardSteps");
+      if (node) {
+        node.innerHTML = steps.map((step, index) => {
+          const state = stepState(report, step.key);
+          const marker = state === "done" ? "OK" : String(index + 1);
+          return `
+            <div class="wizard-step ${escapeHtml(state)}">
+              <div class="wizard-step-marker">${escapeHtml(marker)}</div>
+              <strong>${escapeHtml(step.label)}</strong>
+              <span>${escapeHtml(step.detail || "")}</span>
+            </div>
+          `;
+        }).join("");
+      }
+      const summary = document.getElementById("wizardSummary");
+      if (summary) summary.textContent = wizardSummary(report);
+      const badge = document.getElementById("wizardModeBadge");
+      if (badge) {
+        badge.className = `badge ${statusClass(report.state)}`;
+        badge.textContent = translatedState(report.state);
+      }
+    }
     function importSourceCounts(source) {
       return source?.counts || source?.sourceCounts || {};
     }
@@ -1441,7 +1677,7 @@ def migration_dashboard_html() -> str:
             <div class="source-option-main">
               <div class="source-option-title">
                 <strong>${escapeHtml(source.pluginName || source.name || pluginId || tNext("migration.importSource", "Import Source"))}</strong>
-                <span class="label mono">${escapeHtml(pluginId || "-")}${source.sourceKind ? ` / ${escapeHtml(source.sourceKind)}` : ""}</span>
+                <span class="label">${escapeHtml(source.readable ? tNext("migration.sourceDetected", "Legacy source detected") : badge.text)}</span>
               </div>
               <span class="badge ${badge.tone}">${escapeHtml(selected ? tNext("migration.selectedSource", "Selected") : badge.text)}</span>
             </div>
@@ -1453,7 +1689,6 @@ def migration_dashboard_html() -> str:
               <span class="source-stat"><strong>${formatNumber(counts.credentials)}</strong>${escapeHtml(tNext("migration.passkeys", "Passkeys"))}</span>
               <span class="source-stat"><strong>${formatNumber(imageCount)}</strong>${escapeHtml(tNext("migration.images", "Images"))}</span>
             </div>
-            <div class="label mono">${escapeHtml(source.sqliteDb || source.dataDir || "-")}</div>
             ${warnings}
           </button>
         `;
@@ -1484,11 +1719,12 @@ def migration_dashboard_html() -> str:
 
       const stateBadge = document.getElementById("stateBadge");
       stateBadge.className = `badge ${statusClass(state)}`;
-      stateBadge.textContent = state.replaceAll("_", " ");
+      stateBadge.textContent = translatedState(state);
       document.getElementById("startButton").disabled = !report.canStart;
       message.textContent = report.latestRun?.status
         ? `${tNext("migration.latestRun", "Latest run")}: ${report.latestRun.status}`
         : tNext("migration.noRun", "No migration run has been recorded yet.");
+      renderWizard(report);
 
       document.getElementById("moviesCount").textContent = formatNumber(imported.movies ?? target.movies);
       document.getElementById("peopleCount").textContent = formatNumber(imported.people ?? target.people);
@@ -1520,8 +1756,11 @@ def migration_dashboard_html() -> str:
       renderList("actionsList", report.requiredActions || []);
 
       const warnings = report.summary?.warnings || [];
-      document.getElementById("warningsCard").hidden = warnings.length === 0;
+      document.getElementById("warningsPanel").hidden = warnings.length === 0;
       renderList("warningsList", warnings);
+      const details = document.getElementById("technicalDetails");
+      if (details) details.classList.toggle("hidden", !showTechnicalDetails);
+      updateTechnicalDetailsButton();
     }
     async function startMigration() {
       const button = document.getElementById("startButton");
