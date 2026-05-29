@@ -116,6 +116,19 @@ jobs:
               assert payload["status"] == "ok", (path, payload)
               print(path, payload["status"])
 
+          app_shell = client.get("/api/next/app")
+          assert app_shell.status_code == 200, app_shell.data[:500]
+          app_html = app_shell.get_data(as_text=True)
+          for marker in (
+              "id=\"adminPanel\"",
+              "data-admin-tab=\"roles\"",
+              "id=\"adminRolesList\"",
+              "id=\"adminPluginsList\"",
+              "data-admin-rbac-mode=\"advanced\"",
+          ):
+              assert marker in app_html, marker
+          print("/api/next/app", "admin-ui-ok")
+
           mutation = {
               "clientId": "ci-pwa-install",
               "baseRevision": 0,
