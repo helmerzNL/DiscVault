@@ -6048,6 +6048,57 @@ def create_background_job(conn, *, job_type: str, payload: dict[str, Any]) -> di
     return job_row(row)
 
 
+def actor_job_payload(actor: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(actor.get("id")) if actor.get("id") else None,
+        "username": actor.get("username"),
+        "role": actor.get("role"),
+    }
+
+
+def metadata_refresh_jobs(
+    conn,
+    *,
+    movie_id: UUID | None = None,
+    status: str = "",
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "background_jobs"):
+        return []
+    clauses = ["job_type = %s"]
+    params: list[Any] = [METADATA_REFRESH_JOB_TYPE]
+    if movie_id:
+        clauses.append("payload->>'movieId' = %s")
+        params.append(str(movie_id))
+    if status:
+        clauses.append("status = %s")
+        params.append(status)
+    where = " AND ".join(clauses)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                id,
+                job_type,
+                status,
+                requested_by,
+                payload,
+                result,
+                error,
+                created_at,
+                started_at,
+                finished_at
+            FROM background_jobs
+            WHERE {where}
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (*params, limit),
+        )
+        rows = cur.fetchall()
+    return [job_row(row) for row in rows]
+
+
 PUBLIC_NEXT_PATHS = {
     "/",
     "/app",
@@ -6649,6 +6700,60 @@ def register_routes(flask_app: Flask) -> None:
             result = lookup_metadata_sources(conn, body, actor)
         return response({"status": "ok", "metadata": result})
 
+    @flask_app.get("/api/next/metadata/jobs")
+    def metadata_jobs():
+        limit = parse_int_arg("limit", 50, minimum=1, maximum=200)
+        status = (request.args.get("status") or "").strip()
+        movie_id = parse_uuid(request.args.get("movieId") or request.args.get("movie_id"), "movieId")
+        with connect() as conn:
+            require_any_next_permission(conn, ("metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"))
+            jobs = metadata_refresh_jobs(conn, movie_id=movie_id, status=status, limit=limit)
+        return response({"status": "ok", "jobs": jobs})
+
+    @flask_app.post("/api/next/metadata/jobs")
+    def queue_metadata_refresh_jobs():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Metadata refresh job body must be an object", 400)
+        raw_ids = body.get("movieIds") or body.get("movie_ids")
+        if raw_ids is None and (body.get("movieId") or body.get("movie_id")):
+            raw_ids = [body.get("movieId") or body.get("movie_id")]
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise NextApiError("movieIds must be a non-empty array", 400)
+        if len(raw_ids) > 50:
+            raise NextApiError("At most 50 movieIds can be queued at once", 400)
+        movie_ids = [parse_uuid(item, "movieIds") for item in raw_ids]
+        if any(item is None for item in movie_ids):
+            raise NextApiError("movieIds must not contain empty values", 400)
+        dry_run = parse_bool_value(body.get("dryRun", body.get("dry_run")), default=True)
+        if len(movie_ids) > 1 and not dry_run and body.get("confirm") != "metadata-bulk-refresh":
+            raise NextApiError("Bulk metadata refresh requires confirm=metadata-bulk-refresh when dryRun is false", 400)
+
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_bulk" if len(movie_ids) > 1 else "metadata.refresh_one")
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM movies WHERE id = ANY(%s)", (movie_ids,))
+                found_ids = {row["id"] for row in cur.fetchall()}
+            missing = [str(item) for item in movie_ids if item not in found_ids]
+            if missing:
+                raise NextApiError(f"Movie not found: {', '.join(missing)}", 404)
+            with conn.transaction():
+                jobs = [
+                    create_background_job(
+                        conn,
+                        job_type=METADATA_REFRESH_JOB_TYPE,
+                        payload={
+                            "movieId": str(item),
+                            "dryRun": dry_run,
+                            "requestedBy": actor_job_payload(actor),
+                        },
+                    )
+                    for item in movie_ids
+                ]
+        return response({"status": "ok", "dryRun": dry_run, "queued": len(jobs), "jobs": jobs}, 201)
+
     @flask_app.post("/api/next/movies/<movie_id>/metadata/preview")
     def movie_metadata_preview(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
@@ -6673,6 +6778,16 @@ def register_routes(flask_app: Flask) -> None:
             result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
         return response({"status": "ok", "metadata": result})
 
+    @flask_app.get("/api/next/movies/<movie_id>/metadata/jobs")
+    def movie_metadata_jobs(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        limit = parse_int_arg("limit", 25, minimum=1, maximum=100)
+        status = (request.args.get("status") or "").strip()
+        with connect() as conn:
+            require_any_next_permission(conn, ("metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"))
+            jobs = metadata_refresh_jobs(conn, movie_id=movie_uuid, status=status, limit=limit)
+        return response({"status": "ok", "movieId": str(movie_uuid), "jobs": jobs})
+
     @flask_app.post("/api/next/movies/<movie_id>/metadata/jobs")
     def queue_movie_metadata_refresh(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
@@ -6693,11 +6808,7 @@ def register_routes(flask_app: Flask) -> None:
                     payload={
                         "movieId": str(movie_uuid),
                         "dryRun": dry_run,
-                        "requestedBy": {
-                            "id": str(actor.get("id")) if actor.get("id") else None,
-                            "username": actor.get("username"),
-                            "role": actor.get("role"),
-                        },
+                        "requestedBy": actor_job_payload(actor),
                     },
                 )
         return response({"status": "ok", "job": job}, 201)

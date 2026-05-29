@@ -11,6 +11,7 @@ from app.backend.next_metadata import canonicalize_plugin_result
 from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import merge_metadata_results
 from app.backend.next_metadata import normalize_media_format
+from app.backend.next_metadata import summarize_metadata_execution
 
 
 class NextMetadataPolicyTests(unittest.TestCase):
@@ -165,6 +166,64 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual(result["normalizedSourceFormat"], "4K UHD")
         self.assertEqual(result["identifiers"], {"tmdb": "123", "imdb": "tt1234567"})
+
+    def test_technical_list_strings_are_split_and_deduped(self):
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "technical_specs",
+            {
+                "technicalSpecs": {
+                    "format": "4K UHD",
+                    "audioTracks": "English: Dolby TrueHD 7.1 (48kHz, 24-bit), Spanish: Dolby Digital 5.1",
+                    "subtitles": ["English SDH, French, Japanese, Spanish", "French"],
+                    "regions": "A, B, C",
+                },
+            },
+        )
+
+        self.assertEqual(
+            result["technicalUpdates"]["audio_tracks"],
+            ["English: Dolby TrueHD 7.1 (48kHz, 24-bit)", "Spanish: Dolby Digital 5.1"],
+        )
+        self.assertEqual(result["technicalUpdates"]["subtitles"], ["English SDH", "French", "Japanese", "Spanish"])
+        self.assertEqual(result["technicalUpdates"]["regions"], ["A", "B", "C"])
+
+    def test_audio_track_codec_comma_is_preserved_without_parentheses(self):
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "technical_specs",
+            {
+                "technicalSpecs": {
+                    "format": "4K UHD",
+                    "audioTracks": "English: Dolby TrueHD 7.1 48kHz, 24-bit, Spanish: Dolby Digital 5.1",
+                },
+            },
+        )
+
+        self.assertEqual(
+            result["technicalUpdates"]["audio_tracks"],
+            ["English: Dolby TrueHD 7.1 48kHz, 24-bit", "Spanish: Dolby Digital 5.1"],
+        )
+
+    def test_execution_summary_marks_format_blocked_and_applied_sources(self):
+        plugins = [
+            {"id": "tmdb", "name": "TMDb", "order_index": 10},
+            {"id": "bluray_com", "name": "Blu-ray.com", "order_index": 20},
+        ]
+        executions = [
+            {"pluginId": "tmdb", "entrypoint": "lookup_external_id", "status": "skipped", "state": "needs_configuration"},
+            {"pluginId": "bluray_com", "entrypoint": "technical_specs", "status": "ok", "resultStatus": "hit", "elapsedMs": 20},
+        ]
+        proposal = {
+            "provenance": [{"pluginId": "bluray_com", "field": "audio_tracks"}],
+            "skipped": [{"pluginId": "bluray_com", "field": "hdr", "reason": "format mismatch: target=Blu-ray, source=4K UHD"}],
+        }
+
+        summary = summarize_metadata_execution(plugins=plugins, executions=executions, results=[], proposal=proposal)
+
+        self.assertEqual(summary[0]["state"], "needs_configuration")
+        self.assertEqual(summary[1]["state"], "applied")
+        self.assertEqual(summary[1]["formatBlockedFields"], 1)
 
 
 if __name__ == "__main__":

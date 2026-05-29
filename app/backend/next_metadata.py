@@ -78,6 +78,14 @@ METADATA_TECHNICAL_FIELDS = {
     "content_ratings",
 }
 
+METADATA_LIST_FIELDS = {
+    "audio_tracks",
+    "subtitles",
+    "regions",
+    "backdrop_urls",
+    "videos",
+}
+
 METADATA_RELEASE_FIELDS = {
     "format",
     "edition",
@@ -533,10 +541,101 @@ def normalize_value(value: Any) -> Any:
     if isinstance(value, str):
         return value.strip()
     if isinstance(value, list):
-        return [normalize_value(item) for item in value if value_present(normalize_value(item))]
+        normalized_items = []
+        for item in value:
+            normalized = normalize_value(item)
+            if value_present(normalized):
+                normalized_items.append(normalized)
+        return normalized_items
     if isinstance(value, dict):
-        return {str(key): normalize_value(item) for key, item in value.items() if value_present(normalize_value(item))}
+        normalized_items = {}
+        for key, item in value.items():
+            normalized = normalize_value(item)
+            if value_present(normalized):
+                normalized_items[str(key)] = normalized
+        return normalized_items
     return value
+
+
+def split_outside_parentheses(text: str, separators: set[str]) -> list[str]:
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in text:
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth:
+            depth -= 1
+        if char in separators and depth == 0:
+            value = "".join(current).strip()
+            if value:
+                parts.append(value)
+            current = []
+            continue
+        current.append(char)
+    value = "".join(current).strip()
+    if value:
+        parts.append(value)
+    return parts
+
+
+def normalize_list_field(field: str, value: Any) -> list[Any]:
+    normalized = normalize_value(value)
+    raw_items = normalized if isinstance(normalized, list) else [normalized]
+    items: list[Any] = []
+    separators = {";", "|", "\n", "\r"}
+    if field in {"subtitles", "regions", "backdrop_urls"}:
+        separators.add(",")
+
+    for item in raw_items:
+        if not value_present(item):
+            continue
+        if isinstance(item, str):
+            text = re.sub(r"\s+", " ", item).strip()
+            split_items = split_outside_parentheses(text, separators)
+            if field == "audio_tracks":
+                language_prefix = r"(?:English|French|Spanish|German|Dutch|Italian|Japanese|Portuguese|Cantonese|Mandarin|Korean|Danish|Finnish|Norwegian|Swedish|Polish|Czech|Hungarian|Russian|Thai|Turkish)(?:\s*\([^)]*\))?"
+                comma_split_items: list[str] = []
+                for split_item in split_items:
+                    comma_parts = split_outside_parentheses(split_item, {","})
+                    if len(comma_parts) > 1 and all(re.match(rf"^{language_prefix}(?:\s*:|\s+|$)", part) for part in comma_parts[1:]):
+                        comma_split_items.extend(comma_parts)
+                    else:
+                        comma_split_items.append(split_item)
+                split_items = comma_split_items
+            if len(split_items) == 1 and field == "audio_tracks":
+                # Blu-ray pages sometimes concatenate tracks as
+                # "English: Atmos French: DD 5.1". Split only before a new
+                # language label so codec commas inside parentheses survive.
+                split_items = [
+                    part.strip()
+                    for part in re.split(
+                        rf",?\s+(?={language_prefix}\s*:)",
+                        text,
+                    )
+                    if part.strip()
+                ]
+            items.extend(split_items)
+        elif isinstance(item, list):
+            items.extend(normalize_list_field(field, item))
+        else:
+            items.append(item)
+
+    deduped: list[Any] = []
+    seen: set[str] = set()
+    for item in items:
+        key = json.dumps(json_ready(item), sort_keys=True) if not isinstance(item, str) else item.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def normalize_field_value(field: str, value: Any) -> Any:
+    if field in METADATA_LIST_FIELDS:
+        return normalize_list_field(field, value)
+    return normalize_value(value)
 
 
 def metadata_field_name(name: str) -> str:
@@ -581,7 +680,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
     def collect(source: dict[str, Any], *, release: bool = False) -> None:
         for raw_key, raw_value in source.items():
             key = metadata_field_name(str(raw_key))
-            value = normalize_value(raw_value)
+            value = normalize_field_value(key, raw_value)
             if not value_present(value):
                 continue
             if key in METADATA_IDENTIFIER_TYPES:
@@ -810,6 +909,84 @@ def merge_metadata_results(
     }
 
 
+def count_update_fields(proposal: dict[str, Any]) -> int:
+    return sum(
+        len(proposal.get(key) or {})
+        for key in ("movieUpdates", "metadataUpdates", "technicalUpdates", "identifiers")
+    )
+
+
+def summarize_metadata_execution(
+    *,
+    plugins: list[dict[str, Any]],
+    executions: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    proposal: dict[str, Any],
+) -> list[dict[str, Any]]:
+    provenance = proposal.get("provenance") or []
+    skipped = proposal.get("skipped") or []
+    summary: list[dict[str, Any]] = []
+
+    for plugin in plugins:
+        plugin_id = plugin["id"]
+        plugin_executions = [item for item in executions if item.get("pluginId") == plugin_id]
+        plugin_results = [item for item in results if item.get("pluginId") == plugin_id]
+        accepted = [item for item in provenance if item.get("pluginId") == plugin_id]
+        rejected = [item for item in skipped if item.get("pluginId") == plugin_id]
+        format_rejected = [item for item in rejected if "format mismatch" in str(item.get("reason") or "")]
+
+        if not plugin_executions:
+            state = "skipped"
+            reason = "no compatible entrypoint for query"
+        elif any(item.get("state") == "needs_configuration" for item in plugin_executions):
+            state = "needs_configuration"
+            reason = "plugin settings or secrets are incomplete"
+        elif any(item.get("status") == "error" for item in plugin_executions):
+            state = "error"
+            reason = "plugin execution failed"
+        elif accepted:
+            state = "applied"
+            reason = "provider values passed merge policy"
+        elif format_rejected:
+            state = "blocked_by_format_policy"
+            reason = "provider result did not match the physical release format"
+        elif any(str(item.get("resultStatus") or "") in {"miss", "not_found", "no_match"} for item in plugin_executions):
+            state = "no_match"
+            reason = "provider returned no usable match"
+        elif plugin_results:
+            result_statuses = {str(item.get("status") or "ok") for item in plugin_results}
+            if result_statuses.intersection({"miss", "not_found", "no_match"}):
+                state = "no_match"
+                reason = "provider returned no usable match"
+            elif rejected:
+                state = "retained_existing"
+                reason = "local values were retained by merge policy"
+            else:
+                state = "hit"
+                reason = "provider returned data"
+        else:
+            state = "no_match"
+            reason = "provider returned no normalized metadata"
+
+        summary.append(
+            {
+                "pluginId": plugin_id,
+                "name": plugin.get("name") or plugin_id,
+                "orderIndex": plugin.get("order_index"),
+                "state": state,
+                "reason": reason,
+                "entrypoints": [item.get("entrypoint") for item in plugin_executions],
+                "executed": bool(plugin_executions),
+                "resultCount": len(plugin_results),
+                "acceptedFields": len(accepted),
+                "skippedFields": len(rejected),
+                "formatBlockedFields": len(format_rejected),
+                "elapsedMs": sum(int(item.get("elapsedMs") or 0) for item in plugin_executions),
+            }
+        )
+    return summary
+
+
 def run_metadata_source_pipeline(
     conn,
     *,
@@ -836,20 +1013,26 @@ def run_metadata_source_pipeline(
                         "entrypoint": entrypoint,
                         "status": "skipped",
                         "state": "needs_configuration",
+                        "configured": False,
+                        "resultStatus": None,
+                        "candidateCount": 0,
                     }
                 )
                 continue
             execution = run_plugin_entrypoint(plugin["id"], entrypoint, planned["payload"], context)
-            executions.append(
-                {
-                    "pluginId": plugin["id"],
-                    "entrypoint": entrypoint,
-                    "status": execution.get("status"),
-                    "state": execution.get("state"),
-                    "elapsedMs": execution.get("elapsedMs"),
-                    "error": execution.get("error"),
-                }
-            )
+            execution_item = {
+                "pluginId": plugin["id"],
+                "entrypoint": entrypoint,
+                "status": execution.get("status"),
+                "state": execution.get("state"),
+                "elapsedMs": execution.get("elapsedMs"),
+                "error": execution.get("error"),
+                "configured": True,
+                "resultStatus": None,
+                "candidateCount": 0,
+                "normalizedSourceFormat": "",
+            }
+            executions.append(execution_item)
             if execution.get("status") != "ok":
                 continue
             normalized = canonicalize_plugin_result(
@@ -857,6 +1040,9 @@ def run_metadata_source_pipeline(
                 entrypoint,
                 execution.get("result") or {},
             )
+            execution_item["resultStatus"] = normalized.get("status")
+            execution_item["candidateCount"] = len(normalized.get("candidates") or [])
+            execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
             if normalized.get("status") in {"miss", "not_found", "needs_configuration"}:
                 continue
             normalized_results.append(normalized)
@@ -868,12 +1054,31 @@ def run_metadata_source_pipeline(
         overwrite_enabled=overwrite_enabled,
         target_format=target_format,
     )
+    source_summary = summarize_metadata_execution(
+        plugins=plugins,
+        executions=executions,
+        results=normalized_results,
+        proposal=merge,
+    )
     return {
         "query": query,
         "settings": {"preferredProviderOverwrite": overwrite_enabled},
         "sourceOrder": [plugin["id"] for plugin in plugins],
         "executions": executions,
+        "sourceSummary": source_summary,
         "results": normalized_results,
+        "proposalStats": {
+            "acceptedFields": len(merge.get("provenance") or []),
+            "skippedFields": len(merge.get("skipped") or []),
+            "updateFields": count_update_fields(merge),
+            "formatBlockedFields": len(
+                [
+                    item
+                    for item in (merge.get("skipped") or [])
+                    if "format mismatch" in str(item.get("reason") or "")
+                ]
+            ),
+        },
         "proposal": merge,
     }
 
