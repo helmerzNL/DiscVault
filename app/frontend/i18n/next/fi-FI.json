@@ -426,5 +426,8 @@
   "personDetail.noCrew": "Tassa kokoelmassa ei ole viela crew-creditteja.",
   "personDetail.noDigitalCredits": "Digitaalisia kokoelmalinkkeja ei ole viela.",
   "personDetail.noFilmography": "Ulkoista filmografiaa ei ole viela tuotu.",
-  "personDetail.groupUnknown": "Muu"
+  "personDetail.groupUnknown": "Muu",
+  "personDetail.refreshFilmography": "Paivita filmografia",
+  "personDetail.refreshingFilmography": "Paivitetaan filmografiaa...",
+  "personDetail.filmographyRefreshed": "Filmografia paivitetty."
 }

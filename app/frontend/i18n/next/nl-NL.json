@@ -520,5 +520,8 @@
   "personDetail.noCrew": "Nog geen crew-credits in deze collectie.",
   "personDetail.noDigitalCredits": "Nog geen digitale collectielinks.",
   "personDetail.noFilmography": "Nog geen externe filmografie geimporteerd.",
-  "personDetail.groupUnknown": "Overig"
+  "personDetail.groupUnknown": "Overig",
+  "personDetail.refreshFilmography": "Ververs filmografie",
+  "personDetail.refreshingFilmography": "Filmografie wordt ververst...",
+  "personDetail.filmographyRefreshed": "Filmografie ververst."
 }

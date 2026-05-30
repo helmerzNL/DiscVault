@@ -426,5 +426,8 @@
   "personDetail.noCrew": "Nessun credito crew in questa collezione.",
   "personDetail.noDigitalCredits": "Nessun link di collezione digitale.",
   "personDetail.noFilmography": "Nessuna filmografia esterna importata.",
-  "personDetail.groupUnknown": "Altro"
+  "personDetail.groupUnknown": "Altro",
+  "personDetail.refreshFilmography": "Aggiorna filmografia",
+  "personDetail.refreshingFilmography": "Aggiornamento filmografia...",
+  "personDetail.filmographyRefreshed": "Filmografia aggiornata."
 }

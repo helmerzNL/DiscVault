@@ -5664,6 +5664,7 @@ def ui_preview_html(
             <div class="detail-card-head">
               <h3 data-next-i18n="personDetail.appearances">Appearances</h3>
               <div class="person-credit-controls">
+                <button type="button" class="secondary-button hidden" id="personFilmographyRefreshButton" data-next-i18n="personDetail.refreshFilmography">Refresh filmography</button>
                 <div class="detail-submenu" role="tablist" aria-label="Appearances" data-next-i18n-aria="personDetail.appearances">
                   <button type="button" class="active" data-detail-tab="personCreditScope" data-detail-panel="personScopeCollection" data-next-i18n="personDetail.collection">Collection</button>
                   <button type="button" data-detail-tab="personCreditScope" data-detail-panel="personScopeDigital" id="personDigitalScopeTab" data-next-i18n="personDetail.digitalCollection">Digital</button>
@@ -6770,6 +6771,12 @@ def ui_preview_html(
         </section>
       `;
     }
+    function personHasTmdbIdentifier(detail) {
+      if (detail?.tmdbId) return true;
+      const metadata = detail?.person?.metadata || {};
+      if (metadata.tmdb_id || metadata.tmdbId) return true;
+      return (detail?.identifiers || []).some((item) => String(item.provider_id || "").toLowerCase() === "tmdb" && item.identifier);
+    }
     function activateDetailTab(group, panelId) {
       if (!group || !panelId) return;
       document.querySelectorAll("[data-detail-tab]").forEach((button) => {
@@ -7247,6 +7254,7 @@ def ui_preview_html(
       const filmography = detail.filmography || [];
       const counts = detail.counts || {};
       const extendedPeople = !!preferences.show_extended_people_pages;
+      const canRefreshFilmography = extendedPeople && personHasTmdbIdentifier(detail);
       const image = usableImage(person.profile_url || person.profileUrl || "");
       const avatarNode = document.getElementById("personDetailAvatar");
       if (avatarNode) {
@@ -7276,6 +7284,7 @@ def ui_preview_html(
       document.getElementById("personDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noIdentifiers", "No identifiers yet."))}</div>`;
       document.getElementById("personDigitalScopeTab")?.classList.toggle("hidden", !extendedPeople);
       document.getElementById("personFilmographyScopeTab")?.classList.toggle("hidden", !extendedPeople);
+      document.getElementById("personFilmographyRefreshButton")?.classList.toggle("hidden", !canRefreshFilmography);
       activateDetailTab("personCreditScope", "personScopeCollection");
       activateDetailTab("personCollectionCredits", "personCreditsActing");
       document.getElementById("personDetailActing").innerHTML = acting.map(personCreditCardHtml).join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noActing", "No acting credits in this collection yet."))}</div>`;
@@ -7297,7 +7306,25 @@ def ui_preview_html(
       document.getElementById("personDetailCrew").innerHTML = "";
       document.getElementById("personDetailDigital").innerHTML = "";
       document.getElementById("personDetailFilmography").innerHTML = "";
+      document.getElementById("personFilmographyRefreshButton")?.classList.add("hidden");
       setPersonDetailMessage("");
+    }
+    async function refreshActivePersonFilmography(dryRun = false) {
+      if (!activePersonId) return;
+      setPersonDetailMessage(tNext("personDetail.refreshingFilmography", "Refreshing filmography..."), "info");
+      try {
+        const payload = await authApiJson(`/api/next/people/${encodeURIComponent(activePersonId)}/filmography/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({dryRun})
+        });
+        const detail = payload.filmography?.detail || payload.detail || activePersonPayload || {};
+        renderPersonDetail(detail);
+        setPersonDetailMessage(tNext("personDetail.filmographyRefreshed", "Filmography refreshed."), "good");
+        activateDetailTab("personCreditScope", "personScopeFilmography");
+      } catch (error) {
+        setPersonDetailMessage(error.message || String(error), "bad");
+      }
     }
     async function openAppPersonDetail(personId, pushUrl = true, returnRoute = null) {
       if (!personId) return;
@@ -8573,6 +8600,7 @@ def ui_preview_html(
         event.preventDefault();
         openAppMovieDetail(movieLink.dataset.openMovie);
       });
+      document.getElementById("personFilmographyRefreshButton")?.addEventListener("click", () => refreshActivePersonFilmography(false));
       document.getElementById("containerDetailPage")?.addEventListener("click", (event) => {
         const movieLink = event.target.closest("[data-open-movie]");
         const containerLink = event.target.closest("[data-open-container]");
@@ -15216,6 +15244,16 @@ def person_identifier_entities(conn, person_id: UUID) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+def person_tmdb_identifier(person: dict[str, Any], identifiers: list[dict[str, Any]]) -> str:
+    for item in identifiers:
+        if str(item.get("provider_id") or "").lower() == "tmdb":
+            value = clean_text(item.get("identifier"))
+            if value:
+                return value
+    metadata = person.get("metadata") if isinstance(person.get("metadata"), dict) else {}
+    return clean_text(metadata.get("tmdb_id") or metadata.get("tmdbId") or "") or ""
+
+
 def person_localization_entities(conn, person_id: UUID) -> list[dict[str, Any]]:
     if not table_exists(conn, "person_localizations"):
         return []
@@ -15611,6 +15649,7 @@ def person_detail_entity(conn, person_id: UUID) -> dict[str, Any] | None:
         return None
     localizations = person_localization_entities(conn, person_id)
     person["biography"] = person_biography_value(localizations, person.get("metadata"))
+    identifiers = person_identifier_entities(conn, person_id)
     collection_credits = person_credit_entities(conn, person_id)
     acting_credits = [credit for credit in collection_credits if person_credit_type_is_acting(credit)]
     crew_credits = [credit for credit in collection_credits if not person_credit_type_is_acting(credit)]
@@ -15618,7 +15657,8 @@ def person_detail_entity(conn, person_id: UUID) -> dict[str, Any] | None:
     filmography = person_filmography_entities(conn, person.get("metadata"))
     return {
         "person": person,
-        "identifiers": person_identifier_entities(conn, person_id),
+        "identifiers": identifiers,
+        "tmdbId": person_tmdb_identifier(person, identifiers),
         "localizations": localizations,
         "credits": collection_credits,
         "collectionCredits": collection_credits,
@@ -15634,6 +15674,91 @@ def person_detail_entity(conn, person_id: UUID) -> dict[str, Any] | None:
             "digital": len(digital_credits),
             "filmography": len(filmography),
         },
+    }
+
+
+def person_filmography_plugin(conn) -> dict[str, Any] | None:
+    if not table_exists(conn, "plugins"):
+        return None
+    sync_metadata_plugin_registry(conn)
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    for plugin in registry.get("plugins") or []:
+        runtime = plugin.get("runtime") or {}
+        entrypoints = runtime.get("entrypoints") or []
+        if plugin.get("id") == "tmdb" and "person_filmography" in entrypoints:
+            return plugin
+    return None
+
+
+def refresh_person_filmography(
+    conn,
+    person_id: UUID,
+    *,
+    dry_run: bool = False,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    detail = person_detail_entity(conn, person_id)
+    if not detail:
+        raise NextApiError("Person not found", 404)
+    tmdb_id = detail.get("tmdbId") or ""
+    if not tmdb_id:
+        raise NextApiError("Person has no TMDb identifier", 409)
+    plugin = person_filmography_plugin(conn)
+    if not plugin:
+        raise NextApiError("No enabled filmography plugin is available", 503)
+    if not plugin.get("enabled"):
+        raise NextApiError("TMDb plugin must be enabled before refreshing filmography", 409)
+    config = plugin_config_from_db(conn, str(plugin["id"]))
+    if plugin_requires_config_for_entrypoint(plugin, config, "person_filmography"):
+        raise NextApiError("TMDb plugin configuration is incomplete", 409)
+
+    context = plugin_execution_context(conn, plugin, config, actor)
+    execution = run_plugin_entrypoint(str(plugin["id"]), "person_filmography", {"tmdbId": tmdb_id}, context)
+    result = execution.get("result") or {}
+    if execution.get("status") != "ok":
+        raise NextApiError(execution.get("error") or "Filmography plugin execution failed", 422)
+
+    update_payload = {
+        "filmography": result.get("combinedCredits") or {},
+        "combined_credits": result.get("combinedCredits") or {},
+        "filmography_source": result.get("provider") or plugin.get("id"),
+        "filmography_source_ref": result.get("sourceRef") or "",
+        "filmography_fetched_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+    if not dry_run:
+        metadata = detail.get("person", {}).get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+        metadata.update(update_payload)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE people
+                SET metadata=%s, updated_at=now()
+                WHERE id=%s
+                """,
+                (Jsonb(json_ready(metadata)), person_id),
+            )
+        detail = person_detail_entity(conn, person_id) or detail
+    else:
+        detail["filmography"] = person_filmography_entries_from_metadata(update_payload)
+        detail["counts"] = dict(detail.get("counts") or {})
+        detail["counts"]["filmography"] = len(detail["filmography"])
+
+    return {
+        "dryRun": dry_run,
+        "plugin": {
+            "id": plugin.get("id"),
+            "name": plugin.get("name"),
+        },
+        "execution": {
+            "status": execution.get("status"),
+            "state": execution.get("state"),
+            "elapsedMs": execution.get("elapsedMs"),
+            "entrypoint": execution.get("entrypoint"),
+        },
+        "result": result,
+        "detail": detail,
     }
 
 
@@ -18435,6 +18560,21 @@ def register_routes(flask_app: Flask) -> None:
         if not detail:
             raise NextApiError("Person not found", 404)
         return response({"status": "ok", "detail": detail})
+
+    @flask_app.post("/api/next/people/<person_id>/filmography/refresh")
+    def refresh_person_filmography_route(person_id: str):
+        person_uuid = parse_uuid(person_id, "personId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Filmography refresh body must be an object", 400)
+        dry_run = bool(body.get("dryRun", body.get("dry_run", False)))
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            with conn.transaction():
+                result = refresh_person_filmography(conn, person_uuid, dry_run=dry_run, actor=actor)
+        return response({"status": "ok", "filmography": result})
 
     @flask_app.post("/api/next/movies/<movie_id>/media/primary")
     def movie_media_primary(movie_id: str):

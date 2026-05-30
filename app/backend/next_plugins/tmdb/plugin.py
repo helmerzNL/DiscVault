@@ -173,6 +173,51 @@ def _details(context, tmdb_id):
     )
 
 
+def _filmography_item(item, credit_type):
+    if (item.get("media_type") or "movie") != "movie":
+        return None
+    title = item.get("title") or item.get("name") or item.get("original_title") or ""
+    if not title:
+        return None
+    return {
+        "id": item.get("id"),
+        "tmdbId": item.get("id"),
+        "media_type": "movie",
+        "title": title,
+        "originalTitle": item.get("original_title") or "",
+        "year": str(item.get("release_date") or item.get("first_air_date") or "")[:4],
+        "releaseDate": item.get("release_date") or item.get("first_air_date") or "",
+        "posterUrl": _image(item.get("poster_path")),
+        "posterPath": item.get("poster_path") or "",
+        "backdropUrl": _image(item.get("backdrop_path")),
+        "character": item.get("character") or "",
+        "job": item.get("job") or "",
+        "creditType": credit_type,
+        "voteAverage": item.get("vote_average"),
+        "source": "TMDb",
+    }
+
+
+def _filmography_items(items, credit_type):
+    normalized = []
+    seen = set()
+    for item in items or []:
+        entry = _filmography_item(item, credit_type)
+        if not entry:
+            continue
+        key = (
+            entry.get("tmdbId"),
+            entry.get("creditType"),
+            entry.get("character"),
+            entry.get("job"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(entry)
+    return normalized
+
+
 def health_check(context=None):
     if not _api_key(context or {}):
         return {"status": "needs_configuration", "message": "Configure a TMDb API key."}
@@ -226,3 +271,28 @@ def movie_details(payload, context=None):
     if not items:
         return {"status": "miss", "provider": "tmdb"}
     return _normalize_details(_details(context or {}, items[0]["tmdbId"]))
+
+
+def person_filmography(payload, context=None):
+    tmdb_id = str((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id") or "").strip()
+    if not tmdb_id:
+        return {"status": "miss", "provider": "tmdb", "reason": "tmdbId is required"}
+    data = _request(context or {}, f"/person/{tmdb_id}/combined_credits", language=_language(context))
+    cast = _filmography_items(data.get("cast") or [], "actor")
+    crew = _filmography_items(data.get("crew") or [], "crew")
+    return {
+        "status": "hit" if cast or crew else "miss",
+        "provider": "tmdb",
+        "sourceLabel": "TMDb",
+        "sourceRef": f"tmdb:person:{tmdb_id}",
+        "tmdbId": tmdb_id,
+        "combinedCredits": {
+            "cast": cast,
+            "crew": crew,
+        },
+        "counts": {
+            "cast": len(cast),
+            "crew": len(crew),
+            "total": len(cast) + len(crew),
+        },
+    }

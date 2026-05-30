@@ -8,6 +8,7 @@
     "lookup_external_id",
     "movie_details",
     "people",
+    "person_filmography",
     "images",
     "videos"
   ],
