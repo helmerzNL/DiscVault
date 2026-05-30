@@ -4331,6 +4331,9 @@ def ui_preview_html(
       align-items: center;
       gap: 10px;
     }
+    .detail-mini-card.sortable {
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
+    }
     .detail-mini-card-main {
       display: grid;
       gap: 5px;
@@ -4352,6 +4355,18 @@ def ui_preview_html(
     .detail-remove-button:disabled {
       cursor: not-allowed;
       opacity: .52;
+    }
+    .detail-order-button {
+      min-height: 32px;
+      min-width: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      cursor: pointer;
+      padding: 0 9px;
+      font-size: .82rem;
+      font-weight: 750;
     }
     .detail-mini-card strong {
       overflow-wrap: anywhere;
@@ -4560,7 +4575,9 @@ def ui_preview_html(
       font-size: .84rem;
       font-weight: 650;
     }
-    .profile-form input {
+    .profile-form input,
+    .profile-form select,
+    .profile-form textarea {
       min-height: 40px;
       width: 100%;
       border: 1px solid var(--line);
@@ -4572,7 +4589,15 @@ def ui_preview_html(
       font-size: .95rem;
       font-weight: 620;
     }
-    .profile-form input:focus {
+    .profile-form textarea {
+      min-height: 92px;
+      padding: 10px 12px;
+      resize: vertical;
+      line-height: 1.4;
+    }
+    .profile-form input:focus,
+    .profile-form select:focus,
+    .profile-form textarea:focus {
       outline: 2px solid color-mix(in srgb, var(--accent) 52%, transparent);
       outline-offset: 2px;
       border-color: color-mix(in srgb, var(--accent) 62%, var(--line));
@@ -4587,6 +4612,11 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 10px;
       align-items: center;
+    }
+    .container-add-panels {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
     }
     .profile-passkey-list {
       display: grid;
@@ -4959,6 +4989,16 @@ def ui_preview_html(
       .profile-passkey-actions .secondary-button {
         width: 100%;
       }
+      .container-add-panels {
+        grid-template-columns: 1fr;
+      }
+      .detail-mini-card.sortable {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+      }
+      .detail-mini-card.sortable .detail-remove-button {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
       .detail-field {
         grid-template-columns: 1fr;
         gap: 3px;
@@ -5166,8 +5206,26 @@ def ui_preview_html(
           <div class="preview-panel">
             <div class="panel-head">
               <h2 data-next-i18n="uiPreview.collections">Collections</h2>
-              <span id="containerPanelCount">""" + h(len(containers)) + """</span>
+              <button type="button" class="secondary-button" id="createContainerButton" data-next-i18n="containerDetail.create">Create</button>
             </div>
+            <form class="profile-form hidden" id="createContainerForm">
+              <label for="createContainerType">
+                <span data-next-i18n="containerDetail.fieldType">Type</span>
+                <select id="createContainerType">
+                  <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
+                  <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
+                  <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
+                </select>
+              </label>
+              <label for="createContainerTitle">
+                <span data-next-i18n="containerDetail.fieldTitle">Title</span>
+                <input id="createContainerTitle" maxlength="240" autocomplete="off">
+              </label>
+              <div class="profile-form-actions">
+                <button type="submit" class="secondary-button" data-next-i18n="containerDetail.createButton">Create container</button>
+                <span class="login-message" id="createContainerMessage"></span>
+              </div>
+            </form>
             <div class="preview-collections">""" + container_cards + """</div>
           </div>
           <div class="preview-panel">
@@ -5259,6 +5317,75 @@ def ui_preview_html(
           </div>
         </section>
         <section class="movie-detail-body">
+          <div class="detail-card full">
+            <h3 data-next-i18n="containerDetail.editDetails">Edit details</h3>
+            <form class="profile-form" id="containerEditForm">
+              <label for="containerEditTitle">
+                <span data-next-i18n="containerDetail.fieldTitle">Title</span>
+                <input id="containerEditTitle" name="title" maxlength="240" autocomplete="off">
+              </label>
+              <label for="containerEditType">
+                <span data-next-i18n="containerDetail.fieldType">Type</span>
+                <select id="containerEditType" name="container_type">
+                  <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
+                  <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
+                  <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
+                </select>
+              </label>
+              <label for="containerEditYear">
+                <span data-next-i18n="containerDetail.fieldYear">Year</span>
+                <input id="containerEditYear" name="year" maxlength="40" autocomplete="off">
+              </label>
+              <label for="containerEditBarcode">
+                <span data-next-i18n="containerDetail.fieldBarcode">Barcode</span>
+                <input id="containerEditBarcode" name="barcode" maxlength="160" autocomplete="off">
+              </label>
+              <label for="containerEditBadge">
+                <span data-next-i18n="containerDetail.fieldBadge">Badge</span>
+                <input id="containerEditBadge" name="badge_label" maxlength="80" autocomplete="off">
+              </label>
+              <label for="containerEditDescription">
+                <span data-next-i18n="containerDetail.fieldDescription">Description</span>
+                <textarea id="containerEditDescription" name="description" maxlength="2000"></textarea>
+              </label>
+              <div class="profile-form-actions">
+                <button type="submit" class="secondary-button" data-next-i18n="containerDetail.saveDetails">Save details</button>
+                <span class="login-message" id="containerEditMessage"></span>
+              </div>
+            </form>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="containerDetail.addContent">Add content</h3>
+            <div class="container-add-panels">
+              <form class="profile-form" id="containerAddMovieForm">
+                <label for="containerAddMovieSelect">
+                  <span data-next-i18n="containerDetail.addMovie">Add movie</span>
+                  <select id="containerAddMovieSelect"></select>
+                </label>
+                <div class="profile-form-actions">
+                  <button type="submit" class="secondary-button" data-next-i18n="containerDetail.addMovieButton">Add movie</button>
+                </div>
+              </form>
+              <form class="profile-form" id="containerAddItemForm">
+                <label for="containerAddItemType">
+                  <span data-next-i18n="containerDetail.addCollectionItem">Add collection item</span>
+                  <select id="containerAddItemType">
+                    <option value="movie" data-next-i18n="containerDetail.type.movie">Movie</option>
+                    <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
+                    <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
+                    <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
+                  </select>
+                </label>
+                <label for="containerAddItemSelect">
+                  <span data-next-i18n="containerDetail.item">Item</span>
+                  <select id="containerAddItemSelect"></select>
+                </label>
+                <div class="profile-form-actions">
+                  <button type="submit" class="secondary-button" data-next-i18n="containerDetail.addItemButton">Add item</button>
+                </div>
+              </form>
+            </div>
+          </div>
           <div class="detail-card full">
             <h3 data-next-i18n="containerDetail.memberMovies">Movies</h3>
             <div class="detail-grid" id="containerDetailMovies"></div>
@@ -6290,19 +6417,28 @@ def ui_preview_html(
       const metadata = container.metadata || {};
       return mediaAssetImage(detail.mediaAssets, kind) || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
     }
-    function removableDetailCard(title, subtitle, href, action, actionValue, itemType) {
+    function removableDetailCard(title, subtitle, href, action, actionValue, itemType, options = {}) {
       const attrs = action === "movie"
         ? `data-container-remove-movie="${escapeHtml(actionValue || "")}"`
         : `data-container-remove-item="${escapeHtml(actionValue || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
       const linkAttrs = href.includes("/movies/")
         ? `data-open-movie="${escapeHtml(String(actionValue || ""))}"`
         : `data-open-container="${escapeHtml(String(actionValue || ""))}"`;
+      const orderAttrs = options.orderKind === "movie"
+        ? `data-container-move-movie="${escapeHtml(actionValue || "")}"`
+        : `data-container-move-item="${escapeHtml(actionValue || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
+      const orderControls = options.orderKind ? `
+        <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${options.canMoveUp ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
+        <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${options.canMoveDown ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+      ` : "";
+      const className = options.orderKind ? "detail-mini-card removable sortable" : "detail-mini-card removable";
       return `
-        <div class="detail-mini-card removable">
+        <div class="${className}">
           <a class="detail-mini-card-main" href="${escapeHtml(href)}" ${linkAttrs}>
             <strong>${escapeHtml(title || tNext("common.untitled", "Untitled"))}</strong>
             <span>${escapeHtml(subtitle || "")}</span>
           </a>
+          ${orderControls}
           <button type="button" class="detail-remove-button" ${attrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </div>
       `;
@@ -6520,6 +6656,92 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `detail-message ${tone || ""}`.trim();
     }
+    function formTextValue(id) {
+      return (document.getElementById(id)?.value || "").trim();
+    }
+    function sortedByTitle(items) {
+      return [...(items || [])].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), localeState.locale || undefined, {sensitivity: "base"}));
+    }
+    function movieSelectOptions(availableMovies, selectedId = "") {
+      return sortedByTitle(availableMovies).map((movie) => {
+        const label = [movie.title || tNext("common.untitled", "Untitled"), movie.year, movie.format, movie.barcode].filter(Boolean).join(" / ");
+        return `<option value="${escapeHtml(movie.id)}" ${String(movie.id) === String(selectedId) ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+    }
+    function containerSelectOptions(availableContainers, selectedId = "") {
+      return sortedByTitle(availableContainers).map((container) => {
+        const label = [container.title || tNext("common.untitled", "Untitled"), containerTypeLabel(container.container_type), container.year].filter(Boolean).join(" / ");
+        return `<option value="${escapeHtml(container.id)}" ${String(container.id) === String(selectedId) ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+    }
+    function activeContainer() {
+      return (activeContainerPayload && activeContainerPayload.container) || {};
+    }
+    function collectionItemKeys(detail = activeContainerPayload || {}) {
+      return (detail.collectionItems || []).map((item) => ({
+        itemType: item.item_type || item.container_type || item.entity_type || "movie",
+        itemId: String(item.entity_id || item.item_id || item.id || "")
+      })).filter((item) => item.itemId);
+    }
+    function fillContainerEditForm(detail) {
+      const container = detail.container || {};
+      const typeInput = document.getElementById("containerEditType");
+      const fields = {
+        containerEditTitle: container.title || "",
+        containerEditYear: container.year || "",
+        containerEditBarcode: container.barcode || "",
+        containerEditBadge: container.badge_label || "",
+        containerEditDescription: container.description || ""
+      };
+      Object.entries(fields).forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input && document.activeElement !== input) input.value = value;
+      });
+      if (typeInput) {
+        typeInput.value = container.container_type || "collection";
+        typeInput.disabled = true;
+      }
+    }
+    function renderContainerAddForms(detail = activeContainerPayload || {}) {
+      const container = detail.container || {};
+      const type = container.container_type || "";
+      const movieForm = document.getElementById("containerAddMovieForm");
+      const itemForm = document.getElementById("containerAddItemForm");
+      const movieSelect = document.getElementById("containerAddMovieSelect");
+      const itemTypeSelect = document.getElementById("containerAddItemType");
+      const itemSelect = document.getElementById("containerAddItemSelect");
+      const linkedMovieIds = new Set((detail.memberMovies || []).map((movie) => String(movie.id)));
+      if (movieForm) movieForm.classList.toggle("hidden", !["box_set", "vault"].includes(type));
+      if (movieSelect) {
+        const availableMovies = movies.filter((movie) => !linkedMovieIds.has(String(movie.id)));
+        movieSelect.innerHTML = movieSelectOptions(availableMovies);
+        movieSelect.disabled = !availableMovies.length;
+      }
+      if (itemForm) itemForm.classList.toggle("hidden", type !== "collection");
+      if (!itemTypeSelect || !itemSelect || type !== "collection") return;
+      const selectedType = itemTypeSelect.value || "movie";
+      const existingKeys = new Set(collectionItemKeys(detail).map((item) => `${item.itemType}:${item.itemId}`));
+      if (selectedType === "movie") {
+        const availableMovies = movies.filter((movie) => !existingKeys.has(`movie:${movie.id}`));
+        itemSelect.innerHTML = movieSelectOptions(availableMovies);
+        itemSelect.disabled = !availableMovies.length;
+      } else {
+        const availableContainers = containers.filter((item) => (
+          String(item.id) !== String(container.id)
+          && item.container_type === selectedType
+          && !existingKeys.has(`${selectedType}:${item.id}`)
+        ));
+        itemSelect.innerHTML = containerSelectOptions(availableContainers);
+        itemSelect.disabled = !availableContainers.length;
+      }
+    }
+    async function refreshActiveContainerDetail(message, tone = "good") {
+      if (!activeContainerId) return;
+      const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`);
+      renderContainerDetail(payload.detail || {});
+      await loadAppSnapshot();
+      if (message) setContainerDetailMessage(message, tone);
+    }
     function renderContainerDetail(detail) {
       activeContainerPayload = detail;
       const container = detail.container || {};
@@ -6548,16 +6770,21 @@ def ui_preview_html(
         (detail.memberMovies || []).length ? `${(detail.memberMovies || []).length} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
         (detail.collectionItems || []).length ? `${(detail.collectionItems || []).length} ${tNext("containerDetail.items", "items")}` : ""
       ]);
-      const movieCards = (detail.memberMovies || []).map((movie) => removableDetailCard(
+      fillContainerEditForm(detail);
+      renderContainerAddForms(detail);
+      const memberMovies = detail.memberMovies || [];
+      const movieCards = memberMovies.map((movie, index) => removableDetailCard(
         movie.title,
         [movie.year, movie.format, movie.barcode].filter(Boolean).join(" / "),
         `/movies/${encodeURIComponent(movie.id)}`,
         "movie",
         movie.id,
-        "movie"
+        "movie",
+        {orderKind: "movie", canMoveUp: index > 0, canMoveDown: index < memberMovies.length - 1}
       ));
       document.getElementById("containerDetailMovies").innerHTML = movieCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noMovies", "No movies linked yet."))}</div>`;
-      const itemCards = (detail.collectionItems || []).map((item) => {
+      const collectionItems = detail.collectionItems || [];
+      const itemCards = collectionItems.map((item, index) => {
         const itemId = item.entity_id || item.item_id || item.id || "";
         const itemType = item.item_type || item.container_type || item.entity_type || "movie";
         const href = itemType === "movie" ? `/movies/${encodeURIComponent(itemId)}` : `/containers/${encodeURIComponent(itemId)}`;
@@ -6567,7 +6794,7 @@ def ui_preview_html(
           item.format,
           item.barcode
         ].filter(Boolean).join(" / ");
-        return removableDetailCard(item.title, subtitle, href, "item", itemId, itemType);
+        return removableDetailCard(item.title, subtitle, href, "item", itemId, itemType, {orderKind: "item", canMoveUp: index > 0, canMoveDown: index < collectionItems.length - 1});
       });
       document.getElementById("containerDetailItems").innerHTML = itemCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noItems", "No collection items linked yet."))}</div>`;
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
@@ -6620,6 +6847,154 @@ def ui_preview_html(
       activeContainerPayload = null;
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
+      }
+    }
+    function toggleCreateContainerForm() {
+      const form = document.getElementById("createContainerForm");
+      if (!form) return;
+      form.classList.toggle("hidden");
+      if (!form.classList.contains("hidden")) {
+        document.getElementById("createContainerTitle")?.focus();
+      }
+    }
+    async function createContainer(event) {
+      event.preventDefault();
+      const message = document.getElementById("createContainerMessage");
+      if (message) message.textContent = tNext("containerDetail.creating", "Creating container...");
+      const body = {
+        containerType: document.getElementById("createContainerType")?.value || "collection",
+        title: formTextValue("createContainerTitle")
+      };
+      try {
+        const payload = await authApiJson("/api/next/containers", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        document.getElementById("createContainerTitle").value = "";
+        document.getElementById("createContainerForm")?.classList.add("hidden");
+        await loadAppSnapshot();
+        if (message) message.textContent = "";
+        const newContainerId = payload.detail?.container?.id || payload.detail?.id;
+        if (newContainerId) openAppContainerDetail(newContainerId);
+      } catch (error) {
+        if (message) message.textContent = error.message || String(error);
+      }
+    }
+    async function saveContainerDetails(event) {
+      event.preventDefault();
+      if (!activeContainerId) return;
+      setContainerDetailMessage(tNext("containerDetail.saving", "Saving container..."));
+      const body = {
+        title: formTextValue("containerEditTitle"),
+        year: formTextValue("containerEditYear"),
+        barcode: formTextValue("containerEditBarcode"),
+        badgeLabel: formTextValue("containerEditBadge"),
+        description: formTextValue("containerEditDescription")
+      };
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        renderContainerDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setContainerDetailMessage(tNext("containerDetail.saved", "Container saved."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function addContainerMovie(event) {
+      event.preventDefault();
+      if (!activeContainerId) return;
+      const container = activeContainer();
+      const movieId = document.getElementById("containerAddMovieSelect")?.value || "";
+      if (!movieId) {
+        setContainerDetailMessage(tNext("containerDetail.chooseMovie", "Choose a movie first."), "bad");
+        return;
+      }
+      setContainerDetailMessage(tNext("containerDetail.adding", "Adding content..."));
+      try {
+        await authApiJson(`/api/next/bulk/containers/${encodeURIComponent(activeContainerId)}/movies`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds: [movieId], targetType: container.container_type || ""})
+        });
+        await refreshActiveContainerDetail(tNext("containerDetail.added", "Content added."));
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function addCollectionItem(event) {
+      event.preventDefault();
+      if (!activeContainerId) return;
+      const itemType = document.getElementById("containerAddItemType")?.value || "movie";
+      const itemId = document.getElementById("containerAddItemSelect")?.value || "";
+      if (!itemId) {
+        setContainerDetailMessage(tNext("containerDetail.chooseItem", "Choose an item first."), "bad");
+        return;
+      }
+      const body = itemType === "movie"
+        ? {movieIds: [itemId], containerIds: []}
+        : {movieIds: [], containerIds: [itemId]};
+      setContainerDetailMessage(tNext("containerDetail.adding", "Adding content..."));
+      try {
+        await authApiJson(`/api/next/bulk/collections/${encodeURIComponent(activeContainerId)}/items`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        await refreshActiveContainerDetail(tNext("containerDetail.added", "Content added."));
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function movedOrder(list, matcher, direction) {
+      const rows = [...list];
+      const index = rows.findIndex(matcher);
+      if (index < 0) return rows;
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= rows.length) return rows;
+      const current = rows[index];
+      rows[index] = rows[target];
+      rows[target] = current;
+      return rows;
+    }
+    async function moveContainerMovie(movieId, direction) {
+      if (!activeContainerId || !movieId) return;
+      const current = (activeContainerPayload?.memberMovies || []).map((movie) => String(movie.id));
+      const nextOrder = movedOrder(current, (id) => String(id) === String(movieId), direction);
+      setContainerDetailMessage(tNext("containerDetail.reordering", "Updating order..."));
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}/movies/order`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds: nextOrder})
+        });
+        renderContainerDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setContainerDetailMessage(tNext("containerDetail.reordered", "Order updated."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function moveCollectionItem(itemType, itemId, direction) {
+      if (!activeContainerId || !itemType || !itemId) return;
+      const current = collectionItemKeys();
+      const nextOrder = movedOrder(current, (item) => item.itemType === itemType && String(item.itemId) === String(itemId), direction);
+      setContainerDetailMessage(tNext("containerDetail.reordering", "Updating order..."));
+      try {
+        const payload = await authApiJson(`/api/next/collections/${encodeURIComponent(activeContainerId)}/items/order`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({items: nextOrder})
+        });
+        renderContainerDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setContainerDetailMessage(tNext("containerDetail.reordered", "Order updated."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
     async function removeContainerMovie(movieId) {
@@ -7663,13 +8038,31 @@ def ui_preview_html(
         event.preventDefault();
         openAppMovieDetail(decodeURIComponent(match[1]));
       });
+      document.getElementById("createContainerButton")?.addEventListener("click", () => toggleCreateContainerForm());
+      document.getElementById("createContainerForm")?.addEventListener("submit", (event) => createContainer(event));
       document.getElementById("movieDetailBackButton")?.addEventListener("click", () => closeAppMovieDetail());
       document.getElementById("containerDetailBackButton")?.addEventListener("click", () => closeAppContainerDetail());
+      document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
+      document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
+      document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
+      document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
       document.getElementById("containerDetailPage")?.addEventListener("click", (event) => {
         const movieLink = event.target.closest("[data-open-movie]");
         const containerLink = event.target.closest("[data-open-container]");
+        const moveMovie = event.target.closest("[data-container-move-movie]");
+        const moveItem = event.target.closest("[data-container-move-item]");
         const removeMovie = event.target.closest("[data-container-remove-movie]");
         const removeItem = event.target.closest("[data-container-remove-item]");
+        if (moveMovie) {
+          event.preventDefault();
+          moveContainerMovie(moveMovie.dataset.containerMoveMovie, moveMovie.dataset.direction);
+          return;
+        }
+        if (moveItem) {
+          event.preventDefault();
+          moveCollectionItem(moveItem.dataset.itemType, moveItem.dataset.containerMoveItem, moveItem.dataset.direction);
+          return;
+        }
         if (movieLink) {
           event.preventDefault();
           openAppMovieDetail(movieLink.dataset.openMovie);
@@ -12589,6 +12982,46 @@ def container_types_for_ids(conn, container_ids: list[UUID]) -> dict[UUID, str]:
     return found
 
 
+def normalize_container_type(value: Any) -> str:
+    container_type = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if container_type not in {"box_set", "collection", "vault"}:
+        raise NextApiError("containerType must be box_set, collection or vault", 400)
+    return container_type
+
+
+def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None = None) -> dict[str, Any]:
+    existing = existing or {}
+    title = clean_text(body.get("title")) if "title" in body else existing.get("title")
+    if not title:
+        raise NextApiError("Container title is required", 400)
+    if len(title) > 240:
+        raise NextApiError("Container title must be 240 characters or fewer", 400)
+    description = clean_text(body.get("description")) if "description" in body else existing.get("description")
+    if description and len(description) > 2000:
+        raise NextApiError("Container description must be 2000 characters or fewer", 400)
+    year = clean_text(body.get("year")) if "year" in body else existing.get("year")
+    if year and len(year) > 40:
+        raise NextApiError("Container year must be 40 characters or fewer", 400)
+    barcode = clean_text(body.get("barcode")) if "barcode" in body else existing.get("barcode")
+    if barcode and len(barcode) > 160:
+        raise NextApiError("Container barcode must be 160 characters or fewer", 400)
+    if "badgeLabel" in body or "badge_label" in body:
+        badge_label = clean_text(body.get("badgeLabel", body.get("badge_label")))
+    else:
+        badge_label = existing.get("badge_label")
+    if badge_label and len(badge_label) > 80:
+        raise NextApiError("Container badge must be 80 characters or fewer", 400)
+    metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else existing.get("metadata") or {}
+    return {
+        "title": title,
+        "description": description,
+        "year": year,
+        "barcode": barcode,
+        "badge_label": badge_label,
+        "metadata": metadata,
+    }
+
+
 def ensure_sync_state(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -16018,6 +16451,89 @@ def register_routes(flask_app: Flask) -> None:
             }
         )
 
+    @flask_app.post("/api/next/containers")
+    def create_container():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Container request body must be an object", 400)
+        container_type = normalize_container_type(body.get("containerType", body.get("container_type")))
+        payload = container_payload(body)
+        container_uuid = uuid.uuid4()
+        public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"next-container-{container_uuid.hex[:12]}"
+        if len(public_id) > 160:
+            raise NextApiError("publicId must be 160 characters or fewer", 400)
+        with connect() as conn:
+            require_next_permission(conn, "containers.edit")
+            if not table_exists(conn, "containers"):
+                raise NextApiError("Container table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM containers WHERE public_id=%s", (public_id,))
+                    if cur.fetchone():
+                        raise NextApiError("A container with this public id already exists", 409)
+                    cur.execute(
+                        """
+                        INSERT INTO containers (
+                            id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        """,
+                        (
+                            container_uuid,
+                            public_id,
+                            container_type,
+                            payload["title"],
+                            payload["barcode"],
+                            payload["badge_label"],
+                            payload["year"],
+                            payload["description"],
+                            Jsonb(json_ready(payload["metadata"])),
+                        ),
+                    )
+            detail = container_detail_entity(conn, container_uuid)
+        return response({"status": "ok", "detail": detail}, 201)
+
+    @flask_app.patch("/api/next/containers/<container_id>")
+    def update_container(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        if not container_uuid:
+            raise NextApiError("containerId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Container request body must be an object", 400)
+        with connect() as conn:
+            require_next_permission(conn, "containers.edit")
+            existing = container_entity(conn, container_uuid)
+            if not existing:
+                raise NextApiError("Container not found", 404)
+            payload = container_payload(body, existing=existing)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE containers
+                        SET title=%s,
+                            barcode=%s,
+                            badge_label=%s,
+                            year=%s,
+                            description=%s,
+                            metadata=%s,
+                            updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (
+                            payload["title"],
+                            payload["barcode"],
+                            payload["badge_label"],
+                            payload["year"],
+                            payload["description"],
+                            Jsonb(json_ready(payload["metadata"])),
+                            container_uuid,
+                        ),
+                    )
+            detail = container_detail_entity(conn, container_uuid)
+        return response({"status": "ok", "detail": detail})
+
     @flask_app.post("/api/next/bulk/containers/<container_id>/movies")
     def bulk_container_movies(container_id: str):
         container_uuid = parse_uuid(container_id, "containerId")
@@ -16209,6 +16725,44 @@ def register_routes(flask_app: Flask) -> None:
             }
         )
 
+    @flask_app.patch("/api/next/containers/<container_id>/movies/order")
+    def reorder_container_movies(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        if not container_uuid:
+            raise NextApiError("containerId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Container order request body must be an object", 400)
+        movie_ids = parse_uuid_list(body.get("movieIds") or body.get("movie_ids"), "movieIds", maximum=1000)
+        if not movie_ids:
+            raise NextApiError("movieIds must be a non-empty array", 400)
+        with connect() as conn:
+            require_next_permission(conn, "containers.edit")
+            if not table_exists(conn, "container_movies"):
+                raise NextApiError("Container movie links are not available yet", 503)
+            container_type = container_type_for_id(conn, container_uuid)
+            if container_type not in {"box_set", "vault"}:
+                raise NextApiError("Target container must be a box-set or vault", 400)
+            with conn.cursor() as cur:
+                cur.execute("SELECT movie_id FROM container_movies WHERE container_id=%s", (container_uuid,))
+                current = {row["movie_id"] for row in cur.fetchall()}
+            missing = [str(item) for item in movie_ids if item not in current]
+            if missing:
+                raise NextApiError(f"Movie is not linked to this container: {', '.join(missing)}", 400)
+            omitted = [str(item) for item in current if item not in set(movie_ids)]
+            if omitted:
+                raise NextApiError("movieIds must include every linked movie for this container", 400)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    for index, movie_uuid in enumerate(movie_ids, start=1):
+                        cur.execute(
+                            "UPDATE container_movies SET sort_order=%s WHERE container_id=%s AND movie_id=%s",
+                            (index, container_uuid, movie_uuid),
+                        )
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+            detail = container_detail_entity(conn, container_uuid)
+        return response({"status": "ok", "detail": detail})
+
     @flask_app.delete("/api/next/collections/<collection_id>/items/<item_type>/<item_id>")
     def remove_collection_item(collection_id: str, item_type: str, item_id: str):
         collection_uuid = parse_uuid(collection_id, "collectionId")
@@ -16250,6 +16804,71 @@ def register_routes(flask_app: Flask) -> None:
                 "detail": detail,
             }
         )
+
+    @flask_app.patch("/api/next/collections/<collection_id>/items/order")
+    def reorder_collection_items(collection_id: str):
+        collection_uuid = parse_uuid(collection_id, "collectionId")
+        if not collection_uuid:
+            raise NextApiError("collectionId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Collection order request body must be an object", 400)
+        raw_items = body.get("items")
+        if not isinstance(raw_items, list) or not raw_items:
+            raise NextApiError("items must be a non-empty array", 400)
+        if len(raw_items) > 1000:
+            raise NextApiError("At most 1000 items can be reordered", 400)
+        order_items: list[tuple[str, UUID]] = []
+        seen: set[tuple[str, UUID]] = set()
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                raise NextApiError("items entries must be objects", 400)
+            item_type = str(raw.get("itemType") or raw.get("item_type") or "").strip().lower()
+            if item_type not in {"movie", "box_set", "vault", "collection"}:
+                raise NextApiError("itemType must be movie, box_set, vault or collection", 400)
+            item_uuid = parse_uuid(raw.get("itemId") or raw.get("item_id"), "itemId")
+            if not item_uuid:
+                raise NextApiError("itemId is required", 400)
+            key = (item_type, item_uuid)
+            if key not in seen:
+                order_items.append(key)
+                seen.add(key)
+        with connect() as conn:
+            require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
+            if not table_exists(conn, "collection_items"):
+                raise NextApiError("Collection items are not available yet", 503)
+            if container_type_for_id(conn, collection_uuid) != "collection":
+                raise NextApiError("Target container must be a collection", 400)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT item_type, item_id FROM collection_items WHERE collection_id=%s",
+                    (collection_uuid,),
+                )
+                current = {(row["item_type"], row["item_id"]) for row in cur.fetchall()}
+            missing = [f"{item_type}:{item_uuid}" for item_type, item_uuid in order_items if (item_type, item_uuid) not in current]
+            if missing:
+                raise NextApiError(f"Item is not linked to this collection: {', '.join(missing)}", 400)
+            omitted = [
+                f"{item_type}:{item_uuid}"
+                for item_type, item_uuid in current
+                if (item_type, item_uuid) not in set(order_items)
+            ]
+            if omitted:
+                raise NextApiError("items must include every linked item for this collection", 400)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    for index, (item_type, item_uuid) in enumerate(order_items, start=1):
+                        cur.execute(
+                            """
+                            UPDATE collection_items
+                            SET sort_order=%s
+                            WHERE collection_id=%s AND item_type=%s AND item_id=%s
+                            """,
+                            (index, collection_uuid, item_type, item_uuid),
+                        )
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_uuid,))
+            detail = container_detail_entity(conn, collection_uuid)
+        return response({"status": "ok", "detail": detail})
 
     @flask_app.get("/api/next/digital-items")
     def digital_items():
