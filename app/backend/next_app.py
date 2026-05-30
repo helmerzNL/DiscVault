@@ -4415,6 +4415,52 @@ def ui_preview_html(
       gap: 10px;
       align-items: center;
     }
+    .profile-passkey-list {
+      display: grid;
+      gap: 10px;
+    }
+    .profile-passkey {
+      display: grid;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 12px;
+      min-width: 0;
+    }
+    .profile-passkey-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 12px;
+    }
+    .profile-passkey-head strong {
+      overflow-wrap: anywhere;
+    }
+    .profile-passkey-meta {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.4;
+    }
+    .profile-passkey-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .profile-passkey-actions input {
+      min-height: 36px;
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: .9rem;
+      font-weight: 620;
+    }
     .preferences-backdrop {
       position: fixed;
       inset: 0;
@@ -4665,6 +4711,12 @@ def ui_preview_html(
       .profile-meta-row {
         grid-template-columns: 1fr;
         gap: 3px;
+      }
+      .profile-passkey-actions {
+        grid-template-columns: 1fr;
+      }
+      .profile-passkey-actions .secondary-button {
+        width: 100%;
       }
       .detail-field {
         grid-template-columns: 1fr;
@@ -4918,11 +4970,13 @@ def ui_preview_html(
           </div>
           <div class="detail-card profile-card">
             <h3 data-next-i18n="profile.security">Security</h3>
-            <p data-next-i18n="profile.passkeysHelp">Manage passkeys and trusted devices from here later.</p>
+            <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+            <div class="profile-passkey-list" id="profilePasskeyList"></div>
             <div class="profile-action-row">
-              <button type="button" class="secondary-button" disabled data-next-i18n="auth.passkeys">Passkeys</button>
+              <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
               <button type="button" class="secondary-button" disabled data-next-i18n="auth.recovery">Recovery</button>
             </div>
+            <div class="login-message" id="profileSecurityMessage"></div>
           </div>
           <div class="detail-card profile-card">
             <h3 data-next-i18n="profile.profileEditing">Profile editing</h3>
@@ -4984,6 +5038,7 @@ def ui_preview_html(
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
     let currentStartup = {};
+    let profileCredentials = [];
     const selectedMovieIds = new Set();
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -5447,6 +5502,7 @@ def ui_preview_html(
       activeDetailPayload = null;
       setActiveAppRoute("profile");
       renderProfile();
+      loadProfileDetails();
       if (pushUrl && appMode && window.location.pathname !== "/profile") {
         history.pushState({view: "profile"}, "", "/profile");
       }
@@ -5706,7 +5762,7 @@ def ui_preview_html(
         username: user.username || auth.username || "-",
         role: user.role || auth.role || "-",
         userCount: (state.counts && state.counts.users) || auth.userCount || 0,
-        credentialCount: auth.credentialCount || 0
+        credentialCount: profileCredentials.length || auth.credentialCount || 0
       };
     }
     function initialsFromName(name) {
@@ -5731,6 +5787,96 @@ def ui_preview_html(
       if (userCount) userCount.textContent = String(profile.userCount);
       if (credentialCount) credentialCount.textContent = String(profile.credentialCount);
       if (navRole) navRole.textContent = profile.role && profile.role !== "-" ? profile.role : "-";
+      renderProfilePasskeys();
+    }
+    function shortDateTime(value) {
+      const text = String(value || "");
+      if (!text) return "-";
+      return text.replace("T", " ").slice(0, 16);
+    }
+    function setProfileSecurityMessage(message, tone) {
+      const node = document.getElementById("profileSecurityMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function renderProfilePasskeys() {
+      const list = document.getElementById("profilePasskeyList");
+      if (!list) return;
+      if (!profileCredentials.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("profile.noPasskeys", "No passkeys found."))}</div>`;
+        return;
+      }
+      list.innerHTML = profileCredentials.map((credential) => {
+        const id = escapeHtml(credential.id || "");
+        const name = credential.credential_name || credential.name || "Passkey";
+        return `
+          <div class="profile-passkey" data-profile-passkey="${id}">
+            <div class="profile-passkey-head">
+              <strong>${escapeHtml(name)}</strong>
+              <span class="tag blue">${escapeHtml(tNext("auth.passkey", "Passkey"))}</span>
+            </div>
+            <div class="profile-passkey-meta">
+              ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(credential.created_at))}
+              &middot;
+              ${escapeHtml(tNext("profile.lastUsed", "Last used"))}: ${escapeHtml(shortDateTime(credential.last_used_at))}
+            </div>
+            <div class="profile-passkey-actions">
+              <input data-profile-passkey-name="${id}" value="${escapeHtml(name)}" maxlength="80" aria-label="${escapeHtml(tNext("profile.passkeyName", "Passkey name"))}">
+              <button type="button" class="secondary-button" data-profile-passkey-save="${id}">${escapeHtml(tNext("profile.savePasskey", "Save"))}</button>
+              <button type="button" class="secondary-button" data-profile-passkey-delete="${id}">${escapeHtml(tNext("profile.deletePasskey", "Delete"))}</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+    async function loadProfileDetails() {
+      if (!appMode) return;
+      try {
+        const payload = await authApiJson("/api/next/profile");
+        state.user = Object.assign({}, state.user || {}, payload.user || {});
+        profileCredentials = payload.credentials || [];
+        renderProfile();
+      } catch (error) {
+        setProfileSecurityMessage(error.message || String(error), "bad");
+      }
+    }
+    async function saveProfilePasskey(credentialId) {
+      const input = Array.from(document.querySelectorAll("[data-profile-passkey-name]")).find((node) => String(node.dataset.profilePasskeyName) === String(credentialId));
+      const name = String(input?.value || "").trim();
+      if (!name) {
+        setProfileSecurityMessage(tNext("profile.passkeyNameRequired", "Passkey name is required."), "bad");
+        return;
+      }
+      setProfileSecurityMessage(tNext("profile.savingPasskey", "Saving passkey..."));
+      try {
+        const payload = await authApiJson(`/api/next/profile/passkeys/${encodeURIComponent(credentialId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({credential_name: name})
+        });
+        profileCredentials = payload.credentials || profileCredentials.map((credential) => (
+          String(credential.id) === String(credentialId) ? Object.assign({}, credential, payload.credential || {}) : credential
+        ));
+        renderProfile();
+        setProfileSecurityMessage(tNext("profile.passkeySaved", "Passkey saved."), "good");
+      } catch (error) {
+        setProfileSecurityMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteProfilePasskey(credentialId) {
+      if (!window.confirm(tNext("profile.deletePasskeyConfirm", "Delete this passkey?"))) return;
+      setProfileSecurityMessage(tNext("profile.deletingPasskey", "Deleting passkey..."));
+      try {
+        const payload = await authApiJson(`/api/next/profile/passkeys/${encodeURIComponent(credentialId)}`, {
+          method: "DELETE"
+        });
+        profileCredentials = payload.credentials || profileCredentials.filter((credential) => String(credential.id) !== String(credentialId));
+        renderProfile();
+        setProfileSecurityMessage(tNext("profile.passkeyDeleted", "Passkey deleted."), "good");
+      } catch (error) {
+        setProfileSecurityMessage(error.message || String(error), "bad");
+      }
     }
     function setProfileEditMessage(message, tone) {
       const node = document.getElementById("profileEditMessage");
@@ -5863,6 +6009,13 @@ def ui_preview_html(
       document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
         saveProfileEdits();
+      });
+      document.getElementById("profileRefreshPasskeysButton")?.addEventListener("click", () => loadProfileDetails());
+      document.getElementById("profilePasskeyList")?.addEventListener("click", (event) => {
+        const saveButton = event.target.closest("[data-profile-passkey-save]");
+        const deleteButton = event.target.closest("[data-profile-passkey-delete]");
+        if (saveButton) saveProfilePasskey(saveButton.dataset.profilePasskeySave);
+        if (deleteButton) deleteProfilePasskey(deleteButton.dataset.profilePasskeyDelete);
       });
       document.getElementById("preferencesCloseButton")?.addEventListener("click", () => {
         document.getElementById("preferencesBackdrop")?.classList.add("hidden");
@@ -13308,11 +13461,15 @@ def register_routes(flask_app: Flask) -> None:
             user["role"] = next_user_primary_role(conn, user["id"])
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COUNT(*) AS count FROM passkey_credentials WHERE user_id=%s",
+                    """
+                    SELECT id, credential_name, created_at, last_used_at, sign_count
+                    FROM passkey_credentials
+                    WHERE user_id=%s
+                    ORDER BY created_at DESC
+                    """,
                     (user["id"],),
                 )
-                credential_row = cur.fetchone()
-                credential_count = int(credential_row["count"] if credential_row else 0)
+                credentials = cur.fetchall()
             return response(
                 {
                     "status": "ok",
@@ -13324,8 +13481,9 @@ def register_routes(flask_app: Flask) -> None:
                         "first_name": user.get("first_name"),
                         "last_name": user.get("last_name"),
                         "role": user.get("role"),
-                        "credentialCount": credential_count,
+                        "credentialCount": len(credentials),
                     },
+                    "credentials": credentials,
                 }
             )
 
@@ -13374,6 +13532,81 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 }
             )
+
+    @flask_app.patch("/api/next/profile/passkeys/<credential_id>")
+    def patch_next_profile_passkey(credential_id: str):
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Passkey request body must be an object", 400)
+        credential_name = str(body.get("credential_name") or body.get("credentialName") or "").strip()
+        if not credential_name:
+            raise NextApiError("credential_name is required", 400)
+        if len(credential_name) > 80:
+            raise NextApiError("credential_name must be 80 characters or fewer", 400)
+
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE passkey_credentials
+                        SET credential_name=%s
+                        WHERE id=%s AND user_id=%s
+                        RETURNING id, credential_name, created_at, last_used_at, sign_count
+                        """,
+                        (credential_name, credential_id, user["id"]),
+                    )
+                    credential = cur.fetchone()
+                    if not credential:
+                        raise NextApiError("Passkey not found", 404)
+                    cur.execute(
+                        """
+                        SELECT id, credential_name, created_at, last_used_at, sign_count
+                        FROM passkey_credentials
+                        WHERE user_id=%s
+                        ORDER BY created_at DESC
+                        """,
+                        (user["id"],),
+                    )
+                    credentials = cur.fetchall()
+        return response({"status": "ok", "credential": credential, "credentials": credentials})
+
+    @flask_app.delete("/api/next/profile/passkeys/<credential_id>")
+    def delete_next_profile_passkey(credential_id: str):
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COUNT(*) AS count FROM passkey_credentials WHERE user_id=%s",
+                        (user["id"],),
+                    )
+                    owned_count = int(cur.fetchone()["count"])
+                    if owned_count <= 1:
+                        raise NextApiError("You cannot delete your last passkey from your profile", 400)
+                    cur.execute(
+                        "DELETE FROM passkey_credentials WHERE id=%s AND user_id=%s RETURNING id",
+                        (credential_id, user["id"]),
+                    )
+                    deleted = cur.fetchone()
+                    if not deleted:
+                        raise NextApiError("Passkey not found", 404)
+                    cur.execute(
+                        """
+                        SELECT id, credential_name, created_at, last_used_at, sign_count
+                        FROM passkey_credentials
+                        WHERE user_id=%s
+                        ORDER BY created_at DESC
+                        """,
+                        (user["id"],),
+                    )
+                    credentials = cur.fetchall()
+        return response({"status": "deleted", "credentials": credentials})
 
     @flask_app.get("/api/next/preferences")
     def get_app_preferences():
