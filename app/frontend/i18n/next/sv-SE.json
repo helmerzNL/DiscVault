@@ -240,5 +240,6 @@
   "profile.uploadAvatar": "Ladda upp avatar",
   "profile.uploadingAvatar": "Laddar upp avatar...",
   "profile.users": "Anvandare",
-  "profile.username": "Anvandarnamn"
+  "profile.username": "Anvandarnamn",
+  "profile.lastPasskeyBlocked": "Du kan inte ta bort din sista passkey."
 }

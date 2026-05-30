@@ -4924,9 +4924,9 @@ def ui_preview_html(
               <div class="hero-meta" id="movieDetailTags"></div>
               <p class="movie-detail-overview" id="movieDetailOverview"></p>
               <div class="movie-detail-actions">
-                <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview metadata</button>
-                <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Apply metadata</button>
-                <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Jobs</button>
+                <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
+                <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
+                <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Refresh history</button>
               </div>
               <div class="detail-message" id="movieDetailMessage"></div>
             </div>
@@ -5584,14 +5584,14 @@ def ui_preview_html(
     }
     async function refreshActiveMovieMetadata(dryRun) {
       if (!activeDetailMovieId) return;
-      setMovieDetailMessage(dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata...") : tNext("movieDetail.applyingMetadata", "Applying metadata..."));
+      setMovieDetailMessage(dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/refresh`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({dryRun})
         });
-        setMovieDetailMessage(dryRun ? tNext("movieDetail.previewReady", "Metadata preview is ready.") : tNext("movieDetail.applied", "Metadata applied."), "good");
+        setMovieDetailMessage(dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed."), "good");
         if (!dryRun) {
           const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
           renderMovieDetail(refreshed.detail || {});
@@ -5604,11 +5604,11 @@ def ui_preview_html(
     }
     async function loadActiveMovieJobs() {
       if (!activeDetailMovieId) return;
-      setMovieDetailMessage(tNext("movieDetail.loadingJobs", "Loading jobs..."));
+      setMovieDetailMessage(tNext("movieDetail.loadingJobs", "Loading refresh history..."));
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/jobs`);
         const jobs = payload.jobs || [];
-        setMovieDetailMessage(jobs.length ? `${jobs.length} ${tNext("movieDetail.jobs", "Jobs").toLowerCase()}: ${jobs[0].status}` : tNext("movieDetail.noJobs", "No jobs yet."), "good");
+        setMovieDetailMessage(jobs.length ? `${jobs.length} ${tNext("movieDetail.jobs", "refresh history").toLowerCase()}: ${jobs[0].status}` : tNext("movieDetail.noJobs", "No metadata refreshes yet."), "good");
         console.log("movie metadata jobs", payload);
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
@@ -5872,6 +5872,10 @@ def ui_preview_html(
       list.innerHTML = profileCredentials.map((credential) => {
         const id = escapeHtml(credential.id || "");
         const name = credential.credential_name || credential.name || "Passkey";
+        const lastPasskey = profileCredentials.length <= 1;
+        const deleteDisabled = lastPasskey
+          ? `disabled title="${escapeHtml(tNext("profile.lastPasskeyBlocked", "You cannot delete your last passkey."))}"`
+          : "";
         return `
           <div class="profile-passkey" data-profile-passkey="${id}">
             <div class="profile-passkey-head">
@@ -5886,7 +5890,7 @@ def ui_preview_html(
             <div class="profile-passkey-actions">
               <input data-profile-passkey-name="${id}" value="${escapeHtml(name)}" maxlength="80" aria-label="${escapeHtml(tNext("profile.passkeyName", "Passkey name"))}">
               <button type="button" class="secondary-button" data-profile-passkey-save="${id}">${escapeHtml(tNext("profile.savePasskey", "Save"))}</button>
-              <button type="button" class="secondary-button" data-profile-passkey-delete="${id}">${escapeHtml(tNext("profile.deletePasskey", "Delete"))}</button>
+              <button type="button" class="secondary-button" data-profile-passkey-delete="${id}" ${deleteDisabled}>${escapeHtml(tNext("profile.deletePasskey", "Delete"))}</button>
             </div>
           </div>
         `;
@@ -5924,7 +5928,8 @@ def ui_preview_html(
             credential_name: credentialName
           })
         });
-        const options = optionsPayload.publicKey || {};
+        const options = optionsPayload.options || optionsPayload.publicKey || {};
+        if (!options.user || !options.challenge) throw new Error("Invalid passkey registration options");
         options.challenge = base64urlToBuffer(options.challenge);
         options.user.id = base64urlToBuffer(options.user.id);
         options.excludeCredentials = (options.excludeCredentials || []).map((credential) => ({
@@ -5985,6 +5990,10 @@ def ui_preview_html(
       }
     }
     async function deleteProfilePasskey(credentialId) {
+      if (profileCredentials.length <= 1) {
+        setProfileSecurityMessage(tNext("profile.lastPasskeyBlocked", "You cannot delete your last passkey."), "bad");
+        return;
+      }
       if (!window.confirm(tNext("profile.deletePasskeyConfirm", "Delete this passkey?"))) return;
       setProfileSecurityMessage(tNext("profile.deletingPasskey", "Deleting passkey..."));
       try {

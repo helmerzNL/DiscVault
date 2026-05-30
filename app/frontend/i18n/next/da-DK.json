@@ -240,5 +240,6 @@
   "profile.uploadAvatar": "Upload avatar",
   "profile.uploadingAvatar": "Uploader avatar...",
   "profile.users": "Brugere",
-  "profile.username": "Brugernavn"
+  "profile.username": "Brugernavn",
+  "profile.lastPasskeyBlocked": "Du kan ikke slette din sidste passkey."
 }
