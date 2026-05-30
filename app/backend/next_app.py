@@ -7757,8 +7757,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <h3>Security</h3>
             <div class="admin-controls">
               <button type="button" id="adminAuthToggle" data-admin-action="toggle-auth">Toggle Authentication</button>
-              <button type="button" id="adminInviteOnlyToggle" data-admin-action="toggle-invite-only">Toggle Invite-only</button>
               <button type="button" id="adminMovieVaultReceiverToggle" data-admin-action="toggle-movievault-receiver">Toggle MovieVault Receiver</button>
+            </div>
+            <p class="muted">Choose how new users can join this DiscVault environment.</p>
+            <div class="admin-mode" id="adminRegistrationMode">
+              <button type="button" data-admin-registration-mode="invite">Invite-only login</button>
+              <button type="button" data-admin-registration-mode="public">Public registration</button>
             </div>
             <p class="muted" id="adminSecurityState">-</p>
           </div>
@@ -9381,16 +9385,20 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function renderAdminSecurity() {
       const stateLine = document.getElementById("adminSecurityState");
       const authButton = document.getElementById("adminAuthToggle");
-      const inviteButton = document.getElementById("adminInviteOnlyToggle");
+      const registrationMode = authState.registration_enabled ? "public" : "invite";
       const movieVaultReceiverButton = document.getElementById("adminMovieVaultReceiverToggle");
       if (stateLine) {
         const receiverText = authState.role === "owner"
           ? ` MovieVault receiver ${ownerSettings.movievault_contribution_enabled ? "on" : "off"}.`
           : "";
-        stateLine.textContent = `Auth ${authState.configured_auth_enabled ? "configured on" : "configured off"}; active ${authState.auth_enabled ? "yes" : "no"}; registration ${authState.registration_enabled ? "open" : "invite-only"}.${receiverText}`;
+        stateLine.textContent = `Auth ${authState.configured_auth_enabled ? "configured on" : "configured off"}; active ${authState.auth_enabled ? "yes" : "no"}; registration mode ${authState.registration_enabled ? "public registration" : "invite-only login"}.${receiverText}`;
       }
       if (authButton) authButton.textContent = authState.configured_auth_enabled ? "Disable Auth" : "Enable Auth";
-      if (inviteButton) inviteButton.textContent = authState.registration_enabled ? "Require Invites" : "Allow Open Registration";
+      document.querySelectorAll("[data-admin-registration-mode]").forEach((button) => {
+        const active = button.dataset.adminRegistrationMode === registrationMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
       if (movieVaultReceiverButton) {
         movieVaultReceiverButton.classList.toggle("hidden", authState.role !== "owner");
         movieVaultReceiverButton.textContent = ownerSettings.movievault_contribution_enabled
@@ -9467,6 +9475,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAuthStatus();
       renderAdminSecurity();
       await loadAdmin();
+      setAdminStatus(`Registration mode set to ${inviteOnly ? "invite-only login" : "public registration"}.`, "good");
     }
     async function setMovieVaultReceiver(enabled) {
       if (authState.role !== "owner") {
@@ -9769,7 +9778,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!panel || panel.dataset.bound === "true") return;
       panel.dataset.bound = "true";
       panel.addEventListener("click", (event) => {
-        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-plugin-enable], [data-admin-plugin-health], [data-admin-plugin-execute], [data-admin-plugin-job], [data-admin-plugin-save], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
+        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-registration-mode], [data-admin-plugin-enable], [data-admin-plugin-health], [data-admin-plugin-execute], [data-admin-plugin-job], [data-admin-plugin-save], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
         if (!target) return;
         event.preventDefault();
         const action = target.dataset.adminAction;
@@ -9778,6 +9787,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           setAdminTab(target.dataset.adminTab);
         } else if (target.dataset.adminRbacMode) {
           task = setRbacMode(target.dataset.adminRbacMode);
+        } else if (target.dataset.adminRegistrationMode) {
+          task = setInviteOnly(target.dataset.adminRegistrationMode === "invite");
         } else if (target.dataset.adminPluginEnable) {
           task = setPluginEnabled(target.dataset.adminPluginEnable, target.dataset.enabled === "true");
         } else if (target.dataset.adminPluginHealth) {
