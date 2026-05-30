@@ -257,5 +257,9 @@
   "profile.recoveryCodesReady": "?terst?llningskoder skapade. Spara dem nu.",
   "profile.revokeRecoveryConfirm": "?terkalla alla aktiva ?terst?llningskoder?",
   "profile.revokingRecoveryCodes": "?terkallar ?terst?llningskoder...",
-  "profile.recoveryCodesRevoked": "Aktiva ?terst?llningskoder ?terkallade."
+  "profile.recoveryCodesRevoked": "Aktiva ?terst?llningskoder ?terkallade.",
+  "auth.inviteRequired": "Ange anv?ndarnamn och inbjudningskod.",
+  "auth.inviteCreating": "Skapar konto...",
+  "auth.inviteCreated": "Konto skapat. Du ?r inloggad.",
+  "auth.inviteFailed": "Registrering med inbjudan misslyckades."
 }

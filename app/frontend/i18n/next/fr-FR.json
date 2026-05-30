@@ -257,5 +257,9 @@
   "profile.recoveryCodesReady": "Codes de r?cup?ration g?n?r?s. Enregistrez-les maintenant.",
   "profile.revokeRecoveryConfirm": "R?voquer tous les codes de r?cup?ration actifs ?",
   "profile.revokingRecoveryCodes": "R?vocation des codes de r?cup?ration...",
-  "profile.recoveryCodesRevoked": "Codes de r?cup?ration actifs r?voqu?s."
+  "profile.recoveryCodesRevoked": "Codes de r?cup?ration actifs r?voqu?s.",
+  "auth.inviteRequired": "Saisissez le nom d?utilisateur et le code d?invitation.",
+  "auth.inviteCreating": "Cr?ation du compte...",
+  "auth.inviteCreated": "Compte cr??. Vous ?tes connect?.",
+  "auth.inviteFailed": "Inscription avec invitation ?chou?e."
 }

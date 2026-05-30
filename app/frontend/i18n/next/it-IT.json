@@ -257,5 +257,9 @@
   "profile.recoveryCodesReady": "Codici di recupero generati. Salvali ora.",
   "profile.revokeRecoveryConfirm": "Revocare tutti i codici di recupero attivi?",
   "profile.revokingRecoveryCodes": "Revoca codici di recupero...",
-  "profile.recoveryCodesRevoked": "Codici di recupero attivi revocati."
+  "profile.recoveryCodesRevoked": "Codici di recupero attivi revocati.",
+  "auth.inviteRequired": "Inserisci nome utente e codice invito.",
+  "auth.inviteCreating": "Creazione account...",
+  "auth.inviteCreated": "Account creato. Accesso effettuato.",
+  "auth.inviteFailed": "Registrazione con invito non riuscita."
 }
