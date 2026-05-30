@@ -4318,6 +4318,9 @@ def ui_preview_html(
       margin-top: 6px;
       overflow-wrap: anywhere;
     }
+    .import-job-tabs {
+      margin: 10px 0;
+    }
     .import-counts {
       display: flex;
       flex-wrap: wrap;
@@ -5093,6 +5096,25 @@ def ui_preview_html(
     .app-admin-plugin-actions {
       margin-top: 2px;
     }
+    .app-admin-plugin-order {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+      margin-left: auto;
+    }
+    .job-json {
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg-solid) 86%, transparent);
+      color: var(--text);
+      padding: 10px;
+      font-size: .78rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
     .app-admin-plugin-config {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5810,6 +5832,11 @@ def ui_preview_html(
                 <h3 data-next-i18n="importCenter.jobs">Jobs</h3>
                 <span class="tag" id="importCenterJobCount">-</span>
               </div>
+              <div class="detail-submenu import-job-tabs" role="tablist" aria-label="Import job type" data-next-i18n-aria="importCenter.jobs">
+                <button type="button" class="active" data-import-job-type="migration.import_sqlite" data-next-i18n="importCenter.jobType.collection">Collection</button>
+                <button type="button" data-import-job-type="metadata.refresh_movie" data-next-i18n="importCenter.jobType.metadata">Metadata</button>
+                <button type="button" data-import-job-type="plugin.execute" data-next-i18n="importCenter.jobType.plugins">Plugins</button>
+              </div>
               <div class="import-job-list" id="importCenterJobs"></div>
             </div>
           </div>
@@ -6387,7 +6414,7 @@ def ui_preview_html(
       assignableRoles: [],
       users: []
     };
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", selectedJobType: "migration.import_sqlite", barcodeLookup: null};
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
     const localeState = {
@@ -6570,6 +6597,18 @@ def ui_preview_html(
         </div>
       `;
     }
+    function appAdminPluginSort(a, b) {
+      return Number(a.orderIndex || 0) - Number(b.orderIndex || 0) || String(a.name || a.id).localeCompare(String(b.name || b.id));
+    }
+    function appAdminPluginMoveTarget(plugin, sectionPlugins, direction) {
+      const ordered = [...(sectionPlugins || [])].sort(appAdminPluginSort);
+      const index = ordered.findIndex((item) => item.id === plugin.id);
+      const sibling = direction === "up" ? ordered[index - 1] : ordered[index + 1];
+      if (!sibling) return null;
+      const siblingOrder = Number(sibling.orderIndex || 0);
+      if (direction === "up") return Math.max(1, siblingOrder - 1);
+      return Math.min(10000, siblingOrder + 1);
+    }
     function renderAppAdminPluginConfig(plugin, config) {
       const settings = appAdminPluginSchemaItems(plugin, "settings");
       const secrets = appAdminPluginSchemaItems(plugin, "secrets");
@@ -6610,7 +6649,7 @@ def ui_preview_html(
         </div>
       `;
     }
-    function renderAppAdminPluginCard(plugin) {
+    function renderAppAdminPluginCard(plugin, sectionPlugins = []) {
       const health = appAdmin.pluginHealth[plugin.id] || {};
       const config = appAdmin.pluginConfigs[plugin.id] || {};
       const execution = appAdmin.pluginExecutions[plugin.id] || null;
@@ -6620,12 +6659,20 @@ def ui_preview_html(
       const capabilities = plugin.capabilities || [];
       const needsConfig = plugin.requiresSecrets && !plugin.secretsConfigured;
       const runtimeState = health.state || (runtime.loaded ? "loaded" : "not_loaded");
+      const orderedSection = [...(sectionPlugins || [])].sort(appAdminPluginSort);
+      const pluginIndex = orderedSection.findIndex((item) => item.id === plugin.id);
+      const canMoveUp = pluginIndex > 0;
+      const canMoveDown = pluginIndex >= 0 && pluginIndex < orderedSection.length - 1;
       return `
         <div class="profile-passkey">
           <div class="profile-passkey-head">
             <div>
               <strong>${escapeHtml(plugin.name || plugin.id)}</strong>
               <div class="profile-passkey-meta">${escapeHtml(plugin.id)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
+            </div>
+            <div class="app-admin-plugin-order">
+              <button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>
+              <button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>
             </div>
             <span class="tag ${plugin.enabled ? "good" : ""}">${escapeHtml(plugin.enabled ? tNext("appAdmin.enabled", "Enabled") : tNext("appAdmin.disabled", "Disabled"))}</span>
           </div>
@@ -6657,13 +6704,14 @@ def ui_preview_html(
     }
     function renderAppAdminPluginSection(title, plugins) {
       if (!plugins.length) return "";
+      const ordered = [...plugins].sort(appAdminPluginSort);
       return `
         <div class="app-admin-plugin-section">
           <div class="app-admin-plugin-section-head">
             <h4>${escapeHtml(title)}</h4>
-            <span class="profile-passkey-meta">${escapeHtml(String(plugins.length))}</span>
+            <span class="profile-passkey-meta">${escapeHtml(String(ordered.length))}</span>
           </div>
-          ${plugins.map(renderAppAdminPluginCard).join("")}
+          ${ordered.map((plugin) => renderAppAdminPluginCard(plugin, ordered)).join("")}
         </div>
       `;
     }
@@ -6674,7 +6722,15 @@ def ui_preview_html(
       node.innerHTML = jobs.length ? jobs.map((job) => {
         const result = job.result || {};
         const persistence = result.persistence || {};
-        const pluginId = (job.payload || {}).pluginId || result.pluginId || "-";
+        const payload = job.payload || {};
+        const pluginId = payload.pluginId || result.pluginId || "-";
+        const entrypoint = payload.entrypoint || result.entrypoint || "";
+        const details = {
+          payload,
+          execution: result.execution || null,
+          persistence,
+          error: job.error || null
+        };
         return `
           <div class="profile-passkey">
             <div class="profile-passkey-head">
@@ -6684,9 +6740,14 @@ def ui_preview_html(
             <div class="profile-passkey-meta">
               ${escapeHtml(job.jobType || "plugin.execute")} &middot;
               ${escapeHtml((job.createdAt || "").slice(0, 19))}
+              ${entrypoint ? ` &middot; ${escapeHtml(entrypoint)}` : ""}
               ${persistence.items != null ? ` &middot; ${escapeHtml(tNext("appAdmin.digitalItems", "{count} digital items").replace("{count}", String(persistence.items)))}` : ""}
             </div>
             ${job.error ? `<div class="login-message bad">${escapeHtml(job.error)}</div>` : ""}
+            <details>
+              <summary class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.jobDetails", "Job details"))}</summary>
+              <pre class="job-json">${escapeHtml(jsonPreview(details))}</pre>
+            </details>
           </div>
         `;
       }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPluginJobs", "No plugin jobs yet."))}</div>`;
@@ -7056,6 +7117,41 @@ def ui_preview_html(
         appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", enabled ? tNext("appAdmin.pluginEnabled", "Plugin enabled.") : tNext("appAdmin.pluginDisabled", "Plugin disabled."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    function appAdminPluginSectionPeers(plugin) {
+      const plugins = appAdmin.plugins || [];
+      if (appAdminPluginHasCategory(plugin, "metadata_source") || appAdminPluginHasCategory(plugin, "metadata_receiver")) {
+        return plugins.filter((item) => appAdminPluginHasCategory(item, "metadata_source") || appAdminPluginHasCategory(item, "metadata_receiver"));
+      }
+      if (appAdminPluginHasCategory(plugin, "digital_media_source")) {
+        return plugins.filter((item) => appAdminPluginHasCategory(item, "digital_media_source"));
+      }
+      if (appAdminPluginHasCategory(plugin, "import_source")) {
+        return plugins.filter((item) => appAdminPluginHasCategory(item, "import_source"));
+      }
+      return plugins.filter((item) => !appAdminPluginHasCategory(item, "metadata_source")
+        && !appAdminPluginHasCategory(item, "metadata_receiver")
+        && !appAdminPluginHasCategory(item, "digital_media_source")
+        && !appAdminPluginHasCategory(item, "import_source"));
+    }
+    async function moveAppAdminPlugin(pluginId, direction) {
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId);
+      if (!plugin) return;
+      const orderIndex = appAdminPluginMoveTarget(plugin, appAdminPluginSectionPeers(plugin), direction);
+      if (!orderIndex) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.movingPlugin", "Updating plugin order..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({orderIndex})
+        });
+        appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        renderAppAdminPlugins();
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginMoved", "Plugin order updated."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -8400,6 +8496,24 @@ def ui_preview_html(
       const key = String(state || "unknown");
       return tNext(`importCenter.state.${key}`, key.replace(/_/g, " "));
     }
+    function jsonPreview(value, maxLength = 1200) {
+      if (value === null || value === undefined || value === "") return "";
+      try {
+        const text = JSON.stringify(value, null, 2);
+        return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+      } catch {
+        const text = String(value);
+        return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+      }
+    }
+    function importJobTypeLabel(jobType) {
+      const labels = {
+        "migration.import_sqlite": tNext("importCenter.jobType.collection", "Collection"),
+        "metadata.refresh_movie": tNext("importCenter.jobType.metadata", "Metadata"),
+        "plugin.execute": tNext("importCenter.jobType.plugins", "Plugins")
+      };
+      return labels[jobType] || jobType || tNext("importCenter.jobs", "Jobs");
+    }
     function renderImportSources() {
       const report = importCenter.report || {};
       const sources = report.importSources || [];
@@ -8484,6 +8598,11 @@ def ui_preview_html(
       const list = document.getElementById("importCenterJobs");
       const count = document.getElementById("importCenterJobCount");
       const jobs = importCenter.jobs || [];
+      document.querySelectorAll("[data-import-job-type]").forEach((button) => {
+        const active = button.dataset.importJobType === importCenter.selectedJobType;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
       if (count) count.textContent = `${jobs.length || 0}`;
       if (!list) return;
       if (!jobs.length) {
@@ -8492,12 +8611,21 @@ def ui_preview_html(
       }
       list.innerHTML = jobs.map((job) => {
         const result = job.result || {};
+        const payload = job.payload || {};
         const summary = result.summary || result.result || {};
-        const counters = (summary && summary.counters) || (result.result && result.result.applied) || {};
+        const counters = (summary && summary.counters) || (result.result && result.result.applied) || (result.result && result.result.stats) || {};
+        const pluginId = payload.pluginId || result.pluginId || "";
+        const entrypoint = payload.entrypoint || result.entrypoint || "";
+        const movieId = payload.movieId || (result.result && result.result.movieId) || result.movieId || "";
+        const details = {
+          payload,
+          result: result.result || result.summary || result.execution || result,
+          error: job.error || null
+        };
         return `
           <div class="import-job-card">
             <div class="import-job-head">
-              <strong>${escapeHtml(job.jobType || job.job_type || "import")}</strong>
+              <strong>${escapeHtml(importJobTypeLabel(job.jobType || job.job_type || "import"))}</strong>
               <span class="tag ${job.status === "completed" ? "good" : ""}">${escapeHtml(job.status || "-")}</span>
             </div>
             <div class="import-job-meta">
@@ -8505,7 +8633,17 @@ def ui_preview_html(
               ${job.finishedAt || job.finished_at ? `&middot; ${escapeHtml(shortDateTime(job.finishedAt || job.finished_at))}` : ""}
               ${job.error ? `&middot; ${escapeHtml(job.error)}` : ""}
             </div>
+            <div class="import-counts">
+              ${pluginId ? `<span class="tag">${escapeHtml(tNext("importCenter.plugin", "Plugin"))} ${escapeHtml(pluginId)}</span>` : ""}
+              ${entrypoint ? `<span class="tag">${escapeHtml(tNext("importCenter.entrypoint", "Entrypoint"))} ${escapeHtml(entrypoint)}</span>` : ""}
+              ${movieId ? `<span class="tag">${escapeHtml(tNext("importCenter.movie", "Movie"))} ${escapeHtml(String(movieId).slice(0, 8))}</span>` : ""}
+              ${payload.dryRun !== undefined ? `<span class="tag ${payload.dryRun ? "" : "good"}">${escapeHtml(tNext("importCenter.dryRun", "Dry run"))} ${escapeHtml(String(payload.dryRun))}</span>` : ""}
+            </div>
             <div class="import-counts">${importCountChips(counters || {}, 5)}</div>
+            <details>
+              <summary class="import-result-meta">${escapeHtml(tNext("importCenter.jobDetails", "Job details"))}</summary>
+              <pre class="job-json">${escapeHtml(jsonPreview(details))}</pre>
+            </details>
           </div>
         `;
       }).join("");
@@ -8554,9 +8692,10 @@ def ui_preview_html(
     async function loadImportCenter() {
       setImportCenterMessage(tNext("importCenter.loading", "Loading import status..."));
       try {
+        const selectedJobType = importCenter.selectedJobType || "migration.import_sqlite";
         const [reportPayload, jobsPayload] = await Promise.all([
           authApiJson("/api/next/migration/report"),
-          authApiJson("/api/next/jobs?jobType=migration.import_sqlite&limit=20").catch(() => ({jobs: []}))
+          authApiJson(`/api/next/jobs?jobType=${encodeURIComponent(selectedJobType)}&limit=20`).catch(() => ({jobs: []}))
         ]);
         importCenter.report = reportPayload.report || {};
         importCenter.jobs = jobsPayload.jobs || [];
@@ -9752,11 +9891,13 @@ def ui_preview_html(
         const saveButton = event.target.closest("[data-app-admin-plugin-save]");
         const executeButton = event.target.closest("[data-app-admin-plugin-execute]");
         const jobButton = event.target.closest("[data-app-admin-plugin-job]");
+        const moveButton = event.target.closest("[data-app-admin-plugin-move]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
         if (healthButton) checkAppAdminPluginHealth(healthButton.dataset.appAdminPluginHealth);
         if (saveButton) saveAppAdminPluginConfig(saveButton.dataset.appAdminPluginSave, saveButton.closest(".profile-passkey"));
         if (executeButton) executeAppAdminPlugin(executeButton.dataset.appAdminPluginExecute, executeButton.dataset.entrypoint);
         if (jobButton) queueAppAdminPluginJob(jobButton.dataset.appAdminPluginJob, jobButton.dataset.entrypoint);
+        if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down");
       });
       document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -9774,6 +9915,12 @@ def ui_preview_html(
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
+      document.querySelectorAll("[data-import-job-type]").forEach((button) => {
+        button.addEventListener("click", () => {
+          importCenter.selectedJobType = button.dataset.importJobType || "migration.import_sqlite";
+          loadImportCenter();
+        });
+      });
       document.getElementById("importCenterSources")?.addEventListener("click", (event) => {
         const sourceButton = event.target.closest("[data-import-source]");
         if (!sourceButton) return;

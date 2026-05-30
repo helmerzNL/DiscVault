@@ -665,5 +665,18 @@
   "containerManage.created": "Aangemaakt.",
   "containerManage.renamed": "Hernoemd.",
   "containerManage.deleted": "Verwijderd.",
-  "containerManage.deleteConfirm": "{title} verwijderen? Hiermee worden ook koppelingen met films en collecties verwijderd."
+  "containerManage.deleteConfirm": "{title} verwijderen? Hiermee worden ook koppelingen met films en collecties verwijderd.",
+  "importCenter.jobType.collection": "Collectie",
+  "importCenter.jobType.metadata": "Metadata",
+  "importCenter.jobType.plugins": "Plugins",
+  "importCenter.jobDetails": "Taakdetails",
+  "importCenter.plugin": "Plugin",
+  "importCenter.entrypoint": "Entrypoint",
+  "importCenter.movie": "Film",
+  "importCenter.dryRun": "Proefdraaien",
+  "appAdmin.moveUp": "Omhoog",
+  "appAdmin.moveDown": "Omlaag",
+  "appAdmin.movingPlugin": "Pluginvolgorde bijwerken...",
+  "appAdmin.pluginMoved": "Pluginvolgorde bijgewerkt.",
+  "appAdmin.jobDetails": "Taakdetails"
 }

@@ -571,5 +571,18 @@
   "containerManage.created": "Luotu.",
   "containerManage.renamed": "Nimetty uudelleen.",
   "containerManage.deleted": "Poistettu.",
-  "containerManage.deleteConfirm": "Poistetaanko {title}? Myos linkit elokuviin ja kokoelmiin poistetaan."
+  "containerManage.deleteConfirm": "Poistetaanko {title}? Myos linkit elokuviin ja kokoelmiin poistetaan.",
+  "importCenter.jobType.collection": "Kokoelma",
+  "importCenter.jobType.metadata": "Metatiedot",
+  "importCenter.jobType.plugins": "Lis?osat",
+  "importCenter.jobDetails": "Tehtavan tiedot",
+  "importCenter.plugin": "Lis?osa",
+  "importCenter.entrypoint": "Entrypoint",
+  "importCenter.movie": "Elokuva",
+  "importCenter.dryRun": "Kuiva-ajo",
+  "appAdmin.moveUp": "Ylos",
+  "appAdmin.moveDown": "Alas",
+  "appAdmin.movingPlugin": "Paivitetaan lisaosien jarjestysta...",
+  "appAdmin.pluginMoved": "Lisaosien jarjestys paivitetty.",
+  "appAdmin.jobDetails": "Tehtavan tiedot"
 }

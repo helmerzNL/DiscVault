@@ -665,5 +665,18 @@
   "containerManage.created": "Created.",
   "containerManage.renamed": "Renamed.",
   "containerManage.deleted": "Deleted.",
-  "containerManage.deleteConfirm": "Delete {title}? This also removes its links from movies and collections."
+  "containerManage.deleteConfirm": "Delete {title}? This also removes its links from movies and collections.",
+  "importCenter.jobType.collection": "Collection",
+  "importCenter.jobType.metadata": "Metadata",
+  "importCenter.jobType.plugins": "Plugins",
+  "importCenter.jobDetails": "Job details",
+  "importCenter.plugin": "Plugin",
+  "importCenter.entrypoint": "Entrypoint",
+  "importCenter.movie": "Movie",
+  "importCenter.dryRun": "Dry run",
+  "appAdmin.moveUp": "Up",
+  "appAdmin.moveDown": "Down",
+  "appAdmin.movingPlugin": "Updating plugin order...",
+  "appAdmin.pluginMoved": "Plugin order updated.",
+  "appAdmin.jobDetails": "Job details"
 }

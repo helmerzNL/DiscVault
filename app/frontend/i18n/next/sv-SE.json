@@ -571,5 +571,18 @@
   "containerManage.created": "Skapad.",
   "containerManage.renamed": "Namn andrat.",
   "containerManage.deleted": "Borttagen.",
-  "containerManage.deleteConfirm": "Ta bort {title}? Detta tar aven bort lankar till filmer och samlingar."
+  "containerManage.deleteConfirm": "Ta bort {title}? Detta tar aven bort lankar till filmer och samlingar.",
+  "importCenter.jobType.collection": "Samling",
+  "importCenter.jobType.metadata": "Metadata",
+  "importCenter.jobType.plugins": "Plugins",
+  "importCenter.jobDetails": "Jobbdetaljer",
+  "importCenter.plugin": "Plugin",
+  "importCenter.entrypoint": "Entrypoint",
+  "importCenter.movie": "Film",
+  "importCenter.dryRun": "Testkorning",
+  "appAdmin.moveUp": "Upp",
+  "appAdmin.moveDown": "Ned",
+  "appAdmin.movingPlugin": "Uppdaterar pluginordning...",
+  "appAdmin.pluginMoved": "Pluginordning uppdaterad.",
+  "appAdmin.jobDetails": "Jobbdetaljer"
 }
