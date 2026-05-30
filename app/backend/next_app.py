@@ -4469,6 +4469,76 @@ def ui_preview_html(
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
+    .person-detail-page .movie-detail-summary {
+      grid-template-columns: minmax(92px, 132px) minmax(0, 1fr);
+    }
+    .person-detail-avatar {
+      width: min(132px, 28vw);
+      aspect-ratio: 1;
+      border: 1px solid rgba(255,255,255,.32);
+      border-radius: 999px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, rgba(255,255,255,.24), rgba(255,255,255,.08));
+      color: #fff;
+      font-size: 1.55rem;
+      font-weight: 820;
+      box-shadow: 0 22px 48px rgba(0,0,0,.24);
+    }
+    .person-detail-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .person-credit-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      color: inherit;
+      text-decoration: none;
+      display: grid;
+      grid-template-columns: 56px minmax(0, 1fr);
+      gap: 10px;
+      padding: 9px;
+      align-items: center;
+    }
+    .person-credit-card:hover {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+    }
+    .person-credit-poster {
+      aspect-ratio: 2 / 3;
+      border-radius: 6px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #30343c, #181a1f);
+      color: rgba(255,255,255,.66);
+      font-size: .72rem;
+      text-align: center;
+    }
+    .person-credit-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .person-credit-copy {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+    .person-credit-copy strong {
+      overflow-wrap: anywhere;
+    }
+    .person-credit-copy span {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
     .art-option-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -5531,6 +5601,46 @@ def ui_preview_html(
           </div>
         </section>
       </section>
+      <section class="movie-detail-page person-detail-page hidden" id="personDetailPage" aria-labelledby="personDetailTitle">
+        <section class="movie-detail-hero" id="personDetailHero">
+          <button type="button" class="movie-detail-back" id="personDetailBackButton" data-next-i18n="personDetail.backToMovie">Back</button>
+          <div class="movie-detail-summary">
+            <div class="person-detail-avatar" id="personDetailAvatar">DV</div>
+            <div>
+              <span class="eyebrow" data-next-i18n="personDetail.title">Person details</span>
+              <h2 class="movie-detail-title" id="personDetailTitle">-</h2>
+              <div class="hero-meta" id="personDetailTags"></div>
+              <p class="movie-detail-overview" id="personDetailBiography"></p>
+              <div class="detail-message" id="personDetailMessage"></div>
+            </div>
+          </div>
+        </section>
+        <section class="movie-detail-body">
+          <div class="detail-card">
+            <h3 data-next-i18n="personDetail.details">Details</h3>
+            <div class="detail-fields" id="personDetailFields"></div>
+          </div>
+          <div class="detail-card">
+            <h3 data-next-i18n="personDetail.identifiers">Identifiers</h3>
+            <div class="detail-grid" id="personDetailIdentifiers"></div>
+          </div>
+          <div class="detail-card full">
+            <div class="detail-card-head">
+              <h3 data-next-i18n="personDetail.appearances">Appearances</h3>
+              <div class="detail-submenu" role="tablist" aria-label="Appearances" data-next-i18n-aria="personDetail.appearances">
+                <button type="button" class="active" data-detail-tab="personCredits" data-detail-panel="personCreditsActing" data-next-i18n="personDetail.acting">Acting</button>
+                <button type="button" data-detail-tab="personCredits" data-detail-panel="personCreditsCrew" data-next-i18n="personDetail.crew">Crew</button>
+              </div>
+            </div>
+            <div class="detail-subpanel" data-detail-panel-group="personCredits" id="personCreditsActing">
+              <div class="detail-grid" id="personDetailActing"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="personCredits" id="personCreditsCrew">
+              <div class="detail-grid" id="personDetailCrew"></div>
+            </div>
+          </div>
+        </section>
+      </section>
       <section class="profile-view hidden" id="profileView" aria-labelledby="profilePageTitle">
         <section class="profile-hero">
           <div class="profile-identity">
@@ -5767,6 +5877,8 @@ def ui_preview_html(
     let activeDetailPayload = null;
     let activeContainerId = "";
     let activeContainerPayload = null;
+    let activePersonId = "";
+    let activePersonPayload = null;
     let currentStartup = {};
     let currentAuthStatus = {};
     let profileCredentials = [];
@@ -6554,6 +6666,24 @@ def ui_preview_html(
         </button>
       `;
     }
+    function personCreditCardHtml(credit) {
+      const movieId = credit.movie_id || credit.movieId || "";
+      const title = credit.title || tNext("common.untitled", "Untitled");
+      const poster = usableImage(credit.poster_url || credit.posterUrl || "");
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const role = [credit.character, credit.job, credit.credit_type].filter(Boolean).join(" / ");
+      const meta = [role, credit.year, credit.format].filter(Boolean).join(" / ");
+      const href = movieId ? `/movies/${encodeURIComponent(movieId)}` : "#";
+      return `
+        <a class="person-credit-card" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movieId)}">
+          <span class="person-credit-poster">${posterHtml}</span>
+          <span class="person-credit-copy">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(meta || credit.barcode || "")}</span>
+          </span>
+        </a>
+      `;
+    }
     function activateDetailTab(group, panelId) {
       if (!group || !panelId) return;
       document.querySelectorAll("[data-detail-tab]").forEach((button) => {
@@ -6786,6 +6916,8 @@ def ui_preview_html(
       if (!movieId) return;
       activeContainerId = "";
       activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
       showMovieDetailLoading(movieId);
       showMovieDetailPage();
       if (pushUrl && appMode) {
@@ -6985,6 +7117,8 @@ def ui_preview_html(
       if (!containerId) return;
       activeDetailMovieId = "";
       activeDetailPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
       showContainerDetailLoading(containerId);
       showContainerDetailPage();
       if (pushUrl && appMode) {
@@ -7004,6 +7138,90 @@ def ui_preview_html(
       showLibraryPage(false);
       activeContainerId = "";
       activeContainerPayload = null;
+      if (pushUrl && appMode && window.location.pathname !== "/") {
+        history.pushState({}, "", "/");
+      }
+    }
+    function setPersonDetailMessage(message, tone) {
+      const node = document.getElementById("personDetailMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `detail-message ${tone || ""}`.trim();
+    }
+    function renderPersonDetail(detail) {
+      activePersonPayload = detail;
+      const person = detail.person || {};
+      activePersonId = person.id || activePersonId || "";
+      const name = person.name || tNext("common.untitled", "Untitled");
+      const image = usableImage(person.profile_url || person.profileUrl || "");
+      const avatarNode = document.getElementById("personDetailAvatar");
+      if (avatarNode) {
+        avatarNode.innerHTML = image ? `<img src="${escapeHtml(image)}" alt="">` : escapeHtml(initialsFromName(name));
+      }
+      document.getElementById("personDetailTitle").textContent = name;
+      document.getElementById("personDetailBiography").textContent = person.biography || tNext("personDetail.noBiography", "No biography imported yet.");
+      document.getElementById("personDetailTags").innerHTML = detailTagHtml([
+        person.known_for,
+        person.birth_date,
+        person.death_date ? `${tNext("personDetail.died", "Died")} ${person.death_date}` : "",
+        (detail.credits || []).length ? `${(detail.credits || []).length} ${tNext("personDetail.credits", "credits")}` : ""
+      ]);
+      document.getElementById("personDetailFields").innerHTML = detailFieldRows([
+        [tNext("personDetail.knownFor", "Known for"), person.known_for],
+        [tNext("personDetail.birthDate", "Birth date"), person.birth_date],
+        [tNext("personDetail.deathDate", "Death date"), person.death_date],
+        [tNext("personDetail.placeOfBirth", "Place of birth"), person.place_of_birth],
+        [tNext("personDetail.publicId", "Public ID"), person.public_id]
+      ]);
+      const identifiers = (detail.identifiers || []).map((item) => miniCard(
+        `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
+        item.identifier
+      ));
+      document.getElementById("personDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noIdentifiers", "No identifiers yet."))}</div>`;
+      const acting = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
+      const crew = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
+      document.getElementById("personDetailActing").innerHTML = acting.map(personCreditCardHtml).join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noActing", "No acting credits in this collection yet."))}</div>`;
+      document.getElementById("personDetailCrew").innerHTML = crew.map(personCreditCardHtml).join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noCrew", "No crew credits in this collection yet."))}</div>`;
+      setPersonDetailMessage("");
+    }
+    function showPersonDetailLoading(personId) {
+      activePersonId = personId || "";
+      activePersonPayload = null;
+      document.getElementById("personDetailAvatar").innerHTML = "";
+      document.getElementById("personDetailTitle").textContent = tNext("collection.loading", "Loading...");
+      document.getElementById("personDetailBiography").textContent = "";
+      document.getElementById("personDetailTags").innerHTML = "";
+      document.getElementById("personDetailFields").innerHTML = "";
+      document.getElementById("personDetailIdentifiers").innerHTML = "";
+      document.getElementById("personDetailActing").innerHTML = "";
+      document.getElementById("personDetailCrew").innerHTML = "";
+      setPersonDetailMessage("");
+    }
+    async function openAppPersonDetail(personId, pushUrl = true) {
+      if (!personId) return;
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
+      showPersonDetailLoading(personId);
+      showPersonDetailPage();
+      if (pushUrl && appMode) {
+        const nextPath = `/people/${encodeURIComponent(personId)}`;
+        if (window.location.pathname !== nextPath) {
+          history.pushState({personId}, "", nextPath);
+        }
+      }
+      try {
+        const payload = await authApiJson(`/api/next/people/${encodeURIComponent(personId)}`);
+        renderPersonDetail(payload.detail || {});
+      } catch (error) {
+        setPersonDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function closeAppPersonDetail(pushUrl = true) {
+      showLibraryPage(false);
+      activePersonId = "";
+      activePersonPayload = null;
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
@@ -7196,6 +7414,7 @@ def ui_preview_html(
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.remove("hidden");
       setActiveAppRoute("library");
       scrollPreviewTop();
@@ -7205,13 +7424,25 @@ def ui_preview_html(
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.remove("hidden");
       setActiveAppRoute("containers");
+      scrollPreviewTop();
+    }
+    function showPersonDetailPage() {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.remove("hidden");
+      setActiveAppRoute("library");
       scrollPreviewTop();
     }
     function showLibraryPage(pushUrl = false, activeRoute = "library") {
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
@@ -7224,12 +7455,15 @@ def ui_preview_html(
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.remove("hidden");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
       activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
       setActiveAppRoute("profile");
       renderProfile();
       loadProfileDetails();
@@ -7246,12 +7480,15 @@ def ui_preview_html(
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.remove("hidden");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
       activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
       setActiveAppRoute("admin");
       renderAppAdmin();
       loadAppAdmin();
@@ -7274,6 +7511,10 @@ def ui_preview_html(
       const containerMatch = window.location.pathname.match(/^\\/app\\/containers\\/([^/]+)$|^\\/containers\\/([^/]+)$/);
       if (containerMatch) {
         return {view: "container", containerId: decodeURIComponent(containerMatch[1] || containerMatch[2])};
+      }
+      const personMatch = window.location.pathname.match(/^\\/app\\/people\\/([^/]+)$|^\\/people\\/([^/]+)$/);
+      if (personMatch) {
+        return {view: "person", personId: decodeURIComponent(personMatch[1] || personMatch[2])};
       }
       return {view: "library"};
     }
@@ -8020,6 +8261,7 @@ def ui_preview_html(
       const routeMovieId = route.view === "movie" ? (route.movieId || initialMovieId) : "";
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+      else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
@@ -8213,7 +8455,14 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.addEventListener("click", (event) => {
         const person = event.target.closest("[data-open-person]");
         if (!person) return;
-        setMovieDetailMessage(tNext("movieDetail.personComingSoon", "Person pages are coming soon."), "good");
+        openAppPersonDetail(person.dataset.openPerson);
+      });
+      document.getElementById("personDetailBackButton")?.addEventListener("click", () => closeAppPersonDetail());
+      document.getElementById("personDetailPage")?.addEventListener("click", (event) => {
+        const movieLink = event.target.closest("[data-open-movie]");
+        if (!movieLink) return;
+        event.preventDefault();
+        openAppMovieDetail(movieLink.dataset.openMovie);
       });
       document.getElementById("containerDetailPage")?.addEventListener("click", (event) => {
         const movieLink = event.target.closest("[data-open-movie]");
@@ -8270,17 +8519,21 @@ def ui_preview_html(
         const route = appRouteFromPath();
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+        else if (route.view === "person") openAppPersonDetail(route.personId, false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "profile") showProfilePage(false);
         else {
           activeContainerId = "";
           activeContainerPayload = null;
+          activePersonId = "";
+          activePersonPayload = null;
           closeAppMovieDetail(false);
         }
       });
       window.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && activeDetailMovieId) closeAppMovieDetail();
         if (event.key === "Escape" && activeContainerId) closeAppContainerDetail();
+        if (event.key === "Escape" && activePersonId) closeAppPersonDetail();
       });
     });
   </script>
@@ -14754,6 +15007,236 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     }
 
 
+def person_biography_value(localizations: list[dict[str, Any]], metadata: dict[str, Any] | None = None) -> str:
+    metadata = metadata if isinstance(metadata, dict) else {}
+    localized_by_lang = {
+        str(row.get("lang") or "").lower(): clean_text(row.get("biography")) or ""
+        for row in localizations
+        if clean_text(row.get("biography"))
+    }
+    for lang in ("nl-nl", "nl", "en-us", "en"):
+        if localized_by_lang.get(lang):
+            return localized_by_lang[lang]
+    if localized_by_lang:
+        return next(iter(localized_by_lang.values()))
+    for key in ("biography", "bio", "biography_nl", "biography_en"):
+        value = clean_text(metadata.get(key))
+        if value:
+            return value
+    return ""
+
+
+def person_entity(conn, person_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "people"):
+        return None
+    media_join = table_exists(conn, "media_assets")
+    profile_select = (
+        """
+                ma.storage_backend AS profile_storage_backend,
+                ma.storage_key AS profile_storage_key,
+                ma.source_url AS profile_source_url
+        """
+        if media_join
+        else """
+                NULL AS profile_storage_backend,
+                NULL AS profile_storage_key,
+                NULL AS profile_source_url
+        """
+    )
+    profile_join = "LEFT JOIN media_assets ma ON ma.id = p.profile_asset_id" if media_join else ""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                p.id,
+                p.public_id,
+                p.name,
+                p.birth_date,
+                p.death_date,
+                p.place_of_birth,
+                p.known_for,
+                p.profile_asset_id,
+                p.metadata,
+                p.created_at,
+                p.updated_at,
+{profile_select}
+            FROM people p
+            {profile_join}
+            WHERE p.id=%s
+            """,
+            (person_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    data = dict(row)
+    profile_url = media_asset_public_url(
+        {
+            "id": data.get("profile_asset_id"),
+            "storage_backend": data.pop("profile_storage_backend", None),
+            "storage_key": data.pop("profile_storage_key", None),
+            "source_url": data.pop("profile_source_url", None),
+        }
+    )
+    metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    if not profile_url:
+        profile_url = server_usable_image(
+            metadata.get("profile_url")
+            or metadata.get("profileUrl")
+            or metadata.get("photo_url")
+            or metadata.get("photoUrl")
+        )
+    if profile_url:
+        data["profile_url"] = profile_url
+    return data
+
+
+def person_identifier_entities(conn, person_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "person_identifiers"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT provider_id, identifier_type, identifier, created_at
+            FROM person_identifiers
+            WHERE person_id=%s
+            ORDER BY provider_id, identifier_type, identifier
+            """,
+            (person_id,),
+        )
+        return cur.fetchall()
+
+
+def person_localization_entities(conn, person_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "person_localizations"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT lang, biography, created_at, updated_at
+            FROM person_localizations
+            WHERE person_id=%s
+            ORDER BY
+                CASE lower(lang)
+                    WHEN 'nl-nl' THEN 0
+                    WHEN 'nl' THEN 1
+                    WHEN 'en-us' THEN 2
+                    WHEN 'en' THEN 3
+                    ELSE 4
+                END,
+                lang
+            """,
+            (person_id,),
+        )
+        return cur.fetchall()
+
+
+def person_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movie_credits") or not table_exists(conn, "movies"):
+        return []
+    media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+    media_select = (
+        """
+                poster_asset.id AS poster_asset_id,
+                poster_asset.storage_backend AS poster_asset_storage_backend,
+                poster_asset.storage_key AS poster_asset_storage_key,
+                poster_asset.source_url AS poster_asset_source_url,
+                backdrop_asset.id AS backdrop_asset_id,
+                backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
+                backdrop_asset.storage_key AS backdrop_asset_storage_key,
+                backdrop_asset.source_url AS backdrop_asset_source_url,
+        """
+        if media_join
+        else """
+                NULL AS poster_asset_id,
+                NULL AS poster_asset_storage_backend,
+                NULL AS poster_asset_storage_key,
+                NULL AS poster_asset_source_url,
+                NULL AS backdrop_asset_id,
+                NULL AS backdrop_asset_storage_backend,
+                NULL AS backdrop_asset_storage_key,
+                NULL AS backdrop_asset_source_url,
+        """
+    )
+    media_join_sql = (
+        """
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='poster'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) poster_asset ON true
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='backdrop'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) backdrop_asset ON true
+        """
+        if media_join
+        else ""
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                mc.id,
+                mc.movie_id,
+                mc.credit_type,
+                mc.character,
+                mc.job,
+                mc.sort_order,
+                m.public_id AS movie_public_id,
+                m.barcode,
+                m.title,
+                m.sort_title,
+                m.original_title,
+                m.year,
+                m.release_date,
+                m.format,
+                m.edition,
+                m.metadata->>'poster_url' AS poster_url,
+                m.metadata->>'backdrop_url' AS backdrop_url,
+{media_select}
+                m.updated_at AS movie_updated_at
+            FROM movie_credits mc
+            JOIN movies m ON m.id = mc.movie_id
+            {media_join_sql}
+            WHERE mc.person_id=%s
+            ORDER BY
+                lower(COALESCE(m.sort_title, m.title)),
+                m.year NULLS LAST,
+                mc.sort_order,
+                mc.credit_type
+            LIMIT %s
+            """,
+            (person_id, limit),
+        )
+        return [with_preview_media_urls(row) for row in cur.fetchall()]
+
+
+def person_detail_entity(conn, person_id: UUID) -> dict[str, Any] | None:
+    person = person_entity(conn, person_id)
+    if not person:
+        return None
+    localizations = person_localization_entities(conn, person_id)
+    person["biography"] = person_biography_value(localizations, person.get("metadata"))
+    return {
+        "person": person,
+        "identifiers": person_identifier_entities(conn, person_id),
+        "localizations": localizations,
+        "credits": person_credit_entities(conn, person_id),
+    }
+
+
 def set_primary_movie_media_asset(
     conn,
     *,
@@ -17542,6 +18025,17 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Movie not found", 404)
         return response({"status": "ok", "detail": detail})
 
+    @flask_app.get("/api/next/people/<person_id>")
+    def person_detail(person_id: str):
+        person_uuid = parse_uuid(person_id, "personId")
+        with connect() as conn:
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            detail = person_detail_entity(conn, person_uuid)
+        if not detail:
+            raise NextApiError("Person not found", 404)
+        return response({"status": "ok", "detail": detail})
+
     @flask_app.post("/api/next/movies/<movie_id>/media/primary")
     def movie_media_primary(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
@@ -18037,7 +18531,13 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/movies/<movie_id>")
     @flask_app.get("/containers/<container_id>")
     @flask_app.get("/app/containers/<container_id>")
-    def next_app_shell(movie_id: str | None = None, container_id: str | None = None):
+    @flask_app.get("/people/<person_id>")
+    @flask_app.get("/app/people/<person_id>")
+    def next_app_shell(
+        movie_id: str | None = None,
+        container_id: str | None = None,
+        person_id: str | None = None,
+    ):
         with connect() as conn:
             user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
             if user:
