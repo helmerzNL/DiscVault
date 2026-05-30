@@ -571,5 +571,18 @@
   "containerManage.created": "Erstellt.",
   "containerManage.renamed": "Umbenannt.",
   "containerManage.deleted": "Gelöscht.",
-  "containerManage.deleteConfirm": "{title} loschen? Dadurch werden auch Verknupfungen mit Filmen und Sammlungen entfernt."
+  "containerManage.deleteConfirm": "{title} loschen? Dadurch werden auch Verknupfungen mit Filmen und Sammlungen entfernt.",
+  "importCenter.jobType.collection": "Sammlung",
+  "importCenter.jobType.metadata": "Metadaten",
+  "importCenter.jobType.plugins": "Plugins",
+  "importCenter.jobDetails": "Aufgabendetails",
+  "importCenter.plugin": "Plugin",
+  "importCenter.entrypoint": "Einstiegspunkt",
+  "importCenter.movie": "Film",
+  "importCenter.dryRun": "Probelauf",
+  "appAdmin.moveUp": "Nach oben",
+  "appAdmin.moveDown": "Nach unten",
+  "appAdmin.movingPlugin": "Plugin-Reihenfolge wird aktualisiert...",
+  "appAdmin.pluginMoved": "Plugin-Reihenfolge aktualisiert.",
+  "appAdmin.jobDetails": "Aufgabendetails"
 }

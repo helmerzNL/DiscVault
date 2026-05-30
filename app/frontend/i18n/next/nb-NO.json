@@ -571,5 +571,18 @@
   "containerManage.created": "Opprettet.",
   "containerManage.renamed": "Endret navn.",
   "containerManage.deleted": "Slettet.",
-  "containerManage.deleteConfirm": "Slette {title}? Dette fjerner ogsa koblinger til filmer og samlinger."
+  "containerManage.deleteConfirm": "Slette {title}? Dette fjerner ogsa koblinger til filmer og samlinger.",
+  "importCenter.jobType.collection": "Samling",
+  "importCenter.jobType.metadata": "Metadata",
+  "importCenter.jobType.plugins": "Plugins",
+  "importCenter.jobDetails": "Jobbdetaljer",
+  "importCenter.plugin": "Plugin",
+  "importCenter.entrypoint": "Entrypoint",
+  "importCenter.movie": "Film",
+  "importCenter.dryRun": "Testkjoring",
+  "appAdmin.moveUp": "Opp",
+  "appAdmin.moveDown": "Ned",
+  "appAdmin.movingPlugin": "Oppdaterer pluginrekkefolge...",
+  "appAdmin.pluginMoved": "Pluginrekkefolge oppdatert.",
+  "appAdmin.jobDetails": "Jobbdetaljer"
 }

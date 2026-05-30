@@ -571,5 +571,18 @@
   "containerManage.created": "Cree.",
   "containerManage.renamed": "Renomme.",
   "containerManage.deleted": "Supprime.",
-  "containerManage.deleteConfirm": "Supprimer {title} ? Les liens avec les films et collections seront aussi retires."
+  "containerManage.deleteConfirm": "Supprimer {title} ? Les liens avec les films et collections seront aussi retires.",
+  "importCenter.jobType.collection": "Collection",
+  "importCenter.jobType.metadata": "Metadonnees",
+  "importCenter.jobType.plugins": "Plugins",
+  "importCenter.jobDetails": "Details de la tache",
+  "importCenter.plugin": "Plugin",
+  "importCenter.entrypoint": "Point d entree",
+  "importCenter.movie": "Film",
+  "importCenter.dryRun": "Simulation",
+  "appAdmin.moveUp": "Monter",
+  "appAdmin.moveDown": "Descendre",
+  "appAdmin.movingPlugin": "Mise a jour de l ordre des plugins...",
+  "appAdmin.pluginMoved": "Ordre des plugins mis a jour.",
+  "appAdmin.jobDetails": "Details de la tache"
 }
