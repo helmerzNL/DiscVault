@@ -407,6 +407,10 @@
   "personDetail.details": "Details",
   "personDetail.identifiers": "Identifikatoren",
   "personDetail.appearances": "Auftritte",
+  "personDetail.collection": "Sammlung",
+  "personDetail.digitalCollection": "Digital",
+  "personDetail.filmography": "Filmografie",
+  "personDetail.localCollection": "Sammlungs-Credits",
   "personDetail.acting": "Schauspiel",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Noch keine Biografie importiert.",
@@ -419,5 +423,8 @@
   "personDetail.publicId": "Oeffentliche ID",
   "personDetail.noIdentifiers": "Noch keine Identifikatoren.",
   "personDetail.noActing": "Noch keine Schauspiel-Credits in dieser Sammlung.",
-  "personDetail.noCrew": "Noch keine Crew-Credits in dieser Sammlung."
+  "personDetail.noCrew": "Noch keine Crew-Credits in dieser Sammlung.",
+  "personDetail.noDigitalCredits": "Noch keine digitalen Sammlungslinks.",
+  "personDetail.noFilmography": "Noch keine externe Filmografie importiert.",
+  "personDetail.groupUnknown": "Sonstiges"
 }

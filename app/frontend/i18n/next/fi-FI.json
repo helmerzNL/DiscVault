@@ -407,6 +407,10 @@
   "personDetail.details": "Tiedot",
   "personDetail.identifiers": "Tunnisteet",
   "personDetail.appearances": "Esiintymiset",
+  "personDetail.collection": "Kokoelma",
+  "personDetail.digitalCollection": "Digitaalinen",
+  "personDetail.filmography": "Filmografia",
+  "personDetail.localCollection": "Kokoelman creditit",
   "personDetail.acting": "Nayttely",
   "personDetail.crew": "Tekijat",
   "personDetail.noBiography": "Elamakertaa ei ole viela tuotu.",
@@ -419,5 +423,8 @@
   "personDetail.publicId": "Julkinen ID",
   "personDetail.noIdentifiers": "Tunnisteita ei ole viela.",
   "personDetail.noActing": "Tassa kokoelmassa ei ole viela nayttelycreditteja.",
-  "personDetail.noCrew": "Tassa kokoelmassa ei ole viela crew-creditteja."
+  "personDetail.noCrew": "Tassa kokoelmassa ei ole viela crew-creditteja.",
+  "personDetail.noDigitalCredits": "Digitaalisia kokoelmalinkkeja ei ole viela.",
+  "personDetail.noFilmography": "Ulkoista filmografiaa ei ole viela tuotu.",
+  "personDetail.groupUnknown": "Muu"
 }

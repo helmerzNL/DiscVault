@@ -501,6 +501,10 @@
   "personDetail.details": "Details",
   "personDetail.identifiers": "Identifiers",
   "personDetail.appearances": "Appearances",
+  "personDetail.collection": "Collection",
+  "personDetail.digitalCollection": "Digital",
+  "personDetail.filmography": "Filmography",
+  "personDetail.localCollection": "Collection credits",
   "personDetail.acting": "Acting",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "No biography imported yet.",
@@ -513,5 +517,8 @@
   "personDetail.publicId": "Public ID",
   "personDetail.noIdentifiers": "No identifiers yet.",
   "personDetail.noActing": "No acting credits in this collection yet.",
-  "personDetail.noCrew": "No crew credits in this collection yet."
+  "personDetail.noCrew": "No crew credits in this collection yet.",
+  "personDetail.noDigitalCredits": "No digital collection links yet.",
+  "personDetail.noFilmography": "No external filmography imported yet.",
+  "personDetail.groupUnknown": "Other"
 }

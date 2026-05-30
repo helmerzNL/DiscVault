@@ -407,6 +407,10 @@
   "personDetail.details": "Details",
   "personDetail.identifiers": "Identifiants",
   "personDetail.appearances": "Apparitions",
+  "personDetail.collection": "Collection",
+  "personDetail.digitalCollection": "Numerique",
+  "personDetail.filmography": "Filmographie",
+  "personDetail.localCollection": "Credits de collection",
   "personDetail.acting": "Jeu",
   "personDetail.crew": "Equipe",
   "personDetail.noBiography": "Aucune biographie importee pour le moment.",
@@ -419,5 +423,8 @@
   "personDetail.publicId": "ID public",
   "personDetail.noIdentifiers": "Aucun identifiant pour le moment.",
   "personDetail.noActing": "Aucun credit d'acteur dans cette collection pour le moment.",
-  "personDetail.noCrew": "Aucun credit d'equipe dans cette collection pour le moment."
+  "personDetail.noCrew": "Aucun credit d'equipe dans cette collection pour le moment.",
+  "personDetail.noDigitalCredits": "Aucun lien de collection numerique pour le moment.",
+  "personDetail.noFilmography": "Aucune filmographie externe importee pour le moment.",
+  "personDetail.groupUnknown": "Autre"
 }

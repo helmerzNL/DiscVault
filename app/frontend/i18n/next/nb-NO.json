@@ -407,6 +407,10 @@
   "personDetail.details": "Detaljer",
   "personDetail.identifiers": "Identifikatorer",
   "personDetail.appearances": "Opptredener",
+  "personDetail.collection": "Samling",
+  "personDetail.digitalCollection": "Digital",
+  "personDetail.filmography": "Filmografi",
+  "personDetail.localCollection": "Samlingscredits",
   "personDetail.acting": "Skuespill",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Ingen biografi importert enna.",
@@ -419,5 +423,8 @@
   "personDetail.publicId": "Offentlig ID",
   "personDetail.noIdentifiers": "Ingen identifikatorer enna.",
   "personDetail.noActing": "Ingen skuespill-credits i denne samlingen enna.",
-  "personDetail.noCrew": "Ingen crew-credits i denne samlingen enna."
+  "personDetail.noCrew": "Ingen crew-credits i denne samlingen enna.",
+  "personDetail.noDigitalCredits": "Ingen digitale samlingslenker enna.",
+  "personDetail.noFilmography": "Ingen ekstern filmografi importert enna.",
+  "personDetail.groupUnknown": "Annet"
 }

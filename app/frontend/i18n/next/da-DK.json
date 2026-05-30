@@ -407,6 +407,10 @@
   "personDetail.details": "Detaljer",
   "personDetail.identifiers": "Identifikatorer",
   "personDetail.appearances": "Optradener",
+  "personDetail.collection": "Samling",
+  "personDetail.digitalCollection": "Digital",
+  "personDetail.filmography": "Filmografi",
+  "personDetail.localCollection": "Samlingscredits",
   "personDetail.acting": "Skuespil",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Ingen biografi importeret endnu.",
@@ -419,5 +423,8 @@
   "personDetail.publicId": "Offentligt ID",
   "personDetail.noIdentifiers": "Ingen identifikatorer endnu.",
   "personDetail.noActing": "Ingen skuespil-credits i denne samling endnu.",
-  "personDetail.noCrew": "Ingen crew-credits i denne samling endnu."
+  "personDetail.noCrew": "Ingen crew-credits i denne samling endnu.",
+  "personDetail.noDigitalCredits": "Ingen digitale samlingslinks endnu.",
+  "personDetail.noFilmography": "Ingen ekstern filmografi importeret endnu.",
+  "personDetail.groupUnknown": "Andet"
 }
