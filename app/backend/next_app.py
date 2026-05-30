@@ -3901,7 +3901,7 @@ def ui_preview_html(
     }
     .bulk-bar {
       display: none;
-      align-items: center;
+      align-items: start;
       justify-content: space-between;
       gap: 12px;
       border: 1px solid var(--line);
@@ -3913,6 +3913,44 @@ def ui_preview_html(
     }
     .bulk-bar.visible {
       display: flex;
+    }
+    .bulk-targets {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 10px;
+      width: min(760px, 100%);
+    }
+    .bulk-target {
+      display: grid;
+      grid-template-columns: minmax(120px, 1fr) auto auto;
+      gap: 8px;
+      align-items: end;
+      min-width: 0;
+    }
+    .bulk-target.wide {
+      grid-column: 1 / -1;
+      grid-template-columns: minmax(160px, 1fr) auto auto;
+    }
+    .bulk-target label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 720;
+      min-width: 0;
+    }
+    .bulk-target select {
+      min-height: 34px;
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: .84rem;
+      font-weight: 620;
     }
     .bulk-count {
       color: var(--muted);
@@ -3999,6 +4037,11 @@ def ui_preview_html(
       background: var(--accent);
       border-color: var(--accent);
       box-shadow: inset 0 0 0 5px var(--accent-contrast);
+    }
+    .preview-collection.bulk-selected {
+      border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
     }
     .preview-poster-art {
       aspect-ratio: 2 / 3;
@@ -4708,6 +4751,15 @@ def ui_preview_html(
       .bulk-actions {
         align-items: stretch;
       }
+      .bulk-bar {
+        flex-direction: column;
+      }
+      .bulk-targets,
+      .bulk-target,
+      .bulk-target.wide {
+        grid-template-columns: 1fr;
+        width: 100%;
+      }
       .login-primary,
       .secondary-button,
       .primary-button,
@@ -5013,11 +5065,42 @@ def ui_preview_html(
       </section>
       <section class="bulk-bar" id="bulkBar">
         <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
-        <div class="bulk-actions">
-          <button type="button" class="bulk-action" disabled data-bulk-action="metadata" data-next-i18n="bulk.refreshMetadata">Refresh metadata</button>
-          <button type="button" class="bulk-action" disabled data-bulk-action="boxset" data-next-i18n="bulk.addToBoxSet">Add to box-set</button>
-          <button type="button" class="bulk-action" disabled data-bulk-action="collection" data-next-i18n="bulk.addToCollection">Add to collection</button>
-          <button type="button" class="bulk-action" disabled data-bulk-action="vault" data-next-i18n="bulk.addToVault">Add to Vault</button>
+        <div class="bulk-targets">
+          <div class="bulk-target">
+            <label>
+              <span data-next-i18n="bulk.metadata">Metadata</span>
+              <button type="button" class="bulk-action" disabled data-bulk-action="metadata" data-next-i18n="bulk.refreshMetadata">Refresh metadata</button>
+            </label>
+          </div>
+          <div class="bulk-target">
+            <label>
+              <span data-next-i18n="bulk.groupTarget">Group</span>
+              <select id="bulkGroupTarget"></select>
+            </label>
+            <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
+            <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
+          </div>
+          <div class="bulk-target">
+            <label>
+              <span data-next-i18n="bulk.boxSetTarget">Box-set</span>
+              <select id="bulkBoxSetTarget"></select>
+            </label>
+            <button type="button" class="bulk-action" disabled data-bulk-action="boxset" data-next-i18n="bulk.addToBoxSet">Add to box-set</button>
+          </div>
+          <div class="bulk-target">
+            <label>
+              <span data-next-i18n="bulk.vaultTarget">Vault</span>
+              <select id="bulkVaultTarget"></select>
+            </label>
+            <button type="button" class="bulk-action" disabled data-bulk-action="vault" data-next-i18n="bulk.addToVault">Add to Vault</button>
+          </div>
+          <div class="bulk-target wide">
+            <label>
+              <span data-next-i18n="bulk.collectionTarget">Collection</span>
+              <select id="bulkCollectionTarget"></select>
+            </label>
+            <button type="button" class="bulk-action" disabled data-bulk-action="collection" data-next-i18n="bulk.addToCollection">Add to collection</button>
+          </div>
         </div>
       </section>
       <section class="preview-layout">
@@ -5337,6 +5420,7 @@ def ui_preview_html(
     let profileRecovery = {};
     let appAdmin = {credentials: [], groups: [], invites: [], roles: [], assignableRoles: [], users: []};
     const selectedMovieIds = new Set();
+    const selectedContainerIds = new Set();
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
       messages: {},
@@ -5996,6 +6080,27 @@ def ui_preview_html(
       if (!select) return;
       select.innerHTML = groupOptionsHtml();
     }
+    function targetOptionHtml(items, emptyKey, emptyText) {
+      if (!items.length) return `<option value="">${escapeHtml(tNext(emptyKey, emptyText))}</option>`;
+      return [
+        `<option value="">${escapeHtml(tNext("bulk.chooseTarget", "Choose target"))}</option>`,
+        ...items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.title || item.public_id || item.id)}</option>`)
+      ].join("");
+    }
+    function renderBulkTargets() {
+      const groups = mediaGroups || [];
+      const boxSets = (containers || []).filter((item) => item.container_type === "box_set");
+      const collections = (containers || []).filter((item) => item.container_type === "collection");
+      const vaults = (containers || []).filter((item) => item.container_type === "vault");
+      const groupSelect = document.getElementById("bulkGroupTarget");
+      const boxSetSelect = document.getElementById("bulkBoxSetTarget");
+      const collectionSelect = document.getElementById("bulkCollectionTarget");
+      const vaultSelect = document.getElementById("bulkVaultTarget");
+      if (groupSelect) groupSelect.innerHTML = targetOptionHtml(groups, "bulk.noGroups", "No groups");
+      if (boxSetSelect) boxSetSelect.innerHTML = targetOptionHtml(boxSets, "bulk.noBoxSets", "No box-sets");
+      if (collectionSelect) collectionSelect.innerHTML = targetOptionHtml(collections, "bulk.noCollections", "No collections");
+      if (vaultSelect) vaultSelect.innerHTML = targetOptionHtml(vaults, "bulk.noVaults", "No vaults");
+    }
     function movieMatchesGroup(movie) {
       const selected = preferences.default_media_group_id || "";
       const groups = Array.isArray(movie.media_groups) ? movie.media_groups : [];
@@ -6026,8 +6131,9 @@ def ui_preview_html(
     }
     function containerCardHtml(container) {
       const label = String(container.container_type || "container").replace(/_/g, " ");
+      const selected = selectedContainerIds.has(String(container.id)) ? " bulk-selected" : "";
       return `
-        <a class="preview-collection" href="/api/next/app/containers/${encodeURIComponent(container.id)}">
+        <a class="preview-collection${selected}" href="/api/next/app/containers/${encodeURIComponent(container.id)}" data-preview-container="${escapeHtml(container.id)}">
           <span>${escapeHtml(label)}</span>
           <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
         </a>
@@ -6370,6 +6476,7 @@ def ui_preview_html(
     }
     function renderLibrary() {
       renderGroupFilter();
+      renderBulkTargets();
       const search = document.getElementById("previewSearch");
       if (search) {
         search.closest(".searchbox")?.classList.toggle("hidden", preferences.show_collection_search === false);
@@ -6396,10 +6503,19 @@ def ui_preview_html(
       });
       const collectionNode = document.querySelector(".preview-collections");
       if (collectionNode) {
+        const visibleContainers = selectionMode ? containers : containers.slice(0, 10);
         collectionNode.innerHTML = containers.length
-          ? containers.slice(0, 10).map(containerCardHtml).join("")
+          ? visibleContainers.map(containerCardHtml).join("")
           : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyContainers", "No containers imported yet."))}</div>`;
       }
+      document.querySelectorAll("[data-preview-container]").forEach((link) => {
+        link.classList.toggle("bulk-selected", selectedContainerIds.has(String(link.dataset.previewContainer)));
+        link.addEventListener("click", (event) => {
+          if (!selectionMode) return;
+          event.preventDefault();
+          toggleContainerSelection(link.dataset.previewContainer);
+        });
+      });
       const shownCount = document.getElementById("shownCount");
       if (shownCount) shownCount.textContent = String(visibleMovies.length);
       const summary = document.getElementById("librarySummary");
@@ -6423,8 +6539,8 @@ def ui_preview_html(
       const button = document.getElementById("selectModeButton");
       if (button) button.textContent = selectionMode ? tNext("bulk.done", "Done") : tNext("bulk.select", "Select");
       if (!selectionMode) selectedMovieIds.clear();
-      updateBulkBar();
-      document.querySelectorAll("[data-preview-movie]").forEach((node) => node.classList.toggle("bulk-selected", selectedMovieIds.has(node.dataset.previewMovie)));
+      if (!selectionMode) selectedContainerIds.clear();
+      renderLibrary();
     }
     function toggleMovieSelection(movieId) {
       if (!movieId) return;
@@ -6437,14 +6553,36 @@ def ui_preview_html(
       });
       updateBulkBar();
     }
+    function toggleContainerSelection(containerId) {
+      if (!containerId) return;
+      const value = String(containerId);
+      if (selectedContainerIds.has(value)) selectedContainerIds.delete(value);
+      else selectedContainerIds.add(value);
+      document.querySelectorAll("[data-preview-container]").forEach((node) => {
+        if (String(node.dataset.previewContainer) === value) {
+          node.classList.toggle("bulk-selected", selectedContainerIds.has(value));
+        }
+      });
+      updateBulkBar();
+    }
     function updateBulkBar() {
       const bar = document.getElementById("bulkBar");
-      const count = selectedMovieIds.size;
+      const movieCount = selectedMovieIds.size;
+      const containerCount = selectedContainerIds.size;
+      const count = movieCount + containerCount;
       if (bar) bar.classList.toggle("visible", selectionMode || count > 0);
       const label = document.getElementById("bulkCount");
-      if (label) label.textContent = count ? `${count} ${tNext("bulk.selected", "selected")}` : tNext("bulk.noneSelected", "No movies selected");
+      if (label) {
+        const parts = [];
+        if (movieCount) parts.push(`${movieCount} ${tNext("bulk.moviesSelected", "movies")}`);
+        if (containerCount) parts.push(`${containerCount} ${tNext("bulk.containersSelected", "containers")}`);
+        label.textContent = parts.length ? `${parts.join(", ")} ${tNext("bulk.selected", "selected")}` : tNext("bulk.noneSelected", "No movies selected");
+      }
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
-        button.disabled = count === 0;
+        const action = button.dataset.bulkAction || "";
+        if (action === "collection") button.disabled = count === 0;
+        else if (action === "metadata" || action === "group-add" || action === "group-remove" || action === "boxset" || action === "vault") button.disabled = movieCount === 0;
+        else button.disabled = count === 0;
       });
     }
     async function queueBulkMetadataRefresh() {
@@ -6465,6 +6603,91 @@ def ui_preview_html(
         selectedMovieIds.clear();
         toggleSelectMode(false);
         console.log("bulk metadata jobs", payload);
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
+    }
+    function bulkSelectedMovieIds() {
+      return Array.from(selectedMovieIds);
+    }
+    function bulkSelectedContainerIds(excludeId) {
+      return Array.from(selectedContainerIds).filter((id) => String(id) !== String(excludeId || ""));
+    }
+    function bulkTargetValue(selectId, emptyKey) {
+      const target = document.getElementById(selectId)?.value || "";
+      if (!target) throw new Error(tNext(emptyKey, "Choose a target first."));
+      return target;
+    }
+    function finishBulkAction(message) {
+      const summary = document.getElementById("librarySummary");
+      selectedMovieIds.clear();
+      selectedContainerIds.clear();
+      toggleSelectMode(false);
+      if (summary) summary.textContent = message;
+      loadAppSnapshot().then(() => {
+        const refreshedSummary = document.getElementById("librarySummary");
+        if (refreshedSummary) refreshedSummary.textContent = message;
+      }).catch((error) => {
+        if (summary) summary.textContent = error.message || String(error);
+      });
+    }
+    async function applyBulkGroup(operation) {
+      const movieIds = bulkSelectedMovieIds();
+      const summary = document.getElementById("librarySummary");
+      if (!movieIds.length) {
+        if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+        return;
+      }
+      try {
+        const groupId = bulkTargetValue("bulkGroupTarget", "bulk.chooseGroupFirst");
+        if (summary) summary.textContent = tNext("bulk.savingGroupLinks", "Saving group links...");
+        const payload = await authApiJson(`/api/next/bulk/media-groups/${encodeURIComponent(groupId)}/movies`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, operation})
+        });
+        finishBulkAction(`${payload.changed || 0} ${tNext(operation === "remove" ? "bulk.removedFromGroup" : "bulk.addedToGroup", operation === "remove" ? "movies removed from group" : "movies added to group")}`);
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
+    }
+    async function applyBulkContainer(targetType, selectId) {
+      const movieIds = bulkSelectedMovieIds();
+      const summary = document.getElementById("librarySummary");
+      if (!movieIds.length) {
+        if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+        return;
+      }
+      try {
+        const containerId = bulkTargetValue(selectId, targetType === "vault" ? "bulk.chooseVaultFirst" : "bulk.chooseBoxSetFirst");
+        if (summary) summary.textContent = tNext("bulk.savingContainerLinks", "Saving container links...");
+        const payload = await authApiJson(`/api/next/bulk/containers/${encodeURIComponent(containerId)}/movies`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, targetType})
+        });
+        finishBulkAction(`${payload.changed || 0} ${tNext(targetType === "vault" ? "bulk.addedToVault" : "bulk.addedToBoxSet", targetType === "vault" ? "movies added to Vault" : "movies added to box-set")}`);
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
+    }
+    async function applyBulkCollection() {
+      const movieIds = bulkSelectedMovieIds();
+      const summary = document.getElementById("librarySummary");
+      try {
+        const collectionId = bulkTargetValue("bulkCollectionTarget", "bulk.chooseCollectionFirst");
+        const containerIds = bulkSelectedContainerIds(collectionId);
+        if (!movieIds.length && !containerIds.length) {
+          if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+          return;
+        }
+        if (summary) summary.textContent = tNext("bulk.savingCollectionLinks", "Saving collection links...");
+        const payload = await authApiJson(`/api/next/bulk/collections/${encodeURIComponent(collectionId)}/items`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, containerIds})
+        });
+        finishBulkAction(`${payload.changed || 0} ${tNext("bulk.addedToCollection", "items added to collection")}`);
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
       }
@@ -7073,9 +7296,27 @@ def ui_preview_html(
             queueBulkMetadataRefresh();
             return;
           }
-          const message = count
-            ? tNext("bulk.notBuiltYet", "This bulk action is ready in the UI and will be connected to the backend next.")
-            : tNext("bulk.noneSelected", "No movies selected");
+          if (button.dataset.bulkAction === "group-add") {
+            applyBulkGroup("add");
+            return;
+          }
+          if (button.dataset.bulkAction === "group-remove") {
+            applyBulkGroup("remove");
+            return;
+          }
+          if (button.dataset.bulkAction === "boxset") {
+            applyBulkContainer("box_set", "bulkBoxSetTarget");
+            return;
+          }
+          if (button.dataset.bulkAction === "vault") {
+            applyBulkContainer("vault", "bulkVaultTarget");
+            return;
+          }
+          if (button.dataset.bulkAction === "collection") {
+            applyBulkCollection();
+            return;
+          }
+          const message = tNext("bulk.noneSelected", "No movies selected");
           const summary = document.getElementById("librarySummary");
           if (summary) summary.textContent = message;
         });
@@ -11925,6 +12166,64 @@ def can_manage_media_group_members(conn, group_id: UUID, actor: dict[str, Any]) 
     return bool(member and member.get("role") in {"owner", "manager"})
 
 
+def parse_uuid_list(values: Any, field_name: str, *, maximum: int = 250) -> list[UUID]:
+    if values in (None, ""):
+        return []
+    if not isinstance(values, list):
+        raise NextApiError(f"{field_name} must be an array", 400)
+    if len(values) > maximum:
+        raise NextApiError(f"At most {maximum} {field_name} values are allowed", 400)
+    parsed: list[UUID] = []
+    seen: set[UUID] = set()
+    for value in values:
+        item = parse_uuid(value, field_name)
+        if not item:
+            raise NextApiError(f"{field_name} must not contain empty values", 400)
+        if item not in seen:
+            parsed.append(item)
+            seen.add(item)
+    return parsed
+
+
+def require_existing_movie_ids(conn, movie_ids: list[UUID]) -> None:
+    if not movie_ids:
+        return
+    if not table_exists(conn, "movies"):
+        raise NextApiError("Movie table is not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM movies WHERE id = ANY(%s)", (movie_ids,))
+        found_ids = {row["id"] for row in cur.fetchall()}
+    missing = [str(item) for item in movie_ids if item not in found_ids]
+    if missing:
+        raise NextApiError(f"Movie not found: {', '.join(missing)}", 404)
+
+
+def container_type_for_id(conn, container_id: UUID) -> str:
+    if not table_exists(conn, "containers"):
+        raise NextApiError("Container table is not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT container_type FROM containers WHERE id=%s", (container_id,))
+        row = cur.fetchone()
+    if not row:
+        raise NextApiError("Container not found", 404)
+    return str(row["container_type"] or "")
+
+
+def container_types_for_ids(conn, container_ids: list[UUID]) -> dict[UUID, str]:
+    if not container_ids:
+        return {}
+    if not table_exists(conn, "containers"):
+        raise NextApiError("Container table is not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, container_type FROM containers WHERE id = ANY(%s)", (container_ids,))
+        rows = cur.fetchall()
+    found = {row["id"]: str(row["container_type"] or "") for row in rows}
+    missing = [str(item) for item in container_ids if item not in found]
+    if missing:
+        raise NextApiError(f"Container not found: {', '.join(missing)}", 404)
+    return found
+
+
 def ensure_sync_state(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -15297,6 +15596,218 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
             detail = media_group_detail_entity(conn, group_uuid)
         return response({"status": "deleted", "group": detail})
+
+    @flask_app.post("/api/next/bulk/media-groups/<group_id>/movies")
+    def bulk_media_group_movies(group_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        if not group_uuid:
+            raise NextApiError("groupId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Bulk group request body must be an object", 400)
+        movie_ids = parse_uuid_list(body.get("movieIds") or body.get("movie_ids"), "movieIds")
+        if not movie_ids:
+            raise NextApiError("movieIds must be a non-empty array", 400)
+        operation = str(body.get("operation") or "add").strip().lower()
+        if operation not in {"add", "remove"}:
+            raise NextApiError("operation must be add or remove", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.invite")
+            if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
+                if not cur.fetchone():
+                    raise NextApiError("Media group not found", 404)
+            if not can_manage_media_group_members(conn, group_uuid, actor):
+                raise NextApiError("Media group manager access required", 403)
+            require_existing_movie_ids(conn, movie_ids)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    if operation == "remove":
+                        cur.execute(
+                            "DELETE FROM media_group_movies WHERE group_id=%s AND movie_id = ANY(%s)",
+                            (group_uuid, movie_ids),
+                        )
+                        changed = cur.rowcount
+                    else:
+                        for movie_id in movie_ids:
+                            cur.execute(
+                                """
+                                INSERT INTO media_group_movies (group_id, movie_id, metadata, created_at, updated_at)
+                                VALUES (%s, %s, '{}'::jsonb, now(), now())
+                                ON CONFLICT (group_id, movie_id) DO NOTHING
+                                """,
+                                (group_uuid, movie_id),
+                            )
+                            changed += cur.rowcount
+                    cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
+        return response(
+            {
+                "status": "ok",
+                "operation": operation,
+                "changed": changed,
+                "requested": len(movie_ids),
+                "groupId": str(group_uuid),
+            }
+        )
+
+    @flask_app.post("/api/next/bulk/containers/<container_id>/movies")
+    def bulk_container_movies(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        if not container_uuid:
+            raise NextApiError("containerId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Bulk container request body must be an object", 400)
+        movie_ids = parse_uuid_list(body.get("movieIds") or body.get("movie_ids"), "movieIds")
+        if not movie_ids:
+            raise NextApiError("movieIds must be a non-empty array", 400)
+        target_type = str(body.get("targetType") or body.get("target_type") or "").strip()
+        if target_type not in {"box_set", "vault", ""}:
+            raise NextApiError("targetType must be box_set or vault", 400)
+        operation = str(body.get("operation") or "add").strip().lower()
+        if operation not in {"add", "remove"}:
+            raise NextApiError("operation must be add or remove", 400)
+        with connect() as conn:
+            require_next_permission(conn, "containers.edit")
+            if not table_exists(conn, "container_movies"):
+                raise NextApiError("Container movie links are not available yet", 503)
+            container_type = container_type_for_id(conn, container_uuid)
+            if container_type not in {"box_set", "vault"}:
+                raise NextApiError("Target container must be a box-set or vault", 400)
+            if target_type and container_type != target_type:
+                raise NextApiError("Target container type does not match requested action", 400)
+            require_existing_movie_ids(conn, movie_ids)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    if operation == "remove":
+                        cur.execute(
+                            "DELETE FROM container_movies WHERE container_id=%s AND movie_id = ANY(%s)",
+                            (container_uuid, movie_ids),
+                        )
+                        changed = cur.rowcount
+                    else:
+                        cur.execute(
+                            "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM container_movies WHERE container_id=%s",
+                            (container_uuid,),
+                        )
+                        sort_order = int(cur.fetchone()["max_sort"])
+                        for movie_id in movie_ids:
+                            sort_order += 1
+                            cur.execute(
+                                """
+                                INSERT INTO container_movies (container_id, movie_id, sort_order, created_at)
+                                VALUES (%s, %s, %s, now())
+                                ON CONFLICT (container_id, movie_id) DO NOTHING
+                                """,
+                                (container_uuid, movie_id, sort_order),
+                            )
+                            changed += cur.rowcount
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+        return response(
+            {
+                "status": "ok",
+                "operation": operation,
+                "changed": changed,
+                "requested": len(movie_ids),
+                "containerId": str(container_uuid),
+                "containerType": container_type,
+            }
+        )
+
+    @flask_app.post("/api/next/bulk/collections/<collection_id>/items")
+    def bulk_collection_items(collection_id: str):
+        collection_uuid = parse_uuid(collection_id, "collectionId")
+        if not collection_uuid:
+            raise NextApiError("collectionId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Bulk collection request body must be an object", 400)
+        movie_ids = parse_uuid_list(body.get("movieIds") or body.get("movie_ids"), "movieIds")
+        container_ids = parse_uuid_list(body.get("containerIds") or body.get("container_ids"), "containerIds")
+        container_ids = [item for item in container_ids if item != collection_uuid]
+        if not movie_ids and not container_ids:
+            raise NextApiError("movieIds or containerIds must be supplied", 400)
+        operation = str(body.get("operation") or "add").strip().lower()
+        if operation not in {"add", "remove"}:
+            raise NextApiError("operation must be add or remove", 400)
+        with connect() as conn:
+            require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
+            if not table_exists(conn, "collection_items"):
+                raise NextApiError("Collection items are not available yet", 503)
+            target_type = container_type_for_id(conn, collection_uuid)
+            if target_type != "collection":
+                raise NextApiError("Target container must be a collection", 400)
+            require_existing_movie_ids(conn, movie_ids)
+            container_types = container_types_for_ids(conn, container_ids)
+            allowed_container_ids = [
+                item for item in container_ids if container_types.get(item) in {"box_set", "vault", "collection"}
+            ]
+            changed = 0
+            requested = len(movie_ids) + len(allowed_container_ids)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    if operation == "remove":
+                        if movie_ids:
+                            cur.execute(
+                                """
+                                DELETE FROM collection_items
+                                WHERE collection_id=%s AND item_type='movie' AND item_id = ANY(%s)
+                                """,
+                                (collection_uuid, movie_ids),
+                            )
+                            changed += cur.rowcount
+                        if allowed_container_ids:
+                            cur.execute(
+                                """
+                                DELETE FROM collection_items
+                                WHERE collection_id=%s AND item_type = ANY(%s::text[]) AND item_id = ANY(%s)
+                                """,
+                                (collection_uuid, ["box_set", "vault", "collection"], allowed_container_ids),
+                            )
+                            changed += cur.rowcount
+                    else:
+                        cur.execute(
+                            "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM collection_items WHERE collection_id=%s",
+                            (collection_uuid,),
+                        )
+                        sort_order = int(cur.fetchone()["max_sort"])
+                        for movie_id in movie_ids:
+                            sort_order += 1
+                            cur.execute(
+                                """
+                                INSERT INTO collection_items (collection_id, item_type, item_id, sort_order, created_at)
+                                VALUES (%s, 'movie', %s, %s, now())
+                                ON CONFLICT (collection_id, item_type, item_id) DO NOTHING
+                                """,
+                                (collection_uuid, movie_id, sort_order),
+                            )
+                            changed += cur.rowcount
+                        for item_id in allowed_container_ids:
+                            sort_order += 1
+                            item_type = container_types[item_id]
+                            cur.execute(
+                                """
+                                INSERT INTO collection_items (collection_id, item_type, item_id, sort_order, created_at)
+                                VALUES (%s, %s, %s, %s, now())
+                                ON CONFLICT (collection_id, item_type, item_id) DO NOTHING
+                                """,
+                                (collection_uuid, item_type, item_id, sort_order),
+                            )
+                            changed += cur.rowcount
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_uuid,))
+        return response(
+            {
+                "status": "ok",
+                "operation": operation,
+                "changed": changed,
+                "requested": requested,
+                "collectionId": str(collection_uuid),
+            }
+        )
 
     @flask_app.get("/api/next/digital-items")
     def digital_items():
