@@ -678,5 +678,13 @@
   "appAdmin.moveDown": "Omlaag",
   "appAdmin.movingPlugin": "Pluginvolgorde bijwerken...",
   "appAdmin.pluginMoved": "Pluginvolgorde bijgewerkt.",
-  "appAdmin.jobDetails": "Taakdetails"
+  "appAdmin.jobDetails": "Taakdetails",
+  "preferences.sections": "Voorkeursecties",
+  "preferences.tabAppearance": "Weergave",
+  "preferences.tabLibrary": "Bibliotheek",
+  "preferences.tabCollectors": "Collectors",
+  "preferences.theme": "Thema",
+  "preferences.themeHelp": "Volg het systeemthema of kies een vaste weergave.",
+  "preferences.language": "Taal",
+  "preferences.languageHelp": "Kies de taal voor DiscVault op dit apparaat."
 }

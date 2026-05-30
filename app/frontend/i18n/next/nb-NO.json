@@ -584,5 +584,13 @@
   "appAdmin.moveDown": "Ned",
   "appAdmin.movingPlugin": "Oppdaterer pluginrekkefolge...",
   "appAdmin.pluginMoved": "Pluginrekkefolge oppdatert.",
-  "appAdmin.jobDetails": "Jobbdetaljer"
+  "appAdmin.jobDetails": "Jobbdetaljer",
+  "preferences.sections": "Innstillingsseksjoner",
+  "preferences.tabAppearance": "Utseende",
+  "preferences.tabLibrary": "Bibliotek",
+  "preferences.tabCollectors": "Samlere",
+  "preferences.theme": "Tema",
+  "preferences.themeHelp": "Folg systemtemaet eller velg et fast utseende.",
+  "preferences.language": "Sprak",
+  "preferences.languageHelp": "Velg spraket for DiscVault paa denne enheten."
 }

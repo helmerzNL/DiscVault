@@ -584,5 +584,13 @@
   "appAdmin.moveDown": "Ned",
   "appAdmin.movingPlugin": "Uppdaterar pluginordning...",
   "appAdmin.pluginMoved": "Pluginordning uppdaterad.",
-  "appAdmin.jobDetails": "Jobbdetaljer"
+  "appAdmin.jobDetails": "Jobbdetaljer",
+  "preferences.sections": "Installningssektioner",
+  "preferences.tabAppearance": "Utseende",
+  "preferences.tabLibrary": "Bibliotek",
+  "preferences.tabCollectors": "Samlare",
+  "preferences.theme": "Tema",
+  "preferences.themeHelp": "Folj systemtemat eller valj ett fast utseende.",
+  "preferences.language": "Sprak",
+  "preferences.languageHelp": "Valj sprak for DiscVault pa den har enheten."
 }

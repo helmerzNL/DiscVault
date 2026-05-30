@@ -584,5 +584,13 @@
   "appAdmin.moveDown": "Nach unten",
   "appAdmin.movingPlugin": "Plugin-Reihenfolge wird aktualisiert...",
   "appAdmin.pluginMoved": "Plugin-Reihenfolge aktualisiert.",
-  "appAdmin.jobDetails": "Aufgabendetails"
+  "appAdmin.jobDetails": "Aufgabendetails",
+  "preferences.sections": "Einstellungsbereiche",
+  "preferences.tabAppearance": "Darstellung",
+  "preferences.tabLibrary": "Bibliothek",
+  "preferences.tabCollectors": "Sammler",
+  "preferences.theme": "Design",
+  "preferences.themeHelp": "Systemdesign folgen oder eine feste Darstellung waehlen.",
+  "preferences.language": "Sprache",
+  "preferences.languageHelp": "Waehle die Sprache fuer DiscVault auf diesem Geraet."
 }
