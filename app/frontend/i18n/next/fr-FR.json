@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "Aucune option de visuel pour le moment.",
   "containerDetail.remove": "Retirer",
   "containerDetail.removing": "Suppression du lien...",
-  "containerDetail.removed": "Lien supprime."
+  "containerDetail.removed": "Lien supprime.",
+  "movieDetail.posters": "Affiches",
+  "movieDetail.backdrops": "Backdrops",
+  "movieDetail.videos": "Videos",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Distribution",
+  "movieDetail.crew": "Equipe",
+  "movieDetail.noPosters": "Aucune option d'affiche pour le moment.",
+  "movieDetail.noBackdrops": "Aucune option de backdrop pour le moment.",
+  "movieDetail.noVideos": "Aucune video importee pour le moment.",
+  "movieDetail.noCast": "Aucune distribution importee pour le moment.",
+  "movieDetail.noCrew": "Aucune equipe importee pour le moment.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Ouvrir la video"
 }

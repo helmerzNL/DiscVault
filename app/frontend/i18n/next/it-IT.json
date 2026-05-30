@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "Nessuna opzione artwork.",
   "containerDetail.remove": "Rimuovi",
   "containerDetail.removing": "Rimozione collegamento...",
-  "containerDetail.removed": "Collegamento rimosso."
+  "containerDetail.removed": "Collegamento rimosso.",
+  "movieDetail.posters": "Poster",
+  "movieDetail.backdrops": "Backdrop",
+  "movieDetail.videos": "Video",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Cast",
+  "movieDetail.crew": "Crew",
+  "movieDetail.noPosters": "Nessuna opzione poster.",
+  "movieDetail.noBackdrops": "Nessuna opzione backdrop.",
+  "movieDetail.noVideos": "Nessun video importato.",
+  "movieDetail.noCast": "Nessun cast importato.",
+  "movieDetail.noCrew": "Nessuna crew importata.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Apri video"
 }

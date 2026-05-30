@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "Inga artwork-alternativ an.",
   "containerDetail.remove": "Ta bort",
   "containerDetail.removing": "Tar bort lank...",
-  "containerDetail.removed": "Lank borttagen."
+  "containerDetail.removed": "Lank borttagen.",
+  "movieDetail.posters": "Affischer",
+  "movieDetail.backdrops": "Backdrops",
+  "movieDetail.videos": "Videor",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Skadespelare",
+  "movieDetail.crew": "Crew",
+  "movieDetail.noPosters": "Inga affischalternativ an.",
+  "movieDetail.noBackdrops": "Inga backdrop-alternativ an.",
+  "movieDetail.noVideos": "Inga videor importerade an.",
+  "movieDetail.noCast": "Ingen cast importerad an.",
+  "movieDetail.noCrew": "Ingen crew importerad an.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Oppna video"
 }

@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "Todavia no hay opciones de imagen.",
   "containerDetail.remove": "Quitar",
   "containerDetail.removing": "Quitando enlace...",
-  "containerDetail.removed": "Enlace quitado."
+  "containerDetail.removed": "Enlace quitado.",
+  "movieDetail.posters": "Posters",
+  "movieDetail.backdrops": "Fondos",
+  "movieDetail.videos": "Videos",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Reparto",
+  "movieDetail.crew": "Equipo",
+  "movieDetail.noPosters": "Todavia no hay opciones de poster.",
+  "movieDetail.noBackdrops": "Todavia no hay opciones de fondo.",
+  "movieDetail.noVideos": "Todavia no se han importado videos.",
+  "movieDetail.noCast": "Todavia no se ha importado reparto.",
+  "movieDetail.noCrew": "Todavia no se ha importado equipo.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Abrir video"
 }

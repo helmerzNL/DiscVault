@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "Ingen artwork-muligheder endnu.",
   "containerDetail.remove": "Fjern",
   "containerDetail.removing": "Fjerner link...",
-  "containerDetail.removed": "Link fjernet."
+  "containerDetail.removed": "Link fjernet.",
+  "movieDetail.posters": "Plakater",
+  "movieDetail.backdrops": "Backdrops",
+  "movieDetail.videos": "Videoer",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Medvirkende",
+  "movieDetail.crew": "Crew",
+  "movieDetail.noPosters": "Ingen plakatmuligheder endnu.",
+  "movieDetail.noBackdrops": "Ingen backdrop-muligheder endnu.",
+  "movieDetail.noVideos": "Ingen videoer importeret endnu.",
+  "movieDetail.noCast": "Ingen medvirkende importeret endnu.",
+  "movieDetail.noCrew": "Ingen crew importeret endnu.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Aabn video"
 }
