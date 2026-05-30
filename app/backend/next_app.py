@@ -3081,7 +3081,12 @@ def ui_preview_container_cards(containers: list[dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
-def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = False) -> str:
+def ui_preview_html(
+    snapshot: dict[str, Any] | None = None,
+    *,
+    app_mode: bool = False,
+    initial_movie_id: str | None = None,
+) -> str:
     snapshot = snapshot or empty_collection_dashboard_snapshot()
     counts = snapshot.get("counts") or {}
     movies = snapshot.get("movies") or []
@@ -3089,11 +3094,18 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
     media_groups = snapshot.get("mediaGroups") or []
     preferences = snapshot.get("preferences") or dict(APP_PREFERENCE_DEFAULTS)
     app_mode_json = "true" if app_mode else "false"
+    initial_movie_json = html_lib.escape(json_lib.dumps(initial_movie_id or ""), quote=False)
     featured = movies[0] if movies else {}
     featured_backdrop = server_usable_image(featured.get("backdrop_url"))
     featured_poster = server_usable_image(featured.get("poster_url"))
     featured_id = featured.get("id")
-    featured_href = app_href(f"/movies/{featured_id}") if featured_id else app_href()
+    featured_href = (
+        f"/movies/{featured_id}"
+        if app_mode and featured_id
+        else app_href(f"/movies/{featured_id}")
+        if featured_id
+        else app_href()
+    )
     featured_backdrop_html = (
         f'<img class="hero-backdrop" id="heroBackdrop" src="{h(featured_backdrop)}" alt="">'
         if featured_backdrop
@@ -3910,6 +3922,249 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
       border: 1px dashed var(--line-strong);
       color: var(--muted);
     }
+    .movie-sheet {
+      position: fixed;
+      inset: 0;
+      z-index: 48;
+      display: grid;
+      align-items: stretch;
+      justify-items: center;
+      padding: 18px;
+      background: rgba(0,0,0,.48);
+      backdrop-filter: blur(22px) saturate(150%);
+      overflow: auto;
+    }
+    .movie-sheet.hidden {
+      display: none;
+    }
+    .movie-sheet-panel {
+      width: min(1180px, 100%);
+      min-height: min(820px, calc(100vh - 36px));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: minmax(270px, 42vh) auto;
+    }
+    .movie-detail-hero {
+      position: relative;
+      min-height: 270px;
+      display: grid;
+      align-items: end;
+      padding: clamp(18px, 4vw, 36px);
+      overflow: hidden;
+      background: linear-gradient(145deg, #20242c, #111214);
+      color: #fff;
+    }
+    .movie-detail-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.80), rgba(0,0,0,.34) 56%, rgba(0,0,0,.08)),
+        linear-gradient(0deg, rgba(0,0,0,.72), rgba(0,0,0,.08) 62%);
+      z-index: 1;
+    }
+    .movie-detail-hero img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: .86;
+    }
+    .movie-detail-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 3;
+      width: 40px;
+      min-height: 40px;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 50%;
+      color: #fff;
+      background: rgba(0,0,0,.36);
+      backdrop-filter: blur(18px);
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+    }
+    .movie-detail-summary {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: minmax(132px, 190px) minmax(0, 1fr);
+      gap: clamp(14px, 3vw, 24px);
+      align-items: end;
+      max-width: 980px;
+    }
+    .movie-detail-poster {
+      aspect-ratio: 2 / 3;
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,.14);
+      border: 1px solid rgba(255,255,255,.20);
+      box-shadow: 0 26px 70px rgba(0,0,0,.42);
+      color: rgba(255,255,255,.72);
+    }
+    .movie-detail-poster img {
+      position: static;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 1;
+    }
+    .movie-detail-title {
+      margin: 6px 0 10px;
+      font-size: clamp(2rem, 6vw, 4.8rem);
+      line-height: .94;
+      letter-spacing: 0;
+    }
+    .movie-detail-overview {
+      max-width: 78ch;
+      margin-top: 12px;
+      color: rgba(255,255,255,.78);
+      line-height: 1.55;
+    }
+    .movie-detail-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .movie-detail-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(300px, .92fr);
+      gap: 16px;
+      padding: 18px;
+      background: var(--bg);
+    }
+    .detail-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(22px) saturate(150%);
+      padding: 16px;
+      min-width: 0;
+    }
+    .detail-card.full {
+      grid-column: 1 / -1;
+    }
+    .detail-card h3 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+    }
+    .detail-fields {
+      display: grid;
+      gap: 9px;
+    }
+    .detail-field {
+      display: grid;
+      grid-template-columns: minmax(110px, .58fr) minmax(0, 1.42fr);
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .detail-field:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+    .detail-field span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .detail-field strong {
+      font-weight: 620;
+      overflow-wrap: anywhere;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+      gap: 10px;
+    }
+    .detail-mini-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      padding: 11px;
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .detail-mini-card strong {
+      overflow-wrap: anywhere;
+    }
+    .detail-mini-card span {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .art-option-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 10px;
+    }
+    .art-option {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      padding: 7px;
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+    }
+    .art-option-preview {
+      aspect-ratio: 2 / 3;
+      border-radius: 6px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #30343c, #181a1f);
+      color: rgba(255,255,255,.66);
+      font-size: .78rem;
+    }
+    .art-option.backdrop .art-option-preview {
+      aspect-ratio: 16 / 9;
+    }
+    .art-option-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .art-option button {
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--bg-elevated);
+      color: var(--text);
+      cursor: pointer;
+      font-size: .78rem;
+    }
+    .art-option button:disabled {
+      cursor: default;
+      opacity: .62;
+    }
+    .detail-message {
+      min-height: 20px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+    .detail-message.bad {
+      color: var(--red);
+    }
+    .detail-message.good {
+      color: var(--green);
+    }
     .preferences-backdrop {
       position: fixed;
       inset: 0;
@@ -4119,6 +4374,39 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
         justify-self: start;
         width: min(44vw, 170px);
       }
+      .movie-sheet {
+        padding: 0;
+      }
+      .movie-sheet-panel {
+        min-height: 100vh;
+        border-radius: 0;
+        grid-template-rows: minmax(430px, 56vh) auto;
+      }
+      .movie-detail-hero {
+        padding: 18px 14px 24px;
+      }
+      .movie-detail-summary {
+        grid-template-columns: minmax(88px, 32vw) minmax(0, 1fr);
+        gap: 12px;
+      }
+      .movie-detail-title {
+        font-size: clamp(1.65rem, 9vw, 3rem);
+      }
+      .movie-detail-actions {
+        align-items: stretch;
+      }
+      .movie-detail-actions .action,
+      .movie-detail-actions .secondary-button {
+        width: 100%;
+      }
+      .movie-detail-body {
+        grid-template-columns: 1fr;
+        padding: 12px;
+      }
+      .detail-field {
+        grid-template-columns: 1fr;
+        gap: 3px;
+      }
       .poster-rail { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -4132,6 +4420,7 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
 </head>
 <body data-app-mode=""" + '"' + app_mode_json + '"' + """>
   <script id="initialState" type="application/json">""" + initial_state_json + """</script>
+  <script id="initialMovieId" type="application/json">""" + initial_movie_json + """</script>
   <script id="nextLocales" type="application/json">""" + locales_json + """</script>
   <section class="app-gate hidden" id="authScreen" aria-live="polite">
     <div class="login-card">
@@ -4286,6 +4575,55 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
       <div class="login-message" id="preferencesMessage"></div>
     </div>
   </section>
+  <section class="movie-sheet hidden" id="movieDetailSheet" aria-modal="true" role="dialog" aria-labelledby="movieDetailTitle">
+    <div class="movie-sheet-panel">
+      <section class="movie-detail-hero" id="movieDetailHero">
+        <img id="movieDetailBackdrop" alt="">
+        <button type="button" class="movie-detail-close" id="movieDetailCloseButton" aria-label="Close">x</button>
+        <div class="movie-detail-summary">
+          <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
+          <div>
+            <span class="eyebrow" data-next-i18n="movieDetail.title">Movie details</span>
+            <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
+            <div class="hero-meta" id="movieDetailTags"></div>
+            <p class="movie-detail-overview" id="movieDetailOverview"></p>
+            <div class="movie-detail-actions">
+              <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview metadata</button>
+              <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Apply metadata</button>
+              <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Jobs</button>
+            </div>
+            <div class="detail-message" id="movieDetailMessage"></div>
+          </div>
+        </div>
+      </section>
+      <section class="movie-detail-body">
+        <div class="detail-card">
+          <h3 data-next-i18n="movieDetail.release">Release</h3>
+          <div class="detail-fields" id="movieDetailRelease"></div>
+        </div>
+        <div class="detail-card">
+          <h3 data-next-i18n="movieDetail.technical">Technical</h3>
+          <div class="detail-fields" id="movieDetailTechnical"></div>
+        </div>
+        <div class="detail-card">
+          <h3 data-next-i18n="movieDetail.links">Links</h3>
+          <div class="detail-grid" id="movieDetailLinks"></div>
+        </div>
+        <div class="detail-card">
+          <h3 data-next-i18n="movieDetail.relationships">Relationships</h3>
+          <div class="detail-grid" id="movieDetailRelationships"></div>
+        </div>
+        <div class="detail-card full">
+          <h3 data-next-i18n="movieDetail.artwork">Artwork</h3>
+          <div class="art-option-grid" id="movieDetailArtwork"></div>
+        </div>
+        <div class="detail-card full">
+          <h3 data-next-i18n="movieDetail.castCrew">Cast & crew</h3>
+          <div class="detail-grid" id="movieDetailCredits"></div>
+        </div>
+      </section>
+    </div>
+  </section>
   <nav class=\"""" + mobile_class + """\" aria-label="Mobile">
     <button type="button" class="mobile-tab active">
       <span class="nav-symbol library" aria-hidden="true"></span>
@@ -4306,12 +4644,15 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
   </nav>
   <script>
     const appMode = document.body.dataset.appMode === "true";
+    const initialMovieId = JSON.parse(document.getElementById("initialMovieId").textContent || '""');
     let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
     let movies = state.movies || [];
     let containers = state.containers || [];
     let mediaGroups = state.mediaGroups || [];
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let selectionMode = false;
+    let activeDetailMovieId = "";
+    let activeDetailPayload = null;
     const selectedMovieIds = new Set();
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -4350,6 +4691,11 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
         throw error;
       }
       return payload;
+    }
+    async function authApiJson(url, options) {
+      const incoming = options || {};
+      const headers = Object.assign({}, incoming.headers || {}, authHeaders(incoming.headers || {}));
+      return apiJson(url, Object.assign({}, incoming, {headers}));
     }
     function base64urlToBuffer(base64url) {
       let text = String(base64url || "").replace(/-/g, "+").replace(/_/g, "/");
@@ -4531,6 +4877,249 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
         </a>
       `;
     }
+    function valueText(value) {
+      if (value === null || value === undefined || value === "") return "";
+      if (Array.isArray(value)) return value.filter((item) => item !== null && item !== undefined && item !== "").join(", ");
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    }
+    function detailFieldRows(entries) {
+      const rows = entries
+        .map(([label, value]) => [label, valueText(value)])
+        .filter(([, value]) => value);
+      return rows.length
+        ? rows.map(([label, value]) => `
+            <div class="detail-field">
+              <span>${escapeHtml(label)}</span>
+              <strong>${escapeHtml(value)}</strong>
+            </div>
+          `).join("")
+        : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+    }
+    function mediaAssetUrl(asset) {
+      return usableImage(asset?.url || asset?.source_url || "");
+    }
+    function mediaAssetImage(assets, kind) {
+      const rows = Array.isArray(assets) ? assets : [];
+      const ordered = [
+        ...rows.filter((asset) => asset.kind === kind && asset.is_primary),
+        ...rows.filter((asset) => asset.kind === kind && !asset.is_primary)
+      ];
+      for (const asset of ordered) {
+        const url = mediaAssetUrl(asset);
+        if (url) return url;
+      }
+      return "";
+    }
+    function miniCard(title, subtitle, href) {
+      const body = `
+        <strong>${escapeHtml(title || tNext("common.untitled", "Untitled"))}</strong>
+        <span>${escapeHtml(subtitle || "")}</span>
+      `;
+      return href
+        ? `<a class="detail-mini-card" href="${escapeHtml(href)}">${body}</a>`
+        : `<div class="detail-mini-card">${body}</div>`;
+    }
+    function artworkOptionsHtml(detail, kind) {
+      const assets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
+      const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
+      if (!assets.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noArtwork", "No artwork options yet."))}</div>`;
+      }
+      return assets.map((asset) => {
+        const url = mediaAssetUrl(asset);
+        const preview = url ? `<img src="${escapeHtml(url)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        const label = asset.is_primary ? tNext("movieDetail.primary", "Primary") : tNext("movieDetail.setPrimary", "Set primary");
+        return `
+          <div class="${className}">
+            <div class="art-option-preview">${preview}</div>
+            <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-kind="${escapeHtml(kind)}">${escapeHtml(label)}</button>
+          </div>
+        `;
+      }).join("");
+    }
+    function detailTagHtml(values) {
+      return values.filter(Boolean).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
+    }
+    function setMovieDetailMessage(message, tone) {
+      const node = document.getElementById("movieDetailMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `detail-message ${tone || ""}`.trim();
+    }
+    function renderMovieDetail(detail) {
+      activeDetailPayload = detail;
+      const movie = detail.movie || {};
+      const metadata = movie.metadata || {};
+      const specs = detail.technicalSpecs || {};
+      const poster = mediaAssetImage(detail.mediaAssets, "poster") || usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
+      const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop") || usableImage(movie.backdrop_url || metadata.backdrop_url || metadata.backdropUrl || metadata.backdrop);
+      const title = movie.title || tNext("common.untitled", "Untitled");
+      const backdropNode = document.getElementById("movieDetailBackdrop");
+      if (backdropNode) {
+        backdropNode.src = backdrop || "";
+        backdropNode.classList.toggle("hidden", !backdrop);
+      }
+      const posterNode = document.getElementById("movieDetailPoster");
+      if (posterNode) {
+        posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      }
+      document.getElementById("movieDetailTitle").textContent = title;
+      document.getElementById("movieDetailOverview").textContent = movie.overview || tNext("movieDetail.noOverview", "No overview imported yet.");
+      document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
+        movie.year,
+        movie.format,
+        movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
+        movie.rating ? `${tNext("movieDetail.rating", "Rating")} ${movie.rating}` : "",
+        (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
+        (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : ""
+      ]);
+      document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
+        [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
+        [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
+        [tNext("movieDetail.format", "Format"), movie.format],
+        [tNext("movieDetail.edition", "Edition"), movie.edition],
+        [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
+        [tNext("movieDetail.country", "Country"), movie.country],
+        [tNext("movieDetail.language", "Language"), movie.language],
+        [tNext("movieDetail.location", "Location"), movie.location],
+        [tNext("movieDetail.director", "Director"), metadata.director],
+        [tNext("movieDetail.genre", "Genre"), metadata.genre],
+        [tNext("movieDetail.studios", "Studios"), metadata.studios]
+      ]);
+      document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows([
+        ["HDR", specs.hdr || metadata.hdr],
+        [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
+        [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles],
+        [tNext("movieDetail.regions", "Regions"), specs.regions || metadata.regions],
+        [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
+        [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
+        [tNext("movieDetail.contentRatings", "Content ratings"), specs.content_ratings || metadata.content_ratings]
+      ]);
+      const identifiers = (detail.identifiers || []).map((item) => miniCard(
+        `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
+        item.identifier
+      ));
+      const digital = (detail.digitalItems || []).map((item) => miniCard(
+        item.source_name || item.plugin_id || tNext("uiPreview.digitalItems", "Digital links"),
+        [item.title, item.year, item.variant_count > 1 ? `${item.variant_count} variants` : ""].filter(Boolean).join(" / "),
+        item.playback_url || ""
+      ));
+      document.getElementById("movieDetailLinks").innerHTML = [...identifiers, ...digital].join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noLinks", "No links yet."))}</div>`;
+      const containerCards = (detail.containers || []).map((container) => miniCard(
+        container.title,
+        [String(container.container_type || "").replace(/_/g, " "), container.relationship, container.year].filter(Boolean).join(" / "),
+        `/api/next/app/containers/${encodeURIComponent(container.id)}`
+      ));
+      const groupCards = (detail.mediaGroups || []).map((group) => miniCard(
+        group.name,
+        [
+          group.member_count ? `${group.member_count} ${tNext("movieDetail.members", "members")}` : "",
+          group.movie_count ? `${group.movie_count} ${tNext("collection.movies", "movies").toLowerCase()}` : "",
+          group.hide_digital ? tNext("movieDetail.digitalHidden", "digital hidden") : ""
+        ].filter(Boolean).join(" / ")
+      ));
+      document.getElementById("movieDetailRelationships").innerHTML = [...containerCards, ...groupCards].join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noRelationships", "No relationships yet."))}</div>`;
+      document.getElementById("movieDetailArtwork").innerHTML = `
+        ${artworkOptionsHtml(detail, "poster")}
+        ${artworkOptionsHtml(detail, "backdrop")}
+      `;
+      document.querySelectorAll("[data-app-primary]").forEach((button) => {
+        button.addEventListener("click", () => setPrimaryArtwork(button.dataset.appPrimary, button.dataset.kind));
+      });
+      document.getElementById("movieDetailCredits").innerHTML = (detail.credits || []).slice(0, 48).map((credit) => miniCard(
+        credit.name,
+        credit.character || credit.job || credit.credit_type || ""
+      )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCredits", "No credits imported yet."))}</div>`;
+      setMovieDetailMessage("");
+    }
+    function showMovieDetailLoading(movieId) {
+      activeDetailMovieId = movieId || "";
+      activeDetailPayload = null;
+      document.getElementById("movieDetailTitle").textContent = tNext("collection.loading", "Loading...");
+      document.getElementById("movieDetailOverview").textContent = "";
+      document.getElementById("movieDetailTags").innerHTML = "";
+      document.getElementById("movieDetailRelease").innerHTML = "";
+      document.getElementById("movieDetailTechnical").innerHTML = "";
+      document.getElementById("movieDetailLinks").innerHTML = "";
+      document.getElementById("movieDetailRelationships").innerHTML = "";
+      document.getElementById("movieDetailArtwork").innerHTML = "";
+      document.getElementById("movieDetailCredits").innerHTML = "";
+      document.getElementById("movieDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
+      document.getElementById("movieDetailBackdrop").src = "";
+      setMovieDetailMessage("");
+    }
+    async function openAppMovieDetail(movieId, pushUrl = true) {
+      if (!movieId) return;
+      showMovieDetailLoading(movieId);
+      document.getElementById("movieDetailSheet")?.classList.remove("hidden");
+      if (pushUrl && appMode) {
+        history.pushState({movieId}, "", `/movies/${encodeURIComponent(movieId)}`);
+      }
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
+        renderMovieDetail(payload.detail || {});
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function closeAppMovieDetail(pushUrl = true) {
+      document.getElementById("movieDetailSheet")?.classList.add("hidden");
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      if (pushUrl && appMode) {
+        history.pushState({}, "", "/");
+      }
+    }
+    async function refreshActiveMovieMetadata(dryRun) {
+      if (!activeDetailMovieId) return;
+      setMovieDetailMessage(dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata...") : tNext("movieDetail.applyingMetadata", "Applying metadata..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({dryRun})
+        });
+        setMovieDetailMessage(dryRun ? tNext("movieDetail.previewReady", "Metadata preview is ready.") : tNext("movieDetail.applied", "Metadata applied."), "good");
+        if (!dryRun) {
+          const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+          renderMovieDetail(refreshed.detail || {});
+          await loadAppSnapshot();
+        }
+        console.log("metadata refresh", payload);
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function loadActiveMovieJobs() {
+      if (!activeDetailMovieId) return;
+      setMovieDetailMessage(tNext("movieDetail.loadingJobs", "Loading jobs..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/jobs`);
+        const jobs = payload.jobs || [];
+        setMovieDetailMessage(jobs.length ? `${jobs.length} ${tNext("movieDetail.jobs", "Jobs").toLowerCase()}: ${jobs[0].status}` : tNext("movieDetail.noJobs", "No jobs yet."), "good");
+        console.log("movie metadata jobs", payload);
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function setPrimaryArtwork(mediaId, kind) {
+      if (!activeDetailMovieId || !mediaId) return;
+      setMovieDetailMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/media/primary`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({mediaId, kind})
+        });
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieDetailMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
     function renderLibrary() {
       renderGroupFilter();
       const search = document.getElementById("previewSearch");
@@ -4554,6 +5143,7 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
             return;
           }
           selectMovie(button.dataset.previewMovie);
+          openAppMovieDetail(button.dataset.previewMovie);
         });
       });
       const collectionNode = document.querySelector(".preview-collections");
@@ -4608,6 +5198,28 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         button.disabled = count === 0;
       });
+    }
+    async function queueBulkMetadataRefresh() {
+      const movieIds = Array.from(selectedMovieIds);
+      const summary = document.getElementById("librarySummary");
+      if (!movieIds.length) {
+        if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+        return;
+      }
+      if (summary) summary.textContent = tNext("bulk.queueingMetadata", "Queueing metadata refresh...");
+      try {
+        const payload = await authApiJson("/api/next/metadata/jobs", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, dryRun: true})
+        });
+        if (summary) summary.textContent = `${payload.queued || movieIds.length} ${tNext("bulk.metadataQueued", "metadata refresh jobs queued")}`;
+        selectedMovieIds.clear();
+        toggleSelectMode(false);
+        console.log("bulk metadata jobs", payload);
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
     }
     const preferenceLabels = [
       ["show_featured_hero", "preferences.showFeaturedHero", "preferences.showFeaturedHeroHelp"],
@@ -4704,6 +5316,9 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
       }
       await loadAppSnapshot();
       setGate("library");
+      const routeMatch = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
+      const routeMovieId = initialMovieId || (routeMatch ? decodeURIComponent(routeMatch[1] || routeMatch[2]) : "");
+      if (routeMovieId) openAppMovieDetail(routeMovieId, false);
     }
     function movieMeta(movie) {
       return [movie.year, movie.format, movie.barcode].filter(Boolean);
@@ -4715,7 +5330,7 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
       const poster = usableImage(movie.poster_url);
       document.getElementById("heroTitle").textContent = title;
       document.getElementById("heroMeta").innerHTML = movieMeta(movie).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
-      document.getElementById("heroDetailLink").href = `/api/next/app/movies/${encodeURIComponent(movie.id || "")}`;
+      document.getElementById("heroDetailLink").href = movie.id ? `/movies/${encodeURIComponent(movie.id)}` : "/";
       const backdropNode = document.getElementById("heroBackdrop");
       if (backdropNode && backdropNode.tagName === "IMG") {
         backdropNode.src = backdrop || "";
@@ -4748,7 +5363,10 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
         });
       });
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
-        button.addEventListener("click", () => selectMovie(button.dataset.previewMovie));
+        button.addEventListener("click", () => {
+          selectMovie(button.dataset.previewMovie);
+          openAppMovieDetail(button.dataset.previewMovie);
+        });
       });
       document.getElementById("previewSearch")?.addEventListener("input", filterMovies);
       document.getElementById("groupFilter")?.addEventListener("change", (event) => {
@@ -4779,6 +5397,10 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         button.addEventListener("click", () => {
           const count = selectedMovieIds.size;
+          if (button.dataset.bulkAction === "metadata" && count) {
+            queueBulkMetadataRefresh();
+            return;
+          }
           const message = count
             ? tNext("bulk.notBuiltYet", "This bulk action is ready in the UI and will be connected to the backend next.")
             : tNext("bulk.noneSelected", "No movies selected");
@@ -4786,6 +5408,20 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
           if (summary) summary.textContent = message;
         });
       });
+      document.getElementById("heroDetailLink")?.addEventListener("click", (event) => {
+        const href = event.currentTarget.getAttribute("href") || "";
+        const match = href.match(/\\/movies\\/([^/?#]+)/);
+        if (!match) return;
+        event.preventDefault();
+        openAppMovieDetail(decodeURIComponent(match[1]));
+      });
+      document.getElementById("movieDetailCloseButton")?.addEventListener("click", () => closeAppMovieDetail());
+      document.getElementById("movieDetailSheet")?.addEventListener("click", (event) => {
+        if (event.target.id === "movieDetailSheet") closeAppMovieDetail();
+      });
+      document.getElementById("movieMetadataDryRunButton")?.addEventListener("click", () => refreshActiveMovieMetadata(true));
+      document.getElementById("movieMetadataApplyButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false));
+      document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
         if (!movies.length) return;
         selectMovie(movies[Math.floor(Math.random() * movies.length)].id);
@@ -4798,6 +5434,15 @@ def ui_preview_html(snapshot: dict[str, Any] | None = None, *, app_mode: bool = 
           setGate("library");
           renderLibrary();
         }
+      });
+      window.addEventListener("popstate", () => {
+        const match = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
+        const movieId = match ? decodeURIComponent(match[1] || match[2]) : "";
+        if (movieId) openAppMovieDetail(movieId, false);
+        else closeAppMovieDetail(false);
+      });
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeAppMovieDetail();
       });
     });
   </script>
@@ -13258,7 +13903,9 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/")
     @flask_app.get("/app")
     @flask_app.get("/app/")
-    def next_app_shell():
+    @flask_app.get("/movies/<movie_id>")
+    @flask_app.get("/app/movies/<movie_id>")
+    def next_app_shell(movie_id: str | None = None):
         with connect() as conn:
             user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
             if user:
@@ -13266,7 +13913,7 @@ def register_routes(flask_app: Flask) -> None:
                 snapshot = collection_dashboard_snapshot(conn, user)
             else:
                 snapshot = empty_collection_dashboard_snapshot()
-        return html_response(ui_preview_html(snapshot, app_mode=True))
+        return html_response(ui_preview_html(snapshot, app_mode=True, initial_movie_id=movie_id))
 
     @flask_app.get("/ui-preview")
     @flask_app.get("/ui-preview/")
