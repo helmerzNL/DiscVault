@@ -241,5 +241,21 @@
   "profile.uploadingAvatar": "A carregar avatar...",
   "profile.users": "Utilizadores",
   "profile.username": "Nome de utilizador",
-  "profile.lastPasskeyBlocked": "Nao podes eliminar a tua ultima passkey."
+  "profile.lastPasskeyBlocked": "Nao podes eliminar a tua ultima passkey.",
+  "auth.recoveryCode": "C?digo de recupera??o",
+  "auth.recoverySignIn": "Entrar com c?digo de recupera??o",
+  "auth.recoveryRequired": "Introduza o utilizador e o c?digo de recupera??o.",
+  "auth.recoveryChecking": "A verificar o c?digo de recupera??o...",
+  "auth.recoverySignedIn": "Sess?o iniciada com c?digo de recupera??o. Adicione uma nova passkey no Perfil.",
+  "auth.recoveryFailed": "A recupera??o falhou.",
+  "profile.recoveryActiveCodes": "C?digos ativos",
+  "profile.recoveryLastGenerated": "Gerado por ?ltimo",
+  "profile.generateRecoveryCodes": "Gerar c?digos de recupera??o",
+  "profile.revokeRecoveryCodes": "Revogar c?digos",
+  "profile.generatingRecoveryCodes": "A gerar c?digos de recupera??o...",
+  "profile.recoveryCodesGenerated": "Guarde estes c?digos agora. N?o ser?o mostrados novamente.",
+  "profile.recoveryCodesReady": "C?digos de recupera??o gerados. Guarde-os agora.",
+  "profile.revokeRecoveryConfirm": "Revogar todos os c?digos de recupera??o ativos?",
+  "profile.revokingRecoveryCodes": "A revogar c?digos de recupera??o...",
+  "profile.recoveryCodesRevoked": "C?digos de recupera??o ativos revogados."
 }

@@ -37,6 +37,8 @@ RBAC_MODES = {"basic", "advanced"}
 RBAC_BASIC_ROLE_KEYS = ("admin", "media_editor", "media_fan", "media_viewer")
 RBAC_PROTECTED_ROLE_KEYS = ("owner", "admin", "media_editor", "media_fan", "media_viewer")
 ROLE_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+RECOVERY_CODE_GROUPS = 4
+RECOVERY_CODE_GROUP_LENGTH = 4
 
 
 def _utcnow() -> datetime:
@@ -54,6 +56,33 @@ def _b64url_decode(value: str) -> bytes:
 
 def _make_challenge() -> bytes:
     return secrets.token_bytes(32)
+
+
+def next_normalize_recovery_code(value: Any) -> str:
+    return re.sub(r"[^A-Za-z0-9]", "", str(value or "")).upper()
+
+
+def next_recovery_code_hash(value: Any) -> str:
+    normalized = next_normalize_recovery_code(value)
+    return hashlib.sha256(f"disc-vault-next-recovery:{_jwt_secret()}:{normalized}".encode("utf-8")).hexdigest()
+
+
+def next_generate_recovery_code() -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    raw = "".join(secrets.choice(alphabet) for _ in range(RECOVERY_CODE_GROUPS * RECOVERY_CODE_GROUP_LENGTH))
+    return "-".join(
+        raw[index : index + RECOVERY_CODE_GROUP_LENGTH]
+        for index in range(0, len(raw), RECOVERY_CODE_GROUP_LENGTH)
+    )
+
+
+def next_generate_recovery_codes(count: int = 8) -> list[str]:
+    codes: list[str] = []
+    while len(codes) < count:
+        code = next_generate_recovery_code()
+        if code not in codes:
+            codes.append(code)
+    return codes
 
 
 def _jwt_secret() -> str:
@@ -1178,6 +1207,72 @@ def register_next_auth_routes(
 
         token = _create_token(str(stored["user_id"]), stored["username"])
         return cookie_response({"status": "ok", "token": token, "username": stored["username"]}, token)
+
+    @route("/api/next/auth/recovery", "/api/auth/recovery", methods=["POST"])
+    def recovery_login():
+        body = request.get_json(silent=True) or {}
+        try:
+            username = _normalize_username(body.get("username") or "")
+        except ValueError as exc:
+            raise next_api_error(str(exc), 400) from exc
+        recovery_code = next_normalize_recovery_code(body.get("recovery_code") or body.get("recoveryCode"))
+        if not username or not recovery_code:
+            raise next_api_error("Username and recovery code are required", 400)
+        code_hash = next_recovery_code_hash(recovery_code)
+
+        with connect() as conn:
+            if not table_exists(conn, "users") or not table_exists(conn, "recovery_codes"):
+                raise next_api_error("Recovery is not available yet", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT rc.id AS recovery_code_id, u.id AS user_id, u.username, u.status AS user_status
+                        FROM recovery_codes rc
+                        JOIN users u ON u.id = rc.user_id
+                        WHERE u.username=%s
+                          AND rc.code_hash=%s
+                          AND rc.used_at IS NULL
+                          AND (rc.expires_at IS NULL OR rc.expires_at > now())
+                        """,
+                        (username, code_hash),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        raise next_api_error("Invalid username or recovery code", 401)
+                    if row["user_status"] != "active":
+                        raise next_api_error("User is disabled", 403)
+                    cur.execute(
+                        """
+                        UPDATE recovery_codes
+                        SET used_at=now()
+                        WHERE id=%s
+                        """,
+                        (row["recovery_code_id"],),
+                    )
+                    cur.execute(
+                        """
+                        SELECT COUNT(*) AS count
+                        FROM recovery_codes
+                        WHERE user_id=%s
+                          AND used_at IS NULL
+                          AND (expires_at IS NULL OR expires_at > now())
+                        """,
+                        (row["user_id"],),
+                    )
+                    remaining = int(cur.fetchone()["count"])
+
+        token = _create_token(str(row["user_id"]), row["username"])
+        return cookie_response(
+            {
+                "status": "ok",
+                "token": token,
+                "username": row["username"],
+                "recovery": True,
+                "remainingRecoveryCodes": remaining,
+            },
+            token,
+        )
 
     @route("/api/next/auth/logout", "/api/auth/logout", methods=["POST"])
     def auth_logout():

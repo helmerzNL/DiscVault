@@ -241,5 +241,21 @@
   "profile.uploadingAvatar": "Laster opp avatar...",
   "profile.users": "Brukere",
   "profile.username": "Brukernavn",
-  "profile.lastPasskeyBlocked": "Du kan ikke slette din siste passkey."
+  "profile.lastPasskeyBlocked": "Du kan ikke slette din siste passkey.",
+  "auth.recoveryCode": "Gjenopprettingskode",
+  "auth.recoverySignIn": "Logg inn med gjenopprettingskode",
+  "auth.recoveryRequired": "Skriv inn brukernavn og gjenopprettingskode.",
+  "auth.recoveryChecking": "Kontrollerer gjenopprettingskode...",
+  "auth.recoverySignedIn": "Logget inn med gjenopprettingskode. Legg til en ny passkey fra Profil.",
+  "auth.recoveryFailed": "Gjenoppretting mislyktes.",
+  "profile.recoveryActiveCodes": "Aktive koder",
+  "profile.recoveryLastGenerated": "Sist opprettet",
+  "profile.generateRecoveryCodes": "Opprett gjenopprettingskoder",
+  "profile.revokeRecoveryCodes": "Tilbakekall koder",
+  "profile.generatingRecoveryCodes": "Oppretter gjenopprettingskoder...",
+  "profile.recoveryCodesGenerated": "Lagre disse gjenopprettingskodene n?. De vises ikke igjen.",
+  "profile.recoveryCodesReady": "Gjenopprettingskoder opprettet. Lagre dem n?.",
+  "profile.revokeRecoveryConfirm": "Tilbakekall alle aktive gjenopprettingskoder?",
+  "profile.revokingRecoveryCodes": "Tilbakekaller gjenopprettingskoder...",
+  "profile.recoveryCodesRevoked": "Aktive gjenopprettingskoder tilbakekalt."
 }

@@ -241,5 +241,21 @@
   "profile.uploadingAvatar": "Laddar upp avatar...",
   "profile.users": "Anvandare",
   "profile.username": "Anvandarnamn",
-  "profile.lastPasskeyBlocked": "Du kan inte ta bort din sista passkey."
+  "profile.lastPasskeyBlocked": "Du kan inte ta bort din sista passkey.",
+  "auth.recoveryCode": "?terst?llningskod",
+  "auth.recoverySignIn": "Logga in med ?terst?llningskod",
+  "auth.recoveryRequired": "Ange anv?ndarnamn och ?terst?llningskod.",
+  "auth.recoveryChecking": "Kontrollerar ?terst?llningskod...",
+  "auth.recoverySignedIn": "Inloggad med ?terst?llningskod. L?gg till en ny passkey fr?n Profil.",
+  "auth.recoveryFailed": "?terst?llning misslyckades.",
+  "profile.recoveryActiveCodes": "Aktiva koder",
+  "profile.recoveryLastGenerated": "Senast skapad",
+  "profile.generateRecoveryCodes": "Skapa ?terst?llningskoder",
+  "profile.revokeRecoveryCodes": "?terkalla koder",
+  "profile.generatingRecoveryCodes": "Skapar ?terst?llningskoder...",
+  "profile.recoveryCodesGenerated": "Spara dessa ?terst?llningskoder nu. De visas inte igen.",
+  "profile.recoveryCodesReady": "?terst?llningskoder skapade. Spara dem nu.",
+  "profile.revokeRecoveryConfirm": "?terkalla alla aktiva ?terst?llningskoder?",
+  "profile.revokingRecoveryCodes": "?terkallar ?terst?llningskoder...",
+  "profile.recoveryCodesRevoked": "Aktiva ?terst?llningskoder ?terkallade."
 }

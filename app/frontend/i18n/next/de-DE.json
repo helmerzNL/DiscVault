@@ -241,5 +241,21 @@
   "profile.uploadingAvatar": "Avatar wird hochgeladen...",
   "profile.users": "Benutzer",
   "profile.username": "Benutzername",
-  "profile.lastPasskeyBlocked": "Du kannst deinen letzten Passkey nicht loeschen."
+  "profile.lastPasskeyBlocked": "Du kannst deinen letzten Passkey nicht loeschen.",
+  "auth.recoveryCode": "Wiederherstellungscode",
+  "auth.recoverySignIn": "Mit Wiederherstellungscode anmelden",
+  "auth.recoveryRequired": "Benutzername und Wiederherstellungscode eingeben.",
+  "auth.recoveryChecking": "Wiederherstellungscode pr?fen...",
+  "auth.recoverySignedIn": "Mit Wiederherstellungscode angemeldet. F?ge unter Profil einen neuen Passkey hinzu.",
+  "auth.recoveryFailed": "Wiederherstellung fehlgeschlagen.",
+  "profile.recoveryActiveCodes": "Aktive Codes",
+  "profile.recoveryLastGenerated": "Zuletzt erstellt",
+  "profile.generateRecoveryCodes": "Wiederherstellungscodes erstellen",
+  "profile.revokeRecoveryCodes": "Codes widerrufen",
+  "profile.generatingRecoveryCodes": "Wiederherstellungscodes werden erstellt...",
+  "profile.recoveryCodesGenerated": "Speichere diese Wiederherstellungscodes jetzt. Sie werden nicht erneut angezeigt.",
+  "profile.recoveryCodesReady": "Wiederherstellungscodes erstellt. Speichere sie jetzt.",
+  "profile.revokeRecoveryConfirm": "Alle aktiven Wiederherstellungscodes widerrufen?",
+  "profile.revokingRecoveryCodes": "Wiederherstellungscodes werden widerrufen...",
+  "profile.recoveryCodesRevoked": "Aktive Wiederherstellungscodes widerrufen."
 }

@@ -241,5 +241,21 @@
   "profile.uploadingAvatar": "Caricamento avatar...",
   "profile.users": "Utenti",
   "profile.username": "Nome utente",
-  "profile.lastPasskeyBlocked": "Non puoi eliminare la tua ultima passkey."
+  "profile.lastPasskeyBlocked": "Non puoi eliminare la tua ultima passkey.",
+  "auth.recoveryCode": "Codice di recupero",
+  "auth.recoverySignIn": "Accedi con codice di recupero",
+  "auth.recoveryRequired": "Inserisci nome utente e codice di recupero.",
+  "auth.recoveryChecking": "Controllo del codice di recupero...",
+  "auth.recoverySignedIn": "Accesso effettuato con codice di recupero. Aggiungi una nuova passkey dal Profilo.",
+  "auth.recoveryFailed": "Recupero non riuscito.",
+  "profile.recoveryActiveCodes": "Codici attivi",
+  "profile.recoveryLastGenerated": "Ultima generazione",
+  "profile.generateRecoveryCodes": "Genera codici di recupero",
+  "profile.revokeRecoveryCodes": "Revoca codici",
+  "profile.generatingRecoveryCodes": "Generazione codici di recupero...",
+  "profile.recoveryCodesGenerated": "Salva ora questi codici. Non verranno mostrati di nuovo.",
+  "profile.recoveryCodesReady": "Codici di recupero generati. Salvali ora.",
+  "profile.revokeRecoveryConfirm": "Revocare tutti i codici di recupero attivi?",
+  "profile.revokingRecoveryCodes": "Revoca codici di recupero...",
+  "profile.recoveryCodesRevoked": "Codici di recupero attivi revocati."
 }
