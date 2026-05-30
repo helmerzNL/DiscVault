@@ -240,5 +240,6 @@
   "profile.uploadAvatar": "Televerser avatar",
   "profile.uploadingAvatar": "Televersement de l avatar...",
   "profile.users": "Utilisateurs",
-  "profile.username": "Nom d utilisateur"
+  "profile.username": "Nom d utilisateur",
+  "profile.lastPasskeyBlocked": "Vous ne pouvez pas supprimer votre derniere passkey."
 }

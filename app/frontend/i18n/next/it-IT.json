@@ -240,5 +240,6 @@
   "profile.uploadAvatar": "Carica avatar",
   "profile.uploadingAvatar": "Caricamento avatar...",
   "profile.users": "Utenti",
-  "profile.username": "Nome utente"
+  "profile.username": "Nome utente",
+  "profile.lastPasskeyBlocked": "Non puoi eliminare la tua ultima passkey."
 }

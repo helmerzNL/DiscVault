@@ -240,5 +240,6 @@
   "profile.uploadAvatar": "Lataa avatar",
   "profile.uploadingAvatar": "Ladataan avatar...",
   "profile.users": "Kayttajat",
-  "profile.username": "Kayttajanimi"
+  "profile.username": "Kayttajanimi",
+  "profile.lastPasskeyBlocked": "Et voi poistaa viimeista passkeytasi."
 }

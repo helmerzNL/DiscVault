@@ -1621,6 +1621,13 @@ def register_next_auth_routes(
                         raise next_api_error("Credential not found", 404)
                     if role not in {"owner", "admin"} and credential_row["user_id"] != user["id"]:
                         raise next_api_error("Not authorized", 403)
+                    cur.execute(
+                        "SELECT COUNT(*) AS count FROM passkey_credentials WHERE user_id=%s",
+                        (credential_row["user_id"],),
+                    )
+                    target_remaining = int(cur.fetchone()["count"])
+                    if target_remaining <= 1:
+                        raise next_api_error("You cannot delete the last passkey for a user", 400)
                     cur.execute("DELETE FROM passkey_credentials WHERE id=%s", (credential_id,))
                     cur.execute("SELECT COUNT(*) AS count FROM passkey_credentials")
                     remaining = int(cur.fetchone()["count"])
