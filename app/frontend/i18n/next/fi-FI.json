@@ -584,5 +584,13 @@
   "appAdmin.moveDown": "Alas",
   "appAdmin.movingPlugin": "Paivitetaan lisaosien jarjestysta...",
   "appAdmin.pluginMoved": "Lisaosien jarjestys paivitetty.",
-  "appAdmin.jobDetails": "Tehtavan tiedot"
+  "appAdmin.jobDetails": "Tehtavan tiedot",
+  "preferences.sections": "Asetusosiot",
+  "preferences.tabAppearance": "Ulkoasu",
+  "preferences.tabLibrary": "Kirjasto",
+  "preferences.tabCollectors": "Keraajat",
+  "preferences.theme": "Teema",
+  "preferences.themeHelp": "Seuraa jarjestelman teemaa tai valitse pysyva ulkoasu.",
+  "preferences.language": "Kieli",
+  "preferences.languageHelp": "Valitse DiscVaultin kieli talla laitteella."
 }

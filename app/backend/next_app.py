@@ -3690,7 +3690,7 @@ def ui_preview_html(
     }
     .topbar {
       display: grid;
-      grid-template-columns: minmax(220px, 1fr) auto;
+      grid-template-columns: minmax(220px, 1fr);
       align-items: center;
       gap: 14px;
     }
@@ -5251,6 +5251,35 @@ def ui_preview_html(
     .preference-row.disabled {
       opacity: .58;
     }
+    .preference-control-list {
+      display: grid;
+      gap: 10px;
+    }
+    .preference-control-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+      gap: 14px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 12px;
+    }
+    .preference-control-row strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+    .preference-control-row span {
+      color: var(--muted);
+      font-size: .84rem;
+      line-height: 1.4;
+    }
+    .preference-control-row .segmented,
+    .preference-control-row select {
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+    }
     .switch {
       width: 48px;
       height: 28px;
@@ -5680,15 +5709,6 @@ def ui_preview_html(
           <span aria-hidden="true">/</span>
           <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
         </label>
-        <div class="top-actions">
-          <div class="segmented" role="group" aria-label="Appearance" data-next-i18n-aria="appearance.label">
-            <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
-            <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
-            <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
-          </div>
-          <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
-          <button type="button" class="icon-button" id="profileButton" data-next-i18n="uiPreview.profile">Profile</button>
-        </div>
       </div>
       <section class="library-view" id="libraryView">
       <section class="hero" id="previewHero">
@@ -6122,10 +6142,46 @@ def ui_preview_html(
               </div>
             </div>
           </div>
-          <div class="detail-card profile-card">
-            <h3 data-next-i18n="preferences.title">Preferences</h3>
-            <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
-            <div class="preference-list" id="profilePreferenceList"></div>
+          <div class="detail-card profile-card full">
+            <div class="detail-card-head">
+              <div>
+                <h3 data-next-i18n="preferences.title">Preferences</h3>
+                <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
+              </div>
+              <nav class="detail-submenu" aria-label="Preferences" data-next-i18n-aria="preferences.sections">
+                <button type="button" class="active" data-preferences-tab="appearance" data-next-i18n="preferences.tabAppearance">Appearance</button>
+                <button type="button" data-preferences-tab="library" data-next-i18n="preferences.tabLibrary">Library</button>
+                <button type="button" data-preferences-tab="collectors" data-next-i18n="preferences.tabCollectors">Collectors</button>
+              </nav>
+            </div>
+            <div class="detail-subpanel" data-preferences-panel="appearance">
+              <div class="preference-control-list">
+                <div class="preference-control-row">
+                  <span>
+                    <strong data-next-i18n="preferences.theme">Theme</strong>
+                    <span data-next-i18n="preferences.themeHelp">Follow the system theme or choose a fixed appearance.</span>
+                  </span>
+                  <div class="segmented" role="group" aria-label="Appearance" data-next-i18n-aria="appearance.label">
+                    <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
+                    <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
+                    <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
+                  </div>
+                </div>
+                <label class="preference-control-row" for="nextLanguageSelect">
+                  <span>
+                    <strong data-next-i18n="preferences.language">Language</strong>
+                    <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
+                  </span>
+                  <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+                </label>
+              </div>
+            </div>
+            <div class="detail-subpanel hidden" data-preferences-panel="library">
+              <div class="preference-list" id="profilePreferenceList"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-preferences-panel="collectors">
+              <div class="preference-list" id="profileCollectorPreferenceList"></div>
+            </div>
             <div class="login-message" id="preferencesMessage"></div>
           </div>
           <div class="detail-card profile-card full">
@@ -9174,40 +9230,68 @@ def ui_preview_html(
         if (summary) summary.textContent = error.message || String(error);
       }
     }
-    const preferenceLabels = [
+    const preferenceLibraryLabels = [
       ["show_featured_hero", "preferences.showFeaturedHero", "preferences.showFeaturedHeroHelp"],
       ["show_collection_search", "preferences.showCollectionSearch", "preferences.showCollectionSearchHelp"],
       ["show_auto_videos", "preferences.showAutoVideos", "preferences.showAutoVideosHelp"],
       ["show_local_title", "preferences.showLocalTitle", "preferences.showLocalTitleHelp"],
       ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"],
-      ["collectors_mode", "preferences.collectorsMode", "preferences.collectorsModeHelp"],
-      ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"],
       ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"]
     ];
-    function renderPreferences() {
-      const lists = Array.from(document.querySelectorAll("#profilePreferenceList, #legacyPreferenceList")).filter(Boolean);
-      if (!lists.length) return;
-      const html = preferenceLabels.map(([key, labelKey, helpKey, requiresKey]) => {
+    const preferenceCollectorLabels = [
+      ["collectors_mode", "preferences.collectorsMode", "preferences.collectorsModeHelp"],
+      ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"]
+    ];
+    const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
+    function preferenceRowsHtml(items) {
+      return items.map(([key, labelKey, helpKey, requiresKey]) => {
         const disabled = requiresKey && !preferences[requiresKey];
         return `
-        <div class="preference-row ${disabled ? "disabled" : ""}">
-          <span>
-            <strong>${escapeHtml(tNext(labelKey, key))}</strong>
-            <span>${escapeHtml(tNext(helpKey, ""))}</span>
-          </span>
-          <button type="button" class="switch ${preferences[key] ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${preferences[key] ? "true" : "false"}" ${disabled ? "disabled" : ""}></button>
-        </div>
-      `;
+          <div class="preference-row ${disabled ? "disabled" : ""}">
+            <span>
+              <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+              <span>${escapeHtml(tNext(helpKey, ""))}</span>
+            </span>
+            <button type="button" class="switch ${preferences[key] ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${preferences[key] ? "true" : "false"}" ${disabled ? "disabled" : ""}></button>
+          </div>
+        `;
       }).join("");
-      lists.forEach((list) => {
-        list.innerHTML = html;
-        list.querySelectorAll("[data-preference-toggle]").forEach((button) => {
-          button.addEventListener("click", () => {
-            if (button.disabled) return;
-            updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]);
-          });
+    }
+    function bindPreferenceList(list) {
+      list.querySelectorAll("[data-preference-toggle]").forEach((button) => {
+        button.addEventListener("click", () => {
+          if (button.disabled) return;
+          updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]);
         });
       });
+    }
+    function setPreferenceTab(tab) {
+      const selected = tab || "appearance";
+      document.querySelectorAll("[data-preferences-tab]").forEach((button) => {
+        const active = button.dataset.preferencesTab === selected;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll("[data-preferences-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.preferencesPanel !== selected);
+      });
+    }
+    function renderPreferences() {
+      const libraryList = document.getElementById("profilePreferenceList");
+      const collectorList = document.getElementById("profileCollectorPreferenceList");
+      const legacyList = document.getElementById("legacyPreferenceList");
+      if (libraryList) {
+        libraryList.innerHTML = preferenceRowsHtml(preferenceLibraryLabels);
+        bindPreferenceList(libraryList);
+      }
+      if (collectorList) {
+        collectorList.innerHTML = preferenceRowsHtml(preferenceCollectorLabels);
+        bindPreferenceList(collectorList);
+      }
+      if (legacyList) {
+        legacyList.innerHTML = preferenceRowsHtml(preferenceLabels);
+        bindPreferenceList(legacyList);
+      }
     }
     async function updatePreference(key, value) {
       preferences[key] = value;
@@ -9825,10 +9909,13 @@ def ui_preview_html(
         }
       });
       document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
-      document.getElementById("profileButton")?.addEventListener("click", () => showProfilePage());
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
       });
+      document.querySelectorAll("[data-preferences-tab]").forEach((button) => {
+        button.addEventListener("click", () => setPreferenceTab(button.dataset.preferencesTab || "appearance"));
+      });
+      setPreferenceTab("appearance");
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.addEventListener("click", () => {
           containerManagerType = button.dataset.containerManagerType || "box_set";

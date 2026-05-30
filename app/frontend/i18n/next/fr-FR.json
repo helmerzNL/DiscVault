@@ -584,5 +584,13 @@
   "appAdmin.moveDown": "Descendre",
   "appAdmin.movingPlugin": "Mise a jour de l ordre des plugins...",
   "appAdmin.pluginMoved": "Ordre des plugins mis a jour.",
-  "appAdmin.jobDetails": "Details de la tache"
+  "appAdmin.jobDetails": "Details de la tache",
+  "preferences.sections": "Sections de preferences",
+  "preferences.tabAppearance": "Apparence",
+  "preferences.tabLibrary": "Bibliotheque",
+  "preferences.tabCollectors": "Collectionneurs",
+  "preferences.theme": "Theme",
+  "preferences.themeHelp": "Suivre le theme du systeme ou choisir une apparence fixe.",
+  "preferences.language": "Langue",
+  "preferences.languageHelp": "Choisis la langue de DiscVault sur cet appareil."
 }
