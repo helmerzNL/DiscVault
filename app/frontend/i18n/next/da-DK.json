@@ -426,5 +426,8 @@
   "personDetail.noCrew": "Ingen crew-credits i denne samling endnu.",
   "personDetail.noDigitalCredits": "Ingen digitale samlingslinks endnu.",
   "personDetail.noFilmography": "Ingen ekstern filmografi importeret endnu.",
-  "personDetail.groupUnknown": "Andet"
+  "personDetail.groupUnknown": "Andet",
+  "personDetail.refreshFilmography": "Opdater filmografi",
+  "personDetail.refreshingFilmography": "Opdaterer filmografi...",
+  "personDetail.filmographyRefreshed": "Filmografi opdateret."
 }

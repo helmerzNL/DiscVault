@@ -520,5 +520,8 @@
   "personDetail.noCrew": "No crew credits in this collection yet.",
   "personDetail.noDigitalCredits": "No digital collection links yet.",
   "personDetail.noFilmography": "No external filmography imported yet.",
-  "personDetail.groupUnknown": "Other"
+  "personDetail.groupUnknown": "Other",
+  "personDetail.refreshFilmography": "Refresh filmography",
+  "personDetail.refreshingFilmography": "Refreshing filmography...",
+  "personDetail.filmographyRefreshed": "Filmography refreshed."
 }
