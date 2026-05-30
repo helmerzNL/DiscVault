@@ -136,6 +136,7 @@ TEST_DATABASE_RESET_TABLES = (
     "users",
     "media_assets",
 )
+MEDIA_GROUP_MEMBER_ROLES = {"owner", "manager", "member", "viewer"}
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
 MOVIE_ARTWORK_KINDS = {"poster", "backdrop"}
@@ -4526,7 +4527,8 @@ def ui_preview_html(
       gap: 8px;
       align-items: center;
     }
-    .profile-passkey-actions input {
+    .profile-passkey-actions input,
+    .profile-passkey-actions select {
       min-height: 36px;
       width: 100%;
       min-width: 0;
@@ -4538,6 +4540,42 @@ def ui_preview_html(
       font: inherit;
       font-size: .9rem;
       font-weight: 620;
+    }
+    .admin-member-add {
+      grid-template-columns: minmax(140px, 1fr) minmax(100px, .55fr) auto;
+    }
+    .admin-member-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 9px;
+    }
+    .tag {
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 0 9px;
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 720;
+    }
+    .tag.good {
+      color: var(--green);
+      border-color: color-mix(in srgb, var(--green) 34%, var(--line));
+    }
+    .inline-delete {
+      width: 18px;
+      height: 18px;
+      border: 0;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--muted) 15%, transparent);
+      color: inherit;
+      cursor: pointer;
+      line-height: 1;
     }
     .profile-add-passkey {
       display: grid;
@@ -5215,6 +5253,27 @@ def ui_preview_html(
             <div class="login-message" id="appAdminInviteMessage"></div>
           </div>
           <div class="detail-card profile-card full">
+            <h3 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h3>
+            <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
+            <div class="profile-passkey-list" id="appAdminUsersList"></div>
+            <div class="login-message" id="appAdminUsersMessage"></div>
+          </div>
+          <div class="detail-card profile-card full">
+            <h3 data-next-i18n="appAdmin.groups">Groups</h3>
+            <p data-next-i18n="appAdmin.groupsHelp">Create media groups and manage which users are members.</p>
+            <form class="profile-form" id="appAdminGroupForm">
+              <label for="appAdminGroupName">
+                <span data-next-i18n="appAdmin.groupName">Group name</span>
+                <input id="appAdminGroupName" autocomplete="off" maxlength="120">
+              </label>
+              <div class="profile-form-actions">
+                <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
+              </div>
+            </form>
+            <div class="profile-passkey-list" id="appAdminGroupsList"></div>
+            <div class="login-message" id="appAdminGroupsMessage"></div>
+          </div>
+          <div class="detail-card profile-card full">
             <h3 data-next-i18n="appAdmin.activeInvites">Active invites</h3>
             <div class="profile-passkey-list" id="appAdminInvitesList"></div>
           </div>
@@ -5276,7 +5335,7 @@ def ui_preview_html(
     let currentAuthStatus = {};
     let profileCredentials = [];
     let profileRecovery = {};
-    let appAdmin = {credentials: [], invites: []};
+    let appAdmin = {credentials: [], groups: [], invites: [], roles: [], assignableRoles: [], users: []};
     const selectedMovieIds = new Set();
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -5395,16 +5454,116 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function appAdminRoleLabel(roleKey) {
+      const role = (appAdmin.roles || []).find((item) => item.key === roleKey) || {};
+      return role.name || roleKey || "-";
+    }
+    function appAdminRoleOptions(selectedRole) {
+      const options = [...(appAdmin.assignableRoles || [])];
+      if (selectedRole && !options.some((role) => role.key === selectedRole)) {
+        options.unshift({key: selectedRole, name: appAdminRoleLabel(selectedRole), assignable: false});
+      }
+      return options.map((role) => `
+        <option value="${escapeHtml(role.key)}" ${role.key === selectedRole ? "selected" : ""} ${role.assignable === false && role.key !== selectedRole ? "disabled" : ""}>${escapeHtml(role.name || role.key)}</option>
+      `).join("");
+    }
+    function appAdminUserOptions(selectedUserId) {
+      return (appAdmin.users || [])
+        .filter((user) => user.status === "active")
+        .map((user) => `
+          <option value="${escapeHtml(user.id)}" ${String(user.id) === String(selectedUserId) ? "selected" : ""}>${escapeHtml(user.display_name || user.username)}</option>
+        `).join("");
+    }
+    function appAdminGroupRoleOptions(selectedRole, includeOwner) {
+      const roles = [
+        ...(includeOwner ? [["owner", tNext("appAdmin.groupRoleOwner", "Owner")]] : []),
+        ["manager", tNext("appAdmin.groupRoleManager", "Manager")],
+        ["member", tNext("appAdmin.groupRoleMember", "Member")],
+        ["viewer", tNext("appAdmin.groupRoleViewer", "Viewer")]
+      ];
+      return roles.map(([role, label]) => `<option value="${role}" ${role === selectedRole ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
+    }
+    function appAdminGroupRoleLabel(role) {
+      const labels = {
+        owner: tNext("appAdmin.groupRoleOwner", "Owner"),
+        manager: tNext("appAdmin.groupRoleManager", "Manager"),
+        member: tNext("appAdmin.groupRoleMember", "Member"),
+        viewer: tNext("appAdmin.groupRoleViewer", "Viewer")
+      };
+      return labels[role] || role || "member";
+    }
     function renderAppAdmin() {
       const mode = currentAuthStatus.registration_enabled ? "public" : "invite";
       document.getElementById("appAdminRegistrationMode").textContent = appRegistrationModeLabel();
-      document.getElementById("appAdminUserCount").textContent = String(currentAuthStatus.user_count ?? appAdmin.usersCount ?? "-");
+      document.getElementById("appAdminUserCount").textContent = String((appAdmin.users || []).length || currentAuthStatus.user_count || "-");
       document.getElementById("appAdminCredentialCount").textContent = String(currentAuthStatus.credential_count ?? (appAdmin.credentials || []).length ?? "-");
       document.querySelectorAll("[data-app-admin-registration-mode]").forEach((button) => {
         const active = button.dataset.appAdminRegistrationMode === mode;
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
+      const usersList = document.getElementById("appAdminUsersList");
+      if (usersList) {
+        const users = appAdmin.users || [];
+        usersList.innerHTML = users.length ? users.map((user) => {
+          const disabled = user.status !== "active";
+          const roleLocked = user.role === "owner";
+          return `
+            <div class="profile-passkey ${disabled ? "disabled" : ""}">
+              <div>
+                <strong>${escapeHtml(user.display_name || user.username)}</strong>
+                <div class="profile-passkey-meta">
+                  ${escapeHtml(user.username || "-")}
+                  &middot;
+                  ${escapeHtml(user.status || "active")}
+                  &middot;
+                  ${escapeHtml(tNext("profile.credentials", "Passkeys"))}: ${escapeHtml(user.credential_count ?? 0)}
+                </div>
+              </div>
+              <div class="profile-passkey-actions">
+                <select data-app-admin-user-role="${escapeHtml(user.id)}" ${roleLocked ? "disabled" : ""}>${appAdminRoleOptions(user.role)}</select>
+                ${roleLocked ? "" : `<button type="button" class="secondary-button" data-app-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${escapeHtml(disabled ? tNext("appAdmin.enableUser", "Enable") : tNext("appAdmin.disableUser", "Disable"))}</button>`}
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noUsers", "No users found."))}</div>`;
+      }
+      const groupsList = document.getElementById("appAdminGroupsList");
+      if (groupsList) {
+        const groups = appAdmin.groups || [];
+        groupsList.innerHTML = groups.length ? groups.map((group) => {
+          const members = group.members || [];
+          const userOptions = appAdminUserOptions("");
+          return `
+            <div class="profile-passkey admin-group-row">
+              <div>
+                <strong>${escapeHtml(group.name || tNext("common.untitled", "Untitled"))}</strong>
+                <div class="profile-passkey-meta">
+                  ${escapeHtml(group.public_id || group.id)}
+                  &middot;
+                  ${escapeHtml(tNext("appAdmin.members", "Members"))}: ${escapeHtml(group.member_count ?? members.length)}
+                  &middot;
+                  ${escapeHtml(tNext("collection.movies", "Movies"))}: ${escapeHtml(group.movie_count ?? 0)}
+                </div>
+                <div class="admin-member-cloud">
+                  ${members.length ? members.map((member) => `
+                    <span class="tag ${member.role === "manager" ? "good" : ""}">
+                      ${escapeHtml(member.display_name || member.username || member.user_id)}
+                      ${escapeHtml(appAdminGroupRoleLabel(member.role))}
+                      <button type="button" class="inline-delete" data-app-admin-group-member-delete="${escapeHtml(group.id)}" data-user-id="${escapeHtml(member.user_id)}" aria-label="${escapeHtml(tNext("appAdmin.removeMember", "Remove member"))}">x</button>
+                    </span>
+                  `).join("") : `<span class="tag">${escapeHtml(tNext("appAdmin.noMembers", "No members"))}</span>`}
+                </div>
+              </div>
+              <div class="profile-passkey-actions admin-member-add">
+                <select data-app-admin-group-user="${escapeHtml(group.id)}">${userOptions}</select>
+                <select data-app-admin-group-role="${escapeHtml(group.id)}">${appAdminGroupRoleOptions("member", false)}</select>
+                <button type="button" class="secondary-button" data-app-admin-group-add="${escapeHtml(group.id)}">${escapeHtml(tNext("appAdmin.addMember", "Add member"))}</button>
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noGroups", "No groups found."))}</div>`;
+      }
       const invitesList = document.getElementById("appAdminInvitesList");
       if (invitesList) {
         const invites = appAdmin.invites || [];
@@ -5449,13 +5608,20 @@ def ui_preview_html(
       if (!isNativeAdminUser()) return;
       setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loading", "Loading admin data..."));
       try {
-        const [credentialsPayload, invitesPayload] = await Promise.all([
+        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload] = await Promise.all([
+          authApiJson("/api/next/auth/users"),
           authApiJson("/api/next/auth/credentials"),
-          authApiJson("/api/next/auth/invite")
+          authApiJson("/api/next/auth/invite"),
+          authApiJson("/api/next/auth/rbac"),
+          authApiJson("/api/next/media-groups?limit=500").catch(() => ({groups: []}))
         ]);
+        appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
         appAdmin.invites = invitesPayload.invites || [];
-        appAdmin.usersCount = currentAuthStatus.user_count;
+        appAdmin.roles = rbacPayload.roles || usersPayload.roles || [];
+        appAdmin.assignableRoles = rbacPayload.assignableRoles || usersPayload.roles || [];
+        appAdmin.groups = groupsPayload.groups || [];
+        appAdmin.usersCount = appAdmin.users.length || currentAuthStatus.user_count;
         renderAppAdmin();
         setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loaded", "Admin data loaded."), "good");
       } catch (error) {
@@ -5512,6 +5678,85 @@ def ui_preview_html(
       await authApiJson(`/api/next/auth/invite/${encodeURIComponent(inviteId)}`, {method: "DELETE"});
       await loadAppAdmin();
       setAppAdminMessage("appAdminInviteMessage", tNext("appAdmin.inviteDeleted", "Invite deleted."), "good");
+    }
+    async function updateAppAdminUserRole(userId, role) {
+      if (!userId || !role) return;
+      setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.savingUser", "Saving user..."));
+      try {
+        await authApiJson(`/api/next/auth/users/${encodeURIComponent(userId)}/role`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({role})
+        });
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.userSaved", "User saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
+      }
+    }
+    async function updateAppAdminUserStatus(userId, status) {
+      if (!userId || !status) return;
+      setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.savingUser", "Saving user..."));
+      try {
+        await authApiJson(`/api/next/auth/users/${encodeURIComponent(userId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({status})
+        });
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.userSaved", "User saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
+      }
+    }
+    async function createAppAdminGroup(event) {
+      if (event) event.preventDefault();
+      const input = document.getElementById("appAdminGroupName");
+      const name = String(input?.value || "").trim();
+      if (!name) {
+        setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.groupNameRequired", "Group name is required."), "bad");
+        return;
+      }
+      setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.creatingGroup", "Creating group..."));
+      try {
+        await authApiJson("/api/next/media-groups", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name})
+        });
+        if (input) input.value = "";
+        await loadAppAdmin();
+        await loadAppSnapshot();
+        setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.groupCreated", "Group created."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminGroupsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function addAppAdminGroupMember(groupId, userId, role) {
+      if (!groupId || !userId) return;
+      setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.savingGroup", "Saving group..."));
+      try {
+        await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({role: role || "member"})
+        });
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.memberAdded", "Member added."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminGroupsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function removeAppAdminGroupMember(groupId, userId) {
+      if (!groupId || !userId) return;
+      setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.savingGroup", "Saving group..."));
+      try {
+        await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, {method: "DELETE"});
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.memberRemoved", "Member removed."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminGroupsMessage", error.message || String(error), "bad");
+      }
     }
     async function loginPasskey() {
       const button = document.getElementById("appLoginButton");
@@ -6754,6 +6999,29 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminRegistrationMode(button.dataset.appAdminRegistrationMode));
       });
       document.getElementById("appAdminInviteForm")?.addEventListener("submit", (event) => createAppAdminInvite(event));
+      document.getElementById("appAdminGroupForm")?.addEventListener("submit", (event) => createAppAdminGroup(event));
+      document.getElementById("appAdminUsersList")?.addEventListener("change", (event) => {
+        const roleSelect = event.target.closest("[data-app-admin-user-role]");
+        if (roleSelect) updateAppAdminUserRole(roleSelect.dataset.appAdminUserRole, roleSelect.value);
+      });
+      document.getElementById("appAdminUsersList")?.addEventListener("click", (event) => {
+        const statusButton = event.target.closest("[data-app-admin-user-status]");
+        if (statusButton) updateAppAdminUserStatus(statusButton.dataset.appAdminUserStatus, statusButton.dataset.status);
+      });
+      document.getElementById("appAdminGroupsList")?.addEventListener("click", (event) => {
+        const addButton = event.target.closest("[data-app-admin-group-add]");
+        const deleteButton = event.target.closest("[data-app-admin-group-member-delete]");
+        if (addButton) {
+          const groupId = addButton.dataset.appAdminGroupAdd;
+          const row = addButton.closest(".admin-group-row");
+          const userSelect = row?.querySelector("[data-app-admin-group-user]");
+          const roleSelect = row?.querySelector("[data-app-admin-group-role]");
+          addAppAdminGroupMember(groupId, userSelect?.value || "", roleSelect?.value || "member");
+        }
+        if (deleteButton) {
+          removeAppAdminGroupMember(deleteButton.dataset.appAdminGroupMemberDelete, deleteButton.dataset.userId);
+        }
+      });
       document.getElementById("appAdminInvitesList")?.addEventListener("click", (event) => {
         const deleteButton = event.target.closest("[data-app-admin-invite-delete]");
         if (deleteButton) {
@@ -11629,6 +11897,34 @@ def parse_bool_value(value: Any, *, default: bool = False) -> bool:
     return default
 
 
+def normalize_media_group_member_role(value: Any) -> str:
+    role = str(value or "member").strip().lower().replace(" ", "_")
+    if role not in MEDIA_GROUP_MEMBER_ROLES:
+        raise NextApiError("Invalid media group role", 400)
+    return role
+
+
+def can_manage_media_group_members(conn, group_id: UUID, actor: dict[str, Any]) -> bool:
+    if actor.get("role") in {"owner", "admin"}:
+        return True
+    actor_id = actor.get("id")
+    if not actor_id:
+        return True
+    if not table_exists(conn, "media_group_members"):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT role
+            FROM media_group_members
+            WHERE group_id=%s AND user_id=%s
+            """,
+            (group_id, actor_id),
+        )
+        member = cur.fetchone()
+    return bool(member and member.get("role") in {"owner", "manager"})
+
+
 def ensure_sync_state(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -14837,12 +15133,170 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/media-groups/<group_id>")
     def media_group_detail(group_id: str):
         group_uuid = parse_uuid(group_id, "groupId")
+        if not group_uuid:
+            raise NextApiError("groupId is required", 400)
         with connect() as conn:
             require_next_permission(conn, "groups.view")
             detail = media_group_detail_entity(conn, group_uuid)
         if not detail:
             raise NextApiError("Media group not found", 404)
         return response({"status": "ok", "group": detail})
+
+    @flask_app.post("/api/next/media-groups")
+    def create_media_group():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media group request body must be an object", 400)
+        name = clean_text(body.get("name")) or ""
+        if not name:
+            raise NextApiError("Group name is required", 400)
+        if len(name) > 120:
+            raise NextApiError("Group name must be 120 characters or fewer", 400)
+        hide_digital = parse_bool_value(body.get("hideDigital", body.get("hide_digital")), default=False)
+        metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+        group_uuid = uuid.uuid4()
+        public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"next-group-{group_uuid.hex[:12]}"
+        if len(public_id) > 160:
+            raise NextApiError("publicId must be 160 characters or fewer", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.create")
+            if not table_exists(conn, "media_groups"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM media_groups WHERE public_id=%s", (public_id,))
+                if cur.fetchone():
+                    raise NextApiError("A media group with this public id already exists", 409)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO media_groups (
+                            id, public_id, name, created_by, hide_digital, metadata, created_at, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, now(), now())
+                        """,
+                        (
+                            group_uuid,
+                            public_id,
+                            name,
+                            actor.get("id"),
+                            hide_digital,
+                            Jsonb(json_ready(metadata)),
+                        ),
+                    )
+                    if actor.get("id") and table_exists(conn, "media_group_members"):
+                        cur.execute(
+                            """
+                            INSERT INTO media_group_members (group_id, user_id, role, created_at)
+                            VALUES (%s, %s, 'owner', now())
+                            ON CONFLICT (group_id, user_id) DO UPDATE SET role='owner'
+                            """,
+                            (group_uuid, actor["id"]),
+                        )
+            detail = media_group_detail_entity(conn, group_uuid)
+        return response({"status": "ok", "group": detail}, 201)
+
+    @flask_app.put("/api/next/media-groups/<group_id>/members/<user_id>")
+    @flask_app.patch("/api/next/media-groups/<group_id>/members/<user_id>")
+    def upsert_media_group_member(group_id: str, user_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        user_uuid = parse_uuid(user_id, "userId")
+        if not group_uuid or not user_uuid:
+            raise NextApiError("groupId and userId are required", 400)
+        body = request.get_json(silent=True) or {}
+        if body and not isinstance(body, dict):
+            raise NextApiError("Media group member request body must be an object", 400)
+        role = normalize_media_group_member_role(body.get("role") if isinstance(body, dict) else None)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.invite")
+            if not table_exists(conn, "media_group_members") or not table_exists(conn, "media_groups"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
+                if not cur.fetchone():
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
+                if actor.get("role") not in {"owner", "admin"} and role == "owner":
+                    raise NextApiError("Only admins can assign group owners", 403)
+                cur.execute("SELECT id FROM users WHERE id=%s", (user_uuid,))
+                if not cur.fetchone():
+                    raise NextApiError("User not found", 404)
+                cur.execute(
+                    "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
+                    (group_uuid, user_uuid),
+                )
+                existing_member = cur.fetchone()
+                if existing_member and existing_member.get("role") == "owner" and role != "owner":
+                    cur.execute(
+                        """
+                        SELECT COUNT(*)::int AS count
+                        FROM media_group_members
+                        WHERE group_id=%s AND role='owner'
+                        """,
+                        (group_uuid,),
+                    )
+                    if int(cur.fetchone()["count"]) <= 1:
+                        raise NextApiError("The last group owner cannot be demoted", 400)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO media_group_members (group_id, user_id, role, created_at)
+                        VALUES (%s, %s, %s, now())
+                        ON CONFLICT (group_id, user_id) DO UPDATE SET role=EXCLUDED.role
+                        """,
+                        (group_uuid, user_uuid, role),
+                    )
+                    cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
+            detail = media_group_detail_entity(conn, group_uuid)
+        return response({"status": "ok", "group": detail})
+
+    @flask_app.delete("/api/next/media-groups/<group_id>/members/<user_id>")
+    def delete_media_group_member(group_id: str, user_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        user_uuid = parse_uuid(user_id, "userId")
+        if not group_uuid or not user_uuid:
+            raise NextApiError("groupId and userId are required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.invite")
+            if not table_exists(conn, "media_group_members") or not table_exists(conn, "media_groups"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
+                if not cur.fetchone():
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
+                cur.execute(
+                    "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
+                    (group_uuid, user_uuid),
+                )
+                member = cur.fetchone()
+                if not member:
+                    raise NextApiError("Media group member not found", 404)
+                if member.get("role") == "owner":
+                    if actor.get("role") not in {"owner", "admin"}:
+                        raise NextApiError("Only admins can remove group owners", 403)
+                    cur.execute(
+                        """
+                        SELECT COUNT(*)::int AS count
+                        FROM media_group_members
+                        WHERE group_id=%s AND role='owner'
+                        """,
+                        (group_uuid,),
+                    )
+                    if int(cur.fetchone()["count"]) <= 1:
+                        raise NextApiError("The last group owner cannot be removed", 400)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM media_group_members WHERE group_id=%s AND user_id=%s",
+                        (group_uuid, user_uuid),
+                    )
+                    cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
+            detail = media_group_detail_entity(conn, group_uuid)
+        return response({"status": "deleted", "group": detail})
 
     @flask_app.get("/api/next/digital-items")
     def digital_items():
