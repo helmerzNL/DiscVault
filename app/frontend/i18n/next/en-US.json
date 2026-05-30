@@ -351,5 +351,9 @@
   "profile.recoveryCodesReady": "Recovery codes generated. Save them now.",
   "profile.revokeRecoveryConfirm": "Revoke all active recovery codes?",
   "profile.revokingRecoveryCodes": "Revoking recovery codes...",
-  "profile.recoveryCodesRevoked": "Active recovery codes revoked."
+  "profile.recoveryCodesRevoked": "Active recovery codes revoked.",
+  "auth.inviteRequired": "Enter username and invite code.",
+  "auth.inviteCreating": "Creating account...",
+  "auth.inviteCreated": "Account created. You are signed in.",
+  "auth.inviteFailed": "Invite sign-up failed."
 }

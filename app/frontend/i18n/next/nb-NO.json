@@ -257,5 +257,9 @@
   "profile.recoveryCodesReady": "Gjenopprettingskoder opprettet. Lagre dem n?.",
   "profile.revokeRecoveryConfirm": "Tilbakekall alle aktive gjenopprettingskoder?",
   "profile.revokingRecoveryCodes": "Tilbakekaller gjenopprettingskoder...",
-  "profile.recoveryCodesRevoked": "Aktive gjenopprettingskoder tilbakekalt."
+  "profile.recoveryCodesRevoked": "Aktive gjenopprettingskoder tilbakekalt.",
+  "auth.inviteRequired": "Skriv inn brukernavn og invitasjonskode.",
+  "auth.inviteCreating": "Oppretter konto...",
+  "auth.inviteCreated": "Konto opprettet. Du er logget inn.",
+  "auth.inviteFailed": "Registrering med invitasjon mislyktes."
 }

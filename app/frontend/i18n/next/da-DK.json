@@ -257,5 +257,9 @@
   "profile.recoveryCodesReady": "Gendannelseskoder oprettet. Gem dem nu.",
   "profile.revokeRecoveryConfirm": "Tilbagekald alle aktive gendannelseskoder?",
   "profile.revokingRecoveryCodes": "Tilbagekalder gendannelseskoder...",
-  "profile.recoveryCodesRevoked": "Aktive gendannelseskoder tilbagekaldt."
+  "profile.recoveryCodesRevoked": "Aktive gendannelseskoder tilbagekaldt.",
+  "auth.inviteRequired": "Angiv brugernavn og invitationskode.",
+  "auth.inviteCreating": "Opretter konto...",
+  "auth.inviteCreated": "Konto oprettet. Du er logget ind.",
+  "auth.inviteFailed": "Tilmelding med invitation mislykkedes."
 }

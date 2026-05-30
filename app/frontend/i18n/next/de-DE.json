@@ -257,5 +257,9 @@
   "profile.recoveryCodesReady": "Wiederherstellungscodes erstellt. Speichere sie jetzt.",
   "profile.revokeRecoveryConfirm": "Alle aktiven Wiederherstellungscodes widerrufen?",
   "profile.revokingRecoveryCodes": "Wiederherstellungscodes werden widerrufen...",
-  "profile.recoveryCodesRevoked": "Aktive Wiederherstellungscodes widerrufen."
+  "profile.recoveryCodesRevoked": "Aktive Wiederherstellungscodes widerrufen.",
+  "auth.inviteRequired": "Benutzername und Einladungscode eingeben.",
+  "auth.inviteCreating": "Konto wird erstellt...",
+  "auth.inviteCreated": "Konto erstellt. Du bist angemeldet.",
+  "auth.inviteFailed": "Anmeldung per Einladung fehlgeschlagen."
 }

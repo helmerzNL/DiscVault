@@ -351,5 +351,9 @@
   "profile.recoveryCodesReady": "Herstelcodes gemaakt. Bewaar ze nu.",
   "profile.revokeRecoveryConfirm": "Alle actieve herstelcodes intrekken?",
   "profile.revokingRecoveryCodes": "Herstelcodes intrekken...",
-  "profile.recoveryCodesRevoked": "Actieve herstelcodes ingetrokken."
+  "profile.recoveryCodesRevoked": "Actieve herstelcodes ingetrokken.",
+  "auth.inviteRequired": "Vul gebruikersnaam en uitnodigingscode in.",
+  "auth.inviteCreating": "Account aanmaken...",
+  "auth.inviteCreated": "Account aangemaakt. Je bent ingelogd.",
+  "auth.inviteFailed": "Aanmelden met uitnodiging mislukt."
 }

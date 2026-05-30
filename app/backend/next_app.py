@@ -4844,9 +4844,30 @@ def ui_preview_html(
       </div>
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
-        <button type="button" class="secondary-button" disabled data-next-i18n="auth.inviteOnly">Invite-only access</button>
+        <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
+      <form class="recovery-login-panel hidden" id="appInviteForm">
+        <label for="appInviteUsername">
+          <span data-next-i18n="auth.username">Username</span>
+          <input id="appInviteUsername" autocomplete="username">
+        </label>
+        <label for="appInviteDisplayName">
+          <span data-next-i18n="profile.displayName">Display name</span>
+          <input id="appInviteDisplayName" autocomplete="name">
+        </label>
+        <label for="appInviteCredentialName">
+          <span data-next-i18n="auth.passkeyName">Passkey name</span>
+          <input id="appInviteCredentialName" autocomplete="off" data-next-i18n-placeholder="auth.passkey">
+        </label>
+        <label for="appInviteCode">
+          <span data-next-i18n="auth.inviteCode">Invite code</span>
+          <input id="appInviteCode" autocomplete="one-time-code" inputmode="text">
+        </label>
+        <div class="profile-form-actions">
+          <button type="submit" class="login-primary" id="appInviteJoinButton" data-next-i18n="auth.createAccount">Create account</button>
+        </div>
+      </form>
       <form class="recovery-login-panel hidden" id="appRecoveryForm">
         <label for="appRecoveryUsername">
           <span data-next-i18n="auth.username">Username</span>
@@ -5300,8 +5321,83 @@ def ui_preview_html(
         if (button) button.disabled = false;
       }
     }
+    function toggleInviteLogin() {
+      const panel = document.getElementById("appInviteForm");
+      const recoveryPanel = document.getElementById("appRecoveryForm");
+      recoveryPanel?.classList.add("hidden");
+      panel?.classList.toggle("hidden");
+      setLoginMessage("");
+    }
+    async function registerInviteAccount(event) {
+      if (event) event.preventDefault();
+      if (!window.PublicKeyCredential || !navigator.credentials) {
+        setLoginMessage(tNext("auth.passkeyUnavailable", "This browser does not support passkeys."), "bad");
+        return;
+      }
+      const username = String(document.getElementById("appInviteUsername")?.value || "").trim();
+      const displayName = String(document.getElementById("appInviteDisplayName")?.value || "").trim() || username;
+      const credentialName = String(document.getElementById("appInviteCredentialName")?.value || "").trim() || tNext("auth.passkey", "Passkey");
+      const inviteCode = String(document.getElementById("appInviteCode")?.value || "").trim();
+      const button = document.getElementById("appInviteJoinButton");
+      if (!username || !inviteCode) {
+        setLoginMessage(tNext("auth.inviteRequired", "Enter username and invite code."), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      setLoginMessage(tNext("auth.inviteCreating", "Creating account..."));
+      try {
+        const optionsPayload = await apiJson("/api/next/auth/register/options", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({username, display_name: displayName, invite_code: inviteCode})
+        });
+        const options = optionsPayload.options || optionsPayload.publicKey || {};
+        if (!options.user || !options.challenge) throw new Error("Invalid passkey registration options");
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.user.id = base64urlToBuffer(options.user.id);
+        options.excludeCredentials = (options.excludeCredentials || []).map((credential) => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id)
+        }));
+        const attestation = await navigator.credentials.create({publicKey: options});
+        const credential = {
+          id: attestation.id,
+          rawId: bufferToBase64url(attestation.rawId),
+          response: {
+            attestationObject: bufferToBase64url(attestation.response.attestationObject),
+            clientDataJSON: bufferToBase64url(attestation.response.clientDataJSON)
+          },
+          type: attestation.type,
+          authenticatorAttachment: attestation.authenticatorAttachment
+        };
+        const verified = await apiJson("/api/next/auth/register/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            user_id: optionsPayload.user_id,
+            username,
+            display_name: displayName,
+            credential_name: credentialName,
+            invite_code: inviteCode,
+            credential
+          })
+        });
+        if (verified.token) localStorage.setItem("dv_next_token", verified.token);
+        const codeInput = document.getElementById("appInviteCode");
+        if (codeInput) codeInput.value = "";
+        setLoginMessage(tNext("auth.inviteCreated", "Account created. You are signed in."), "good");
+        await refreshAppFlow();
+      } catch (error) {
+        const cancelled = error && error.name === "NotAllowedError";
+        setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : (error.message || tNext("auth.inviteFailed", "Invite sign-up failed.")), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
     function toggleRecoveryLogin() {
       const panel = document.getElementById("appRecoveryForm");
+      const invitePanel = document.getElementById("appInviteForm");
+      invitePanel?.classList.add("hidden");
       panel?.classList.toggle("hidden");
       setLoginMessage("");
     }
@@ -6403,6 +6499,8 @@ def ui_preview_html(
         if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
       });
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
+      document.getElementById("appInviteToggleButton")?.addEventListener("click", () => toggleInviteLogin());
+      document.getElementById("appInviteForm")?.addEventListener("submit", (event) => registerInviteAccount(event));
       document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());
       document.getElementById("appRecoveryForm")?.addEventListener("submit", (event) => loginRecovery(event));
       document.getElementById("profileSignOutButton")?.addEventListener("click", () => logoutApp());

@@ -257,5 +257,9 @@
   "profile.recoveryCodesReady": "Palautuskoodit luotu. Tallenna ne nyt.",
   "profile.revokeRecoveryConfirm": "Perutaanko kaikki aktiiviset palautuskoodit?",
   "profile.revokingRecoveryCodes": "Perutaan palautuskoodeja...",
-  "profile.recoveryCodesRevoked": "Aktiiviset palautuskoodit peruttu."
+  "profile.recoveryCodesRevoked": "Aktiiviset palautuskoodit peruttu.",
+  "auth.inviteRequired": "Anna k?ytt?j?nimi ja kutsukoodi.",
+  "auth.inviteCreating": "Luodaan tili?...",
+  "auth.inviteCreated": "Tili luotu. Olet kirjautunut sis??n.",
+  "auth.inviteFailed": "Kutsulla rekister?ityminen ep?onnistui."
 }
