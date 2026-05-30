@@ -4315,6 +4315,13 @@ def ui_preview_html(
       box-shadow: 0 22px 54px rgba(0,0,0,.24);
       font-size: 1.1rem;
       font-weight: 800;
+      overflow: hidden;
+    }
+    .profile-avatar img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
     }
     .profile-copy {
       min-width: 0;
@@ -4409,6 +4416,11 @@ def ui_preview_html(
       outline-offset: 2px;
       border-color: color-mix(in srgb, var(--accent) 62%, var(--line));
     }
+    .profile-form input[type="file"] {
+      min-height: auto;
+      padding: 9px 10px;
+      cursor: pointer;
+    }
     .profile-form-actions {
       display: flex;
       flex-wrap: wrap;
@@ -4451,6 +4463,28 @@ def ui_preview_html(
     .profile-passkey-actions input {
       min-height: 36px;
       width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: .9rem;
+      font-weight: 620;
+    }
+    .profile-add-passkey {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      padding: 12px;
+    }
+    .profile-add-passkey input {
+      min-height: 38px;
       min-width: 0;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -4972,9 +5006,12 @@ def ui_preview_html(
             <h3 data-next-i18n="profile.security">Security</h3>
             <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
             <div class="profile-passkey-list" id="profilePasskeyList"></div>
+            <div class="profile-add-passkey">
+              <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
+              <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
+            </div>
             <div class="profile-action-row">
               <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
-              <button type="button" class="secondary-button" disabled data-next-i18n="auth.recovery">Recovery</button>
             </div>
             <div class="login-message" id="profileSecurityMessage"></div>
           </div>
@@ -4990,6 +5027,24 @@ def ui_preview_html(
                 <span class="login-message" id="profileEditMessage"></span>
               </div>
             </form>
+            <form class="profile-form" id="profileAvatarForm">
+              <label for="profileAvatarFileInput">
+                <span data-next-i18n="profile.avatar">Avatar</span>
+                <input id="profileAvatarFileInput" name="file" type="file" accept="image/*">
+              </label>
+              <div class="profile-form-actions">
+                <button type="submit" class="secondary-button" id="profileAvatarUploadButton" data-next-i18n="profile.uploadAvatar">Upload avatar</button>
+                <button type="button" class="secondary-button" id="profileAvatarRemoveButton" data-next-i18n="profile.removeAvatar">Remove avatar</button>
+                <span class="login-message" id="profileAvatarMessage"></span>
+              </div>
+            </form>
+          </div>
+          <div class="detail-card profile-card">
+            <h3 data-next-i18n="profile.recoveryTitle">Account recovery</h3>
+            <p data-next-i18n="profile.recoveryHelp">Recovery options will let you regain access if all passkeys are lost.</p>
+            <div class="profile-action-row">
+              <button type="button" class="secondary-button" disabled data-next-i18n="profile.recoveryComingSoon">Recovery setup coming next</button>
+            </div>
           </div>
         </section>
       </section>
@@ -5761,6 +5816,7 @@ def ui_preview_html(
         name,
         username: user.username || auth.username || "-",
         role: user.role || auth.role || "-",
+        avatarUrl: user.avatarUrl || user.avatar_url || "",
         userCount: (state.counts && state.counts.users) || auth.userCount || 0,
         credentialCount: profileCredentials.length || auth.credentialCount || 0
       };
@@ -5780,13 +5836,19 @@ def ui_preview_html(
       const credentialCount = document.getElementById("profileCredentialCount");
       const navRole = document.getElementById("navProfileRole");
       if (title) title.textContent = profile.name;
-      if (avatar) avatar.textContent = initialsFromName(profile.name);
+      if (avatar) {
+        avatar.innerHTML = profile.avatarUrl
+          ? `<img src="${escapeHtml(profile.avatarUrl)}" alt="">`
+          : escapeHtml(initialsFromName(profile.name));
+      }
       if (displayNameInput && document.activeElement !== displayNameInput) displayNameInput.value = profile.name;
       if (username) username.textContent = profile.username;
       if (role) role.textContent = profile.role;
       if (userCount) userCount.textContent = String(profile.userCount);
       if (credentialCount) credentialCount.textContent = String(profile.credentialCount);
       if (navRole) navRole.textContent = profile.role && profile.role !== "-" ? profile.role : "-";
+      const removeAvatarButton = document.getElementById("profileAvatarRemoveButton");
+      if (removeAvatarButton) removeAvatarButton.disabled = !profile.avatarUrl;
       renderProfilePasskeys();
     }
     function shortDateTime(value) {
@@ -5841,6 +5903,64 @@ def ui_preview_html(
         setProfileSecurityMessage(error.message || String(error), "bad");
       }
     }
+    async function addProfilePasskey() {
+      if (!window.PublicKeyCredential || !navigator.credentials) {
+        setProfileSecurityMessage(tNext("auth.passkeyUnavailable", "This browser does not support passkeys."), "bad");
+        return;
+      }
+      const profile = profileIdentity();
+      const input = document.getElementById("profileNewPasskeyNameInput");
+      const button = document.getElementById("profileAddPasskeyButton");
+      const credentialName = String(input?.value || "").trim() || tNext("auth.passkey", "Passkey");
+      if (button) button.disabled = true;
+      setProfileSecurityMessage(tNext("profile.addingPasskey", "Adding passkey..."));
+      try {
+        const optionsPayload = await authApiJson("/api/next/auth/register/options", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            username: profile.username,
+            display_name: profile.name,
+            credential_name: credentialName
+          })
+        });
+        const options = optionsPayload.publicKey || {};
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.user.id = base64urlToBuffer(options.user.id);
+        options.excludeCredentials = (options.excludeCredentials || []).map((credential) => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id)
+        }));
+        const attestation = await navigator.credentials.create({publicKey: options});
+        const credential = {
+          id: attestation.id,
+          rawId: bufferToBase64url(attestation.rawId),
+          type: attestation.type,
+          response: {
+            attestationObject: bufferToBase64url(attestation.response.attestationObject),
+            clientDataJSON: bufferToBase64url(attestation.response.clientDataJSON)
+          }
+        };
+        await authApiJson("/api/next/auth/register/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            user_id: optionsPayload.user_id,
+            username: profile.username,
+            display_name: profile.name,
+            credential_name: credentialName,
+            credential
+          })
+        });
+        if (input) input.value = "";
+        await loadProfileDetails();
+        setProfileSecurityMessage(tNext("profile.passkeyAdded", "Passkey added."), "good");
+      } catch (error) {
+        setProfileSecurityMessage(error.message || tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
     async function saveProfilePasskey(credentialId) {
       const input = Array.from(document.querySelectorAll("[data-profile-passkey-name]")).find((node) => String(node.dataset.profilePasskeyName) === String(credentialId));
       const name = String(input?.value || "").trim();
@@ -5884,6 +6004,12 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function setProfileAvatarMessage(message, tone) {
+      const node = document.getElementById("profileAvatarMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
     async function saveProfileEdits() {
       const input = document.getElementById("profileDisplayNameInput");
       const button = document.getElementById("profileSaveButton");
@@ -5910,6 +6036,49 @@ def ui_preview_html(
         setProfileEditMessage(tNext("profile.profileSaved", "Profile saved."), "good");
       } catch (error) {
         setProfileEditMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function uploadProfileAvatar() {
+      const input = document.getElementById("profileAvatarFileInput");
+      const button = document.getElementById("profileAvatarUploadButton");
+      const file = input?.files?.[0];
+      if (!file) {
+        setProfileAvatarMessage(tNext("profile.avatarRequired", "Choose an image first."), "bad");
+        return;
+      }
+      const form = new FormData();
+      form.append("file", file);
+      if (button) button.disabled = true;
+      setProfileAvatarMessage(tNext("profile.uploadingAvatar", "Uploading avatar..."));
+      try {
+        const payload = await apiJson("/api/next/profile/avatar", {
+          method: "POST",
+          headers: authHeaders(),
+          body: form
+        });
+        state.user = Object.assign({}, state.user || {}, payload.user || {});
+        if (input) input.value = "";
+        renderProfile();
+        setProfileAvatarMessage(tNext("profile.avatarSaved", "Avatar saved."), "good");
+      } catch (error) {
+        setProfileAvatarMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function removeProfileAvatar() {
+      const button = document.getElementById("profileAvatarRemoveButton");
+      if (button) button.disabled = true;
+      setProfileAvatarMessage(tNext("profile.removingAvatar", "Removing avatar..."));
+      try {
+        const payload = await authApiJson("/api/next/profile/avatar", {method: "DELETE"});
+        state.user = Object.assign({}, state.user || {}, payload.user || {});
+        renderProfile();
+        setProfileAvatarMessage(tNext("profile.avatarRemoved", "Avatar removed."), "good");
+      } catch (error) {
+        setProfileAvatarMessage(error.message || String(error), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -6010,7 +6179,13 @@ def ui_preview_html(
         event.preventDefault();
         saveProfileEdits();
       });
+      document.getElementById("profileAvatarForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        uploadProfileAvatar();
+      });
+      document.getElementById("profileAvatarRemoveButton")?.addEventListener("click", () => removeProfileAvatar());
       document.getElementById("profileRefreshPasskeysButton")?.addEventListener("click", () => loadProfileDetails());
+      document.getElementById("profileAddPasskeyButton")?.addEventListener("click", () => addProfilePasskey());
       document.getElementById("profilePasskeyList")?.addEventListener("click", (event) => {
         const saveButton = event.target.closest("[data-profile-passkey-save]");
         const deleteButton = event.target.closest("[data-profile-passkey-delete]");
@@ -11096,6 +11271,81 @@ def next_user_primary_role(conn, user_id: UUID | str) -> str | None:
     return row["key"] if row else None
 
 
+def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
+    user_id = user["id"]
+    avatar: dict[str, Any] | None = None
+    fresh_user = user
+    if table_exists(conn, "users"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    u.id,
+                    u.username,
+                    u.display_name,
+                    u.first_name,
+                    u.last_name,
+                    u.status,
+                    u.avatar_asset_id,
+                    u.updated_at,
+                    ma.id AS avatar_id,
+                    ma.kind AS avatar_kind,
+                    ma.variant AS avatar_variant,
+                    ma.storage_backend AS avatar_storage_backend,
+                    ma.storage_key AS avatar_storage_key,
+                    ma.source_url AS avatar_source_url,
+                    ma.provider_id AS avatar_provider_id,
+                    ma.content_type AS avatar_content_type,
+                    ma.width AS avatar_width,
+                    ma.height AS avatar_height,
+                    ma.size_bytes AS avatar_size_bytes,
+                    ma.sha256 AS avatar_sha256,
+                    ma.metadata AS avatar_metadata,
+                    ma.created_at AS avatar_created_at
+                FROM users u
+                LEFT JOIN media_assets ma ON ma.id = u.avatar_asset_id
+                WHERE u.id=%s
+                """,
+                (user_id,),
+            )
+            row = cur.fetchone()
+        if row:
+            fresh_user = row
+            if row.get("avatar_id"):
+                avatar = {
+                    "id": row.get("avatar_id"),
+                    "kind": row.get("avatar_kind"),
+                    "variant": row.get("avatar_variant"),
+                    "storage_backend": row.get("avatar_storage_backend"),
+                    "storage_key": row.get("avatar_storage_key"),
+                    "source_url": row.get("avatar_source_url"),
+                    "provider_id": row.get("avatar_provider_id"),
+                    "content_type": row.get("avatar_content_type"),
+                    "width": row.get("avatar_width"),
+                    "height": row.get("avatar_height"),
+                    "size_bytes": row.get("avatar_size_bytes"),
+                    "sha256": row.get("avatar_sha256"),
+                    "metadata": row.get("avatar_metadata"),
+                    "created_at": row.get("avatar_created_at"),
+                }
+    avatar_url = media_asset_public_url(avatar)
+    display_name = fresh_user.get("display_name") or fresh_user.get("username")
+    return {
+        "id": fresh_user.get("id"),
+        "username": fresh_user.get("username"),
+        "displayName": display_name,
+        "display_name": display_name,
+        "first_name": fresh_user.get("first_name"),
+        "last_name": fresh_user.get("last_name"),
+        "role": fresh_user.get("role") or next_user_primary_role(conn, user_id),
+        "avatarAssetId": fresh_user.get("avatar_asset_id"),
+        "avatar_asset_id": fresh_user.get("avatar_asset_id"),
+        "avatarUrl": avatar_url,
+        "avatar_url": avatar_url,
+        "updated_at": fresh_user.get("updated_at"),
+    }
+
+
 def require_next_admin_user(conn) -> dict[str, Any]:
     if not next_auth_effective_enabled(conn, table_exists):
         return {"id": None, "username": "system", "role": "owner"}
@@ -12429,6 +12679,128 @@ def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
     }
 
 
+def save_uploaded_profile_avatar_file(upload: Any) -> dict[str, Any]:
+    try:
+        upload.stream.seek(0)
+        image = Image.open(upload.stream)
+        image = ImageOps.exif_transpose(image)
+        if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+            alpha_image = image.convert("RGBA")
+            background = Image.new("RGBA", alpha_image.size, (255, 255, 255, 255))
+            background.alpha_composite(alpha_image)
+            image = background.convert("RGB")
+        elif image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+        elif image.mode == "L":
+            image = image.convert("RGB")
+        image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+        width, height = image.size
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=88, optimize=True)
+        data = buffer.getvalue()
+    except UnidentifiedImageError as exc:
+        raise NextApiError("Uploaded file is not a valid image", 400) from exc
+    except Exception as exc:
+        raise NextApiError(f"Avatar upload failed: {exc}", 400) from exc
+    if len(data) > MAX_ARTWORK_UPLOAD_BYTES:
+        raise NextApiError("Avatar upload may not exceed 20 MB after processing", 413)
+
+    digest = hashlib.sha256(data).hexdigest()
+    data_dir = legacy_data_dir().resolve()
+    target_dir = data_dir / "media" / "profiles" / "original" / digest[:2] / digest[2:4]
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{digest}.jpg"
+    if not target.exists():
+        target.write_bytes(data)
+    storage_key = target.relative_to(data_dir).as_posix()
+    return {
+        "path": target,
+        "storageKey": storage_key,
+        "sha256": digest,
+        "sizeBytes": len(data),
+        "contentType": "image/jpeg",
+        "width": width,
+        "height": height,
+        "originalFilename": os.path.basename(str(upload.filename or "")),
+    }
+
+
+def create_uploaded_profile_avatar_asset(
+    conn,
+    *,
+    upload_info: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset table is not available", 503)
+    storage_key = clean_text(upload_info.get("storageKey")) or ""
+    if not storage_key:
+        raise NextApiError("Uploaded avatar did not produce a storage key", 500)
+    media_id = media_asset_uuid(storage_key)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO media_assets (
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata
+            )
+            VALUES (%s, 'profile', 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (kind, variant, sha256) DO UPDATE SET
+                storage_backend=EXCLUDED.storage_backend,
+                storage_key=EXCLUDED.storage_key,
+                provider_id=EXCLUDED.provider_id,
+                content_type=EXCLUDED.content_type,
+                width=EXCLUDED.width,
+                height=EXCLUDED.height,
+                size_bytes=EXCLUDED.size_bytes,
+                metadata=EXCLUDED.metadata
+            RETURNING
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata,
+                created_at
+            """,
+            (
+                media_id,
+                storage_key,
+                upload_info.get("contentType"),
+                upload_info.get("width"),
+                upload_info.get("height"),
+                upload_info.get("sizeBytes"),
+                upload_info.get("sha256"),
+                Jsonb(
+                    {
+                        "source": "profile_upload",
+                        "originalFilename": upload_info.get("originalFilename"),
+                        "uploadedBy": actor_job_payload(actor or {}) if actor else None,
+                    }
+                ),
+            ),
+        )
+        return cur.fetchone()
+
+
 def create_uploaded_movie_media_asset(
     conn,
     *,
@@ -13470,19 +13842,12 @@ def register_routes(flask_app: Flask) -> None:
                     (user["id"],),
                 )
                 credentials = cur.fetchall()
+            user_payload = next_profile_user_payload(conn, user)
+            user_payload["credentialCount"] = len(credentials)
             return response(
                 {
                     "status": "ok",
-                    "user": {
-                        "id": user["id"],
-                        "username": user["username"],
-                        "displayName": user.get("display_name") or user["username"],
-                        "display_name": user.get("display_name") or user["username"],
-                        "first_name": user.get("first_name"),
-                        "last_name": user.get("last_name"),
-                        "role": user.get("role"),
-                        "credentialCount": len(credentials),
-                    },
+                    "user": user_payload,
                     "credentials": credentials,
                 }
             )
@@ -13520,18 +13885,54 @@ def register_routes(flask_app: Flask) -> None:
             return response(
                 {
                     "status": "ok",
-                    "user": {
-                        "id": updated["id"],
-                        "username": updated["username"],
-                        "displayName": updated.get("display_name") or updated["username"],
-                        "display_name": updated.get("display_name") or updated["username"],
-                        "first_name": updated.get("first_name"),
-                        "last_name": updated.get("last_name"),
-                        "role": updated.get("role"),
-                        "updated_at": updated.get("updated_at"),
-                    },
+                    "user": next_profile_user_payload(conn, updated),
                 }
             )
+
+    @flask_app.post("/api/next/profile/avatar")
+    def upload_next_profile_avatar():
+        if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
+            raise NextApiError("Avatar upload may not exceed 20 MB", 413)
+        upload = request.files.get("file") or request.files.get("avatar")
+        if not upload or not upload.filename:
+            raise NextApiError("file is required", 400)
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            upload_info = save_uploaded_profile_avatar_file(upload)
+            with conn.transaction():
+                media = create_uploaded_profile_avatar_asset(conn, upload_info=upload_info, actor=user)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE users
+                        SET avatar_asset_id=%s, updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (media["id"], user["id"]),
+                    )
+            user_payload = next_profile_user_payload(conn, user)
+        return response({"status": "ok", "user": user_payload, "mediaAsset": media})
+
+    @flask_app.delete("/api/next/profile/avatar")
+    def delete_next_profile_avatar():
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE users
+                        SET avatar_asset_id=NULL, updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (user["id"],),
+                    )
+            user_payload = next_profile_user_payload(conn, user)
+        return response({"status": "deleted", "user": user_payload})
 
     @flask_app.patch("/api/next/profile/passkeys/<credential_id>")
     def patch_next_profile_passkey(credential_id: str):
