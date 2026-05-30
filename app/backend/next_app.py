@@ -3922,31 +3922,26 @@ def ui_preview_html(
       border: 1px dashed var(--line-strong);
       color: var(--muted);
     }
-    .movie-sheet {
-      position: fixed;
-      inset: 0;
-      z-index: 48;
+    .library-view {
       display: grid;
-      align-items: stretch;
-      justify-items: center;
-      padding: 18px;
-      background: rgba(0,0,0,.48);
-      backdrop-filter: blur(22px) saturate(150%);
-      overflow: auto;
+      gap: 18px;
+      min-width: 0;
     }
-    .movie-sheet.hidden {
+    .library-view.hidden,
+    .movie-detail-page.hidden {
       display: none;
     }
-    .movie-sheet-panel {
-      width: min(1180px, 100%);
-      min-height: min(820px, calc(100vh - 36px));
+    .movie-detail-page {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .movie-detail-page .movie-detail-hero {
+      min-height: min(520px, 56vh);
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: var(--bg-solid);
       box-shadow: var(--shadow);
       overflow: hidden;
-      display: grid;
-      grid-template-rows: minmax(270px, 42vh) auto;
     }
     .movie-detail-hero {
       position: relative;
@@ -3975,20 +3970,21 @@ def ui_preview_html(
       object-fit: cover;
       opacity: .86;
     }
-    .movie-detail-close {
+    .movie-detail-back {
       position: absolute;
       top: 14px;
-      right: 14px;
+      left: 14px;
       z-index: 3;
-      width: 40px;
       min-height: 40px;
       border: 1px solid rgba(255,255,255,.24);
-      border-radius: 50%;
+      border-radius: 999px;
       color: #fff;
       background: rgba(0,0,0,.36);
       backdrop-filter: blur(18px);
       cursor: pointer;
-      font-size: 20px;
+      padding: 0 14px;
+      font-size: .9rem;
+      font-weight: 700;
       line-height: 1;
     }
     .movie-detail-summary {
@@ -4042,6 +4038,12 @@ def ui_preview_html(
       gap: 16px;
       padding: 18px;
       background: var(--bg);
+    }
+    .movie-detail-page .movie-detail-body {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      box-shadow: var(--shadow-soft);
     }
     .detail-card {
       border: 1px solid var(--line);
@@ -4374,13 +4376,8 @@ def ui_preview_html(
         justify-self: start;
         width: min(44vw, 170px);
       }
-      .movie-sheet {
-        padding: 0;
-      }
-      .movie-sheet-panel {
-        min-height: 100vh;
-        border-radius: 0;
-        grid-template-rows: minmax(430px, 56vh) auto;
+      .movie-detail-page .movie-detail-hero {
+        min-height: min(560px, 68vh);
       }
       .movie-detail-hero {
         padding: 18px 14px 24px;
@@ -4496,6 +4493,7 @@ def ui_preview_html(
           <button type="button" class="icon-button" id="preferencesButton" data-next-i18n="preferences.title">Preferences</button>
         </div>
       </div>
+      <section class="library-view" id="libraryView">
       <section class="hero" id="previewHero">
         """ + featured_backdrop_html + """
         <div class="hero-content">
@@ -4560,6 +4558,54 @@ def ui_preview_html(
           </div>
         </div>
       </section>
+      </section>
+      <section class="movie-detail-page hidden" id="movieDetailPage" aria-labelledby="movieDetailTitle">
+        <section class="movie-detail-hero" id="movieDetailHero">
+          <img id="movieDetailBackdrop" alt="">
+          <button type="button" class="movie-detail-back" id="movieDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back to library</button>
+          <div class="movie-detail-summary">
+            <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
+            <div>
+              <span class="eyebrow" data-next-i18n="movieDetail.title">Movie details</span>
+              <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
+              <div class="hero-meta" id="movieDetailTags"></div>
+              <p class="movie-detail-overview" id="movieDetailOverview"></p>
+              <div class="movie-detail-actions">
+                <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview metadata</button>
+                <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Apply metadata</button>
+                <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Jobs</button>
+              </div>
+              <div class="detail-message" id="movieDetailMessage"></div>
+            </div>
+          </div>
+        </section>
+        <section class="movie-detail-body">
+          <div class="detail-card">
+            <h3 data-next-i18n="movieDetail.release">Release</h3>
+            <div class="detail-fields" id="movieDetailRelease"></div>
+          </div>
+          <div class="detail-card">
+            <h3 data-next-i18n="movieDetail.technical">Technical</h3>
+            <div class="detail-fields" id="movieDetailTechnical"></div>
+          </div>
+          <div class="detail-card">
+            <h3 data-next-i18n="movieDetail.links">Links</h3>
+            <div class="detail-grid" id="movieDetailLinks"></div>
+          </div>
+          <div class="detail-card">
+            <h3 data-next-i18n="movieDetail.relationships">Relationships</h3>
+            <div class="detail-grid" id="movieDetailRelationships"></div>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="movieDetail.artwork">Artwork</h3>
+            <div class="art-option-grid" id="movieDetailArtwork"></div>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="movieDetail.castCrew">Cast & crew</h3>
+            <div class="detail-grid" id="movieDetailCredits"></div>
+          </div>
+        </section>
+      </section>
     </main>
   </div>
   <section class="preferences-backdrop hidden" id="preferencesBackdrop" aria-modal="true" role="dialog" aria-labelledby="preferencesTitle">
@@ -4573,55 +4619,6 @@ def ui_preview_html(
       </div>
       <div class="preference-list" id="preferenceList"></div>
       <div class="login-message" id="preferencesMessage"></div>
-    </div>
-  </section>
-  <section class="movie-sheet hidden" id="movieDetailSheet" aria-modal="true" role="dialog" aria-labelledby="movieDetailTitle">
-    <div class="movie-sheet-panel">
-      <section class="movie-detail-hero" id="movieDetailHero">
-        <img id="movieDetailBackdrop" alt="">
-        <button type="button" class="movie-detail-close" id="movieDetailCloseButton" aria-label="Close">x</button>
-        <div class="movie-detail-summary">
-          <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
-          <div>
-            <span class="eyebrow" data-next-i18n="movieDetail.title">Movie details</span>
-            <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
-            <div class="hero-meta" id="movieDetailTags"></div>
-            <p class="movie-detail-overview" id="movieDetailOverview"></p>
-            <div class="movie-detail-actions">
-              <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview metadata</button>
-              <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Apply metadata</button>
-              <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Jobs</button>
-            </div>
-            <div class="detail-message" id="movieDetailMessage"></div>
-          </div>
-        </div>
-      </section>
-      <section class="movie-detail-body">
-        <div class="detail-card">
-          <h3 data-next-i18n="movieDetail.release">Release</h3>
-          <div class="detail-fields" id="movieDetailRelease"></div>
-        </div>
-        <div class="detail-card">
-          <h3 data-next-i18n="movieDetail.technical">Technical</h3>
-          <div class="detail-fields" id="movieDetailTechnical"></div>
-        </div>
-        <div class="detail-card">
-          <h3 data-next-i18n="movieDetail.links">Links</h3>
-          <div class="detail-grid" id="movieDetailLinks"></div>
-        </div>
-        <div class="detail-card">
-          <h3 data-next-i18n="movieDetail.relationships">Relationships</h3>
-          <div class="detail-grid" id="movieDetailRelationships"></div>
-        </div>
-        <div class="detail-card full">
-          <h3 data-next-i18n="movieDetail.artwork">Artwork</h3>
-          <div class="art-option-grid" id="movieDetailArtwork"></div>
-        </div>
-        <div class="detail-card full">
-          <h3 data-next-i18n="movieDetail.castCrew">Cast & crew</h3>
-          <div class="detail-grid" id="movieDetailCredits"></div>
-        </div>
-      </section>
     </div>
   </section>
   <nav class=\"""" + mobile_class + """\" aria-label="Mobile">
@@ -5052,9 +5049,12 @@ def ui_preview_html(
     async function openAppMovieDetail(movieId, pushUrl = true) {
       if (!movieId) return;
       showMovieDetailLoading(movieId);
-      document.getElementById("movieDetailSheet")?.classList.remove("hidden");
+      showMovieDetailPage();
       if (pushUrl && appMode) {
-        history.pushState({movieId}, "", `/movies/${encodeURIComponent(movieId)}`);
+        const nextPath = `/movies/${encodeURIComponent(movieId)}`;
+        if (window.location.pathname !== nextPath) {
+          history.pushState({movieId}, "", nextPath);
+        }
       }
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
@@ -5064,12 +5064,24 @@ def ui_preview_html(
       }
     }
     function closeAppMovieDetail(pushUrl = true) {
-      document.getElementById("movieDetailSheet")?.classList.add("hidden");
+      showLibraryPage();
       activeDetailMovieId = "";
       activeDetailPayload = null;
-      if (pushUrl && appMode) {
+      if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
+    }
+    function showMovieDetailPage() {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.remove("hidden");
+      requestAnimationFrame(() => {
+        document.querySelector(".preview-main")?.scrollTo({top: 0, behavior: "auto"});
+        window.scrollTo({top: 0, behavior: "auto"});
+      });
+    }
+    function showLibraryPage() {
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("libraryView")?.classList.remove("hidden");
     }
     async function refreshActiveMovieMetadata(dryRun) {
       if (!activeDetailMovieId) return;
@@ -5415,10 +5427,7 @@ def ui_preview_html(
         event.preventDefault();
         openAppMovieDetail(decodeURIComponent(match[1]));
       });
-      document.getElementById("movieDetailCloseButton")?.addEventListener("click", () => closeAppMovieDetail());
-      document.getElementById("movieDetailSheet")?.addEventListener("click", (event) => {
-        if (event.target.id === "movieDetailSheet") closeAppMovieDetail();
-      });
+      document.getElementById("movieDetailBackButton")?.addEventListener("click", () => closeAppMovieDetail());
       document.getElementById("movieMetadataDryRunButton")?.addEventListener("click", () => refreshActiveMovieMetadata(true));
       document.getElementById("movieMetadataApplyButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false));
       document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
