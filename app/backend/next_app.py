@@ -3367,6 +3367,13 @@ def ui_preview_html(
       color: var(--text);
       cursor: pointer;
     }
+    .secondary-button.active,
+    .secondary-button[aria-pressed="true"] {
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+      background: color-mix(in srgb, var(--accent) 14%, var(--bg-solid));
+      color: var(--text);
+      font-weight: 750;
+    }
     .login-message,
     .startup-message {
       min-height: 22px;
@@ -4694,7 +4701,7 @@ def ui_preview_html(
         min-height: 66px;
         padding: 7px;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
         gap: 4px;
         border: 1px solid color-mix(in srgb, var(--line-strong) 80%, transparent);
         border-radius: 22px;
@@ -4916,7 +4923,7 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="containers"><span data-next-i18n="collection.containers">Containers</span><small id="navContainerCount">""" + h(counts.get("containers", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="groups"><span data-next-i18n="migration.groups">Groups</span><small id="navGroupCount">""" + h(counts.get("mediaGroups", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span data-next-i18n="uiPreview.profile">Profile</span><small id="navProfileRole">-</small></button>
-        <a class="nav-item" href="/api/next/app"><span data-next-i18n="uiPreview.admin">Admin</span><small>Next</small></a>
+        <button type="button" class="nav-item hidden" id="adminNavItem" data-app-route="admin"><span data-next-i18n="uiPreview.admin">Admin</span><small id="navAdminMode">-</small></button>
       </nav>
       <div class="sidebar-footer">
         <strong data-next-i18n="uiPreview.build">Build</strong><br>
@@ -5063,7 +5070,7 @@ def ui_preview_html(
             </div>
           </div>
           <div class="profile-hero-actions">
-            <a class="secondary-button" href="/api/next/app" data-next-i18n="profile.openAdmin">Open admin</a>
+            <button type="button" class="secondary-button hidden" id="profileOpenAdminButton" data-app-route="admin" data-next-i18n="profile.openAdmin">Open admin</button>
             <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
           </div>
         </section>
@@ -5154,6 +5161,69 @@ def ui_preview_html(
           </div>
         </section>
       </section>
+      <section class="profile-view hidden" id="adminView" aria-labelledby="appAdminTitle">
+        <section class="profile-hero">
+          <div class="profile-identity">
+            <div class="profile-avatar">AD</div>
+            <div class="profile-copy">
+              <span class="eyebrow" data-next-i18n="uiPreview.admin">Admin</span>
+              <h2 id="appAdminTitle" data-next-i18n="appAdmin.title">Admin</h2>
+              <p data-next-i18n="appAdmin.subtitle">Security and invite settings for this DiscVault environment.</p>
+            </div>
+          </div>
+          <div class="profile-hero-actions">
+            <button type="button" class="secondary-button" id="appAdminRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+          </div>
+        </section>
+        <section class="profile-grid">
+          <div class="detail-card profile-card">
+            <h3 data-next-i18n="appAdmin.security">Security</h3>
+            <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
+            <div class="profile-meta">
+              <div class="profile-meta-row">
+                <span data-next-i18n="appAdmin.currentMode">Current mode</span>
+                <strong id="appAdminRegistrationMode">-</strong>
+              </div>
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.users">Users</span>
+                <strong id="appAdminUserCount">-</strong>
+              </div>
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.credentials">Passkeys</span>
+                <strong id="appAdminCredentialCount">-</strong>
+              </div>
+            </div>
+            <div class="profile-action-row">
+              <button type="button" class="secondary-button" data-app-admin-registration-mode="invite" data-next-i18n="appAdmin.inviteOnly">Invite-only login</button>
+              <button type="button" class="secondary-button" data-app-admin-registration-mode="public" data-next-i18n="appAdmin.publicRegistration">Public registration</button>
+            </div>
+            <div class="login-message" id="appAdminSecurityMessage"></div>
+          </div>
+          <div class="detail-card profile-card">
+            <h3 data-next-i18n="appAdmin.createInvite">Create invite</h3>
+            <p data-next-i18n="appAdmin.createInviteHelp">Generate a one-time invite code for a new user.</p>
+            <form class="profile-form" id="appAdminInviteForm">
+              <label for="appAdminInviteUsername">
+                <span data-next-i18n="profile.username">Username</span>
+                <input id="appAdminInviteUsername" autocomplete="off" maxlength="80">
+              </label>
+              <div class="profile-form-actions">
+                <button type="submit" class="secondary-button" id="appAdminCreateInviteButton" data-next-i18n="appAdmin.createInviteButton">Create invite</button>
+              </div>
+            </form>
+            <div class="admin-code hidden" id="appAdminInviteCodeOutput"></div>
+            <div class="login-message" id="appAdminInviteMessage"></div>
+          </div>
+          <div class="detail-card profile-card full">
+            <h3 data-next-i18n="appAdmin.activeInvites">Active invites</h3>
+            <div class="profile-passkey-list" id="appAdminInvitesList"></div>
+          </div>
+          <div class="detail-card profile-card full">
+            <h3 data-next-i18n="profile.credentials">Passkeys</h3>
+            <div class="profile-passkey-list" id="appAdminCredentialsList"></div>
+          </div>
+        </section>
+      </section>
     </main>
   </div>
   <section class="preferences-backdrop hidden" id="preferencesBackdrop" aria-modal="true" role="dialog" aria-labelledby="preferencesTitle">
@@ -5186,6 +5256,10 @@ def ui_preview_html(
       <span class="nav-symbol profile" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.profile">Profile</span>
     </button>
+    <button type="button" class="mobile-tab hidden" id="mobileAdminTab" data-app-route="admin">
+      <span class="nav-symbol admin" aria-hidden="true"></span>
+      <span data-next-i18n="uiPreview.admin">Admin</span>
+    </button>
   </nav>
   <script>
     const appMode = document.body.dataset.appMode === "true";
@@ -5202,6 +5276,7 @@ def ui_preview_html(
     let currentAuthStatus = {};
     let profileCredentials = [];
     let profileRecovery = {};
+    let appAdmin = {credentials: [], invites: []};
     const selectedMovieIds = new Set();
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -5276,6 +5351,22 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function isNativeAdminUser() {
+      return !!currentAuthStatus.authenticated && ["owner", "admin"].includes(currentAuthStatus.role || "");
+    }
+    function appRegistrationModeLabel() {
+      return currentAuthStatus.registration_enabled
+        ? tNext("appAdmin.publicRegistration", "Public registration")
+        : tNext("appAdmin.inviteOnly", "Invite-only login");
+    }
+    function renderAppAdminVisibility() {
+      const allowed = isNativeAdminUser();
+      document.getElementById("adminNavItem")?.classList.toggle("hidden", !allowed);
+      document.getElementById("mobileAdminTab")?.classList.toggle("hidden", !allowed);
+      document.getElementById("profileOpenAdminButton")?.classList.toggle("hidden", !allowed);
+      const navMode = document.getElementById("navAdminMode");
+      if (navMode) navMode.textContent = allowed ? appRegistrationModeLabel() : "-";
+    }
     function renderAppRegistrationMode(auth) {
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
@@ -5296,6 +5387,131 @@ def ui_preview_html(
       if (submitButton) {
         submitButton.textContent = tNext("auth.createAccount", "Create account");
       }
+      renderAppAdminVisibility();
+    }
+    function setAppAdminMessage(id, message, tone) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function renderAppAdmin() {
+      const mode = currentAuthStatus.registration_enabled ? "public" : "invite";
+      document.getElementById("appAdminRegistrationMode").textContent = appRegistrationModeLabel();
+      document.getElementById("appAdminUserCount").textContent = String(currentAuthStatus.user_count ?? appAdmin.usersCount ?? "-");
+      document.getElementById("appAdminCredentialCount").textContent = String(currentAuthStatus.credential_count ?? (appAdmin.credentials || []).length ?? "-");
+      document.querySelectorAll("[data-app-admin-registration-mode]").forEach((button) => {
+        const active = button.dataset.appAdminRegistrationMode === mode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      const invitesList = document.getElementById("appAdminInvitesList");
+      if (invitesList) {
+        const invites = appAdmin.invites || [];
+        invitesList.innerHTML = invites.length ? invites.map((invite) => {
+          const used = !!invite.used_at;
+          return `
+            <div class="profile-passkey ${used ? "disabled" : ""}">
+              <div>
+                <strong>${escapeHtml(invite.username || "-")}</strong>
+                <div class="profile-passkey-meta">
+                  ${used ? escapeHtml(tNext("appAdmin.inviteUsed", "Used")) : escapeHtml(tNext("appAdmin.inviteActive", "Active"))}
+                  &middot;
+                  ${escapeHtml(tNext("appAdmin.expires", "Expires"))}: ${escapeHtml(shortDateTime(invite.expires_at))}
+                </div>
+              </div>
+              ${used ? "" : `<button type="button" class="secondary-button" data-app-admin-invite-delete="${escapeHtml(invite.id)}">${escapeHtml(tNext("appAdmin.deleteInvite", "Delete"))}</button>`}
+            </div>
+          `;
+        }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noInvites", "No invites created."))}</div>`;
+      }
+      const credentialsList = document.getElementById("appAdminCredentialsList");
+      if (credentialsList) {
+        const credentials = appAdmin.credentials || [];
+        credentialsList.innerHTML = credentials.length ? credentials.map((credential) => `
+          <div class="profile-passkey">
+            <div>
+              <strong>${escapeHtml(credential.credential_name || tNext("auth.passkey", "Passkey"))}</strong>
+              <div class="profile-passkey-meta">
+                ${escapeHtml(credential.username || "-")}
+                &middot;
+                ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(credential.created_at))}
+                &middot;
+                ${escapeHtml(tNext("profile.lastUsed", "Last used"))}: ${escapeHtml(shortDateTime(credential.last_used_at))}
+              </div>
+            </div>
+          </div>
+        `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPasskeys", "No passkeys found."))}</div>`;
+      }
+      renderAppAdminVisibility();
+    }
+    async function loadAppAdmin() {
+      if (!isNativeAdminUser()) return;
+      setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loading", "Loading admin data..."));
+      try {
+        const [credentialsPayload, invitesPayload] = await Promise.all([
+          authApiJson("/api/next/auth/credentials"),
+          authApiJson("/api/next/auth/invite")
+        ]);
+        appAdmin.credentials = credentialsPayload.credentials || [];
+        appAdmin.invites = invitesPayload.invites || [];
+        appAdmin.usersCount = currentAuthStatus.user_count;
+        renderAppAdmin();
+        setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loaded", "Admin data loaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminSecurityMessage", error.message || String(error), "bad");
+      }
+    }
+    async function setAppAdminRegistrationMode(mode) {
+      if (!isNativeAdminUser()) return;
+      const publicRegistration = mode === "public";
+      setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.savingMode", "Saving registration mode..."));
+      try {
+        const payload = await authApiJson("/api/next/auth/registration", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({enabled: publicRegistration})
+        });
+        currentAuthStatus = Object.assign({}, currentAuthStatus, payload || {});
+        renderAppRegistrationMode(currentAuthStatus);
+        renderAppAdmin();
+        setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.modeSaved", "Registration mode saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminSecurityMessage", error.message || String(error), "bad");
+      }
+    }
+    async function createAppAdminInvite(event) {
+      if (event) event.preventDefault();
+      const input = document.getElementById("appAdminInviteUsername");
+      const username = String(input?.value || "").trim();
+      const output = document.getElementById("appAdminInviteCodeOutput");
+      if (!username) {
+        setAppAdminMessage("appAdminInviteMessage", tNext("auth.usernameRequired", "Username is required."), "bad");
+        return;
+      }
+      setAppAdminMessage("appAdminInviteMessage", tNext("appAdmin.creatingInvite", "Creating invite..."));
+      try {
+        const payload = await authApiJson("/api/next/auth/invite", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({username})
+        });
+        if (output) {
+          output.classList.remove("hidden");
+          output.textContent = `${payload.username}: ${payload.code}`;
+        }
+        if (input) input.value = "";
+        setAppAdminMessage("appAdminInviteMessage", tNext("appAdmin.inviteCreated", "Invite created. Copy the code now."), "good");
+        await loadAppAdmin();
+      } catch (error) {
+        setAppAdminMessage("appAdminInviteMessage", error.message || String(error), "bad");
+      }
+    }
+    async function deleteAppAdminInvite(inviteId) {
+      if (!inviteId) return;
+      await authApiJson(`/api/next/auth/invite/${encodeURIComponent(inviteId)}`, {method: "DELETE"});
+      await loadAppAdmin();
+      setAppAdminMessage("appAdminInviteMessage", tNext("appAdmin.inviteDeleted", "Invite deleted."), "good");
     }
     async function loginPasskey() {
       const button = document.getElementById("appLoginButton");
@@ -5783,6 +5999,7 @@ def ui_preview_html(
     function showMovieDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.remove("hidden");
       setActiveAppRoute("library");
       scrollPreviewTop();
@@ -5790,6 +6007,7 @@ def ui_preview_html(
     function showLibraryPage(pushUrl = false, activeRoute = "library") {
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
       setActiveAppRoute(activeRoute);
       if (pushUrl && appMode && window.location.pathname !== "/") {
@@ -5799,6 +6017,7 @@ def ui_preview_html(
     function showProfilePage(pushUrl = true) {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.remove("hidden");
       activeDetailMovieId = "";
       activeDetailPayload = null;
@@ -5810,7 +6029,29 @@ def ui_preview_html(
       }
       scrollPreviewTop();
     }
+    function showAdminPage(pushUrl = true) {
+      if (!isNativeAdminUser()) {
+        showLibraryPage(pushUrl);
+        return;
+      }
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.remove("hidden");
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      setActiveAppRoute("admin");
+      renderAppAdmin();
+      loadAppAdmin();
+      if (pushUrl && appMode && window.location.pathname !== "/admin") {
+        history.pushState({view: "admin"}, "", "/admin");
+      }
+      scrollPreviewTop();
+    }
     function appRouteFromPath() {
+      if (/^\\/app\\/admin\\/?$|^\\/admin\\/?$/.test(window.location.pathname)) {
+        return {view: "admin"};
+      }
       if (/^\\/app\\/profile\\/?$|^\\/profile\\/?$/.test(window.location.pathname)) {
         return {view: "profile"};
       }
@@ -5821,6 +6062,10 @@ def ui_preview_html(
       return {view: "library"};
     }
     function openAppRoute(route) {
+      if (route === "admin") {
+        showAdminPage();
+        return;
+      }
       if (route === "profile") {
         showProfilePage();
         return;
@@ -6438,6 +6683,7 @@ def ui_preview_html(
       const route = appRouteFromPath();
       const routeMovieId = route.view === "movie" ? (route.movieId || initialMovieId) : "";
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
+      else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
     }
@@ -6502,6 +6748,19 @@ def ui_preview_html(
       document.getElementById("profileButton")?.addEventListener("click", () => showProfilePage());
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
+      });
+      document.getElementById("appAdminRefreshButton")?.addEventListener("click", () => loadAppAdmin());
+      document.querySelectorAll("[data-app-admin-registration-mode]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminRegistrationMode(button.dataset.appAdminRegistrationMode));
+      });
+      document.getElementById("appAdminInviteForm")?.addEventListener("submit", (event) => createAppAdminInvite(event));
+      document.getElementById("appAdminInvitesList")?.addEventListener("click", (event) => {
+        const deleteButton = event.target.closest("[data-app-admin-invite-delete]");
+        if (deleteButton) {
+          deleteAppAdminInvite(deleteButton.dataset.appAdminInviteDelete).catch((error) => {
+            setAppAdminMessage("appAdminInviteMessage", error.message || String(error), "bad");
+          });
+        }
       });
       document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -6580,6 +6839,7 @@ def ui_preview_html(
       window.addEventListener("popstate", () => {
         const route = appRouteFromPath();
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
+        else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "profile") showProfilePage(false);
         else closeAppMovieDetail(false);
       });
@@ -15546,6 +15806,8 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/")
     @flask_app.get("/profile")
     @flask_app.get("/app/profile")
+    @flask_app.get("/admin")
+    @flask_app.get("/app/admin")
     @flask_app.get("/movies/<movie_id>")
     @flask_app.get("/app/movies/<movie_id>")
     def next_app_shell(movie_id: str | None = None):
