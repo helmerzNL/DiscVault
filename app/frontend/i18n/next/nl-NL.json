@@ -335,5 +335,21 @@
   "movieDetail.savingArtwork": "Artwork opslaan...",
   "movieDetail.artworkSaved": "Artwork opgeslagen.",
   "auth.waitingPasskey": "Wachten op je passkey...",
-  "profile.lastPasskeyBlocked": "Je kunt je laatste passkey niet verwijderen."
+  "profile.lastPasskeyBlocked": "Je kunt je laatste passkey niet verwijderen.",
+  "auth.recoveryCode": "Herstelcode",
+  "auth.recoverySignIn": "Inloggen met herstelcode",
+  "auth.recoveryRequired": "Vul gebruikersnaam en herstelcode in.",
+  "auth.recoveryChecking": "Herstelcode controleren...",
+  "auth.recoverySignedIn": "Ingelogd met herstelcode. Voeg een nieuwe passkey toe via Profiel.",
+  "auth.recoveryFailed": "Herstel mislukt.",
+  "profile.recoveryActiveCodes": "Actieve codes",
+  "profile.recoveryLastGenerated": "Laatst gemaakt",
+  "profile.generateRecoveryCodes": "Herstelcodes maken",
+  "profile.revokeRecoveryCodes": "Codes intrekken",
+  "profile.generatingRecoveryCodes": "Herstelcodes maken...",
+  "profile.recoveryCodesGenerated": "Bewaar deze herstelcodes nu. Ze worden niet opnieuw getoond.",
+  "profile.recoveryCodesReady": "Herstelcodes gemaakt. Bewaar ze nu.",
+  "profile.revokeRecoveryConfirm": "Alle actieve herstelcodes intrekken?",
+  "profile.revokingRecoveryCodes": "Herstelcodes intrekken...",
+  "profile.recoveryCodesRevoked": "Actieve herstelcodes ingetrokken."
 }

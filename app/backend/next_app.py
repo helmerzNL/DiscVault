@@ -50,6 +50,8 @@ try:
     from .next_backup import validate_backup_zip
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_effective_enabled
+    from .next_auth import next_generate_recovery_codes
+    from .next_auth import next_recovery_code_hash
     from .next_auth import register_next_auth_routes
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
@@ -72,6 +74,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import validate_backup_zip
     from next_auth import next_auth_current_user
     from next_auth import next_auth_effective_enabled
+    from next_auth import next_generate_recovery_codes
+    from next_auth import next_recovery_code_hash
     from next_auth import register_next_auth_routes
 
 
@@ -124,6 +128,7 @@ TEST_DATABASE_RESET_TABLES = (
     "containers",
     "movies",
     "people",
+    "recovery_codes",
     "passkey_credentials",
     "auth_challenges",
     "user_roles",
@@ -3373,6 +3378,60 @@ def ui_preview_html(
     .startup-message.bad {
       color: var(--red);
     }
+    .login-message.good,
+    .startup-message.good {
+      color: var(--green);
+    }
+    .recovery-login-panel {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      padding: 14px;
+    }
+    .recovery-login-panel label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .84rem;
+      font-weight: 650;
+    }
+    .recovery-login-panel input {
+      min-height: 40px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+      font-weight: 620;
+    }
+    .recovery-codes {
+      display: grid;
+      gap: 8px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      padding: 12px;
+    }
+    .recovery-code-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 8px;
+    }
+    .recovery-code {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .92rem;
+      user-select: all;
+      text-align: center;
+    }
     .startup-steps {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4786,8 +4845,21 @@ def ui_preview_html(
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
         <button type="button" class="secondary-button" disabled data-next-i18n="auth.inviteOnly">Invite-only access</button>
-        <button type="button" class="secondary-button" disabled data-next-i18n="auth.recovery">Recovery</button>
+        <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
+      <form class="recovery-login-panel hidden" id="appRecoveryForm">
+        <label for="appRecoveryUsername">
+          <span data-next-i18n="auth.username">Username</span>
+          <input id="appRecoveryUsername" autocomplete="username">
+        </label>
+        <label for="appRecoveryCode">
+          <span data-next-i18n="auth.recoveryCode">Recovery code</span>
+          <input id="appRecoveryCode" autocomplete="one-time-code" inputmode="text">
+        </label>
+        <div class="profile-form-actions">
+          <button type="submit" class="login-primary" id="appRecoveryLoginButton" data-next-i18n="auth.recoverySignIn">Sign in with recovery code</button>
+        </div>
+      </form>
       <div class="login-message" id="appLoginMessage" data-next-i18n="auth.checking">Checking authentication status...</div>
     </div>
   </section>
@@ -5042,9 +5114,22 @@ def ui_preview_html(
           <div class="detail-card profile-card">
             <h3 data-next-i18n="profile.recoveryTitle">Account recovery</h3>
             <p data-next-i18n="profile.recoveryHelp">Recovery options will let you regain access if all passkeys are lost.</p>
-            <div class="profile-action-row">
-              <button type="button" class="secondary-button" disabled data-next-i18n="profile.recoveryComingSoon">Recovery setup coming next</button>
+            <div class="profile-meta">
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
+                <strong id="profileRecoveryActiveCount">-</strong>
+              </div>
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
+                <strong id="profileRecoveryLastGenerated">-</strong>
+              </div>
             </div>
+            <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
+            <div class="profile-action-row">
+              <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
+              <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
+            </div>
+            <div class="login-message" id="profileRecoveryMessage"></div>
           </div>
         </section>
       </section>
@@ -5094,6 +5179,7 @@ def ui_preview_html(
     let activeDetailPayload = null;
     let currentStartup = {};
     let profileCredentials = [];
+    let profileRecovery = {};
     const selectedMovieIds = new Set();
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -5210,6 +5296,43 @@ def ui_preview_html(
       } catch (error) {
         const cancelled = error && error.name === "NotAllowedError";
         setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : String(error.message || error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    function toggleRecoveryLogin() {
+      const panel = document.getElementById("appRecoveryForm");
+      panel?.classList.toggle("hidden");
+      setLoginMessage("");
+    }
+    async function loginRecovery(event) {
+      if (event) event.preventDefault();
+      const username = String(document.getElementById("appRecoveryUsername")?.value || "").trim();
+      const recoveryCode = String(document.getElementById("appRecoveryCode")?.value || "").trim();
+      const button = document.getElementById("appRecoveryLoginButton");
+      if (!username || !recoveryCode) {
+        setLoginMessage(tNext("auth.recoveryRequired", "Enter username and recovery code."), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      setLoginMessage(tNext("auth.recoveryChecking", "Checking recovery code..."));
+      try {
+        const payload = await apiJson("/api/next/auth/recovery", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({username, recovery_code: recoveryCode})
+        });
+        if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+        const codeInput = document.getElementById("appRecoveryCode");
+        if (codeInput) codeInput.value = "";
+        setLoginMessage(tNext("auth.recoverySignedIn", "Signed in with recovery code. Add a new passkey from Profile."), "good");
+        await refreshAppFlow();
+        if (appMode) {
+          showProfilePage();
+          setProfileSecurityMessage(tNext("auth.recoverySignedIn", "Signed in with recovery code. Add a new passkey from Profile."), "good");
+        }
+      } catch (error) {
+        setLoginMessage(error.message || tNext("auth.recoveryFailed", "Recovery failed."), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -5850,6 +5973,7 @@ def ui_preview_html(
       const removeAvatarButton = document.getElementById("profileAvatarRemoveButton");
       if (removeAvatarButton) removeAvatarButton.disabled = !profile.avatarUrl;
       renderProfilePasskeys();
+      renderProfileRecovery();
     }
     function shortDateTime(value) {
       const text = String(value || "");
@@ -5896,12 +6020,39 @@ def ui_preview_html(
         `;
       }).join("");
     }
+    function setProfileRecoveryMessage(message, tone) {
+      const node = document.getElementById("profileRecoveryMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function renderProfileRecovery(codes) {
+      const activeCount = document.getElementById("profileRecoveryActiveCount");
+      const lastGenerated = document.getElementById("profileRecoveryLastGenerated");
+      const revokeButton = document.getElementById("profileRevokeRecoveryButton");
+      const codesNode = document.getElementById("profileRecoveryCodes");
+      const active = Number(profileRecovery.activeCount || 0);
+      if (activeCount) activeCount.textContent = String(active);
+      if (lastGenerated) lastGenerated.textContent = shortDateTime(profileRecovery.lastGeneratedAt);
+      if (revokeButton) revokeButton.disabled = active <= 0;
+      if (!codesNode) return;
+      if (Array.isArray(codes) && codes.length) {
+        codesNode.classList.remove("hidden");
+        codesNode.innerHTML = `
+          <strong>${escapeHtml(tNext("profile.recoveryCodesGenerated", "Save these recovery codes now. They will not be shown again."))}</strong>
+          <div class="recovery-code-grid">
+            ${codes.map((code) => `<span class="recovery-code">${escapeHtml(code)}</span>`).join("")}
+          </div>
+        `;
+      }
+    }
     async function loadProfileDetails() {
       if (!appMode) return;
       try {
         const payload = await authApiJson("/api/next/profile");
         state.user = Object.assign({}, state.user || {}, payload.user || {});
         profileCredentials = payload.credentials || [];
+        profileRecovery = payload.recovery || {};
         renderProfile();
       } catch (error) {
         setProfileSecurityMessage(error.message || String(error), "bad");
@@ -6005,6 +6156,48 @@ def ui_preview_html(
         setProfileSecurityMessage(tNext("profile.passkeyDeleted", "Passkey deleted."), "good");
       } catch (error) {
         setProfileSecurityMessage(error.message || String(error), "bad");
+      }
+    }
+    async function generateRecoveryCodes() {
+      const button = document.getElementById("profileGenerateRecoveryButton");
+      const codesNode = document.getElementById("profileRecoveryCodes");
+      if (button) button.disabled = true;
+      setProfileRecoveryMessage(tNext("profile.generatingRecoveryCodes", "Generating recovery codes..."));
+      try {
+        const payload = await authApiJson("/api/next/profile/recovery/codes", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({count: 8})
+        });
+        profileRecovery = payload.recovery || {};
+        renderProfileRecovery(payload.codes || []);
+        setProfileRecoveryMessage(tNext("profile.recoveryCodesReady", "Recovery codes generated. Save them now."), "good");
+      } catch (error) {
+        if (codesNode) codesNode.classList.add("hidden");
+        setProfileRecoveryMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function revokeRecoveryCodes() {
+      if (!window.confirm(tNext("profile.revokeRecoveryConfirm", "Revoke all active recovery codes?"))) return;
+      const button = document.getElementById("profileRevokeRecoveryButton");
+      const codesNode = document.getElementById("profileRecoveryCodes");
+      if (button) button.disabled = true;
+      setProfileRecoveryMessage(tNext("profile.revokingRecoveryCodes", "Revoking recovery codes..."));
+      try {
+        const payload = await authApiJson("/api/next/profile/recovery/codes", {method: "DELETE"});
+        profileRecovery = payload.recovery || {};
+        if (codesNode) {
+          codesNode.classList.add("hidden");
+          codesNode.innerHTML = "";
+        }
+        renderProfileRecovery();
+        setProfileRecoveryMessage(tNext("profile.recoveryCodesRevoked", "Active recovery codes revoked."), "good");
+      } catch (error) {
+        setProfileRecoveryMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
       }
     }
     function setProfileEditMessage(message, tone) {
@@ -6195,6 +6388,8 @@ def ui_preview_html(
       document.getElementById("profileAvatarRemoveButton")?.addEventListener("click", () => removeProfileAvatar());
       document.getElementById("profileRefreshPasskeysButton")?.addEventListener("click", () => loadProfileDetails());
       document.getElementById("profileAddPasskeyButton")?.addEventListener("click", () => addProfilePasskey());
+      document.getElementById("profileGenerateRecoveryButton")?.addEventListener("click", () => generateRecoveryCodes());
+      document.getElementById("profileRevokeRecoveryButton")?.addEventListener("click", () => revokeRecoveryCodes());
       document.getElementById("profilePasskeyList")?.addEventListener("click", (event) => {
         const saveButton = event.target.closest("[data-profile-passkey-save]");
         const deleteButton = event.target.closest("[data-profile-passkey-delete]");
@@ -6208,6 +6403,8 @@ def ui_preview_html(
         if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
       });
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
+      document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());
+      document.getElementById("appRecoveryForm")?.addEventListener("submit", (event) => loginRecovery(event));
       document.getElementById("profileSignOutButton")?.addEventListener("click", () => logoutApp());
       document.getElementById("startupRefreshButton")?.addEventListener("click", () => refreshAppFlow().catch((error) => {
         const node = document.getElementById("startupMessage");
@@ -11355,6 +11552,38 @@ def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def next_profile_recovery_payload(conn, user_id: UUID | str) -> dict[str, Any]:
+    if not table_exists(conn, "recovery_codes"):
+        return {
+            "available": False,
+            "activeCount": 0,
+            "usedCount": 0,
+            "lastGeneratedAt": None,
+        }
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE used_at IS NULL
+                      AND (expires_at IS NULL OR expires_at > now())
+                )::int AS active_count,
+                COUNT(*) FILTER (WHERE used_at IS NOT NULL)::int AS used_count,
+                MAX(created_at) AS last_generated_at
+            FROM recovery_codes
+            WHERE user_id=%s
+            """,
+            (user_id,),
+        )
+        row = cur.fetchone() or {}
+    return {
+        "available": True,
+        "activeCount": int(row.get("active_count") or 0),
+        "usedCount": int(row.get("used_count") or 0),
+        "lastGeneratedAt": row.get("last_generated_at"),
+    }
+
+
 def require_next_admin_user(conn) -> dict[str, Any]:
     if not next_auth_effective_enabled(conn, table_exists):
         return {"id": None, "username": "system", "role": "owner"}
@@ -13858,6 +14087,7 @@ def register_routes(flask_app: Flask) -> None:
                     "status": "ok",
                     "user": user_payload,
                     "credentials": credentials,
+                    "recovery": next_profile_recovery_payload(conn, user["id"]),
                 }
             )
 
@@ -13942,6 +14172,79 @@ def register_routes(flask_app: Flask) -> None:
                     )
             user_payload = next_profile_user_payload(conn, user)
         return response({"status": "deleted", "user": user_payload})
+
+    @flask_app.get("/api/next/profile/recovery")
+    def get_next_profile_recovery():
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            return response({"status": "ok", "recovery": next_profile_recovery_payload(conn, user["id"])})
+
+    @flask_app.post("/api/next/profile/recovery/codes")
+    def generate_next_profile_recovery_codes():
+        body = request.get_json(silent=True) or {}
+        if body and not isinstance(body, dict):
+            raise NextApiError("Recovery request body must be an object", 400)
+        try:
+            count = int(body.get("count") or 8)
+        except (TypeError, ValueError) as exc:
+            raise NextApiError("count must be an integer", 400) from exc
+        count = max(1, min(12, count))
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            if not table_exists(conn, "recovery_codes"):
+                raise NextApiError("Recovery is not available yet", 503)
+            codes = next_generate_recovery_codes(count)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE recovery_codes
+                        SET used_at=COALESCE(used_at, now())
+                        WHERE user_id=%s
+                          AND used_at IS NULL
+                        """,
+                        (user["id"],),
+                    )
+                    for index, code in enumerate(codes, start=1):
+                        cur.execute(
+                            """
+                            INSERT INTO recovery_codes (user_id, code_hash, label, created_at)
+                            VALUES (%s, %s, %s, now())
+                            """,
+                            (user["id"], next_recovery_code_hash(code), f"Recovery code {index}"),
+                        )
+            return response(
+                {
+                    "status": "ok",
+                    "codes": codes,
+                    "recovery": next_profile_recovery_payload(conn, user["id"]),
+                }
+            )
+
+    @flask_app.delete("/api/next/profile/recovery/codes")
+    def revoke_next_profile_recovery_codes():
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            if not table_exists(conn, "recovery_codes"):
+                raise NextApiError("Recovery is not available yet", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE recovery_codes
+                        SET used_at=COALESCE(used_at, now())
+                        WHERE user_id=%s
+                          AND used_at IS NULL
+                        """,
+                        (user["id"],),
+                    )
+            return response({"status": "deleted", "recovery": next_profile_recovery_payload(conn, user["id"])})
 
     @flask_app.patch("/api/next/profile/passkeys/<credential_id>")
     def patch_next_profile_passkey(credential_id: str):

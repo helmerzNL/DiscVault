@@ -241,5 +241,21 @@
   "profile.uploadingAvatar": "Televersement de l avatar...",
   "profile.users": "Utilisateurs",
   "profile.username": "Nom d utilisateur",
-  "profile.lastPasskeyBlocked": "Vous ne pouvez pas supprimer votre derniere passkey."
+  "profile.lastPasskeyBlocked": "Vous ne pouvez pas supprimer votre derniere passkey.",
+  "auth.recoveryCode": "Code de r?cup?ration",
+  "auth.recoverySignIn": "Se connecter avec un code de r?cup?ration",
+  "auth.recoveryRequired": "Saisissez le nom d?utilisateur et le code de r?cup?ration.",
+  "auth.recoveryChecking": "V?rification du code de r?cup?ration...",
+  "auth.recoverySignedIn": "Connect? avec un code de r?cup?ration. Ajoutez un nouveau passkey dans Profil.",
+  "auth.recoveryFailed": "R?cup?ration ?chou?e.",
+  "profile.recoveryActiveCodes": "Codes actifs",
+  "profile.recoveryLastGenerated": "Derni?re g?n?ration",
+  "profile.generateRecoveryCodes": "G?n?rer des codes de r?cup?ration",
+  "profile.revokeRecoveryCodes": "R?voquer les codes",
+  "profile.generatingRecoveryCodes": "G?n?ration des codes de r?cup?ration...",
+  "profile.recoveryCodesGenerated": "Enregistrez ces codes maintenant. Ils ne seront plus affich?s.",
+  "profile.recoveryCodesReady": "Codes de r?cup?ration g?n?r?s. Enregistrez-les maintenant.",
+  "profile.revokeRecoveryConfirm": "R?voquer tous les codes de r?cup?ration actifs ?",
+  "profile.revokingRecoveryCodes": "R?vocation des codes de r?cup?ration...",
+  "profile.recoveryCodesRevoked": "Codes de r?cup?ration actifs r?voqu?s."
 }

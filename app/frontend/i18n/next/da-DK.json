@@ -241,5 +241,21 @@
   "profile.uploadingAvatar": "Uploader avatar...",
   "profile.users": "Brugere",
   "profile.username": "Brugernavn",
-  "profile.lastPasskeyBlocked": "Du kan ikke slette din sidste passkey."
+  "profile.lastPasskeyBlocked": "Du kan ikke slette din sidste passkey.",
+  "auth.recoveryCode": "Gendannelseskode",
+  "auth.recoverySignIn": "Log ind med gendannelseskode",
+  "auth.recoveryRequired": "Angiv brugernavn og gendannelseskode.",
+  "auth.recoveryChecking": "Kontrollerer gendannelseskode...",
+  "auth.recoverySignedIn": "Logget ind med gendannelseskode. Tilf?j en ny passkey fra Profil.",
+  "auth.recoveryFailed": "Gendannelse mislykkedes.",
+  "profile.recoveryActiveCodes": "Aktive koder",
+  "profile.recoveryLastGenerated": "Senest oprettet",
+  "profile.generateRecoveryCodes": "Opret gendannelseskoder",
+  "profile.revokeRecoveryCodes": "Tilbagekald koder",
+  "profile.generatingRecoveryCodes": "Opretter gendannelseskoder...",
+  "profile.recoveryCodesGenerated": "Gem disse gendannelseskoder nu. De vises ikke igen.",
+  "profile.recoveryCodesReady": "Gendannelseskoder oprettet. Gem dem nu.",
+  "profile.revokeRecoveryConfirm": "Tilbagekald alle aktive gendannelseskoder?",
+  "profile.revokingRecoveryCodes": "Tilbagekalder gendannelseskoder...",
+  "profile.recoveryCodesRevoked": "Aktive gendannelseskoder tilbagekaldt."
 }

@@ -241,5 +241,21 @@
   "profile.uploadingAvatar": "Ladataan avatar...",
   "profile.users": "Kayttajat",
   "profile.username": "Kayttajanimi",
-  "profile.lastPasskeyBlocked": "Et voi poistaa viimeista passkeytasi."
+  "profile.lastPasskeyBlocked": "Et voi poistaa viimeista passkeytasi.",
+  "auth.recoveryCode": "Palautuskoodi",
+  "auth.recoverySignIn": "Kirjaudu palautuskoodilla",
+  "auth.recoveryRequired": "Anna k?ytt?j?nimi ja palautuskoodi.",
+  "auth.recoveryChecking": "Tarkistetaan palautuskoodia...",
+  "auth.recoverySignedIn": "Kirjauduttu palautuskoodilla. Lis?? uusi passkey Profiilissa.",
+  "auth.recoveryFailed": "Palautus ep?onnistui.",
+  "profile.recoveryActiveCodes": "Aktiiviset koodit",
+  "profile.recoveryLastGenerated": "Viimeksi luotu",
+  "profile.generateRecoveryCodes": "Luo palautuskoodit",
+  "profile.revokeRecoveryCodes": "Peru koodit",
+  "profile.generatingRecoveryCodes": "Luodaan palautuskoodeja...",
+  "profile.recoveryCodesGenerated": "Tallenna n?m? palautuskoodit nyt. Niit? ei n?ytet? uudelleen.",
+  "profile.recoveryCodesReady": "Palautuskoodit luotu. Tallenna ne nyt.",
+  "profile.revokeRecoveryConfirm": "Perutaanko kaikki aktiiviset palautuskoodit?",
+  "profile.revokingRecoveryCodes": "Perutaan palautuskoodeja...",
+  "profile.recoveryCodesRevoked": "Aktiiviset palautuskoodit peruttu."
 }

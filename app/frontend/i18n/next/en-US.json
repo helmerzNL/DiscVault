@@ -335,5 +335,21 @@
   "movieDetail.savingArtwork": "Saving artwork...",
   "movieDetail.artworkSaved": "Artwork saved.",
   "auth.waitingPasskey": "Waiting for your passkey...",
-  "profile.lastPasskeyBlocked": "You cannot delete your last passkey."
+  "profile.lastPasskeyBlocked": "You cannot delete your last passkey.",
+  "auth.recoveryCode": "Recovery code",
+  "auth.recoverySignIn": "Sign in with recovery code",
+  "auth.recoveryRequired": "Enter username and recovery code.",
+  "auth.recoveryChecking": "Checking recovery code...",
+  "auth.recoverySignedIn": "Signed in with recovery code. Add a new passkey from Profile.",
+  "auth.recoveryFailed": "Recovery failed.",
+  "profile.recoveryActiveCodes": "Active codes",
+  "profile.recoveryLastGenerated": "Last generated",
+  "profile.generateRecoveryCodes": "Generate recovery codes",
+  "profile.revokeRecoveryCodes": "Revoke codes",
+  "profile.generatingRecoveryCodes": "Generating recovery codes...",
+  "profile.recoveryCodesGenerated": "Save these recovery codes now. They will not be shown again.",
+  "profile.recoveryCodesReady": "Recovery codes generated. Save them now.",
+  "profile.revokeRecoveryConfirm": "Revoke all active recovery codes?",
+  "profile.revokingRecoveryCodes": "Revoking recovery codes...",
+  "profile.recoveryCodesRevoked": "Active recovery codes revoked."
 }
