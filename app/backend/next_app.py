@@ -3554,6 +3554,26 @@ def ui_preview_html(
       border: 2px solid currentColor;
       background: transparent;
     }
+    .nav-symbol.profile::before,
+    .nav-symbol.profile::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      background: currentColor;
+    }
+    .nav-symbol.profile::before {
+      width: 8px;
+      height: 8px;
+      top: 2px;
+      border-radius: 50%;
+    }
+    .nav-symbol.profile::after {
+      width: 17px;
+      height: 8px;
+      bottom: 2px;
+      border-radius: 10px 10px 5px 5px;
+    }
     .sidebar-footer {
       margin-top: auto;
       padding: 12px;
@@ -4017,10 +4037,16 @@ def ui_preview_html(
       min-width: 0;
     }
     .library-view.hidden,
-    .movie-detail-page.hidden {
+    .movie-detail-page.hidden,
+    .profile-view.hidden {
       display: none;
     }
     .movie-detail-page {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .profile-view {
       display: grid;
       gap: 16px;
       min-width: 0;
@@ -4256,6 +4282,105 @@ def ui_preview_html(
     .detail-message.good {
       color: var(--green);
     }
+    .profile-hero {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34%),
+        var(--bg-elevated);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(26px) saturate(160%);
+      padding: clamp(18px, 4vw, 30px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .profile-identity {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+    .profile-avatar {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: #fff;
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 82%, #111), #17191d);
+      box-shadow: 0 22px 54px rgba(0,0,0,.24);
+      font-size: 1.1rem;
+      font-weight: 800;
+    }
+    .profile-copy {
+      min-width: 0;
+    }
+    .profile-copy h2 {
+      margin: 3px 0 5px;
+      font-size: clamp(1.8rem, 5vw, 3.4rem);
+      line-height: 1;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+    .profile-copy p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 58ch;
+      line-height: 1.5;
+    }
+    .profile-hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .profile-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, .82fr) minmax(0, 1.18fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .profile-card {
+      display: grid;
+      gap: 12px;
+    }
+    .profile-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .profile-meta {
+      display: grid;
+      gap: 8px;
+    }
+    .profile-meta-row {
+      display: grid;
+      grid-template-columns: minmax(90px, .56fr) minmax(0, 1.44fr);
+      gap: 12px;
+      align-items: baseline;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .profile-meta-row:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+    .profile-meta-row span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .profile-meta-row strong {
+      overflow-wrap: anywhere;
+    }
+    .profile-action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
     .preferences-backdrop {
       position: fixed;
       inset: 0;
@@ -4489,6 +4614,24 @@ def ui_preview_html(
         grid-template-columns: 1fr;
         padding: 12px;
       }
+      .profile-hero {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .profile-hero-actions {
+        justify-content: stretch;
+      }
+      .profile-hero-actions .secondary-button,
+      .profile-hero-actions .primary-button {
+        width: 100%;
+      }
+      .profile-grid {
+        grid-template-columns: 1fr;
+      }
+      .profile-meta-row {
+        grid-template-columns: 1fr;
+        gap: 3px;
+      }
       .detail-field {
         grid-template-columns: 1fr;
         gap: 3px;
@@ -4556,9 +4699,10 @@ def ui_preview_html(
         </div>
       </div>
       <nav class="nav-section" aria-label="Primary">
-        <button type="button" class="nav-item active"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
-        <button type="button" class="nav-item"><span data-next-i18n="collection.containers">Containers</span><small id="navContainerCount">""" + h(counts.get("containers", 0)) + """</small></button>
-        <button type="button" class="nav-item"><span data-next-i18n="migration.groups">Groups</span><small id="navGroupCount">""" + h(counts.get("mediaGroups", 0)) + """</small></button>
+        <button type="button" class="nav-item active" data-app-route="library"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="containers"><span data-next-i18n="collection.containers">Containers</span><small id="navContainerCount">""" + h(counts.get("containers", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="groups"><span data-next-i18n="migration.groups">Groups</span><small id="navGroupCount">""" + h(counts.get("mediaGroups", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="profile"><span data-next-i18n="uiPreview.profile">Profile</span><small id="navProfileRole">-</small></button>
         <a class="nav-item" href="/api/next/app"><span data-next-i18n="uiPreview.admin">Admin</span><small>Next</small></a>
       </nav>
       <div class="sidebar-footer">
@@ -4579,7 +4723,7 @@ def ui_preview_html(
             <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
           </div>
           <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
-          <button type="button" class="icon-button" id="preferencesButton" data-next-i18n="preferences.title">Preferences</button>
+          <button type="button" class="icon-button" id="profileButton" data-next-i18n="uiPreview.profile">Profile</button>
         </div>
       </div>
       <section class="library-view" id="libraryView">
@@ -4695,6 +4839,63 @@ def ui_preview_html(
           </div>
         </section>
       </section>
+      <section class="profile-view hidden" id="profileView" aria-labelledby="profilePageTitle">
+        <section class="profile-hero">
+          <div class="profile-identity">
+            <div class="profile-avatar" id="profileAvatar">DV</div>
+            <div class="profile-copy">
+              <span class="eyebrow" data-next-i18n="profile.account">Account</span>
+              <h2 id="profilePageTitle">DiscVault</h2>
+              <p data-next-i18n="profile.subtitle">Personal settings and account access.</p>
+            </div>
+          </div>
+          <div class="profile-hero-actions">
+            <a class="secondary-button" href="/api/next/app" data-next-i18n="profile.openAdmin">Open admin</a>
+            <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
+          </div>
+        </section>
+        <section class="profile-grid">
+          <div class="detail-card profile-card">
+            <h3 data-next-i18n="profile.account">Account</h3>
+            <div class="profile-meta">
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.username">Username</span>
+                <strong id="profileUsername">-</strong>
+              </div>
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.role">Role</span>
+                <strong id="profileRole">-</strong>
+              </div>
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.users">Users</span>
+                <strong id="profileUserCount">-</strong>
+              </div>
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.credentials">Passkeys</span>
+                <strong id="profileCredentialCount">-</strong>
+              </div>
+            </div>
+          </div>
+          <div class="detail-card profile-card">
+            <h3 data-next-i18n="preferences.title">Preferences</h3>
+            <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
+            <div class="preference-list" id="profilePreferenceList"></div>
+            <div class="login-message" id="preferencesMessage"></div>
+          </div>
+          <div class="detail-card profile-card">
+            <h3 data-next-i18n="profile.security">Security</h3>
+            <p data-next-i18n="profile.passkeysHelp">Manage passkeys and trusted devices from here later.</p>
+            <div class="profile-action-row">
+              <button type="button" class="secondary-button" disabled data-next-i18n="auth.passkeys">Passkeys</button>
+              <button type="button" class="secondary-button" disabled data-next-i18n="auth.recovery">Recovery</button>
+            </div>
+          </div>
+          <div class="detail-card profile-card">
+            <h3 data-next-i18n="profile.profileEditing">Profile editing</h3>
+            <p data-next-i18n="profile.profileEditingSoon">Editing display name and avatar will be connected next.</p>
+          </div>
+        </section>
+      </section>
     </main>
   </div>
   <section class="preferences-backdrop hidden" id="preferencesBackdrop" aria-modal="true" role="dialog" aria-labelledby="preferencesTitle">
@@ -4706,27 +4907,27 @@ def ui_preview_html(
         </div>
         <button type="button" class="icon-button" id="preferencesCloseButton" aria-label="Close">×</button>
       </div>
-      <div class="preference-list" id="preferenceList"></div>
-      <div class="login-message" id="preferencesMessage"></div>
+      <div class="preference-list" id="legacyPreferenceList"></div>
+      <div class="login-message" id="legacyPreferencesMessage"></div>
     </div>
   </section>
   <nav class=\"""" + mobile_class + """\" aria-label="Mobile">
-    <button type="button" class="mobile-tab active">
+    <button type="button" class="mobile-tab active" data-app-route="library">
       <span class="nav-symbol library" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLibrary">Library</span>
     </button>
-    <button type="button" class="mobile-tab">
+    <button type="button" class="mobile-tab" data-app-route="containers">
       <span class="nav-symbol containers" aria-hidden="true"></span>
       <span data-next-i18n="collection.containers">Containers</span>
     </button>
-    <button type="button" class="mobile-tab">
+    <button type="button" class="mobile-tab" data-app-route="groups">
       <span class="nav-symbol groups" aria-hidden="true"></span>
       <span data-next-i18n="migration.groups">Groups</span>
     </button>
-    <a class="mobile-tab" href="/api/next/app">
-      <span class="nav-symbol admin" aria-hidden="true"></span>
-      <span data-next-i18n="uiPreview.admin">Admin</span>
-    </a>
+    <button type="button" class="mobile-tab" data-app-route="profile">
+      <span class="nav-symbol profile" aria-hidden="true"></span>
+      <span data-next-i18n="uiPreview.profile">Profile</span>
+    </button>
   </nav>
   <script>
     const appMode = document.body.dataset.appMode === "true";
@@ -4739,6 +4940,7 @@ def ui_preview_html(
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
+    let currentStartup = {};
     const selectedMovieIds = new Set();
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -4891,6 +5093,7 @@ def ui_preview_html(
       applyTranslations();
       renderLanguageSelect();
       renderPreferences();
+      renderProfile();
       renderLibrary();
     }
     function renderLanguageSelect() {
@@ -5159,24 +5362,71 @@ def ui_preview_html(
       }
     }
     function closeAppMovieDetail(pushUrl = true) {
-      showLibraryPage();
+      showLibraryPage(false);
       activeDetailMovieId = "";
       activeDetailPayload = null;
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
     }
-    function showMovieDetailPage() {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.remove("hidden");
+    function setActiveAppRoute(route) {
+      document.querySelectorAll("[data-app-route]").forEach((node) => {
+        node.classList.toggle("active", node.dataset.appRoute === route);
+      });
+    }
+    function scrollPreviewTop() {
       requestAnimationFrame(() => {
         document.querySelector(".preview-main")?.scrollTo({top: 0, behavior: "auto"});
         window.scrollTo({top: 0, behavior: "auto"});
       });
     }
-    function showLibraryPage() {
+    function showMovieDetailPage() {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.remove("hidden");
+      setActiveAppRoute("library");
+      scrollPreviewTop();
+    }
+    function showLibraryPage(pushUrl = false, activeRoute = "library") {
       document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
+      setActiveAppRoute(activeRoute);
+      if (pushUrl && appMode && window.location.pathname !== "/") {
+        history.pushState({}, "", "/");
+      }
+    }
+    function showProfilePage(pushUrl = true) {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.remove("hidden");
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      setActiveAppRoute("profile");
+      renderProfile();
+      if (pushUrl && appMode && window.location.pathname !== "/profile") {
+        history.pushState({view: "profile"}, "", "/profile");
+      }
+      scrollPreviewTop();
+    }
+    function appRouteFromPath() {
+      if (/^\\/app\\/profile\\/?$|^\\/profile\\/?$/.test(window.location.pathname)) {
+        return {view: "profile"};
+      }
+      const movieMatch = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
+      if (movieMatch) {
+        return {view: "movie", movieId: decodeURIComponent(movieMatch[1] || movieMatch[2])};
+      }
+      return {view: "library"};
+    }
+    function openAppRoute(route) {
+      if (route === "profile") {
+        showProfilePage();
+        return;
+      }
+      showLibraryPage(true, route || "library");
+      if (route === "groups") document.getElementById("groupFilter")?.focus();
+      if (route === "containers") document.querySelector(".side-stack")?.scrollIntoView({block: "start", behavior: "smooth"});
     }
     async function refreshActiveMovieMetadata(dryRun) {
       if (!activeDetailMovieId) return;
@@ -5336,9 +5586,9 @@ def ui_preview_html(
       ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"]
     ];
     function renderPreferences() {
-      const list = document.getElementById("preferenceList");
-      if (!list) return;
-      list.innerHTML = preferenceLabels.map(([key, labelKey, helpKey]) => `
+      const lists = Array.from(document.querySelectorAll("#profilePreferenceList")).filter(Boolean);
+      if (!lists.length) return;
+      const html = preferenceLabels.map(([key, labelKey, helpKey]) => `
         <div class="preference-row">
           <span>
             <strong>${escapeHtml(tNext(labelKey, key))}</strong>
@@ -5347,8 +5597,11 @@ def ui_preview_html(
           <button type="button" class="switch ${preferences[key] ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${preferences[key] ? "true" : "false"}"></button>
         </div>
       `).join("");
-      list.querySelectorAll("[data-preference-toggle]").forEach((button) => {
-        button.addEventListener("click", () => updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]));
+      lists.forEach((list) => {
+        list.innerHTML = html;
+        list.querySelectorAll("[data-preference-toggle]").forEach((button) => {
+          button.addEventListener("click", () => updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]));
+        });
       });
     }
     async function updatePreference(key, value) {
@@ -5398,7 +5651,41 @@ def ui_preview_html(
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
       renderPreferences();
+      renderProfile();
       renderLibrary();
+    }
+    function profileIdentity() {
+      const auth = currentStartup.auth || {};
+      const user = Object.assign({}, state.user || {});
+      const name = user.displayName || user.display_name || auth.displayName || auth.username || user.username || "DiscVault";
+      return {
+        name,
+        username: user.username || auth.username || "-",
+        role: user.role || auth.role || "-",
+        userCount: (state.counts && state.counts.users) || auth.userCount || 0,
+        credentialCount: auth.credentialCount || 0
+      };
+    }
+    function initialsFromName(name) {
+      const parts = String(name || "DiscVault").trim().split(/\\s+/).filter(Boolean);
+      return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : String(parts[0] || "DV").slice(0, 2)).toUpperCase();
+    }
+    function renderProfile() {
+      const profile = profileIdentity();
+      const title = document.getElementById("profilePageTitle");
+      const avatar = document.getElementById("profileAvatar");
+      const username = document.getElementById("profileUsername");
+      const role = document.getElementById("profileRole");
+      const userCount = document.getElementById("profileUserCount");
+      const credentialCount = document.getElementById("profileCredentialCount");
+      const navRole = document.getElementById("navProfileRole");
+      if (title) title.textContent = profile.name;
+      if (avatar) avatar.textContent = initialsFromName(profile.name);
+      if (username) username.textContent = profile.username;
+      if (role) role.textContent = profile.role;
+      if (userCount) userCount.textContent = String(profile.userCount);
+      if (credentialCount) credentialCount.textContent = String(profile.credentialCount);
+      if (navRole) navRole.textContent = profile.role && profile.role !== "-" ? profile.role : "-";
     }
     async function refreshAppFlow() {
       if (!appMode) {
@@ -5416,6 +5703,7 @@ def ui_preview_html(
       }
       const startupPayload = await apiJson("/api/next/startup/status", {headers: authHeaders()});
       const startup = startupPayload.startup || {};
+      currentStartup = startup;
       if (!startup.ready) {
         renderStartup(startup);
         setGate("startup");
@@ -5423,9 +5711,11 @@ def ui_preview_html(
       }
       await loadAppSnapshot();
       setGate("library");
-      const routeMatch = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
-      const routeMovieId = initialMovieId || (routeMatch ? decodeURIComponent(routeMatch[1] || routeMatch[2]) : "");
+      const route = appRouteFromPath();
+      const routeMovieId = route.view === "movie" ? (route.movieId || initialMovieId) : "";
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
+      else if (route.view === "profile") showProfilePage(false);
+      else showLibraryPage(false);
     }
     function movieMeta(movie) {
       return [movie.year, movie.format, movie.barcode].filter(Boolean);
@@ -5485,9 +5775,9 @@ def ui_preview_html(
         }
       });
       document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
-      document.getElementById("preferencesButton")?.addEventListener("click", () => {
-        renderPreferences();
-        document.getElementById("preferencesBackdrop")?.classList.remove("hidden");
+      document.getElementById("profileButton")?.addEventListener("click", () => showProfilePage());
+      document.querySelectorAll("[data-app-route]").forEach((button) => {
+        button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
       });
       document.getElementById("preferencesCloseButton")?.addEventListener("click", () => {
         document.getElementById("preferencesBackdrop")?.classList.add("hidden");
@@ -5496,6 +5786,7 @@ def ui_preview_html(
         if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
       });
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
+      document.getElementById("profileSignOutButton")?.addEventListener("click", () => logoutApp());
       document.getElementById("startupRefreshButton")?.addEventListener("click", () => refreshAppFlow().catch((error) => {
         const node = document.getElementById("startupMessage");
         if (node) node.textContent = error.message || String(error);
@@ -5540,13 +5831,13 @@ def ui_preview_html(
         }
       });
       window.addEventListener("popstate", () => {
-        const match = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
-        const movieId = match ? decodeURIComponent(match[1] || match[2]) : "";
-        if (movieId) openAppMovieDetail(movieId, false);
+        const route = appRouteFromPath();
+        if (route.view === "movie") openAppMovieDetail(route.movieId, false);
+        else if (route.view === "profile") showProfilePage(false);
         else closeAppMovieDetail(false);
       });
       window.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeAppMovieDetail();
+        if (event.key === "Escape" && activeDetailMovieId) closeAppMovieDetail();
       });
     });
   </script>
@@ -14007,6 +14298,8 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/")
     @flask_app.get("/app")
     @flask_app.get("/app/")
+    @flask_app.get("/profile")
+    @flask_app.get("/app/profile")
     @flask_app.get("/movies/<movie_id>")
     @flask_app.get("/app/movies/<movie_id>")
     def next_app_shell(movie_id: str | None = None):
