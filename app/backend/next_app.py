@@ -4381,6 +4381,40 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 10px;
     }
+    .profile-form {
+      display: grid;
+      gap: 12px;
+    }
+    .profile-form label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .84rem;
+      font-weight: 650;
+    }
+    .profile-form input {
+      min-height: 40px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+      font-size: .95rem;
+      font-weight: 620;
+    }
+    .profile-form input:focus {
+      outline: 2px solid color-mix(in srgb, var(--accent) 52%, transparent);
+      outline-offset: 2px;
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--line));
+    }
+    .profile-form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
     .preferences-backdrop {
       position: fixed;
       inset: 0;
@@ -4892,7 +4926,16 @@ def ui_preview_html(
           </div>
           <div class="detail-card profile-card">
             <h3 data-next-i18n="profile.profileEditing">Profile editing</h3>
-            <p data-next-i18n="profile.profileEditingSoon">Editing display name and avatar will be connected next.</p>
+            <form class="profile-form" id="profileEditForm">
+              <label for="profileDisplayNameInput">
+                <span data-next-i18n="profile.displayName">Display name</span>
+                <input id="profileDisplayNameInput" name="display_name" maxlength="120" autocomplete="name">
+              </label>
+              <div class="profile-form-actions">
+                <button type="submit" class="secondary-button" id="profileSaveButton" data-next-i18n="profile.saveProfile">Save profile</button>
+                <span class="login-message" id="profileEditMessage"></span>
+              </div>
+            </form>
           </div>
         </section>
       </section>
@@ -5674,6 +5717,7 @@ def ui_preview_html(
       const profile = profileIdentity();
       const title = document.getElementById("profilePageTitle");
       const avatar = document.getElementById("profileAvatar");
+      const displayNameInput = document.getElementById("profileDisplayNameInput");
       const username = document.getElementById("profileUsername");
       const role = document.getElementById("profileRole");
       const userCount = document.getElementById("profileUserCount");
@@ -5681,11 +5725,48 @@ def ui_preview_html(
       const navRole = document.getElementById("navProfileRole");
       if (title) title.textContent = profile.name;
       if (avatar) avatar.textContent = initialsFromName(profile.name);
+      if (displayNameInput && document.activeElement !== displayNameInput) displayNameInput.value = profile.name;
       if (username) username.textContent = profile.username;
       if (role) role.textContent = profile.role;
       if (userCount) userCount.textContent = String(profile.userCount);
       if (credentialCount) credentialCount.textContent = String(profile.credentialCount);
       if (navRole) navRole.textContent = profile.role && profile.role !== "-" ? profile.role : "-";
+    }
+    function setProfileEditMessage(message, tone) {
+      const node = document.getElementById("profileEditMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    async function saveProfileEdits() {
+      const input = document.getElementById("profileDisplayNameInput");
+      const button = document.getElementById("profileSaveButton");
+      const displayName = String(input?.value || "").trim();
+      if (!displayName) {
+        setProfileEditMessage(tNext("profile.displayNameRequired", "Display name is required."), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      setProfileEditMessage(tNext("profile.savingProfile", "Saving profile..."));
+      try {
+        const payload = await authApiJson("/api/next/profile", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({display_name: displayName})
+        });
+        state.user = Object.assign({}, state.user || {}, payload.user || {});
+        currentStartup.auth = Object.assign({}, currentStartup.auth || {}, {
+          username: state.user.username,
+          displayName: state.user.displayName || state.user.display_name,
+          role: state.user.role || (currentStartup.auth || {}).role
+        });
+        renderProfile();
+        setProfileEditMessage(tNext("profile.profileSaved", "Profile saved."), "good");
+      } catch (error) {
+        setProfileEditMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
     }
     async function refreshAppFlow() {
       if (!appMode) {
@@ -5778,6 +5859,10 @@ def ui_preview_html(
       document.getElementById("profileButton")?.addEventListener("click", () => showProfilePage());
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
+      });
+      document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        saveProfileEdits();
       });
       document.getElementById("preferencesCloseButton")?.addEventListener("click", () => {
         document.getElementById("preferencesBackdrop")?.classList.add("hidden");
@@ -13213,6 +13298,82 @@ def register_routes(flask_app: Flask) -> None:
             if user:
                 user["role"] = next_user_primary_role(conn, user["id"])
             return response({"status": "ok", "snapshot": collection_dashboard_snapshot(conn, user)})
+
+    @flask_app.get("/api/next/profile")
+    def get_next_profile():
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            user["role"] = next_user_primary_role(conn, user["id"])
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) AS count FROM passkey_credentials WHERE user_id=%s",
+                    (user["id"],),
+                )
+                credential_row = cur.fetchone()
+                credential_count = int(credential_row["count"] if credential_row else 0)
+            return response(
+                {
+                    "status": "ok",
+                    "user": {
+                        "id": user["id"],
+                        "username": user["username"],
+                        "displayName": user.get("display_name") or user["username"],
+                        "display_name": user.get("display_name") or user["username"],
+                        "first_name": user.get("first_name"),
+                        "last_name": user.get("last_name"),
+                        "role": user.get("role"),
+                        "credentialCount": credential_count,
+                    },
+                }
+            )
+
+    @flask_app.patch("/api/next/profile")
+    def patch_next_profile():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Profile request body must be an object", 400)
+        display_name = str(body.get("display_name") or body.get("displayName") or "").strip()
+        if not display_name:
+            raise NextApiError("display_name is required", 400)
+        if len(display_name) > 120:
+            raise NextApiError("display_name must be 120 characters or fewer", 400)
+
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE users
+                        SET display_name=%s, updated_at=now()
+                        WHERE id=%s
+                        RETURNING id, username, display_name, first_name, last_name, status, updated_at
+                        """,
+                        (display_name, user["id"]),
+                    )
+                    updated = cur.fetchone()
+            if not updated:
+                raise NextApiError("User not found", 404)
+            updated["role"] = next_user_primary_role(conn, updated["id"])
+            return response(
+                {
+                    "status": "ok",
+                    "user": {
+                        "id": updated["id"],
+                        "username": updated["username"],
+                        "displayName": updated.get("display_name") or updated["username"],
+                        "display_name": updated.get("display_name") or updated["username"],
+                        "first_name": updated.get("first_name"),
+                        "last_name": updated.get("last_name"),
+                        "role": updated.get("role"),
+                        "updated_at": updated.get("updated_at"),
+                    },
+                }
+            )
 
     @flask_app.get("/api/next/preferences")
     def get_app_preferences():
