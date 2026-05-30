@@ -261,5 +261,6 @@
   "auth.inviteRequired": "Anna k?ytt?j?nimi ja kutsukoodi.",
   "auth.inviteCreating": "Luodaan tili?...",
   "auth.inviteCreated": "Tili luotu. Olet kirjautunut sis??n.",
-  "auth.inviteFailed": "Kutsulla rekister?ityminen ep?onnistui."
+  "auth.inviteFailed": "Kutsulla rekister?ityminen ep?onnistui.",
+  "auth.usernameRequired": "K?ytt?j?nimi vaaditaan."
 }

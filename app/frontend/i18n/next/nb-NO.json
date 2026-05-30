@@ -261,5 +261,6 @@
   "auth.inviteRequired": "Skriv inn brukernavn og invitasjonskode.",
   "auth.inviteCreating": "Oppretter konto...",
   "auth.inviteCreated": "Konto opprettet. Du er logget inn.",
-  "auth.inviteFailed": "Registrering med invitasjon mislyktes."
+  "auth.inviteFailed": "Registrering med invitasjon mislyktes.",
+  "auth.usernameRequired": "Brukernavn er p?krevd."
 }

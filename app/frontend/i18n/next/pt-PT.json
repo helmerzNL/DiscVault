@@ -261,5 +261,6 @@
   "auth.inviteRequired": "Introduza o utilizador e o c?digo de convite.",
   "auth.inviteCreating": "A criar conta...",
   "auth.inviteCreated": "Conta criada. Sess?o iniciada.",
-  "auth.inviteFailed": "Falha ao registar com convite."
+  "auth.inviteFailed": "Falha ao registar com convite.",
+  "auth.usernameRequired": "O nome de utilizador ? obrigat?rio."
 }

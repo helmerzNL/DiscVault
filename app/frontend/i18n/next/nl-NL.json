@@ -355,5 +355,6 @@
   "auth.inviteRequired": "Vul gebruikersnaam en uitnodigingscode in.",
   "auth.inviteCreating": "Account aanmaken...",
   "auth.inviteCreated": "Account aangemaakt. Je bent ingelogd.",
-  "auth.inviteFailed": "Aanmelden met uitnodiging mislukt."
+  "auth.inviteFailed": "Aanmelden met uitnodiging mislukt.",
+  "auth.usernameRequired": "Gebruikersnaam is verplicht."
 }

@@ -261,5 +261,6 @@
   "auth.inviteRequired": "Introduce el usuario y el c?digo de invitaci?n.",
   "auth.inviteCreating": "Creando cuenta...",
   "auth.inviteCreated": "Cuenta creada. Has iniciado sesi?n.",
-  "auth.inviteFailed": "No se pudo registrar con la invitaci?n."
+  "auth.inviteFailed": "No se pudo registrar con la invitaci?n.",
+  "auth.usernameRequired": "El nombre de usuario es obligatorio."
 }
