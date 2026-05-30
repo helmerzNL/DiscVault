@@ -4287,6 +4287,48 @@ def ui_preview_html(
       margin: 0 0 12px;
       font-size: 1rem;
     }
+    .detail-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .detail-card-head h3 {
+      margin: 0;
+    }
+    .detail-submenu {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .detail-submenu button {
+      min-height: 32px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0 13px;
+      font: inherit;
+      font-size: .82rem;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .detail-submenu button.active {
+      background: var(--bg-solid);
+      color: var(--text);
+      box-shadow: 0 7px 18px rgba(0,0,0,.12);
+    }
+    .detail-subpanel {
+      min-width: 0;
+    }
     .detail-fields {
       display: grid;
       gap: 9px;
@@ -4372,6 +4414,56 @@ def ui_preview_html(
       overflow-wrap: anywhere;
     }
     .detail-mini-card span {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .person-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      color: inherit;
+      cursor: pointer;
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 9px;
+      text-align: left;
+      font: inherit;
+    }
+    .person-card:hover {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+    }
+    .person-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 32%, var(--bg-solid)), var(--bg-solid));
+      color: var(--text);
+      font-size: .84rem;
+      font-weight: 780;
+    }
+    .person-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .person-card-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .person-card-copy strong {
+      overflow-wrap: anywhere;
+    }
+    .person-card-copy span {
       color: var(--muted);
       font-size: .82rem;
       line-height: 1.35;
@@ -4965,6 +5057,16 @@ def ui_preview_html(
         grid-template-columns: 1fr;
         padding: 12px;
       }
+      .detail-card-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .detail-submenu {
+        width: 100%;
+      }
+      .detail-submenu button {
+        flex: 1;
+      }
       .profile-hero {
         align-items: stretch;
         flex-direction: column;
@@ -5280,24 +5382,38 @@ def ui_preview_html(
             <div class="detail-grid" id="movieDetailRelationships"></div>
           </div>
           <div class="detail-card full">
-            <h3 data-next-i18n="movieDetail.posters">Posters</h3>
-            <div class="art-option-grid" id="movieDetailPosterArtwork"></div>
+            <div class="detail-card-head">
+              <h3 data-next-i18n="movieDetail.media">Media</h3>
+              <div class="detail-submenu" role="tablist" aria-label="Media" data-next-i18n-aria="movieDetail.media">
+                <button type="button" class="active" data-detail-tab="movieMedia" data-detail-panel="movieMediaPosters" data-next-i18n="movieDetail.posters">Posters</button>
+                <button type="button" data-detail-tab="movieMedia" data-detail-panel="movieMediaBackdrops" data-next-i18n="movieDetail.backdrops">Backdrops</button>
+                <button type="button" data-detail-tab="movieMedia" data-detail-panel="movieMediaVideos" data-next-i18n="movieDetail.videos">Videos</button>
+              </div>
+            </div>
+            <div class="detail-subpanel" data-detail-panel-group="movieMedia" id="movieMediaPosters">
+              <div class="art-option-grid" id="movieDetailPosterArtwork"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaBackdrops">
+              <div class="art-option-grid backdrops" id="movieDetailBackdropArtwork"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
+              <div class="detail-grid" id="movieDetailVideos"></div>
+            </div>
           </div>
           <div class="detail-card full">
-            <h3 data-next-i18n="movieDetail.backdrops">Backdrops</h3>
-            <div class="art-option-grid backdrops" id="movieDetailBackdropArtwork"></div>
-          </div>
-          <div class="detail-card full">
-            <h3 data-next-i18n="movieDetail.videos">Videos</h3>
-            <div class="detail-grid" id="movieDetailVideos"></div>
-          </div>
-          <div class="detail-card full">
-            <h3 data-next-i18n="movieDetail.cast">Cast</h3>
-            <div class="detail-grid" id="movieDetailCast"></div>
-          </div>
-          <div class="detail-card full">
-            <h3 data-next-i18n="movieDetail.crew">Crew</h3>
-            <div class="detail-grid" id="movieDetailCrew"></div>
+            <div class="detail-card-head">
+              <h3 data-next-i18n="movieDetail.people">People</h3>
+              <div class="detail-submenu" role="tablist" aria-label="People" data-next-i18n-aria="movieDetail.people">
+                <button type="button" class="active" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCast" data-next-i18n="movieDetail.cast">Cast</button>
+                <button type="button" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCrew" data-next-i18n="movieDetail.crew">Crew</button>
+              </div>
+            </div>
+            <div class="detail-subpanel" data-detail-panel-group="moviePeople" id="moviePeopleCast">
+              <div class="detail-grid" id="movieDetailCast"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
+              <div class="detail-grid" id="movieDetailCrew"></div>
+            </div>
           </div>
         </section>
       </section>
@@ -5399,8 +5515,19 @@ def ui_preview_html(
             <div class="detail-grid" id="containerDetailIdentifiers"></div>
           </div>
           <div class="detail-card">
-            <h3 data-next-i18n="containerDetail.artwork">Artwork</h3>
-            <div class="art-option-grid" id="containerDetailArtwork"></div>
+            <div class="detail-card-head">
+              <h3 data-next-i18n="containerDetail.artwork">Artwork</h3>
+              <div class="detail-submenu" role="tablist" aria-label="Artwork" data-next-i18n-aria="containerDetail.artwork">
+                <button type="button" class="active" data-detail-tab="containerArtwork" data-detail-panel="containerArtworkPosters" data-next-i18n="movieDetail.posters">Posters</button>
+                <button type="button" data-detail-tab="containerArtwork" data-detail-panel="containerArtworkBackdrops" data-next-i18n="movieDetail.backdrops">Backdrops</button>
+              </div>
+            </div>
+            <div class="detail-subpanel" data-detail-panel-group="containerArtwork" id="containerArtworkPosters">
+              <div class="art-option-grid" id="containerDetailPosterArtwork"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="containerArtwork" id="containerArtworkBackdrops">
+              <div class="art-option-grid backdrops" id="containerDetailBackdropArtwork"></div>
+            </div>
           </div>
         </section>
       </section>
@@ -6408,6 +6535,38 @@ def ui_preview_html(
         ? `<a class="detail-mini-card" href="${escapeHtml(href)}">${body}</a>`
         : `<div class="detail-mini-card">${body}</div>`;
     }
+    function personImageUrl(credit) {
+      return usableImage(credit?.profile_url || credit?.profileUrl || "");
+    }
+    function personCardHtml(credit, subtitle) {
+      const image = personImageUrl(credit);
+      const name = credit.name || tNext("common.untitled", "Untitled");
+      const avatar = image
+        ? `<img src="${escapeHtml(image)}" alt="">`
+        : escapeHtml(initialsFromName(name));
+      return `
+        <button type="button" class="person-card" data-open-person="${escapeHtml(credit.person_id || "")}">
+          <span class="person-avatar">${avatar}</span>
+          <span class="person-card-copy">
+            <strong>${escapeHtml(name)}</strong>
+            <span>${escapeHtml(subtitle || credit.character || credit.job || credit.credit_type || "")}</span>
+          </span>
+        </button>
+      `;
+    }
+    function activateDetailTab(group, panelId) {
+      if (!group || !panelId) return;
+      document.querySelectorAll("[data-detail-tab]").forEach((button) => {
+        if (button.dataset.detailTab !== group) return;
+        const active = button.dataset.detailPanel === panelId;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll("[data-detail-panel-group]").forEach((panel) => {
+        if (panel.dataset.detailPanelGroup !== group) return;
+        panel.classList.toggle("hidden", panel.id !== panelId);
+      });
+    }
     function containerTypeLabel(type) {
       const key = String(type || "container");
       return tNext(`containerDetail.type.${key}`, key.replace(/_/g, " "));
@@ -6594,12 +6753,12 @@ def ui_preview_html(
       document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
-      document.getElementById("movieDetailCast").innerHTML = castCredits.slice(0, 64).map((credit) => miniCard(
-        credit.name,
+      document.getElementById("movieDetailCast").innerHTML = castCredits.slice(0, 64).map((credit) => personCardHtml(
+        credit,
         credit.character || credit.job || credit.credit_type || ""
       )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCast", "No cast imported yet."))}</div>`;
-      document.getElementById("movieDetailCrew").innerHTML = crewCredits.slice(0, 64).map((credit) => miniCard(
-        credit.name,
+      document.getElementById("movieDetailCrew").innerHTML = crewCredits.slice(0, 64).map((credit) => personCardHtml(
+        credit,
         credit.job || credit.character || credit.credit_type || ""
       )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCrew", "No crew imported yet."))}</div>`;
       setMovieDetailMessage("");
@@ -6802,9 +6961,8 @@ def ui_preview_html(
         item.identifier
       ));
       document.getElementById("containerDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noIdentifiers", "No identifiers yet."))}</div>`;
-      document.getElementById("containerDetailArtwork").innerHTML = (detail.mediaAssets || []).length
-        ? `${artworkOptionsHtml(detail, "poster")}${artworkOptionsHtml(detail, "backdrop")}`
-        : `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noArtwork", "No artwork options yet."))}</div>`;
+      document.getElementById("containerDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
+      document.getElementById("containerDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       setContainerDetailMessage("");
     }
     function showContainerDetailLoading(containerId) {
@@ -6817,7 +6975,8 @@ def ui_preview_html(
       document.getElementById("containerDetailMovies").innerHTML = "";
       document.getElementById("containerDetailItems").innerHTML = "";
       document.getElementById("containerDetailIdentifiers").innerHTML = "";
-      document.getElementById("containerDetailArtwork").innerHTML = "";
+      document.getElementById("containerDetailPosterArtwork").innerHTML = "";
+      document.getElementById("containerDetailBackdropArtwork").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
       document.getElementById("containerDetailBackdrop").src = "";
       setContainerDetailMessage("");
@@ -8046,6 +8205,16 @@ def ui_preview_html(
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
+      document.addEventListener("click", (event) => {
+        const tab = event.target.closest("[data-detail-tab]");
+        if (!tab) return;
+        activateDetailTab(tab.dataset.detailTab, tab.dataset.detailPanel);
+      });
+      document.getElementById("movieDetailPage")?.addEventListener("click", (event) => {
+        const person = event.target.closest("[data-open-person]");
+        if (!person) return;
+        setMovieDetailMessage(tNext("movieDetail.personComingSoon", "Person pages are coming soon."), "good");
+      });
       document.getElementById("containerDetailPage")?.addEventListener("click", (event) => {
         const movieLink = event.target.closest("[data-open-movie]");
         const containerLink = event.target.closest("[data-open-container]");
@@ -13925,9 +14094,24 @@ def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
 def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
     if not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
         return []
+    media_join = table_exists(conn, "media_assets")
+    profile_select = (
+        """
+                ma.storage_backend AS profile_storage_backend,
+                ma.storage_key AS profile_storage_key,
+                ma.source_url AS profile_source_url
+        """
+        if media_join
+        else """
+                NULL AS profile_storage_backend,
+                NULL AS profile_storage_key,
+                NULL AS profile_source_url
+        """
+    )
+    profile_join = "LEFT JOIN media_assets ma ON ma.id = p.profile_asset_id" if media_join else ""
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
                 mc.id,
                 mc.credit_type,
@@ -13938,16 +14122,31 @@ def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict
                 p.public_id AS person_public_id,
                 p.name,
                 p.known_for,
-                p.metadata AS person_metadata
+                p.profile_asset_id,
+                p.metadata AS person_metadata,
+{profile_select}
             FROM movie_credits mc
             JOIN people p ON p.id = mc.person_id
+            {profile_join}
             WHERE mc.movie_id=%s
             ORDER BY mc.sort_order, p.name
             LIMIT %s
             """,
             (movie_id, limit),
         )
-        return cur.fetchall()
+        rows = [dict(row) for row in cur.fetchall()]
+    for row in rows:
+        profile_url = media_asset_public_url(
+            {
+                "id": row.get("profile_asset_id"),
+                "storage_backend": row.pop("profile_storage_backend", None),
+                "storage_key": row.pop("profile_storage_key", None),
+                "source_url": row.pop("profile_source_url", None),
+            }
+        )
+        if profile_url:
+            row["profile_url"] = profile_url
+    return rows
 
 
 def movie_container_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
