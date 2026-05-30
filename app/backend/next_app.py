@@ -4148,6 +4148,7 @@ def ui_preview_html(
     }
     .library-view.hidden,
     .movie-detail-page.hidden,
+    .container-detail-page.hidden,
     .profile-view.hidden {
       display: none;
     }
@@ -4324,6 +4325,33 @@ def ui_preview_html(
       gap: 5px;
       color: inherit;
       text-decoration: none;
+    }
+    .detail-mini-card.removable {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+    }
+    .detail-mini-card-main {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      color: inherit;
+      text-decoration: none;
+    }
+    .detail-remove-button {
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--red) 10%, var(--bg-solid));
+      color: var(--red);
+      cursor: pointer;
+      padding: 0 10px;
+      font-size: .8rem;
+      font-weight: 720;
+    }
+    .detail-remove-button:disabled {
+      cursor: not-allowed;
+      opacity: .52;
     }
     .detail-mini-card strong {
       overflow-wrap: anywhere;
@@ -5180,6 +5208,40 @@ def ui_preview_html(
           </div>
         </section>
       </section>
+      <section class="movie-detail-page container-detail-page hidden" id="containerDetailPage" aria-labelledby="containerDetailTitle">
+        <section class="movie-detail-hero" id="containerDetailHero">
+          <img id="containerDetailBackdrop" alt="">
+          <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Back to library</button>
+          <div class="movie-detail-summary">
+            <div class="movie-detail-poster" id="containerDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
+            <div>
+              <span class="eyebrow" id="containerDetailType" data-next-i18n="containerDetail.title">Container details</span>
+              <h2 class="movie-detail-title" id="containerDetailTitle">-</h2>
+              <div class="hero-meta" id="containerDetailTags"></div>
+              <p class="movie-detail-overview" id="containerDetailDescription"></p>
+              <div class="detail-message" id="containerDetailMessage"></div>
+            </div>
+          </div>
+        </section>
+        <section class="movie-detail-body">
+          <div class="detail-card full">
+            <h3 data-next-i18n="containerDetail.memberMovies">Movies</h3>
+            <div class="detail-grid" id="containerDetailMovies"></div>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="containerDetail.collectionItems">Collection items</h3>
+            <div class="detail-grid" id="containerDetailItems"></div>
+          </div>
+          <div class="detail-card">
+            <h3 data-next-i18n="containerDetail.identifiers">Identifiers</h3>
+            <div class="detail-grid" id="containerDetailIdentifiers"></div>
+          </div>
+          <div class="detail-card">
+            <h3 data-next-i18n="containerDetail.artwork">Artwork</h3>
+            <div class="art-option-grid" id="containerDetailArtwork"></div>
+          </div>
+        </section>
+      </section>
       <section class="profile-view hidden" id="profileView" aria-labelledby="profilePageTitle">
         <section class="profile-hero">
           <div class="profile-identity">
@@ -5414,6 +5476,8 @@ def ui_preview_html(
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
+    let activeContainerId = "";
+    let activeContainerPayload = null;
     let currentStartup = {};
     let currentAuthStatus = {};
     let profileCredentials = [];
@@ -6182,6 +6246,32 @@ def ui_preview_html(
         ? `<a class="detail-mini-card" href="${escapeHtml(href)}">${body}</a>`
         : `<div class="detail-mini-card">${body}</div>`;
     }
+    function containerTypeLabel(type) {
+      const key = String(type || "container");
+      return tNext(`containerDetail.type.${key}`, key.replace(/_/g, " "));
+    }
+    function containerMediaImage(detail, kind) {
+      const container = detail.container || {};
+      const metadata = container.metadata || {};
+      return mediaAssetImage(detail.mediaAssets, kind) || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
+    }
+    function removableDetailCard(title, subtitle, href, action, actionValue, itemType) {
+      const attrs = action === "movie"
+        ? `data-container-remove-movie="${escapeHtml(actionValue || "")}"`
+        : `data-container-remove-item="${escapeHtml(actionValue || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
+      const linkAttrs = href.includes("/movies/")
+        ? `data-open-movie="${escapeHtml(String(actionValue || ""))}"`
+        : `data-open-container="${escapeHtml(String(actionValue || ""))}"`;
+      return `
+        <div class="detail-mini-card removable">
+          <a class="detail-mini-card-main" href="${escapeHtml(href)}" ${linkAttrs}>
+            <strong>${escapeHtml(title || tNext("common.untitled", "Untitled"))}</strong>
+            <span>${escapeHtml(subtitle || "")}</span>
+          </a>
+          <button type="button" class="detail-remove-button" ${attrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
+        </div>
+      `;
+    }
     function artworkOptionsHtml(detail, kind) {
       const assets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
       const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
@@ -6282,6 +6372,15 @@ def ui_preview_html(
         ].filter(Boolean).join(" / ")
       ));
       document.getElementById("movieDetailRelationships").innerHTML = [...containerCards, ...groupCards].join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noRelationships", "No relationships yet."))}</div>`;
+      document.querySelectorAll("#movieDetailRelationships a[href*='/containers/']").forEach((anchor) => {
+        anchor.addEventListener("click", (event) => {
+          const href = event.currentTarget.getAttribute("href") || "";
+          const match = href.match(/\\/containers\\/([^/?#]+)/);
+          if (!match) return;
+          event.preventDefault();
+          openAppContainerDetail(decodeURIComponent(match[1]));
+        });
+      });
       document.getElementById("movieDetailArtwork").innerHTML = `
         ${artworkOptionsHtml(detail, "poster")}
         ${artworkOptionsHtml(detail, "backdrop")}
@@ -6313,6 +6412,8 @@ def ui_preview_html(
     }
     async function openAppMovieDetail(movieId, pushUrl = true) {
       if (!movieId) return;
+      activeContainerId = "";
+      activeContainerPayload = null;
       showMovieDetailLoading(movieId);
       showMovieDetailPage();
       if (pushUrl && appMode) {
@@ -6336,6 +6437,138 @@ def ui_preview_html(
         history.pushState({}, "", "/");
       }
     }
+    function setContainerDetailMessage(message, tone) {
+      const node = document.getElementById("containerDetailMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `detail-message ${tone || ""}`.trim();
+    }
+    function renderContainerDetail(detail) {
+      activeContainerPayload = detail;
+      const container = detail.container || {};
+      activeContainerId = container.id || activeContainerId || "";
+      const metadata = container.metadata || {};
+      const poster = containerMediaImage(detail, "poster");
+      const backdrop = containerMediaImage(detail, "backdrop");
+      const title = container.title || tNext("common.untitled", "Untitled");
+      const typeLabel = containerTypeLabel(container.container_type);
+      const backdropNode = document.getElementById("containerDetailBackdrop");
+      if (backdropNode) {
+        backdropNode.src = backdrop || "";
+        backdropNode.classList.toggle("hidden", !backdrop);
+      }
+      const posterNode = document.getElementById("containerDetailPoster");
+      if (posterNode) {
+        posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      }
+      document.getElementById("containerDetailType").textContent = typeLabel;
+      document.getElementById("containerDetailTitle").textContent = title;
+      document.getElementById("containerDetailDescription").textContent = container.description || metadata.description || tNext("containerDetail.noDescription", "No description imported yet.");
+      document.getElementById("containerDetailTags").innerHTML = detailTagHtml([
+        typeLabel,
+        container.year,
+        container.barcode,
+        (detail.memberMovies || []).length ? `${(detail.memberMovies || []).length} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
+        (detail.collectionItems || []).length ? `${(detail.collectionItems || []).length} ${tNext("containerDetail.items", "items")}` : ""
+      ]);
+      const movieCards = (detail.memberMovies || []).map((movie) => removableDetailCard(
+        movie.title,
+        [movie.year, movie.format, movie.barcode].filter(Boolean).join(" / "),
+        `/movies/${encodeURIComponent(movie.id)}`,
+        "movie",
+        movie.id,
+        "movie"
+      ));
+      document.getElementById("containerDetailMovies").innerHTML = movieCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noMovies", "No movies linked yet."))}</div>`;
+      const itemCards = (detail.collectionItems || []).map((item) => {
+        const itemId = item.entity_id || item.item_id || item.id || "";
+        const itemType = item.item_type || item.container_type || item.entity_type || "movie";
+        const href = itemType === "movie" ? `/movies/${encodeURIComponent(itemId)}` : `/containers/${encodeURIComponent(itemId)}`;
+        const subtitle = [
+          itemType === "movie" ? tNext("containerDetail.type.movie", "Movie") : containerTypeLabel(itemType),
+          item.year,
+          item.format,
+          item.barcode
+        ].filter(Boolean).join(" / ");
+        return removableDetailCard(item.title, subtitle, href, "item", itemId, itemType);
+      });
+      document.getElementById("containerDetailItems").innerHTML = itemCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noItems", "No collection items linked yet."))}</div>`;
+      const identifiers = (detail.identifiers || []).map((item) => miniCard(
+        `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
+        item.identifier
+      ));
+      document.getElementById("containerDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noIdentifiers", "No identifiers yet."))}</div>`;
+      document.getElementById("containerDetailArtwork").innerHTML = (detail.mediaAssets || []).length
+        ? `${artworkOptionsHtml(detail, "poster")}${artworkOptionsHtml(detail, "backdrop")}`
+        : `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noArtwork", "No artwork options yet."))}</div>`;
+      setContainerDetailMessage("");
+    }
+    function showContainerDetailLoading(containerId) {
+      activeContainerId = containerId || "";
+      activeContainerPayload = null;
+      document.getElementById("containerDetailType").textContent = tNext("containerDetail.title", "Container details");
+      document.getElementById("containerDetailTitle").textContent = tNext("collection.loading", "Loading...");
+      document.getElementById("containerDetailDescription").textContent = "";
+      document.getElementById("containerDetailTags").innerHTML = "";
+      document.getElementById("containerDetailMovies").innerHTML = "";
+      document.getElementById("containerDetailItems").innerHTML = "";
+      document.getElementById("containerDetailIdentifiers").innerHTML = "";
+      document.getElementById("containerDetailArtwork").innerHTML = "";
+      document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
+      document.getElementById("containerDetailBackdrop").src = "";
+      setContainerDetailMessage("");
+    }
+    async function openAppContainerDetail(containerId, pushUrl = true) {
+      if (!containerId) return;
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      showContainerDetailLoading(containerId);
+      showContainerDetailPage();
+      if (pushUrl && appMode) {
+        const nextPath = `/containers/${encodeURIComponent(containerId)}`;
+        if (window.location.pathname !== nextPath) {
+          history.pushState({containerId}, "", nextPath);
+        }
+      }
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(containerId)}`);
+        renderContainerDetail(payload.detail || {});
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function closeAppContainerDetail(pushUrl = true) {
+      showLibraryPage(false);
+      activeContainerId = "";
+      activeContainerPayload = null;
+      if (pushUrl && appMode && window.location.pathname !== "/") {
+        history.pushState({}, "", "/");
+      }
+    }
+    async function removeContainerMovie(movieId) {
+      if (!activeContainerId || !movieId) return;
+      setContainerDetailMessage(tNext("containerDetail.removing", "Removing link..."));
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}/movies/${encodeURIComponent(movieId)}`, {method: "DELETE"});
+        renderContainerDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setContainerDetailMessage(tNext("containerDetail.removed", "Link removed."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function removeCollectionItem(itemType, itemId) {
+      if (!activeContainerId || !itemType || !itemId) return;
+      setContainerDetailMessage(tNext("containerDetail.removing", "Removing link..."));
+      try {
+        const payload = await authApiJson(`/api/next/collections/${encodeURIComponent(activeContainerId)}/items/${encodeURIComponent(itemType)}/${encodeURIComponent(itemId)}`, {method: "DELETE"});
+        renderContainerDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setContainerDetailMessage(tNext("containerDetail.removed", "Link removed."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
     function setActiveAppRoute(route) {
       document.querySelectorAll("[data-app-route]").forEach((node) => {
         node.classList.toggle("active", node.dataset.appRoute === route);
@@ -6351,12 +6584,23 @@ def ui_preview_html(
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.remove("hidden");
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
+    function showContainerDetailPage() {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.remove("hidden");
+      setActiveAppRoute("containers");
+      scrollPreviewTop();
+    }
     function showLibraryPage(pushUrl = false, activeRoute = "library") {
       document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
@@ -6368,10 +6612,13 @@ def ui_preview_html(
     function showProfilePage(pushUrl = true) {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.remove("hidden");
       activeDetailMovieId = "";
       activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
       setActiveAppRoute("profile");
       renderProfile();
       loadProfileDetails();
@@ -6387,10 +6634,13 @@ def ui_preview_html(
       }
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.remove("hidden");
       activeDetailMovieId = "";
       activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
       setActiveAppRoute("admin");
       renderAppAdmin();
       loadAppAdmin();
@@ -6409,6 +6659,10 @@ def ui_preview_html(
       const movieMatch = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
       if (movieMatch) {
         return {view: "movie", movieId: decodeURIComponent(movieMatch[1] || movieMatch[2])};
+      }
+      const containerMatch = window.location.pathname.match(/^\\/app\\/containers\\/([^/]+)$|^\\/containers\\/([^/]+)$/);
+      if (containerMatch) {
+        return {view: "container", containerId: decodeURIComponent(containerMatch[1] || containerMatch[2])};
       }
       return {view: "library"};
     }
@@ -6511,9 +6765,12 @@ def ui_preview_html(
       document.querySelectorAll("[data-preview-container]").forEach((link) => {
         link.classList.toggle("bulk-selected", selectedContainerIds.has(String(link.dataset.previewContainer)));
         link.addEventListener("click", (event) => {
-          if (!selectionMode) return;
           event.preventDefault();
-          toggleContainerSelection(link.dataset.previewContainer);
+          if (selectionMode) {
+            toggleContainerSelection(link.dataset.previewContainer);
+            return;
+          }
+          openAppContainerDetail(link.dataset.previewContainer);
         });
       });
       const shownCount = document.getElementById("shownCount");
@@ -7151,6 +7408,7 @@ def ui_preview_html(
       const route = appRouteFromPath();
       const routeMovieId = route.view === "movie" ? (route.movieId || initialMovieId) : "";
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
+      else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
@@ -7329,6 +7587,30 @@ def ui_preview_html(
         openAppMovieDetail(decodeURIComponent(match[1]));
       });
       document.getElementById("movieDetailBackButton")?.addEventListener("click", () => closeAppMovieDetail());
+      document.getElementById("containerDetailBackButton")?.addEventListener("click", () => closeAppContainerDetail());
+      document.getElementById("containerDetailPage")?.addEventListener("click", (event) => {
+        const movieLink = event.target.closest("[data-open-movie]");
+        const containerLink = event.target.closest("[data-open-container]");
+        const removeMovie = event.target.closest("[data-container-remove-movie]");
+        const removeItem = event.target.closest("[data-container-remove-item]");
+        if (movieLink) {
+          event.preventDefault();
+          openAppMovieDetail(movieLink.dataset.openMovie);
+          return;
+        }
+        if (containerLink) {
+          event.preventDefault();
+          openAppContainerDetail(containerLink.dataset.openContainer);
+          return;
+        }
+        if (removeMovie) {
+          removeContainerMovie(removeMovie.dataset.containerRemoveMovie);
+          return;
+        }
+        if (removeItem) {
+          removeCollectionItem(removeItem.dataset.itemType, removeItem.dataset.containerRemoveItem);
+        }
+      });
       document.getElementById("movieMetadataDryRunButton")?.addEventListener("click", () => refreshActiveMovieMetadata(true));
       document.getElementById("movieMetadataApplyButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false));
       document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
@@ -7348,12 +7630,18 @@ def ui_preview_html(
       window.addEventListener("popstate", () => {
         const route = appRouteFromPath();
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
+        else if (route.view === "container") openAppContainerDetail(route.containerId, false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "profile") showProfilePage(false);
-        else closeAppMovieDetail(false);
+        else {
+          activeContainerId = "";
+          activeContainerPayload = null;
+          closeAppMovieDetail(false);
+        }
       });
       window.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && activeDetailMovieId) closeAppMovieDetail();
+        if (event.key === "Escape" && activeContainerId) closeAppContainerDetail();
       });
     });
   </script>
@@ -15809,6 +16097,83 @@ def register_routes(flask_app: Flask) -> None:
             }
         )
 
+    @flask_app.delete("/api/next/containers/<container_id>/movies/<movie_id>")
+    def remove_container_movie(container_id: str, movie_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not container_uuid or not movie_uuid:
+            raise NextApiError("containerId and movieId are required", 400)
+        with connect() as conn:
+            require_next_permission(conn, "containers.edit")
+            if not table_exists(conn, "container_movies"):
+                raise NextApiError("Container movie links are not available yet", 503)
+            container_type = container_type_for_id(conn, container_uuid)
+            if container_type not in {"box_set", "vault"}:
+                raise NextApiError("Target container must be a box-set or vault", 400)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM container_movies WHERE container_id=%s AND movie_id=%s",
+                        (container_uuid, movie_uuid),
+                    )
+                    changed = cur.rowcount
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+            detail = container_detail_entity(conn, container_uuid)
+        if not detail:
+            raise NextApiError("Container not found", 404)
+        return response(
+            {
+                "status": "ok",
+                "changed": changed,
+                "containerId": str(container_uuid),
+                "movieId": str(movie_uuid),
+                "detail": detail,
+            }
+        )
+
+    @flask_app.delete("/api/next/collections/<collection_id>/items/<item_type>/<item_id>")
+    def remove_collection_item(collection_id: str, item_type: str, item_id: str):
+        collection_uuid = parse_uuid(collection_id, "collectionId")
+        item_uuid = parse_uuid(item_id, "itemId")
+        normalized_type = str(item_type or "").strip().lower()
+        if not collection_uuid or not item_uuid:
+            raise NextApiError("collectionId and itemId are required", 400)
+        if normalized_type not in {"movie", "box_set", "vault", "collection"}:
+            raise NextApiError("itemType must be movie, box_set, vault or collection", 400)
+        with connect() as conn:
+            require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
+            if not table_exists(conn, "collection_items"):
+                raise NextApiError("Collection items are not available yet", 503)
+            target_type = container_type_for_id(conn, collection_uuid)
+            if target_type != "collection":
+                raise NextApiError("Target container must be a collection", 400)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        DELETE FROM collection_items
+                        WHERE collection_id=%s AND item_type=%s AND item_id=%s
+                        """,
+                        (collection_uuid, normalized_type, item_uuid),
+                    )
+                    changed = cur.rowcount
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_uuid,))
+            detail = container_detail_entity(conn, collection_uuid)
+        if not detail:
+            raise NextApiError("Collection not found", 404)
+        return response(
+            {
+                "status": "ok",
+                "changed": changed,
+                "collectionId": str(collection_uuid),
+                "itemType": normalized_type,
+                "itemId": str(item_uuid),
+                "detail": detail,
+            }
+        )
+
     @flask_app.get("/api/next/digital-items")
     def digital_items():
         limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
@@ -16775,7 +17140,9 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/admin")
     @flask_app.get("/movies/<movie_id>")
     @flask_app.get("/app/movies/<movie_id>")
-    def next_app_shell(movie_id: str | None = None):
+    @flask_app.get("/containers/<container_id>")
+    @flask_app.get("/app/containers/<container_id>")
+    def next_app_shell(movie_id: str | None = None, container_id: str | None = None):
         with connect() as conn:
             user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
             if user:
