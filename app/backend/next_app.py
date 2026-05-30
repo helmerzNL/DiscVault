@@ -446,6 +446,8 @@ def migration_security_backfill_required(
 ) -> bool:
     if latest and latest.get("status") == "completed" and latest_run_included_security(latest):
         return False
+    if completed_security_import_exists(conn):
+        return False
     latest_supports_backfill = (
         bool(latest)
         and latest.get("status") == "completed"
@@ -480,6 +482,23 @@ def migration_security_backfill_required(
         int(source_counts.get(source_table) or 0) > count_table(conn, target_table)
         for source_table, target_table in source_to_target
     )
+
+
+def completed_security_import_exists(conn) -> bool:
+    if not table_exists(conn, "migration_runs") or not table_exists(conn, "import_id_mappings"):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT m.source_table
+            FROM import_id_mappings m
+            JOIN migration_runs r ON r.id = m.migration_run_id
+            WHERE r.status='completed'
+              AND m.source_table IN ('users', 'groups')
+            """
+        )
+        mapped_tables = {str(row["source_table"]) for row in cur.fetchall()}
+    return bool(mapped_tables & {"users", "groups"})
 
 
 def target_has_legacy_collection_import(conn) -> bool:
@@ -550,6 +569,32 @@ def latest_migration_run(conn, source_hash: str | None = None) -> dict[str, Any]
             LIMIT 1
             """,
             params,
+        )
+        return cur.fetchone()
+
+
+def latest_completed_migration_run(conn) -> dict[str, Any] | None:
+    if not table_exists(conn, "migration_runs"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                source_kind,
+                source_version,
+                source_database_hash,
+                export_manifest,
+                status,
+                result,
+                error,
+                started_at,
+                completed_at
+            FROM migration_runs
+            WHERE status='completed'
+            ORDER BY completed_at DESC NULLS LAST, started_at DESC
+            LIMIT 1
+            """
         )
         return cur.fetchone()
 
@@ -888,8 +933,19 @@ def migration_readiness(conn) -> dict[str, Any]:
     target_empty = target_database_empty(target_counts)
     source_hash = clean_text(source.get("sourceDatabaseHash"))
     latest_run = latest_migration_run(conn, source_hash)
+    fallback_completed_run = (
+        latest_completed_migration_run(conn)
+        if not latest_run and target_has_legacy_collection_import(conn)
+        else None
+    )
+    latest_run_for_state = latest_run or fallback_completed_run
+    source_changed_after_completion = bool(
+        fallback_completed_run
+        and source_hash
+        and clean_text(fallback_completed_run.get("source_database_hash")) != source_hash
+    )
     active_job = active_migration_job(conn, source_hash)
-    latest = migration_run_row(latest_run)
+    latest = migration_run_row(latest_run_for_state)
     active = job_row(active_job) if active_job else None
     security_backfill_required = migration_security_backfill_required(
         conn,
@@ -918,7 +974,17 @@ def migration_readiness(conn) -> dict[str, Any]:
         required_actions.append("Import legacy users, passkeys and media groups for the completed collection migration.")
     elif latest and latest["status"] == "completed":
         state = "already_completed"
-        required_actions.append("A completed migration for this source database already exists.")
+        if source_changed_after_completion:
+            warnings.append(
+                "Legacy source database changed after the completed migration. "
+                "DiscVault Next will keep using the migrated PostgreSQL collection."
+            )
+            required_actions.append(
+                "A completed migration already exists. Use DiscVault Next normally; "
+                "a future conflict-aware import can handle later legacy changes."
+            )
+        else:
+            required_actions.append("A completed migration for this source database already exists.")
     elif not target_empty:
         state = "blocked_target_not_empty"
         required_actions.append("Use an empty PostgreSQL target database or start an explicit conflict-aware import later.")
