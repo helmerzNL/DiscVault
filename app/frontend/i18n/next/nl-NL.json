@@ -501,6 +501,10 @@
   "personDetail.details": "Details",
   "personDetail.identifiers": "Identifiers",
   "personDetail.appearances": "Verschijningen",
+  "personDetail.collection": "Collectie",
+  "personDetail.digitalCollection": "Digitaal",
+  "personDetail.filmography": "Filmografie",
+  "personDetail.localCollection": "Collectiecredits",
   "personDetail.acting": "Acteren",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Nog geen biografie geimporteerd.",
@@ -513,5 +517,8 @@
   "personDetail.publicId": "Publieke ID",
   "personDetail.noIdentifiers": "Nog geen identifiers.",
   "personDetail.noActing": "Nog geen cast-credits in deze collectie.",
-  "personDetail.noCrew": "Nog geen crew-credits in deze collectie."
+  "personDetail.noCrew": "Nog geen crew-credits in deze collectie.",
+  "personDetail.noDigitalCredits": "Nog geen digitale collectielinks.",
+  "personDetail.noFilmography": "Nog geen externe filmografie geimporteerd.",
+  "personDetail.groupUnknown": "Overig"
 }

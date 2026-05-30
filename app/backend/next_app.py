@@ -4539,6 +4539,42 @@ def ui_preview_html(
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
+    .person-credit-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 0;
+    }
+    .person-credit-section {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+    .person-credit-group {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .person-credit-group + .person-credit-group {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .person-credit-group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .person-credit-group-head strong {
+      font-size: .92rem;
+    }
+    .person-credit-group-head span {
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 700;
+    }
     .art-option-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -5627,16 +5663,31 @@ def ui_preview_html(
           <div class="detail-card full">
             <div class="detail-card-head">
               <h3 data-next-i18n="personDetail.appearances">Appearances</h3>
-              <div class="detail-submenu" role="tablist" aria-label="Appearances" data-next-i18n-aria="personDetail.appearances">
-                <button type="button" class="active" data-detail-tab="personCredits" data-detail-panel="personCreditsActing" data-next-i18n="personDetail.acting">Acting</button>
-                <button type="button" data-detail-tab="personCredits" data-detail-panel="personCreditsCrew" data-next-i18n="personDetail.crew">Crew</button>
+              <div class="person-credit-controls">
+                <div class="detail-submenu" role="tablist" aria-label="Appearances" data-next-i18n-aria="personDetail.appearances">
+                  <button type="button" class="active" data-detail-tab="personCreditScope" data-detail-panel="personScopeCollection" data-next-i18n="personDetail.collection">Collection</button>
+                  <button type="button" data-detail-tab="personCreditScope" data-detail-panel="personScopeDigital" id="personDigitalScopeTab" data-next-i18n="personDetail.digitalCollection">Digital</button>
+                  <button type="button" data-detail-tab="personCreditScope" data-detail-panel="personScopeFilmography" id="personFilmographyScopeTab" data-next-i18n="personDetail.filmography">Filmography</button>
+                </div>
               </div>
             </div>
-            <div class="detail-subpanel" data-detail-panel-group="personCredits" id="personCreditsActing">
-              <div class="detail-grid" id="personDetailActing"></div>
+            <div class="detail-subpanel person-credit-section" data-detail-panel-group="personCreditScope" id="personScopeCollection">
+              <div class="detail-submenu" role="tablist" aria-label="Collection credits" data-next-i18n-aria="personDetail.localCollection">
+                <button type="button" class="active" data-detail-tab="personCollectionCredits" data-detail-panel="personCreditsActing" data-next-i18n="personDetail.acting">Acting</button>
+                <button type="button" data-detail-tab="personCollectionCredits" data-detail-panel="personCreditsCrew" data-next-i18n="personDetail.crew">Crew</button>
+              </div>
+              <div class="detail-subpanel" data-detail-panel-group="personCollectionCredits" id="personCreditsActing">
+                <div class="detail-grid" id="personDetailActing"></div>
+              </div>
+              <div class="detail-subpanel hidden" data-detail-panel-group="personCollectionCredits" id="personCreditsCrew">
+                <div id="personDetailCrew"></div>
+              </div>
             </div>
-            <div class="detail-subpanel hidden" data-detail-panel-group="personCredits" id="personCreditsCrew">
-              <div class="detail-grid" id="personDetailCrew"></div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="personCreditScope" id="personScopeDigital">
+              <div class="detail-grid" id="personDetailDigital"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="personCreditScope" id="personScopeFilmography">
+              <div class="detail-grid" id="personDetailFilmography"></div>
             </div>
           </div>
         </section>
@@ -5879,6 +5930,7 @@ def ui_preview_html(
     let activeContainerPayload = null;
     let activePersonId = "";
     let activePersonPayload = null;
+    let personReturnRoute = null;
     let currentStartup = {};
     let currentAuthStatus = {};
     let profileCredentials = [];
@@ -6666,22 +6718,56 @@ def ui_preview_html(
         </button>
       `;
     }
+    function isActingCredit(credit) {
+      return ["actor", "cast"].includes(String(credit?.credit_type || credit?.creditType || "").toLowerCase());
+    }
+    function groupPersonCreditsByJob(credits) {
+      const groups = new Map();
+      (credits || []).forEach((credit) => {
+        const label = credit.job || credit.credit_type || credit.creditType || tNext("personDetail.groupUnknown", "Other");
+        const key = String(label || "").toLowerCase();
+        if (!groups.has(key)) groups.set(key, {job: label, items: []});
+        groups.get(key).items.push(credit);
+      });
+      return Array.from(groups.values())
+        .map((group) => ({job: group.job, count: group.items.length, items: group.items}))
+        .sort((a, b) => String(a.job || "").localeCompare(String(b.job || ""), localeState.locale || undefined, {sensitivity: "base"}));
+    }
     function personCreditCardHtml(credit) {
       const movieId = credit.movie_id || credit.movieId || "";
       const title = credit.title || tNext("common.untitled", "Untitled");
       const poster = usableImage(credit.poster_url || credit.posterUrl || "");
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-      const role = [credit.character, credit.job, credit.credit_type].filter(Boolean).join(" / ");
-      const meta = [role, credit.year, credit.format].filter(Boolean).join(" / ");
-      const href = movieId ? `/movies/${encodeURIComponent(movieId)}` : "#";
+      const source = credit.source_name || credit.sourceName || credit.source || "";
+      const role = [credit.character, credit.job, credit.credit_type || credit.creditType].filter(Boolean).join(" / ");
+      const meta = [role, credit.year, credit.format, source].filter(Boolean).join(" / ");
+      const playbackUrl = String(credit.playback_url || credit.playbackUrl || "");
+      const href = movieId ? `/movies/${encodeURIComponent(movieId)}` : playbackUrl;
+      const openAttrs = movieId
+        ? `href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movieId)}"`
+        : (href.startsWith("http://") || href.startsWith("https://") ? `href="${escapeHtml(href)}" target="_blank" rel="noopener"` : "");
+      const tag = openAttrs ? "a" : "article";
       return `
-        <a class="person-credit-card" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movieId)}">
+        <${tag} class="person-credit-card" ${openAttrs}>
           <span class="person-credit-poster">${posterHtml}</span>
           <span class="person-credit-copy">
             <strong>${escapeHtml(title)}</strong>
             <span>${escapeHtml(meta || credit.barcode || "")}</span>
           </span>
-        </a>
+        </${tag}>
+      `;
+    }
+    function personCrewGroupHtml(group) {
+      const title = group.job || tNext("personDetail.groupUnknown", "Other");
+      const items = group.items || [];
+      return `
+        <section class="person-credit-group">
+          <div class="person-credit-group-head">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(String(group.count || items.length || 0))}</span>
+          </div>
+          <div class="detail-grid">${items.map(personCreditCardHtml).join("")}</div>
+        </section>
       `;
     }
     function activateDetailTab(group, panelId) {
@@ -7153,6 +7239,14 @@ def ui_preview_html(
       const person = detail.person || {};
       activePersonId = person.id || activePersonId || "";
       const name = person.name || tNext("common.untitled", "Untitled");
+      const collectionCredits = detail.collectionCredits || detail.credits || [];
+      const acting = detail.actingCredits || collectionCredits.filter(isActingCredit);
+      const crew = detail.crewCredits || collectionCredits.filter((credit) => !isActingCredit(credit));
+      const groupedCrew = detail.groupedCrew || groupPersonCreditsByJob(crew);
+      const digitalCredits = detail.digitalCredits || [];
+      const filmography = detail.filmography || [];
+      const counts = detail.counts || {};
+      const extendedPeople = !!preferences.show_extended_people_pages;
       const image = usableImage(person.profile_url || person.profileUrl || "");
       const avatarNode = document.getElementById("personDetailAvatar");
       if (avatarNode) {
@@ -7164,7 +7258,9 @@ def ui_preview_html(
         person.known_for,
         person.birth_date,
         person.death_date ? `${tNext("personDetail.died", "Died")} ${person.death_date}` : "",
-        (detail.credits || []).length ? `${(detail.credits || []).length} ${tNext("personDetail.credits", "credits")}` : ""
+        (counts.collection || collectionCredits.length) ? `${counts.collection || collectionCredits.length} ${tNext("personDetail.credits", "credits")}` : "",
+        extendedPeople && digitalCredits.length ? `${digitalCredits.length} ${tNext("personDetail.digitalCollection", "Digital").toLowerCase()}` : "",
+        extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : ""
       ]);
       document.getElementById("personDetailFields").innerHTML = detailFieldRows([
         [tNext("personDetail.knownFor", "Known for"), person.known_for],
@@ -7178,10 +7274,14 @@ def ui_preview_html(
         item.identifier
       ));
       document.getElementById("personDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noIdentifiers", "No identifiers yet."))}</div>`;
-      const acting = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
-      const crew = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
+      document.getElementById("personDigitalScopeTab")?.classList.toggle("hidden", !extendedPeople);
+      document.getElementById("personFilmographyScopeTab")?.classList.toggle("hidden", !extendedPeople);
+      activateDetailTab("personCreditScope", "personScopeCollection");
+      activateDetailTab("personCollectionCredits", "personCreditsActing");
       document.getElementById("personDetailActing").innerHTML = acting.map(personCreditCardHtml).join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noActing", "No acting credits in this collection yet."))}</div>`;
-      document.getElementById("personDetailCrew").innerHTML = crew.map(personCreditCardHtml).join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noCrew", "No crew credits in this collection yet."))}</div>`;
+      document.getElementById("personDetailCrew").innerHTML = groupedCrew.length ? groupedCrew.map(personCrewGroupHtml).join("") : `<div class="preview-empty">${escapeHtml(tNext("personDetail.noCrew", "No crew credits in this collection yet."))}</div>`;
+      document.getElementById("personDetailDigital").innerHTML = digitalCredits.map(personCreditCardHtml).join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noDigitalCredits", "No digital collection links yet."))}</div>`;
+      document.getElementById("personDetailFilmography").innerHTML = filmography.map(personCreditCardHtml).join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noFilmography", "No external filmography imported yet."))}</div>`;
       setPersonDetailMessage("");
     }
     function showPersonDetailLoading(personId) {
@@ -7195,14 +7295,17 @@ def ui_preview_html(
       document.getElementById("personDetailIdentifiers").innerHTML = "";
       document.getElementById("personDetailActing").innerHTML = "";
       document.getElementById("personDetailCrew").innerHTML = "";
+      document.getElementById("personDetailDigital").innerHTML = "";
+      document.getElementById("personDetailFilmography").innerHTML = "";
       setPersonDetailMessage("");
     }
-    async function openAppPersonDetail(personId, pushUrl = true) {
+    async function openAppPersonDetail(personId, pushUrl = true, returnRoute = null) {
       if (!personId) return;
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
       activeContainerPayload = null;
+      personReturnRoute = returnRoute || null;
       showPersonDetailLoading(personId);
       showPersonDetailPage();
       if (pushUrl && appMode) {
@@ -7219,6 +7322,12 @@ def ui_preview_html(
       }
     }
     function closeAppPersonDetail(pushUrl = true) {
+      const returnRoute = personReturnRoute;
+      personReturnRoute = null;
+      if (returnRoute?.view === "movie" && returnRoute.movieId) {
+        openAppMovieDetail(returnRoute.movieId, pushUrl);
+        return;
+      }
       showLibraryPage(false);
       activePersonId = "";
       activePersonPayload = null;
@@ -8455,7 +8564,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.addEventListener("click", (event) => {
         const person = event.target.closest("[data-open-person]");
         if (!person) return;
-        openAppPersonDetail(person.dataset.openPerson);
+        openAppPersonDetail(person.dataset.openPerson, true, {view: "movie", movieId: activeDetailMovieId});
       });
       document.getElementById("personDetailBackButton")?.addEventListener("click", () => closeAppPersonDetail());
       document.getElementById("personDetailPage")?.addEventListener("click", (event) => {
@@ -15223,17 +15332,308 @@ def person_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[d
         return [with_preview_media_urls(row) for row in cur.fetchall()]
 
 
+def person_credit_type_is_acting(credit: dict[str, Any]) -> bool:
+    return str(credit.get("credit_type") or credit.get("creditType") or "").lower() in {"actor", "cast"}
+
+
+def group_person_credits_by_job(credits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for credit in credits:
+        label = clean_text(credit.get("job")) or clean_text(credit.get("credit_type")) or "Other"
+        key = label.lower()
+        groups.setdefault(key, {"job": label, "count": 0, "items": []})
+        groups[key]["items"].append(credit)
+        groups[key]["count"] += 1
+    return sorted(groups.values(), key=lambda group: str(group.get("job") or "").lower())
+
+
+def person_digital_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[dict[str, Any]]:
+    if (
+        not table_exists(conn, "movie_credits")
+        or not table_exists(conn, "movies")
+        or not table_exists(conn, "digital_media_items")
+        or not table_exists(conn, "digital_media_sources")
+    ):
+        return []
+    media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+    media_select = (
+        """
+                poster_asset.id AS poster_asset_id,
+                poster_asset.storage_backend AS poster_asset_storage_backend,
+                poster_asset.storage_key AS poster_asset_storage_key,
+                poster_asset.source_url AS poster_asset_source_url,
+                backdrop_asset.id AS backdrop_asset_id,
+                backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
+                backdrop_asset.storage_key AS backdrop_asset_storage_key,
+                backdrop_asset.source_url AS backdrop_asset_source_url,
+        """
+        if media_join
+        else """
+                NULL AS poster_asset_id,
+                NULL AS poster_asset_storage_backend,
+                NULL AS poster_asset_storage_key,
+                NULL AS poster_asset_source_url,
+                NULL AS backdrop_asset_id,
+                NULL AS backdrop_asset_storage_backend,
+                NULL AS backdrop_asset_storage_key,
+                NULL AS backdrop_asset_source_url,
+        """
+    )
+    media_join_sql = (
+        """
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='poster'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) poster_asset ON true
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='backdrop'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) backdrop_asset ON true
+        """
+        if media_join
+        else ""
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            WITH ranked AS (
+                SELECT
+                    dmi.id AS digital_item_id,
+                    dmi.external_id,
+                    dmi.media_type,
+                    dmi.title AS digital_title,
+                    dmi.year AS digital_year,
+                    dmi.tmdb_id,
+                    dmi.imdb_id,
+                    dmi.playback_url,
+                    dmi.metadata AS digital_metadata,
+                    dmi.synced_at,
+                    dms.plugin_id,
+                    dms.name AS source_name,
+                    dms.source_type,
+                    mc.id,
+                    mc.movie_id,
+                    mc.credit_type,
+                    mc.character,
+                    mc.job,
+                    mc.sort_order,
+                    m.public_id AS movie_public_id,
+                    m.barcode,
+                    m.title,
+                    m.sort_title,
+                    m.original_title,
+                    m.year,
+                    m.release_date,
+                    m.format,
+                    m.edition,
+                    m.metadata->>'poster_url' AS poster_url,
+                    m.metadata->>'backdrop_url' AS backdrop_url,
+{media_select}
+                    ROW_NUMBER() OVER (
+                        PARTITION BY dms.id, dmi.matched_movie_id
+                        ORDER BY
+                            CASE
+                                WHEN dmi.playback_url IS NULL OR dmi.playback_url = '' THEN 1
+                                ELSE 0
+                            END,
+                            dmi.synced_at DESC,
+                            dmi.title,
+                            dmi.external_id
+                    ) AS source_rank
+                FROM movie_credits mc
+                JOIN movies m ON m.id = mc.movie_id
+                JOIN digital_media_items dmi ON dmi.matched_movie_id = m.id
+                JOIN digital_media_sources dms ON dms.id = dmi.source_id
+                {media_join_sql}
+                WHERE mc.person_id=%s
+            )
+            SELECT *
+            FROM ranked
+            WHERE source_rank = 1
+            ORDER BY source_name, lower(COALESCE(sort_title, title, digital_title)), sort_order
+            LIMIT %s
+            """,
+            (person_id, limit),
+        )
+        rows = []
+        for row in cur.fetchall():
+            data = with_preview_media_urls(row)
+            data["source"] = data.get("source_name")
+            rows.append(data)
+        return rows
+
+
+def person_filmography_entries_from_metadata(metadata: dict[str, Any] | None, *, limit: int = 240) -> list[dict[str, Any]]:
+    metadata = metadata if isinstance(metadata, dict) else {}
+
+    def add_entries(raw_items: Any, credit_type: str, result: list[dict[str, Any]], seen: set[tuple[str, str, str, str, str]]) -> None:
+        if not isinstance(raw_items, list):
+            return
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            media_type = (clean_text(raw.get("media_type") or raw.get("mediaType") or raw.get("type")) or "").lower()
+            if media_type and media_type not in {"movie", "film"}:
+                continue
+            title = clean_text(raw.get("title") or raw.get("name") or raw.get("original_title") or raw.get("originalTitle"))
+            if not title:
+                continue
+            tmdb_id = clean_text(raw.get("tmdb_id") or raw.get("tmdbId") or raw.get("id"))
+            release_date = clean_text(raw.get("release_date") or raw.get("releaseDate") or raw.get("first_air_date") or raw.get("firstAirDate"))
+            year = clean_text(raw.get("year")) or (release_date[:4] if release_date else "")
+            poster_url = first_usable_image(raw.get("poster_url"), raw.get("posterUrl"), raw.get("poster"))
+            poster_path = clean_text(raw.get("poster_path") or raw.get("posterPath"))
+            if not poster_url and poster_path:
+                poster_url = f"https://image.tmdb.org/t/p/w342{poster_path}" if poster_path.startswith("/") else server_usable_image(poster_path)
+            normalized_credit_type = clean_text(raw.get("credit_type") or raw.get("creditType") or credit_type) or credit_type
+            character = clean_text(raw.get("character")) or ""
+            job = clean_text(raw.get("job")) or ""
+            key = (tmdb_id or "", title.lower(), normalized_credit_type.lower(), character.lower(), job.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(
+                {
+                    "tmdb_id": tmdb_id,
+                    "title": title,
+                    "year": year,
+                    "release_date": release_date,
+                    "poster_url": poster_url,
+                    "character": character,
+                    "job": job,
+                    "credit_type": normalized_credit_type,
+                    "source_name": clean_text(raw.get("source") or raw.get("provider")) or "TMDb",
+                    "in_collection": False,
+                    "in_digital": False,
+                }
+            )
+            if len(result) >= limit:
+                return
+
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    filmography = metadata.get("filmography")
+    if isinstance(filmography, dict):
+        add_entries(filmography.get("cast"), "actor", result, seen)
+        add_entries(filmography.get("crew"), "crew", result, seen)
+    else:
+        add_entries(filmography, "movie", result, seen)
+    combined = metadata.get("combined_credits") or metadata.get("combinedCredits") or metadata.get("credits")
+    if isinstance(combined, dict):
+        add_entries(combined.get("cast"), "actor", result, seen)
+        add_entries(combined.get("crew"), "crew", result, seen)
+    add_entries(metadata.get("movie_credits") or metadata.get("movieCredits"), "movie", result, seen)
+    add_entries(metadata.get("known_for") or metadata.get("knownFor"), "movie", result, seen)
+    return result[:limit]
+
+
+def person_filmography_entities(conn, person_metadata: dict[str, Any] | None, *, limit: int = 240) -> list[dict[str, Any]]:
+    entries = person_filmography_entries_from_metadata(person_metadata, limit=limit)
+    tmdb_ids = sorted({str(entry.get("tmdb_id")) for entry in entries if entry.get("tmdb_id")})
+    if not entries or not tmdb_ids:
+        return entries
+
+    local_by_tmdb: dict[str, dict[str, Any]] = {}
+    if table_exists(conn, "movie_identifiers") and table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    mi.identifier AS tmdb_id,
+                    m.id AS movie_id,
+                    m.title,
+                    m.year,
+                    m.format,
+                    m.metadata->>'poster_url' AS poster_url
+                FROM movie_identifiers mi
+                JOIN movies m ON m.id = mi.movie_id
+                WHERE mi.provider_id='tmdb'
+                  AND mi.identifier = ANY(%s)
+                """,
+                (tmdb_ids,),
+            )
+            local_by_tmdb = {str(row["tmdb_id"]): row for row in cur.fetchall()}
+
+    digital_by_tmdb: dict[str, dict[str, Any]] = {}
+    if table_exists(conn, "digital_media_items") and table_exists(conn, "digital_media_sources"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (dmi.tmdb_id)
+                    dmi.tmdb_id,
+                    dmi.id AS digital_item_id,
+                    dmi.playback_url,
+                    dms.name AS source_name,
+                    dms.source_type
+                FROM digital_media_items dmi
+                JOIN digital_media_sources dms ON dms.id = dmi.source_id
+                WHERE dmi.tmdb_id = ANY(%s)
+                ORDER BY dmi.tmdb_id, dms.name, dmi.synced_at DESC
+                """,
+                (tmdb_ids,),
+            )
+            digital_by_tmdb = {str(row["tmdb_id"]): row for row in cur.fetchall()}
+
+    for entry in entries:
+        tmdb_id = str(entry.get("tmdb_id") or "")
+        local = local_by_tmdb.get(tmdb_id)
+        if local:
+            entry["movie_id"] = local.get("movie_id")
+            entry["in_collection"] = True
+            entry["format"] = local.get("format")
+            entry["poster_url"] = entry.get("poster_url") or local.get("poster_url")
+        digital = digital_by_tmdb.get(tmdb_id)
+        if digital:
+            entry["digital_item_id"] = digital.get("digital_item_id")
+            entry["playback_url"] = digital.get("playback_url")
+            entry["digital_source_name"] = digital.get("source_name")
+            entry["digital_source_type"] = digital.get("source_type")
+            entry["in_digital"] = True
+            entry["source_name"] = digital.get("source_name") or entry.get("source_name")
+    return entries
+
+
 def person_detail_entity(conn, person_id: UUID) -> dict[str, Any] | None:
     person = person_entity(conn, person_id)
     if not person:
         return None
     localizations = person_localization_entities(conn, person_id)
     person["biography"] = person_biography_value(localizations, person.get("metadata"))
+    collection_credits = person_credit_entities(conn, person_id)
+    acting_credits = [credit for credit in collection_credits if person_credit_type_is_acting(credit)]
+    crew_credits = [credit for credit in collection_credits if not person_credit_type_is_acting(credit)]
+    digital_credits = person_digital_credit_entities(conn, person_id)
+    filmography = person_filmography_entities(conn, person.get("metadata"))
     return {
         "person": person,
         "identifiers": person_identifier_entities(conn, person_id),
         "localizations": localizations,
-        "credits": person_credit_entities(conn, person_id),
+        "credits": collection_credits,
+        "collectionCredits": collection_credits,
+        "actingCredits": acting_credits,
+        "crewCredits": crew_credits,
+        "groupedCrew": group_person_credits_by_job(crew_credits),
+        "digitalCredits": digital_credits,
+        "filmography": filmography,
+        "counts": {
+            "collection": len(collection_credits),
+            "acting": len(acting_credits),
+            "crew": len(crew_credits),
+            "digital": len(digital_credits),
+            "filmography": len(filmography),
+        },
     }
 
 

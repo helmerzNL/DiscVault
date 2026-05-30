@@ -407,6 +407,10 @@
   "personDetail.details": "Detalles",
   "personDetail.identifiers": "Identificadores",
   "personDetail.appearances": "Apariciones",
+  "personDetail.collection": "Coleccion",
+  "personDetail.digitalCollection": "Digital",
+  "personDetail.filmography": "Filmografia",
+  "personDetail.localCollection": "Creditos de coleccion",
   "personDetail.acting": "Actuacion",
   "personDetail.crew": "Equipo",
   "personDetail.noBiography": "Todavia no se ha importado biografia.",
@@ -419,5 +423,8 @@
   "personDetail.publicId": "ID publico",
   "personDetail.noIdentifiers": "Todavia no hay identificadores.",
   "personDetail.noActing": "Todavia no hay creditos de actuacion en esta coleccion.",
-  "personDetail.noCrew": "Todavia no hay creditos de equipo en esta coleccion."
+  "personDetail.noCrew": "Todavia no hay creditos de equipo en esta coleccion.",
+  "personDetail.noDigitalCredits": "Todavia no hay enlaces de coleccion digital.",
+  "personDetail.noFilmography": "Todavia no se ha importado filmografia externa.",
+  "personDetail.groupUnknown": "Otros"
 }

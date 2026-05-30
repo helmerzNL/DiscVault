@@ -407,6 +407,10 @@
   "personDetail.details": "Detaljer",
   "personDetail.identifiers": "Identifierare",
   "personDetail.appearances": "Framtradanden",
+  "personDetail.collection": "Samling",
+  "personDetail.digitalCollection": "Digitalt",
+  "personDetail.filmography": "Filmografi",
+  "personDetail.localCollection": "Samlingscredits",
   "personDetail.acting": "Skadespel",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Ingen biografi importerad an.",
@@ -419,5 +423,8 @@
   "personDetail.publicId": "Publikt ID",
   "personDetail.noIdentifiers": "Inga identifierare an.",
   "personDetail.noActing": "Inga skadespelarcredits i den har samlingen an.",
-  "personDetail.noCrew": "Inga crew-credits i den har samlingen an."
+  "personDetail.noCrew": "Inga crew-credits i den har samlingen an.",
+  "personDetail.noDigitalCredits": "Inga digitala samlingslankar an.",
+  "personDetail.noFilmography": "Ingen extern filmografi importerad an.",
+  "personDetail.groupUnknown": "Ovrigt"
 }
