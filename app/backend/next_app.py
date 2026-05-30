@@ -149,6 +149,19 @@ NEXT_I18N_LOCALES: tuple[dict[str, str], ...] = (
     {"locale": "nb-NO", "legacy": "no", "nativeName": "Norsk", "englishName": "Norwegian"},
     {"locale": "fi-FI", "legacy": "fi", "nativeName": "Suomi", "englishName": "Finnish"},
 )
+NEXT_I18N_FLAGS: dict[str, str] = {
+    "nl-NL": "🇳🇱",
+    "en-US": "🇺🇸",
+    "fr-FR": "🇫🇷",
+    "de-DE": "🇩🇪",
+    "es-ES": "🇪🇸",
+    "pt-PT": "🇵🇹",
+    "it-IT": "🇮🇹",
+    "sv-SE": "🇸🇪",
+    "da-DK": "🇩🇰",
+    "nb-NO": "🇳🇴",
+    "fi-FI": "🇫🇮",
+}
 NEXT_I18N_ALIASES = {
     item["legacy"].lower(): item["locale"] for item in NEXT_I18N_LOCALES
 } | {
@@ -262,7 +275,14 @@ def next_frontend_dir() -> Path:
 
 
 def supported_next_locales() -> list[dict[str, str]]:
-    return [dict(item) for item in NEXT_I18N_LOCALES]
+    locales: list[dict[str, str]] = []
+    for item in NEXT_I18N_LOCALES:
+        locale = dict(item)
+        flag = NEXT_I18N_FLAGS.get(locale["locale"], "")
+        locale["flag"] = flag
+        locale["label"] = f"{flag} {locale['nativeName']} ({locale['locale']})".strip()
+        locales.append(locale)
+    return locales
 
 
 def normalize_next_locale(value: str | None) -> str:
@@ -3549,15 +3569,18 @@ def ui_preview_html(
     }
     select {
       padding: 0 12px;
-      max-width: 180px;
+      min-width: 170px;
+      max-width: 240px;
       color: var(--text);
       background-color: var(--bg-solid);
       color-scheme: light;
       appearance: auto;
+      font-weight: 650;
     }
     select option {
-      color: #17181c;
-      background-color: #ffffff;
+      color: #17181c !important;
+      background-color: #ffffff !important;
+      font-weight: 500;
     }
     html[data-theme="dark"] select {
       color: var(--text);
@@ -3565,8 +3588,8 @@ def ui_preview_html(
       color-scheme: dark;
     }
     html[data-theme="dark"] select option {
-      color: #f5f6f8;
-      background-color: #24262b;
+      color: #f5f6f8 !important;
+      background-color: #24262b !important;
     }
     .icon-button {
       min-height: 36px;
@@ -4807,9 +4830,15 @@ def ui_preview_html(
     function renderLanguageSelect() {
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect").forEach((select) => {
         select.innerHTML = localeState.locales.map((item) => (
-          `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+          `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(languageLabel(item))}</option>`
         )).join("");
+        select.value = localeState.locale;
       });
+    }
+    function languageLabel(item) {
+      const flag = item.flag ? `${item.flag} ` : "";
+      const name = item.nativeName || item.englishName || item.locale || "";
+      return item.label || `${flag}${name} (${item.locale || ""})`.trim();
     }
     function setTheme(preference) {
       const selected = preference || "system";
