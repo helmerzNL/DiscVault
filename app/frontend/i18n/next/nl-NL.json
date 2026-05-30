@@ -452,5 +452,18 @@
   "containerDetail.noArtwork": "Nog geen artwork-opties.",
   "containerDetail.remove": "Verwijderen",
   "containerDetail.removing": "Koppeling verwijderen...",
-  "containerDetail.removed": "Koppeling verwijderd."
+  "containerDetail.removed": "Koppeling verwijderd.",
+  "movieDetail.posters": "Posters",
+  "movieDetail.backdrops": "Backdrops",
+  "movieDetail.videos": "Video's",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Cast",
+  "movieDetail.crew": "Crew",
+  "movieDetail.noPosters": "Nog geen posteropties.",
+  "movieDetail.noBackdrops": "Nog geen backdropopties.",
+  "movieDetail.noVideos": "Nog geen video's geimporteerd.",
+  "movieDetail.noCast": "Nog geen cast geimporteerd.",
+  "movieDetail.noCrew": "Nog geen crew geimporteerd.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Video openen"
 }

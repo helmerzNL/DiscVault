@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "Ainda nao ha opcoes de imagem.",
   "containerDetail.remove": "Remover",
   "containerDetail.removing": "A remover ligacao...",
-  "containerDetail.removed": "Ligacao removida."
+  "containerDetail.removed": "Ligacao removida.",
+  "movieDetail.posters": "Posters",
+  "movieDetail.backdrops": "Backdrops",
+  "movieDetail.videos": "Videos",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Elenco",
+  "movieDetail.crew": "Equipa",
+  "movieDetail.noPosters": "Ainda nao ha opcoes de poster.",
+  "movieDetail.noBackdrops": "Ainda nao ha opcoes de backdrop.",
+  "movieDetail.noVideos": "Ainda nao foram importados videos.",
+  "movieDetail.noCast": "Ainda nao foi importado elenco.",
+  "movieDetail.noCrew": "Ainda nao foi importada equipa.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Abrir video"
 }

@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "Ingen artwork-alternativer enna.",
   "containerDetail.remove": "Fjern",
   "containerDetail.removing": "Fjerner lenke...",
-  "containerDetail.removed": "Lenke fjernet."
+  "containerDetail.removed": "Lenke fjernet.",
+  "movieDetail.posters": "Plakater",
+  "movieDetail.backdrops": "Backdrops",
+  "movieDetail.videos": "Videoer",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Medvirkende",
+  "movieDetail.crew": "Crew",
+  "movieDetail.noPosters": "Ingen plakatalternativer enna.",
+  "movieDetail.noBackdrops": "Ingen backdrop-alternativer enna.",
+  "movieDetail.noVideos": "Ingen videoer importert enna.",
+  "movieDetail.noCast": "Ingen medvirkende importert enna.",
+  "movieDetail.noCrew": "Ingen crew importert enna.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Aapne video"
 }

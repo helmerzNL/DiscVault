@@ -4367,6 +4367,9 @@ def ui_preview_html(
       grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
       gap: 10px;
     }
+    .art-option-grid.backdrops {
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    }
     .art-option {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -4419,6 +4422,26 @@ def ui_preview_html(
     }
     .detail-message.good {
       color: var(--green);
+    }
+    .video-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      padding: 12px;
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+      color: inherit;
+      text-decoration: none;
+    }
+    .video-card strong,
+    .video-card span {
+      overflow-wrap: anywhere;
+    }
+    .video-card span {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35;
     }
     .profile-hero {
       border: 1px solid var(--line);
@@ -5199,12 +5222,24 @@ def ui_preview_html(
             <div class="detail-grid" id="movieDetailRelationships"></div>
           </div>
           <div class="detail-card full">
-            <h3 data-next-i18n="movieDetail.artwork">Artwork</h3>
-            <div class="art-option-grid" id="movieDetailArtwork"></div>
+            <h3 data-next-i18n="movieDetail.posters">Posters</h3>
+            <div class="art-option-grid" id="movieDetailPosterArtwork"></div>
           </div>
           <div class="detail-card full">
-            <h3 data-next-i18n="movieDetail.castCrew">Cast & crew</h3>
-            <div class="detail-grid" id="movieDetailCredits"></div>
+            <h3 data-next-i18n="movieDetail.backdrops">Backdrops</h3>
+            <div class="art-option-grid backdrops" id="movieDetailBackdropArtwork"></div>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="movieDetail.videos">Videos</h3>
+            <div class="detail-grid" id="movieDetailVideos"></div>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="movieDetail.cast">Cast</h3>
+            <div class="detail-grid" id="movieDetailCast"></div>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="movieDetail.crew">Crew</h3>
+            <div class="detail-grid" id="movieDetailCrew"></div>
           </div>
         </section>
       </section>
@@ -6272,11 +6307,11 @@ def ui_preview_html(
         </div>
       `;
     }
-    function artworkOptionsHtml(detail, kind) {
+    function artworkOptionsHtml(detail, kind, emptyKey) {
       const assets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
       const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
       if (!assets.length) {
-        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noArtwork", "No artwork options yet."))}</div>`;
+        return `<div class="preview-empty">${escapeHtml(tNext(emptyKey || "movieDetail.noArtwork", "No artwork options yet."))}</div>`;
       }
       return assets.map((asset) => {
         const url = mediaAssetUrl(asset);
@@ -6289,6 +6324,40 @@ def ui_preview_html(
           </div>
         `;
       }).join("");
+    }
+    function movieVideoItems(movie, metadata) {
+      const videos = [];
+      const seen = new Set();
+      const addVideo = (item) => {
+        const url = usableVideoUrl(item?.url || item?.video_url || item?.href || "");
+        if (!url || seen.has(url)) return;
+        seen.add(url);
+        videos.push({
+          label: item?.label || item?.name || item?.title || item?.type || tNext("movieDetail.video", "Video"),
+          type: item?.type || "",
+          source: item?.source || item?.provider || "",
+          url
+        });
+      };
+      addVideo({label: tNext("movieDetail.trailer", "Trailer"), type: "Trailer", source: "metadata", url: movie.trailer_url || metadata.trailer_url});
+      const metadataVideos = Array.isArray(metadata.videos) ? metadata.videos : [];
+      metadataVideos.forEach(addVideo);
+      return videos;
+    }
+    function usableVideoUrl(value) {
+      const text = String(value || "");
+      return text.startsWith("http://") || text.startsWith("https://") ? text : "";
+    }
+    function videoCardsHtml(videos) {
+      if (!videos.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noVideos", "No videos imported yet."))}</div>`;
+      }
+      return videos.map((video) => `
+        <a class="video-card" href="${escapeHtml(video.url)}" target="_blank" rel="noopener noreferrer">
+          <strong>${escapeHtml(video.label || tNext("movieDetail.video", "Video"))}</strong>
+          <span>${escapeHtml([video.type, video.source].filter(Boolean).join(" / ") || tNext("movieDetail.openVideo", "Open video"))}</span>
+        </a>
+      `).join("");
     }
     function detailTagHtml(values) {
       return values.filter(Boolean).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
@@ -6381,17 +6450,22 @@ def ui_preview_html(
           openAppContainerDetail(decodeURIComponent(match[1]));
         });
       });
-      document.getElementById("movieDetailArtwork").innerHTML = `
-        ${artworkOptionsHtml(detail, "poster")}
-        ${artworkOptionsHtml(detail, "backdrop")}
-      `;
+      document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
+      document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.querySelectorAll("[data-app-primary]").forEach((button) => {
         button.addEventListener("click", () => setPrimaryArtwork(button.dataset.appPrimary, button.dataset.kind));
       });
-      document.getElementById("movieDetailCredits").innerHTML = (detail.credits || []).slice(0, 48).map((credit) => miniCard(
+      document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
+      const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
+      const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
+      document.getElementById("movieDetailCast").innerHTML = castCredits.slice(0, 64).map((credit) => miniCard(
         credit.name,
         credit.character || credit.job || credit.credit_type || ""
-      )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCredits", "No credits imported yet."))}</div>`;
+      )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCast", "No cast imported yet."))}</div>`;
+      document.getElementById("movieDetailCrew").innerHTML = crewCredits.slice(0, 64).map((credit) => miniCard(
+        credit.name,
+        credit.job || credit.character || credit.credit_type || ""
+      )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCrew", "No crew imported yet."))}</div>`;
       setMovieDetailMessage("");
     }
     function showMovieDetailLoading(movieId) {
@@ -6404,8 +6478,11 @@ def ui_preview_html(
       document.getElementById("movieDetailTechnical").innerHTML = "";
       document.getElementById("movieDetailLinks").innerHTML = "";
       document.getElementById("movieDetailRelationships").innerHTML = "";
-      document.getElementById("movieDetailArtwork").innerHTML = "";
-      document.getElementById("movieDetailCredits").innerHTML = "";
+      document.getElementById("movieDetailPosterArtwork").innerHTML = "";
+      document.getElementById("movieDetailBackdropArtwork").innerHTML = "";
+      document.getElementById("movieDetailVideos").innerHTML = "";
+      document.getElementById("movieDetailCast").innerHTML = "";
+      document.getElementById("movieDetailCrew").innerHTML = "";
       document.getElementById("movieDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
       document.getElementById("movieDetailBackdrop").src = "";
       setMovieDetailMessage("");

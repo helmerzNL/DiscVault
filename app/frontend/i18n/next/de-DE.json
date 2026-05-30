@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "No artwork options yet.",
   "containerDetail.remove": "Entfernen",
   "containerDetail.removing": "Verknuepfung entfernen...",
-  "containerDetail.removed": "Verknuepfung entfernt."
+  "containerDetail.removed": "Verknuepfung entfernt.",
+  "movieDetail.posters": "Poster",
+  "movieDetail.backdrops": "Backdrops",
+  "movieDetail.videos": "Videos",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Besetzung",
+  "movieDetail.crew": "Crew",
+  "movieDetail.noPosters": "Noch keine Posteroptionen.",
+  "movieDetail.noBackdrops": "Noch keine Backdrop-Optionen.",
+  "movieDetail.noVideos": "Noch keine Videos importiert.",
+  "movieDetail.noCast": "Noch keine Besetzung importiert.",
+  "movieDetail.noCrew": "Noch keine Crew importiert.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Video oeffnen"
 }

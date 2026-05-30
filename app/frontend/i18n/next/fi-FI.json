@@ -358,5 +358,18 @@
   "containerDetail.noArtwork": "Kuvavaihtoehtoja ei viela ole.",
   "containerDetail.remove": "Poista",
   "containerDetail.removing": "Poistetaan linkkia...",
-  "containerDetail.removed": "Linkki poistettu."
+  "containerDetail.removed": "Linkki poistettu.",
+  "movieDetail.posters": "Julisteet",
+  "movieDetail.backdrops": "Taustakuvat",
+  "movieDetail.videos": "Videot",
+  "movieDetail.video": "Video",
+  "movieDetail.cast": "Nayttelijat",
+  "movieDetail.crew": "Tekijat",
+  "movieDetail.noPosters": "Julistevaihtoehtoja ei viela ole.",
+  "movieDetail.noBackdrops": "Taustakuvavaihtoehtoja ei viela ole.",
+  "movieDetail.noVideos": "Videoita ei ole viela tuotu.",
+  "movieDetail.noCast": "Nayttelijoita ei ole viela tuotu.",
+  "movieDetail.noCrew": "Tekijoita ei ole viela tuotu.",
+  "movieDetail.trailer": "Trailer",
+  "movieDetail.openVideo": "Avaa video"
 }
