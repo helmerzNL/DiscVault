@@ -261,5 +261,6 @@
   "auth.inviteRequired": "Ange anv?ndarnamn och inbjudningskod.",
   "auth.inviteCreating": "Skapar konto...",
   "auth.inviteCreated": "Konto skapat. Du ?r inloggad.",
-  "auth.inviteFailed": "Registrering med inbjudan misslyckades."
+  "auth.inviteFailed": "Registrering med inbjudan misslyckades.",
+  "auth.usernameRequired": "Anv?ndarnamn kr?vs."
 }

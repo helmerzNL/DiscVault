@@ -261,5 +261,6 @@
   "auth.inviteRequired": "Benutzername und Einladungscode eingeben.",
   "auth.inviteCreating": "Konto wird erstellt...",
   "auth.inviteCreated": "Konto erstellt. Du bist angemeldet.",
-  "auth.inviteFailed": "Anmeldung per Einladung fehlgeschlagen."
+  "auth.inviteFailed": "Anmeldung per Einladung fehlgeschlagen.",
+  "auth.usernameRequired": "Benutzername ist erforderlich."
 }

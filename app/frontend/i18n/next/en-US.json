@@ -355,5 +355,6 @@
   "auth.inviteRequired": "Enter username and invite code.",
   "auth.inviteCreating": "Creating account...",
   "auth.inviteCreated": "Account created. You are signed in.",
-  "auth.inviteFailed": "Invite sign-up failed."
+  "auth.inviteFailed": "Invite sign-up failed.",
+  "auth.usernameRequired": "Username is required."
 }

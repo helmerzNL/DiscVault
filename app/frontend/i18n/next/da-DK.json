@@ -261,5 +261,6 @@
   "auth.inviteRequired": "Angiv brugernavn og invitationskode.",
   "auth.inviteCreating": "Opretter konto...",
   "auth.inviteCreated": "Konto oprettet. Du er logget ind.",
-  "auth.inviteFailed": "Tilmelding med invitation mislykkedes."
+  "auth.inviteFailed": "Tilmelding med invitation mislykkedes.",
+  "auth.usernameRequired": "Brugernavn er p?kr?vet."
 }

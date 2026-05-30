@@ -261,5 +261,6 @@
   "auth.inviteRequired": "Inserisci nome utente e codice invito.",
   "auth.inviteCreating": "Creazione account...",
   "auth.inviteCreated": "Account creato. Accesso effettuato.",
-  "auth.inviteFailed": "Registrazione con invito non riuscita."
+  "auth.inviteFailed": "Registrazione con invito non riuscita.",
+  "auth.usernameRequired": "Il nome utente ? obbligatorio."
 }

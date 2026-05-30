@@ -4860,7 +4860,7 @@ def ui_preview_html(
           <span data-next-i18n="auth.passkeyName">Passkey name</span>
           <input id="appInviteCredentialName" autocomplete="off" data-next-i18n-placeholder="auth.passkey">
         </label>
-        <label for="appInviteCode">
+        <label for="appInviteCode" id="appInviteCodeLabel">
           <span data-next-i18n="auth.inviteCode">Invite code</span>
           <input id="appInviteCode" autocomplete="one-time-code" inputmode="text">
         </label>
@@ -5199,6 +5199,7 @@ def ui_preview_html(
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
     let currentStartup = {};
+    let currentAuthStatus = {};
     let profileCredentials = [];
     let profileRecovery = {};
     const selectedMovieIds = new Set();
@@ -5275,6 +5276,27 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function renderAppRegistrationMode(auth) {
+      if (auth) currentAuthStatus = auth || {};
+      const publicRegistration = !!currentAuthStatus.registration_enabled;
+      const toggleButton = document.getElementById("appInviteToggleButton");
+      const codeLabel = document.getElementById("appInviteCodeLabel");
+      const codeInput = document.getElementById("appInviteCode");
+      const submitButton = document.getElementById("appInviteJoinButton");
+      if (toggleButton) {
+        const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
+        toggleButton.dataset.nextI18n = key;
+        toggleButton.textContent = tNext(key, publicRegistration ? "Create account" : "Invite-only access");
+      }
+      if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
+      if (codeInput) {
+        codeInput.required = !publicRegistration;
+        if (publicRegistration) codeInput.value = "";
+      }
+      if (submitButton) {
+        submitButton.textContent = tNext("auth.createAccount", "Create account");
+      }
+    }
     async function loginPasskey() {
       const button = document.getElementById("appLoginButton");
       if (button) button.disabled = true;
@@ -5338,8 +5360,13 @@ def ui_preview_html(
       const displayName = String(document.getElementById("appInviteDisplayName")?.value || "").trim() || username;
       const credentialName = String(document.getElementById("appInviteCredentialName")?.value || "").trim() || tNext("auth.passkey", "Passkey");
       const inviteCode = String(document.getElementById("appInviteCode")?.value || "").trim();
+      const publicRegistration = !!currentAuthStatus.registration_enabled;
       const button = document.getElementById("appInviteJoinButton");
-      if (!username || !inviteCode) {
+      if (!username) {
+        setLoginMessage(tNext("auth.usernameRequired", "Username is required."), "bad");
+        return;
+      }
+      if (!publicRegistration && !inviteCode) {
         setLoginMessage(tNext("auth.inviteRequired", "Enter username and invite code."), "bad");
         return;
       }
@@ -5449,6 +5476,7 @@ def ui_preview_html(
       document.querySelectorAll("[data-next-i18n-aria]").forEach((node) => {
         node.setAttribute("aria-label", tNext(node.dataset.nextI18nAria, node.getAttribute("aria-label") || ""));
       });
+      renderAppRegistrationMode();
     }
     async function loadLocale(locale) {
       const normalized = locale || "nl-NL";
@@ -6390,6 +6418,8 @@ def ui_preview_html(
       }
       setGate("auth");
       const auth = await apiJson("/api/next/auth/status", {headers: authHeaders()}).catch((error) => ({error: error.message}));
+      currentAuthStatus = auth || {};
+      renderAppRegistrationMode(auth);
       if (auth.auth_enabled && !auth.authenticated) {
         setLoginMessage(tNext("auth.loginDescription", "Log in with your Passkey"));
         setGate("auth");
