@@ -182,6 +182,9 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_auto_videos": True,
     "show_local_title": True,
     "show_extended_people_pages": False,
+    "collectors_mode": False,
+    "merge_editions_as_title": False,
+    "show_digital_badge_on_tiles": True,
     "default_media_group_id": "",
 }
 APP_PREFERENCE_ALIASES = {
@@ -193,6 +196,9 @@ APP_BOOLEAN_PREFERENCES = {
     "show_auto_videos",
     "show_local_title",
     "show_extended_people_pages",
+    "collectors_mode",
+    "merge_editions_as_title",
+    "show_digital_badge_on_tiles",
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
@@ -3578,6 +3584,30 @@ def ui_preview_html(
       border-radius: 5px;
       box-shadow: 5px -5px 0 -2px var(--bg-solid), 5px -5px 0 0 currentColor;
     }
+    .nav-symbol.import {
+      border: 2px solid currentColor;
+      border-radius: 5px;
+    }
+    .nav-symbol.import::before,
+    .nav-symbol.import::after {
+      content: "";
+      position: absolute;
+      background: currentColor;
+      border-radius: 2px;
+    }
+    .nav-symbol.import::before {
+      width: 8px;
+      height: 2px;
+      left: 5px;
+      top: 4px;
+      box-shadow: 0 5px 0 currentColor, 0 10px 0 currentColor;
+    }
+    .nav-symbol.import::after {
+      width: 2px;
+      height: 12px;
+      right: 4px;
+      top: 4px;
+    }
     .nav-symbol.groups::before,
     .nav-symbol.groups::after,
     .nav-symbol.admin::before,
@@ -4053,6 +4083,7 @@ def ui_preview_html(
       color: rgba(255,255,255,.68);
       box-shadow: var(--shadow-soft);
       border: 1px solid var(--line);
+      position: relative;
     }
     .preview-poster-art img {
       width: 100%;
@@ -4086,6 +4117,31 @@ def ui_preview_html(
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    .digital-source-badges {
+      position: absolute;
+      right: 7px;
+      bottom: 7px;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      z-index: 2;
+    }
+    .digital-source-badge {
+      min-width: 22px;
+      height: 22px;
+      padding: 0 6px;
+      border-radius: 999px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.46);
+      background: rgba(9,12,18,.58);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 850;
+      line-height: 1;
+      backdrop-filter: blur(12px) saturate(150%);
+      box-shadow: 0 6px 18px rgba(0,0,0,.24);
     }
     .side-stack {
       display: grid;
@@ -4149,7 +4205,8 @@ def ui_preview_html(
     .library-view.hidden,
     .movie-detail-page.hidden,
     .container-detail-page.hidden,
-    .profile-view.hidden {
+    .profile-view.hidden,
+    .import-view.hidden {
       display: none;
     }
     .movie-detail-page {
@@ -4161,6 +4218,128 @@ def ui_preview_html(
       display: grid;
       gap: 16px;
       min-width: 0;
+    }
+    .import-view {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .import-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 55%),
+        var(--bg-elevated);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(24px) saturate(160%);
+      padding: clamp(18px, 3vw, 26px);
+    }
+    .import-hero .eyebrow,
+    .profile-hero .eyebrow {
+      color: var(--muted);
+    }
+    .import-hero h2 {
+      margin: 6px 0 8px;
+      font-size: clamp(2rem, 4.5vw, 4.2rem);
+      line-height: .95;
+      letter-spacing: 0;
+    }
+    .import-hero p {
+      max-width: 70ch;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .import-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .import-stack {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .import-source-list,
+    .import-job-list,
+    .import-result-list {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .import-source-card,
+    .import-job-card,
+    .import-result-card {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 12px;
+      color: var(--text);
+      text-align: left;
+      min-width: 0;
+    }
+    button.import-source-card {
+      cursor: pointer;
+    }
+    .import-source-card.active {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      background: color-mix(in srgb, var(--accent) 13%, var(--bg-solid));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    .import-card-head,
+    .import-source-head,
+    .import-job-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+    .import-card-head h3 {
+      margin: 0;
+    }
+    .import-source-head strong,
+    .import-job-head strong {
+      overflow-wrap: anywhere;
+    }
+    .import-source-meta,
+    .import-job-meta,
+    .import-result-meta {
+      color: var(--muted);
+      font-size: .84rem;
+      line-height: 1.45;
+      margin-top: 6px;
+      overflow-wrap: anywhere;
+    }
+    .import-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .import-barcode-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .import-barcode-form input {
+      min-height: 40px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+      font-weight: 620;
     }
     .movie-detail-page .movie-detail-hero {
       min-height: min(520px, 56vh);
@@ -4725,6 +4904,18 @@ def ui_preview_html(
       gap: 16px;
       align-items: start;
     }
+    .app-admin-submenu {
+      width: max-content;
+      max-width: 100%;
+    }
+    .app-admin-panel {
+      display: none;
+      min-width: 0;
+    }
+    .app-admin-panel.active {
+      display: grid;
+      gap: 16px;
+    }
     .profile-card {
       display: grid;
       gap: 12px;
@@ -4872,6 +5063,62 @@ def ui_preview_html(
       gap: 6px;
       margin-top: 9px;
     }
+    .app-admin-plugin-section {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .app-admin-plugin-section + .app-admin-plugin-section {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .app-admin-plugin-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .app-admin-plugin-section-head h4 {
+      margin: 0;
+      font-size: .95rem;
+    }
+    .app-admin-plugin-meta,
+    .app-admin-plugin-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .app-admin-plugin-actions {
+      margin-top: 2px;
+    }
+    .app-admin-plugin-config {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .app-admin-plugin-config label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 650;
+    }
+    .app-admin-plugin-config input {
+      min-height: 38px;
+      min-width: 0;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: .9rem;
+      font-weight: 620;
+    }
     .tag {
       min-height: 24px;
       display: inline-flex;
@@ -4888,6 +5135,14 @@ def ui_preview_html(
     .tag.good {
       color: var(--green);
       border-color: color-mix(in srgb, var(--green) 34%, var(--line));
+    }
+    .tag.blue {
+      color: var(--accent);
+      border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+    }
+    .tag.bad {
+      color: var(--red);
+      border-color: color-mix(in srgb, var(--red) 34%, var(--line));
     }
     .inline-delete {
       width: 18px;
@@ -4971,6 +5226,9 @@ def ui_preview_html(
       font-size: .84rem;
       line-height: 1.4;
     }
+    .preference-row.disabled {
+      opacity: .58;
+    }
     .switch {
       width: 48px;
       height: 28px;
@@ -4993,6 +5251,60 @@ def ui_preview_html(
     .switch.on {
       justify-content: flex-end;
       background: var(--accent);
+    }
+    .switch:disabled {
+      cursor: not-allowed;
+      opacity: .66;
+    }
+    .container-manager-create {
+      grid-template-columns: minmax(220px, 1fr) auto;
+      align-items: end;
+    }
+    .container-manager-list {
+      display: grid;
+      gap: 10px;
+    }
+    .container-manager-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 12px;
+      min-width: 0;
+    }
+    .container-manager-meta {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .container-manager-meta strong {
+      overflow-wrap: anywhere;
+    }
+    .container-manager-meta span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .container-manager-actions {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) auto auto auto;
+      gap: 8px;
+      align-items: center;
+      min-width: min(520px, 100%);
+    }
+    .container-manager-actions input {
+      min-height: 36px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: .9rem;
+      font-weight: 650;
     }
     @media (max-width: 1060px) {
       .preview-shell { grid-template-columns: 1fr; }
@@ -5177,6 +5489,16 @@ def ui_preview_html(
         align-items: stretch;
         flex-direction: column;
       }
+      .import-hero {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .import-grid {
+        grid-template-columns: 1fr;
+      }
+      .import-barcode-form {
+        grid-template-columns: 1fr;
+      }
       .profile-hero-actions {
         justify-content: stretch;
       }
@@ -5192,6 +5514,17 @@ def ui_preview_html(
         gap: 3px;
       }
       .profile-passkey-actions {
+        grid-template-columns: 1fr;
+      }
+      .container-manager-create,
+      .container-manager-row,
+      .container-manager-actions {
+        grid-template-columns: 1fr;
+      }
+      .container-manager-actions {
+        min-width: 0;
+      }
+      .app-admin-plugin-config {
         grid-template-columns: 1fr;
       }
       .profile-passkey-actions .secondary-button {
@@ -5309,8 +5642,8 @@ def ui_preview_html(
       </div>
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="containers"><span data-next-i18n="collection.containers">Containers</span><small id="navContainerCount">""" + h(counts.get("containers", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="groups"><span data-next-i18n="migration.groups">Groups</span><small id="navGroupCount">""" + h(counts.get("mediaGroups", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="import"><span data-next-i18n="importCenter.title">Import</span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span data-next-i18n="uiPreview.profile">Profile</span><small id="navProfileRole">-</small></button>
         <button type="button" class="nav-item hidden" id="adminNavItem" data-app-route="admin"><span data-next-i18n="uiPreview.admin">Admin</span><small id="navAdminMode">-</small></button>
       </nav>
@@ -5413,31 +5746,6 @@ def ui_preview_html(
         <div class="side-stack">
           <div class="preview-panel">
             <div class="panel-head">
-              <h2 data-next-i18n="uiPreview.collections">Collections</h2>
-              <button type="button" class="secondary-button" id="createContainerButton" data-next-i18n="containerDetail.create">Create</button>
-            </div>
-            <form class="profile-form hidden" id="createContainerForm">
-              <label for="createContainerType">
-                <span data-next-i18n="containerDetail.fieldType">Type</span>
-                <select id="createContainerType">
-                  <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
-                  <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
-                  <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
-                </select>
-              </label>
-              <label for="createContainerTitle">
-                <span data-next-i18n="containerDetail.fieldTitle">Title</span>
-                <input id="createContainerTitle" maxlength="240" autocomplete="off">
-              </label>
-              <div class="profile-form-actions">
-                <button type="submit" class="secondary-button" data-next-i18n="containerDetail.createButton">Create container</button>
-                <span class="login-message" id="createContainerMessage"></span>
-              </div>
-            </form>
-            <div class="preview-collections">""" + container_cards + """</div>
-          </div>
-          <div class="preview-panel">
-            <div class="panel-head">
               <h2 data-next-i18n="uiPreview.activity">Activity</h2>
               <span data-next-i18n="uiPreview.live">Live</span>
             </div>
@@ -5449,6 +5757,63 @@ def ui_preview_html(
           </div>
         </div>
       </section>
+      </section>
+      <section class="import-view hidden" id="importView" aria-labelledby="importCenterTitle">
+        <section class="import-hero">
+          <div>
+            <span class="eyebrow" data-next-i18n="importCenter.eyebrow">Import Center</span>
+            <h2 id="importCenterTitle" data-next-i18n="importCenter.title">Import</h2>
+            <p data-next-i18n="importCenter.description">Bring collection data into DiscVault through plugin-backed import sources and barcode lookups.</p>
+          </div>
+          <div class="profile-hero-actions">
+            <button type="button" class="secondary-button" id="importCenterRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+            <button type="button" class="primary-button" id="importCenterStartButton" data-next-i18n="importCenter.start">Start import</button>
+          </div>
+        </section>
+        <section class="import-grid">
+          <div class="import-stack">
+            <div class="detail-card full">
+              <div class="import-card-head">
+                <div>
+                  <h3 data-next-i18n="importCenter.sources">Import sources</h3>
+                  <p class="import-source-meta" data-next-i18n="importCenter.sourcesHelp">Choose the plugin that should inspect and plan the import.</p>
+                </div>
+                <span class="tag" id="importCenterSourceCount">-</span>
+              </div>
+              <div class="import-source-list" id="importCenterSources"></div>
+            </div>
+            <div class="detail-card full">
+              <div class="import-card-head">
+                <div>
+                  <h3 data-next-i18n="importCenter.plan">Plan</h3>
+                  <p class="import-source-meta" data-next-i18n="importCenter.planHelp">Readiness, required actions and data counts for the selected source.</p>
+                </div>
+                <span class="tag" id="importCenterState">-</span>
+              </div>
+              <div class="profile-meta" id="importCenterPlan"></div>
+              <div class="import-counts" id="importCenterSourceCounts"></div>
+              <div class="login-message" id="importCenterMessage"></div>
+            </div>
+          </div>
+          <div class="import-stack">
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="importCenter.barcode">Barcode import</h3>
+              <p data-next-i18n="importCenter.barcodeHelp">Preview metadata candidates from the enabled metadata source plugins before adding a movie.</p>
+              <form class="import-barcode-form" id="importBarcodeForm">
+                <input id="importBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
+                <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Preview</button>
+              </form>
+              <div class="import-result-list" id="importBarcodeResults"></div>
+            </div>
+            <div class="detail-card profile-card">
+              <div class="import-card-head">
+                <h3 data-next-i18n="importCenter.jobs">Jobs</h3>
+                <span class="tag" id="importCenterJobCount">-</span>
+              </div>
+              <div class="import-job-list" id="importCenterJobs"></div>
+            </div>
+          </div>
+        </section>
       </section>
       <section class="movie-detail-page hidden" id="movieDetailPage" aria-labelledby="movieDetailTitle">
         <section class="movie-detail-hero" id="movieDetailHero">
@@ -5736,6 +6101,30 @@ def ui_preview_html(
             <div class="preference-list" id="profilePreferenceList"></div>
             <div class="login-message" id="preferencesMessage"></div>
           </div>
+          <div class="detail-card profile-card full">
+            <div class="detail-card-head">
+              <div>
+                <h3 data-next-i18n="containerManage.title">Collection structure</h3>
+                <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
+              </div>
+              <nav class="detail-submenu" aria-label="Collection structure" data-next-i18n-aria="containerManage.sections">
+                <button type="button" class="active" data-container-manager-type="box_set" data-next-i18n="containerManage.boxSets">Box-sets</button>
+                <button type="button" data-container-manager-type="vault" data-next-i18n="containerManage.vaults">Vaults</button>
+                <button type="button" data-container-manager-type="collection" data-next-i18n="containerManage.collections">Collections</button>
+              </nav>
+            </div>
+            <form class="profile-form container-manager-create" id="containerManagerCreateForm">
+              <label for="containerManagerTitle">
+                <span data-next-i18n="containerManage.titleLabel">Name</span>
+                <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
+              </label>
+              <div class="profile-form-actions">
+                <button type="submit" class="secondary-button" id="containerManagerCreateButton" data-next-i18n="containerManage.create">Create</button>
+                <span class="login-message" id="containerManagerMessage"></span>
+              </div>
+            </form>
+            <div class="container-manager-list" id="containerManagerList"></div>
+          </div>
           <div class="detail-card profile-card">
             <h3 data-next-i18n="profile.security">Security</h3>
             <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
@@ -5809,51 +6198,71 @@ def ui_preview_html(
             <button type="button" class="secondary-button" id="appAdminRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           </div>
         </section>
-        <section class="profile-grid">
-          <div class="detail-card profile-card">
-            <h3 data-next-i18n="appAdmin.security">Security</h3>
-            <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
-            <div class="profile-meta">
-              <div class="profile-meta-row">
-                <span data-next-i18n="appAdmin.currentMode">Current mode</span>
-                <strong id="appAdminRegistrationMode">-</strong>
+        <nav class="app-admin-submenu detail-submenu" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
+          <button type="button" class="active" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
+          <button type="button" data-app-admin-tab="users" data-next-i18n="appAdmin.tabUsers">Users</button>
+          <button type="button" data-app-admin-tab="groups" data-next-i18n="appAdmin.tabGroups">Groups</button>
+          <button type="button" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
+        </nav>
+        <section class="app-admin-panel active" data-app-admin-panel="access">
+          <section class="profile-grid">
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.security">Security</h3>
+              <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
+              <div class="profile-meta">
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.currentMode">Current mode</span>
+                  <strong id="appAdminRegistrationMode">-</strong>
+                </div>
+                <div class="profile-meta-row">
+                  <span data-next-i18n="profile.users">Users</span>
+                  <strong id="appAdminUserCount">-</strong>
+                </div>
+                <div class="profile-meta-row">
+                  <span data-next-i18n="profile.credentials">Passkeys</span>
+                  <strong id="appAdminCredentialCount">-</strong>
+                </div>
               </div>
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.users">Users</span>
-                <strong id="appAdminUserCount">-</strong>
+              <div class="profile-action-row">
+                <button type="button" class="secondary-button" data-app-admin-registration-mode="invite" data-next-i18n="appAdmin.inviteOnly">Invite-only login</button>
+                <button type="button" class="secondary-button" data-app-admin-registration-mode="public" data-next-i18n="appAdmin.publicRegistration">Public registration</button>
               </div>
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.credentials">Passkeys</span>
-                <strong id="appAdminCredentialCount">-</strong>
-              </div>
+              <div class="login-message" id="appAdminSecurityMessage"></div>
             </div>
-            <div class="profile-action-row">
-              <button type="button" class="secondary-button" data-app-admin-registration-mode="invite" data-next-i18n="appAdmin.inviteOnly">Invite-only login</button>
-              <button type="button" class="secondary-button" data-app-admin-registration-mode="public" data-next-i18n="appAdmin.publicRegistration">Public registration</button>
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.createInvite">Create invite</h3>
+              <p data-next-i18n="appAdmin.createInviteHelp">Generate a one-time invite code for a new user.</p>
+              <form class="profile-form" id="appAdminInviteForm">
+                <label for="appAdminInviteUsername">
+                  <span data-next-i18n="profile.username">Username</span>
+                  <input id="appAdminInviteUsername" autocomplete="off" maxlength="80">
+                </label>
+                <div class="profile-form-actions">
+                  <button type="submit" class="secondary-button" id="appAdminCreateInviteButton" data-next-i18n="appAdmin.createInviteButton">Create invite</button>
+                </div>
+              </form>
+              <div class="admin-code hidden" id="appAdminInviteCodeOutput"></div>
+              <div class="login-message" id="appAdminInviteMessage"></div>
             </div>
-            <div class="login-message" id="appAdminSecurityMessage"></div>
-          </div>
-          <div class="detail-card profile-card">
-            <h3 data-next-i18n="appAdmin.createInvite">Create invite</h3>
-            <p data-next-i18n="appAdmin.createInviteHelp">Generate a one-time invite code for a new user.</p>
-            <form class="profile-form" id="appAdminInviteForm">
-              <label for="appAdminInviteUsername">
-                <span data-next-i18n="profile.username">Username</span>
-                <input id="appAdminInviteUsername" autocomplete="off" maxlength="80">
-              </label>
-              <div class="profile-form-actions">
-                <button type="submit" class="secondary-button" id="appAdminCreateInviteButton" data-next-i18n="appAdmin.createInviteButton">Create invite</button>
-              </div>
-            </form>
-            <div class="admin-code hidden" id="appAdminInviteCodeOutput"></div>
-            <div class="login-message" id="appAdminInviteMessage"></div>
-          </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.activeInvites">Active invites</h3>
+              <div class="profile-passkey-list" id="appAdminInvitesList"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="profile.credentials">Passkeys</h3>
+              <div class="profile-passkey-list" id="appAdminCredentialsList"></div>
+            </div>
+          </section>
+        </section>
+        <section class="app-admin-panel" data-app-admin-panel="users">
           <div class="detail-card profile-card full">
             <h3 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h3>
             <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
             <div class="profile-passkey-list" id="appAdminUsersList"></div>
             <div class="login-message" id="appAdminUsersMessage"></div>
           </div>
+        </section>
+        <section class="app-admin-panel" data-app-admin-panel="groups">
           <div class="detail-card profile-card full">
             <h3 data-next-i18n="appAdmin.groups">Groups</h3>
             <p data-next-i18n="appAdmin.groupsHelp">Create media groups and manage which users are members.</p>
@@ -5869,14 +6278,40 @@ def ui_preview_html(
             <div class="profile-passkey-list" id="appAdminGroupsList"></div>
             <div class="login-message" id="appAdminGroupsMessage"></div>
           </div>
-          <div class="detail-card profile-card full">
-            <h3 data-next-i18n="appAdmin.activeInvites">Active invites</h3>
-            <div class="profile-passkey-list" id="appAdminInvitesList"></div>
-          </div>
-          <div class="detail-card profile-card full">
-            <h3 data-next-i18n="profile.credentials">Passkeys</h3>
-            <div class="profile-passkey-list" id="appAdminCredentialsList"></div>
-          </div>
+        </section>
+        <section class="app-admin-panel" data-app-admin-panel="plugins">
+          <section class="profile-grid">
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.plugins">Plugins</h3>
+              <p data-next-i18n="appAdmin.pluginsHelp">Manage metadata, receiver, digital media and import source plugins.</p>
+              <div class="profile-meta">
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.enabledPlugins">Enabled</span>
+                  <strong id="appAdminPluginEnabledCount">-</strong>
+                </div>
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.configNeeded">Configuration needed</span>
+                  <strong id="appAdminPluginConfigNeededCount">-</strong>
+                </div>
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.digitalSources">Digital sources</span>
+                  <strong id="appAdminDigitalSourceCount">-</strong>
+                </div>
+              </div>
+              <div class="profile-action-row">
+                <button type="button" class="secondary-button" id="appAdminRefreshPluginJobsButton" data-next-i18n="appAdmin.refreshPluginJobs">Refresh plugin jobs</button>
+              </div>
+              <div class="login-message" id="appAdminPluginsMessage"></div>
+            </div>
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.pluginJobs">Plugin jobs</h3>
+              <div class="profile-passkey-list" id="appAdminPluginJobsList"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
+              <div class="profile-passkey-list" id="appAdminPluginsList"></div>
+            </div>
+          </section>
         </section>
       </section>
     </main>
@@ -5899,13 +6334,13 @@ def ui_preview_html(
       <span class="nav-symbol library" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLibrary">Library</span>
     </button>
-    <button type="button" class="mobile-tab" data-app-route="containers">
-      <span class="nav-symbol containers" aria-hidden="true"></span>
-      <span data-next-i18n="collection.containers">Containers</span>
-    </button>
     <button type="button" class="mobile-tab" data-app-route="groups">
       <span class="nav-symbol groups" aria-hidden="true"></span>
       <span data-next-i18n="migration.groups">Groups</span>
+    </button>
+    <button type="button" class="mobile-tab" data-app-route="import">
+      <span class="nav-symbol import" aria-hidden="true"></span>
+      <span data-next-i18n="importCenter.title">Import</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="profile">
       <span class="nav-symbol profile" aria-hidden="true"></span>
@@ -5936,7 +6371,23 @@ def ui_preview_html(
     let currentAuthStatus = {};
     let profileCredentials = [];
     let profileRecovery = {};
-    let appAdmin = {credentials: [], groups: [], invites: [], roles: [], assignableRoles: [], users: []};
+    let containerManagerType = "box_set";
+    let appAdmin = {
+      activeTab: "access",
+      credentials: [],
+      digitalSources: [],
+      groups: [],
+      invites: [],
+      pluginConfigs: {},
+      pluginExecutions: {},
+      pluginHealth: {},
+      pluginJobs: [],
+      plugins: [],
+      roles: [],
+      assignableRoles: [],
+      users: []
+    };
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null};
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
     const localeState = {
@@ -6055,6 +6506,220 @@ def ui_preview_html(
       if (!node) return;
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
+    }
+    function setAppAdminTab(tab) {
+      appAdmin.activeTab = tab || "access";
+      document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
+        const active = button.dataset.appAdminTab === appAdmin.activeTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll("[data-app-admin-panel]").forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.appAdminPanel === appAdmin.activeTab);
+      });
+    }
+    function appAdminPluginHasCategory(plugin, category) {
+      return (plugin.categories || []).includes(category);
+    }
+    function appAdminPluginCategoryLabel(plugin) {
+      const values = plugin.categories || [];
+      if (!values.length) return tNext("appAdmin.pluginCategoryGeneric", "Plugin");
+      return values.map((category) => category.replaceAll("_", " ")).join(", ");
+    }
+    function appAdminPluginSchemaItems(plugin, kind) {
+      const schema = plugin.settingsSchema || {};
+      const values = schema[kind];
+      if (Array.isArray(values)) return values;
+      if (values && typeof values === "object") {
+        return Object.entries(values).map(([name, value]) => ({name, ...(value || {})}));
+      }
+      return [];
+    }
+    function appAdminPluginInputType(field) {
+      if (field.type === "password") return "password";
+      if (field.type === "url") return "url";
+      if (field.type === "number") return "number";
+      return "text";
+    }
+    function appAdminPluginConfigStatus(plugin, config) {
+      const secretNames = (config && config.secretNames) || [];
+      const settingKeys = Object.keys((config && config.settings) || {});
+      return [
+        plugin.requiresSecrets
+          ? tNext("appAdmin.secretCount", "{count} secrets").replace("{count}", String(secretNames.length))
+          : tNext("appAdmin.noSecretsRequired", "No secrets"),
+        tNext("appAdmin.settingCount", "{count} settings").replace("{count}", String(settingKeys.length))
+      ].join(" / ");
+    }
+    function appAdminJobStatusClass(status) {
+      if (status === "completed") return "good";
+      if (status === "pending" || status === "running") return "blue";
+      if (status === "failed") return "bad";
+      return "";
+    }
+    function appAdminPluginHealthDetails(pluginId) {
+      const health = appAdmin.pluginHealth[pluginId] || {};
+      if (!Object.keys(health).length) return "";
+      const runtime = health.runtime || {};
+      const nested = runtime.health || {};
+      const message = health.error || runtime.error || nested.message || nested.error || "";
+      const state = String(health.state || "unknown").replaceAll("_", " ");
+      return `
+        <div class="login-message ${health.state === "ok" || health.state === "available" ? "good" : health.state === "error" ? "bad" : ""}">
+          ${escapeHtml(tNext("appAdmin.health", "Health"))}: ${escapeHtml(state)}${message ? ` - ${escapeHtml(message)}` : ""}
+        </div>
+      `;
+    }
+    function renderAppAdminPluginConfig(plugin, config) {
+      const settings = appAdminPluginSchemaItems(plugin, "settings");
+      const secrets = appAdminPluginSchemaItems(plugin, "secrets");
+      if (!settings.length && !secrets.length) {
+        return `<div class="login-message">${escapeHtml(tNext("appAdmin.noConfigurationRequired", "No configuration required."))}</div>`;
+      }
+      const currentSettings = (config && config.settings) || {};
+      const secretNames = new Set((config && config.secretNames) || []);
+      const settingFields = settings.map((field) => {
+        const name = field.name || field.key;
+        const value = currentSettings[name];
+        const display = Array.isArray(value) ? value.join(", ") : (value || "");
+        return `
+          <label>
+            <span>${escapeHtml(field.label || name)} ${field.required ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.required", "Required"))}</span>` : ""}</span>
+            <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(appAdminPluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}" ${field.required ? "required" : ""}>
+          </label>
+        `;
+      }).join("");
+      const secretFields = secrets.map((field) => {
+        const name = field.name || field.key;
+        const configured = secretNames.has(name);
+        return `
+          <label>
+            <span>${escapeHtml(field.label || name)} ${configured ? `<span class="tag good">${escapeHtml(tNext("appAdmin.configured", "Configured"))}</span>` : `<span class="tag">${escapeHtml(tNext("appAdmin.missing", "Missing"))}</span>`}</span>
+            <input data-app-admin-plugin-secret="${escapeHtml(name)}" type="password" value="" placeholder="${configured ? escapeHtml(tNext("appAdmin.keepExistingSecret", "Configured - leave blank to keep")) : ""}" ${field.required && !configured ? "required" : ""}>
+          </label>
+        `;
+      }).join("");
+      return `
+        <div class="profile-passkey-meta">${escapeHtml(appAdminPluginConfigStatus(plugin, config))}</div>
+        <div class="app-admin-plugin-config">
+          ${settingFields}
+          ${secretFields}
+        </div>
+        <div class="app-admin-plugin-actions">
+          <button type="button" class="secondary-button" data-app-admin-plugin-save="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.savePluginConfig", "Save config"))}</button>
+        </div>
+      `;
+    }
+    function renderAppAdminPluginCard(plugin) {
+      const health = appAdmin.pluginHealth[plugin.id] || {};
+      const config = appAdmin.pluginConfigs[plugin.id] || {};
+      const execution = appAdmin.pluginExecutions[plugin.id] || null;
+      const latestJob = (appAdmin.pluginJobs || []).find((job) => (job.payload || {}).pluginId === plugin.id);
+      const digitalSource = (appAdmin.digitalSources || []).find((source) => source.plugin_id === plugin.id);
+      const runtime = plugin.runtime || {};
+      const capabilities = plugin.capabilities || [];
+      const needsConfig = plugin.requiresSecrets && !plugin.secretsConfigured;
+      const runtimeState = health.state || (runtime.loaded ? "loaded" : "not_loaded");
+      return `
+        <div class="profile-passkey">
+          <div class="profile-passkey-head">
+            <div>
+              <strong>${escapeHtml(plugin.name || plugin.id)}</strong>
+              <div class="profile-passkey-meta">${escapeHtml(plugin.id)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
+            </div>
+            <span class="tag ${plugin.enabled ? "good" : ""}">${escapeHtml(plugin.enabled ? tNext("appAdmin.enabled", "Enabled") : tNext("appAdmin.disabled", "Disabled"))}</span>
+          </div>
+          <div class="app-admin-plugin-meta">
+            <span class="tag ${runtime.loaded || health.state === "ok" ? "good" : ""}">${escapeHtml(tNext("appAdmin.runtime", "Runtime"))} ${escapeHtml(String(runtimeState).replaceAll("_", " "))}</span>
+            ${plugin.requiresSecrets ? `<span class="tag ${plugin.secretsConfigured ? "good" : ""}">${escapeHtml(tNext("appAdmin.secrets", "Secrets"))} ${escapeHtml(plugin.secretsConfigured ? tNext("appAdmin.configured", "Configured") : tNext("appAdmin.missing", "Missing"))}</span>` : `<span class="tag good">${escapeHtml(tNext("appAdmin.noSecretsRequired", "No secrets"))}</span>`}
+            ${plugin.settingsConfigured ? `<span class="tag good">${escapeHtml(tNext("appAdmin.settingsConfigured", "Settings configured"))}</span>` : `<span class="tag">${escapeHtml(tNext("appAdmin.defaultSettings", "Default settings"))}</span>`}
+            ${appAdminPluginHasCategory(plugin, "metadata_source") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.metadataSource", "Metadata source"))}</span>` : ""}
+            ${appAdminPluginHasCategory(plugin, "metadata_receiver") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.metadataReceiver", "Metadata receiver"))}</span>` : ""}
+            ${appAdminPluginHasCategory(plugin, "digital_media_source") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.digitalMediaSource", "Digital media source"))}</span>` : ""}
+            ${appAdminPluginHasCategory(plugin, "import_source") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.importSource", "Import source"))}</span>` : ""}
+            ${digitalSource ? `<span class="tag good">${escapeHtml(tNext("appAdmin.digitalItems", "{count} digital items").replace("{count}", String(digitalSource.itemCount || digitalSource.item_count || 0)))}</span>` : ""}
+            ${latestJob ? `<span class="tag ${appAdminJobStatusClass(latestJob.status)}">${escapeHtml(tNext("appAdmin.job", "Job"))} ${escapeHtml(latestJob.status || "-")}</span>` : ""}
+            ${execution ? `<span class="tag blue">${escapeHtml(execution.entrypoint || "execution")} ${escapeHtml(execution.state || execution.status || "-")}</span>` : ""}
+            ${needsConfig ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.configurationNeeded", "Configuration needed"))}</span>` : ""}
+            ${plugin.premiumFeatureKey ? `<span class="tag blue">${escapeHtml(plugin.premiumFeatureKey)}</span>` : ""}
+          </div>
+          <div class="app-admin-plugin-actions">
+            <button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>
+            <button type="button" class="secondary-button" data-app-admin-plugin-health="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.checkHealth", "Check health"))}</button>
+            ${capabilities.includes("discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
+            ${capabilities.includes("inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
+            ${capabilities.includes("sync_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
+          </div>
+          ${renderAppAdminPluginConfig(plugin, config)}
+          ${appAdminPluginHealthDetails(plugin.id)}
+        </div>
+      `;
+    }
+    function renderAppAdminPluginSection(title, plugins) {
+      if (!plugins.length) return "";
+      return `
+        <div class="app-admin-plugin-section">
+          <div class="app-admin-plugin-section-head">
+            <h4>${escapeHtml(title)}</h4>
+            <span class="profile-passkey-meta">${escapeHtml(String(plugins.length))}</span>
+          </div>
+          ${plugins.map(renderAppAdminPluginCard).join("")}
+        </div>
+      `;
+    }
+    function renderAppAdminPluginJobs() {
+      const node = document.getElementById("appAdminPluginJobsList");
+      if (!node) return;
+      const jobs = appAdmin.pluginJobs || [];
+      node.innerHTML = jobs.length ? jobs.map((job) => {
+        const result = job.result || {};
+        const persistence = result.persistence || {};
+        const pluginId = (job.payload || {}).pluginId || result.pluginId || "-";
+        return `
+          <div class="profile-passkey">
+            <div class="profile-passkey-head">
+              <strong>${escapeHtml(pluginId)}</strong>
+              <span class="tag ${appAdminJobStatusClass(job.status)}">${escapeHtml(job.status || "-")}</span>
+            </div>
+            <div class="profile-passkey-meta">
+              ${escapeHtml(job.jobType || "plugin.execute")} &middot;
+              ${escapeHtml((job.createdAt || "").slice(0, 19))}
+              ${persistence.items != null ? ` &middot; ${escapeHtml(tNext("appAdmin.digitalItems", "{count} digital items").replace("{count}", String(persistence.items)))}` : ""}
+            </div>
+            ${job.error ? `<div class="login-message bad">${escapeHtml(job.error)}</div>` : ""}
+          </div>
+        `;
+      }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPluginJobs", "No plugin jobs yet."))}</div>`;
+    }
+    function renderAppAdminPlugins() {
+      const list = document.getElementById("appAdminPluginsList");
+      const plugins = appAdmin.plugins || [];
+      const enabled = plugins.filter((plugin) => plugin.enabled).length;
+      const configNeeded = plugins.filter((plugin) => plugin.requiresSecrets && !plugin.secretsConfigured).length;
+      const digitalSources = appAdmin.digitalSources || [];
+      const enabledNode = document.getElementById("appAdminPluginEnabledCount");
+      const configNode = document.getElementById("appAdminPluginConfigNeededCount");
+      const digitalNode = document.getElementById("appAdminDigitalSourceCount");
+      if (enabledNode) enabledNode.textContent = `${enabled}/${plugins.length}`;
+      if (configNode) configNode.textContent = String(configNeeded);
+      if (digitalNode) digitalNode.textContent = String(digitalSources.length);
+      renderAppAdminPluginJobs();
+      if (!list) return;
+      if (!plugins.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
+        return;
+      }
+      const metadataPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source") || appAdminPluginHasCategory(plugin, "metadata_receiver"));
+      const digitalPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "digital_media_source"));
+      const importPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source"));
+      const shown = new Set([...metadataPlugins, ...digitalPlugins, ...importPlugins].map((plugin) => plugin.id));
+      const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
+      list.innerHTML = [
+        renderAppAdminPluginSection(tNext("appAdmin.metadataPlugins", "Metadata plugins"), metadataPlugins),
+        renderAppAdminPluginSection(tNext("appAdmin.digitalMediaSources", "Digital media sources"), digitalPlugins),
+        renderAppAdminPluginSection(tNext("appAdmin.importSources", "Import sources"), importPlugins),
+        renderAppAdminPluginSection(tNext("appAdmin.otherPlugins", "Other plugins"), otherPlugins)
+      ].filter(Boolean).join("");
     }
     function appAdminRoleLabel(roleKey) {
       const role = (appAdmin.roles || []).find((item) => item.key === roleKey) || {};
@@ -6204,18 +6869,23 @@ def ui_preview_html(
           </div>
         `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPasskeys", "No passkeys found."))}</div>`;
       }
+      renderAppAdminPlugins();
+      setAppAdminTab(appAdmin.activeTab || "access");
       renderAppAdminVisibility();
     }
     async function loadAppAdmin() {
       if (!isNativeAdminUser()) return;
       setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loading", "Loading admin data..."));
       try {
-        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload] = await Promise.all([
+        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, pluginJobsPayload] = await Promise.all([
           authApiJson("/api/next/auth/users"),
           authApiJson("/api/next/auth/credentials"),
           authApiJson("/api/next/auth/invite"),
           authApiJson("/api/next/auth/rbac"),
-          authApiJson("/api/next/media-groups?limit=500").catch(() => ({groups: []}))
+          authApiJson("/api/next/media-groups?limit=500").catch(() => ({groups: []})),
+          authApiJson("/api/next/plugins/registry").catch((error) => ({plugins: [], error: error.message || String(error)})),
+          authApiJson("/api/next/digital-sources").catch(() => ({items: []})),
+          authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []}))
         ]);
         appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
@@ -6223,9 +6893,23 @@ def ui_preview_html(
         appAdmin.roles = rbacPayload.roles || usersPayload.roles || [];
         appAdmin.assignableRoles = rbacPayload.assignableRoles || usersPayload.roles || [];
         appAdmin.groups = groupsPayload.groups || [];
+        appAdmin.plugins = pluginsPayload.plugins || [];
+        appAdmin.digitalSources = digitalSourcesPayload.items || [];
+        appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
+        const configPayloads = await Promise.all(appAdmin.plugins.map((plugin) =>
+          authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
+            .catch(() => ({plugin, config: {}}))
+        ));
+        appAdmin.pluginConfigs = {};
+        configPayloads.forEach((payload) => {
+          if (payload.plugin && payload.plugin.id) {
+            appAdmin.pluginConfigs[payload.plugin.id] = payload.config || {};
+          }
+        });
         appAdmin.usersCount = appAdmin.users.length || currentAuthStatus.user_count;
         renderAppAdmin();
         setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loaded", "Admin data loaded."), "good");
+        setAppAdminMessage("appAdminPluginsMessage", pluginsPayload.error || "", pluginsPayload.error ? "bad" : "");
       } catch (error) {
         setAppAdminMessage("appAdminSecurityMessage", error.message || String(error), "bad");
       }
@@ -6358,6 +7042,149 @@ def ui_preview_html(
         setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.memberRemoved", "Member removed."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminGroupsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function setAppAdminPluginEnabled(pluginId, enabled) {
+      if (!pluginId) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.savingPlugin", "Saving plugin..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({enabled})
+        });
+        appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        renderAppAdminPlugins();
+        setAppAdminMessage("appAdminPluginsMessage", enabled ? tNext("appAdmin.pluginEnabled", "Plugin enabled.") : tNext("appAdmin.pluginDisabled", "Plugin disabled."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function checkAppAdminPluginHealth(pluginId) {
+      if (!pluginId) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.checkingHealth", "Checking plugin health..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/health`);
+        appAdmin.pluginHealth[pluginId] = payload.health || {};
+        renderAppAdminPlugins();
+        const state = (payload.health && payload.health.state) || "unknown";
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.healthLoaded", "Plugin health loaded: {state}.").replace("{state}", state), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    function coerceAppAdminPluginValue(value, type) {
+      const trimmed = String(value || "").trim();
+      if (type === "array") return trimmed ? trimmed.split(",").map((item) => item.trim()).filter(Boolean) : [];
+      if (type === "number") return trimmed ? Number(trimmed) : null;
+      if (type === "boolean") return ["1", "true", "yes", "on"].includes(trimmed.toLowerCase());
+      return trimmed;
+    }
+    async function saveAppAdminPluginConfig(pluginId, row) {
+      if (!pluginId || !row) return;
+      const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) => !String(input.value || "").trim());
+      if (missingRequired.length) {
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.fillRequiredPluginFields", "Fill the required plugin fields first."), "bad");
+        return;
+      }
+      const settings = {};
+      const secrets = {};
+      row.querySelectorAll("[data-app-admin-plugin-setting]").forEach((input) => {
+        settings[input.dataset.appAdminPluginSetting] = coerceAppAdminPluginValue(input.value, input.dataset.valueType || "text");
+      });
+      row.querySelectorAll("[data-app-admin-plugin-secret]").forEach((input) => {
+        if (input.value) secrets[input.dataset.appAdminPluginSecret] = input.value;
+      });
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.savingPluginConfig", "Saving plugin configuration..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/config`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({settings, secrets})
+        });
+        appAdmin.pluginConfigs[pluginId] = payload.config || {};
+        if (payload.plugin) {
+          appAdmin.plugins = appAdmin.plugins.map((plugin) => plugin.id === pluginId ? payload.plugin : plugin);
+        }
+        renderAppAdminPlugins();
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginConfigSaved", "Plugin configuration saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function executeAppAdminPlugin(pluginId, entrypoint) {
+      if (!pluginId || !entrypoint) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.executingPlugin", "Executing plugin..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/execute`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({entrypoint, payload: {}})
+        });
+        appAdmin.pluginExecutions[pluginId] = {entrypoint, ...((payload && payload.execution) || {})};
+        renderAppAdminPlugins();
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginExecuted", "Plugin execution completed."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    function upsertAppAdminPluginJob(job) {
+      if (!job || !job.id) return;
+      const rest = (appAdmin.pluginJobs || []).filter((item) => item.id !== job.id);
+      appAdmin.pluginJobs = [job, ...rest].slice(0, 10);
+      renderAppAdminPlugins();
+    }
+    async function refreshAppAdminPluginJobs() {
+      try {
+        const payload = await authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10");
+        appAdmin.pluginJobs = payload.jobs || [];
+        renderAppAdminPlugins();
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginJobsLoaded", "Plugin jobs loaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function refreshAppAdminDigitalSources() {
+      const payload = await authApiJson("/api/next/digital-sources").catch(() => ({items: []}));
+      appAdmin.digitalSources = payload.items || [];
+      renderAppAdminPlugins();
+    }
+    async function pollAppAdminPluginJob(jobId, pluginId) {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 4 ? 1000 : 2000));
+        const payload = await authApiJson(`/api/next/jobs/${encodeURIComponent(jobId)}`);
+        const job = payload.job || {};
+        upsertAppAdminPluginJob(job);
+        if (job.status === "completed") {
+          await refreshAppAdminDigitalSources();
+          setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginJobCompleted", "Plugin job completed."), "good");
+          return job;
+        }
+        if (job.status === "failed") {
+          setAppAdminMessage("appAdminPluginsMessage", job.error || tNext("appAdmin.pluginJobFailed", "Plugin job failed."), "bad");
+          return job;
+        }
+      }
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginJobStillRunning", "Plugin job is still running."), "good");
+    }
+    async function queueAppAdminPluginJob(pluginId, entrypoint) {
+      if (!pluginId || !entrypoint) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.queueingPluginJob", "Queueing plugin job..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/jobs`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({entrypoint, payload: {}})
+        });
+        if (payload.job) upsertAppAdminPluginJob(payload.job);
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginJobQueued", "Plugin job queued."), "good");
+        if (payload.job && payload.job.id) {
+          pollAppAdminPluginJob(payload.job.id, pluginId).catch((error) => {
+            setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+          });
+        }
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
     }
     async function loginPasskey() {
@@ -6634,6 +7461,20 @@ def ui_preview_html(
       const haystack = [movie.title, movie.original_title, movie.year, movie.format, movie.barcode, groups].join(" ").toLowerCase();
       return haystack.includes(query);
     }
+    function digitalSourceBadgeHtml(movie) {
+      if (preferences.show_digital_badge_on_tiles === false) return "";
+      const sourceRows = Array.isArray(movie.digital_sources) ? movie.digital_sources : [];
+      const names = sourceRows.map((source) => (
+        source.source_name || source.name || source.plugin_id || source.source || ""
+      )).filter(Boolean);
+      if (!names.length && !Number(movie.digital_count || 0)) return "";
+      const uniqueNames = [...new Set(names.length ? names : [tNext("uiPreview.digitalItems", "Digital links")])].slice(0, 3);
+      return `<span class="digital-source-badges" aria-label="${escapeHtml(tNext("preferences.showDigitalBadgeOnTiles", "Show Plex/Jellyfin badge on movie tiles"))}">` + uniqueNames.map((name) => {
+        const lower = String(name).toLowerCase();
+        const shortName = lower.includes("jellyfin") ? "J" : lower.includes("plex") ? "P" : String(name).slice(0, 1).toUpperCase();
+        return `<span class="digital-source-badge" title="${escapeHtml(name)}">${escapeHtml(shortName || "D")}</span>`;
+      }).join("") + `</span>`;
+    }
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -6641,7 +7482,7 @@ def ui_preview_html(
       const selected = index === 0 ? " selected" : "";
       return `
         <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
-          <span class="preview-poster-art">${posterHtml}</span>
+          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
         </button>
@@ -7534,6 +8375,248 @@ def ui_preview_html(
         setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
+    function setImportCenterMessage(message, tone) {
+      const node = document.getElementById("importCenterMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function importSourceId(source) {
+      return String((source || {}).pluginId || (source || {}).id || "");
+    }
+    function selectedImportSource(report) {
+      const sources = (report && report.importSources) || [];
+      const selectedId = importCenter.selectedSourceId || importSourceId(report?.source || {});
+      return sources.find((source) => importSourceId(source) === selectedId) || report?.source || sources[0] || {};
+    }
+    function importCountChips(counts, maxItems = 8) {
+      const entries = Object.entries(counts || {})
+        .filter(([, value]) => value !== null && value !== undefined && String(value) !== "")
+        .slice(0, maxItems);
+      if (!entries.length) return "";
+      return entries.map(([key, value]) => `<span class="tag">${escapeHtml(key)} ${escapeHtml(formatNumber(value))}</span>`).join("");
+    }
+    function importStateLabel(state) {
+      const key = String(state || "unknown");
+      return tNext(`importCenter.state.${key}`, key.replace(/_/g, " "));
+    }
+    function renderImportSources() {
+      const report = importCenter.report || {};
+      const sources = report.importSources || [];
+      const list = document.getElementById("importCenterSources");
+      const count = document.getElementById("importCenterSourceCount");
+      if (count) count.textContent = `${sources.length || 0}`;
+      if (!list) return;
+      if (!sources.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noSources", "No import source plugins are enabled."))}</div>`;
+        return;
+      }
+      const selectedId = importSourceId(selectedImportSource(report));
+      list.innerHTML = sources.map((source) => {
+        const sourceId = importSourceId(source);
+        const active = sourceId === selectedId;
+        const ready = source.found && source.readable;
+        const statusLabel = ready ? tNext("importCenter.ready", "Ready") : (source.status || source.runtimeState || "-");
+        return `
+          <button type="button" class="import-source-card ${active ? "active" : ""}" data-import-source="${escapeHtml(sourceId)}">
+            <div class="import-source-head">
+              <strong>${escapeHtml(source.pluginName || sourceId || tNext("importCenter.source", "Source"))}</strong>
+              <span class="tag ${ready ? "good" : ""}">${escapeHtml(statusLabel)}</span>
+            </div>
+            <div class="import-source-meta">
+              ${escapeHtml(source.sourceKind || source.mediaMigrationMode || "-")}
+              &middot;
+              ${escapeHtml(source.sqliteDb || source.dataDir || "-")}
+            </div>
+            <div class="import-counts">${importCountChips(source.sourceCounts || source.counts || {}, 6)}</div>
+          </button>
+        `;
+      }).join("");
+    }
+    function renderImportPlan() {
+      const report = importCenter.report || {};
+      const source = selectedImportSource(report);
+      const plan = document.getElementById("importCenterPlan");
+      const sourceCounts = document.getElementById("importCenterSourceCounts");
+      const state = document.getElementById("importCenterState");
+      const navState = document.getElementById("navImportState");
+      const startButton = document.getElementById("importCenterStartButton");
+      const stateText = importStateLabel(report.state || source.status || "unknown");
+      if (state) {
+        state.textContent = stateText;
+        state.className = `tag ${report.canStart ? "good" : ""}`.trim();
+      }
+      if (navState) navState.textContent = report.canStart ? tNext("importCenter.ready", "Ready") : stateText;
+      if (startButton) startButton.disabled = !report.canStart || !importSourceId(source);
+      if (sourceCounts) sourceCounts.innerHTML = importCountChips(source.sourceCounts || source.counts || {}, 12);
+      if (!plan) return;
+      const required = report.requiredActions || [];
+      const warnings = (report.summary && report.summary.warnings) || report.warnings || [];
+      const targetCounts = (report.target && report.target.counts) || {};
+      plan.innerHTML = `
+        <div class="profile-meta-row">
+          <span>${escapeHtml(tNext("importCenter.selected", "Selected"))}</span>
+          <strong>${escapeHtml(source.pluginName || source.pluginId || "-")}</strong>
+        </div>
+        <div class="profile-meta-row">
+          <span>${escapeHtml(tNext("importCenter.source", "Source"))}</span>
+          <strong>${escapeHtml(source.sqliteDb || source.dataDir || "-")}</strong>
+        </div>
+        <div class="profile-meta-row">
+          <span>${escapeHtml(tNext("importCenter.target", "Target"))}</span>
+          <strong>${escapeHtml((report.target && report.target.empty) ? tNext("importCenter.empty", "Empty") : tNext("importCenter.notEmpty", "Not empty"))}</strong>
+        </div>
+        <div class="profile-meta-row">
+          <span>${escapeHtml(tNext("importCenter.requiredActions", "Required actions"))}</span>
+          <strong>${escapeHtml(required.length ? required.join(" ") : tNext("importCenter.none", "None"))}</strong>
+        </div>
+        <div class="profile-meta-row">
+          <span>${escapeHtml(tNext("importCenter.warnings", "Warnings"))}</span>
+          <strong>${escapeHtml(warnings.length ? warnings.join(" ") : tNext("importCenter.none", "None"))}</strong>
+        </div>
+        <div class="profile-meta-row">
+          <span>${escapeHtml(tNext("importCenter.targetCounts", "Target counts"))}</span>
+          <strong>${escapeHtml(Object.keys(targetCounts).length ? Object.entries(targetCounts).slice(0, 4).map(([key, value]) => `${key}: ${value}`).join(", ") : "-")}</strong>
+        </div>
+      `;
+    }
+    function renderImportJobs() {
+      const list = document.getElementById("importCenterJobs");
+      const count = document.getElementById("importCenterJobCount");
+      const jobs = importCenter.jobs || [];
+      if (count) count.textContent = `${jobs.length || 0}`;
+      if (!list) return;
+      if (!jobs.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noJobs", "No import jobs yet."))}</div>`;
+        return;
+      }
+      list.innerHTML = jobs.map((job) => {
+        const result = job.result || {};
+        const summary = result.summary || result.result || {};
+        const counters = (summary && summary.counters) || (result.result && result.result.applied) || {};
+        return `
+          <div class="import-job-card">
+            <div class="import-job-head">
+              <strong>${escapeHtml(job.jobType || job.job_type || "import")}</strong>
+              <span class="tag ${job.status === "completed" ? "good" : ""}">${escapeHtml(job.status || "-")}</span>
+            </div>
+            <div class="import-job-meta">
+              ${escapeHtml(shortDateTime(job.createdAt || job.created_at))}
+              ${job.finishedAt || job.finished_at ? `&middot; ${escapeHtml(shortDateTime(job.finishedAt || job.finished_at))}` : ""}
+              ${job.error ? `&middot; ${escapeHtml(job.error)}` : ""}
+            </div>
+            <div class="import-counts">${importCountChips(counters || {}, 5)}</div>
+          </div>
+        `;
+      }).join("");
+    }
+    function renderBarcodeLookup() {
+      const list = document.getElementById("importBarcodeResults");
+      if (!list) return;
+      const payload = importCenter.barcodeLookup;
+      if (!payload) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodePreview", "Enter a barcode to preview plugin results."))}</div>`;
+        return;
+      }
+      const metadata = payload.metadata || payload;
+      const results = metadata.results || metadata.sources || metadata.matches || [];
+      if (!Array.isArray(results) || !results.length) {
+        const proposal = metadata.proposal || metadata.movieUpdates || metadata.movie || {};
+        if (proposal && Object.keys(proposal).length) {
+          list.innerHTML = `
+            <div class="import-result-card">
+              <strong>${escapeHtml(proposal.title || proposal.originalTitle || tNext("importCenter.previewReady", "Preview ready"))}</strong>
+              <div class="import-result-meta">${escapeHtml(JSON.stringify(proposal).slice(0, 360))}</div>
+            </div>
+          `;
+        } else {
+          list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>`;
+        }
+        return;
+      }
+      list.innerHTML = results.slice(0, 8).map((item) => {
+        const title = item.title || item.originalTitle || item.name || item.providerId || item.pluginId || tNext("importCenter.result", "Result");
+        const provider = item.providerId || item.pluginId || item.source || item.name || "";
+        return `
+          <div class="import-result-card">
+            <strong>${escapeHtml(title)}</strong>
+            <div class="import-result-meta">${escapeHtml(provider)} ${item.year ? `&middot; ${escapeHtml(item.year)}` : ""}</div>
+          </div>
+        `;
+      }).join("");
+    }
+    function renderImportCenter() {
+      renderImportSources();
+      renderImportPlan();
+      renderImportJobs();
+      renderBarcodeLookup();
+    }
+    async function loadImportCenter() {
+      setImportCenterMessage(tNext("importCenter.loading", "Loading import status..."));
+      try {
+        const [reportPayload, jobsPayload] = await Promise.all([
+          authApiJson("/api/next/migration/report"),
+          authApiJson("/api/next/jobs?jobType=migration.import_sqlite&limit=20").catch(() => ({jobs: []}))
+        ]);
+        importCenter.report = reportPayload.report || {};
+        importCenter.jobs = jobsPayload.jobs || [];
+        const source = selectedImportSource(importCenter.report);
+        if (!importCenter.selectedSourceId) importCenter.selectedSourceId = importSourceId(source);
+        renderImportCenter();
+        setImportCenterMessage(tNext("importCenter.loaded", "Import status loaded."), "good");
+      } catch (error) {
+        setImportCenterMessage(error.message || String(error), "bad");
+      }
+    }
+    async function startImportCenterImport() {
+      const source = selectedImportSource(importCenter.report || {});
+      const sourceId = importSourceId(source);
+      if (!sourceId) {
+        setImportCenterMessage(tNext("importCenter.chooseSourceFirst", "Choose an import source first."), "bad");
+        return;
+      }
+      setImportCenterMessage(tNext("importCenter.starting", "Starting import job..."));
+      try {
+        const payload = await authApiJson("/api/next/migration/start", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            importSourceId: sourceId,
+            includeSecurity: true,
+            includePersonal: false,
+            importMediaReferences: true
+          })
+        });
+        console.log("import job", payload);
+        setImportCenterMessage(tNext("importCenter.queued", "Import job queued."), "good");
+        await loadImportCenter();
+      } catch (error) {
+        setImportCenterMessage(error.message || String(error), "bad");
+      }
+    }
+    async function previewBarcodeImport(event) {
+      event?.preventDefault();
+      const input = document.getElementById("importBarcodeInput");
+      const barcode = String(input?.value || "").trim();
+      if (!barcode) {
+        setImportCenterMessage(tNext("importCenter.barcodeRequired", "Enter a barcode first."), "bad");
+        return;
+      }
+      setImportCenterMessage(tNext("importCenter.previewingBarcode", "Previewing barcode metadata..."));
+      try {
+        const payload = await authApiJson("/api/next/metadata/lookup", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({barcode})
+        });
+        importCenter.barcodeLookup = payload;
+        renderBarcodeLookup();
+        setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
+        console.log("barcode import preview", payload);
+      } catch (error) {
+        setImportCenterMessage(error.message || String(error), "bad");
+      }
+    }
     function setActiveAppRoute(route) {
       document.querySelectorAll("[data-app-route]").forEach((node) => {
         node.classList.toggle("active", node.dataset.appRoute === route);
@@ -7547,6 +8630,7 @@ def ui_preview_html(
     }
     function showMovieDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -7557,16 +8641,18 @@ def ui_preview_html(
     }
     function showContainerDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.remove("hidden");
-      setActiveAppRoute("containers");
+      setActiveAppRoute("library");
       scrollPreviewTop();
     }
     function showPersonDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
@@ -7579,6 +8665,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
@@ -7589,6 +8676,7 @@ def ui_preview_html(
     }
     function showProfilePage(pushUrl = true) {
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -7614,6 +8702,7 @@ def ui_preview_html(
         return;
       }
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -7633,9 +8722,34 @@ def ui_preview_html(
       }
       scrollPreviewTop();
     }
+    function showImportPage(pushUrl = true) {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.remove("hidden");
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
+      setActiveAppRoute("import");
+      renderImportCenter();
+      loadImportCenter();
+      if (pushUrl && appMode && window.location.pathname !== "/import") {
+        history.pushState({view: "import"}, "", "/import");
+      }
+      scrollPreviewTop();
+    }
     function appRouteFromPath() {
       if (/^\\/app\\/admin\\/?$|^\\/admin\\/?$/.test(window.location.pathname)) {
         return {view: "admin"};
+      }
+      if (/^\\/api\\/next\\/app\\/import\\/?$|^\\/app\\/import\\/?$|^\\/import\\/?$/.test(window.location.pathname)) {
+        return {view: "import"};
       }
       if (/^\\/app\\/profile\\/?$|^\\/profile\\/?$/.test(window.location.pathname)) {
         return {view: "profile"};
@@ -7661,6 +8775,10 @@ def ui_preview_html(
       }
       if (route === "profile") {
         showProfilePage();
+        return;
+      }
+      if (route === "import") {
+        showImportPage();
         return;
       }
       showLibraryPage(true, route || "library");
@@ -7743,24 +8861,6 @@ def ui_preview_html(
           openAppMovieDetail(button.dataset.previewMovie);
         });
       });
-      const collectionNode = document.querySelector(".preview-collections");
-      if (collectionNode) {
-        const visibleContainers = selectionMode ? containers : containers.slice(0, 10);
-        collectionNode.innerHTML = containers.length
-          ? visibleContainers.map(containerCardHtml).join("")
-          : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyContainers", "No containers imported yet."))}</div>`;
-      }
-      document.querySelectorAll("[data-preview-container]").forEach((link) => {
-        link.classList.toggle("bulk-selected", selectedContainerIds.has(String(link.dataset.previewContainer)));
-        link.addEventListener("click", (event) => {
-          event.preventDefault();
-          if (selectionMode) {
-            toggleContainerSelection(link.dataset.previewContainer);
-            return;
-          }
-          openAppContainerDetail(link.dataset.previewContainer);
-        });
-      });
       const shownCount = document.getElementById("shownCount");
       if (shownCount) shownCount.textContent = String(visibleMovies.length);
       const summary = document.getElementById("librarySummary");
@@ -7768,11 +8868,9 @@ def ui_preview_html(
         summary.textContent = `${visibleMovies.length} / ${movies.length} ${tNext("collection.movies", "Movies").toLowerCase()}`;
       }
       const navMovieCount = document.getElementById("navMovieCount");
-      const navContainerCount = document.getElementById("navContainerCount");
       const navGroupCount = document.getElementById("navGroupCount");
       const containerPanelCount = document.getElementById("containerPanelCount");
       if (navMovieCount) navMovieCount.textContent = String(movies.length);
-      if (navContainerCount) navContainerCount.textContent = String(containers.length);
       if (navGroupCount) navGroupCount.textContent = String(mediaGroups.length);
       if (containerPanelCount) containerPanelCount.textContent = String(containers.length);
       if (visibleMovies[0]) selectMovie(visibleMovies[0].id);
@@ -7942,43 +9040,169 @@ def ui_preview_html(
       ["show_collection_search", "preferences.showCollectionSearch", "preferences.showCollectionSearchHelp"],
       ["show_auto_videos", "preferences.showAutoVideos", "preferences.showAutoVideosHelp"],
       ["show_local_title", "preferences.showLocalTitle", "preferences.showLocalTitleHelp"],
-      ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"]
+      ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"],
+      ["collectors_mode", "preferences.collectorsMode", "preferences.collectorsModeHelp"],
+      ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"],
+      ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"]
     ];
     function renderPreferences() {
-      const lists = Array.from(document.querySelectorAll("#profilePreferenceList")).filter(Boolean);
+      const lists = Array.from(document.querySelectorAll("#profilePreferenceList, #legacyPreferenceList")).filter(Boolean);
       if (!lists.length) return;
-      const html = preferenceLabels.map(([key, labelKey, helpKey]) => `
-        <div class="preference-row">
+      const html = preferenceLabels.map(([key, labelKey, helpKey, requiresKey]) => {
+        const disabled = requiresKey && !preferences[requiresKey];
+        return `
+        <div class="preference-row ${disabled ? "disabled" : ""}">
           <span>
             <strong>${escapeHtml(tNext(labelKey, key))}</strong>
             <span>${escapeHtml(tNext(helpKey, ""))}</span>
           </span>
-          <button type="button" class="switch ${preferences[key] ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${preferences[key] ? "true" : "false"}"></button>
+          <button type="button" class="switch ${preferences[key] ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${preferences[key] ? "true" : "false"}" ${disabled ? "disabled" : ""}></button>
         </div>
-      `).join("");
+      `;
+      }).join("");
       lists.forEach((list) => {
         list.innerHTML = html;
         list.querySelectorAll("[data-preference-toggle]").forEach((button) => {
-          button.addEventListener("click", () => updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]));
+          button.addEventListener("click", () => {
+            if (button.disabled) return;
+            updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]);
+          });
         });
       });
     }
     async function updatePreference(key, value) {
       preferences[key] = value;
+      if (key === "collectors_mode" && !value) {
+        preferences.merge_editions_as_title = false;
+      }
       renderPreferences();
       renderLibrary();
       const message = document.getElementById("preferencesMessage");
       if (message) message.textContent = tNext("preferences.saving", "Saving...");
       try {
+        const patch = {[key]: value};
+        if (key === "collectors_mode" && !value) patch.merge_editions_as_title = false;
         const payload = await apiJson("/api/next/preferences", {
           method: "PATCH",
           headers: authHeaders({"Content-Type": "application/json"}),
-          body: JSON.stringify({preferences: {[key]: value}})
+          body: JSON.stringify({preferences: patch})
         });
         preferences = Object.assign({}, preferences, payload.preferences || {});
         if (message) message.textContent = tNext("preferences.saved", "Saved.");
       } catch (error) {
         if (message) message.textContent = error.message || String(error);
+      }
+    }
+    function setContainerManagerMessage(message, tone) {
+      const node = document.getElementById("containerManagerMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function containerManagerItems() {
+      return sortedByTitle(containers.filter((container) => container.container_type === containerManagerType));
+    }
+    function renderContainerManager() {
+      document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.containerManagerType === containerManagerType);
+      });
+      const createButton = document.getElementById("containerManagerCreateButton");
+      if (createButton) {
+        createButton.textContent = tNext(
+          `containerManage.create.${containerManagerType}`,
+          tNext("containerManage.create", "Create")
+        );
+      }
+      const list = document.getElementById("containerManagerList");
+      if (!list) return;
+      const items = containerManagerItems();
+      if (!items.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext(`containerManage.empty.${containerManagerType}`, tNext("containerManage.noItems", "Nothing here yet.")))}</div>`;
+        return;
+      }
+      list.innerHTML = items.map((container) => {
+        const id = escapeHtml(container.id || "");
+        const typeLabel = containerTypeLabel(container.container_type);
+        const meta = [typeLabel, container.year, container.barcode].filter(Boolean).join(" / ");
+        return `
+          <div class="container-manager-row" data-container-manager-id="${id}">
+            <div class="container-manager-meta">
+              <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
+              <span>${escapeHtml(meta)}</span>
+            </div>
+            <div class="container-manager-actions">
+              <input data-container-manager-title="${id}" value="${escapeHtml(container.title || "")}" maxlength="240" aria-label="${escapeHtml(tNext("containerManage.titleLabel", "Name"))}">
+              <button type="button" class="secondary-button" data-container-manager-rename="${id}">${escapeHtml(tNext("containerManage.rename", "Rename"))}</button>
+              <button type="button" class="secondary-button" data-container-manager-open="${id}">${escapeHtml(tNext("containerManage.open", "Open"))}</button>
+              <button type="button" class="secondary-button" data-container-manager-delete="${id}">${escapeHtml(tNext("containerManage.delete", "Delete"))}</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+    async function createManagedContainer(event) {
+      event?.preventDefault();
+      const input = document.getElementById("containerManagerTitle");
+      const title = String(input?.value || "").trim();
+      if (!title) {
+        setContainerManagerMessage(tNext("containerManage.titleRequired", "Enter a name first."), "bad");
+        return;
+      }
+      setContainerManagerMessage(tNext("containerManage.saving", "Saving..."));
+      try {
+        const payload = await authApiJson("/api/next/containers", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({containerType: containerManagerType, title})
+        });
+        const container = (payload.detail || {}).container;
+        if (container) containers = [...containers.filter((item) => String(item.id) !== String(container.id)), container];
+        if (input) input.value = "";
+        renderContainerManager();
+        renderBulkTargets();
+        setContainerManagerMessage(tNext("containerManage.created", "Created."), "good");
+      } catch (error) {
+        setContainerManagerMessage(error.message || String(error), "bad");
+      }
+    }
+    async function renameManagedContainer(containerId) {
+      const input = document.querySelector(`[data-container-manager-title="${CSS.escape(containerId)}"]`);
+      const title = String(input?.value || "").trim();
+      if (!title) {
+        setContainerManagerMessage(tNext("containerManage.titleRequired", "Enter a name first."), "bad");
+        return;
+      }
+      setContainerManagerMessage(tNext("containerManage.saving", "Saving..."));
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(containerId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({title})
+        });
+        const container = (payload.detail || {}).container;
+        if (container) containers = containers.map((item) => String(item.id) === String(container.id) ? container : item);
+        renderContainerManager();
+        renderBulkTargets();
+        setContainerManagerMessage(tNext("containerManage.renamed", "Renamed."), "good");
+      } catch (error) {
+        setContainerManagerMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteManagedContainer(containerId) {
+      const container = containers.find((item) => String(item.id) === String(containerId));
+      const title = container?.title || tNext("common.untitled", "Untitled");
+      const confirmed = window.confirm(tNext("containerManage.deleteConfirm", "Delete this item?").replace("{title}", title));
+      if (!confirmed) return;
+      setContainerManagerMessage(tNext("containerManage.saving", "Saving..."));
+      try {
+        await authApiJson(`/api/next/containers/${encodeURIComponent(containerId)}`, {method: "DELETE"});
+        containers = containers.filter((item) => String(item.id) !== String(containerId));
+        selectedContainerIds.delete(String(containerId));
+        renderContainerManager();
+        renderBulkTargets();
+        setContainerManagerMessage(tNext("containerManage.deleted", "Deleted."), "good");
+      } catch (error) {
+        setContainerManagerMessage(error.message || String(error), "bad");
       }
     }
     function renderStartup(startup) {
@@ -8056,6 +9280,7 @@ def ui_preview_html(
       if (removeAvatarButton) removeAvatarButton.disabled = !profile.avatarUrl;
       renderProfilePasskeys();
       renderProfileRecovery();
+      renderContainerManager();
     }
     function shortDateTime(value) {
       const text = String(value || "");
@@ -8399,6 +9624,7 @@ def ui_preview_html(
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
+      else if (route.view === "import") showImportPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
     }
@@ -8464,7 +9690,26 @@ def ui_preview_html(
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
       });
+      document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
+        button.addEventListener("click", () => {
+          containerManagerType = button.dataset.containerManagerType || "box_set";
+          renderContainerManager();
+          setContainerManagerMessage("");
+        });
+      });
+      document.getElementById("containerManagerCreateForm")?.addEventListener("submit", (event) => createManagedContainer(event));
+      document.getElementById("containerManagerList")?.addEventListener("click", (event) => {
+        const renameButton = event.target.closest("[data-container-manager-rename]");
+        const openButton = event.target.closest("[data-container-manager-open]");
+        const deleteButton = event.target.closest("[data-container-manager-delete]");
+        if (renameButton) renameManagedContainer(renameButton.dataset.containerManagerRename);
+        if (openButton) openAppContainerDetail(openButton.dataset.containerManagerOpen);
+        if (deleteButton) deleteManagedContainer(deleteButton.dataset.containerManagerDelete);
+      });
       document.getElementById("appAdminRefreshButton")?.addEventListener("click", () => loadAppAdmin());
+      document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminTab(button.dataset.appAdminTab));
+      });
       document.querySelectorAll("[data-app-admin-registration-mode]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminRegistrationMode(button.dataset.appAdminRegistrationMode));
       });
@@ -8500,6 +9745,19 @@ def ui_preview_html(
           });
         }
       });
+      document.getElementById("appAdminRefreshPluginJobsButton")?.addEventListener("click", () => refreshAppAdminPluginJobs());
+      document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
+        const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
+        const healthButton = event.target.closest("[data-app-admin-plugin-health]");
+        const saveButton = event.target.closest("[data-app-admin-plugin-save]");
+        const executeButton = event.target.closest("[data-app-admin-plugin-execute]");
+        const jobButton = event.target.closest("[data-app-admin-plugin-job]");
+        if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
+        if (healthButton) checkAppAdminPluginHealth(healthButton.dataset.appAdminPluginHealth);
+        if (saveButton) saveAppAdminPluginConfig(saveButton.dataset.appAdminPluginSave, saveButton.closest(".profile-passkey"));
+        if (executeButton) executeAppAdminPlugin(executeButton.dataset.appAdminPluginExecute, executeButton.dataset.entrypoint);
+        if (jobButton) queueAppAdminPluginJob(jobButton.dataset.appAdminPluginJob, jobButton.dataset.entrypoint);
+      });
       document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
         saveProfileEdits();
@@ -8513,6 +9771,15 @@ def ui_preview_html(
       document.getElementById("profileAddPasskeyButton")?.addEventListener("click", () => addProfilePasskey());
       document.getElementById("profileGenerateRecoveryButton")?.addEventListener("click", () => generateRecoveryCodes());
       document.getElementById("profileRevokeRecoveryButton")?.addEventListener("click", () => revokeRecoveryCodes());
+      document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
+      document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
+      document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
+      document.getElementById("importCenterSources")?.addEventListener("click", (event) => {
+        const sourceButton = event.target.closest("[data-import-source]");
+        if (!sourceButton) return;
+        importCenter.selectedSourceId = sourceButton.dataset.importSource || "";
+        renderImportCenter();
+      });
       document.getElementById("profilePasskeyList")?.addEventListener("click", (event) => {
         const saveButton = event.target.closest("[data-profile-passkey-save]");
         const deleteButton = event.target.closest("[data-profile-passkey-delete]");
@@ -8658,6 +9925,7 @@ def ui_preview_html(
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
+        else if (route.view === "import") showImportPage(false);
         else if (route.view === "profile") showProfilePage(false);
         else {
           activeContainerId = "";
@@ -8690,7 +9958,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     movie_cards = server_movie_cards(movies)
     container_cards = server_container_cards(containers)
     client_status = (
-        f"Server rendered {len(movies)} movies and {len(containers)} containers. "
+        f"Server rendered {len(movies)} movies. "
         f"Build {snapshot.get('build', {}).get('sha') or 'unknown'}."
     )
     return """<!doctype html>
@@ -16897,10 +18165,14 @@ PUBLIC_NEXT_PATHS = {
     "/",
     "/app",
     "/app/",
+    "/app/import",
+    "/app/import/",
     "/ui-preview",
     "/ui-preview/",
     "/api/next/app",
     "/api/next/app/",
+    "/api/next/app/import",
+    "/api/next/app/import/",
     "/api/next/collection",
     "/api/next/collection/",
     "/api/next/health",
@@ -17740,6 +19012,45 @@ def register_routes(flask_app: Flask) -> None:
                     )
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail})
+
+    @flask_app.delete("/api/next/containers/<container_id>")
+    def delete_container(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        if not container_uuid:
+            raise NextApiError("containerId is required", 400)
+        deleted: dict[str, int] = {}
+        with connect() as conn:
+            require_next_permission(conn, "containers.edit")
+            existing = container_entity(conn, container_uuid)
+            if not existing:
+                raise NextApiError("Container not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    if table_exists(conn, "collection_items"):
+                        cur.execute(
+                            "DELETE FROM collection_items WHERE collection_id=%s OR item_id=%s",
+                            (container_uuid, container_uuid),
+                        )
+                        deleted["collection_items"] = max(int(cur.rowcount or 0), 0)
+                    if table_exists(conn, "container_movies"):
+                        cur.execute("DELETE FROM container_movies WHERE container_id=%s", (container_uuid,))
+                        deleted["container_movies"] = max(int(cur.rowcount or 0), 0)
+                    if table_exists(conn, "container_identifiers"):
+                        cur.execute("DELETE FROM container_identifiers WHERE container_id=%s", (container_uuid,))
+                        deleted["container_identifiers"] = max(int(cur.rowcount or 0), 0)
+                    if table_exists(conn, "entity_media"):
+                        cur.execute("DELETE FROM entity_media WHERE entity_type='container' AND entity_id=%s", (container_uuid,))
+                        deleted["entity_media"] = max(int(cur.rowcount or 0), 0)
+                    cur.execute("DELETE FROM containers WHERE id=%s", (container_uuid,))
+                    deleted["containers"] = max(int(cur.rowcount or 0), 0)
+        return response(
+            {
+                "status": "ok",
+                "deleted": deleted,
+                "containerId": str(container_uuid),
+                "containerType": existing.get("container_type"),
+            }
+        )
 
     @flask_app.post("/api/next/bulk/containers/<container_id>/movies")
     def bulk_container_movies(container_id: str):
@@ -18632,7 +19943,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Metadata lookup body must be an object", 400)
         with connect() as conn:
-            actor = require_next_permission(conn, "metadata.search")
+            actor = require_any_next_permission(conn, ("metadata.search", "collection.import", "collection.edit_all"))
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             result = lookup_metadata_sources(conn, body, actor)
@@ -18848,6 +20159,8 @@ def register_routes(flask_app: Flask) -> None:
                 conn,
                 (
                     "admin.view_jobs",
+                    "collection.import",
+                    "admin.restore_functional",
                     "metadata.view_plugin_health",
                     "metadata.refresh_one",
                     "metadata.refresh_bulk",
@@ -18868,6 +20181,8 @@ def register_routes(flask_app: Flask) -> None:
                     allowed_types.append(PLUGIN_EXECUTION_JOB_TYPE)
                 if permissions.intersection({"metadata.refresh_one", "metadata.refresh_bulk"}):
                     allowed_types.append(METADATA_REFRESH_JOB_TYPE)
+                if permissions.intersection({"collection.import", "admin.restore_functional"}):
+                    allowed_types.append(MIGRATION_JOB_TYPE)
                 if job_type and job_type not in allowed_types:
                     raise NextApiError(f"Permission required for job type: {job_type}", 403)
                 if not job_type and len(allowed_types) == 1:
@@ -19067,6 +20382,9 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/profile")
     @flask_app.get("/admin")
     @flask_app.get("/app/admin")
+    @flask_app.get("/import")
+    @flask_app.get("/app/import")
+    @flask_app.get("/api/next/app/import")
     @flask_app.get("/movies/<movie_id>")
     @flask_app.get("/app/movies/<movie_id>")
     @flask_app.get("/containers/<container_id>")
@@ -19140,6 +20458,8 @@ def register_routes(flask_app: Flask) -> None:
                 conn,
                 (
                     "admin.view_jobs",
+                    "collection.import",
+                    "admin.restore_functional",
                     "metadata.view_plugin_health",
                     "metadata.refresh_one",
                     "metadata.refresh_bulk",
@@ -19186,6 +20506,9 @@ def register_routes(flask_app: Flask) -> None:
                     raise NextApiError("Permission required: admin.view_jobs", 403)
             elif row["job_type"] == METADATA_REFRESH_JOB_TYPE:
                 if not permissions.intersection({"metadata.refresh_one", "metadata.refresh_bulk"}):
+                    raise NextApiError("Permission required: admin.view_jobs", 403)
+            elif row["job_type"] == MIGRATION_JOB_TYPE:
+                if not permissions.intersection({"collection.import", "admin.restore_functional"}):
                     raise NextApiError("Permission required: admin.view_jobs", 403)
             else:
                 raise NextApiError("Permission required: admin.view_jobs", 403)
