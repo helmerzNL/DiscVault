@@ -244,6 +244,7 @@
   "bulk.metadataQueued": "metadata refresh jobs queued",
   "bulk.notBuiltYet": "This bulk action is ready in the UI and will be connected to the backend next.",
   "movieDetail.title": "Movie details",
+  "movieDetail.backToLibrary": "Back to library",
   "movieDetail.previewMetadata": "Preview metadata",
   "movieDetail.applyMetadata": "Apply metadata",
   "movieDetail.jobs": "Jobs",

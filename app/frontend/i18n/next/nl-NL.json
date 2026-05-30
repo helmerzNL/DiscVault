@@ -244,6 +244,7 @@
   "bulk.metadataQueued": "metadata-vernieuwingstaken aangemaakt",
   "bulk.notBuiltYet": "Deze bulkactie staat klaar in de UI en wordt hierna aan de backend gekoppeld.",
   "movieDetail.title": "Filmdetails",
+  "movieDetail.backToLibrary": "Terug naar bibliotheek",
   "movieDetail.previewMetadata": "Metadata previewen",
   "movieDetail.applyMetadata": "Metadata toepassen",
   "movieDetail.jobs": "Taken",
