@@ -1019,5 +1019,21 @@
   "preferences.showExtendedPeoplePagesHelp": "Zeigt digitale Filme und vollstaendige Filmografien auf Personenseiten. Aus zeigt nur physische Medien in deinem Besitz.",
   "containerDetail.overview": "Uebersicht",
   "containerDetail.sections": "Containerbereiche",
-  "migration.legacyAuthRequired": "Melde dich mit einem Legacy-Owner/Admin-Passkey an, bevor du die Migration startest."
+  "migration.legacyAuthRequired": "Melde dich mit einem Legacy-Owner/Admin-Passkey an, bevor du die Migration startest.",
+  "appAdmin.pluginPackages": "Plugin-Pakete",
+  "appAdmin.pluginPackagesHelp": "Installierte Plugins exportieren oder eine kompatible DiscVault-Plugin-ZIP installieren.",
+  "appAdmin.pluginImportHelp": "Importierte ZIP-Dateien mussen manifest.json, plugin.py, eine Version und eine kompatible DiscVault-Plugin-API enthalten.",
+  "appAdmin.importPlugin": "Plugin importieren",
+  "appAdmin.exportPlugin": "Exportieren",
+  "appAdmin.exportingPlugin": "Plugin wird exportiert...",
+  "appAdmin.pluginExported": "Plugin-ZIP heruntergeladen.",
+  "appAdmin.importingPlugin": "Plugin wird importiert...",
+  "appAdmin.pluginImported": "Plugin importiert.",
+  "appAdmin.selectPluginZip": "Wahle zuerst eine Plugin-ZIP aus.",
+  "appAdmin.version": "Version",
+  "appAdmin.pluginTypeMetadataSources": "Metadatenquellen",
+  "appAdmin.pluginTypeMetadataReceivers": "Metadatenempfanger",
+  "appAdmin.pluginTypeDigitalSources": "Digitale Medienquellen",
+  "appAdmin.pluginTypeImportSources": "Importquellen",
+  "appAdmin.pluginTypeOther": "Andere Plugins"
 }

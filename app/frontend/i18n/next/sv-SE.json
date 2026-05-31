@@ -1019,5 +1019,21 @@
   "preferences.showExtendedPeoplePagesHelp": "Visar digitala filmer och fullstandiga filmografier pa personsidor. Av visar bara agda fysiska medier.",
   "containerDetail.overview": "Oversikt",
   "containerDetail.sections": "Containersektioner",
-  "migration.legacyAuthRequired": "Logga in med en legacy owner/admin-passkey innan du startar migreringen."
+  "migration.legacyAuthRequired": "Logga in med en legacy owner/admin-passkey innan du startar migreringen.",
+  "appAdmin.pluginPackages": "Pluginpaket",
+  "appAdmin.pluginPackagesHelp": "Exportera installerade plugins eller installera en kompatibel DiscVault-plugin-ZIP.",
+  "appAdmin.pluginImportHelp": "Importerade ZIP-filer maste innehalla manifest.json, plugin.py, en version och en kompatibel DiscVault-plugin-API-deklaration.",
+  "appAdmin.importPlugin": "Importera plugin",
+  "appAdmin.exportPlugin": "Exportera",
+  "appAdmin.exportingPlugin": "Exporterar plugin...",
+  "appAdmin.pluginExported": "Plugin-ZIP nedladdad.",
+  "appAdmin.importingPlugin": "Importerar plugin...",
+  "appAdmin.pluginImported": "Plugin importerad.",
+  "appAdmin.selectPluginZip": "Valj forst en plugin-ZIP.",
+  "appAdmin.version": "Version",
+  "appAdmin.pluginTypeMetadataSources": "Metadatakallor",
+  "appAdmin.pluginTypeMetadataReceivers": "Metadatamottagare",
+  "appAdmin.pluginTypeDigitalSources": "Digitala mediekallor",
+  "appAdmin.pluginTypeImportSources": "Importkallor",
+  "appAdmin.pluginTypeOther": "Andra plugins"
 }

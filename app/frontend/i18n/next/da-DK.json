@@ -1019,5 +1019,21 @@
   "preferences.showExtendedPeoplePagesHelp": "Viser digitale film og fulde filmografier pa personsider. Fra viser kun ejede fysiske medier.",
   "containerDetail.overview": "Oversigt",
   "containerDetail.sections": "Containersektioner",
-  "migration.legacyAuthRequired": "Log ind med en legacy owner/admin-passkey, for du starter migreringen."
+  "migration.legacyAuthRequired": "Log ind med en legacy owner/admin-passkey, for du starter migreringen.",
+  "appAdmin.pluginPackages": "Pluginpakker",
+  "appAdmin.pluginPackagesHelp": "Eksporter installerede plugins eller installer en kompatibel DiscVault-plugin-ZIP.",
+  "appAdmin.pluginImportHelp": "Importerede ZIP-filer skal indeholde manifest.json, plugin.py, en version og en kompatibel DiscVault-plugin-API-erklaering.",
+  "appAdmin.importPlugin": "Importer plugin",
+  "appAdmin.exportPlugin": "Eksporter",
+  "appAdmin.exportingPlugin": "Eksporterer plugin...",
+  "appAdmin.pluginExported": "Plugin-ZIP downloadet.",
+  "appAdmin.importingPlugin": "Importerer plugin...",
+  "appAdmin.pluginImported": "Plugin importeret.",
+  "appAdmin.selectPluginZip": "Vaelg forst en plugin-ZIP.",
+  "appAdmin.version": "Version",
+  "appAdmin.pluginTypeMetadataSources": "Metadatakilder",
+  "appAdmin.pluginTypeMetadataReceivers": "Metadatamodtagere",
+  "appAdmin.pluginTypeDigitalSources": "Digitale mediekilder",
+  "appAdmin.pluginTypeImportSources": "Importkilder",
+  "appAdmin.pluginTypeOther": "Andre plugins"
 }

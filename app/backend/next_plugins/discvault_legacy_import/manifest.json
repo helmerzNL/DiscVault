@@ -2,6 +2,8 @@
   "id": "discvault_legacy_import",
   "name": "DiscVault Legacy Import",
   "version": "1.0.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
   "categories": ["import_source"],
   "capabilities": [
     "inspect_source",

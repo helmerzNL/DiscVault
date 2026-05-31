@@ -1019,5 +1019,21 @@
   "preferences.showExtendedPeoplePagesHelp": "Nayttaa digitaaliset elokuvat ja taydet filmografiat henkil?sivuilla. Pois paalta nayttaa vain omistetun fyysisen median.",
   "containerDetail.overview": "Yleiskuva",
   "containerDetail.sections": "Sailion osiot",
-  "migration.legacyAuthRequired": "Kirjaudu legacy owner/admin -passkeylla ennen migraation kaynnistamista."
+  "migration.legacyAuthRequired": "Kirjaudu legacy owner/admin -passkeylla ennen migraation kaynnistamista.",
+  "appAdmin.pluginPackages": "Lisaosapaketit",
+  "appAdmin.pluginPackagesHelp": "Vie asennetut lisaosat tai asenna yhteensopiva DiscVault-lisaosan ZIP.",
+  "appAdmin.pluginImportHelp": "Tuotujen ZIP-tiedostojen tulee sisaltaa manifest.json, plugin.py, versio ja yhteensopiva DiscVault-lisaosan API-maaritys.",
+  "appAdmin.importPlugin": "Tuo lisaosa",
+  "appAdmin.exportPlugin": "Vie",
+  "appAdmin.exportingPlugin": "Viedaan lisaosaa...",
+  "appAdmin.pluginExported": "Lisaosan ZIP ladattu.",
+  "appAdmin.importingPlugin": "Tuodaan lisaosaa...",
+  "appAdmin.pluginImported": "Lisaosa tuotu.",
+  "appAdmin.selectPluginZip": "Valitse ensin lisaosan ZIP.",
+  "appAdmin.version": "Versio",
+  "appAdmin.pluginTypeMetadataSources": "Metatietolahteet",
+  "appAdmin.pluginTypeMetadataReceivers": "Metatietojen vastaanottajat",
+  "appAdmin.pluginTypeDigitalSources": "Digitaaliset medialahteet",
+  "appAdmin.pluginTypeImportSources": "Tuontilahteet",
+  "appAdmin.pluginTypeOther": "Muut lisaosat"
 }

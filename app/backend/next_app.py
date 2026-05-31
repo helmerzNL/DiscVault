@@ -17,8 +17,11 @@ import mimetypes
 import os
 import re
 import secrets
+import shutil
 import sqlite3
+import tempfile
 import uuid
+import zipfile
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -27,6 +30,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from flask import Flask, Response, jsonify, request, send_file
+from flask import after_this_request
 from flask_cors import CORS
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -39,9 +43,12 @@ try:
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
     from .next_plugin_runtime import plugin_registry_snapshot
+    from .next_plugin_runtime import DEFAULT_PLUGIN_DIR
+    from .next_plugin_runtime import PLUGIN_ID_PATTERN
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
+    from .next_plugin_runtime import validate_manifest_compatibility
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -77,9 +84,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
     from next_plugin_runtime import plugin_registry_snapshot
+    from next_plugin_runtime import DEFAULT_PLUGIN_DIR
+    from next_plugin_runtime import PLUGIN_ID_PATTERN
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
+    from next_plugin_runtime import validate_manifest_compatibility
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -6752,6 +6762,25 @@ def ui_preview_html(
     .app-admin-plugin-actions {
       margin-top: 2px;
     }
+    .app-admin-plugin-import {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .app-admin-plugin-import input {
+      min-height: 40px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 7px 10px;
+      font: inherit;
+      font-size: .9rem;
+      font-weight: 620;
+    }
     .app-admin-plugin-order {
       display: inline-flex;
       gap: 4px;
@@ -8750,6 +8779,15 @@ def ui_preview_html(
               <div class="login-message" id="appAdminPluginsMessage"></div>
             </div>
             <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.pluginPackages">Plugin packages</h3>
+              <p data-next-i18n="appAdmin.pluginPackagesHelp">Export installed plugins or install a compatible DiscVault plugin ZIP.</p>
+              <div class="app-admin-plugin-import">
+                <input type="file" id="appAdminPluginImportFile" accept=".zip,application/zip">
+                <button type="button" class="secondary-button" id="appAdminImportPluginButton" data-next-i18n="appAdmin.importPlugin">Import plugin</button>
+              </div>
+              <p class="profile-passkey-meta" data-next-i18n="appAdmin.pluginImportHelp">Imported ZIP files must contain manifest.json, plugin.py, a version and a compatible DiscVault plugin API declaration.</p>
+            </div>
+            <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.pluginJobs">Plugin jobs</h3>
               <div class="profile-passkey-list" id="appAdminPluginJobsList"></div>
             </div>
@@ -9386,10 +9424,19 @@ def ui_preview_html(
     function appAdminPluginHasCategory(plugin, category) {
       return (plugin.categories || []).includes(category);
     }
+    function appAdminPluginTypeLabel(category) {
+      const labels = {
+        metadata_source: tNext("appAdmin.pluginTypeMetadataSources", "Metadata sources"),
+        metadata_receiver: tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"),
+        digital_media_source: tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"),
+        import_source: tNext("appAdmin.pluginTypeImportSources", "Import sources")
+      };
+      return labels[category] || tNext("appAdmin.pluginTypeOther", "Other plugins");
+    }
     function appAdminPluginCategoryLabel(plugin) {
       const values = plugin.categories || [];
       if (!values.length) return tNext("appAdmin.pluginCategoryGeneric", "Plugin");
-      return values.map((category) => category.replaceAll("_", " ")).join(", ");
+      return values.map((category) => appAdminPluginTypeLabel(category)).join(", ");
     }
     function appAdminPluginSchemaItems(plugin, kind) {
       const schema = plugin.settingsSchema || {};
@@ -9557,7 +9604,7 @@ def ui_preview_html(
         </div>
       `;
     }
-    function renderAppAdminPluginCard(plugin, sectionPlugins = []) {
+    function renderAppAdminPluginCard(plugin, sectionPlugins = [], sectionCategory = "") {
       const health = appAdmin.pluginHealth[plugin.id] || {};
       const config = appAdmin.pluginConfigs[plugin.id] || {};
       const execution = appAdmin.pluginExecutions[plugin.id] || null;
@@ -9573,20 +9620,22 @@ def ui_preview_html(
       const canMoveDown = pluginIndex >= 0 && pluginIndex < orderedSection.length - 1;
       const canManage = appAdminCanManagePlugin(plugin);
       const canViewHealth = appAdminCanViewPluginHealth(plugin);
+      const version = plugin.version || (plugin.manifest || {}).version || "0.0.0";
       return `
         <div class="profile-passkey">
           <div class="profile-passkey-head">
             <div>
               <strong>${escapeHtml(plugin.name || plugin.id)}</strong>
-              <div class="profile-passkey-meta">${escapeHtml(plugin.id)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
+              <div class="profile-passkey-meta">${escapeHtml(plugin.id)} &middot; ${escapeHtml(tNext("appAdmin.version", "Version"))} ${escapeHtml(version)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
             </div>
             <div class="app-admin-plugin-order">
-              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>` : ""}
-              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>` : ""}
+              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>` : ""}
+              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>` : ""}
             </div>
             <span class="tag ${plugin.enabled ? "good" : ""}">${escapeHtml(plugin.enabled ? tNext("appAdmin.enabled", "Enabled") : tNext("appAdmin.disabled", "Disabled"))}</span>
           </div>
           <div class="app-admin-plugin-meta">
+            <span class="tag blue">${escapeHtml(tNext("appAdmin.version", "Version"))} ${escapeHtml(version)}</span>
             <span class="tag ${runtime.loaded || health.state === "ok" ? "good" : ""}">${escapeHtml(tNext("appAdmin.runtime", "Runtime"))} ${escapeHtml(String(runtimeState).replaceAll("_", " "))}</span>
             ${plugin.requiresSecrets ? `<span class="tag ${plugin.secretsConfigured ? "good" : ""}">${escapeHtml(tNext("appAdmin.secrets", "Secrets"))} ${escapeHtml(plugin.secretsConfigured ? tNext("appAdmin.configured", "Configured") : tNext("appAdmin.missing", "Missing"))}</span>` : `<span class="tag good">${escapeHtml(tNext("appAdmin.noSecretsRequired", "No secrets"))}</span>`}
             ${plugin.settingsConfigured ? `<span class="tag good">${escapeHtml(tNext("appAdmin.settingsConfigured", "Settings configured"))}</span>` : `<span class="tag">${escapeHtml(tNext("appAdmin.defaultSettings", "Default settings"))}</span>`}
@@ -9602,6 +9651,7 @@ def ui_preview_html(
           </div>
           <div class="app-admin-plugin-actions">
             ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>` : ""}
+            ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-export="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.exportPlugin", "Export"))}</button>` : ""}
             ${canViewHealth ? `<button type="button" class="secondary-button" data-app-admin-plugin-health="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.checkHealth", "Check health"))}</button>` : ""}
             ${capabilities.includes("discover_library") && appAdminCanExecutePlugin(plugin, "discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
             ${capabilities.includes("inspect_source") && appAdminCanExecutePlugin(plugin, "inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
@@ -9613,7 +9663,7 @@ def ui_preview_html(
         </div>
       `;
     }
-    function renderAppAdminPluginSection(title, plugins) {
+    function renderAppAdminPluginSection(title, plugins, sectionCategory = "") {
       if (!plugins.length) return "";
       const ordered = [...plugins].sort(appAdminPluginSort);
       return `
@@ -9622,7 +9672,7 @@ def ui_preview_html(
             <h4>${escapeHtml(title)}</h4>
             <span class="profile-passkey-meta">${escapeHtml(String(ordered.length))}</span>
           </div>
-          ${ordered.map((plugin) => renderAppAdminPluginCard(plugin, ordered)).join("")}
+          ${ordered.map((plugin) => renderAppAdminPluginCard(plugin, ordered, sectionCategory)).join("")}
         </div>
       `;
     }
@@ -9855,16 +9905,18 @@ def ui_preview_html(
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
         return;
       }
-      const metadataPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source") || appAdminPluginHasCategory(plugin, "metadata_receiver"));
+      const metadataSourcePlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source"));
+      const metadataReceiverPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver"));
       const digitalPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "digital_media_source"));
       const importPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source"));
-      const shown = new Set([...metadataPlugins, ...digitalPlugins, ...importPlugins].map((plugin) => plugin.id));
+      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...importPlugins].map((plugin) => plugin.id));
       const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
       list.innerHTML = [
-        renderAppAdminPluginSection(tNext("appAdmin.metadataPlugins", "Metadata plugins"), metadataPlugins),
-        renderAppAdminPluginSection(tNext("appAdmin.digitalMediaSources", "Digital media sources"), digitalPlugins),
-        renderAppAdminPluginSection(tNext("appAdmin.importSources", "Import sources"), importPlugins),
-        renderAppAdminPluginSection(tNext("appAdmin.otherPlugins", "Other plugins"), otherPlugins)
+        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeMetadataSources", "Metadata sources"), metadataSourcePlugins, "metadata_source"),
+        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"), metadataReceiverPlugins, "metadata_receiver"),
+        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"), digitalPlugins, "digital_media_source"),
+        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeImportSources", "Import sources"), importPlugins, "import_source"),
+        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeOther", "Other plugins"), otherPlugins, "other")
       ].filter(Boolean).join("");
     }
     function appAdminRbacModeLabel(mode) {
@@ -10643,8 +10695,11 @@ def ui_preview_html(
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
     }
-    function appAdminPluginSectionPeers(plugin) {
+    function appAdminPluginSectionPeers(plugin, sectionCategory = "") {
       const plugins = appAdmin.plugins || [];
+      if (sectionCategory && sectionCategory !== "other") {
+        return plugins.filter((item) => appAdminPluginHasCategory(item, sectionCategory));
+      }
       if (appAdminPluginHasCategory(plugin, "metadata_source") || appAdminPluginHasCategory(plugin, "metadata_receiver")) {
         return plugins.filter((item) => appAdminPluginHasCategory(item, "metadata_source") || appAdminPluginHasCategory(item, "metadata_receiver"));
       }
@@ -10659,11 +10714,11 @@ def ui_preview_html(
         && !appAdminPluginHasCategory(item, "digital_media_source")
         && !appAdminPluginHasCategory(item, "import_source"));
     }
-    async function moveAppAdminPlugin(pluginId, direction) {
+    async function moveAppAdminPlugin(pluginId, direction, sectionCategory = "") {
       const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId);
       if (!plugin) return;
       if (!appAdminCanManagePlugin(plugin)) return;
-      const orderIndex = appAdminPluginMoveTarget(plugin, appAdminPluginSectionPeers(plugin), direction);
+      const orderIndex = appAdminPluginMoveTarget(plugin, appAdminPluginSectionPeers(plugin, sectionCategory), direction);
       if (!orderIndex) return;
       setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.movingPlugin", "Updating plugin order..."));
       try {
@@ -10675,6 +10730,72 @@ def ui_preview_html(
         appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginMoved", "Plugin order updated."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    function appAdminPluginDownloadName(response, pluginId) {
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i);
+      if (match && match[1]) return decodeURIComponent(match[1].replace(/"/g, ""));
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      const version = plugin.version || (plugin.manifest || {}).version || "0.0.0";
+      return `${pluginId || "plugin"}_${version}.zip`;
+    }
+    async function exportAppAdminPlugin(pluginId) {
+      if (!pluginId) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanManagePlugin(plugin)) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.exportingPlugin", "Exporting plugin..."));
+      try {
+        const response = await fetch(`/api/next/plugins/${encodeURIComponent(pluginId)}/export`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: authHeaders()
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || `Plugin export HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = appAdminPluginDownloadName(response, pluginId);
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginExported", "Plugin ZIP downloaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function importAppAdminPlugin() {
+      const input = document.getElementById("appAdminPluginImportFile");
+      const file = input && input.files && input.files[0];
+      if (!file) {
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.selectPluginZip", "Select a plugin ZIP first."), "bad");
+        return;
+      }
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.importingPlugin", "Importing plugin..."));
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/next/plugins/import", {
+          method: "POST",
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: authHeaders(),
+          body: formData
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `Plugin import HTTP ${response.status}`);
+        appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        if (input) input.value = "";
+        renderAppAdminPlugins();
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginImported", "Plugin imported."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -15771,6 +15892,7 @@ def ui_preview_html(
         }
       });
       document.getElementById("appAdminRefreshPluginJobsButton")?.addEventListener("click", () => refreshAppAdminPluginJobs());
+      document.getElementById("appAdminImportPluginButton")?.addEventListener("click", () => importAppAdminPlugin());
       document.getElementById("appAdminRefreshMetadataJobsButton")?.addEventListener("click", () => refreshAppAdminMetadataJobs());
       document.getElementById("appAdminRefreshDigitalSourcesButton")?.addEventListener("click", () => refreshAppAdminDigitalSources());
       document.getElementById("appAdminRefreshBackupButton")?.addEventListener("click", () => refreshAppAdminBackupStatus());
@@ -15786,6 +15908,7 @@ def ui_preview_html(
         const executeButton = event.target.closest("[data-app-admin-plugin-execute]");
         const jobButton = event.target.closest("[data-app-admin-plugin-job]");
         const moveButton = event.target.closest("[data-app-admin-plugin-move]");
+        const exportButton = event.target.closest("[data-app-admin-plugin-export]");
         const movieVaultRefreshButton = event.target.closest("[data-app-admin-movievault-refresh]");
         const movieVaultResetButton = event.target.closest("[data-app-admin-movievault-reset]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
@@ -15793,7 +15916,8 @@ def ui_preview_html(
         if (saveButton) saveAppAdminPluginConfig(saveButton.dataset.appAdminPluginSave, saveButton.closest(".profile-passkey"));
         if (executeButton) executeAppAdminPlugin(executeButton.dataset.appAdminPluginExecute, executeButton.dataset.entrypoint);
         if (jobButton) queueAppAdminPluginJob(jobButton.dataset.appAdminPluginJob, jobButton.dataset.entrypoint);
-        if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down");
+        if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down", moveButton.dataset.sectionCategory || "");
+        if (exportButton) exportAppAdminPlugin(exportButton.dataset.appAdminPluginExport);
         if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(false);
         if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(true);
       });
@@ -21643,6 +21767,117 @@ def require_plugin_action_permission(conn, plugin: dict[str, Any], entrypoint: s
     return require_any_next_permission(conn, plugin_action_permissions(plugin, entrypoint))
 
 
+def plugin_archive_filename(plugin: dict[str, Any]) -> str:
+    manifest = plugin.get("manifest") or {}
+    name = str(plugin.get("id") or manifest.get("id") or plugin.get("name") or "plugin").strip()
+    version = str(plugin.get("version") or manifest.get("version") or "0.0.0").strip()
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._-") or "plugin"
+    safe_version = re.sub(r"[^A-Za-z0-9._-]+", "_", version).strip("._-") or "0.0.0"
+    return f"{safe_name}_{safe_version}.zip"
+
+
+def write_plugin_archive(plugin: dict[str, Any], destination: Path) -> None:
+    plugin_id = str(plugin.get("id") or "").strip()
+    source_path = Path(str(plugin.get("sourcePath") or ""))
+    if not plugin_id or not source_path.exists() or not source_path.is_dir():
+        raise NextApiError("Plugin source directory is not available", 404)
+    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(source_path.rglob("*")):
+            if path.is_dir():
+                continue
+            if "__pycache__" in path.parts or path.suffix == ".pyc" or path.name == ".DS_Store":
+                continue
+            archive.write(path, Path(plugin_id) / path.relative_to(source_path))
+
+
+def safe_extract_plugin_zip(upload_path: Path, destination_dir: Path) -> None:
+    destination = destination_dir.resolve()
+    with zipfile.ZipFile(upload_path) as archive:
+        for member in archive.infolist():
+            member_path = Path(member.filename)
+            if member_path.is_absolute() or ".." in member_path.parts:
+                raise NextApiError("Plugin ZIP contains unsafe paths", 400)
+            target = (destination / member.filename).resolve()
+            if destination != target and destination not in target.parents:
+                raise NextApiError("Plugin ZIP contains unsafe paths", 400)
+        archive.extractall(destination)
+
+
+def uploaded_plugin_file_path(destination_dir: Path) -> Path:
+    upload = request.files.get("file") or request.files.get("plugin")
+    if not upload or not upload.filename:
+        raise NextApiError("Upload a plugin ZIP as multipart field 'file'", 400)
+    if not upload.filename.lower().endswith(".zip"):
+        raise NextApiError("Plugin upload must be a .zip file", 400)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    target = destination_dir / f"{uuid.uuid4()}.zip"
+    upload.save(target)
+    return target
+
+
+def locate_plugin_root(extracted_dir: Path) -> Path:
+    direct_manifest = extracted_dir / "manifest.json"
+    if direct_manifest.exists():
+        return extracted_dir
+    candidates = [item for item in extracted_dir.iterdir() if item.is_dir() and (item / "manifest.json").exists()]
+    if len(candidates) == 1:
+        return candidates[0]
+    raise NextApiError("Plugin ZIP must contain exactly one plugin manifest.json", 400)
+
+
+def validate_import_plugin_root(plugin_root: Path) -> dict[str, Any]:
+    manifest_path = plugin_root / "manifest.json"
+    plugin_module = plugin_root / "plugin.py"
+    if not manifest_path.exists():
+        raise NextApiError("Plugin manifest.json is missing", 400)
+    if not plugin_module.exists():
+        raise NextApiError("Plugin runtime plugin.py is missing", 400)
+    try:
+        manifest = json_lib.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json_lib.JSONDecodeError) as exc:
+        raise NextApiError("Plugin manifest.json is invalid", 400) from exc
+    if not isinstance(manifest, dict):
+        raise NextApiError("Plugin manifest.json must contain an object", 400)
+    plugin_id = str(manifest.get("id") or "").strip()
+    if not PLUGIN_ID_PATTERN.match(plugin_id):
+        raise NextApiError("Plugin manifest contains an invalid id", 400)
+    if not str(manifest.get("name") or "").strip():
+        raise NextApiError("Plugin manifest must declare a name", 400)
+    if not str(manifest.get("version") or "").strip():
+        raise NextApiError("Plugin manifest must declare a version", 400)
+    try:
+        settings_schema_version = int(manifest.get("settingsSchemaVersion") or 1)
+    except (TypeError, ValueError) as exc:
+        raise NextApiError("Plugin settings schema version is invalid", 400) from exc
+    if settings_schema_version > 1:
+        raise NextApiError("Plugin settings schema version is not supported", 400)
+    try:
+        validate_manifest_compatibility(manifest, require_declared=True)
+    except ValueError as exc:
+        raise NextApiError(str(exc), 400) from exc
+    categories = manifest.get("categories")
+    kind = str(manifest.get("kind") or "").strip()
+    if not isinstance(categories, list):
+        categories = [kind] if kind else []
+    valid = {"metadata_source", "metadata_receiver", "digital_media_source", "import_source"}
+    if not {str(item) for item in categories}.intersection(valid):
+        raise NextApiError("Plugin manifest must declare a supported category", 400)
+    return manifest
+
+
+def install_plugin_from_root(plugin_root: Path, manifest: dict[str, Any]) -> Path:
+    plugin_id = str(manifest["id"]).strip()
+    install_base = DEFAULT_PLUGIN_DIR.resolve()
+    target = (install_base / plugin_id).resolve()
+    if install_base != target and install_base not in target.parents:
+        raise NextApiError("Plugin target path is not safe", 400)
+    install_base.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(plugin_root, target)
+    return target
+
+
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
         return False
@@ -26877,6 +27112,89 @@ def register_routes(flask_app: Flask) -> None:
                 sync_metadata_plugin_registry(conn)
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
         return response(registry)
+
+    @flask_app.get("/api/next/plugins/<plugin_id>/export")
+    def export_plugin(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        with connect() as conn:
+            require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+            if not plugin:
+                raise NextApiError("Plugin not found", 404)
+            require_any_next_permission(conn, plugin_manage_permissions(plugin))
+            file_name = plugin_archive_filename(plugin)
+            handle = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+            archive_path = Path(handle.name)
+            handle.close()
+            write_plugin_archive(plugin, archive_path)
+
+        @after_this_request
+        def cleanup_plugin_archive(response_obj):
+            try:
+                archive_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return response_obj
+
+        return send_file(
+            archive_path,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=file_name,
+        )
+
+    @flask_app.post("/api/next/plugins/import")
+    def import_plugin_zip():
+        with connect() as conn:
+            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            with tempfile.TemporaryDirectory(prefix="discvault-plugin-import-") as temp_dir_name:
+                temp_dir = Path(temp_dir_name)
+                upload_path = uploaded_plugin_file_path(temp_dir)
+                extracted_dir = temp_dir / "extracted"
+                extracted_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    safe_extract_plugin_zip(upload_path, extracted_dir)
+                except zipfile.BadZipFile as exc:
+                    raise NextApiError("Plugin upload is not a valid ZIP file", 400) from exc
+                plugin_root = locate_plugin_root(extracted_dir)
+                manifest = validate_import_plugin_root(plugin_root)
+                installed_path = install_plugin_from_root(plugin_root, manifest)
+
+            with conn.transaction():
+                if table_exists(conn, "metadata_plugins"):
+                    sync_metadata_plugin_registry(conn)
+                else:
+                    sync_plugin_registry(conn, table_exists, Jsonb)
+                audit_event(
+                    conn,
+                    event_type="plugin.imported",
+                    category="plugins",
+                    actor=actor,
+                    target_type="plugin",
+                    target_id=str(manifest["id"]),
+                    summary=f"Imported plugin {manifest['id']} {manifest.get('version')}",
+                    metadata={
+                        "pluginId": manifest["id"],
+                        "name": manifest.get("name"),
+                        "version": manifest.get("version"),
+                        "categories": manifest.get("categories"),
+                        "installedPath": str(installed_path),
+                    },
+                )
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            plugin = next((item for item in registry["plugins"] if item["id"] == manifest["id"]), None)
+        return response({"status": "ok", "plugin": plugin, "registry": registry})
 
     @flask_app.patch("/api/next/plugins/<plugin_id>")
     def update_plugin(plugin_id: str):

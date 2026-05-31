@@ -1019,5 +1019,21 @@
   "preferences.showExtendedPeoplePagesHelp": "Mostra film digitali e filmografie complete nelle pagine persone. Disattivato mostra solo i media fisici posseduti.",
   "containerDetail.overview": "Panoramica",
   "containerDetail.sections": "Sezioni contenitore",
-  "migration.legacyAuthRequired": "Accedi con una passkey legacy owner/admin prima di avviare la migrazione."
+  "migration.legacyAuthRequired": "Accedi con una passkey legacy owner/admin prima di avviare la migrazione.",
+  "appAdmin.pluginPackages": "Pacchetti plugin",
+  "appAdmin.pluginPackagesHelp": "Esporta i plugin installati o installa uno ZIP plugin DiscVault compatibile.",
+  "appAdmin.pluginImportHelp": "Gli ZIP importati devono contenere manifest.json, plugin.py, una versione e una dichiarazione API plugin DiscVault compatibile.",
+  "appAdmin.importPlugin": "Importa plugin",
+  "appAdmin.exportPlugin": "Esporta",
+  "appAdmin.exportingPlugin": "Esportazione plugin...",
+  "appAdmin.pluginExported": "ZIP del plugin scaricato.",
+  "appAdmin.importingPlugin": "Importazione plugin...",
+  "appAdmin.pluginImported": "Plugin importato.",
+  "appAdmin.selectPluginZip": "Seleziona prima uno ZIP plugin.",
+  "appAdmin.version": "Versione",
+  "appAdmin.pluginTypeMetadataSources": "Fonti metadati",
+  "appAdmin.pluginTypeMetadataReceivers": "Destinatari metadati",
+  "appAdmin.pluginTypeDigitalSources": "Fonti multimediali digitali",
+  "appAdmin.pluginTypeImportSources": "Fonti di importazione",
+  "appAdmin.pluginTypeOther": "Altri plugin"
 }
