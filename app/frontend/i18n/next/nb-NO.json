@@ -37,7 +37,7 @@
   "collection.movies": "Filmer",
   "collection.noPoster": "Ingen plakat",
   "collection.people": "Personer",
-  "collection.searchPlaceholder": "Søk tittel, strekkode, format...",
+  "collection.searchPlaceholder": "Sok tittel, strekkode, format, crew...",
   "collection.signInRequired": "Innlogging kreves",
   "collection.signInRequiredMessage": "Logg inn med passkey for å laste samlingen.",
   "collection.shown": "vist",

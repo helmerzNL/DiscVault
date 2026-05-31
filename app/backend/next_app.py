@@ -2912,6 +2912,14 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                     m.year,
                     m.format,
                     m.edition,
+                    concat_ws(' ',
+                        m.metadata->>'actor',
+                        m.metadata->>'director',
+                        m.metadata->>'producer',
+                        m.metadata->>'writer',
+                        m.metadata->>'genre',
+                        m.metadata->>'studios'
+                    ) AS metadata_search,
                     COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
                     COALESCE(m.metadata->>'backdrop_url', backdrop_asset.source_url) AS backdrop_url,
                     poster_asset.id AS poster_asset_id,
@@ -2950,9 +2958,12 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                 """,
                 (limit,),
             )
-            return attach_media_group_availability(
+            return attach_movie_search_credits(
                 conn,
-                attach_digital_availability(conn, [with_preview_media_urls(row) for row in cur.fetchall()]),
+                attach_media_group_availability(
+                    conn,
+                    attach_digital_availability(conn, [with_preview_media_urls(row) for row in cur.fetchall()]),
+                ),
             )
     with conn.cursor() as cur:
         cur.execute(
@@ -2967,6 +2978,14 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                 year,
                 format,
                 edition,
+                concat_ws(' ',
+                    metadata->>'actor',
+                    metadata->>'director',
+                    metadata->>'producer',
+                    metadata->>'writer',
+                    metadata->>'genre',
+                    metadata->>'studios'
+                ) AS metadata_search,
                 metadata->>'poster_url' AS poster_url,
                 metadata->>'backdrop_url' AS backdrop_url,
                 created_at,
@@ -2977,7 +2996,50 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
             """,
             (limit,),
         )
-        return attach_media_group_availability(conn, attach_digital_availability(conn, cur.fetchall()))
+        return attach_movie_search_credits(
+            conn,
+            attach_media_group_availability(conn, attach_digital_availability(conn, cur.fetchall())),
+        )
+
+
+def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not movies or not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    if not movie_ids:
+        return movies
+    credits_by_movie: dict[str, list[str]] = {str(movie_id): [] for movie_id in movie_ids}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mc.movie_id,
+                p.name,
+                p.known_for,
+                mc.credit_type,
+                mc.character,
+                mc.job,
+                mc.sort_order
+            FROM movie_credits mc
+            JOIN people p ON p.id = mc.person_id
+            WHERE mc.movie_id = ANY(%s)
+            ORDER BY mc.movie_id, mc.sort_order, p.name
+            """,
+            (movie_ids,),
+        )
+        for row in cur.fetchall():
+            key = str(row.get("movie_id"))
+            values = credits_by_movie.get(key)
+            if values is None or len(values) >= 80:
+                continue
+            values.extend(
+                clean_text(row.get(field))
+                for field in ("name", "known_for", "credit_type", "character", "job")
+                if clean_text(row.get(field))
+            )
+    for movie in movies:
+        movie["search_credits"] = " ".join(credits_by_movie.get(str(movie.get("id")), []))
+    return movies
 
 
 def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
@@ -9768,7 +9830,16 @@ def ui_preview_html(
       const query = activeSearchQuery();
       if (!query) return true;
       const groups = (movie.media_groups || []).map((group) => group.name).join(" ");
-      const haystack = [movie.title, movie.original_title, movie.year, movie.format, movie.barcode, groups].join(" ").toLowerCase();
+      const haystack = [
+        movie.title,
+        movie.original_title,
+        movie.year,
+        movie.format,
+        movie.barcode,
+        movie.metadata_search,
+        movie.search_credits,
+        groups
+      ].join(" ").toLowerCase();
       return haystack.includes(query);
     }
     function containerMatchesGroup(container) {
@@ -9788,7 +9859,9 @@ def ui_preview_html(
         movie.original_title,
         movie.year,
         movie.format,
-        movie.barcode
+        movie.barcode,
+        movie.metadata_search,
+        movie.search_credits
       ].filter(Boolean).join(" ")).join(" ");
       const haystack = [
         container.title,

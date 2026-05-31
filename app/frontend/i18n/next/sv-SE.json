@@ -37,7 +37,7 @@
   "collection.movies": "Filmer",
   "collection.noPoster": "Ingen poster",
   "collection.people": "Personer",
-  "collection.searchPlaceholder": "Sök titel, streckkod, format...",
+  "collection.searchPlaceholder": "Sok titel, streckkod, format, crew...",
   "collection.signInRequired": "Inloggning krävs",
   "collection.signInRequiredMessage": "Logga in med din passkey för att ladda samlingen.",
   "collection.shown": "visas",

@@ -52,7 +52,7 @@
   "collection.movies": "Films",
   "collection.noPoster": "Geen poster",
   "collection.people": "Personen",
-  "collection.searchPlaceholder": "Zoek titel, barcode, formaat...",
+  "collection.searchPlaceholder": "Zoek titel, barcode, formaat, crew...",
   "collection.signInRequired": "Inloggen vereist",
   "collection.signInRequiredMessage": "Log in met je passkey om de collectie te laden.",
   "collection.shown": "getoond",
