@@ -25,6 +25,41 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertIn("inspect_source", plugin.runtime["entrypoints"])
         self.assertIn("plan_import", plugin.runtime["entrypoints"])
 
+    def test_known_collection_import_plugins_are_discoverable(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        for plugin_id in ("import_mymovies_dk", "import_letterboxd", "import_bluray_com", "import_clz_movies"):
+            with self.subTest(plugin_id=plugin_id):
+                plugin = plugins[plugin_id]
+                self.assertIn("import_source", plugin.manifest["categories"])
+                self.assertIn("inspect_source", plugin.runtime["entrypoints"])
+                self.assertIn("plan_import", plugin.runtime["entrypoints"])
+                self.assertIn("import_source", plugin.runtime["entrypoints"])
+
+    def test_letterboxd_import_plugin_parses_export_csv(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_file = Path(temp_dir) / "watched.csv"
+            export_file.write_text(
+                "Date,Name,Year,Letterboxd URI\n"
+                "2026-05-31,Back to the Future,1985,https://boxd.it/2b8e\n",
+                encoding="utf-8",
+            )
+
+            execution = run_plugin_entrypoint(
+                "import_letterboxd",
+                "import_source",
+                {"sourcePath": str(export_file)},
+                {},
+            )
+
+        result = execution["result"]
+        self.assertEqual(execution["status"], "ok")
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["items"][0]["title"], "Back to the Future")
+        self.assertEqual(result["items"][0]["year"], "1985")
+        self.assertEqual(result["items"][0]["sourceUrl"], "https://boxd.it/2b8e")
+
     def test_legacy_import_plugin_inspects_sqlite_source(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             data_dir = Path(temp_dir)

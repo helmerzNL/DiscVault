@@ -4,10 +4,31 @@ from pathlib import Path
 
 
 APP_NAME = "DiscVault"
+PLACEHOLDER_VERSIONS = {"", "dev", "next-dev", "unknown"}
 
 
 def _clean(value: str | None) -> str:
     return str(value or "").strip()
+
+
+def _version_file_candidates() -> list[Path]:
+    here = Path(__file__).resolve()
+    return [
+        here.parents[1] / "VERSION",
+        here.parents[2] / "app" / "VERSION",
+        Path.cwd() / "VERSION",
+    ]
+
+
+def packaged_version() -> str:
+    for path in _version_file_candidates():
+        try:
+            value = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if value and value.lower() not in PLACEHOLDER_VERSIONS:
+            return value
+    return ""
 
 
 def build_sha() -> str:
@@ -34,8 +55,11 @@ def build_sha() -> str:
 def backend_version() -> str:
     for key in ("DISCVAULT_BACKEND_VERSION", "BUILD_VERSION", "APP_VERSION", "VERSION"):
         value = _clean(os.environ.get(key))
-        if value and value.lower() != "dev":
+        if value and value.lower() not in PLACEHOLDER_VERSIONS:
             return value
+    value = packaged_version()
+    if value:
+        return value
     try:
         root = Path(__file__).resolve().parents[2]
         value = subprocess.check_output(

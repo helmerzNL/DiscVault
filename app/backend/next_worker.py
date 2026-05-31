@@ -9,8 +9,10 @@ without processing the same job twice.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import signal
 import sys
 import time
@@ -422,6 +424,8 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
     persist_summary = {}
     if entrypoint == "sync_library":
         persist_summary = persist_digital_sync(plugin_id, execution.get("result") or {})
+    elif entrypoint == "import_source":
+        persist_summary = persist_collection_import(plugin_id, execution.get("result") or {}, queued_actor)
     return {
         "workerId": worker_id,
         "handled": True,
@@ -430,6 +434,254 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
         "entrypoint": entrypoint,
         "execution": execution,
         "persistence": persist_summary,
+    }
+
+
+def stable_uuid(seed: str) -> UUID:
+    import uuid
+
+    return uuid.uuid5(uuid.UUID("0e3a8e91-caf6-4b6e-911f-59d5f4cf8d9e"), seed)
+
+
+def source_public_id(prefix: str, value: str, *, fallback: str) -> str:
+    raw = clean_text(value) or fallback
+    safe = re.sub(r"[^a-zA-Z0-9_-]+", "-", raw).strip("-").lower()[:90]
+    return f"{prefix}-{safe or fallback}"
+
+
+def import_movie_existing_id(conn, item: dict[str, Any]) -> UUID | None:
+    barcode = clean_text(item.get("barcode"))
+    with conn.cursor() as cur:
+        if barcode:
+            cur.execute("SELECT id FROM movies WHERE barcode=%s LIMIT 1", (barcode,))
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+        identifiers = {
+            "tmdb": clean_text(item.get("tmdbId") or item.get("tmdb_id")),
+            "imdb": clean_text(item.get("imdbId") or item.get("imdb_id")),
+        }
+        if table_exists(conn, "movie_identifiers"):
+            for provider, identifier in identifiers.items():
+                if not identifier:
+                    continue
+                cur.execute(
+                    """
+                    SELECT movie_id
+                    FROM movie_identifiers
+                    WHERE provider_id=%s AND identifier_type='movie_id' AND identifier=%s
+                    LIMIT 1
+                    """,
+                    (provider, identifier),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row["movie_id"]
+        title = clean_text(item.get("title"))
+        year = clean_text(item.get("year"))
+        if title and year:
+            cur.execute(
+                """
+                SELECT id
+                FROM movies
+                WHERE lower(title)=lower(%s) AND year=%s
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (title, year),
+            )
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+    return None
+
+
+def import_movie_metadata(item: dict[str, Any], plugin_id: str) -> dict[str, Any]:
+    metadata = {
+        "import_source": plugin_id,
+        "source_provider": item.get("sourceProvider") or plugin_id,
+        "source_file": item.get("sourceFile"),
+        "source_url": item.get("sourceUrl"),
+        "genre": item.get("genre"),
+        "director": item.get("director"),
+        "actor": item.get("actor"),
+        "poster_url": item.get("posterUrl") or item.get("poster_url"),
+        "backdrop_url": item.get("backdropUrl") or item.get("backdrop_url"),
+        "personal": item.get("personal"),
+    }
+    return {key: value for key, value in metadata.items() if value not in (None, "", [], {})}
+
+
+def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUID, bool]:
+    title = clean_text(item.get("title"))
+    if not title:
+        raise RuntimeError("Import item is missing title")
+    external_id = clean_text(item.get("externalId") or item.get("external_id"))
+    seed = f"{plugin_id}:{external_id or title}:{clean_text(item.get('year'))}:{clean_text(item.get('barcode'))}"
+    existing_id = import_movie_existing_id(conn, item)
+    movie_id = existing_id or stable_uuid(f"movie:{seed}")
+    public_id = source_public_id(f"import-{plugin_id}", external_id or str(movie_id), fallback=str(movie_id))
+    metadata = import_movie_metadata(item, plugin_id)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO movies (
+                id,
+                public_id,
+                barcode,
+                title,
+                sort_title,
+                original_title,
+                year,
+                release_date,
+                format,
+                edition,
+                country,
+                language,
+                runtime_minutes,
+                overview,
+                rating,
+                metadata,
+                created_at,
+                updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            ON CONFLICT (id) DO UPDATE SET
+                barcode=COALESCE(EXCLUDED.barcode, movies.barcode),
+                title=COALESCE(EXCLUDED.title, movies.title),
+                sort_title=COALESCE(EXCLUDED.sort_title, movies.sort_title),
+                original_title=COALESCE(EXCLUDED.original_title, movies.original_title),
+                year=COALESCE(EXCLUDED.year, movies.year),
+                release_date=COALESCE(EXCLUDED.release_date, movies.release_date),
+                format=COALESCE(EXCLUDED.format, movies.format),
+                edition=COALESCE(EXCLUDED.edition, movies.edition),
+                country=COALESCE(EXCLUDED.country, movies.country),
+                language=COALESCE(EXCLUDED.language, movies.language),
+                runtime_minutes=COALESCE(EXCLUDED.runtime_minutes, movies.runtime_minutes),
+                overview=COALESCE(EXCLUDED.overview, movies.overview),
+                rating=COALESCE(EXCLUDED.rating, movies.rating),
+                metadata=movies.metadata || EXCLUDED.metadata,
+                updated_at=now()
+            """,
+            (
+                movie_id,
+                public_id,
+                clean_text(item.get("barcode")) or None,
+                title,
+                clean_text(item.get("sortTitle") or item.get("sort_title") or title),
+                clean_text(item.get("originalTitle") or item.get("original_title")) or None,
+                clean_text(item.get("year")) or None,
+                clean_text(item.get("releaseDate") or item.get("release_date")) or None,
+                clean_text(item.get("format")) or None,
+                clean_text(item.get("edition")) or None,
+                clean_text(item.get("country")) or None,
+                clean_text(item.get("language")) or None,
+                item.get("runtimeMinutes") or item.get("runtime_minutes") or None,
+                clean_text(item.get("overview") or item.get("plot")) or None,
+                clean_text(item.get("rating")) or None,
+                Jsonb(json_ready(metadata)),
+            ),
+        )
+        if table_exists(conn, "movie_identifiers"):
+            for provider, identifier in {
+                "tmdb": clean_text(item.get("tmdbId") or item.get("tmdb_id")),
+                "imdb": clean_text(item.get("imdbId") or item.get("imdb_id")),
+            }.items():
+                if not identifier:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO movie_identifiers (movie_id, provider_id, identifier_type, identifier)
+                    VALUES (%s, %s, 'movie_id', %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (movie_id, provider, identifier),
+                )
+    return movie_id, existing_id is None
+
+
+def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dict[str, Any] | None) -> dict[str, Any]:
+    if result.get("status") not in {"completed", "ok"}:
+        return {"skipped": True, "reason": result.get("error") or result.get("status") or "import did not complete"}
+    items = result.get("items") or []
+    if not isinstance(items, list):
+        return {"skipped": True, "reason": "import_source result did not contain items"}
+    with connect() as conn:
+        if not table_exists(conn, "movies"):
+            return {"skipped": True, "reason": "movies table is not initialized"}
+        with conn.transaction():
+            container_id = None
+            if table_exists(conn, "containers") and table_exists(conn, "collection_items"):
+                source_hash = clean_text(result.get("sourceDatabaseHash")) or hashlib.sha256(
+                    f"{plugin_id}:{result.get('sourcePath')}".encode("utf-8")
+                ).hexdigest()
+                container_id = stable_uuid(f"collection-import:{plugin_id}:{source_hash}")
+                title = f"{result.get('sourceKind') or plugin_id} import"
+                public_id = source_public_id("import-collection", f"{plugin_id}-{source_hash[:16]}", fallback=str(container_id))
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO containers (
+                            id, public_id, container_type, title, metadata, created_at, updated_at
+                        )
+                        VALUES (%s, %s, 'collection', %s, %s, now(), now())
+                        ON CONFLICT (id) DO UPDATE SET
+                            title=EXCLUDED.title,
+                            metadata=containers.metadata || EXCLUDED.metadata,
+                            updated_at=now()
+                        """,
+                        (
+                            container_id,
+                            public_id,
+                            title,
+                            Jsonb(
+                                json_ready(
+                                    {
+                                        "import_source": plugin_id,
+                                        "source_kind": result.get("sourceKind"),
+                                        "source_path": result.get("sourcePath"),
+                                        "source_hash": source_hash,
+                                    }
+                                )
+                            ),
+                        ),
+                    )
+                    cur.execute("DELETE FROM collection_items WHERE collection_id=%s AND item_type='movie'", (container_id,))
+
+            imported = 0
+            created = 0
+            linked = 0
+            errors = []
+            for index, item in enumerate(items[:5000], start=1):
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
+                    imported += 1
+                    created += 1 if was_created else 0
+                    if container_id and table_exists(conn, "collection_items"):
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                INSERT INTO collection_items (collection_id, item_type, item_id, sort_order, created_at)
+                                VALUES (%s, 'movie', %s, %s, now())
+                                ON CONFLICT (collection_id, item_type, item_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
+                                """,
+                                (container_id, movie_id, index),
+                            )
+                        linked += 1
+                except Exception as exc:
+                    errors.append({"index": index, "title": item.get("title"), "error": str(exc)})
+
+    return {
+        "sourceKind": result.get("sourceKind"),
+        "sourcePath": result.get("sourcePath"),
+        "items": len(items),
+        "imported": imported,
+        "created": created,
+        "linkedToCollection": linked,
+        "collectionId": str(container_id) if container_id else None,
+        "errors": errors[:20],
     }
 
 

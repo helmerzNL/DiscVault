@@ -11,6 +11,8 @@ from app.backend.next_metadata import canonicalize_plugin_result
 from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import merge_metadata_results
 from app.backend.next_metadata import normalize_media_format
+from app.backend.next_metadata import plugin_execution_plan
+from app.backend.next_metadata import query_from_payload
 from app.backend.next_metadata import summarize_metadata_execution
 
 
@@ -178,6 +180,15 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(external_metadata_barcode("IMPORT-BACK_TO_THE_FUTURE-1985"), "")
         self.assertEqual(external_metadata_barcode("032429316110-BOX-01"), "")
         self.assertEqual(external_metadata_barcode("8717418557683"), "8717418557683")
+
+    def test_import_lookup_can_request_box_set_candidates(self):
+        query = query_from_payload({"barcode": "5051892000000", "detectBoxSets": True})
+        plan = plugin_execution_plan(
+            {"capabilities": ["search_barcode", "movie_details", "box_set_candidates"]},
+            query,
+        )
+
+        self.assertIn("box_set_candidates", [item["entrypoint"] for item in plan])
 
     def test_media_format_normalization(self):
         self.assertEqual(normalize_media_format("Ultra HD Blu-ray"), "4K UHD")
