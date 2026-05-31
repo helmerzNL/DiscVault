@@ -5126,6 +5126,10 @@ def ui_preview_html(
       padding: 12px;
       min-width: 0;
     }
+    .profile-passkey.selected {
+      border-color: color-mix(in srgb, var(--accent) 68%, var(--line));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+    }
     .profile-passkey-head {
       display: flex;
       justify-content: space-between;
@@ -5243,6 +5247,72 @@ def ui_preview_html(
       font: inherit;
       font-size: .9rem;
       font-weight: 620;
+    }
+    .app-admin-rbac-mode {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .app-admin-rbac-mode button.active {
+      background: var(--text);
+      color: var(--bg-solid);
+      border-color: var(--text);
+    }
+    .app-admin-role-layout {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .app-admin-role-editor {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      padding: 12px;
+      min-width: 0;
+    }
+    .app-admin-role-editor h3 {
+      margin: 0;
+      font-size: .95rem;
+    }
+    .app-admin-permission-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .app-admin-permission-domain {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      padding: 10px;
+      min-width: 0;
+    }
+    .app-admin-permission-domain h4 {
+      margin: 0 0 8px;
+      font-size: .82rem;
+    }
+    .app-admin-permission-domain label {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      color: var(--text);
+      font-size: .76rem;
+      line-height: 1.3;
+      padding: 5px 0;
+    }
+    .app-admin-permission-domain input {
+      margin-top: 2px;
+    }
+    .app-admin-permission-domain small {
+      display: block;
+      color: var(--muted);
+      font-size: .7rem;
+      margin-top: 2px;
     }
     .tag {
       min-height: 24px;
@@ -5682,6 +5752,10 @@ def ui_preview_html(
         min-width: 0;
       }
       .app-admin-plugin-config {
+        grid-template-columns: 1fr;
+      }
+      .app-admin-role-layout,
+      .app-admin-permission-grid {
         grid-template-columns: 1fr;
       }
       .profile-passkey-actions .secondary-button {
@@ -6489,6 +6563,7 @@ def ui_preview_html(
         <nav class="app-admin-submenu detail-submenu" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
           <button type="button" class="active" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
           <button type="button" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
+          <button type="button" data-app-admin-tab="roles" data-next-i18n="appAdmin.tabRoles">Roles</button>
           <button type="button" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
           <button type="button" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
           <button type="button" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
@@ -6566,6 +6641,82 @@ def ui_preview_html(
               </form>
               <div class="profile-passkey-list" id="appAdminGroupsList"></div>
               <div class="login-message" id="appAdminGroupsMessage"></div>
+            </div>
+          </section>
+        </section>
+        <section class="app-admin-panel" data-app-admin-panel="roles">
+          <section class="profile-grid">
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.rbacMode">RBAC mode</h3>
+              <p data-next-i18n="appAdmin.rbacModeHelp">Basic keeps DiscVault roles simple. Advanced unlocks custom roles and exact permission sets.</p>
+              <div class="profile-meta">
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.currentMode">Current mode</span>
+                  <strong id="appAdminRbacMode">-</strong>
+                </div>
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.permissionCount">Permissions</span>
+                  <strong id="appAdminPermissionCount">-</strong>
+                </div>
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.customRoleCount">Custom roles</span>
+                  <strong id="appAdminCustomRoleCount">-</strong>
+                </div>
+              </div>
+              <div class="app-admin-rbac-mode">
+                <button type="button" class="secondary-button" id="appAdminRbacBasicButton" data-app-admin-rbac-mode="basic" data-next-i18n="appAdmin.basicMode">Basic</button>
+                <button type="button" class="secondary-button" id="appAdminRbacAdvancedButton" data-app-admin-rbac-mode="advanced" data-next-i18n="appAdmin.advancedMode">Advanced</button>
+              </div>
+              <div class="login-message" id="appAdminRbacMessage"></div>
+            </div>
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.createCustomRole">Create custom role</h3>
+              <p data-next-i18n="appAdmin.createCustomRoleHelp">Create a role in Advanced mode, then select it below to attach permissions.</p>
+              <form class="profile-form" id="appAdminRoleCreateForm">
+                <label for="appAdminRoleKey">
+                  <span data-next-i18n="appAdmin.roleKey">Role key</span>
+                  <input id="appAdminRoleKey" autocomplete="off" maxlength="80" placeholder="family_curator">
+                </label>
+                <label for="appAdminRoleName">
+                  <span data-next-i18n="appAdmin.roleName">Role name</span>
+                  <input id="appAdminRoleName" autocomplete="off" maxlength="120">
+                </label>
+                <label for="appAdminRoleDescription">
+                  <span data-next-i18n="appAdmin.roleDescription">Description</span>
+                  <input id="appAdminRoleDescription" autocomplete="off" maxlength="500">
+                </label>
+                <div class="profile-form-actions">
+                  <button type="submit" class="secondary-button" id="appAdminCreateRoleButton" data-next-i18n="appAdmin.createRoleButton">Create role</button>
+                </div>
+              </form>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.roles">Roles</h3>
+              <p data-next-i18n="appAdmin.rolesHelp">Basic roles are fixed presets. In Advanced mode the Owner can create and maintain custom roles.</p>
+              <div class="app-admin-role-layout">
+                <div class="profile-passkey-list" id="appAdminRolesList"></div>
+                <div class="app-admin-role-editor" id="appAdminRoleEditor">
+                  <h3 data-next-i18n="appAdmin.roleEditor">Role editor</h3>
+                  <form class="profile-form" id="appAdminRoleEditForm">
+                    <label for="appAdminRoleEditName">
+                      <span data-next-i18n="appAdmin.roleName">Role name</span>
+                      <input id="appAdminRoleEditName" autocomplete="off" maxlength="120">
+                    </label>
+                    <label for="appAdminRoleEditDescription">
+                      <span data-next-i18n="appAdmin.roleDescription">Description</span>
+                      <input id="appAdminRoleEditDescription" autocomplete="off" maxlength="500">
+                    </label>
+                    <div class="profile-form-actions">
+                      <button type="submit" class="secondary-button" id="appAdminSaveRoleButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
+                    </div>
+                  </form>
+                  <div class="profile-action-row">
+                    <button type="button" class="secondary-button" id="appAdminSelectAllPermissionsButton" data-next-i18n="appAdmin.selectAllPermissions">Select all</button>
+                    <button type="button" class="secondary-button" id="appAdminClearPermissionsButton" data-next-i18n="appAdmin.clearPermissions">Clear</button>
+                  </div>
+                  <div id="appAdminPermissionEditor"></div>
+                </div>
+              </div>
             </div>
           </section>
         </section>
@@ -6755,8 +6906,10 @@ def ui_preview_html(
       pluginJobs: [],
       metadataJobs: [],
       plugins: [],
+      rbac: {},
       roles: [],
       assignableRoles: [],
+      selectedRoleId: "",
       users: []
     };
     let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null, addResult: null};
@@ -6856,6 +7009,7 @@ def ui_preview_html(
       adminTabs: {
         access: ["security.toggle_auth", "security.manage_invite_only", "users.view", "users.invite", "users.manage_passkeys"],
         users: ["users.view", "users.invite", "users.disable", "users.delete", "users.assign_roles", "groups.view", "groups.create", "groups.invite"],
+        roles: ["roles.view", "roles.manage", "security.manage_rbac_mode", "users.assign_roles"],
         plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "digital_sources.connect", "digital_sources.manage", "collection.import"],
         digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
         metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"],
@@ -6903,7 +7057,7 @@ def ui_preview_html(
       return true;
     }
     function allowedAppAdminTabs() {
-      return ["access", "users", "plugins", "digital", "metadata", "backup"].filter(canUseAdminTab);
+      return ["access", "users", "roles", "plugins", "digital", "metadata", "backup"].filter(canUseAdminTab);
     }
     function canUseAppAdmin() {
       return allowedAppAdminTabs().length > 0;
@@ -7420,6 +7574,137 @@ def ui_preview_html(
         renderAppAdminPluginSection(tNext("appAdmin.otherPlugins", "Other plugins"), otherPlugins)
       ].filter(Boolean).join("");
     }
+    function appAdminRbacModeLabel(mode) {
+      return mode === "advanced"
+        ? tNext("appAdmin.advancedMode", "Advanced")
+        : tNext("appAdmin.basicMode", "Basic");
+    }
+    function appAdminCanManageRbac() {
+      const rbac = appAdmin.rbac || {};
+      return currentRole() === "owner" && rbac.mode === "advanced" && rbac.customRolesEnabled !== false;
+    }
+    function appAdminPermissionDomains(permissions) {
+      const grouped = {};
+      (permissions || []).forEach((permission) => {
+        const domain = permission.domain || "core";
+        if (!grouped[domain]) grouped[domain] = [];
+        grouped[domain].push(permission);
+      });
+      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+    }
+    function appAdminPermissionCheckboxes(selectedPermissions, disabled = false) {
+      const selected = new Set((selectedPermissions || []).map(String));
+      const domains = appAdminPermissionDomains((appAdmin.rbac || {}).permissions || []);
+      if (!domains.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPermissions", "No permissions found."))}</div>`;
+      }
+      return `<div class="app-admin-permission-grid">${domains.map(([domain, permissions]) => `
+        <div class="app-admin-permission-domain">
+          <h4>${escapeHtml(domain.replaceAll("_", " "))}</h4>
+          ${permissions.map((permission) => `
+            <label>
+              <input type="checkbox" data-app-admin-role-permission="${escapeHtml(permission.key)}" ${selected.has(permission.key) ? "checked" : ""} ${disabled ? "disabled" : ""}>
+              <span>
+                ${escapeHtml(permission.key)}
+                <small>${escapeHtml(permission.description || "")}</small>
+              </span>
+            </label>
+          `).join("")}
+        </div>
+      `).join("")}</div>`;
+    }
+    function appAdminSelectedRole() {
+      const roles = (appAdmin.rbac && appAdmin.rbac.roles) || appAdmin.roles || [];
+      return roles.find((role) => String(role.id) === String(appAdmin.selectedRoleId))
+        || roles.find((role) => role.custom)
+        || roles.find((role) => role.key === "admin")
+        || roles[0]
+        || null;
+    }
+    function renderAppAdminRbac() {
+      const rbac = appAdmin.rbac || {};
+      const roles = rbac.roles || appAdmin.roles || [];
+      const permissions = rbac.permissions || [];
+      const selectedRole = appAdminSelectedRole();
+      if (selectedRole) appAdmin.selectedRoleId = selectedRole.id;
+      const customRoles = roles.filter((role) => role.custom);
+      const mode = rbac.mode || "basic";
+      const canSwitch = currentRole() === "owner" && rbac.canSwitchMode !== false;
+      const canManage = appAdminCanManageRbac();
+      const modeNode = document.getElementById("appAdminRbacMode");
+      const permissionCountNode = document.getElementById("appAdminPermissionCount");
+      const customCountNode = document.getElementById("appAdminCustomRoleCount");
+      if (modeNode) modeNode.textContent = appAdminRbacModeLabel(mode);
+      if (permissionCountNode) permissionCountNode.textContent = String(permissions.length || 0);
+      if (customCountNode) customCountNode.textContent = String(customRoles.length || 0);
+      document.querySelectorAll("[data-app-admin-rbac-mode]").forEach((button) => {
+        const targetMode = button.dataset.appAdminRbacMode || "";
+        button.classList.toggle("active", targetMode === mode);
+        button.disabled = !canSwitch || targetMode === mode || (targetMode === "advanced" && rbac.advancedEnabled === false);
+      });
+      const createForm = document.getElementById("appAdminRoleCreateForm");
+      if (createForm) setElementVisible(closestCard(createForm), canManage);
+      const rolesList = document.getElementById("appAdminRolesList");
+      if (rolesList) {
+        rolesList.innerHTML = roles.length ? roles.map((role) => {
+          const selected = selectedRole && String(selectedRole.id) === String(role.id);
+          const canEdit = canManage && role.custom;
+          return `
+            <div class="profile-passkey ${selected ? "selected" : ""}">
+              <div>
+                <div class="profile-passkey-head">
+                  <strong>${escapeHtml(role.name || role.key)}</strong>
+                  <span class="tag ${role.assignable ? "good" : ""}">${escapeHtml(role.assignable ? tNext("appAdmin.assignable", "Assignable") : tNext("appAdmin.protectedRole", "Protected"))}</span>
+                </div>
+                <div class="profile-passkey-meta">
+                  ${escapeHtml(role.key)}
+                  &middot;
+                  ${escapeHtml(role.custom ? tNext("appAdmin.customRole", "Custom") : tNext("appAdmin.systemRole", "System"))}
+                  &middot;
+                  ${escapeHtml(formatNumber((role.permissions || []).length))} ${escapeHtml(tNext("appAdmin.permissions", "permissions"))}
+                </div>
+                <div class="admin-member-cloud">${permissionTags(role.permissions || [], 10)}</div>
+              </div>
+              <div class="profile-passkey-actions">
+                <button type="button" class="secondary-button" data-app-admin-role-select="${escapeHtml(role.id)}">${escapeHtml(tNext("common.view", "View"))}</button>
+                ${canEdit ? `<button type="button" class="secondary-button" data-app-admin-role-delete="${escapeHtml(role.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noRoles", "No roles found."))}</div>`;
+      }
+      const editor = document.getElementById("appAdminRoleEditor");
+      const permissionEditor = document.getElementById("appAdminPermissionEditor");
+      const nameInput = document.getElementById("appAdminRoleEditName");
+      const descriptionInput = document.getElementById("appAdminRoleEditDescription");
+      const saveButton = document.getElementById("appAdminSaveRoleButton");
+      const selectAllButton = document.getElementById("appAdminSelectAllPermissionsButton");
+      const clearButton = document.getElementById("appAdminClearPermissionsButton");
+      if (editor) editor.classList.toggle("hidden", !selectedRole);
+      if (nameInput) {
+        nameInput.value = selectedRole ? (selectedRole.name || "") : "";
+        nameInput.disabled = !canManage || !selectedRole?.custom;
+      }
+      if (descriptionInput) {
+        descriptionInput.value = selectedRole ? (selectedRole.description || "") : "";
+        descriptionInput.disabled = !canManage || !selectedRole?.custom;
+      }
+      if (saveButton) saveButton.disabled = !canManage || !selectedRole?.custom;
+      if (selectAllButton) selectAllButton.disabled = !canManage || !selectedRole?.custom;
+      if (clearButton) clearButton.disabled = !canManage || !selectedRole?.custom;
+      if (permissionEditor) {
+        permissionEditor.innerHTML = selectedRole
+          ? appAdminPermissionCheckboxes(selectedRole.permissions || [], !canManage || !selectedRole.custom)
+          : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.selectRoleToEdit", "Select a role to edit."))}</div>`;
+      }
+      const message = document.getElementById("appAdminRbacMessage");
+      if (message && !message.textContent) {
+        message.textContent = mode === "advanced"
+          ? tNext("appAdmin.advancedReady", "Advanced RBAC is active. Custom roles can be managed by the Owner.")
+          : tNext("appAdmin.basicReady", "Basic RBAC is active. Users can be assigned one of the fixed DiscVault roles.");
+        message.className = "login-message info";
+      }
+    }
     function appAdminRoleLabel(roleKey) {
       const role = (appAdmin.roles || []).find((item) => item.key === roleKey) || {};
       return role.name || roleKey || "-";
@@ -7588,6 +7873,7 @@ def ui_preview_html(
           </div>
         `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPasskeys", "No passkeys found."))}</div>`;
       }
+      renderAppAdminRbac();
       renderAppAdminPlugins();
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
@@ -7602,6 +7888,7 @@ def ui_preview_html(
       try {
         const canLoadAccess = canUseAdminTab("access");
         const canLoadUsers = canUseAdminTab("users");
+        const canLoadRoles = canUseAdminTab("roles");
         const canLoadPlugins = canUseAdminTab("plugins");
         const canLoadDigital = canUseAdminTab("digital") || canLoadPlugins;
         const canLoadBackup = canUseAdminTab("backup");
@@ -7610,7 +7897,7 @@ def ui_preview_html(
           canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/users").catch(() => ({users: [], roles: []})) : Promise.resolve({users: [], roles: []}),
           canLoadAccess ? authApiJson("/api/next/auth/credentials").catch(() => ({credentials: []})) : Promise.resolve({credentials: []}),
           canLoadAccess ? authApiJson("/api/next/auth/invite").catch(() => ({invites: []})) : Promise.resolve({invites: []}),
-          canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/rbac").catch(() => ({roles: [], assignableRoles: []})) : Promise.resolve({roles: [], assignableRoles: []}),
+          canLoadAccess || canLoadUsers || canLoadRoles ? authApiJson("/api/next/auth/rbac").catch(() => ({roles: [], assignableRoles: [], permissions: []})) : Promise.resolve({roles: [], assignableRoles: [], permissions: []}),
           canLoadUsers ? authApiJson("/api/next/media-groups?limit=500").catch(() => ({groups: []})) : Promise.resolve({groups: []}),
           canLoadPlugins ? authApiJson("/api/next/plugins/registry").catch((error) => ({plugins: [], error: error.message || String(error)})) : Promise.resolve({plugins: []}),
           canLoadDigital ? authApiJson("/api/next/digital-sources").catch(() => ({items: []})) : Promise.resolve({items: []}),
@@ -7621,6 +7908,7 @@ def ui_preview_html(
         appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
         appAdmin.invites = invitesPayload.invites || [];
+        appAdmin.rbac = rbacPayload || {};
         appAdmin.roles = rbacPayload.roles || usersPayload.roles || [];
         appAdmin.assignableRoles = rbacPayload.assignableRoles || usersPayload.roles || [];
         appAdmin.groups = groupsPayload.groups || [];
@@ -7730,6 +8018,98 @@ def ui_preview_html(
         setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.userSaved", "User saved."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
+      }
+    }
+    async function setAppAdminRbacMode(mode) {
+      if (currentRole() !== "owner") return;
+      setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.savingRbac", "Saving RBAC mode..."));
+      try {
+        const payload = await authApiJson("/api/next/auth/rbac", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({mode})
+        });
+        appAdmin.rbac = payload || {};
+        appAdmin.roles = payload.roles || appAdmin.roles;
+        appAdmin.assignableRoles = payload.assignableRoles || appAdmin.assignableRoles;
+        renderAppAdmin();
+        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.rbacSaved", "RBAC settings saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
+      }
+    }
+    async function createAppAdminRole(event) {
+      if (event) event.preventDefault();
+      if (!appAdminCanManageRbac()) return;
+      const key = String(document.getElementById("appAdminRoleKey")?.value || "").trim();
+      const name = String(document.getElementById("appAdminRoleName")?.value || "").trim();
+      const description = String(document.getElementById("appAdminRoleDescription")?.value || "").trim();
+      if (!key || !name) {
+        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleKeyNameRequired", "Role key and name are required."), "bad");
+        return;
+      }
+      setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.creatingRole", "Creating role..."));
+      try {
+        const payload = await authApiJson("/api/next/auth/roles", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({key, name, description, permissions: []})
+        });
+        if (document.getElementById("appAdminRoleKey")) document.getElementById("appAdminRoleKey").value = "";
+        if (document.getElementById("appAdminRoleName")) document.getElementById("appAdminRoleName").value = "";
+        if (document.getElementById("appAdminRoleDescription")) document.getElementById("appAdminRoleDescription").value = "";
+        appAdmin.selectedRoleId = payload.role?.id || "";
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleCreated", "Role created. Select permissions and save."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
+      }
+    }
+    function setAppAdminRolePermissionSelection(checked) {
+      document.querySelectorAll("#appAdminPermissionEditor [data-app-admin-role-permission]").forEach((input) => {
+        if (!input.disabled) input.checked = checked;
+      });
+    }
+    async function saveAppAdminRole(event) {
+      if (event) event.preventDefault();
+      const role = appAdminSelectedRole();
+      if (!role || !role.custom || !appAdminCanManageRbac()) return;
+      const name = String(document.getElementById("appAdminRoleEditName")?.value || "").trim();
+      const description = String(document.getElementById("appAdminRoleEditDescription")?.value || "").trim();
+      const permissions = Array.from(document.querySelectorAll("#appAdminPermissionEditor [data-app-admin-role-permission]:checked"))
+        .map((input) => input.dataset.appAdminRolePermission)
+        .filter(Boolean);
+      if (!name) {
+        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleNameRequired", "Role name is required."), "bad");
+        return;
+      }
+      setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.savingRole", "Saving role..."));
+      try {
+        const payload = await authApiJson(`/api/next/auth/roles/${encodeURIComponent(role.id)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name, description, permissions})
+        });
+        appAdmin.selectedRoleId = payload.role?.id || role.id;
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleSaved", "Role saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
+      }
+    }
+    async function deleteAppAdminRole(roleId) {
+      if (!roleId || !appAdminCanManageRbac()) return;
+      const role = ((appAdmin.rbac || {}).roles || []).find((item) => String(item.id) === String(roleId));
+      if (!role || !role.custom) return;
+      if (!confirm(tNext("appAdmin.deleteRoleConfirm", "Delete this custom role?"))) return;
+      setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.deletingRole", "Deleting role..."));
+      try {
+        await authApiJson(`/api/next/auth/roles/${encodeURIComponent(roleId)}`, {method: "DELETE"});
+        appAdmin.selectedRoleId = "";
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleDeleted", "Role deleted."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
       }
     }
     async function createAppAdminGroup(event) {
@@ -11151,6 +11531,22 @@ def ui_preview_html(
       });
       document.getElementById("appAdminInviteForm")?.addEventListener("submit", (event) => createAppAdminInvite(event));
       document.getElementById("appAdminGroupForm")?.addEventListener("submit", (event) => createAppAdminGroup(event));
+      document.querySelectorAll("[data-app-admin-rbac-mode]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminRbacMode(button.dataset.appAdminRbacMode));
+      });
+      document.getElementById("appAdminRoleCreateForm")?.addEventListener("submit", (event) => createAppAdminRole(event));
+      document.getElementById("appAdminRoleEditForm")?.addEventListener("submit", (event) => saveAppAdminRole(event));
+      document.getElementById("appAdminSelectAllPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(true));
+      document.getElementById("appAdminClearPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(false));
+      document.getElementById("appAdminRolesList")?.addEventListener("click", (event) => {
+        const selectButton = event.target.closest("[data-app-admin-role-select]");
+        const deleteButton = event.target.closest("[data-app-admin-role-delete]");
+        if (selectButton) {
+          appAdmin.selectedRoleId = selectButton.dataset.appAdminRoleSelect || "";
+          renderAppAdminRbac();
+        }
+        if (deleteButton) deleteAppAdminRole(deleteButton.dataset.appAdminRoleDelete);
+      });
       document.getElementById("appAdminUsersList")?.addEventListener("change", (event) => {
         const roleSelect = event.target.closest("[data-app-admin-user-role]");
         if (roleSelect) updateAppAdminUserRole(roleSelect.dataset.appAdminUserRole, roleSelect.value);
