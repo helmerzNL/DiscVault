@@ -41,6 +41,7 @@ try:
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
+    from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
@@ -65,6 +66,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
+    from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
@@ -4332,11 +4334,96 @@ def ui_preview_html(
       gap: 6px;
       margin-top: 10px;
     }
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .button-row.compact {
+      flex-wrap: nowrap;
+    }
+    .barcode-scanner-shell {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+    }
+    .barcode-scanner-viewport {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      min-height: 220px;
+      aspect-ratio: 16 / 10;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 46%),
+        color-mix(in srgb, var(--bg-solid) 88%, #000);
+    }
+    .barcode-scanner-viewport video,
+    .barcode-scanner-viewport canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .barcode-scanner-placeholder {
+      max-width: 260px;
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.45;
+      text-align: center;
+      padding: 18px;
+    }
+    .barcode-scanner-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(rgba(0,0,0,.16), rgba(0,0,0,.16));
+    }
+    .barcode-scanner-frame {
+      position: relative;
+      width: min(76%, 360px);
+      height: 44%;
+      border: 2px solid rgba(255,255,255,.88);
+      border-radius: 14px;
+      box-shadow: 0 0 0 999px rgba(0,0,0,.24);
+    }
+    .barcode-scan-line {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 50%;
+      height: 2px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 84%, white);
+      box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 90%, transparent);
+      animation: barcodeScanLine 1.35s ease-in-out infinite;
+    }
+    @keyframes barcodeScanLine {
+      0%, 100% { transform: translateY(-46px); opacity: .58; }
+      50% { transform: translateY(46px); opacity: 1; }
+    }
     .import-barcode-form {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 8px;
       margin-top: 12px;
+    }
+    .import-barcode-form label {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 760;
     }
     .import-barcode-form input {
       min-height: 40px;
@@ -4348,6 +4435,9 @@ def ui_preview_html(
       padding: 0 12px;
       font: inherit;
       font-weight: 620;
+    }
+    .import-barcode-form button {
+      min-height: 40px;
     }
     .movie-detail-page .movie-detail-hero {
       min-height: min(520px, 56vh);
@@ -5844,11 +5934,35 @@ def ui_preview_html(
           </div>
           <div class="import-stack">
             <div class="detail-card profile-card">
-              <h3 data-next-i18n="importCenter.barcode">Barcode import</h3>
-              <p data-next-i18n="importCenter.barcodeHelp">Preview metadata candidates from the enabled metadata source plugins before adding a movie.</p>
+              <h3 data-next-i18n="importCenter.lookupTitle">Film toevoegen</h3>
+              <p data-next-i18n="importCenter.lookupHelp">Scan een barcode of zoek handmatig op barcode of titel voordat je een film toevoegt.</p>
+              <div class="barcode-scanner-shell">
+                <div class="import-card-head">
+                  <div>
+                    <strong data-next-i18n="importCenter.scanTitle">Camera scanner</strong>
+                    <p class="import-source-meta" data-next-i18n="importCenter.scanHelp">Werkt in de PWA via HTTPS met camera-toestemming.</p>
+                  </div>
+                  <div class="button-row compact">
+                    <button type="button" class="secondary-button" id="importScannerStartButton" data-next-i18n="importCenter.scanStart">Scan</button>
+                    <button type="button" class="secondary-button hidden" id="importScannerStopButton" data-next-i18n="importCenter.scanStop">Stop</button>
+                  </div>
+                </div>
+                <div class="barcode-scanner-viewport" id="importScannerViewport">
+                  <div class="barcode-scanner-placeholder" id="importScannerPlaceholder" data-next-i18n="importCenter.scanPlaceholder">Richt de camera op een EAN of UPC barcode.</div>
+                </div>
+                <div class="login-message" id="importScannerMessage"></div>
+              </div>
               <form class="import-barcode-form" id="importBarcodeForm">
-                <input id="importBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
+                <label>
+                  <span data-next-i18n="importCenter.manualBarcode">Barcode</span>
+                  <input id="importBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
+                </label>
+                <label>
+                  <span data-next-i18n="importCenter.manualTitle">Titel</span>
+                  <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                </label>
                 <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Preview</button>
+                <button type="button" class="primary-button" id="importMovieAddButton" disabled data-next-i18n="importCenter.addMovie">Add movie</button>
               </form>
               <div class="import-result-list" id="importBarcodeResults"></div>
             </div>
@@ -6554,7 +6668,19 @@ def ui_preview_html(
       assignableRoles: [],
       users: []
     };
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null, addResult: null};
+    let importScanner = {
+      running: false,
+      native: false,
+      stream: null,
+      timer: null,
+      quaggaHandler: null,
+      lastCode: "",
+      lastTime: 0,
+      confirmCode: "",
+      confirmCount: 0,
+      resetTimer: null
+    };
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
     const localeState = {
@@ -9039,31 +9165,341 @@ def ui_preview_html(
         `;
       }).join("");
     }
+    function setImportScannerMessage(message, tone) {
+      const node = document.getElementById("importScannerMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function validateImportBarcode(code) {
+      const value = String(code || "").replace(/\\D/g, "");
+      if (/^\\d{13}$/.test(value)) {
+        let sum = 0;
+        for (let index = 0; index < 12; index += 1) {
+          sum += Number(value[index]) * (index % 2 === 0 ? 1 : 3);
+        }
+        return (10 - (sum % 10)) % 10 === Number(value[12]);
+      }
+      if (/^\\d{12}$/.test(value)) {
+        let sum = 0;
+        for (let index = 0; index < 11; index += 1) {
+          sum += Number(value[index]) * (index % 2 === 0 ? 3 : 1);
+        }
+        return (10 - (sum % 10)) % 10 === Number(value[11]);
+      }
+      return false;
+    }
+    function normalizeImportBarcode(value) {
+      return String(value || "").replace(/\\D/g, "");
+    }
+    async function applyImportScannerFocus(stream) {
+      try {
+        const track = stream?.getVideoTracks?.()[0];
+        if (!track || !track.getCapabilities) return;
+        const caps = track.getCapabilities();
+        const advanced = {};
+        if (caps.focusMode?.includes("continuous")) advanced.focusMode = "continuous";
+        if (caps.exposureMode?.includes("continuous")) advanced.exposureMode = "continuous";
+        if (caps.whiteBalanceMode?.includes("continuous")) advanced.whiteBalanceMode = "continuous";
+        if (Object.keys(advanced).length) await track.applyConstraints({advanced: [advanced]});
+      } catch {
+        // Camera focus constraints are best-effort and vary widely by device/browser.
+      }
+    }
+    function loadQuagga2Scanner() {
+      return new Promise((resolve, reject) => {
+        if (window.Quagga) {
+          resolve();
+          return;
+        }
+        const existing = document.querySelector("script[data-discvault-quagga2]");
+        if (existing) {
+          existing.addEventListener("load", resolve, {once: true});
+          existing.addEventListener("error", () => reject(new Error("Quagga2 load failed")), {once: true});
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js";
+        script.async = true;
+        script.dataset.discvaultQuagga2 = "true";
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("Quagga2 load failed"));
+        document.head.appendChild(script);
+      });
+    }
+    function importScannerOverlayHtml() {
+      return `<div class="barcode-scanner-overlay"><div class="barcode-scanner-frame"><div class="barcode-scan-line"></div></div></div>`;
+    }
+    function resetImportScannerUi() {
+      const viewport = document.getElementById("importScannerViewport");
+      const placeholder = document.getElementById("importScannerPlaceholder");
+      document.getElementById("importScannerStartButton")?.classList.remove("hidden");
+      document.getElementById("importScannerStopButton")?.classList.add("hidden");
+      if (viewport) {
+        viewport.querySelectorAll("video, canvas, .barcode-scanner-overlay").forEach((node) => node.remove());
+      }
+      if (placeholder) placeholder.classList.remove("hidden");
+    }
+    function stopImportBarcodeScanner() {
+      if (importScanner.timer) {
+        clearTimeout(importScanner.timer);
+        importScanner.timer = null;
+      }
+      if (importScanner.resetTimer) {
+        clearTimeout(importScanner.resetTimer);
+        importScanner.resetTimer = null;
+      }
+      if (importScanner.stream) {
+        importScanner.stream.getTracks().forEach((track) => track.stop());
+        importScanner.stream = null;
+      }
+      if (!importScanner.native && window.Quagga) {
+        try {
+          if (importScanner.quaggaHandler && Quagga.offDetected) Quagga.offDetected(importScanner.quaggaHandler);
+          Quagga.stop();
+        } catch {
+          // Quagga may not be initialized yet.
+        }
+      }
+      importScanner.running = false;
+      importScanner.native = false;
+      importScanner.quaggaHandler = null;
+      importScanner.confirmCode = "";
+      importScanner.confirmCount = 0;
+      resetImportScannerUi();
+    }
+    function acceptImportBarcodeScan(code) {
+      const barcode = normalizeImportBarcode(code);
+      if (!validateImportBarcode(barcode)) {
+        setImportScannerMessage(tNext("importCenter.scanInvalid", "The scanned barcode was not a valid EAN or UPC."), "bad");
+        return false;
+      }
+      const now = Date.now();
+      if (barcode === importScanner.lastCode && now - importScanner.lastTime < 2200) return false;
+      importScanner.lastCode = barcode;
+      importScanner.lastTime = now;
+      stopImportBarcodeScanner();
+      const input = document.getElementById("importBarcodeInput");
+      if (input) input.value = barcode;
+      setImportScannerMessage(tNext("importCenter.scanFound", "Barcode found. Previewing metadata..."), "good");
+      previewBarcodeImport();
+      return true;
+    }
+    async function tryNativeImportBarcodeScanner(viewport) {
+      if (typeof BarcodeDetector === "undefined") return "fallback";
+      let detector;
+      try {
+        detector = new BarcodeDetector({formats: ["ean_13", "upc_a"]});
+      } catch {
+        return "fallback";
+      }
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: {ideal: 1920},
+            height: {ideal: 1080}
+          }
+        });
+      } catch (error) {
+        setImportScannerMessage(tNext("importCenter.scanCameraError", "Camera access failed.") + ` ${error.message || ""}`.trim(), "bad");
+        return "error";
+      }
+      importScanner.native = true;
+      importScanner.stream = stream;
+      await applyImportScannerFocus(stream);
+      const video = document.createElement("video");
+      video.setAttribute("playsinline", "");
+      video.setAttribute("autoplay", "");
+      video.setAttribute("muted", "");
+      video.muted = true;
+      viewport.appendChild(video);
+      video.srcObject = stream;
+      try {
+        await video.play();
+      } catch {
+        stopImportBarcodeScanner();
+        return "fallback";
+      }
+      viewport.insertAdjacentHTML("beforeend", importScannerOverlayHtml());
+      importScanner.running = true;
+      importScanner.confirmCode = "";
+      importScanner.confirmCount = 0;
+      const detectLoop = async () => {
+        if (!importScanner.running || !importScanner.native) return;
+        try {
+          const results = await detector.detect(video);
+          if (!results.length) {
+            importScanner.confirmCode = "";
+            importScanner.confirmCount = 0;
+          }
+          for (const result of results) {
+            const barcode = normalizeImportBarcode(result.rawValue);
+            if (!validateImportBarcode(barcode)) continue;
+            if (barcode === importScanner.confirmCode) {
+              importScanner.confirmCount += 1;
+            } else {
+              importScanner.confirmCode = barcode;
+              importScanner.confirmCount = 1;
+            }
+            if (importScanner.confirmCount >= 3) {
+              acceptImportBarcodeScan(barcode);
+              return;
+            }
+          }
+        } catch {
+          // Video frames may not be ready during startup.
+        }
+        if (importScanner.running && importScanner.native) {
+          importScanner.timer = setTimeout(detectLoop, 150);
+        }
+      };
+      importScanner.timer = setTimeout(detectLoop, 700);
+      return "success";
+    }
+    async function startQuaggaImportBarcodeScanner(viewport) {
+      setImportScannerMessage(tNext("importCenter.scanLibraryLoading", "Loading scanner fallback..."));
+      try {
+        await loadQuagga2Scanner();
+      } catch (error) {
+        setImportScannerMessage(tNext("importCenter.scanLibraryError", "Scanner fallback could not be loaded.") + ` ${error.message || ""}`.trim(), "bad");
+        resetImportScannerUi();
+        return;
+      }
+      importScanner.native = false;
+      importScanner.confirmCode = "";
+      importScanner.confirmCount = 0;
+      Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: viewport,
+          constraints: {
+            facingMode: "environment",
+            width: {ideal: 1920},
+            height: {ideal: 1080}
+          }
+        },
+        decoder: {
+          readers: ["ean_reader", "upc_reader"],
+          multiple: false
+        },
+        locate: true,
+        frequency: 10
+      }, (error) => {
+        if (error) {
+          setImportScannerMessage(tNext("importCenter.scanCameraError", "Camera access failed.") + ` ${error.message || ""}`.trim(), "bad");
+          stopImportBarcodeScanner();
+          return;
+        }
+        const video = viewport.querySelector("video");
+        if (video) {
+          video.setAttribute("playsinline", "");
+          video.setAttribute("muted", "");
+          video.muted = true;
+          applyImportScannerFocus(video.srcObject);
+        }
+        Quagga.start();
+        importScanner.running = true;
+        viewport.insertAdjacentHTML("beforeend", importScannerOverlayHtml());
+        setImportScannerMessage(tNext("importCenter.scanReady", "Scanner ready."), "good");
+      });
+      importScanner.quaggaHandler = (result) => {
+        const barcode = normalizeImportBarcode(result?.codeResult?.code);
+        if (!validateImportBarcode(barcode)) return;
+        const bars = (result.codeResult.decodedCodes || []).filter((item) => item.error !== undefined);
+        if (bars.length) {
+          const avgError = bars.reduce((sum, item) => sum + item.error, 0) / bars.length;
+          if (avgError > 0.08) return;
+        }
+        if (importScanner.resetTimer) clearTimeout(importScanner.resetTimer);
+        importScanner.resetTimer = setTimeout(() => {
+          importScanner.confirmCode = "";
+          importScanner.confirmCount = 0;
+        }, 650);
+        if (barcode === importScanner.confirmCode) {
+          importScanner.confirmCount += 1;
+        } else {
+          importScanner.confirmCode = barcode;
+          importScanner.confirmCount = 1;
+        }
+        if (importScanner.confirmCount >= 4) {
+          acceptImportBarcodeScan(barcode);
+        }
+      };
+      Quagga.onDetected(importScanner.quaggaHandler);
+    }
+    async function startImportBarcodeScanner() {
+      const viewport = document.getElementById("importScannerViewport");
+      const placeholder = document.getElementById("importScannerPlaceholder");
+      if (!viewport) return;
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        setImportScannerMessage(tNext("importCenter.scanSecureContext", "Open DiscVault over HTTPS or localhost to use the camera."), "bad");
+        return;
+      }
+      stopImportBarcodeScanner();
+      placeholder?.classList.add("hidden");
+      document.getElementById("importScannerStartButton")?.classList.add("hidden");
+      document.getElementById("importScannerStopButton")?.classList.remove("hidden");
+      setImportScannerMessage(tNext("importCenter.scanStarting", "Starting camera..."));
+      const nativeResult = await tryNativeImportBarcodeScanner(viewport);
+      if (nativeResult === "success") {
+        setImportScannerMessage(tNext("importCenter.scanReady", "Scanner ready."), "good");
+        return;
+      }
+      if (nativeResult === "fallback") {
+        placeholder?.classList.add("hidden");
+        document.getElementById("importScannerStartButton")?.classList.add("hidden");
+        document.getElementById("importScannerStopButton")?.classList.remove("hidden");
+        await startQuaggaImportBarcodeScanner(viewport);
+      } else {
+        resetImportScannerUi();
+      }
+    }
     function renderBarcodeLookup() {
       const list = document.getElementById("importBarcodeResults");
+      const addButton = document.getElementById("importMovieAddButton");
+      if (addButton) {
+        addButton.disabled = !importCenter.barcodeLookup;
+      }
       if (!list) return;
       const payload = importCenter.barcodeLookup;
       if (!payload) {
-        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodePreview", "Enter a barcode to preview plugin results."))}</div>`;
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodePreview", "Scan a barcode or search by barcode or title to preview plugin results."))}</div>`;
         return;
       }
       const metadata = payload.metadata || payload;
       const results = metadata.results || metadata.sources || metadata.matches || [];
+      const proposal = metadata.proposal || {};
+      const movieUpdates = proposal.movieUpdates || {};
+      const metadataUpdates = proposal.metadataUpdates || {};
+      const technicalUpdates = proposal.technicalUpdates || {};
+      const proposedTitle = movieUpdates.title || movieUpdates.original_title || document.getElementById("importTitleInput")?.value || "";
+      const proposedYear = movieUpdates.year || document.getElementById("importYearInput")?.value || "";
+      const proposedFormat = movieUpdates.format || document.getElementById("importFormatInput")?.value || "";
+      const proposalCard = (proposedTitle || Object.keys(metadataUpdates).length || Object.keys(technicalUpdates).length) ? `
+        <div class="import-result-card">
+          <div class="import-job-head">
+            <strong>${escapeHtml(proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}</strong>
+            <span class="tag good">${escapeHtml(tNext("importCenter.previewReady", "Preview ready."))}</span>
+          </div>
+          <div class="import-counts">
+            ${proposedYear ? `<span class="tag">${escapeHtml(tNext("importCenter.previewYear", "Year"))} ${escapeHtml(proposedYear)}</span>` : ""}
+            ${proposedFormat ? `<span class="tag">${escapeHtml(tNext("importCenter.previewFormat", "Format"))} ${escapeHtml(proposedFormat)}</span>` : ""}
+            <span class="tag">${escapeHtml(tNext("importCenter.plugin", "Plugin"))} ${escapeHtml((metadata.summary || []).filter((item) => item.state === "applied").length || (metadata.executions || []).length || 0)}</span>
+          </div>
+        </div>
+      ` : "";
       if (!Array.isArray(results) || !results.length) {
-        const proposal = metadata.proposal || metadata.movieUpdates || metadata.movie || {};
-        if (proposal && Object.keys(proposal).length) {
-          list.innerHTML = `
-            <div class="import-result-card">
-              <strong>${escapeHtml(proposal.title || proposal.originalTitle || tNext("importCenter.previewReady", "Preview ready"))}</strong>
-              <div class="import-result-meta">${escapeHtml(JSON.stringify(proposal).slice(0, 360))}</div>
-            </div>
-          `;
+        if (proposalCard) {
+          list.innerHTML = proposalCard;
         } else {
           list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>`;
         }
         return;
       }
-      list.innerHTML = results.slice(0, 8).map((item) => {
+      list.innerHTML = proposalCard + results.slice(0, 8).map((item) => {
         const title = item.title || item.originalTitle || item.name || item.providerId || item.pluginId || tNext("importCenter.result", "Result");
         const provider = item.providerId || item.pluginId || item.source || item.name || "";
         return `
@@ -9125,28 +9561,61 @@ def ui_preview_html(
     }
     async function previewBarcodeImport(event) {
       event?.preventDefault();
-      const input = document.getElementById("importBarcodeInput");
-      const barcode = String(input?.value || "").trim();
-      if (!barcode) {
-        setImportCenterMessage(tNext("importCenter.barcodeRequired", "Enter a barcode first."), "bad");
+      const barcodeInput = document.getElementById("importBarcodeInput");
+      const titleInput = document.getElementById("importTitleInput");
+      const barcode = normalizeImportBarcode(barcodeInput?.value || "");
+      const title = String(titleInput?.value || "").trim();
+      if (!barcode && !title) {
+        setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
         return;
       }
-      setImportCenterMessage(tNext("importCenter.previewingBarcode", "Previewing barcode metadata..."));
+      setImportCenterMessage(tNext("importCenter.previewingLookup", "Searching metadata..."));
       try {
         const payload = await authApiJson("/api/next/metadata/lookup", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({barcode})
+          body: JSON.stringify({barcode, title})
         });
         importCenter.barcodeLookup = payload;
         renderBarcodeLookup();
         setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
-        console.log("barcode import preview", payload);
+        console.log("movie import preview", payload);
       } catch (error) {
         setImportCenterMessage(error.message || String(error), "bad");
       }
     }
+    async function addLookupMovie() {
+      const barcode = normalizeImportBarcode(document.getElementById("importBarcodeInput")?.value || "");
+      const title = String(document.getElementById("importTitleInput")?.value || "").trim();
+      if (!barcode && !title) {
+        setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
+        return;
+      }
+      setImportCenterMessage(tNext("importCenter.addingMovie", "Adding movie..."));
+      const button = document.getElementById("importMovieAddButton");
+      if (button) button.disabled = true;
+      try {
+        const payload = await authApiJson("/api/next/import/movie", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({barcode, title})
+        });
+        importCenter.addResult = payload;
+        const movie = payload.movie || (payload.detail && payload.detail.movie) || {};
+        const messageKey = payload.state === "already_exists" ? "importCenter.movieExists" : "importCenter.movieAdded";
+        setImportCenterMessage(tNext(messageKey, payload.state === "already_exists" ? "Movie already exists." : "Movie added."), "good");
+        await loadAppSnapshot();
+        if (movie.id) openAppMovieDetail(movie.id);
+      } catch (error) {
+        setImportCenterMessage(error.message || String(error), "bad");
+      } finally {
+        renderBarcodeLookup();
+      }
+    }
     function setActiveAppRoute(route) {
+      if (route !== "import" && importScanner.running) {
+        stopImportBarcodeScanner();
+      }
       document.querySelectorAll("[data-app-route]").forEach((node) => {
         node.classList.toggle("active", node.dataset.appRoute === route);
       });
@@ -10342,6 +10811,12 @@ def ui_preview_html(
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
+      document.getElementById("importScannerStartButton")?.addEventListener("click", () => startImportBarcodeScanner());
+      document.getElementById("importScannerStopButton")?.addEventListener("click", () => {
+        stopImportBarcodeScanner();
+        setImportScannerMessage(tNext("importCenter.scanStopped", "Scanner stopped."));
+      });
+      document.getElementById("importMovieAddButton")?.addEventListener("click", () => addLookupMovie());
       document.getElementById("importCenterSources")?.addEventListener("click", (event) => {
         const sourceButton = event.target.closest("[data-import-source]");
         if (!sourceButton) return;
@@ -20516,6 +20991,90 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Plugin registry table is not available", 503)
             result = lookup_metadata_sources(conn, body, actor)
         return response({"status": "ok", "metadata": result})
+
+    @flask_app.post("/api/next/import/movie")
+    def import_movie_from_metadata():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Movie import body must be an object", 400)
+        barcode = clean_text(body.get("barcode")) or ""
+        title = clean_text(body.get("title") or body.get("query")) or ""
+        if not barcode and not title:
+            raise NextApiError("barcode or title is required", 400)
+
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("collection.import", "collection.edit_all"))
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+
+            if barcode:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
+                    existing = cur.fetchone()
+                if existing:
+                    detail = movie_detail_entity(conn, existing["id"])
+                    return response(
+                        {
+                            "status": "ok",
+                            "state": "already_exists",
+                            "movie": detail.get("movie") if detail else None,
+                            "detail": detail,
+                        }
+                    )
+
+            with conn.transaction():
+                metadata_result = lookup_metadata_sources(conn, body, actor)
+                proposal = metadata_result.get("proposal") or {}
+                movie_updates = proposal.get("movieUpdates") or {}
+                metadata_updates = proposal.get("metadataUpdates") or {}
+                import_title = clean_text(
+                    movie_updates.get("title")
+                    or movie_updates.get("original_title")
+                    or title
+                )
+                if not import_title:
+                    raise NextApiError("No movie title was found for this import.", 422)
+
+                payload = dict(movie_updates)
+                payload["title"] = import_title
+                if barcode:
+                    payload["barcode"] = barcode
+                if metadata_updates:
+                    payload["metadata"] = metadata_updates
+                if body.get("format") and not payload.get("format"):
+                    payload["format"] = clean_text(body.get("format"))
+                if body.get("year") and not payload.get("year"):
+                    payload["year"] = clean_text(body.get("year"))
+
+                mutation_id = f"import-movie-{uuid.uuid4()}"
+                upsert = apply_movie_upsert(
+                    conn,
+                    client_id="next-import-center",
+                    idem_key=f"next-import-center:{mutation_id}",
+                    mutation={
+                        "clientMutationId": mutation_id,
+                        "entityType": "movie",
+                        "operation": "upsert",
+                        "payload": payload,
+                    },
+                )
+                movie_id = upsert["entityId"]
+                applied = apply_metadata_proposal(conn, movie_id, proposal, actor=actor)
+                detail = movie_detail_entity(conn, movie_id)
+
+        return response(
+            {
+                "status": "ok",
+                "state": "created",
+                "movie": detail.get("movie") if detail else upsert.get("entity"),
+                "detail": detail,
+                "metadata": metadata_result,
+                "applied": applied,
+            },
+            201,
+        )
 
     @flask_app.get("/api/next/metadata/jobs")
     def metadata_jobs():
