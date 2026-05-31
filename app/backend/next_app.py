@@ -11048,6 +11048,9 @@ def ui_preview_html(
       renderPreferences();
       renderProfile();
       renderLibrary();
+      if (currentStartup && Object.keys(currentStartup).length && !currentStartup.ready) {
+        renderStartup(currentStartup);
+      }
       if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
       applyAppPermissionVisibility();
     }
