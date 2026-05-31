@@ -5291,6 +5291,11 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
     }
     .watch-date-row input {
       min-height: 38px;
@@ -5300,6 +5305,16 @@ def ui_preview_html(
       color: var(--text);
       padding: 0 12px;
       font: inherit;
+    }
+    .watch-date-row .segmented {
+      flex: 1 1 320px;
+    }
+    .watch-custom-date {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
     }
     .watch-history-pills {
       display: flex;
@@ -8007,12 +8022,18 @@ def ui_preview_html(
               </div>
               <div class="movie-list-actions">
                 <button type="button" class="list-pill-button" id="movieWatchlistToggleButton" data-next-i18n="lists.addToWatchlist">Add to Watchlist</button>
-                <button type="button" class="list-pill-button" id="movieWatchedTodayButton" data-next-i18n="lists.markWatchedToday">Watched today</button>
               </div>
             </div>
             <div class="watch-date-row">
-              <input type="date" id="movieWatchedDateInput" aria-label="Watched date" data-next-i18n-aria="lists.watchedDate">
-              <button type="button" class="secondary-button" id="movieWatchedDateButton" data-next-i18n="lists.markWatchedDate">Add date</button>
+              <div class="segmented compact" role="group" aria-label="Watched date" data-next-i18n-aria="lists.watchedDate">
+                <button type="button" id="movieWatchedTodayButton" data-watch-date-choice="today" data-next-i18n="lists.markWatchedToday">Today</button>
+                <button type="button" id="movieWatchedYesterdayButton" data-watch-date-choice="yesterday" data-next-i18n="lists.markWatchedYesterday">Yesterday</button>
+                <button type="button" id="movieWatchedChooseDateButton" data-watch-date-choice="choose" data-next-i18n="lists.chooseWatchedDate">Choose a date</button>
+              </div>
+              <div class="watch-custom-date hidden" id="movieWatchedCustomDateControls">
+                <input type="date" id="movieWatchedDateInput" aria-label="Watched date" data-next-i18n-aria="lists.watchedDate">
+                <button type="button" class="secondary-button" id="movieWatchedDateButton" data-next-i18n="lists.markWatchedDate">Add date</button>
+              </div>
             </div>
             <div class="watch-history-pills" id="movieWatchHistoryPills"></div>
           </div>
@@ -12281,6 +12302,9 @@ def ui_preview_html(
       const state = detail.userState || {};
       const watchButton = document.getElementById("movieWatchlistToggleButton");
       const watchedButton = document.getElementById("movieWatchedTodayButton");
+      const yesterdayButton = document.getElementById("movieWatchedYesterdayButton");
+      const chooseDateButton = document.getElementById("movieWatchedChooseDateButton");
+      const customDateControls = document.getElementById("movieWatchedCustomDateControls");
       const summary = document.getElementById("movieListStateSummary");
       const historyNode = document.getElementById("movieWatchHistoryPills");
       const canUseLists = hasPermission("watchlist.manage");
@@ -12293,11 +12317,11 @@ def ui_preview_html(
           : tNext("lists.addToWatchlist", "Add to Watchlist");
       }
       if (watchedButton) {
-        watchedButton.classList.toggle("active", !!state.lastWatched);
-        watchedButton.textContent = state.lastWatched
-          ? tNext("lists.watchedAgain", "Watched again")
-          : tNext("lists.markWatchedToday", "Watched today");
+        watchedButton.classList.toggle("active", sameLocalDate(state.lastWatched, localDateString(0)));
       }
+      if (yesterdayButton) yesterdayButton.classList.toggle("active", sameLocalDate(state.lastWatched, localDateString(-1)));
+      if (chooseDateButton) chooseDateButton.classList.remove("active");
+      if (customDateControls) customDateControls.classList.add("hidden");
       const lastWatched = state.lastWatched ? formatAppDate(state.lastWatched) : "";
       if (summary) {
         summary.textContent = lastWatched
@@ -12332,6 +12356,18 @@ def ui_preview_html(
         watchedMovies: (movies || []).filter((movie) => movie.last_watched).length
       });
     }
+    function localDateString(offsetDays = 0) {
+      const date = new Date();
+      date.setDate(date.getDate() + offsetDays);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    function sameLocalDate(value, dateText) {
+      if (!value || !dateText) return false;
+      return String(value).slice(0, 10) === dateText;
+    }
     async function toggleActiveMovieWatchlist() {
       if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
       const current = !!(activeDetailPayload?.userState || {}).onWatchlist;
@@ -12365,6 +12401,23 @@ def ui_preview_html(
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
       }
+    }
+    function handleWatchedDateChoice(choice) {
+      if (choice === "today") {
+        markActiveMovieWatched(localDateString(0));
+        return;
+      }
+      if (choice === "yesterday") {
+        markActiveMovieWatched(localDateString(-1));
+        return;
+      }
+      const controls = document.getElementById("movieWatchedCustomDateControls");
+      const input = document.getElementById("movieWatchedDateInput");
+      const chooseButton = document.getElementById("movieWatchedChooseDateButton");
+      if (controls) controls.classList.remove("hidden");
+      if (chooseButton) chooseButton.classList.add("active");
+      if (input && !input.value) input.value = localDateString(0);
+      input?.focus();
     }
     async function deleteActiveMovieWatchedEntry(entryId) {
       if (!activeDetailMovieId || !entryId || !hasPermission("watchlist.manage")) return;
@@ -15847,7 +15900,9 @@ def ui_preview_html(
       document.getElementById("movieEditCancelButton")?.addEventListener("click", () => setMovieEditPanelVisible(false));
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
       document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
-      document.getElementById("movieWatchedTodayButton")?.addEventListener("click", () => markActiveMovieWatched());
+      document.querySelectorAll("[data-watch-date-choice]").forEach((button) => {
+        button.addEventListener("click", () => handleWatchedDateChoice(button.dataset.watchDateChoice || "today"));
+      });
       document.getElementById("movieWatchedDateButton")?.addEventListener("click", () => {
         const value = document.getElementById("movieWatchedDateInput")?.value || "";
         if (value) markActiveMovieWatched(value);
