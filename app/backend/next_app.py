@@ -3058,6 +3058,75 @@ def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dic
         return cur.fetchall()
 
 
+def collection_container_membership_entities(conn, *, limit: int = 10000) -> list[dict[str, Any]]:
+    if not table_exists(conn, "containers") or not table_exists(conn, "movies"):
+        return []
+    links: list[dict[str, Any]] = []
+    if table_exists(conn, "container_movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    cm.container_id,
+                    cm.movie_id,
+                    c.container_type,
+                    cm.sort_order,
+                    'container_movie' AS relationship,
+                    NULL::uuid AS child_container_id
+                FROM container_movies cm
+                JOIN containers c ON c.id = cm.container_id
+                ORDER BY c.container_type, lower(c.title), cm.sort_order
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            links.extend(cur.fetchall())
+    remaining = max(limit - len(links), 0)
+    if remaining and table_exists(conn, "collection_items"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    ci.collection_id AS container_id,
+                    ci.item_id AS movie_id,
+                    c.container_type,
+                    ci.sort_order,
+                    'collection_movie' AS relationship,
+                    NULL::uuid AS child_container_id
+                FROM collection_items ci
+                JOIN containers c ON c.id = ci.collection_id
+                WHERE ci.item_type='movie'
+                ORDER BY lower(c.title), ci.sort_order
+                LIMIT %s
+                """,
+                (remaining,),
+            )
+            links.extend(cur.fetchall())
+    remaining = max(limit - len(links), 0)
+    if remaining and table_exists(conn, "collection_items") and table_exists(conn, "container_movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    ci.collection_id AS container_id,
+                    cm.movie_id,
+                    c.container_type,
+                    ci.sort_order,
+                    'collection_container_movie' AS relationship,
+                    ci.item_id AS child_container_id
+                FROM collection_items ci
+                JOIN containers c ON c.id = ci.collection_id
+                JOIN container_movies cm ON cm.container_id = ci.item_id
+                WHERE ci.item_type IN ('box_set', 'vault')
+                ORDER BY lower(c.title), ci.sort_order
+                LIMIT %s
+                """,
+                (remaining,),
+            )
+            links.extend(cur.fetchall())
+    return links[:limit]
+
+
 def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
     if not table_exists(conn, "metadata_plugins"):
         return []
@@ -3090,6 +3159,7 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "counts": counts,
         "movies": collection_movie_preview_entities(conn),
         "containers": collection_container_preview_entities(conn),
+        "containerMembership": collection_container_membership_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200),
         "plugins": collection_plugin_preview_entities(conn),
         "preferences": app_effective_preferences(conn, user.get("id") if user else None),
@@ -3114,6 +3184,7 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "counts": {},
         "movies": [],
         "containers": [],
+        "containerMembership": [],
         "mediaGroups": [],
         "plugins": [],
         "preferences": dict(APP_PREFERENCE_DEFAULTS),
@@ -3314,6 +3385,8 @@ def ui_preview_html(
     containers = snapshot.get("containers") or []
     media_groups = snapshot.get("mediaGroups") or []
     preferences = snapshot.get("preferences") or dict(APP_PREFERENCE_DEFAULTS)
+    if not preferences.get("collectors_mode"):
+        containers = []
     app_mode_json = "true" if app_mode else "false"
     initial_movie_json = html_lib.escape(json_lib.dumps(initial_movie_id or ""), quote=False)
     featured = movies[0] if movies else {}
@@ -4212,6 +4285,30 @@ def ui_preview_html(
       background: var(--accent);
       border-color: var(--accent);
       box-shadow: inset 0 0 0 5px var(--accent-contrast);
+    }
+    .preview-poster.container-tile .preview-poster-art {
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent 58%),
+        linear-gradient(145deg, #2f3742, #171b22);
+    }
+    .container-tile-badge {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      max-width: calc(100% - 16px);
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(9,12,18,.58);
+      border: 1px solid rgba(255,255,255,.4);
+      font-size: 10px;
+      font-weight: 850;
+      line-height: 1;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      backdrop-filter: blur(12px) saturate(150%);
     }
     .preview-collection.bulk-selected {
       border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
@@ -7226,6 +7323,7 @@ def ui_preview_html(
     let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
     let movies = state.movies || [];
     let containers = state.containers || [];
+    let containerMembership = state.containerMembership || [];
     let mediaGroups = state.mediaGroups || [];
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let selectionMode = false;
@@ -7504,17 +7602,19 @@ def ui_preview_html(
       if (navMode) navMode.textContent = allowed ? appRegistrationModeLabel() : "-";
     }
     function applyAppPermissionVisibility() {
+      const collectorsEnabled = collectorsModeEnabled();
+      const canManageContainers = collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
       setVisible('[data-app-route="import"]', hasAnyPermission(APP_PERMISSION_GROUPS.importCenter));
       setVisible('[data-app-route="groups"]', hasAnyPermission(APP_PERMISSION_GROUPS.groupNavigation));
       renderAppAdminVisibility();
       setElementVisible(document.querySelector('[data-preferences-tab="collectors"]'), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
       setElementVisible(document.querySelector('[data-preferences-panel="collectors"]'), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
-      setElementVisible(closestCard(document.getElementById("containerManagerCreateForm")), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
+      setElementVisible(closestCard(document.getElementById("containerManagerCreateForm")), canManageContainers);
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
-      setElementVisible(closestCard(document.querySelector('[data-bulk-action="boxset"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
-      setElementVisible(closestCard(document.querySelector('[data-bulk-action="vault"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
-      setElementVisible(closestCard(document.querySelector('[data-bulk-action="collection"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="boxset"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="vault"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="collection"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections));
       document.querySelectorAll("#movieMetadataDryRunButton, #movieMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       });
@@ -7522,10 +7622,15 @@ def ui_preview_html(
       const canEditMovies = hasPermission("collection.edit_all");
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
       if (!canEditMovies) setMovieEditPanelVisible(false);
-      const canEditContainers = hasPermission("containers.edit");
+      const canEditContainers = collectorsEnabled && hasPermission("containers.edit");
       setElementVisible(document.getElementById("containerEditToggleButton"), canEditContainers);
       setElementVisible(document.getElementById("containerAddContentPanel"), canEditContainers);
       if (!canEditContainers) setContainerEditPanelVisible(false);
+      if (!collectorsEnabled && activeContainerId) {
+        activeContainerId = "";
+        activeContainerPayload = null;
+        showLibraryPage(appMode && window.location.pathname.includes("/containers/"));
+      }
       const importCanStart = hasPermission("collection.import");
       const importCanAdd = hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd);
       document.getElementById("importCenterStartButton")?.classList.toggle("hidden", !importCanStart);
@@ -8080,7 +8185,10 @@ def ui_preview_html(
     }
     function appAdminPermissionDomains(permissions) {
       const grouped = {};
-      (permissions || []).forEach((permission) => {
+      const visiblePermissions = collectorsModeEnabled()
+        ? (permissions || [])
+        : (permissions || []).filter((permission) => !String(permission.key || "").startsWith("containers."));
+      visiblePermissions.forEach((permission) => {
         const domain = permission.domain || "core";
         if (!grouped[domain]) grouped[domain] = [];
         grouped[domain].push(permission);
@@ -8126,11 +8234,14 @@ def ui_preview_html(
         || roles[0]
         || null;
     }
+    function visibleAppFeaturePreview() {
+      return APP_FEATURE_PREVIEW.filter((feature) => collectorsModeEnabled() || feature.key !== "containers.manage");
+    }
     function appAdminRoleFeaturePreviewHtml(role) {
       if (!role) {
         return `<div class="preview-empty">${escapeHtml(tNext("appAdmin.selectRoleToEdit", "Select a role to edit."))}</div>`;
       }
-      return `<div class="app-admin-feature-list">${APP_FEATURE_PREVIEW.map((feature) => {
+      return `<div class="app-admin-feature-list">${visibleAppFeaturePreview().map((feature) => {
         const allowed = appAdminRoleAllowsFeature(role, feature.permissions);
         const statusLabel = allowed
           ? tNext("appAdmin.featureAllowed", "Allowed")
@@ -8213,7 +8324,7 @@ def ui_preview_html(
           <div class="profile-passkey-meta">${escapeHtml(role.key || "")}</div>
         </th>
       `).join("");
-      const rows = APP_FEATURE_PREVIEW.map((feature) => {
+      const rows = visibleAppFeaturePreview().map((feature) => {
         const cells = roleList.map((role) => {
           const allowed = appAdminRoleAllowsFeature(role, feature.permissions);
           return `<td><span class="tag ${allowed ? "good" : "blue"}">${escapeHtml(allowed ? tNext("appAdmin.featureAllowed", "Allowed") : tNext("appAdmin.featureBlocked", "Blocked"))}</span></td>`;
@@ -9413,9 +9524,10 @@ def ui_preview_html(
     }
     function renderBulkTargets() {
       const groups = mediaGroups || [];
-      const boxSets = (containers || []).filter((item) => item.container_type === "box_set");
-      const collections = (containers || []).filter((item) => item.container_type === "collection");
-      const vaults = (containers || []).filter((item) => item.container_type === "vault");
+      const collectorContainers = collectorsModeEnabled() ? (containers || []) : [];
+      const boxSets = collectorContainers.filter((item) => item.container_type === "box_set");
+      const collections = collectorContainers.filter((item) => item.container_type === "collection");
+      const vaults = collectorContainers.filter((item) => item.container_type === "vault");
       const groupSelect = document.getElementById("bulkGroupTarget");
       const boxSetSelect = document.getElementById("bulkBoxSetTarget");
       const collectionSelect = document.getElementById("bulkCollectionTarget");
@@ -9425,6 +9537,34 @@ def ui_preview_html(
       if (collectionSelect) collectionSelect.innerHTML = targetOptionHtml(collections, "bulk.noCollections", "No collections");
       if (vaultSelect) vaultSelect.innerHTML = targetOptionHtml(vaults, "bulk.noVaults", "No vaults");
     }
+    function collectorsModeEnabled() {
+      return preferences.collectors_mode === true;
+    }
+    function mergeEditionsAsTitleEnabled() {
+      return collectorsModeEnabled() && preferences.merge_editions_as_title === true;
+    }
+    function containerMembershipRows() {
+      return Array.isArray(containerMembership) ? containerMembership : [];
+    }
+    function movieIdSetForContainer(containerId) {
+      const id = String(containerId || "");
+      const values = containerMembershipRows()
+        .filter((row) => String(row.container_id || "") === id)
+        .map((row) => String(row.movie_id || ""))
+        .filter(Boolean);
+      return new Set(values);
+    }
+    function containerMemberMovies(containerId) {
+      const memberIds = movieIdSetForContainer(containerId);
+      return (movies || []).filter((movie) => memberIds.has(String(movie.id || "")));
+    }
+    function containerIsNestedChild(containerId, visibleContainerIds) {
+      const id = String(containerId || "");
+      return containerMembershipRows().some((row) => {
+        const parentId = String(row.container_id || "");
+        return String(row.child_container_id || "") === id && (!visibleContainerIds || visibleContainerIds.has(parentId));
+      });
+    }
     function movieMatchesGroup(movie) {
       const selected = preferences.default_media_group_id || "";
       const groups = Array.isArray(movie.media_groups) ? movie.media_groups : [];
@@ -9432,13 +9572,88 @@ def ui_preview_html(
       if (selected === "__ungrouped") return groups.length === 0;
       return groups.some((group) => String(group.id) === String(selected) || String(group.publicId) === String(selected));
     }
-    function movieMatchesSearch(movie) {
+    function activeSearchQuery() {
       const search = document.getElementById("previewSearch");
-      const query = search ? search.value.trim().toLowerCase() : "";
+      return search ? search.value.trim().toLowerCase() : "";
+    }
+    function movieMatchesSearch(movie) {
+      const query = activeSearchQuery();
       if (!query) return true;
       const groups = (movie.media_groups || []).map((group) => group.name).join(" ");
       const haystack = [movie.title, movie.original_title, movie.year, movie.format, movie.barcode, groups].join(" ").toLowerCase();
       return haystack.includes(query);
+    }
+    function containerMatchesGroup(container) {
+      if (!collectorsModeEnabled()) return false;
+      const selected = preferences.default_media_group_id || "";
+      if (!selected) return true;
+      const memberMovies = containerMemberMovies(container.id);
+      if (!memberMovies.length) return selected === "__ungrouped";
+      return memberMovies.some((movie) => movieMatchesGroup(movie));
+    }
+    function containerMatchesSearch(container) {
+      if (!collectorsModeEnabled()) return false;
+      const query = activeSearchQuery();
+      if (!query) return true;
+      const memberText = containerMemberMovies(container.id).map((movie) => [
+        movie.title,
+        movie.original_title,
+        movie.year,
+        movie.format,
+        movie.barcode
+      ].filter(Boolean).join(" ")).join(" ");
+      const haystack = [
+        container.title,
+        container.container_type,
+        container.badge_label,
+        container.year,
+        container.barcode,
+        memberText
+      ].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(query);
+    }
+    function libraryDisplayItems() {
+      const visibleMovies = (movies || []).filter((movie) => movieMatchesGroup(movie) && movieMatchesSearch(movie));
+      if (!mergeEditionsAsTitleEnabled()) {
+        return visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
+      }
+      const visibleMovieIds = new Set(visibleMovies.map((movie) => String(movie.id || "")));
+      const visibleContainerIds = new Set();
+      containerMembershipRows().forEach((row) => {
+        if (visibleMovieIds.has(String(row.movie_id || ""))) {
+          visibleContainerIds.add(String(row.container_id || ""));
+        }
+      });
+      (containers || []).forEach((container) => {
+        const memberIds = movieIdSetForContainer(container.id);
+        if (!memberIds.size && !activeSearchQuery()) return;
+        if (containerMatchesGroup(container) && containerMatchesSearch(container)) {
+          visibleContainerIds.add(String(container.id || ""));
+        }
+      });
+      [...visibleContainerIds].forEach((containerId) => {
+        if (containerIsNestedChild(containerId, visibleContainerIds)) visibleContainerIds.delete(containerId);
+      });
+      const representedMovieIds = new Set();
+      const containerItems = (containers || [])
+        .filter((container) => visibleContainerIds.has(String(container.id || "")))
+        .filter((container) => containerMatchesGroup(container) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
+        .map((container) => {
+          movieIdSetForContainer(container.id).forEach((movieId) => representedMovieIds.add(movieId));
+          return {kind: "container", container, title: container.title || ""};
+        });
+      const movieItems = visibleMovies
+        .filter((movie) => !representedMovieIds.has(String(movie.id || "")))
+        .map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
+      return [...containerItems, ...movieItems].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), localeState.locale || undefined, {sensitivity: "base"}));
+    }
+    function libraryDisplayMovieCount(items) {
+      const ids = new Set();
+      (items || []).forEach((item) => {
+        if (item.kind === "movie") ids.add(String(item.movie?.id || ""));
+        if (item.kind === "container") movieIdSetForContainer(item.container?.id).forEach((movieId) => ids.add(movieId));
+      });
+      return ids.size;
     }
     function digitalSourceBadgeHtml(movie) {
       if (preferences.show_digital_badge_on_tiles === false) return "";
@@ -9471,6 +9686,26 @@ def ui_preview_html(
         <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
           <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
+          <span class="preview-poster-meta">${escapeHtml(meta)}</span>
+        </button>
+      `;
+    }
+    function containerPosterCardHtml(container, index) {
+      const poster = usableImage(container.poster_url || container.backdrop_url);
+      const typeLabel = containerTypeLabel(container.container_type);
+      const memberCount = movieIdSetForContainer(container.id).size;
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(typeLabel)}</span>`;
+      const meta = [
+        typeLabel,
+        memberCount ? `${memberCount} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
+        container.year || container.barcode || ""
+      ].filter(Boolean).join(" / ");
+      const selected = index === 0 ? " selected" : "";
+      const bulkSelected = selectedContainerIds.has(String(container.id || "")) ? " bulk-selected" : "";
+      return `
+        <button type="button" class="preview-poster container-tile${selected}${bulkSelected}" data-preview-container="${escapeHtml(container.id)}">
+          <span class="preview-poster-art">${posterHtml}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
+          <span class="preview-poster-title">${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
         </button>
       `;
@@ -9807,11 +10042,11 @@ def ui_preview_html(
         item.playback_url || ""
       ));
       document.getElementById("movieDetailLinks").innerHTML = [...identifiers, ...digital].join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noLinks", "No links yet."))}</div>`;
-      const containerCards = (detail.containers || []).map((container) => miniCard(
+      const containerCards = collectorsModeEnabled() ? (detail.containers || []).map((container) => miniCard(
         container.title,
         [String(container.container_type || "").replace(/_/g, " "), container.relationship, container.year].filter(Boolean).join(" / "),
         `/api/next/app/containers/${encodeURIComponent(container.id)}`
-      ));
+      )) : [];
       const groupCards = (detail.mediaGroups || []).map((group) => miniCard(
         group.name,
         [
@@ -10089,6 +10324,10 @@ def ui_preview_html(
     }
     async function openAppContainerDetail(containerId, pushUrl = true) {
       if (!containerId) return;
+      if (!collectorsModeEnabled()) {
+        showLibraryPage(pushUrl);
+        return;
+      }
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activePersonId = "";
@@ -10245,6 +10484,7 @@ def ui_preview_html(
       }
     }
     function toggleCreateContainerForm() {
+      if (!collectorsModeEnabled()) return;
       const form = document.getElementById("createContainerForm");
       if (!form) return;
       form.classList.toggle("hidden");
@@ -10254,6 +10494,7 @@ def ui_preview_html(
     }
     async function createContainer(event) {
       event.preventDefault();
+      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) return;
       const message = document.getElementById("createContainerMessage");
       if (message) message.textContent = tNext("containerDetail.creating", "Creating container...");
       const body = {
@@ -11306,6 +11547,7 @@ def ui_preview_html(
       }
     }
     function renderLibrary() {
+      if (!collectorsModeEnabled()) selectedContainerIds.clear();
       renderGroupFilter();
       renderBulkTargets();
       const search = document.getElementById("previewSearch");
@@ -11314,11 +11556,16 @@ def ui_preview_html(
       }
       const hero = document.getElementById("previewHero");
       if (hero) hero.classList.toggle("hidden", preferences.show_featured_hero === false || movies.length === 0);
-      const visibleMovies = movies.filter((movie) => movieMatchesGroup(movie) && movieMatchesSearch(movie));
+      const displayItems = libraryDisplayItems();
+      const visibleMovieCount = libraryDisplayMovieCount(displayItems);
       const rail = document.getElementById("posterRail");
       if (rail) {
-        rail.innerHTML = visibleMovies.length
-          ? visibleMovies.slice(0, 80).map((movie, index) => posterCardHtml(movie, index)).join("")
+        rail.innerHTML = displayItems.length
+          ? displayItems.slice(0, 80).map((item, index) => (
+              item.kind === "container"
+                ? containerPosterCardHtml(item.container, index)
+                : posterCardHtml(item.movie, index)
+            )).join("")
           : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
       }
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
@@ -11332,19 +11579,36 @@ def ui_preview_html(
           openAppMovieDetail(button.dataset.previewMovie);
         });
       });
+      document.querySelectorAll("[data-preview-container]").forEach((button) => {
+        button.classList.toggle("bulk-selected", selectedContainerIds.has(button.dataset.previewContainer));
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (selectionMode) {
+            toggleContainerSelection(button.dataset.previewContainer);
+            return;
+          }
+          openAppContainerDetail(button.dataset.previewContainer);
+        });
+      });
       const shownCount = document.getElementById("shownCount");
-      if (shownCount) shownCount.textContent = String(visibleMovies.length);
+      if (shownCount) shownCount.textContent = String(displayItems.length);
       const summary = document.getElementById("librarySummary");
       if (summary) {
-        summary.textContent = `${visibleMovies.length} / ${movies.length} ${tNext("collection.movies", "Movies").toLowerCase()}`;
+        const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
+        const tileLabel = tNext("collection.tiles", "tiles");
+        summary.textContent = mergeEditionsAsTitleEnabled()
+          ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
+          : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
       }
       const navMovieCount = document.getElementById("navMovieCount");
       const navGroupCount = document.getElementById("navGroupCount");
       const containerPanelCount = document.getElementById("containerPanelCount");
       if (navMovieCount) navMovieCount.textContent = String(movies.length);
       if (navGroupCount) navGroupCount.textContent = String(mediaGroups.length);
-      if (containerPanelCount) containerPanelCount.textContent = String(containers.length);
-      if (visibleMovies[0]) selectMovie(visibleMovies[0].id);
+      if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
+      const firstItem = displayItems[0];
+      if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
+      if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
       updateBulkBar();
     }
     function toggleSelectMode(force) {
@@ -11468,7 +11732,7 @@ def ui_preview_html(
       }
     }
     async function applyBulkContainer(targetType, selectId) {
-      if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers)) return;
+      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers)) return;
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
       if (!movieIds.length) {
@@ -11489,7 +11753,7 @@ def ui_preview_html(
       }
     }
     async function applyBulkCollection() {
-      if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)) return;
+      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)) return;
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
       try {
@@ -11593,6 +11857,8 @@ def ui_preview_html(
           body: JSON.stringify({preferences: patch})
         });
         preferences = Object.assign({}, preferences, payload.preferences || {});
+        renderPreferences();
+        renderLibrary();
         if (message) message.textContent = tNext("preferences.saved", "Saved.");
       } catch (error) {
         if (message) message.textContent = error.message || String(error);
@@ -11608,7 +11874,12 @@ def ui_preview_html(
       return sortedByTitle(containers.filter((container) => container.container_type === containerManagerType));
     }
     function renderContainerManager() {
-      if (!hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) return;
+      const list = document.getElementById("containerManagerList");
+      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) {
+        if (list) list.innerHTML = "";
+        setContainerManagerMessage("");
+        return;
+      }
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.classList.toggle("active", button.dataset.containerManagerType === containerManagerType);
       });
@@ -11619,7 +11890,6 @@ def ui_preview_html(
           tNext("containerManage.create", "Create")
         );
       }
-      const list = document.getElementById("containerManagerList");
       if (!list) return;
       const items = containerManagerItems();
       if (!items.length) {
@@ -11648,7 +11918,7 @@ def ui_preview_html(
     }
     async function createManagedContainer(event) {
       event?.preventDefault();
-      if (!hasAnyPermission(["containers.create", "collection.bulk_edit"])) return;
+      if (!collectorsModeEnabled() || !hasAnyPermission(["containers.create", "collection.bulk_edit"])) return;
       const input = document.getElementById("containerManagerTitle");
       const title = String(input?.value || "").trim();
       if (!title) {
@@ -11673,7 +11943,7 @@ def ui_preview_html(
       }
     }
     async function renameManagedContainer(containerId) {
-      if (!hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
+      if (!collectorsModeEnabled() || !hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
       const input = document.querySelector(`[data-container-manager-title="${CSS.escape(containerId)}"]`);
       const title = String(input?.value || "").trim();
       if (!title) {
@@ -11697,7 +11967,7 @@ def ui_preview_html(
       }
     }
     async function deleteManagedContainer(containerId) {
-      if (!hasAnyPermission(["containers.delete", "collection.bulk_edit"])) return;
+      if (!collectorsModeEnabled() || !hasAnyPermission(["containers.delete", "collection.bulk_edit"])) return;
       const container = containers.find((item) => String(item.id) === String(containerId));
       const title = container?.title || tNext("common.untitled", "Untitled");
       const confirmed = window.confirm(tNext("containerManage.deleteConfirm", "Delete this item?").replace("{title}", title));
@@ -11739,6 +12009,7 @@ def ui_preview_html(
       state = payload.snapshot || {};
       movies = state.movies || [];
       containers = state.containers || [];
+      containerMembership = state.containerMembership || [];
       mediaGroups = state.mediaGroups || [];
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
@@ -12160,6 +12431,36 @@ def ui_preview_html(
       document.querySelectorAll("[data-preview-movie]").forEach((node) => {
         node.classList.toggle("selected", String(node.dataset.previewMovie) === String(movie.id));
       });
+      document.querySelectorAll("[data-preview-container]").forEach((node) => {
+        node.classList.toggle("selected", false);
+      });
+    }
+    function selectContainer(containerId) {
+      const container = containers.find((item) => String(item.id) === String(containerId)) || {};
+      const title = container.title || tNext("common.untitled", "Untitled");
+      const backdrop = usableImage(container.backdrop_url || container.poster_url);
+      const poster = usableImage(container.poster_url || container.backdrop_url);
+      document.getElementById("heroTitle").textContent = title;
+      document.getElementById("heroMeta").innerHTML = [
+        containerTypeLabel(container.container_type),
+        container.year,
+        movieIdSetForContainer(container.id).size ? `${movieIdSetForContainer(container.id).size} ${tNext("collection.movies", "Movies").toLowerCase()}` : ""
+      ].filter(Boolean).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
+      document.getElementById("heroDetailLink").href = container.id ? `/containers/${encodeURIComponent(container.id)}` : "/";
+      const backdropNode = document.getElementById("heroBackdrop");
+      if (backdropNode && backdropNode.tagName === "IMG") {
+        backdropNode.src = backdrop || "";
+      }
+      const posterNode = document.getElementById("heroPoster");
+      posterNode.innerHTML = poster
+        ? `<img src="${escapeHtml(poster)}" alt="">`
+        : `<span>${escapeHtml(containerTypeLabel(container.container_type))}</span>`;
+      document.querySelectorAll("[data-preview-movie]").forEach((node) => {
+        node.classList.toggle("selected", false);
+      });
+      document.querySelectorAll("[data-preview-container]").forEach((node) => {
+        node.classList.toggle("selected", String(node.dataset.previewContainer) === String(container.id));
+      });
     }
     function filterMovies() {
       renderLibrary();
@@ -12394,10 +12695,12 @@ def ui_preview_html(
       });
       document.getElementById("heroDetailLink")?.addEventListener("click", (event) => {
         const href = event.currentTarget.getAttribute("href") || "";
-        const match = href.match(/\\/movies\\/([^/?#]+)/);
-        if (!match) return;
+        const movieMatch = href.match(/\\/movies\\/([^/?#]+)/);
+        const containerMatch = href.match(/\\/containers\\/([^/?#]+)/);
+        if (!movieMatch && !containerMatch) return;
         event.preventDefault();
-        openAppMovieDetail(decodeURIComponent(match[1]));
+        if (movieMatch) openAppMovieDetail(decodeURIComponent(movieMatch[1]));
+        if (containerMatch) openAppContainerDetail(decodeURIComponent(containerMatch[1]));
       });
       document.getElementById("createContainerButton")?.addEventListener("click", () => toggleCreateContainerForm());
       document.getElementById("createContainerForm")?.addEventListener("submit", (event) => createContainer(event));
@@ -12469,8 +12772,11 @@ def ui_preview_html(
       document.getElementById("movieMetadataApplyButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false));
       document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
-        if (!movies.length) return;
-        selectMovie(movies[Math.floor(Math.random() * movies.length)].id);
+        const items = libraryDisplayItems();
+        if (!items.length) return;
+        const item = items[Math.floor(Math.random() * items.length)];
+        if (item.kind === "container") selectContainer(item.container.id);
+        else selectMovie(item.movie.id);
       });
       refreshAppFlow().catch((error) => {
         if (appMode) {
@@ -12515,7 +12821,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     movies = snapshot.get("movies") or []
     containers = snapshot.get("containers") or []
     plugins = snapshot.get("plugins") or []
+    preferences = snapshot.get("preferences") or dict(APP_PREFERENCE_DEFAULTS)
+    if not preferences.get("collectors_mode"):
+        containers = []
     enabled_plugins = [plugin for plugin in plugins if plugin.get("enabled")]
+    container_panel_class = "panel" if preferences.get("collectors_mode") else "panel hidden"
     initial_state_json = html_lib.escape(json_lib.dumps(json_ready(snapshot), separators=(",", ":")), quote=False)
     movie_cards = server_movie_cards(movies)
     container_cards = server_container_cards(containers)
@@ -12641,6 +12951,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       color: var(--text);
       font-family: var(--font-sans);
     }
+    .hidden { display: none !important; }
     ::selection {
       background: var(--blue-soft);
       color: var(--text-strong);
@@ -13848,7 +14159,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         </div>
         <div class="grid" id="movieGrid">""" + movie_cards + """</div>
       </div>
-      <aside class="panel">
+      <aside class=\"""" + container_panel_class + """\">
         <div class="section-head">
           <h2 data-next-i18n="collection.containers">Containers</h2>
           <span class="muted" id="containerCount">""" + h(len(containers)) + """</span>
