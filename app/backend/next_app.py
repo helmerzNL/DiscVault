@@ -6569,6 +6569,52 @@ def ui_preview_html(
       gap: 16px;
       align-items: start;
     }
+    .profile-grid-single {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .profile-center-card {
+      gap: 16px;
+    }
+    .profile-submenu {
+      max-width: 100%;
+    }
+    .profile-panel {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .profile-section-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+    .profile-section-box {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+      padding: 14px;
+    }
+    .profile-section-box h4,
+    .detail-card-head.compact h4 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+    .profile-section-box p,
+    .detail-card-head.compact p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .detail-card-head.compact {
+      gap: 12px;
+      padding-bottom: 0;
+    }
     .app-admin-submenu {
       width: max-content;
       max-width: 100%;
@@ -7495,6 +7541,12 @@ def ui_preview_html(
       .profile-grid {
         grid-template-columns: 1fr;
       }
+      .profile-section-grid {
+        grid-template-columns: 1fr;
+      }
+      .profile-submenu button {
+        flex: 1 0 auto;
+      }
       .profile-meta-row {
         grid-template-columns: 1fr;
         gap: 3px;
@@ -8360,196 +8412,230 @@ def ui_preview_html(
             <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
           </div>
         </section>
-        <section class="profile-grid">
-          <div class="detail-card profile-card">
-            <h3 data-next-i18n="profile.account">Account</h3>
-            <div class="profile-meta">
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.username">Username</span>
-                <strong id="profileUsername">-</strong>
-              </div>
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.role">Role</span>
-                <strong id="profileRole">-</strong>
-              </div>
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.users">Users</span>
-                <strong id="profileUserCount">-</strong>
-              </div>
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.credentials">Passkeys</span>
-                <strong id="profileCredentialCount">-</strong>
-              </div>
-            </div>
-          </div>
-          <div class="detail-card profile-card">
-            <h3 data-next-i18n="profile.about">About</h3>
-            <p class="muted" data-next-i18n="profile.aboutHelp">App details and version information.</p>
-            <div class="profile-meta">
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.appVersion">App version</span>
-                <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
-              </div>
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.buildSha">Build SHA</span>
-                <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
-              </div>
-            </div>
-          </div>
-          <div class="detail-card profile-card full">
+        <section class="profile-grid profile-grid-single">
+          <div class="detail-card profile-card full profile-center-card">
             <div class="detail-card-head">
               <div>
-                <h3 data-next-i18n="preferences.title">Preferences</h3>
-                <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
+                <h3 data-next-i18n="profile.profileCenter">Profile center</h3>
+                <p data-next-i18n="profile.profileCenterHelp">Manage your account, preferences, security and app information.</p>
               </div>
-              <nav class="detail-submenu" aria-label="Preferences" data-next-i18n-aria="preferences.sections">
-                <button type="button" class="active" data-preferences-tab="appearance" data-next-i18n="preferences.tabAppearance">Appearance</button>
-                <button type="button" data-preferences-tab="library" data-next-i18n="preferences.tabLibrary">Library</button>
-                <button type="button" data-preferences-tab="collectors" data-next-i18n="preferences.tabCollectors">Collectors</button>
+              <nav class="detail-submenu profile-submenu" aria-label="Profile sections" data-next-i18n-aria="profile.sections">
+                <button type="button" class="active" data-profile-tab="account" data-next-i18n="profile.tabAccount">Account</button>
+                <button type="button" data-profile-tab="preferences" data-next-i18n="preferences.title">Preferences</button>
+                <button type="button" data-profile-tab="notifications" data-next-i18n="profile.tabNotifications">Notifications</button>
+                <button type="button" data-profile-tab="structure" data-next-i18n="profile.tabStructure">Structure</button>
+                <button type="button" data-profile-tab="security" data-next-i18n="profile.security">Security</button>
+                <button type="button" data-profile-tab="about" data-next-i18n="profile.about">About</button>
               </nav>
             </div>
-            <div class="detail-subpanel" data-preferences-panel="appearance">
-              <div class="preference-control-list">
-                <div class="preference-control-row">
-                  <span>
-                    <strong data-next-i18n="preferences.theme">Theme</strong>
-                    <span data-next-i18n="preferences.themeHelp">Follow the system theme or choose a fixed appearance.</span>
-                  </span>
-                  <div class="segmented" role="group" aria-label="Appearance" data-next-i18n-aria="appearance.label">
-                    <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
-                    <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
-                    <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
+            <div class="detail-subpanel profile-panel" data-profile-panel="account">
+              <div class="profile-section-grid">
+                <section class="profile-section-box">
+                  <h4 data-next-i18n="profile.account">Account</h4>
+                  <div class="profile-meta">
+                    <div class="profile-meta-row">
+                      <span data-next-i18n="profile.username">Username</span>
+                      <strong id="profileUsername">-</strong>
+                    </div>
+                    <div class="profile-meta-row">
+                      <span data-next-i18n="profile.role">Role</span>
+                      <strong id="profileRole">-</strong>
+                    </div>
+                    <div class="profile-meta-row">
+                      <span data-next-i18n="profile.users">Users</span>
+                      <strong id="profileUserCount">-</strong>
+                    </div>
+                    <div class="profile-meta-row">
+                      <span data-next-i18n="profile.credentials">Passkeys</span>
+                      <strong id="profileCredentialCount">-</strong>
+                    </div>
+                  </div>
+                </section>
+                <section class="profile-section-box">
+                  <h4 data-next-i18n="profile.profileEditing">Profile editing</h4>
+                  <form class="profile-form" id="profileEditForm">
+                    <label for="profileDisplayNameInput">
+                      <span data-next-i18n="profile.displayName">Display name</span>
+                      <input id="profileDisplayNameInput" name="display_name" maxlength="120" autocomplete="name">
+                    </label>
+                    <div class="profile-form-actions">
+                      <button type="submit" class="secondary-button" id="profileSaveButton" data-next-i18n="profile.saveProfile">Save profile</button>
+                      <span class="login-message" id="profileEditMessage"></span>
+                    </div>
+                  </form>
+                  <form class="profile-form" id="profileAvatarForm">
+                    <label for="profileAvatarFileInput">
+                      <span data-next-i18n="profile.avatar">Avatar</span>
+                      <input id="profileAvatarFileInput" name="file" type="file" accept="image/*">
+                    </label>
+                    <div class="profile-form-actions">
+                      <button type="submit" class="secondary-button" id="profileAvatarUploadButton" data-next-i18n="profile.uploadAvatar">Upload avatar</button>
+                      <button type="button" class="secondary-button" id="profileAvatarRemoveButton" data-next-i18n="profile.removeAvatar">Remove avatar</button>
+                      <span class="login-message" id="profileAvatarMessage"></span>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            </div>
+            <div class="detail-subpanel profile-panel hidden" data-profile-panel="preferences">
+              <div class="detail-card-head compact">
+                <div>
+                  <h4 data-next-i18n="preferences.title">Preferences</h4>
+                  <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
+                </div>
+                <nav class="detail-submenu" aria-label="Preferences" data-next-i18n-aria="preferences.sections">
+                  <button type="button" class="active" data-preferences-tab="appearance" data-next-i18n="preferences.tabAppearance">Appearance</button>
+                  <button type="button" data-preferences-tab="library" data-next-i18n="preferences.tabLibrary">Library</button>
+                  <button type="button" data-preferences-tab="collectors" data-next-i18n="preferences.tabCollectors">Collectors</button>
+                </nav>
+              </div>
+              <div class="detail-subpanel" data-preferences-panel="appearance">
+                <div class="preference-control-list">
+                  <div class="preference-control-row">
+                    <span>
+                      <strong data-next-i18n="preferences.theme">Theme</strong>
+                      <span data-next-i18n="preferences.themeHelp">Follow the system theme or choose a fixed appearance.</span>
+                    </span>
+                    <div class="segmented" role="group" aria-label="Appearance" data-next-i18n-aria="appearance.label">
+                      <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
+                      <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
+                      <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
+                    </div>
+                  </div>
+                  <div class="preference-control-row">
+                    <span>
+                      <strong data-next-i18n="preferences.language">Language</strong>
+                      <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
+                    </span>
+                    <div class="language-picker" id="profileLanguagePicker">
+                      <span id="profileLanguageFlag" aria-hidden="true"></span>
+                      <select id="profileLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+                    </div>
                   </div>
                 </div>
-                <div class="preference-control-row">
-                  <span>
-                    <strong data-next-i18n="preferences.language">Language</strong>
-                    <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
-                  </span>
-                  <div class="language-picker" id="profileLanguagePicker">
-                    <span id="profileLanguageFlag" aria-hidden="true"></span>
-                    <select id="profileLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
-                  </div>
+              </div>
+              <div class="detail-subpanel hidden" data-preferences-panel="library">
+                <div class="preference-list" id="profilePreferenceList"></div>
+              </div>
+              <div class="detail-subpanel hidden" data-preferences-panel="collectors">
+                <div class="preference-list" id="profileCollectorPreferenceList"></div>
+              </div>
+              <div class="login-message" id="preferencesMessage"></div>
+            </div>
+            <div class="detail-subpanel profile-panel hidden" data-profile-panel="notifications">
+              <div class="detail-card-head compact">
+                <div>
+                  <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
+                  <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
+                </div>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+                  <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
                 </div>
               </div>
-            </div>
-            <div class="detail-subpanel hidden" data-preferences-panel="library">
-              <div class="preference-list" id="profilePreferenceList"></div>
-            </div>
-            <div class="detail-subpanel hidden" data-preferences-panel="collectors">
-              <div class="preference-list" id="profileCollectorPreferenceList"></div>
-            </div>
-            <div class="login-message" id="preferencesMessage"></div>
-          </div>
-          <div class="detail-card profile-card full">
-            <div class="detail-card-head">
-              <div>
-                <h3 data-next-i18n="notifications.pushTitle">Push notifications</h3>
-                <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
+              <div class="profile-section-grid">
+                <section class="profile-section-box">
+                  <div class="profile-meta">
+                    <div class="profile-meta-row">
+                      <span data-next-i18n="notifications.browserState">Browser</span>
+                      <strong id="pushBrowserState">-</strong>
+                    </div>
+                    <div class="profile-meta-row">
+                      <span data-next-i18n="notifications.deviceState">This device</span>
+                      <strong id="pushDeviceState">-</strong>
+                    </div>
+                  </div>
+                  <div class="profile-action-row">
+                    <button type="button" class="secondary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
+                    <button type="button" class="secondary-button" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
+                  </div>
+                </section>
+                <section class="profile-section-box">
+                  <div class="preference-control-list" id="pushPreferenceList"></div>
+                  <div class="push-device-list" id="pushDeviceList"></div>
+                </section>
               </div>
-              <div class="profile-form-actions">
-                <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
-                <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
-              </div>
+              <div class="login-message" id="pushProfileMessage"></div>
             </div>
-            <div class="profile-meta">
-              <div class="profile-meta-row">
-                <span data-next-i18n="notifications.browserState">Browser</span>
-                <strong id="pushBrowserState">-</strong>
+            <div class="detail-subpanel profile-panel hidden" data-profile-panel="structure">
+              <div class="detail-card-head compact">
+                <div>
+                  <h4 data-next-i18n="containerManage.title">Collection structure</h4>
+                  <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
+                </div>
+                <nav class="detail-submenu" aria-label="Collection structure" data-next-i18n-aria="containerManage.sections">
+                  <button type="button" class="active" data-container-manager-type="box_set" data-next-i18n="containerManage.boxSets">Box-sets</button>
+                  <button type="button" data-container-manager-type="vault" data-next-i18n="containerManage.vaults">Vaults</button>
+                  <button type="button" data-container-manager-type="collection" data-next-i18n="containerManage.collections">Collections</button>
+                </nav>
               </div>
-              <div class="profile-meta-row">
-                <span data-next-i18n="notifications.deviceState">This device</span>
-                <strong id="pushDeviceState">-</strong>
-              </div>
+              <form class="profile-form container-manager-create" id="containerManagerCreateForm">
+                <label for="containerManagerTitle">
+                  <span data-next-i18n="containerManage.titleLabel">Name</span>
+                  <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
+                </label>
+                <div class="profile-form-actions">
+                  <button type="submit" class="secondary-button" id="containerManagerCreateButton" data-next-i18n="containerManage.create">Create</button>
+                  <span class="login-message" id="containerManagerMessage"></span>
+                </div>
+              </form>
+              <div class="container-manager-list" id="containerManagerList"></div>
             </div>
-            <div class="profile-action-row">
-              <button type="button" class="secondary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
-              <button type="button" class="secondary-button" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
-            </div>
-            <div class="preference-control-list" id="pushPreferenceList"></div>
-            <div class="push-device-list" id="pushDeviceList"></div>
-            <div class="login-message" id="pushProfileMessage"></div>
-          </div>
-          <div class="detail-card profile-card full">
-            <div class="detail-card-head">
-              <div>
-                <h3 data-next-i18n="containerManage.title">Collection structure</h3>
-                <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
-              </div>
-              <nav class="detail-submenu" aria-label="Collection structure" data-next-i18n-aria="containerManage.sections">
-                <button type="button" class="active" data-container-manager-type="box_set" data-next-i18n="containerManage.boxSets">Box-sets</button>
-                <button type="button" data-container-manager-type="vault" data-next-i18n="containerManage.vaults">Vaults</button>
-                <button type="button" data-container-manager-type="collection" data-next-i18n="containerManage.collections">Collections</button>
-              </nav>
-            </div>
-            <form class="profile-form container-manager-create" id="containerManagerCreateForm">
-              <label for="containerManagerTitle">
-                <span data-next-i18n="containerManage.titleLabel">Name</span>
-                <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
-              </label>
-              <div class="profile-form-actions">
-                <button type="submit" class="secondary-button" id="containerManagerCreateButton" data-next-i18n="containerManage.create">Create</button>
-                <span class="login-message" id="containerManagerMessage"></span>
-              </div>
-            </form>
-            <div class="container-manager-list" id="containerManagerList"></div>
-          </div>
-          <div class="detail-card profile-card">
-            <h3 data-next-i18n="profile.security">Security</h3>
-            <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
-            <div class="profile-passkey-list" id="profilePasskeyList"></div>
-            <div class="profile-add-passkey">
-              <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
-              <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
-            </div>
-            <div class="profile-action-row">
-              <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
-            </div>
-            <div class="login-message" id="profileSecurityMessage"></div>
-          </div>
-          <div class="detail-card profile-card">
-            <h3 data-next-i18n="profile.profileEditing">Profile editing</h3>
-            <form class="profile-form" id="profileEditForm">
-              <label for="profileDisplayNameInput">
-                <span data-next-i18n="profile.displayName">Display name</span>
-                <input id="profileDisplayNameInput" name="display_name" maxlength="120" autocomplete="name">
-              </label>
-              <div class="profile-form-actions">
-                <button type="submit" class="secondary-button" id="profileSaveButton" data-next-i18n="profile.saveProfile">Save profile</button>
-                <span class="login-message" id="profileEditMessage"></span>
-              </div>
-            </form>
-            <form class="profile-form" id="profileAvatarForm">
-              <label for="profileAvatarFileInput">
-                <span data-next-i18n="profile.avatar">Avatar</span>
-                <input id="profileAvatarFileInput" name="file" type="file" accept="image/*">
-              </label>
-              <div class="profile-form-actions">
-                <button type="submit" class="secondary-button" id="profileAvatarUploadButton" data-next-i18n="profile.uploadAvatar">Upload avatar</button>
-                <button type="button" class="secondary-button" id="profileAvatarRemoveButton" data-next-i18n="profile.removeAvatar">Remove avatar</button>
-                <span class="login-message" id="profileAvatarMessage"></span>
-              </div>
-            </form>
-          </div>
-          <div class="detail-card profile-card">
-            <h3 data-next-i18n="profile.recoveryTitle">Account recovery</h3>
-            <p data-next-i18n="profile.recoveryHelp">Recovery options will let you regain access if all passkeys are lost.</p>
-            <div class="profile-meta">
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
-                <strong id="profileRecoveryActiveCount">-</strong>
-              </div>
-              <div class="profile-meta-row">
-                <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
-                <strong id="profileRecoveryLastGenerated">-</strong>
+            <div class="detail-subpanel profile-panel hidden" data-profile-panel="security">
+              <div class="profile-section-grid">
+                <section class="profile-section-box">
+                  <div class="detail-card-head compact">
+                    <div>
+                      <h4 data-next-i18n="profile.security">Security</h4>
+                      <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                    </div>
+                    <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
+                  </div>
+                  <div class="profile-passkey-list" id="profilePasskeyList"></div>
+                  <div class="profile-add-passkey">
+                    <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
+                    <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
+                  </div>
+                  <div class="login-message" id="profileSecurityMessage"></div>
+                </section>
+                <section class="profile-section-box">
+                  <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
+                  <p data-next-i18n="profile.recoveryHelp">Recovery options will let you regain access if all passkeys are lost.</p>
+                  <div class="profile-meta">
+                    <div class="profile-meta-row">
+                      <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
+                      <strong id="profileRecoveryActiveCount">-</strong>
+                    </div>
+                    <div class="profile-meta-row">
+                      <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
+                      <strong id="profileRecoveryLastGenerated">-</strong>
+                    </div>
+                  </div>
+                  <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
+                  <div class="profile-action-row">
+                    <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
+                    <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
+                  </div>
+                  <div class="login-message" id="profileRecoveryMessage"></div>
+                </section>
               </div>
             </div>
-            <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
-            <div class="profile-action-row">
-              <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
-              <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
+            <div class="detail-subpanel profile-panel hidden" data-profile-panel="about">
+              <section class="profile-section-box">
+                <h4 data-next-i18n="profile.about">About</h4>
+                <p class="muted" data-next-i18n="profile.aboutHelp">App details and version information.</p>
+                <div class="profile-meta">
+                  <div class="profile-meta-row">
+                    <span data-next-i18n="profile.appVersion">App version</span>
+                    <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+                  </div>
+                  <div class="profile-meta-row">
+                    <span data-next-i18n="profile.buildSha">Build SHA</span>
+                    <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
+                  </div>
+                </div>
+              </section>
             </div>
-            <div class="login-message" id="profileRecoveryMessage"></div>
           </div>
         </section>
       </section>
@@ -8981,6 +9067,7 @@ def ui_preview_html(
     let currentAuthStatus = {};
     let profileCredentials = [];
     let profileRecovery = {};
+    let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
     let containerManagerType = "box_set";
     let appAdmin = {
       activeTab: "access",
@@ -9328,7 +9415,11 @@ def ui_preview_html(
         activePreferenceTab = "appearance";
       }
       syncPreferencePanelVisibility();
-      setElementVisible(closestCard(document.getElementById("containerManagerCreateForm")), canManageContainers);
+      setElementVisible(document.querySelector('[data-profile-tab="structure"]'), canManageContainers);
+      if (!canManageContainers && activeProfileTab === "structure") {
+        activeProfileTab = "account";
+      }
+      syncProfilePanelVisibility();
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="boxset"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
@@ -15057,6 +15148,32 @@ def ui_preview_html(
     function syncPreferencePanelVisibility() {
       setPreferenceTab(activePreferenceTab);
     }
+    function canUseProfileTab(tab) {
+      if (tab === "structure") {
+        return collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
+      }
+      return true;
+    }
+    function setProfileTab(tab) {
+      let selected = tab || "account";
+      if (!canUseProfileTab(selected)) selected = "account";
+      activeProfileTab = selected;
+      localStorage.setItem("dv_next_profile_tab", selected);
+      document.querySelectorAll("[data-profile-tab]").forEach((button) => {
+        const visible = canUseProfileTab(button.dataset.profileTab);
+        const active = visible && button.dataset.profileTab === selected;
+        button.classList.toggle("hidden", !visible);
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll("[data-profile-panel]").forEach((panel) => {
+        const visible = canUseProfileTab(panel.dataset.profilePanel);
+        panel.classList.toggle("hidden", !visible || panel.dataset.profilePanel !== selected);
+      });
+    }
+    function syncProfilePanelVisibility() {
+      setProfileTab(activeProfileTab);
+    }
     function renderPreferences() {
       const libraryList = document.getElementById("profilePreferenceList");
       const collectorList = document.getElementById("profileCollectorPreferenceList");
@@ -15811,6 +15928,10 @@ def ui_preview_html(
         button.addEventListener("click", () => setPreferenceTab(button.dataset.preferencesTab || "appearance"));
       });
       setPreferenceTab("appearance");
+      document.querySelectorAll("[data-profile-tab]").forEach((button) => {
+        button.addEventListener("click", () => setProfileTab(button.dataset.profileTab || "account"));
+      });
+      setProfileTab(activeProfileTab);
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.addEventListener("click", () => {
           containerManagerType = button.dataset.containerManagerType || "box_set";

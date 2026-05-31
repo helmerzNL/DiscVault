@@ -1035,5 +1035,11 @@
   "appAdmin.pluginTypeMetadataReceivers": "Metadatamottagare",
   "appAdmin.pluginTypeDigitalSources": "Digitala mediekallor",
   "appAdmin.pluginTypeImportSources": "Importkallor",
-  "appAdmin.pluginTypeOther": "Andra plugins"
+  "appAdmin.pluginTypeOther": "Andra plugins",
+  "profile.profileCenter": "Profilcenter",
+  "profile.profileCenterHelp": "Hantera konto, installningar, sakerhet och appinformation.",
+  "profile.sections": "Profilsektioner",
+  "profile.tabAccount": "Konto",
+  "profile.tabNotifications": "Aviseringar",
+  "profile.tabStructure": "Struktur"
 }
