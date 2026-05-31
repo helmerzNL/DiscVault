@@ -10843,6 +10843,7 @@ def ui_preview_html(
     function containerPosterCardHtml(container, index) {
       const poster = usableImage(container.poster_url || container.backdrop_url);
       const typeLabel = containerTypeLabel(container.container_type);
+      const showFormatBadge = String(container.container_type || "") !== "collection";
       const memberCount = movieIdSetForContainer(container.id).size;
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(typeLabel)}</span>`;
       const meta = [
@@ -10854,7 +10855,7 @@ def ui_preview_html(
       const bulkSelected = selectedContainerIds.has(String(container.id || "")) ? " bulk-selected" : "";
       return `
         <button type="button" class="preview-poster container-tile${selected}${bulkSelected}" data-preview-container="${escapeHtml(container.id)}">
-          <span class="preview-poster-art">${posterHtml}${physicalFormatBadgeHtml(containerFormatBadgeValue(container))}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
+          <span class="preview-poster-art">${posterHtml}${showFormatBadge ? physicalFormatBadgeHtml(containerFormatBadgeValue(container)) : ""}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
           <span class="preview-poster-title">${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
           ${debugIdHtml(container.id, "Container ID")}
