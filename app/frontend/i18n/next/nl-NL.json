@@ -875,5 +875,18 @@
   "appAdmin.auditActor": "Uitvoerder",
   "appAdmin.auditDetails": "Auditdetails",
   "appAdmin.noAuditEvents": "Nog geen auditgebeurtenissen.",
-  "appAdmin.featureAudit": "Auditlog bekijken"
+  "appAdmin.featureAudit": "Auditlog bekijken",
+  "appAdmin.movievaultConnection": "MovieVault-koppeling",
+  "appAdmin.movievaultConnected": "Verbonden",
+  "appAdmin.movievaultNotConnected": "Niet verbonden",
+  "appAdmin.movievaultResetRequired": "Lokale koppeling moet worden gereset",
+  "appAdmin.movievaultInstance": "Instance",
+  "appAdmin.movievaultAuthMethod": "Authenticatie",
+  "appAdmin.movievaultToken": "Token",
+  "appAdmin.movievaultLastHandshake": "Laatste handshake",
+  "appAdmin.movievaultRefreshConnection": "Koppeling vernieuwen",
+  "appAdmin.movievaultResetConnection": "Koppeling resetten",
+  "appAdmin.movievaultResetConfirm": "Lokale MovieVault-instance resetten en opnieuw koppelen als nieuwe DiscVault-instance?",
+  "appAdmin.movievaultRefreshing": "MovieVault-koppeling vernieuwen...",
+  "appAdmin.movievaultRefreshed": "MovieVault-koppeling vernieuwd."
 }

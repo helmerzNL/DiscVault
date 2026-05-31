@@ -10,28 +10,28 @@
     "box_set_candidates",
     "receive_metadata"
   ],
-  "requiresSecrets": true,
+  "requiresSecrets": false,
   "settingsSchemaVersion": 1,
   "settingsSchema": {
     "settings": [
       {
         "name": "baseUrl",
-        "label": "MovieVault URL",
+        "label": "MovieVault search URL",
         "type": "url",
         "required": false,
         "placeholder": "https://search.discvault.eu",
         "description": "MovieVault metadata API base URL."
+      },
+      {
+        "name": "ingestUrl",
+        "label": "MovieVault ingest URL",
+        "type": "url",
+        "required": false,
+        "placeholder": "https://movies.discvault.eu",
+        "description": "MovieVault connection and contribution API base URL."
       }
     ],
-    "secrets": [
-      {
-        "name": "token",
-        "label": "MovieVault token",
-        "type": "password",
-        "required": true,
-        "description": "Bearer token for MovieVault source and receiver access."
-      }
-    ]
+    "secrets": []
   },
   "orderIndex": 50,
   "premiumFeatureKey": "metadata.source.movievault.use",

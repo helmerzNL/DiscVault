@@ -781,5 +781,18 @@
   "appAdmin.auditActor": "Akteur",
   "appAdmin.auditDetails": "Auditdetails",
   "appAdmin.noAuditEvents": "Noch keine Auditereignisse.",
-  "appAdmin.featureAudit": "Auditprotokoll anzeigen"
+  "appAdmin.featureAudit": "Auditprotokoll anzeigen",
+  "appAdmin.movievaultConnection": "MovieVault-Verbindung",
+  "appAdmin.movievaultConnected": "Verbunden",
+  "appAdmin.movievaultNotConnected": "Nicht verbunden",
+  "appAdmin.movievaultResetRequired": "Lokaler Verbindungsreset erforderlich",
+  "appAdmin.movievaultInstance": "Instanz",
+  "appAdmin.movievaultAuthMethod": "Authentifizierung",
+  "appAdmin.movievaultToken": "Token",
+  "appAdmin.movievaultLastHandshake": "Letzter Handshake",
+  "appAdmin.movievaultRefreshConnection": "Verbindung erneuern",
+  "appAdmin.movievaultResetConnection": "Verbindung zur?cksetzen",
+  "appAdmin.movievaultResetConfirm": "Lokale MovieVault-Instanz zur?cksetzen und als neue DiscVault-Instanz neu verbinden?",
+  "appAdmin.movievaultRefreshing": "MovieVault-Verbindung wird erneuert...",
+  "appAdmin.movievaultRefreshed": "MovieVault-Verbindung erneuert."
 }

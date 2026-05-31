@@ -27,6 +27,8 @@ try:
     from .next_import import ImportError as NextImportError
     from .next_import import NextImporter
     from .next_import import clean_text
+    from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
+    from .next_movievault_connection import movievault_plugin_context
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import refresh_movie_metadata
@@ -37,6 +39,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
     from next_import import clean_text
+    from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
+    from next_movievault_connection import movievault_plugin_context
     from next_plugin_runtime import run_plugin_entrypoint
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import refresh_movie_metadata
@@ -200,6 +204,8 @@ def plugin_record(conn, plugin_id: str) -> dict[str, Any]:
 def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
         return False
+    if str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID:
+        return False
     manifest = plugin.get("manifest") or {}
     return bool(manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
 
@@ -217,7 +223,7 @@ def plugin_execution_context_from_db(
     if plugin_requires_config(plugin, config, entrypoint):
         raise RuntimeError("Plugin configuration is incomplete")
     manifest = plugin.get("manifest") or {}
-    return {
+    context = {
         "pluginId": plugin.get("id"),
         "pluginName": plugin.get("name"),
         "enabled": bool(plugin.get("enabled")),
@@ -230,6 +236,13 @@ def plugin_execution_context_from_db(
         "secretsConfigured": bool(config.get("secretsConfigured")),
         "actor": queued_actor or {"id": None, "username": None, "role": None},
     }
+    return movievault_plugin_context(
+        conn,
+        plugin_id,
+        context,
+        ensure_token=plugin_id == MOVIEVAULT_PLUGIN_ID and entrypoint != "health_check",
+        actor_id=(queued_actor or {}).get("id") if queued_actor else None,
+    )
 
 
 def claim_job(conn, worker_id: str) -> dict[str, Any] | None:

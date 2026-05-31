@@ -21,10 +21,14 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
 
 try:
     from .next_import import clean_text
+    from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
+    from .next_movievault_connection import movievault_plugin_context
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import sync_plugin_registry
 except ImportError:  # pragma: no cover - supports direct module execution
     from next_import import clean_text
+    from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
+    from next_movievault_connection import movievault_plugin_context
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import sync_plugin_registry
 
@@ -334,7 +338,7 @@ def plugin_execution_context(
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = plugin.get("manifest") or {}
-    return {
+    context = {
         "pluginId": plugin.get("id"),
         "pluginName": plugin.get("name"),
         "enabled": bool(plugin.get("enabled")),
@@ -351,10 +355,19 @@ def plugin_execution_context(
             "role": actor.get("role") if actor else None,
         },
     }
+    return movievault_plugin_context(
+        conn,
+        str(plugin.get("id") or ""),
+        context,
+        ensure_token=str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID,
+        actor_id=actor.get("id") if actor else None,
+    )
 
 
 def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint == "health_check":
+        return False
+    if str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID:
         return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))

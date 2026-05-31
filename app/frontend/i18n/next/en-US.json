@@ -875,5 +875,18 @@
   "appAdmin.auditActor": "Actor",
   "appAdmin.auditDetails": "Audit details",
   "appAdmin.noAuditEvents": "No audit events yet.",
-  "appAdmin.featureAudit": "View audit log"
+  "appAdmin.featureAudit": "View audit log",
+  "appAdmin.movievaultConnection": "MovieVault connection",
+  "appAdmin.movievaultConnected": "Connected",
+  "appAdmin.movievaultNotConnected": "Not connected",
+  "appAdmin.movievaultResetRequired": "Local connection reset required",
+  "appAdmin.movievaultInstance": "Instance",
+  "appAdmin.movievaultAuthMethod": "Auth",
+  "appAdmin.movievaultToken": "Token",
+  "appAdmin.movievaultLastHandshake": "Last handshake",
+  "appAdmin.movievaultRefreshConnection": "Refresh connection",
+  "appAdmin.movievaultResetConnection": "Reset connection",
+  "appAdmin.movievaultResetConfirm": "Reset the local MovieVault instance and reconnect as a new DiscVault instance?",
+  "appAdmin.movievaultRefreshing": "Refreshing MovieVault connection...",
+  "appAdmin.movievaultRefreshed": "MovieVault connection refreshed."
 }

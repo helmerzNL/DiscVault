@@ -781,5 +781,18 @@
   "appAdmin.auditActor": "Tekija",
   "appAdmin.auditDetails": "Auditointitiedot",
   "appAdmin.noAuditEvents": "Ei auditointitapahtumia viela.",
-  "appAdmin.featureAudit": "Nayta auditointiloki"
+  "appAdmin.featureAudit": "Nayta auditointiloki",
+  "appAdmin.movievaultConnection": "MovieVault-yhteys",
+  "appAdmin.movievaultConnected": "Yhdistetty",
+  "appAdmin.movievaultNotConnected": "Ei yhdistetty",
+  "appAdmin.movievaultResetRequired": "Paikallinen yhteys on nollattava",
+  "appAdmin.movievaultInstance": "Instanssi",
+  "appAdmin.movievaultAuthMethod": "Tunnistautuminen",
+  "appAdmin.movievaultToken": "Token",
+  "appAdmin.movievaultLastHandshake": "Viimeisin handshake",
+  "appAdmin.movievaultRefreshConnection": "P?ivit? yhteys",
+  "appAdmin.movievaultResetConnection": "Nollaa yhteys",
+  "appAdmin.movievaultResetConfirm": "Nollataanko paikallinen MovieVault-instanssi ja yhdistet??nk? se uutena DiscVault-instanssina?",
+  "appAdmin.movievaultRefreshing": "P?ivitet??n MovieVault-yhteytt?...",
+  "appAdmin.movievaultRefreshed": "MovieVault-yhteys p?ivitetty."
 }
