@@ -4353,8 +4353,8 @@ def ui_preview_html(
     }
     .container-tile-badge {
       position: absolute;
-      left: 8px;
-      top: 8px;
+      right: 8px;
+      bottom: 8px;
       max-width: calc(100% - 16px);
       padding: 5px 8px;
       border-radius: 999px;
@@ -4369,6 +4369,26 @@ def ui_preview_html(
       overflow: hidden;
       text-overflow: ellipsis;
       backdrop-filter: blur(12px) saturate(150%);
+    }
+    .physical-format-badge {
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      max-width: calc(100% - 16px);
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(9,12,18,.58);
+      border: 1px solid rgba(255,255,255,.4);
+      font-size: 10px;
+      font-weight: 850;
+      line-height: 1;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      backdrop-filter: blur(12px) saturate(150%);
+      z-index: 2;
     }
     .preview-collection.bulk-selected {
       border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
@@ -4422,8 +4442,8 @@ def ui_preview_html(
     }
     .digital-source-badges {
       position: absolute;
-      right: 7px;
-      bottom: 7px;
+      left: 7px;
+      top: 7px;
       display: flex;
       gap: 4px;
       align-items: center;
@@ -9954,14 +9974,34 @@ def ui_preview_html(
       }
       return `<span>${escapeHtml(String(name || "D").slice(0, 1).toUpperCase())}</span>`;
     }
+    function physicalFormatLabel(value) {
+      const text = String(value || "").trim();
+      const lower = text.toLowerCase();
+      if (!text) return "";
+      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
+      if (lower.includes("blu") || lower.includes("bd")) return "Blu-ray";
+      if (lower.includes("dvd")) return "DVD";
+      return text;
+    }
+    function physicalFormatBadgeHtml(value) {
+      const label = physicalFormatLabel(value);
+      return label ? `<span class="physical-format-badge">${escapeHtml(label)}</span>` : "";
+    }
+    function containerFormatBadgeValue(container) {
+      const metadata = container.metadata || {};
+      const aggregate = metadata.aggregate || {};
+      const format = container.format || metadata.format || aggregate.formats || "";
+      const parts = String(format || "").split(",").map((item) => item.trim()).filter(Boolean);
+      return parts.length === 1 ? parts[0] : "";
+    }
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-      const meta = [movie.year, movie.format].filter(Boolean).join(" ") || movie.barcode || "";
+      const meta = [movie.year, movie.barcode].filter(Boolean).join(" / ") || "";
       const selected = index === 0 ? " selected" : "";
       return `
         <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
-          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}</span>
+          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
         </button>
@@ -9981,7 +10021,7 @@ def ui_preview_html(
       const bulkSelected = selectedContainerIds.has(String(container.id || "")) ? " bulk-selected" : "";
       return `
         <button type="button" class="preview-poster container-tile${selected}${bulkSelected}" data-preview-container="${escapeHtml(container.id)}">
-          <span class="preview-poster-art">${posterHtml}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
+          <span class="preview-poster-art">${posterHtml}${physicalFormatBadgeHtml(containerFormatBadgeValue(container))}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
           <span class="preview-poster-title">${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
         </button>
@@ -21059,7 +21099,6 @@ def container_aggregate_movie_entities(conn, container_id: UUID, *, max_depth: i
                     m.runtime_minutes,
                     m.overview,
                     m.rating,
-                    m.trailer_url,
                     m.metadata,
                     m.created_at,
                     m.updated_at,
