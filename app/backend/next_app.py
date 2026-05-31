@@ -5003,6 +5003,87 @@ def ui_preview_html(
       font-weight: 620;
       overflow-wrap: anywhere;
     }
+    .debug-id {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: .68rem;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .debug-card {
+      border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+      background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
+    }
+    .debug-localization-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 10px;
+    }
+    .debug-localization-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--bg-solid);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .debug-localization-card header,
+    .country-picker-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .flag-icon {
+      width: 22px;
+      height: 16px;
+      border-radius: 3px;
+      object-fit: cover;
+      box-shadow: 0 0 0 1px var(--line);
+      flex: 0 0 auto;
+    }
+    .debug-localization-card strong,
+    .debug-localization-card p {
+      margin: 0;
+    }
+    .debug-localization-card p {
+      color: var(--muted);
+      font-size: .84rem;
+      line-height: 1.45;
+    }
+    .country-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .country-picker-button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 7px 10px;
+      font: inherit;
+      font-size: .82rem;
+      cursor: pointer;
+    }
+    .country-picker-button.active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+    }
+    .country-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .country-list-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
     .detail-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
@@ -6778,6 +6859,13 @@ def ui_preview_html(
             <h3 data-next-i18n="movieDetail.technical">Technical</h3>
             <div class="detail-fields" id="movieDetailTechnical"></div>
           </div>
+          <div class="detail-card full debug-card hidden" id="movieDetailDebugLocalizationsCard">
+            <div class="detail-card-head">
+              <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
+              <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+            </div>
+            <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
+          </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.links">Links</h3>
             <div class="detail-grid" id="movieDetailLinks"></div>
@@ -7181,6 +7269,7 @@ def ui_preview_html(
             </div>
           </div>
           <div class="profile-hero-actions">
+            <button type="button" class="secondary-button" id="appAdminDebugButton" aria-pressed="false" data-next-i18n="appAdmin.debugMode">Debug</button>
             <button type="button" class="secondary-button" id="appAdminRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           </div>
         </section>
@@ -7602,6 +7691,7 @@ def ui_preview_html(
       selectedRoleId: "",
       users: []
     };
+    let appDebugMode = localStorage.getItem("dv_next_debug_mode") === "true";
     function registerAppServiceWorker() {
       if (!("serviceWorker" in navigator)) return;
       const canRegister = location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1";
@@ -7653,6 +7743,76 @@ def ui_preview_html(
     }
     function tNext(key, fallback) {
       return localeState.messages[key] || fallback || key;
+    }
+    function flagCodeForLocale(value) {
+      const raw = String(value || "").replace("_", "-").toLowerCase();
+      const base = raw.split("-")[0];
+      const region = raw.split("-")[1] || "";
+      const map = {en: "us", nb: "no", no: "no", da: "da", sv: "sv", fi: "fi", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it"};
+      if (["us", "gb", "ca", "nl", "de", "fr", "es", "pt", "it", "da", "sv", "fi", "no"].includes(region)) return region;
+      return map[base] || base || "us";
+    }
+    function flagCodeForCountry(value) {
+      const raw = String(value || "").trim().toLowerCase();
+      const map = {uk: "gb", gb: "gb", us: "us", ca: "ca", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", da: "da", sv: "sv", fi: "fi", nb: "no", no: "no"};
+      return map[raw] || flagCodeForLocale(raw);
+    }
+    function flagIconHtml(value, label = "") {
+      const code = flagCodeForCountry(value);
+      return `<img class="flag-icon" src="/api/next/flags/${escapeHtml(code)}.svg" alt="${escapeHtml(label || code.toUpperCase())}">`;
+    }
+    function debugIdHtml(id, label = "ID") {
+      if (!appDebugMode || !id) return "";
+      return `<span class="debug-id">${escapeHtml(label)}: ${escapeHtml(id)}</span>`;
+    }
+    function localizationLanguageLabel(lang) {
+      const raw = String(lang || "").replace("_", "-");
+      const base = raw.split("-")[0] || raw || "en";
+      try {
+        const names = new Intl.DisplayNames([localeState.locale || "en-US"], {type: "language"});
+        return names.of(base) || raw.toUpperCase();
+      } catch (error) {
+        return raw.toUpperCase();
+      }
+    }
+    function movieLocalizationDebugHtml(localizations) {
+      const rows = Array.isArray(localizations) ? localizations : [];
+      if (!rows.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugNoLocalizations", "No localized title or plot rows found."))}</div>`;
+      }
+      return rows.map((row) => {
+        const lang = row.lang || row.locale || row.language || "en";
+        const label = localizationLanguageLabel(lang);
+        return `
+          <article class="debug-localization-card">
+            <header>
+              ${flagIconHtml(lang, label)}
+              <strong>${escapeHtml(label)}</strong>
+              <span>${escapeHtml(String(lang).replace("_", "-"))}</span>
+            </header>
+            <strong>${escapeHtml(valueText(row.title) || tNext("common.untitled", "Untitled"))}</strong>
+            <p>${escapeHtml(valueText(row.overview) || tNext("movieDetail.noOverview", "No overview imported yet."))}</p>
+            ${debugIdHtml(row.id || row.lang || row.locale, tNext("movieDetail.debugLocalizationKey", "Key"))}
+          </article>
+        `;
+      }).join("");
+    }
+    function renderAppDebugButton() {
+      document.body.classList.toggle("debug-mode", appDebugMode);
+      const button = document.getElementById("appAdminDebugButton");
+      if (!button) return;
+      button.classList.toggle("active", appDebugMode);
+      button.setAttribute("aria-pressed", appDebugMode ? "true" : "false");
+      button.textContent = appDebugMode ? tNext("appAdmin.debugOn", "Debug on") : tNext("appAdmin.debugMode", "Debug");
+    }
+    function setAppDebugMode(enabled) {
+      appDebugMode = !!enabled;
+      localStorage.setItem("dv_next_debug_mode", appDebugMode ? "true" : "false");
+      renderAppDebugButton();
+      renderLibrary();
+      if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
+      if (activeContainerPayload) renderContainerDetail(activeContainerPayload);
+      if (activePersonPayload) renderPersonDetail(activePersonPayload);
     }
     function authHeaders(extra) {
       const headers = Object.assign({}, extra || {});
@@ -8744,6 +8904,7 @@ def ui_preview_html(
     }
     function renderAppAdmin() {
       if (!canUseAppAdmin()) return;
+      renderAppDebugButton();
       const mode = currentAuthStatus.registration_enabled ? "public" : "invite";
       document.getElementById("appAdminRegistrationMode").textContent = appRegistrationModeLabel();
       document.getElementById("appAdminUserCount").textContent = String((appAdmin.users || []).length || currentAuthStatus.user_count || "-");
@@ -10066,6 +10227,24 @@ def ui_preview_html(
       const rating = ratings[selected] || ratings[selected.toLowerCase()] || ratings.US || ratings.GB || "";
       return valueText(rating || movie?.audience_rating || metadata.audience_rating || metadata.audienceRating || "");
     }
+    function contentRatingsListHtml(value) {
+      const ratings = contentRatingMap(value);
+      const keys = [...new Set([
+        ...RATING_COUNTRIES_ORDER,
+        ...Object.keys(ratings || {}).map((key) => String(key || "").toUpperCase())
+      ])].filter((key) => ratings[key] || ratings[key.toLowerCase()]);
+      if (!keys.length) return "";
+      const items = keys.map((key) => {
+        const rating = ratings[key] || ratings[key.toLowerCase()];
+        return `<span class="country-list-item">${flagIconHtml(key, ratingCountryLabel(key))}<span>${escapeHtml(key)} ${escapeHtml(valueText(rating))}</span></span>`;
+      }).join("");
+      return `
+        <div class="detail-field">
+          <span>${escapeHtml(tNext("movieDetail.contentRatings", "Content ratings"))}</span>
+          <strong class="country-list">${items}</strong>
+        </div>
+      `;
+    }
     function movieScoreLabel(movie) {
       const value = valueText(movie?.rating || movie?.metadata?.rating || "");
       return value ? `${tNext("movieDetail.rating", "Rating")} ${value}` : "";
@@ -10115,6 +10294,7 @@ def ui_preview_html(
           <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
+          ${debugIdHtml(movie.id, "Movie ID")}
         </button>
       `;
     }
@@ -10135,6 +10315,7 @@ def ui_preview_html(
           <span class="preview-poster-art">${posterHtml}${physicalFormatBadgeHtml(containerFormatBadgeValue(container))}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
           <span class="preview-poster-title">${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
+          ${debugIdHtml(container.id, "Container ID")}
         </button>
       `;
     }
@@ -10145,6 +10326,7 @@ def ui_preview_html(
         <a class="preview-collection${selected}" href="/api/next/app/containers/${encodeURIComponent(container.id)}" data-preview-container="${escapeHtml(container.id)}">
           <span>${escapeHtml(label)}</span>
           <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
+          ${debugIdHtml(container.id, "Container ID")}
         </a>
       `;
     }
@@ -10183,13 +10365,15 @@ def ui_preview_html(
       return "";
     }
     function miniCard(title, subtitle, href) {
+      const movieMatch = String(href || "").match(/\\/movies\\/([^/?#]+)/);
+      const containerMatch = String(href || "").match(/\\/containers\\/([^/?#]+)/);
+      const debugId = (movieMatch && decodeURIComponent(movieMatch[1])) || (containerMatch && decodeURIComponent(containerMatch[1])) || "";
       const body = `
         <strong>${escapeHtml(title || tNext("common.untitled", "Untitled"))}</strong>
         <span>${escapeHtml(subtitle || "")}</span>
+        ${debugIdHtml(debugId, movieMatch ? "Movie ID" : "Container ID")}
       `;
       let linkAttrs = "";
-      const movieMatch = String(href || "").match(/\\/movies\\/([^/?#]+)/);
-      const containerMatch = String(href || "").match(/\\/containers\\/([^/?#]+)/);
       if (movieMatch) linkAttrs = ` data-open-movie="${escapeHtml(decodeURIComponent(movieMatch[1]))}"`;
       if (containerMatch) linkAttrs = ` data-open-container="${escapeHtml(decodeURIComponent(containerMatch[1]))}"`;
       return href
@@ -10211,6 +10395,7 @@ def ui_preview_html(
           <span class="person-card-copy">
             <strong>${escapeHtml(name)}</strong>
             <span>${escapeHtml(subtitle || credit.character || credit.job || credit.credit_type || "")}</span>
+            ${debugIdHtml(credit.person_id || credit.id, "Person ID")}
           </span>
         </button>
       `;
@@ -10250,6 +10435,7 @@ def ui_preview_html(
           <span class="person-credit-copy">
             <strong>${escapeHtml(title)}</strong>
             <span>${escapeHtml(meta || credit.barcode || "")}</span>
+            ${debugIdHtml(movieId, "Movie ID")}
           </span>
         </${tag}>
       `;
@@ -10338,6 +10524,7 @@ def ui_preview_html(
           <a class="detail-mini-card-main" href="${escapeHtml(href)}" ${linkAttrs}>
             <strong>${escapeHtml(title || tNext("common.untitled", "Untitled"))}</strong>
             <span>${escapeHtml(subtitle || "")}</span>
+            ${debugIdHtml(actionValue, action === "movie" || itemType === "movie" ? "Movie ID" : "Container ID")}
           </a>
           ${orderControls}
           <button type="button" class="detail-remove-button" ${attrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
@@ -10364,6 +10551,7 @@ def ui_preview_html(
           <a class="container-member-copy" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}">
             <strong>${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</strong>
             <span>${escapeHtml(subtitle || tNext("containerDetail.type.movie", "Movie"))}</span>
+            ${debugIdHtml(movie.id, "Movie ID")}
           </a>
           ${orderControls}
         </div>
@@ -10547,7 +10735,8 @@ def ui_preview_html(
         contentRating ? `${tNext("movieDetail.contentRating", "Content rating")} ${contentRating}` : "",
         movieScoreLabel(movie),
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
-        (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : ""
+        (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : "",
+        appDebugMode && movie.id ? `Movie ID ${movie.id}` : ""
       ]);
       fillMovieEditForm(detail);
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
@@ -10563,6 +10752,7 @@ def ui_preview_html(
         [tNext("movieDetail.genre", "Genre"), metadata.genre],
         [tNext("movieDetail.studios", "Studios"), metadata.studios]
       ]);
+      const contentRatings = specs.content_ratings || specs.contentRatings || metadata.content_ratings || metadata.contentRatings;
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows([
         ["HDR", specs.hdr || metadata.hdr],
         [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
@@ -10570,9 +10760,12 @@ def ui_preview_html(
         [tNext("movieDetail.regions", "Regions"), specs.regions || metadata.regions],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
         [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
-        [tNext("movieDetail.contentRating", "Content rating"), contentRating],
-        [tNext("movieDetail.contentRatings", "Content ratings"), specs.content_ratings || metadata.content_ratings]
-      ]);
+        [tNext("movieDetail.contentRating", "Content rating"), contentRating]
+      ]) + contentRatingsListHtml(contentRatings);
+      const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
+      const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
+      if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
+      if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || []) : "";
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
         `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
         item.identifier
@@ -10634,6 +10827,8 @@ def ui_preview_html(
       document.getElementById("movieDetailTags").innerHTML = "";
       document.getElementById("movieDetailRelease").innerHTML = "";
       document.getElementById("movieDetailTechnical").innerHTML = "";
+      document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
+      document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
       document.getElementById("movieDetailLinks").innerHTML = "";
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
@@ -10802,7 +10997,8 @@ def ui_preview_html(
         container.year,
         container.barcode,
         (detail.memberMovies || []).length ? `${(detail.memberMovies || []).length} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
-        (detail.collectionItems || []).length ? `${(detail.collectionItems || []).length} ${tNext("containerDetail.items", "items")}` : ""
+        (detail.collectionItems || []).length ? `${(detail.collectionItems || []).length} ${tNext("containerDetail.items", "items")}` : "",
+        appDebugMode && container.id ? `Container ID ${container.id}` : ""
       ]);
       fillContainerEditForm(detail);
       renderContainerAddForms(detail);
@@ -10939,7 +11135,8 @@ def ui_preview_html(
         person.death_date ? `${tNext("personDetail.died", "Died")} ${person.death_date}` : "",
         (counts.collection || collectionCredits.length) ? `${counts.collection || collectionCredits.length} ${tNext("personDetail.credits", "credits")}` : "",
         extendedPeople && digitalCredits.length ? `${digitalCredits.length} ${tNext("personDetail.digitalCollection", "Digital").toLowerCase()}` : "",
-        extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : ""
+        extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : "",
+        appDebugMode && person.id ? `Person ID ${person.id}` : ""
       ]);
       document.getElementById("personDetailFields").innerHTML = detailFieldRows([
         [tNext("personDetail.knownFor", "Known for"), person.known_for],
@@ -12356,10 +12553,13 @@ def ui_preview_html(
       ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"]
     ];
     const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
-    function ratingCountryOptionsHtml() {
+    function ratingCountryButtonsHtml(disabled = false) {
       const selected = String(preferences.rating_country || "NL").toUpperCase();
       return RATING_COUNTRIES_ORDER.map((code) => (
-        `<option value="${escapeHtml(code)}" ${code === selected ? "selected" : ""}>${escapeHtml(ratingCountryLabel(code))}</option>`
+        `<button type="button" class="country-picker-button ${code === selected ? "active" : ""}" data-preference-country="${escapeHtml(code)}" ${disabled ? "disabled" : ""}>
+          ${flagIconHtml(code, ratingCountryLabel(code))}
+          <span>${escapeHtml(ratingCountryLabel(code))}</span>
+        </button>`
       )).join("");
     }
     function preferenceRowsHtml(items) {
@@ -12372,9 +12572,9 @@ def ui_preview_html(
                 <strong>${escapeHtml(tNext(labelKey, key))}</strong>
                 <span>${escapeHtml(tNext(helpKey, ""))}</span>
               </span>
-              <select data-preference-select="${escapeHtml(key)}" ${disabled ? "disabled" : ""}>
-                ${ratingCountryOptionsHtml()}
-              </select>
+              <div class="country-picker" data-preference-country-picker="${escapeHtml(key)}">
+                ${ratingCountryButtonsHtml(disabled)}
+              </div>
             </div>
           `;
         }
@@ -12396,10 +12596,10 @@ def ui_preview_html(
           updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]);
         });
       });
-      list.querySelectorAll("[data-preference-select]").forEach((select) => {
-        select.addEventListener("change", () => {
-          if (select.disabled) return;
-          updatePreference(select.dataset.preferenceSelect, select.value);
+      list.querySelectorAll("[data-preference-country]").forEach((button) => {
+        button.addEventListener("click", () => {
+          if (button.disabled) return;
+          updatePreference("rating_country", button.dataset.preferenceCountry);
         });
       });
     }
@@ -13136,6 +13336,7 @@ def ui_preview_html(
         if (deleteButton) deleteManagedContainer(deleteButton.dataset.containerManagerDelete);
       });
       document.getElementById("appAdminRefreshButton")?.addEventListener("click", () => loadAppAdmin());
+      document.getElementById("appAdminDebugButton")?.addEventListener("click", () => setAppDebugMode(!appDebugMode));
       document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminTab(button.dataset.appAdminTab));
       });
@@ -22290,6 +22491,16 @@ def register_routes(flask_app: Flask) -> None:
         if not path.exists() or not path.is_file():
             raise NextApiError("Asset not found", 404)
         return send_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+
+    @flask_app.get("/api/next/flags/<path:flag_name>")
+    def next_frontend_flag(flag_name: str):
+        safe_name = Path(flag_name).name
+        if safe_name != flag_name or not re.fullmatch(r"[a-z]{2}\.svg", safe_name):
+            raise NextApiError("Flag not found", 404)
+        path = next_frontend_dir() / "flags" / safe_name
+        if not path.exists() or not path.is_file():
+            raise NextApiError("Flag not found", 404)
+        return send_file(path, mimetype="image/svg+xml")
 
     @flask_app.get("/apple-touch-icon-152.png")
     @flask_app.get("/apple-touch-icon-167.png")
