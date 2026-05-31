@@ -977,5 +977,10 @@
   "notifications.prefGroupInvites": "Groepen en uitnodigingen",
   "notifications.prefGroupInvitesHelp": "Groepswijzigingen, gedeelde lijsten en toekomstige uitnodigingen.",
   "notifications.prefSecurity": "Beveiliging",
-  "notifications.prefSecurityHelp": "Passkey-, herstel- en accountbeveiligingsberichten."
+  "notifications.prefSecurityHelp": "Passkey-, herstel- en accountbeveiligingsberichten.",
+  "importCenter.sections": "Importonderdelen",
+  "importCenter.addTab": "Scan & voeg toe",
+  "importCenter.addEyebrow": "Snel toevoegen",
+  "importCenter.manualTitleCard": "Handmatig zoeken",
+  "importCenter.manualHelp": "Gebruik dit als de barcode niet leesbaar is of als je een film op titel wilt toevoegen."
 }

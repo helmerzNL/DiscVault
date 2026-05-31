@@ -876,5 +876,10 @@
   "notifications.prefGroupInvites": "Groups and invites",
   "notifications.prefGroupInvitesHelp": "Group changes, shared lists and future invitations.",
   "notifications.prefSecurity": "Securite",
-  "notifications.prefSecurityHelp": "Messages de passkey, recuperation et securite du compte."
+  "notifications.prefSecurityHelp": "Messages de passkey, recuperation et securite du compte.",
+  "importCenter.sections": "Sections d import",
+  "importCenter.addTab": "Scanner & ajouter",
+  "importCenter.addEyebrow": "Ajout rapide",
+  "importCenter.manualTitleCard": "Recherche manuelle",
+  "importCenter.manualHelp": "Utilisez ceci si le code-barres est illisible ou si vous voulez ajouter un film par titre."
 }
