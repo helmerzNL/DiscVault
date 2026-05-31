@@ -592,5 +592,14 @@
   "preferences.theme": "Tema",
   "preferences.themeHelp": "Segui il tema di sistema o scegli un aspetto fisso.",
   "preferences.language": "Lingua",
-  "preferences.languageHelp": "Scegli la lingua di DiscVault su questo dispositivo."
+  "preferences.languageHelp": "Scegli la lingua di DiscVault su questo dispositivo.",
+  "appAdmin.tabMetadata": "Metadati",
+  "appAdmin.metadataOperations": "Metadati",
+  "appAdmin.metadataOperationsHelp": "Controlla aggiornamenti metadata e attivita delle fonti fuori dal flusso di import.",
+  "appAdmin.refreshMetadataJobs": "Aggiorna attivita metadati",
+  "appAdmin.metadataJobs": "Attivita metadati",
+  "appAdmin.metadataJob": "Attivita metadati",
+  "appAdmin.noMetadataJobs": "Ancora nessuna attivita metadati.",
+  "appAdmin.loadingMetadataJobs": "Caricamento attivita metadati...",
+  "appAdmin.metadataJobsLoaded": "Attivita metadati caricate."
 }

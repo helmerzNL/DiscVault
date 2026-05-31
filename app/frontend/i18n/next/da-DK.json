@@ -592,5 +592,14 @@
   "preferences.theme": "Tema",
   "preferences.themeHelp": "Foelg systemtemaet eller vaelg et fast udseende.",
   "preferences.language": "Sprog",
-  "preferences.languageHelp": "Vaelg sproget for DiscVault paa denne enhed."
+  "preferences.languageHelp": "Vaelg sproget for DiscVault paa denne enhed.",
+  "appAdmin.tabMetadata": "Metadata",
+  "appAdmin.metadataOperations": "Metadata",
+  "appAdmin.metadataOperationsHelp": "Gennemse metadataopdateringer og kildeaktivitet uden for importflowet.",
+  "appAdmin.refreshMetadataJobs": "Opdater metadatajobs",
+  "appAdmin.metadataJobs": "Metadatajobs",
+  "appAdmin.metadataJob": "Metadatajob",
+  "appAdmin.noMetadataJobs": "Ingen metadatajobs endnu.",
+  "appAdmin.loadingMetadataJobs": "Indlaeser metadatajobs...",
+  "appAdmin.metadataJobsLoaded": "Metadatajobs indlaest."
 }
