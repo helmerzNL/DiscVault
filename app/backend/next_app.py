@@ -5278,6 +5278,58 @@ def ui_preview_html(
       margin: 0;
       font-size: .95rem;
     }
+    .app-admin-role-preview {
+      display: grid;
+      gap: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      min-width: 0;
+    }
+    .app-admin-role-preview h4 {
+      margin: 0;
+      font-size: .88rem;
+    }
+    .app-admin-role-preview p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.45;
+    }
+    .app-admin-feature-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .app-admin-feature-row {
+      display: grid;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      padding: 9px;
+      min-width: 0;
+    }
+    .app-admin-feature-row.allowed {
+      border-color: color-mix(in srgb, var(--green) 46%, var(--line));
+      background: color-mix(in srgb, var(--green) 8%, var(--bg-solid));
+    }
+    .app-admin-feature-row.blocked {
+      opacity: .72;
+    }
+    .app-admin-feature-head {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 0;
+    }
+    .app-admin-feature-head strong {
+      font-size: .82rem;
+      overflow-wrap: anywhere;
+    }
+    .app-admin-feature-row .admin-member-cloud {
+      margin-top: 0;
+    }
     .app-admin-permission-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5755,7 +5807,8 @@ def ui_preview_html(
         grid-template-columns: 1fr;
       }
       .app-admin-role-layout,
-      .app-admin-permission-grid {
+      .app-admin-permission-grid,
+      .app-admin-feature-list {
         grid-template-columns: 1fr;
       }
       .profile-passkey-actions .secondary-button {
@@ -6715,6 +6768,11 @@ def ui_preview_html(
                     <button type="button" class="secondary-button" id="appAdminClearPermissionsButton" data-next-i18n="appAdmin.clearPermissions">Clear</button>
                   </div>
                   <div id="appAdminPermissionEditor"></div>
+                  <div class="app-admin-role-preview">
+                    <h4 data-next-i18n="appAdmin.featurePreview">Feature preview</h4>
+                    <p data-next-i18n="appAdmin.featurePreviewHelp">Shows which DiscVault features this role unlocks.</p>
+                    <div id="appAdminRoleFeaturePreview"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -7025,6 +7083,23 @@ def ui_preview_html(
       bulkCollections: ["collection.bulk_edit"],
       mediaAdd: ["collection.add", "collection.add_own", "collection.import"]
     };
+    const APP_FEATURE_PREVIEW = [
+      {key: "collection.view", labelKey: "appAdmin.featureCollectionView", fallback: "View collection", permissions: ["collection.view"]},
+      {key: "movie.add", labelKey: "appAdmin.featureMovieAdd", fallback: "Add movies", permissions: ["collection.add", "collection.add_own", "collection.import"]},
+      {key: "movie.edit", labelKey: "appAdmin.featureMovieEdit", fallback: "Edit movies", permissions: ["collection.edit_all", "collection.edit_own"]},
+      {key: "metadata.search", labelKey: "appAdmin.featureMetadataSearch", fallback: "Search metadata", permissions: ["metadata.search"]},
+      {key: "metadata.refresh_one", labelKey: "appAdmin.featureMetadataRefreshOne", fallback: "Refresh one movie", permissions: ["metadata.refresh_one"]},
+      {key: "metadata.refresh_bulk", labelKey: "appAdmin.featureMetadataRefreshBulk", fallback: "Bulk refresh metadata", permissions: ["metadata.refresh_bulk"]},
+      {key: "bulk.edit", labelKey: "appAdmin.featureBulkEdit", fallback: "Bulk edit collection", permissions: ["collection.bulk_edit"]},
+      {key: "containers.manage", labelKey: "appAdmin.featureContainers", fallback: "Manage box sets, vaults and collections", permissions: ["containers.create", "containers.edit", "containers.delete", "collection.bulk_edit"]},
+      {key: "groups.manage", labelKey: "appAdmin.featureGroups", fallback: "Manage groups", permissions: ["groups.view", "groups.create", "groups.invite"]},
+      {key: "plugins.manage", labelKey: "appAdmin.featurePlugins", fallback: "Manage plugins", permissions: ["metadata.manage_plugins", "metadata.manage_plugin_settings", "metadata.manage_receivers"]},
+      {key: "digital.manage", labelKey: "appAdmin.featureDigitalSources", fallback: "Manage digital sources", permissions: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"]},
+      {key: "backup.export", labelKey: "appAdmin.featureBackupExport", fallback: "Export collection backups", permissions: ["admin.backup", "collection.export_functional"]},
+      {key: "backup.restore", labelKey: "appAdmin.featureBackupRestore", fallback: "Restore collection backups", permissions: ["admin.restore_functional"]},
+      {key: "users.manage", labelKey: "appAdmin.featureUsers", fallback: "Manage users", permissions: ["users.view", "users.invite", "users.assign_roles", "users.disable"]},
+      {key: "rbac.manage", labelKey: "appAdmin.featureRbac", fallback: "Manage roles and RBAC mode", permissions: ["roles.view", "roles.manage", "security.manage_rbac_mode"]}
+    ];
     function currentRole() {
       return currentAuthStatus.role || (currentStartup.auth || {}).role || (state.user || {}).role || "";
     }
@@ -7049,6 +7124,16 @@ def ui_preview_html(
     }
     function hasAnyPermission(permissions) {
       return (permissions || []).some((permission) => hasPermission(permission));
+    }
+    function appAdminRolePermissionSet(role) {
+      return new Set(((role && role.permissions) || []).filter(Boolean).map(String));
+    }
+    function appAdminRoleAllowsFeature(role, permissions) {
+      if (!role) return false;
+      if (role.key === "owner") return true;
+      const selected = appAdminRolePermissionSet(role);
+      if (selected.has("*")) return true;
+      return (permissions || []).some((permission) => selected.has(permission));
     }
     function canUseAdminTab(tab) {
       const permissions = (APP_PERMISSION_GROUPS.adminTabs || {})[tab] || [];
@@ -7621,6 +7706,27 @@ def ui_preview_html(
         || roles[0]
         || null;
     }
+    function appAdminRoleFeaturePreviewHtml(role) {
+      if (!role) {
+        return `<div class="preview-empty">${escapeHtml(tNext("appAdmin.selectRoleToEdit", "Select a role to edit."))}</div>`;
+      }
+      return `<div class="app-admin-feature-list">${APP_FEATURE_PREVIEW.map((feature) => {
+        const allowed = appAdminRoleAllowsFeature(role, feature.permissions);
+        const statusLabel = allowed
+          ? tNext("appAdmin.featureAllowed", "Allowed")
+          : tNext("appAdmin.featureBlocked", "Blocked");
+        return `
+          <div class="app-admin-feature-row ${allowed ? "allowed" : "blocked"}">
+            <div class="app-admin-feature-head">
+              <strong>${escapeHtml(tNext(feature.labelKey, feature.fallback))}</strong>
+              <span class="tag ${allowed ? "good" : "blue"}">${escapeHtml(statusLabel)}</span>
+            </div>
+            <div class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.featureRequires", "Requires one of"))}</div>
+            <div class="admin-member-cloud">${permissionTags(feature.permissions || [], 4)}</div>
+          </div>
+        `;
+      }).join("")}</div>`;
+    }
     function renderAppAdminRbac() {
       const rbac = appAdmin.rbac || {};
       const roles = rbac.roles || appAdmin.roles || [];
@@ -7680,6 +7786,7 @@ def ui_preview_html(
       const saveButton = document.getElementById("appAdminSaveRoleButton");
       const selectAllButton = document.getElementById("appAdminSelectAllPermissionsButton");
       const clearButton = document.getElementById("appAdminClearPermissionsButton");
+      const featurePreview = document.getElementById("appAdminRoleFeaturePreview");
       if (editor) editor.classList.toggle("hidden", !selectedRole);
       if (nameInput) {
         nameInput.value = selectedRole ? (selectedRole.name || "") : "";
@@ -7697,6 +7804,7 @@ def ui_preview_html(
           ? appAdminPermissionCheckboxes(selectedRole.permissions || [], !canManage || !selectedRole.custom)
           : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.selectRoleToEdit", "Select a role to edit."))}</div>`;
       }
+      if (featurePreview) featurePreview.innerHTML = appAdminRoleFeaturePreviewHtml(selectedRole);
       const message = document.getElementById("appAdminRbacMessage");
       if (message && !message.textContent) {
         message.textContent = mode === "advanced"
@@ -21931,7 +22039,10 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Metadata lookup body must be an object", 400)
         with connect() as conn:
-            actor = require_any_next_permission(conn, ("metadata.search", "collection.import", "collection.edit_all"))
+            actor = require_any_next_permission(
+                conn,
+                ("metadata.search", "collection.import", "collection.add", "collection.add_own", "collection.edit_all"),
+            )
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             result = lookup_metadata_sources(conn, body, actor)
@@ -21948,7 +22059,10 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("barcode or title is required", 400)
 
         with connect() as conn:
-            actor = require_any_next_permission(conn, ("collection.import", "collection.edit_all"))
+            actor = require_any_next_permission(
+                conn,
+                ("collection.add", "collection.add_own", "collection.import", "collection.edit_all"),
+            )
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
             if not table_exists(conn, "plugins"):
