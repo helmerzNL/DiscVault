@@ -8332,6 +8332,20 @@ def ui_preview_html(
               </div>
             </div>
           </div>
+          <div class="detail-card profile-card">
+            <h3 data-next-i18n="profile.about">About</h3>
+            <p class="muted" data-next-i18n="profile.aboutHelp">App details and version information.</p>
+            <div class="profile-meta">
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.appVersion">App version</span>
+                <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+              </div>
+              <div class="profile-meta-row">
+                <span data-next-i18n="profile.buildSha">Build SHA</span>
+                <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
+              </div>
+            </div>
+          </div>
           <div class="detail-card profile-card full">
             <div class="detail-card-head">
               <div>
