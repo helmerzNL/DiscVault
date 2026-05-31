@@ -13,8 +13,10 @@ def _secrets(context):
 
 
 def _base_url(context):
+    movievault = (context or {}).get("movievault") or {}
     return str(
         _settings(context).get("baseUrl")
+        or movievault.get("searchUrl")
         or os.environ.get("MOVIEVAULT_SEARCH_URL")
         or os.environ.get("MOVIEVAULT_BASE_URL")
         or "https://search.discvault.eu"
@@ -127,11 +129,37 @@ def _normalize_result(payload, *, source_ref=""):
 
 
 def health_check(context=None):
-    if not _token(context or {}):
-        return {"status": "needs_configuration", "message": "Configure a MovieVault token."}
+    context = context or {}
+    connection = context.get("movievault") or {}
     try:
-        response = requests.get(f"{_base_url(context or {})}/api/v1/health", headers=_headers(context or {}), timeout=8)
-        return {"status": "available" if response.status_code < 500 else "unavailable", "message": f"HTTP {response.status_code}"}
+        response = requests.get(f"{_base_url(context)}/api/v1/health", headers={"Accept": "application/json"}, timeout=8)
+        status = "available" if response.status_code < 500 else "unavailable"
+        if connection.get("error"):
+            status = "connection_error"
+        elif connection.get("requiresReset"):
+            status = "reset_required"
+        elif not connection.get("tokenSet") and connection.get("enabled", True):
+            status = "needs_connection"
+        elif connection.get("linkStatus") == "revoked":
+            status = "revoked"
+        elif connection.get("linkStatus") == "disabled":
+            status = "disabled"
+        return {
+            "status": status,
+            "message": f"HTTP {response.status_code}",
+            "connection": {
+                "authMethod": connection.get("authMethod"),
+                "instanceId": connection.get("instanceId"),
+                "instanceName": connection.get("instanceName"),
+                "keyId": connection.get("keyId"),
+                "lastHandshakeAt": connection.get("lastHandshakeAt"),
+                "linkStatus": connection.get("linkStatus"),
+                "requiresReset": bool(connection.get("requiresReset")),
+                "searchUrl": connection.get("searchUrl"),
+                "tokenPrefix": connection.get("tokenPrefix"),
+                "tokenSet": bool(connection.get("tokenSet")),
+            },
+        }
     except Exception as exc:
         return {"status": "unavailable", "message": str(exc)}
 

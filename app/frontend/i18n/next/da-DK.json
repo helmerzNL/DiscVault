@@ -781,5 +781,18 @@
   "appAdmin.auditActor": "Aktoer",
   "appAdmin.auditDetails": "Auditdetaljer",
   "appAdmin.noAuditEvents": "Ingen audithaendelser endnu.",
-  "appAdmin.featureAudit": "Se auditlog"
+  "appAdmin.featureAudit": "Se auditlog",
+  "appAdmin.movievaultConnection": "MovieVault-forbindelse",
+  "appAdmin.movievaultConnected": "Forbundet",
+  "appAdmin.movievaultNotConnected": "Ikke forbundet",
+  "appAdmin.movievaultResetRequired": "Lokal forbindelsesnulstilling kr?ves",
+  "appAdmin.movievaultInstance": "Instans",
+  "appAdmin.movievaultAuthMethod": "Godkendelse",
+  "appAdmin.movievaultToken": "Token",
+  "appAdmin.movievaultLastHandshake": "Seneste handshake",
+  "appAdmin.movievaultRefreshConnection": "Opdater forbindelse",
+  "appAdmin.movievaultResetConnection": "Nulstil forbindelse",
+  "appAdmin.movievaultResetConfirm": "Nulstil den lokale MovieVault-instans og forbind igen som en ny DiscVault-instans?",
+  "appAdmin.movievaultRefreshing": "Opdaterer MovieVault-forbindelse...",
+  "appAdmin.movievaultRefreshed": "MovieVault-forbindelse opdateret."
 }
