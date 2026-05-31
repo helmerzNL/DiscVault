@@ -3968,6 +3968,66 @@ def ui_preview_html(
       background: var(--bg-solid);
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
+    .collection-toolbar {
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--bg-solid) 72%, transparent), color-mix(in srgb, var(--bg-solid) 54%, transparent)),
+        var(--bg-elevated);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(24px) saturate(160%);
+    }
+    .collection-toolbar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      min-width: 0;
+    }
+    .collection-toolbar .searchbox {
+      flex: 1 1 280px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .collection-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
+    }
+    .segmented.compact button {
+      min-width: 0;
+      min-height: 30px;
+      padding-inline: 9px;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .sort-menu {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 8px 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: var(--bg-solid);
+      backdrop-filter: blur(20px) saturate(160%);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .sort-menu select {
+      min-height: 30px;
+      border: 0;
+      background-color: transparent;
+      padding-inline: 4px;
+    }
     select {
       padding: 0 12px;
       min-width: 170px;
@@ -6028,6 +6088,24 @@ def ui_preview_html(
       }
       .topbar { grid-template-columns: 1fr; }
       .top-actions { justify-content: stretch; }
+      .collection-toolbar {
+        padding: 10px;
+      }
+      .collection-toolbar-row,
+      .collection-controls {
+        align-items: stretch;
+      }
+      .collection-toolbar .searchbox,
+      .sort-menu {
+        flex: 1 1 100%;
+      }
+      .segmented.compact {
+        flex: 1 1 100%;
+        overflow-x: auto;
+      }
+      .segmented.compact button {
+        flex: 1 0 auto;
+      }
       .segmented { flex: 1; }
       .segmented button { flex: 1; }
       select { flex: 1; max-width: none; }
@@ -6268,17 +6346,44 @@ def ui_preview_html(
       </div>
     </aside>
     <main class="preview-main">
-      <div class="topbar">
-        <label class="searchbox">
-          <span aria-hidden="true">/</span>
-          <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
-        </label>
-      </div>
       <div class="app-simulation-banner hidden" id="appRoleSimulationBanner">
         <span id="appRoleSimulationBannerText"></span>
         <button type="button" class="secondary-button" id="appRoleSimulationStopButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
       </div>
       <section class="library-view" id="libraryView">
+      <section class="collection-toolbar" id="collectionToolbar" aria-label="Collection controls">
+        <div class="collection-toolbar-row">
+          <label class="searchbox">
+            <span aria-hidden="true">/</span>
+            <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
+          </label>
+          <div class="collection-controls">
+            <label class="sort-menu" for="collectionSortSelect">
+              <span data-next-i18n="collection.sort">Sort</span>
+              <select id="collectionSortSelect" aria-label="Sort collection" data-next-i18n-aria="collection.sort">
+                <option value="title_asc" data-next-i18n="collection.sortTitleAsc">Title A-Z</option>
+                <option value="title_desc" data-next-i18n="collection.sortTitleDesc">Title Z-A</option>
+                <option value="added_desc" data-next-i18n="collection.sortAddedDesc">Added newest first</option>
+                <option value="added_asc" data-next-i18n="collection.sortAddedAsc">Added oldest first</option>
+                <option value="year_desc" data-next-i18n="collection.sortYearDesc">Year newest first</option>
+                <option value="year_asc" data-next-i18n="collection.sortYearAsc">Year oldest first</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="collection-toolbar-row">
+          <div class="segmented compact" id="collectionFormatFilter" role="group" aria-label="Format filter" data-next-i18n-aria="collection.formatFilter">
+            <button type="button" class="active" data-format-filter="all" data-next-i18n="common.all">All</button>
+            <button type="button" data-format-filter="4k" data-next-i18n="collection.format4k">4K UHD</button>
+            <button type="button" data-format-filter="bluray" data-next-i18n="collection.formatBluray">Blu-ray</button>
+            <button type="button" data-format-filter="dvd" data-next-i18n="collection.formatDvd">DVD</button>
+          </div>
+          <div class="segmented compact" id="collectionItemFilter" role="group" aria-label="Item filter" data-next-i18n-aria="collection.itemFilter">
+            <button type="button" class="active" data-item-filter="all" data-next-i18n="common.all">All</button>
+            <button type="button" data-item-filter="containers" data-next-i18n="collection.containers">Containers</button>
+          </div>
+        </div>
+      </section>
       <section class="hero" id="previewHero">
         """ + featured_backdrop_html + """
         <div class="hero-content">
@@ -7326,6 +7431,9 @@ def ui_preview_html(
     let containerMembership = state.containerMembership || [];
     let mediaGroups = state.mediaGroups || [];
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
+    let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
+    let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
+    let collectionItemFilter = localStorage.getItem("dv_next_collection_item_filter") || "all";
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
@@ -9515,6 +9623,24 @@ def ui_preview_html(
       if (!select) return;
       select.innerHTML = groupOptionsHtml();
     }
+    function renderCollectionToolbar() {
+      if (!collectorsModeEnabled() && collectionItemFilter === "containers") {
+        collectionItemFilter = "all";
+        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+      }
+      const sortSelect = document.getElementById("collectionSortSelect");
+      if (sortSelect && sortSelect.value !== collectionSortMode) sortSelect.value = collectionSortMode;
+      document.querySelectorAll("[data-format-filter]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.formatFilter === collectionFormatFilter);
+        button.setAttribute("aria-pressed", button.dataset.formatFilter === collectionFormatFilter ? "true" : "false");
+      });
+      const itemFilter = document.getElementById("collectionItemFilter");
+      if (itemFilter) itemFilter.classList.toggle("hidden", !collectorsModeEnabled());
+      document.querySelectorAll("[data-item-filter]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.itemFilter === collectionItemFilter);
+        button.setAttribute("aria-pressed", button.dataset.itemFilter === collectionItemFilter ? "true" : "false");
+      });
+    }
     function targetOptionHtml(items, emptyKey, emptyText) {
       if (!items.length) return `<option value="">${escapeHtml(tNext(emptyKey, emptyText))}</option>`;
       return [
@@ -9612,10 +9738,81 @@ def ui_preview_html(
       ].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(query);
     }
+    function normalizedMovieFormat(movie) {
+      return String(movie?.format || movie?.edition_type || movie?.metadata?.format || "").toLowerCase();
+    }
+    function movieMatchesFormat(movie) {
+      const selected = collectionFormatFilter || "all";
+      if (selected === "all") return true;
+      const value = normalizedMovieFormat(movie);
+      if (selected === "4k") return value.includes("4k") || value.includes("uhd") || value.includes("ultra hd");
+      if (selected === "bluray") return (value.includes("blu") || value.includes("bd")) && !movieMatchesFormatValue(value, "4k");
+      if (selected === "dvd") return value.includes("dvd") && !value.includes("blu") && !value.includes("uhd");
+      return true;
+    }
+    function movieMatchesFormatValue(value, selected) {
+      const normalized = String(value || "").toLowerCase();
+      if (selected === "4k") return normalized.includes("4k") || normalized.includes("uhd") || normalized.includes("ultra hd");
+      if (selected === "bluray") return normalized.includes("blu") || normalized.includes("bd");
+      if (selected === "dvd") return normalized.includes("dvd");
+      return true;
+    }
+    function containerMatchesFormat(container) {
+      if (!collectorsModeEnabled()) return false;
+      if ((collectionFormatFilter || "all") === "all") return true;
+      return containerMemberMovies(container.id).some((movie) => movieMatchesFormat(movie));
+    }
+    function itemDateValue(item, mode) {
+      if (item.kind === "container") {
+        const values = containerMemberMovies(item.container?.id)
+          .map((movie) => Date.parse(movie.created_at || movie.updated_at || ""))
+          .filter((time) => Number.isFinite(time));
+        if (values.length) return mode === "added_asc" ? Math.min(...values) : Math.max(...values);
+      }
+      const value = item?.movie?.created_at || item?.movie?.updated_at || item?.container?.created_at || item?.container?.updated_at || "";
+      const time = Date.parse(value);
+      return Number.isFinite(time) ? time : 0;
+    }
+    function itemYearValue(item, mode) {
+      if (item.kind === "movie") return Number.parseInt(item.movie?.year || "0", 10) || 0;
+      const years = containerMemberMovies(item.container?.id).map((movie) => Number.parseInt(movie.year || "0", 10) || 0).filter(Boolean);
+      if (years.length) return mode === "year_asc" ? Math.min(...years) : Math.max(...years);
+      return Number.parseInt(item.container?.year || "0", 10) || 0;
+    }
+    function sortLibraryItems(items) {
+      const mode = collectionSortMode || "title_asc";
+      return [...(items || [])].sort((a, b) => {
+        if (mode === "added_desc" || mode === "added_asc") {
+          const diff = itemDateValue(a, mode) - itemDateValue(b, mode);
+          return mode === "added_desc" ? -diff : diff;
+        }
+        if (mode === "year_desc" || mode === "year_asc") {
+          const diff = itemYearValue(a, mode) - itemYearValue(b, mode);
+          if (diff) return mode === "year_desc" ? -diff : diff;
+        }
+        const diff = String(a.title || "").localeCompare(String(b.title || ""), localeState.locale || undefined, {sensitivity: "base"});
+        return mode === "title_desc" ? -diff : diff;
+      });
+    }
+    function visibleContainerItems(visibleMovieIds = null) {
+      if (!collectorsModeEnabled()) return [];
+      return (containers || [])
+        .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container))
+        .filter((container) => {
+          if (!visibleMovieIds) return true;
+          const memberIds = movieIdSetForContainer(container.id);
+          if (!memberIds.size) return activeSearchQuery();
+          return [...memberIds].some((movieId) => visibleMovieIds.has(String(movieId)));
+        })
+        .map((container) => ({kind: "container", container, title: container.title || ""}));
+    }
     function libraryDisplayItems() {
-      const visibleMovies = (movies || []).filter((movie) => movieMatchesGroup(movie) && movieMatchesSearch(movie));
+      const visibleMovies = (movies || []).filter((movie) => movieMatchesGroup(movie) && movieMatchesSearch(movie) && movieMatchesFormat(movie));
+      if (collectionItemFilter === "containers") {
+        return sortLibraryItems(visibleContainerItems());
+      }
       if (!mergeEditionsAsTitleEnabled()) {
-        return visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
+        return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
       }
       const visibleMovieIds = new Set(visibleMovies.map((movie) => String(movie.id || "")));
       const visibleContainerIds = new Set();
@@ -9627,7 +9824,7 @@ def ui_preview_html(
       (containers || []).forEach((container) => {
         const memberIds = movieIdSetForContainer(container.id);
         if (!memberIds.size && !activeSearchQuery()) return;
-        if (containerMatchesGroup(container) && containerMatchesSearch(container)) {
+        if (containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container)) {
           visibleContainerIds.add(String(container.id || ""));
         }
       });
@@ -9637,7 +9834,7 @@ def ui_preview_html(
       const representedMovieIds = new Set();
       const containerItems = (containers || [])
         .filter((container) => visibleContainerIds.has(String(container.id || "")))
-        .filter((container) => containerMatchesGroup(container) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
+        .filter((container) => containerMatchesGroup(container) && containerMatchesFormat(container) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
         .map((container) => {
           movieIdSetForContainer(container.id).forEach((movieId) => representedMovieIds.add(movieId));
           return {kind: "container", container, title: container.title || ""};
@@ -9645,7 +9842,7 @@ def ui_preview_html(
       const movieItems = visibleMovies
         .filter((movie) => !representedMovieIds.has(String(movie.id || "")))
         .map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
-      return [...containerItems, ...movieItems].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), localeState.locale || undefined, {sensitivity: "base"}));
+      return sortLibraryItems([...containerItems, ...movieItems]);
     }
     function libraryDisplayMovieCount(items) {
       const ids = new Set();
@@ -11549,15 +11746,16 @@ def ui_preview_html(
     function renderLibrary() {
       if (!collectorsModeEnabled()) selectedContainerIds.clear();
       renderGroupFilter();
+      renderCollectionToolbar();
       renderBulkTargets();
       const search = document.getElementById("previewSearch");
       if (search) {
         search.closest(".searchbox")?.classList.toggle("hidden", preferences.show_collection_search === false);
       }
-      const hero = document.getElementById("previewHero");
-      if (hero) hero.classList.toggle("hidden", preferences.show_featured_hero === false || movies.length === 0);
       const displayItems = libraryDisplayItems();
       const visibleMovieCount = libraryDisplayMovieCount(displayItems);
+      const hero = document.getElementById("previewHero");
+      if (hero) hero.classList.toggle("hidden", preferences.show_featured_hero === false || displayItems.length === 0);
       const rail = document.getElementById("posterRail");
       if (rail) {
         rail.innerHTML = displayItems.length
@@ -12488,6 +12686,25 @@ def ui_preview_html(
         });
       });
       document.getElementById("previewSearch")?.addEventListener("input", filterMovies);
+      document.getElementById("collectionSortSelect")?.addEventListener("change", (event) => {
+        collectionSortMode = event.target.value || "title_asc";
+        localStorage.setItem("dv_next_collection_sort", collectionSortMode);
+        renderLibrary();
+      });
+      document.querySelectorAll("[data-format-filter]").forEach((button) => {
+        button.addEventListener("click", () => {
+          collectionFormatFilter = button.dataset.formatFilter || "all";
+          localStorage.setItem("dv_next_collection_format", collectionFormatFilter);
+          renderLibrary();
+        });
+      });
+      document.querySelectorAll("[data-item-filter]").forEach((button) => {
+        button.addEventListener("click", () => {
+          collectionItemFilter = button.dataset.itemFilter || "all";
+          localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+          renderLibrary();
+        });
+      });
       document.getElementById("groupFilter")?.addEventListener("change", (event) => {
         preferences.default_media_group_id = event.target.value || "";
         if (appMode) {
