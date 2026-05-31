@@ -1035,5 +1035,11 @@
   "appAdmin.pluginTypeMetadataReceivers": "Metatietojen vastaanottajat",
   "appAdmin.pluginTypeDigitalSources": "Digitaaliset medialahteet",
   "appAdmin.pluginTypeImportSources": "Tuontilahteet",
-  "appAdmin.pluginTypeOther": "Muut lisaosat"
+  "appAdmin.pluginTypeOther": "Muut lisaosat",
+  "profile.profileCenter": "Profiilikeskus",
+  "profile.profileCenterHelp": "Hallitse tiliä, asetuksia, turvallisuutta ja sovellustietoja.",
+  "profile.sections": "Profiiliosiot",
+  "profile.tabAccount": "Tili",
+  "profile.tabNotifications": "Ilmoitukset",
+  "profile.tabStructure": "Rakenne"
 }

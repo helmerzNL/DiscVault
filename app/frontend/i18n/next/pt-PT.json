@@ -1035,5 +1035,11 @@
   "appAdmin.pluginTypeMetadataReceivers": "Recetores de metadados",
   "appAdmin.pluginTypeDigitalSources": "Fontes media digitais",
   "appAdmin.pluginTypeImportSources": "Fontes de importacao",
-  "appAdmin.pluginTypeOther": "Outros plugins"
+  "appAdmin.pluginTypeOther": "Outros plugins",
+  "profile.profileCenter": "Centro de perfil",
+  "profile.profileCenterHelp": "Gira a conta, preferencias, seguranca e informacao da app.",
+  "profile.sections": "Seccoes do perfil",
+  "profile.tabAccount": "Conta",
+  "profile.tabNotifications": "Notificacoes",
+  "profile.tabStructure": "Estrutura"
 }

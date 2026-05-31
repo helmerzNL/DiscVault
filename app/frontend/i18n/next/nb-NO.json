@@ -1035,5 +1035,11 @@
   "appAdmin.pluginTypeMetadataReceivers": "Metadatamottakere",
   "appAdmin.pluginTypeDigitalSources": "Digitale mediekilder",
   "appAdmin.pluginTypeImportSources": "Importkilder",
-  "appAdmin.pluginTypeOther": "Andre plugins"
+  "appAdmin.pluginTypeOther": "Andre plugins",
+  "profile.profileCenter": "Profilsenter",
+  "profile.profileCenterHelp": "Administrer konto, preferanser, sikkerhet og appinformasjon.",
+  "profile.sections": "Profilseksjoner",
+  "profile.tabAccount": "Konto",
+  "profile.tabNotifications": "Varsler",
+  "profile.tabStructure": "Struktur"
 }
