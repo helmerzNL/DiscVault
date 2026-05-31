@@ -16,6 +16,8 @@ import json as json_lib
 import mimetypes
 import os
 import re
+import secrets
+import sqlite3
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -55,6 +57,13 @@ try:
     from .next_auth import next_generate_recovery_codes
     from .next_auth import next_recovery_code_hash
     from .next_auth import register_next_auth_routes
+    from .next_auth import _b64url_decode
+    from .next_auth import _b64url_encode
+    from .next_auth import _make_challenge
+    from .next_auth import _parse_auth_data
+    from .next_auth import _rp_id
+    from .next_auth import _rp_origins
+    from .next_auth import _verify_signature
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import MovieVaultConnectionError
     from .next_movievault_connection import MovieVaultInstanceRevoked
@@ -86,6 +95,13 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import next_generate_recovery_codes
     from next_auth import next_recovery_code_hash
     from next_auth import register_next_auth_routes
+    from next_auth import _b64url_decode
+    from next_auth import _b64url_encode
+    from next_auth import _make_challenge
+    from next_auth import _parse_auth_data
+    from next_auth import _rp_id
+    from next_auth import _rp_origins
+    from next_auth import _verify_signature
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import MovieVaultConnectionError
     from next_movievault_connection import MovieVaultInstanceRevoked
@@ -95,6 +111,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
+MIGRATION_LEGACY_AUTH_CHALLENGE_KEY = "migration:legacy-auth"
+MIGRATION_LEGACY_AUTH_GRANT_PREFIX = "migration:legacy-grant:"
+MIGRATION_LEGACY_AUTH_GRANT_SECONDS = 30 * 60
 PLUGIN_EXECUTION_JOB_TYPE = "plugin.execute"
 TARGET_DATA_TABLES = (
     "movies",
@@ -503,6 +522,117 @@ def legacy_sqlite_db(data_dir: Path) -> Path:
     if raw:
         return Path(raw).expanduser()
     return data_dir / "discvault.db"
+
+
+def sqlite_connect(path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def legacy_table_exists(sqlite: sqlite3.Connection, table_name: str) -> bool:
+    row = sqlite.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def legacy_auth_required(source: dict[str, Any]) -> bool:
+    counts = source.get("sourceCounts") or {}
+    return bool(source.get("found") and source.get("readable") and int(counts.get("credentials") or 0) > 0)
+
+
+def migration_legacy_token_from_request() -> str:
+    return clean_text(
+        request.headers.get("X-DiscVault-Legacy-Migration-Token")
+        or request.headers.get("X-DiscVault-Migration-Token")
+        or (request.get_json(silent=True) or {}).get("legacyMigrationToken")
+        or (request.get_json(silent=True) or {}).get("legacy_migration_token")
+    )
+
+
+def migration_legacy_grant_key(token: str) -> str:
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return f"{MIGRATION_LEGACY_AUTH_GRANT_PREFIX}{digest}"
+
+
+def store_migration_challenge(conn, key: str, challenge: bytes, *, seconds: int = 300) -> None:
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM auth_challenges WHERE expires_at < now()")
+        cur.execute(
+            """
+            INSERT INTO auth_challenges (key, challenge, created_at, expires_at)
+            VALUES (%s, %s, now(), now() + (%s * interval '1 second'))
+            ON CONFLICT (key) DO UPDATE SET
+                challenge=EXCLUDED.challenge,
+                created_at=now(),
+                expires_at=EXCLUDED.expires_at
+            """,
+            (key, challenge, seconds),
+        )
+
+
+def pop_migration_challenge(conn, key: str) -> bytes | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM auth_challenges
+            WHERE key=%s AND expires_at > now()
+            RETURNING challenge
+            """,
+            (key,),
+        )
+        row = cur.fetchone()
+    return bytes(row["challenge"]) if row else None
+
+
+def migration_legacy_grant_valid(conn, token: str) -> bool:
+    if not token:
+        return False
+    return pop_migration_challenge(conn, migration_legacy_grant_key(token)) is not None
+
+
+def legacy_passkey_rows(sqlite_db: Path) -> list[dict[str, Any]]:
+    with sqlite_connect(sqlite_db) as sqlite:
+        if not legacy_table_exists(sqlite, "credentials"):
+            return []
+        rows = sqlite.execute(
+            """
+            SELECT
+                c.id,
+                c.user_id,
+                c.public_key,
+                c.sign_count,
+                c.credential_name,
+                u.username,
+                u.display_name,
+                u.role
+            FROM credentials c
+            LEFT JOIN users u ON u.id = c.user_id
+            ORDER BY c.created_at
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def legacy_admin_user(row: dict[str, Any]) -> bool:
+    return clean_text(row.get("role")).lower() in {"admin", "owner"}
+
+
+def require_migration_actor(conn, readiness: dict[str, Any]) -> dict[str, Any]:
+    if next_auth_effective_enabled(conn, table_exists):
+        return require_next_permission(conn, "collection.import")
+    if not legacy_auth_required(readiness.get("legacyData") or {}):
+        return require_next_permission(conn, "collection.import")
+    if not migration_legacy_grant_valid(conn, migration_legacy_token_from_request()):
+        raise NextApiError("Legacy passkey login is required before migration can start.", 401)
+    return {
+        "id": None,
+        "username": "legacy-migration",
+        "role": "owner",
+        "permissions": ["collection.import"],
+    }
 
 
 def target_data_counts(conn) -> dict[str, int]:
@@ -1145,10 +1275,15 @@ def migration_readiness(conn) -> dict[str, Any]:
         required_actions.append("Confirm the migration in the UI or call the migration start endpoint.")
 
     can_start = state in {"ready_for_confirmation", "ready_for_security_backfill"}
+    legacy_auth = {
+        "required": legacy_auth_required(source),
+        "authenticated": False,
+    }
     return {
         "state": state,
         "canStart": can_start,
         "requiresConfirmation": can_start,
+        "legacyAuth": legacy_auth,
         "legacyData": source,
         "importSources": import_sources,
         "targetDatabase": {
@@ -1185,6 +1320,7 @@ def migration_report(conn) -> dict[str, Any]:
         "state": readiness["state"],
         "canStart": readiness["canStart"],
         "requiresConfirmation": readiness["requiresConfirmation"],
+        "legacyAuth": readiness.get("legacyAuth") or {},
         "source": {
             "pluginId": readiness["legacyData"].get("pluginId"),
             "pluginName": readiness["legacyData"].get("pluginName"),
@@ -2154,6 +2290,7 @@ def migration_dashboard_html() -> str:
     let showTechnicalDetails = false;
     let migrationIntroAccepted = false;
     let migrationConfirmed = false;
+    let migrationLegacyAuthRequired = false;
     function normalizeNextLocale(value) {
       const raw = String(value || "").trim().replace("_", "-").toLowerCase();
       const aliases = {};
@@ -2184,6 +2321,8 @@ def migration_dashboard_html() -> str:
       const headers = {...(extra || {})};
       const token = localStorage.getItem("dv_next_token");
       if (token) headers.Authorization = `Bearer ${token}`;
+      const legacyToken = sessionStorage.getItem("dv_next_legacy_migration_token");
+      if (legacyToken) headers["X-DiscVault-Legacy-Migration-Token"] = legacyToken;
       return headers;
     }
     function setMigrationAuthMessage(message, tone) {
@@ -2282,7 +2421,13 @@ def migration_dashboard_html() -> str:
       if (button) button.disabled = true;
       setMigrationAuthMessage(tNext("auth.checking", "Checking authentication status..."), "info");
       try {
-        const optionsPayload = await migrationJson("/api/next/auth/login/options", {
+        const optionsEndpoint = migrationLegacyAuthRequired
+          ? "/api/next/migration/legacy-auth/options"
+          : "/api/next/auth/login/options";
+        const verifyEndpoint = migrationLegacyAuthRequired
+          ? "/api/next/migration/legacy-auth/verify"
+          : "/api/next/auth/login/verify";
+        const optionsPayload = await migrationJson(optionsEndpoint, {
           method: "POST",
           body: "{}"
         });
@@ -2305,11 +2450,12 @@ def migration_dashboard_html() -> str:
           type: assertion.type,
           authenticatorAttachment: assertion.authenticatorAttachment
         };
-        const verified = await migrationJson("/api/next/auth/login/verify", {
+        const verified = await migrationJson(verifyEndpoint, {
           method: "POST",
           body: JSON.stringify({credential})
         });
         if (verified.token) localStorage.setItem("dv_next_token", verified.token);
+        if (verified.legacyMigrationToken) sessionStorage.setItem("dv_next_legacy_migration_token", verified.legacyMigrationToken);
         setMigrationAuthMessage(tNext("auth.signedIn", "Signed in."), "good");
         showMigrationAuthGate(false);
         await loadReport();
@@ -2771,6 +2917,16 @@ def migration_dashboard_html() -> str:
       const payload = await response.json();
       const report = payload.report || {};
       lastMigrationReport = report;
+      const legacyAuth = report.legacyAuth || {};
+      migrationLegacyAuthRequired = !!legacyAuth.required && !sessionStorage.getItem("dv_next_legacy_migration_token");
+      if (migrationLegacyAuthRequired) {
+        showMigrationAuthGate(true);
+        setMigrationAuthMessage(tNext("migration.legacyAuthRequired", "Sign in with a legacy owner/admin passkey before starting migration."), "info");
+        const loginButton = document.getElementById("migrationLoginButton");
+        if (loginButton) loginButton.disabled = !!webauthnUnavailableReason();
+        return;
+      }
+      showMigrationAuthGate(false);
       const imported = report.summary?.imported || {};
       const target = report.target?.counts || {};
       const source = report.source || {};
@@ -2843,6 +2999,11 @@ def migration_dashboard_html() -> str:
         body: JSON.stringify(selectedImportSourceId ? {importSourceId: selectedImportSourceId} : {})
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          sessionStorage.removeItem("dv_next_legacy_migration_token");
+          migrationLegacyAuthRequired = true;
+          showMigrationAuthGate(true);
+        }
         const text = await response.text();
         throw new Error(`Migration start failed: HTTP ${response.status} ${text}`);
       }
@@ -27856,6 +28017,101 @@ def register_routes(flask_app: Flask) -> None:
             readiness = migration_readiness(conn)
         return response({"status": "ok", "readiness": readiness})
 
+    @flask_app.post("/api/next/migration/legacy-auth/options")
+    def legacy_migration_auth_options():
+        with connect() as conn:
+            readiness = migration_readiness(conn)
+            source = readiness["legacyData"]
+            if not legacy_auth_required(source):
+                return response({"status": "ok", "required": False})
+            sqlite_db = Path(str(source.get("sqliteDb") or ""))
+            credentials = legacy_passkey_rows(sqlite_db)
+            if not credentials:
+                raise NextApiError("No legacy passkeys are available for migration approval.", 409)
+            challenge = _make_challenge()
+            with conn.transaction():
+                store_migration_challenge(conn, MIGRATION_LEGACY_AUTH_CHALLENGE_KEY, challenge)
+        return response(
+            {
+                "status": "ok",
+                "required": True,
+                "options": {
+                    "challenge": _b64url_encode(challenge),
+                    "timeout": 60000,
+                    "rpId": _rp_id(),
+                    "allowCredentials": [
+                        {"type": "public-key", "id": clean_text(row.get("id"))}
+                        for row in credentials
+                        if clean_text(row.get("id"))
+                    ],
+                    "userVerification": "preferred",
+                },
+            }
+        )
+
+    @flask_app.post("/api/next/migration/legacy-auth/verify")
+    def legacy_migration_auth_verify():
+        body = request.get_json(silent=True) or {}
+        credential = body.get("credential") or {}
+        credential_id = clean_text(credential.get("id"))
+        if not credential_id:
+            raise NextApiError("Credential id is required", 400)
+
+        with connect() as conn:
+            readiness = migration_readiness(conn)
+            source = readiness["legacyData"]
+            if not legacy_auth_required(source):
+                return response({"status": "ok", "required": False})
+            challenge = pop_migration_challenge(conn, MIGRATION_LEGACY_AUTH_CHALLENGE_KEY)
+            if not challenge:
+                raise NextApiError("No pending legacy passkey challenge", 400)
+            sqlite_db = Path(str(source.get("sqliteDb") or ""))
+            credentials = {clean_text(row.get("id")): row for row in legacy_passkey_rows(sqlite_db)}
+            stored = credentials.get(credential_id)
+            if not stored:
+                raise NextApiError("Unknown legacy credential", 400)
+            if not legacy_admin_user(stored):
+                raise NextApiError("Legacy owner/admin passkey is required to approve migration.", 403)
+
+            try:
+                client_data_raw = _b64url_decode(credential["response"]["clientDataJSON"])
+                client_data = json_lib.loads(client_data_raw)
+                if client_data.get("type") != "webauthn.get":
+                    raise ValueError("Wrong type in clientDataJSON")
+                if _b64url_decode(client_data["challenge"]) != challenge:
+                    raise ValueError("Challenge mismatch")
+                incoming_origin = clean_text(client_data.get("origin")).rstrip("/")
+                if incoming_origin not in _rp_origins():
+                    raise ValueError(f"Origin not allowed: {incoming_origin}")
+                auth_data = _b64url_decode(credential["response"]["authenticatorData"])
+                expected_rp_hash = hashlib.sha256(_rp_id().encode("utf-8")).digest()
+                if auth_data[:32] != expected_rp_hash:
+                    raise ValueError("RP ID hash mismatch")
+                signature = _b64url_decode(credential["response"]["signature"])
+                client_data_hash = hashlib.sha256(client_data_raw).digest()
+                _verify_signature(bytes(stored["public_key"]), auth_data, client_data_hash, signature)
+                _, _, new_sign_count = _parse_auth_data(auth_data)
+            except Exception as exc:
+                raise NextApiError(f"Legacy passkey verification failed: {exc}", 400) from exc
+
+            token = secrets.token_urlsafe(32)
+            with conn.transaction():
+                store_migration_challenge(
+                    conn,
+                    migration_legacy_grant_key(token),
+                    f"{clean_text(stored.get('username'))}:{credential_id}:{new_sign_count}".encode("utf-8"),
+                    seconds=MIGRATION_LEGACY_AUTH_GRANT_SECONDS,
+                )
+        return response(
+            {
+                "status": "ok",
+                "required": True,
+                "legacyMigrationToken": token,
+                "username": clean_text(stored.get("username")),
+                "displayName": clean_text(stored.get("display_name")),
+            }
+        )
+
     @flask_app.post("/api/next/migration/start")
     def start_migration():
         body = request.get_json(silent=True) or {}
@@ -27871,8 +28127,8 @@ def register_routes(flask_app: Flask) -> None:
         import_media_references = parse_bool_value(import_media_references, default=True)
 
         with connect() as conn:
-            actor = require_next_permission(conn, "collection.import")
             readiness = migration_readiness(conn)
+            actor = require_migration_actor(conn, readiness)
             active = readiness.get("activeJob")
             if active:
                 return response({"status": "ok", "job": active, "readiness": readiness, "replayed": True}, 200)
