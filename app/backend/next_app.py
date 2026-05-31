@@ -1674,11 +1674,17 @@ def migration_dashboard_html() -> str:
       padding-top: 8px;
       padding-bottom: 8px;
     }
-    button.primary {
+    button.primary,
+    a.button.primary {
       background: var(--accent);
       border-color: var(--accent);
       color: #111217;
       font-weight: 700;
+    }
+    .completion-open-button {
+      min-height: 46px;
+      padding: 0 20px;
+      box-shadow: 0 14px 34px rgba(232,197,71,.18);
     }
     button.danger {
       background: rgba(255,107,107,.08);
@@ -2184,7 +2190,7 @@ def migration_dashboard_html() -> str:
         </label>
         <div class="actions">
           <button type="button" class="primary" id="migrationFlowStartButton" disabled data-next-i18n="migration.start">Start Migration</button>
-          <a class="button hidden" id="migrationFlowAppButton" href="/api/next/app" data-next-i18n="migration.openApp">Open DiscVault Next</a>
+          <a class="button primary completion-open-button hidden" id="migrationFlowAppButton" href="/app">Open DiscVault 26</a>
           <button type="button" id="migrationFlowRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           <button type="button" class="danger hidden" id="migrationTestResetButton" data-next-i18n="migration.testResetButton">Reset test database</button>
         </div>
