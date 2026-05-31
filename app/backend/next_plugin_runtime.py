@@ -19,6 +19,8 @@ TableExists = Callable[[Any, str], bool]
 DEFAULT_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
 VALID_CATEGORIES = {"metadata_source", "metadata_receiver", "digital_media_source", "import_source"}
 PLUGIN_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,80}$")
+DISCVAULT_PLUGIN_API_VERSION = "next-1"
+SUPPORTED_PLUGIN_API_VERSIONS = {DISCVAULT_PLUGIN_API_VERSION}
 PLUGIN_ENTRYPOINTS = (
     "health_check",
     "search_title",
@@ -87,6 +89,30 @@ def normalize_categories(manifest: dict[str, Any]) -> list[str]:
     return normalized
 
 
+def manifest_plugin_api_versions(manifest: dict[str, Any]) -> set[str]:
+    declared = manifest.get("discVaultPluginApi", manifest.get("pluginApi"))
+    if declared is None:
+        declared = manifest.get("discVaultPluginApis")
+    if declared is None and isinstance(manifest.get("compatibleDiscVault"), dict):
+        compatible = manifest["compatibleDiscVault"]
+        declared = compatible.get("pluginApi", compatible.get("pluginApis"))
+    if isinstance(declared, str):
+        return {declared.strip()} if declared.strip() else set()
+    if isinstance(declared, list):
+        return {str(item).strip() for item in declared if str(item).strip()}
+    return set()
+
+
+def validate_manifest_compatibility(manifest: dict[str, Any], require_declared: bool = False) -> None:
+    versions = manifest_plugin_api_versions(manifest)
+    if require_declared and not versions:
+        raise ValueError("Plugin manifest must declare discVaultPluginApi")
+    if versions and not versions.intersection(SUPPORTED_PLUGIN_API_VERSIONS):
+        supported = ", ".join(sorted(SUPPORTED_PLUGIN_API_VERSIONS))
+        declared = ", ".join(sorted(versions))
+        raise ValueError(f"Plugin API version is not compatible: {declared}; supported: {supported}")
+
+
 def normalize_manifest(raw: dict[str, Any], path: Path) -> dict[str, Any]:
     manifest = dict(raw)
     plugin_id = str(manifest.get("id") or path.name).strip()
@@ -94,7 +120,14 @@ def normalize_manifest(raw: dict[str, Any], path: Path) -> dict[str, Any]:
         raise ValueError(f"Invalid plugin id: {plugin_id}")
     manifest["id"] = plugin_id
     manifest["name"] = str(manifest.get("name") or plugin_id).strip()
-    manifest["version"] = str(manifest.get("version") or "0.0.0").strip()
+    manifest["version"] = str(manifest.get("version") or "").strip()
+    if not manifest["version"]:
+        raise ValueError(f"Plugin {plugin_id} must declare a version")
+    manifest["manifestVersion"] = int(manifest.get("manifestVersion") or 1)
+    manifest["discVaultPluginApi"] = str(
+        manifest.get("discVaultPluginApi") or DISCVAULT_PLUGIN_API_VERSION
+    ).strip()
+    validate_manifest_compatibility(manifest)
     manifest["categories"] = normalize_categories(manifest)
     if not manifest["categories"]:
         raise ValueError(f"Plugin {plugin_id} does not declare a valid category")

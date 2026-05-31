@@ -2,6 +2,8 @@
   "id": "omdb",
   "name": "OMDb",
   "version": "1.0.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
   "categories": ["metadata_source"],
   "capabilities": [
     "search_title",

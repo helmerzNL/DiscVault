@@ -1019,5 +1019,21 @@
   "collection.tiles": "tiles",
   "containerDetail.overview": "Overview",
   "containerDetail.sections": "Container sections",
-  "migration.legacyAuthRequired": "Sign in with a legacy owner/admin passkey before starting migration."
+  "migration.legacyAuthRequired": "Sign in with a legacy owner/admin passkey before starting migration.",
+  "appAdmin.pluginPackages": "Plugin packages",
+  "appAdmin.pluginPackagesHelp": "Export installed plugins or install a compatible DiscVault plugin ZIP.",
+  "appAdmin.pluginImportHelp": "Imported ZIP files must contain manifest.json, plugin.py, a version and a compatible DiscVault plugin API declaration.",
+  "appAdmin.importPlugin": "Import plugin",
+  "appAdmin.exportPlugin": "Export",
+  "appAdmin.exportingPlugin": "Exporting plugin...",
+  "appAdmin.pluginExported": "Plugin ZIP downloaded.",
+  "appAdmin.importingPlugin": "Importing plugin...",
+  "appAdmin.pluginImported": "Plugin imported.",
+  "appAdmin.selectPluginZip": "Select a plugin ZIP first.",
+  "appAdmin.version": "Version",
+  "appAdmin.pluginTypeMetadataSources": "Metadata sources",
+  "appAdmin.pluginTypeMetadataReceivers": "Metadata receivers",
+  "appAdmin.pluginTypeDigitalSources": "Digital media sources",
+  "appAdmin.pluginTypeImportSources": "Import sources",
+  "appAdmin.pluginTypeOther": "Other plugins"
 }

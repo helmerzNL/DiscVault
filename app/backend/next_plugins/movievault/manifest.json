@@ -2,6 +2,8 @@
   "id": "movievault",
   "name": "MovieVault",
   "version": "1.0.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
   "categories": ["metadata_source", "metadata_receiver"],
   "capabilities": [
     "search_barcode",

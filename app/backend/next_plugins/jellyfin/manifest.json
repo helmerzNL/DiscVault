@@ -2,6 +2,8 @@
   "id": "jellyfin",
   "name": "Jellyfin",
   "version": "1.0.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
   "categories": ["digital_media_source"],
   "capabilities": [
     "discover_library",

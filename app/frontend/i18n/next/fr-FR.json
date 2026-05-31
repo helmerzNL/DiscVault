@@ -1019,5 +1019,21 @@
   "preferences.showExtendedPeoplePagesHelp": "Affiche les films numeriques et les filmographies completes sur les pages de personnes. Desactive affiche seulement les medias physiques possedes.",
   "containerDetail.overview": "Apercu",
   "containerDetail.sections": "Sections du conteneur",
-  "migration.legacyAuthRequired": "Connectez-vous avec une passkey legacy owner/admin avant de lancer la migration."
+  "migration.legacyAuthRequired": "Connectez-vous avec une passkey legacy owner/admin avant de lancer la migration.",
+  "appAdmin.pluginPackages": "Paquets de plugins",
+  "appAdmin.pluginPackagesHelp": "Exportez les plugins installes ou installez un ZIP de plugin DiscVault compatible.",
+  "appAdmin.pluginImportHelp": "Les ZIP importes doivent contenir manifest.json, plugin.py, une version et une declaration API de plugin DiscVault compatible.",
+  "appAdmin.importPlugin": "Importer le plugin",
+  "appAdmin.exportPlugin": "Exporter",
+  "appAdmin.exportingPlugin": "Export du plugin...",
+  "appAdmin.pluginExported": "ZIP du plugin telecharge.",
+  "appAdmin.importingPlugin": "Import du plugin...",
+  "appAdmin.pluginImported": "Plugin importe.",
+  "appAdmin.selectPluginZip": "Selectionnez d abord un ZIP de plugin.",
+  "appAdmin.version": "Version",
+  "appAdmin.pluginTypeMetadataSources": "Sources de metadonnees",
+  "appAdmin.pluginTypeMetadataReceivers": "Recepteurs de metadonnees",
+  "appAdmin.pluginTypeDigitalSources": "Sources media numeriques",
+  "appAdmin.pluginTypeImportSources": "Sources d import",
+  "appAdmin.pluginTypeOther": "Autres plugins"
 }
