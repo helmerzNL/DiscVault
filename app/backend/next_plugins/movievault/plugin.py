@@ -64,6 +64,26 @@ def _text(value):
     return str(value or "").strip()
 
 
+def _first_value(item, *keys):
+    if not isinstance(item, dict):
+        return ""
+    for key in keys:
+        value = item.get(key)
+        if value not in (None, "", [], {}):
+            return value
+    return ""
+
+
+def _parse_year(value):
+    text = _text(value)
+    return text[:4] if len(text) >= 4 and text[:4].isdigit() else ""
+
+
+def _image_url(value):
+    text = _text(value)
+    return text if text.startswith(("http://", "https://")) else ""
+
+
 def _movie_payload(item):
     if not isinstance(item, dict):
         return {}
@@ -91,6 +111,238 @@ def _movie_payload(item):
         "videos": item.get("videos") or [],
         "audienceRating": _text(item.get("audienceRating") or item.get("audience_rating")),
     }
+
+
+def _member_list(payload):
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+    for key in ("members", "movies", "items", "titles", "boxSetMovies", "box_set_movies", "releases"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return value
+    for key in ("boxSetProposal", "box_set_proposal", "boxSet", "box_set", "proposal", "data"):
+        nested = payload.get(key)
+        found = _member_list(nested)
+        if found:
+            return found
+    return []
+
+
+def _member_source(item):
+    if not isinstance(item, dict):
+        return {}
+    for key in ("movie", "release", "metadata", "details"):
+        value = item.get(key)
+        if isinstance(value, dict):
+            return {**value, **{k: v for k, v in item.items() if k not in {key}}}
+    return item
+
+
+def _normalize_member(item, index):
+    if isinstance(item, str):
+        title = _text(item)
+        return {"title": title, "sort_order": index, "sortOrder": index} if title else {}
+    source = _member_source(item)
+    title = _text(_first_value(source, "title", "name", "originalTitle", "original_title"))
+    if not title:
+        return {}
+    movie = _movie_payload(source)
+    year = _parse_year(_first_value(source, "year", "releaseYear", "release_year", "releaseDate", "release_date") or movie.get("year"))
+    sort_order = _text(_first_value(source, "sortOrder", "sort_order", "discNumber", "disc_number")) or index
+    poster = _image_url(_first_value(source, "posterUrl", "poster_url", "poster", "coverUrl", "cover_url", "image"))
+    backdrop = _image_url(_first_value(source, "backdropUrl", "backdrop_url", "backdrop"))
+    member = {
+        "title": title,
+        "originalTitle": _text(_first_value(source, "originalTitle", "original_title") or movie.get("originalTitle")),
+        "original_title": _text(_first_value(source, "original_title", "originalTitle") or movie.get("originalTitle")),
+        "year": year,
+        "releaseDate": _text(_first_value(source, "releaseDate", "release_date") or movie.get("releaseDate")),
+        "release_date": _text(_first_value(source, "release_date", "releaseDate") or movie.get("releaseDate")),
+        "tmdbId": _text(_first_value(source, "tmdbId", "tmdb_id")),
+        "tmdb_id": _text(_first_value(source, "tmdb_id", "tmdbId")),
+        "imdbId": _text(_first_value(source, "imdbId", "imdb_id")),
+        "imdb_id": _text(_first_value(source, "imdb_id", "imdbId")),
+        "overview": _text(_first_value(source, "overview", "plot", "description") or movie.get("overview")),
+        "plot": _text(_first_value(source, "plot", "overview", "description") or movie.get("overview")),
+        "runtime": _first_value(source, "runtime", "runtimeMinutes", "runtime_minutes") or movie.get("runtimeMinutes"),
+        "genre": _text(_first_value(source, "genre", "genres") or movie.get("genre")),
+        "director": _text(_first_value(source, "director", "directors") or movie.get("director")),
+        "actor": _text(_first_value(source, "actor", "actors", "cast") or movie.get("actor")),
+        "poster": poster,
+        "posterUrl": poster,
+        "poster_url": poster,
+        "backdrop": backdrop,
+        "backdropUrl": backdrop,
+        "backdrop_url": backdrop,
+        "backdropUrls": source.get("backdropUrls") or source.get("backdrop_urls") or movie.get("backdropUrls") or [],
+        "backdrop_urls": source.get("backdrop_urls") or source.get("backdropUrls") or movie.get("backdropUrls") or [],
+        "sortOrder": sort_order,
+        "sort_order": sort_order,
+        "source": _text(source.get("source") or "MovieVault"),
+        "sourceRef": _text(_first_value(source, "sourceRef", "source_ref", "id", "movieVaultId", "movievault_id")),
+    }
+    return {key: value for key, value in member.items() if value not in (None, "", [], {})}
+
+
+def _member_needs_identification(member):
+    return not (member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id"))
+
+
+def _merge_member_enrichment(member, enrichment):
+    proposal = enrichment.get("proposal") if isinstance(enrichment, dict) else {}
+    proposal = proposal if isinstance(proposal, dict) else {}
+    movie_updates = proposal.get("movieUpdates") or {}
+    metadata_updates = proposal.get("metadataUpdates") or {}
+    media_updates = proposal.get("mediaUpdates") or {}
+    identifiers = proposal.get("identifiers") or {}
+    enriched = dict(member)
+
+    mappings = {
+        "title": ("title",),
+        "original_title": ("original_title", "originalTitle"),
+        "originalTitle": ("original_title", "originalTitle"),
+        "year": ("year",),
+        "release_date": ("release_date", "releaseDate"),
+        "releaseDate": ("release_date", "releaseDate"),
+        "overview": ("overview", "plot"),
+        "plot": ("overview", "plot"),
+        "runtime": ("runtime_minutes", "runtimeMinutes", "runtime"),
+        "genre": ("genre",),
+        "director": ("director",),
+        "actor": ("actor",),
+    }
+    for target, keys in mappings.items():
+        if enriched.get(target):
+            continue
+        for key in keys:
+            value = movie_updates.get(key) or metadata_updates.get(key)
+            if value not in (None, "", [], {}):
+                enriched[target] = value
+                break
+
+    if identifiers.get("tmdb") and not (enriched.get("tmdbId") or enriched.get("tmdb_id")):
+        enriched["tmdbId"] = str(identifiers["tmdb"])
+        enriched["tmdb_id"] = str(identifiers["tmdb"])
+    if identifiers.get("imdb") and not (enriched.get("imdbId") or enriched.get("imdb_id")):
+        enriched["imdbId"] = str(identifiers["imdb"])
+        enriched["imdb_id"] = str(identifiers["imdb"])
+
+    poster = metadata_updates.get("poster_url") or (media_updates.get("poster") or {}).get("sourceUrl")
+    if poster and not (enriched.get("poster") or enriched.get("posterUrl") or enriched.get("poster_url")):
+        enriched["poster"] = poster
+        enriched["posterUrl"] = poster
+        enriched["poster_url"] = poster
+    backdrop = metadata_updates.get("backdrop_url") or (media_updates.get("backdrop") or {}).get("sourceUrl")
+    if backdrop and not (enriched.get("backdrop") or enriched.get("backdropUrl") or enriched.get("backdrop_url")):
+        enriched["backdrop"] = backdrop
+        enriched["backdropUrl"] = backdrop
+        enriched["backdrop_url"] = backdrop
+
+    sources = []
+    for item in enrichment.get("sourceSummary") or []:
+        if item.get("state") in {"applied", "hit"}:
+            sources.append(item.get("pluginId"))
+    if sources:
+        enriched["identifiedBy"] = sources
+        enriched["memberConfidence"] = "identified_by_metadata_plugins"
+    return {key: value for key, value in enriched.items() if value not in (None, "", [], {})}
+
+
+def _identify_member_with_other_plugins(member, context):
+    lookup = (context or {}).get("metadataLookup")
+    if not callable(lookup):
+        return member, None
+    query = {
+        "title": member.get("title") or member.get("originalTitle") or member.get("original_title") or "",
+        "year": member.get("year") or "",
+        "tmdbId": member.get("tmdbId") or member.get("tmdb_id") or "",
+        "imdbId": member.get("imdbId") or member.get("imdb_id") or "",
+        "format": member.get("format") or (context or {}).get("format") or "",
+    }
+    if not query["title"] and not query["tmdbId"] and not query["imdbId"]:
+        return member, None
+    try:
+        enrichment = lookup(query, excludeProviders=["movievault"])
+    except Exception as exc:  # Fallback discovery should never make MovieVault unusable.
+        return {**member, "identificationWarning": str(exc)}, None
+    return _merge_member_enrichment(member, enrichment or {}), enrichment
+
+
+def _normalize_box_set_proposal(payload, context=None):
+    item = _first(payload)
+    if not item:
+        return {}
+    if not _member_list(item):
+        nested = (
+            item.get("boxSetProposal")
+            or item.get("box_set_proposal")
+            or item.get("boxSet")
+            or item.get("box_set")
+        )
+        if isinstance(nested, dict):
+            item = nested
+
+    title = _text(_first_value(item, "title", "name", "boxSetTitle", "box_set_title"))
+    raw_members = _member_list(item)
+    members = []
+    lookup_summaries = []
+    seen = set()
+    for index, raw_member in enumerate(raw_members[:50], start=1):
+        member = _normalize_member(raw_member, index)
+        if not member:
+            continue
+        if _member_needs_identification(member):
+            member, enrichment = _identify_member_with_other_plugins(member, context or {})
+            if isinstance(enrichment, dict):
+                lookup_summaries.append(
+                    {
+                        "member": member.get("title"),
+                        "sourceOrder": enrichment.get("sourceOrder") or [],
+                        "proposalStats": enrichment.get("proposalStats") or {},
+                    }
+                )
+        key = (
+            _text(member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id")),
+            _text(member.get("title")).casefold(),
+            _text(member.get("year")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        members.append(member)
+
+    if not title and members:
+        title = _text(item.get("boxSetTitle") or item.get("collectionTitle") or item.get("name"))
+    if not title:
+        return {}
+
+    proposal = {
+        "title": title,
+        "name": title,
+        "source": "MovieVault",
+        "provider": "movievault",
+        "movievault_id": _text(_first_value(item, "movieVaultId", "movievaultId", "movievault_id", "id")),
+        "barcode": _text(_first_value(item, "barcode", "ean", "upc")),
+        "year": _parse_year(_first_value(item, "year", "releaseYear", "release_year")),
+        "year_range": _text(_first_value(item, "yearRange", "year_range")),
+        "format": _text(_first_value(item, "format", "mediaType", "media_type")),
+        "poster": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
+        "poster_url": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
+        "backdrop": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
+        "backdrop_url": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
+        "backdrop_urls": item.get("backdrop_urls") or item.get("backdropUrls") or [],
+        "movies": members,
+        "members": members,
+        "member_count": len(members),
+        "member_source": "MovieVault",
+        "member_confidence": "identified" if members and all(not _member_needs_identification(m) for m in members) else "candidate",
+        "metadata_plugin_fallbacks": lookup_summaries,
+    }
+    if lookup_summaries:
+        proposal["member_source"] = "MovieVault + metadata plugins"
+    return {key: value for key, value in proposal.items() if value not in (None, "", [], {})}
 
 
 def _technical_payload(item):
@@ -124,7 +376,10 @@ def _normalize_result(payload, *, source_ref=""):
         "technicalSpecs": _technical_payload(item),
         "tmdbId": _text(item.get("tmdbId") or item.get("tmdb_id")),
         "imdbId": _text(item.get("imdbId") or item.get("imdb_id")),
-        "boxSetProposal": item.get("boxSetProposal") or item.get("box_set_proposal") or item.get("box_set"),
+        "boxSetProposal": _normalize_box_set_proposal(item, None)
+        or item.get("boxSetProposal")
+        or item.get("box_set_proposal")
+        or item.get("box_set"),
     }
 
 
@@ -213,7 +468,16 @@ def box_set_candidates(payload, context=None):
     year = str((payload or {}).get("year") or "").strip()
     barcode = str((payload or {}).get("barcode") or "").strip()
     data = _get(context or {}, "/api/v1/box-sets", q=title, year=year, barcode=barcode)
-    return {"status": "hit", "provider": "movievault", "boxSetProposal": _first(data)}
+    proposal = _normalize_box_set_proposal(data, context or {})
+    if not proposal or len(proposal.get("movies") or []) < 2:
+        return {"status": "miss", "provider": "movievault", "boxSetProposal": {}}
+    return {
+        "status": "hit",
+        "provider": "movievault",
+        "sourceLabel": "MovieVault",
+        "sourceRef": proposal.get("movievault_id") or proposal.get("barcode") or title,
+        "boxSetProposal": proposal,
+    }
 
 
 def receive_metadata(payload, context=None):

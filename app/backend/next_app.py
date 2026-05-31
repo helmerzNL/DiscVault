@@ -45,6 +45,7 @@ try:
     from .next_plugin_runtime import plugin_registry_snapshot
     from .next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from .next_plugin_runtime import PLUGIN_ID_PATTERN
+    from .next_plugin_runtime import plugin_paths
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
@@ -78,6 +79,8 @@ try:
     from .next_movievault_connection import movievault_connection_status
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
+    from .versioning import backend_version
+    from .versioning import build_sha as version_build_sha
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
@@ -86,6 +89,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import plugin_registry_snapshot
     from next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from next_plugin_runtime import PLUGIN_ID_PATTERN
+    from next_plugin_runtime import plugin_paths
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
@@ -119,6 +123,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import movievault_connection_status
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
+    from versioning import backend_version
+    from versioning import build_sha as version_build_sha
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
@@ -291,15 +297,11 @@ def connect():
 
 
 def build_version() -> str:
-    return (
-        os.environ.get("DISCVAULT_BACKEND_VERSION")
-        or os.environ.get("BUILD_VERSION")
-        or "next-dev"
-    )
+    return backend_version()
 
 
 def build_sha() -> str:
-    return os.environ.get("DISCVAULT_BUILD_SHA") or os.environ.get("BUILD_SHA") or "unknown"
+    return version_build_sha()
 
 
 def json_ready(value: Any) -> Any:
@@ -1197,11 +1199,13 @@ def plan_migration_import_job(
             409,
         )
     job_type = clean_text(plan.get("jobType")) or MIGRATION_JOB_TYPE
-    if job_type != MIGRATION_JOB_TYPE:
+    if job_type not in {MIGRATION_JOB_TYPE, "plugin.execute"}:
         raise NextApiError(f"Unsupported import job type from plugin: {job_type}", 409)
     job_payload = plan.get("jobPayload") or {}
     if not isinstance(job_payload, dict):
         raise NextApiError("Import source jobPayload must be an object", 502)
+    if job_type == "plugin.execute" and clean_text(job_payload.get("entrypoint")) != "import_source":
+        raise NextApiError(f"Unsupported plugin import entrypoint: {job_payload.get('entrypoint')}", 409)
     job_payload = dict(job_payload)
     job_payload["requestedBy"] = actor_job_payload(actor)
     job_payload["importSource"] = {
@@ -9274,7 +9278,7 @@ def ui_preview_html(
         access: ["security.toggle_auth", "security.manage_invite_only", "users.view", "users.invite", "users.manage_passkeys"],
         users: ["users.view", "users.invite", "users.disable", "users.delete", "users.assign_roles", "groups.view", "groups.create", "groups.invite"],
         roles: ["roles.view", "roles.manage", "security.manage_rbac_mode", "users.assign_roles"],
-        plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "digital_sources.connect", "digital_sources.manage", "collection.import"],
+        plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "plugins.delete", "digital_sources.connect", "digital_sources.manage", "collection.import"],
         digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
         metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"],
         backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"],
@@ -9300,7 +9304,7 @@ def ui_preview_html(
       {key: "bulk.edit", labelKey: "appAdmin.featureBulkEdit", fallback: "Bulk edit collection", permissions: ["collection.bulk_edit"]},
       {key: "containers.manage", labelKey: "appAdmin.featureContainers", fallback: "Manage box sets, vaults and collections", permissions: ["containers.create", "containers.edit", "containers.delete", "collection.bulk_edit"]},
       {key: "groups.manage", labelKey: "appAdmin.featureGroups", fallback: "Manage groups", permissions: ["groups.view", "groups.create", "groups.invite"]},
-      {key: "plugins.manage", labelKey: "appAdmin.featurePlugins", fallback: "Manage plugins", permissions: ["metadata.manage_plugins", "metadata.manage_plugin_settings", "metadata.manage_receivers"]},
+      {key: "plugins.manage", labelKey: "appAdmin.featurePlugins", fallback: "Manage plugins", permissions: ["metadata.manage_plugins", "metadata.manage_plugin_settings", "metadata.manage_receivers", "plugins.delete"]},
       {key: "digital.manage", labelKey: "appAdmin.featureDigitalSources", fallback: "Manage digital sources", permissions: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"]},
       {key: "backup.export", labelKey: "appAdmin.featureBackupExport", fallback: "Export collection backups", permissions: ["admin.backup", "collection.export_functional"]},
       {key: "backup.restore", labelKey: "appAdmin.featureBackupRestore", fallback: "Restore collection backups", permissions: ["admin.restore_functional"]},
@@ -9632,6 +9636,9 @@ def ui_preview_html(
       if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
       return hasActualPermission("metadata.manage_plugins");
     }
+    function appAdminCanDeletePlugin(plugin) {
+      return hasActualPermission("plugins.delete") && appAdminCanManagePlugin(plugin);
+    }
     function appAdminCanConfigurePlugin(plugin) {
       if (appAdminPluginHasCategory(plugin, "metadata_source")) return hasActualPermission("metadata.manage_plugin_settings");
       if (appAdminPluginHasCategory(plugin, "metadata_receiver")) return hasActualAnyPermission(["metadata.manage_plugin_settings", "metadata.manage_receivers"]);
@@ -9743,6 +9750,7 @@ def ui_preview_html(
           <div class="app-admin-plugin-actions">
             ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>` : ""}
             ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-export="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.exportPlugin", "Export"))}</button>` : ""}
+            ${appAdminCanDeletePlugin(plugin) ? `<button type="button" class="secondary-button danger" data-app-admin-plugin-delete="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.deletePlugin", "Delete"))}</button>` : ""}
             ${canViewHealth ? `<button type="button" class="secondary-button" data-app-admin-plugin-health="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.checkHealth", "Check health"))}</button>` : ""}
             ${capabilities.includes("discover_library") && appAdminCanExecutePlugin(plugin, "discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
             ${capabilities.includes("inspect_source") && appAdminCanExecutePlugin(plugin, "inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
@@ -10887,6 +10895,34 @@ def ui_preview_html(
         if (input) input.value = "";
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginImported", "Plugin imported."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function deleteAppAdminPlugin(pluginId) {
+      if (!pluginId) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanDeletePlugin(plugin)) return;
+      const firstConfirm = window.confirm(tNext("appAdmin.deletePluginConfirm", "Delete this plugin from DiscVault? This removes its files, configuration and registry entry."));
+      if (!firstConfirm) return;
+      const typed = window.prompt(tNext("appAdmin.deletePluginPrompt", "Type the plugin id to confirm deletion: {id}").replace("{id}", pluginId), "");
+      if (typed !== pluginId) {
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.deletePluginCancelled", "Plugin deletion cancelled."), "bad");
+        return;
+      }
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.deletingPlugin", "Deleting plugin..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}`, {
+          method: "DELETE",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({confirmPluginId: pluginId, confirmation: `DELETE ${pluginId}`})
+        });
+        appAdmin.plugins = (payload.registry && payload.registry.plugins) || (appAdmin.plugins || []).filter((item) => item.id !== pluginId);
+        delete appAdmin.pluginConfigs[pluginId];
+        delete appAdmin.pluginHealth[pluginId];
+        delete appAdmin.pluginExecutions[pluginId];
+        renderAppAdminPlugins();
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginDeleted", "Plugin deleted."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -13863,6 +13899,14 @@ def ui_preview_html(
       }
       const metadata = payload.metadata || payload;
       const results = metadata.results || metadata.sources || metadata.matches || [];
+      const boxSetProposal = (metadata.results || [])
+        .map((item) => item.boxSetProposal || item.raw?.boxSetProposal)
+        .find((item) => item && Array.isArray(item.movies) && item.movies.length >= 2);
+      if (addButton) {
+        addButton.textContent = boxSetProposal
+          ? tNext("importCenter.addBoxSet", "Add box-set")
+          : tNext("importCenter.addMovie", "Add movie");
+      }
       const proposal = metadata.proposal || {};
       const movieUpdates = proposal.movieUpdates || {};
       const metadataUpdates = proposal.metadataUpdates || {};
@@ -13870,6 +13914,18 @@ def ui_preview_html(
       const proposedTitle = movieUpdates.title || movieUpdates.original_title || document.getElementById("importTitleInput")?.value || "";
       const proposedYear = movieUpdates.year || document.getElementById("importYearInput")?.value || "";
       const proposedFormat = movieUpdates.format || document.getElementById("importFormatInput")?.value || "";
+      const boxSetCard = boxSetProposal ? `
+        <div class="import-result-card">
+          <div class="import-job-head">
+            <strong>${escapeHtml(boxSetProposal.title || boxSetProposal.name || tNext("importCenter.boxSetDetected", "Box-set detected"))}</strong>
+            <span class="tag good">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>
+          </div>
+          <div class="import-result-meta">${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}: ${escapeHtml(String(boxSetProposal.movies.length))}</div>
+          <div class="import-counts">
+            ${(boxSetProposal.movies || []).slice(0, 8).map((member) => `<span class="tag">${escapeHtml(member.title || "")}${member.year ? ` (${escapeHtml(member.year)})` : ""}</span>`).join("")}
+          </div>
+        </div>
+      ` : "";
       const proposalCard = (proposedTitle || Object.keys(metadataUpdates).length || Object.keys(technicalUpdates).length) ? `
         <div class="import-result-card">
           <div class="import-job-head">
@@ -13884,14 +13940,14 @@ def ui_preview_html(
         </div>
       ` : "";
       if (!Array.isArray(results) || !results.length) {
-        if (proposalCard) {
-          list.innerHTML = proposalCard;
+        if (proposalCard || boxSetCard) {
+          list.innerHTML = boxSetCard + proposalCard;
         } else {
           list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>`;
         }
         return;
       }
-      list.innerHTML = proposalCard + results.slice(0, 8).map((item) => {
+      list.innerHTML = boxSetCard + proposalCard + results.slice(0, 8).map((item) => {
         const title = item.title || item.originalTitle || item.name || item.providerId || item.pluginId || tNext("importCenter.result", "Result");
         const provider = item.providerId || item.pluginId || item.source || item.name || "";
         return `
@@ -13977,7 +14033,7 @@ def ui_preview_html(
         const payload = await authApiJson("/api/next/metadata/lookup", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({barcode, title, year, format})
+          body: JSON.stringify({barcode, title, year, format, detectBoxSets: true})
         });
         importCenter.barcodeLookup = payload;
         renderBarcodeLookup();
@@ -14004,14 +14060,25 @@ def ui_preview_html(
         const payload = await authApiJson("/api/next/import/movie", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({barcode, title, year, format})
+          body: JSON.stringify({barcode, title, year, format, detectBoxSets: true})
         });
         importCenter.addResult = payload;
         const movie = payload.movie || (payload.detail && payload.detail.movie) || {};
-        const messageKey = payload.state === "already_exists" ? "importCenter.movieExists" : "importCenter.movieAdded";
-        setImportCenterMessage(tNext(messageKey, payload.state === "already_exists" ? "Movie already exists." : "Movie added."), "good");
+        const messageKey = payload.state === "already_exists"
+          ? "importCenter.movieExists"
+          : payload.state === "box_set_created"
+            ? "importCenter.boxSetAdded"
+            : "importCenter.movieAdded";
+        const messageFallback = payload.state === "already_exists"
+          ? "Movie already exists."
+          : payload.state === "box_set_created"
+            ? "Box-set added."
+            : "Movie added.";
+        setImportCenterMessage(tNext(messageKey, messageFallback), "good");
         await loadAppSnapshot();
-        if (movie.id) openAppMovieDetail(movie.id);
+        const importedContainerId = payload.boxSet?.container?.id || payload.boxSet?.id || "";
+        if (importedContainerId) openAppContainerDetail(importedContainerId);
+        else if (movie.id) openAppMovieDetail(movie.id);
       } catch (error) {
         setImportCenterMessage(error.message || String(error), "bad");
       } finally {
@@ -16030,6 +16097,7 @@ def ui_preview_html(
         const jobButton = event.target.closest("[data-app-admin-plugin-job]");
         const moveButton = event.target.closest("[data-app-admin-plugin-move]");
         const exportButton = event.target.closest("[data-app-admin-plugin-export]");
+        const deleteButton = event.target.closest("[data-app-admin-plugin-delete]");
         const movieVaultRefreshButton = event.target.closest("[data-app-admin-movievault-refresh]");
         const movieVaultResetButton = event.target.closest("[data-app-admin-movievault-reset]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
@@ -16039,6 +16107,7 @@ def ui_preview_html(
         if (jobButton) queueAppAdminPluginJob(jobButton.dataset.appAdminPluginJob, jobButton.dataset.entrypoint);
         if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down", moveButton.dataset.sectionCategory || "");
         if (exportButton) exportAppAdminPlugin(exportButton.dataset.appAdminPluginExport);
+        if (deleteButton) deleteAppAdminPlugin(deleteButton.dataset.appAdminPluginDelete);
         if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(false);
         if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(true);
       });
@@ -18713,6 +18782,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             </div>
             <div class="admin-controls">
               <button type="button" data-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${plugin.enabled ? "Disable" : "Enable"}</button>
+              <button type="button" class="danger" data-admin-plugin-delete="${escapeHtml(plugin.id)}">Delete</button>
               <button type="button" data-admin-plugin-health="${escapeHtml(plugin.id)}">Check Health</button>
               ${capabilities.includes("discover_library") ? `<button type="button" data-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">Discover</button>` : ""}
               ${capabilities.includes("inspect_source") ? `<button type="button" data-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">Inspect Source</button>` : ""}
@@ -19218,6 +19288,26 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAdminSummary();
       setAdminStatus(`${pluginId} ${enabled ? "enabled" : "disabled"}.`, "good");
     }
+    async function deleteAdminPlugin(pluginId) {
+      if (!pluginId) return;
+      if (!window.confirm(`Delete plugin ${pluginId} from DiscVault?`)) return;
+      const typed = window.prompt(`Type the plugin id to confirm deletion: ${pluginId}`, "");
+      if (typed !== pluginId) {
+        setAdminStatus("Plugin deletion cancelled.", "bad");
+        return;
+      }
+      const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}`, {
+        method: "DELETE",
+        body: JSON.stringify({confirmPluginId: pluginId, confirmation: `DELETE ${pluginId}`})
+      });
+      adminState.plugins = (payload.registry && payload.registry.plugins) || adminState.plugins.filter((plugin) => plugin.id !== pluginId);
+      delete adminState.pluginConfigs[pluginId];
+      delete adminState.pluginHealth[pluginId];
+      delete adminState.pluginExecutions[pluginId];
+      renderAdminPlugins(adminState.plugins);
+      renderAdminSummary();
+      setAdminStatus(`${pluginId} deleted.`, "good");
+    }
     async function checkPluginHealth(pluginId) {
       const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/health`, {
         headers: authHeaders()
@@ -19488,7 +19578,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!panel || panel.dataset.bound === "true") return;
       panel.dataset.bound = "true";
       panel.addEventListener("click", (event) => {
-        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-registration-mode], [data-admin-plugin-enable], [data-admin-plugin-health], [data-admin-plugin-execute], [data-admin-plugin-job], [data-admin-plugin-save], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
+        const target = event.target.closest("[data-admin-action], [data-admin-tab], [data-admin-rbac-mode], [data-admin-registration-mode], [data-admin-plugin-enable], [data-admin-plugin-delete], [data-admin-plugin-health], [data-admin-plugin-execute], [data-admin-plugin-job], [data-admin-plugin-save], [data-admin-user-status], [data-admin-user-delete], [data-admin-owner-transfer], [data-admin-credential-delete], [data-admin-invite-delete]");
         if (!target) return;
         event.preventDefault();
         const action = target.dataset.adminAction;
@@ -19501,6 +19591,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           task = setInviteOnly(target.dataset.adminRegistrationMode === "invite");
         } else if (target.dataset.adminPluginEnable) {
           task = setPluginEnabled(target.dataset.adminPluginEnable, target.dataset.enabled === "true");
+        } else if (target.dataset.adminPluginDelete) {
+          task = deleteAdminPlugin(target.dataset.adminPluginDelete);
         } else if (target.dataset.adminPluginHealth) {
           task = checkPluginHealth(target.dataset.adminPluginHealth);
         } else if (target.dataset.adminPluginExecute) {
@@ -21888,6 +21980,17 @@ def require_plugin_action_permission(conn, plugin: dict[str, Any], entrypoint: s
     return require_any_next_permission(conn, plugin_action_permissions(plugin, entrypoint))
 
 
+def require_plugin_delete_permission(conn, plugin: dict[str, Any]) -> dict[str, Any]:
+    actor = require_any_next_permission(conn, ("plugins.delete",))
+    if actor.get("role") == "owner":
+        return actor
+    permissions = set(actor.get("permissions") or [])
+    if not permissions.intersection(plugin_manage_permissions(plugin)):
+        required = ", ".join(("plugins.delete", *plugin_manage_permissions(plugin)))
+        raise NextApiError(f"One of these permissions is required: {required}", 403)
+    return actor
+
+
 def plugin_archive_filename(plugin: dict[str, Any]) -> str:
     manifest = plugin.get("manifest") or {}
     name = str(plugin.get("id") or manifest.get("id") or plugin.get("name") or "plugin").strip()
@@ -21997,6 +22100,63 @@ def install_plugin_from_root(plugin_root: Path, manifest: dict[str, Any]) -> Pat
         shutil.rmtree(target)
     shutil.copytree(plugin_root, target)
     return target
+
+
+def plugin_source_path_for_delete(plugin: dict[str, Any]) -> Path | None:
+    raw_path = str(plugin.get("sourcePath") or "").strip()
+    if not raw_path:
+        return None
+    source_path = Path(raw_path).resolve()
+    allowed_roots = [path.resolve() for path in plugin_paths()]
+    for root in allowed_roots:
+        if source_path == root:
+            raise NextApiError("Refusing to delete the plugin root directory", 400)
+        if root in source_path.parents:
+            return source_path
+    raise NextApiError("Plugin source path is outside the configured plugin roots", 400)
+
+
+def move_plugin_source_to_trash(plugin: dict[str, Any]) -> tuple[Path | None, Path | None, Path | None]:
+    source_path = plugin_source_path_for_delete(plugin)
+    if not source_path or not source_path.exists():
+        return None, None, None
+    trash_root = Path(tempfile.mkdtemp(prefix="discvault-plugin-delete-"))
+    trash_path = trash_root / source_path.name
+    shutil.move(str(source_path), str(trash_path))
+    return source_path, trash_path, trash_root
+
+
+def restore_plugin_source(source_path: Path | None, trash_path: Path | None) -> None:
+    if not source_path or not trash_path or not trash_path.exists():
+        return
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    if source_path.exists():
+        return
+    shutil.move(str(trash_path), str(source_path))
+
+
+def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
+    deleted: dict[str, int] = {}
+    with conn.cursor() as cur:
+        if table_exists(conn, "metadata_field_provenance"):
+            cur.execute("DELETE FROM metadata_field_provenance WHERE plugin_id=%s", (plugin_id,))
+            deleted["metadataFieldProvenance"] = cur.rowcount
+        if table_exists(conn, "metadata_plugin_settings"):
+            cur.execute("DELETE FROM metadata_plugin_settings WHERE plugin_id=%s", (plugin_id,))
+            deleted["metadataPluginSettings"] = cur.rowcount
+        if table_exists(conn, "metadata_lookup_cache"):
+            cur.execute("DELETE FROM metadata_lookup_cache WHERE plugin_id=%s", (plugin_id,))
+            deleted["metadataLookupCache"] = cur.rowcount
+        if table_exists(conn, "metadata_plugins"):
+            cur.execute("DELETE FROM metadata_plugins WHERE id=%s", (plugin_id,))
+            deleted["metadataPlugins"] = cur.rowcount
+        if table_exists(conn, "plugin_settings"):
+            cur.execute("DELETE FROM plugin_settings WHERE plugin_id=%s", (plugin_id,))
+            deleted["pluginSettings"] = cur.rowcount
+        if table_exists(conn, "plugins"):
+            cur.execute("DELETE FROM plugins WHERE id=%s", (plugin_id,))
+            deleted["plugins"] = cur.rowcount
+    return deleted
 
 
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
@@ -27317,6 +27477,82 @@ def register_routes(flask_app: Flask) -> None:
             plugin = next((item for item in registry["plugins"] if item["id"] == manifest["id"]), None)
         return response({"status": "ok", "plugin": plugin, "registry": registry})
 
+    @flask_app.delete("/api/next/plugins/<plugin_id>")
+    def delete_plugin(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        body = request.get_json(silent=True) or {}
+        confirm_plugin_id = clean_text(body.get("confirmPluginId") or body.get("pluginId"))
+        confirmation = clean_text(body.get("confirmation"))
+        expected_confirmation = f"DELETE {plugin_id}"
+        if confirm_plugin_id != plugin_id or confirmation != expected_confirmation:
+            raise NextApiError(
+                f"Type the plugin id and confirmation phrase exactly: {expected_confirmation}",
+                400,
+            )
+
+        source_path: Path | None = None
+        trash_path: Path | None = None
+        trash_root: Path | None = None
+        plugin: dict[str, Any] | None = None
+        deleted: dict[str, int] = {}
+        actor: dict[str, Any] | None = None
+        try:
+            with connect() as conn:
+                require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
+                if not table_exists(conn, "plugins"):
+                    raise NextApiError("Plugin registry table is not available", 503)
+                if table_exists(conn, "metadata_plugins"):
+                    sync_metadata_plugin_registry(conn)
+                else:
+                    sync_plugin_registry(conn, table_exists, Jsonb)
+                registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+                plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+                if not plugin:
+                    raise NextApiError("Plugin not found", 404)
+                actor = require_plugin_delete_permission(conn, plugin)
+
+                source_path, trash_path, trash_root = move_plugin_source_to_trash(plugin)
+                with conn.transaction():
+                    deleted = delete_plugin_records(conn, plugin_id)
+                    audit_event(
+                        conn,
+                        event_type="plugin.deleted",
+                        category="plugins",
+                        actor=actor,
+                        target_type="plugin",
+                        target_id=plugin_id,
+                        summary=f"Deleted plugin {plugin_id}",
+                        metadata={
+                            "pluginId": plugin_id,
+                            "name": plugin.get("name"),
+                            "version": plugin.get("version"),
+                            "categories": plugin.get("categories") or [],
+                            "sourcePath": str(source_path) if source_path else None,
+                            "deleted": deleted,
+                        },
+                    )
+                registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+        except Exception:
+            restore_plugin_source(source_path, trash_path)
+            raise
+        finally:
+            if trash_root:
+                shutil.rmtree(trash_root, ignore_errors=True)
+
+        return response(
+            {
+                "status": "ok",
+                "deleted": {
+                    "pluginId": plugin_id,
+                    "sourcePath": str(source_path) if source_path else None,
+                    "records": deleted,
+                },
+                "registry": registry,
+            }
+        )
+
     @flask_app.patch("/api/next/plugins/<plugin_id>")
     def update_plugin(plugin_id: str):
         plugin_id = str(plugin_id or "").strip()
@@ -28246,6 +28482,238 @@ def register_routes(flask_app: Flask) -> None:
                 )
         return response({"status": "ok", **result}, 201)
 
+    def metadata_box_set_proposal(metadata_result: dict[str, Any]) -> dict[str, Any]:
+        for result in metadata_result.get("results") or []:
+            if not isinstance(result, dict):
+                continue
+            proposal = result.get("boxSetProposal") or (result.get("raw") or {}).get("boxSetProposal")
+            if not isinstance(proposal, dict):
+                continue
+            members = proposal.get("movies") or proposal.get("members") or []
+            if len([item for item in members if isinstance(item, dict) and clean_text(item.get("title"))]) >= 2:
+                return proposal
+        return {}
+
+    def synthetic_box_set_member_barcode(box_set_title: str, parent_barcode: str, index: int) -> str:
+        base = clean_text(parent_barcode) or clean_text(box_set_title) or "box-set"
+        clean = re.sub(r"[^A-Za-z0-9]+", "_", base).strip("_").upper()[:48] or "BOXSET"
+        return f"IMPORT-{clean}-BOX-{index:02d}"
+
+    def box_set_member_identifiers(member: dict[str, Any]) -> dict[str, str]:
+        identifiers: dict[str, str] = {}
+        tmdb_id = clean_text(member.get("tmdbId") or member.get("tmdb_id"))
+        imdb_id = clean_text(member.get("imdbId") or member.get("imdb_id"))
+        if tmdb_id:
+            identifiers["tmdb"] = tmdb_id
+        if imdb_id:
+            identifiers["imdb"] = imdb_id
+        return identifiers
+
+    def existing_movie_for_box_set_member(conn, member: dict[str, Any]) -> UUID | None:
+        barcode = clean_text(member.get("barcode"))
+        with conn.cursor() as cur:
+            if barcode:
+                cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
+                row = cur.fetchone()
+                if row:
+                    return row["id"]
+            identifiers = box_set_member_identifiers(member)
+            if identifiers and table_exists(conn, "movie_identifiers"):
+                for provider, identifier in identifiers.items():
+                    cur.execute(
+                        """
+                        SELECT movie_id
+                        FROM movie_identifiers
+                        WHERE provider_id=%s AND identifier_type='movie_id' AND identifier=%s
+                        LIMIT 1
+                        """,
+                        (provider, identifier),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        return row["movie_id"]
+        return None
+
+    def box_set_member_import_payload(member: dict[str, Any], *, box_set_title: str, fallback_format: str, barcode: str) -> dict[str, Any]:
+        metadata = {}
+        for key in (
+            "genre",
+            "director",
+            "actor",
+            "producer",
+            "studios",
+            "poster_url",
+            "posterUrl",
+            "backdrop_url",
+            "backdropUrl",
+            "backdrop_urls",
+            "backdropUrls",
+            "identifiedBy",
+            "memberConfidence",
+            "sourceRef",
+        ):
+            value = member.get(key)
+            if value not in (None, "", [], {}):
+                metadata[key] = value
+        metadata["box_set"] = box_set_title
+        return {
+            "barcode": barcode,
+            "title": clean_text(member.get("title")),
+            "originalTitle": clean_text(member.get("originalTitle") or member.get("original_title")),
+            "year": clean_text(member.get("year")),
+            "releaseDate": clean_text(member.get("releaseDate") or member.get("release_date")),
+            "format": clean_text(member.get("format")) or fallback_format,
+            "overview": clean_text(member.get("overview") or member.get("plot")),
+            "runtimeMinutes": member.get("runtimeMinutes") or member.get("runtime_minutes") or member.get("runtime"),
+            "country": clean_text(member.get("country")),
+            "language": clean_text(member.get("language")),
+            "rating": clean_text(member.get("rating")),
+            "metadata": metadata,
+        }
+
+    def box_set_member_metadata_proposal(member: dict[str, Any]) -> dict[str, Any]:
+        metadata_updates = {}
+        for source, target in (
+            ("genre", "genre"),
+            ("director", "director"),
+            ("actor", "actor"),
+            ("producer", "producer"),
+            ("studios", "studios"),
+            ("posterUrl", "poster_url"),
+            ("poster_url", "poster_url"),
+            ("backdropUrl", "backdrop_url"),
+            ("backdrop_url", "backdrop_url"),
+            ("backdropUrls", "backdrop_urls"),
+            ("backdrop_urls", "backdrop_urls"),
+        ):
+            value = member.get(source)
+            if value not in (None, "", [], {}):
+                metadata_updates[target] = value
+        media_updates = {}
+        poster_url = clean_text(member.get("posterUrl") or member.get("poster_url") or member.get("poster"))
+        backdrop_url = clean_text(member.get("backdropUrl") or member.get("backdrop_url") or member.get("backdrop"))
+        if poster_url:
+            media_updates["poster"] = {
+                "kind": "poster",
+                "sourceUrl": poster_url,
+                "options": [poster_url],
+                "providerId": "movievault",
+                "sourceLabel": "MovieVault",
+                "sourceRef": clean_text(member.get("sourceRef")),
+            }
+        if backdrop_url:
+            media_updates["backdrop"] = {
+                "kind": "backdrop",
+                "sourceUrl": backdrop_url,
+                "options": [backdrop_url],
+                "providerId": "movievault",
+                "sourceLabel": "MovieVault",
+                "sourceRef": clean_text(member.get("sourceRef")),
+            }
+        return {
+            "metadataUpdates": metadata_updates,
+            "identifiers": box_set_member_identifiers(member),
+            "mediaUpdates": media_updates,
+        }
+
+    def import_box_set_proposal(conn, proposal: dict[str, Any], body: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
+        if not table_exists(conn, "containers") or not table_exists(conn, "container_movies"):
+            raise NextApiError("Container tables are not available", 503)
+        title = clean_text(proposal.get("title") or proposal.get("name") or body.get("title"))
+        members = [item for item in (proposal.get("movies") or proposal.get("members") or []) if isinstance(item, dict) and clean_text(item.get("title"))]
+        if not title or len(members) < 2:
+            raise NextApiError("Box-set proposal requires a title and at least two members.", 422)
+        fallback_format = clean_text(proposal.get("format") or body.get("format")) or "4K UHD"
+        barcode = clean_text(proposal.get("barcode") or body.get("barcode"))
+        container_uuid = uuid.uuid4()
+        container_public_id = f"movievault-box-set-{container_uuid.hex[:12]}"
+        container_metadata = {
+            "source": "MovieVault",
+            "import_source": "movievault_box_set",
+            "movievault_id": proposal.get("movievault_id"),
+            "member_source": proposal.get("member_source"),
+            "member_confidence": proposal.get("member_confidence"),
+            "metadata_plugin_fallbacks": proposal.get("metadata_plugin_fallbacks") or [],
+            "poster_url": proposal.get("poster_url") or proposal.get("poster"),
+            "backdrop_url": proposal.get("backdrop_url") or proposal.get("backdrop"),
+            "backdrop_urls": proposal.get("backdrop_urls") or proposal.get("backdropUrls") or [],
+        }
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO containers (
+                    id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                )
+                VALUES (%s, %s, 'box_set', %s, %s, NULL, %s, %s, %s, now(), now())
+                """,
+                (
+                    container_uuid,
+                    container_public_id,
+                    title,
+                    barcode or None,
+                    clean_text(proposal.get("year") or proposal.get("year_range")),
+                    clean_text(proposal.get("description")),
+                    Jsonb(json_ready(container_metadata)),
+                ),
+            )
+
+        imported_movies = []
+        applied_members = []
+        for index, member in enumerate(members[:50], start=1):
+            existing_id = existing_movie_for_box_set_member(conn, member)
+            member_barcode = clean_text(member.get("barcode")) or synthetic_box_set_member_barcode(title, barcode, index)
+            payload = box_set_member_import_payload(
+                member,
+                box_set_title=title,
+                fallback_format=fallback_format,
+                barcode=member_barcode,
+            )
+            if existing_id:
+                movie_id = existing_id
+            else:
+                mutation_id = f"import-box-set-member-{uuid.uuid4()}"
+                upsert = apply_movie_upsert(
+                    conn,
+                    client_id="next-import-center",
+                    idem_key=f"next-import-center:{mutation_id}",
+                    mutation={
+                        "clientMutationId": mutation_id,
+                        "entityType": "movie",
+                        "operation": "upsert",
+                        "payload": payload,
+                    },
+                )
+                movie_id = upsert["entityId"]
+            applied = apply_metadata_proposal(conn, movie_id, box_set_member_metadata_proposal(member), actor=actor)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO container_movies (container_id, movie_id, sort_order, created_at)
+                    VALUES (%s, %s, %s, now())
+                    ON CONFLICT (container_id, movie_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
+                    """,
+                    (container_uuid, movie_id, index),
+                )
+            detail = movie_detail_entity(conn, movie_id)
+            imported_movies.append(detail.get("movie") if detail else {"id": str(movie_id), "title": payload.get("title")})
+            applied_members.append({"movieId": str(movie_id), "applied": applied})
+
+        audit_event(
+            conn,
+            event_type="box_set.imported",
+            category="import",
+            actor=actor,
+            target_type="container",
+            target_id=container_uuid,
+            summary=f"Imported MovieVault box-set {title}",
+            metadata={"barcode": barcode, "members": len(imported_movies), "source": proposal.get("member_source")},
+        )
+        return {
+            "container": container_detail_entity(conn, container_uuid),
+            "movies": imported_movies,
+            "appliedMembers": applied_members,
+        }
+
     @flask_app.post("/api/next/metadata/lookup")
     def metadata_lookup():
         body = request.get_json(silent=True) or {}
@@ -28307,7 +28775,24 @@ def register_routes(flask_app: Flask) -> None:
                     )
 
             with conn.transaction():
-                metadata_result = lookup_metadata_sources(conn, body, actor)
+                metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
+                box_set_proposal = metadata_box_set_proposal(metadata_result)
+                if box_set_proposal:
+                    box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
+                    first_movie = (box_set_import.get("movies") or [{}])[0]
+                    return response(
+                        {
+                            "status": "ok",
+                            "state": "box_set_created",
+                            "movie": first_movie,
+                            "detail": movie_detail_entity(conn, first_movie.get("id")) if first_movie.get("id") else None,
+                            "boxSet": box_set_import.get("container"),
+                            "movies": box_set_import.get("movies") or [],
+                            "metadata": metadata_result,
+                            "applied": {"boxSet": box_set_import.get("appliedMembers") or []},
+                        },
+                        201,
+                    )
                 proposal = metadata_result.get("proposal") or {}
                 movie_updates = proposal.get("movieUpdates") or {}
                 metadata_updates = proposal.get("metadataUpdates") or {}

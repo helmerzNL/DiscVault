@@ -1,0 +1,85 @@
+import os
+import sys
+import types
+import unittest
+
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+sys.modules.setdefault(
+    "requests",
+    types.SimpleNamespace(
+        get=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests"))
+    ),
+)
+
+from app.backend.next_plugins.movievault import plugin as movievault_plugin
+
+
+class MovieVaultPluginBoxSetTests(unittest.TestCase):
+    def test_box_set_members_are_normalized_and_identified_by_metadata_bridge(self):
+        lookups = []
+
+        def metadata_lookup(payload, **_kwargs):
+            lookups.append(payload)
+            title = payload["title"]
+            return {
+                "sourceOrder": ["tmdb", "omdb", "bluray_com"],
+                "sourceSummary": [{"pluginId": "tmdb", "state": "applied"}],
+                "proposalStats": {"updateFields": 4},
+                "proposal": {
+                    "movieUpdates": {
+                        "title": title,
+                        "year": "1985",
+                        "overview": f"{title} overview",
+                    },
+                    "metadataUpdates": {
+                        "poster_url": f"https://image.example/{title.lower().replace(' ', '-')}.jpg",
+                    },
+                    "identifiers": {"tmdb": "105", "imdb": "tt0088763"},
+                    "mediaUpdates": {},
+                },
+            }
+
+        proposal = movievault_plugin._normalize_box_set_proposal(
+            {
+                "items": [
+                    {
+                        "boxSetTitle": "Back to the Future Trilogy",
+                        "barcode": "5051892000000",
+                        "movies": [
+                            {"title": "Back to the Future", "year": "1985"},
+                            {"title": "Back to the Future Part II"},
+                        ],
+                    }
+                ]
+            },
+            {"metadataLookup": metadata_lookup},
+        )
+
+        self.assertEqual(proposal["title"], "Back to the Future Trilogy")
+        self.assertEqual(proposal["member_count"], 2)
+        self.assertEqual(proposal["member_source"], "MovieVault + metadata plugins")
+        self.assertEqual(len(lookups), 2)
+        self.assertEqual(proposal["movies"][0]["tmdbId"], "105")
+        self.assertEqual(proposal["movies"][0]["imdbId"], "tt0088763")
+        self.assertEqual(proposal["movies"][0]["memberConfidence"], "identified_by_metadata_plugins")
+        self.assertIn("poster_url", proposal["movies"][0])
+        self.assertEqual(proposal["metadata_plugin_fallbacks"][0]["sourceOrder"], ["tmdb", "omdb", "bluray_com"])
+
+    def test_box_set_candidates_returns_miss_when_movievault_has_no_members(self):
+        original_get = movievault_plugin._get
+        try:
+            movievault_plugin._get = lambda *_args, **_kwargs: {"items": [{"title": "Empty Box Set", "movies": []}]}
+            result = movievault_plugin.box_set_candidates({"title": "Empty Box Set"}, {})
+        finally:
+            movievault_plugin._get = original_get
+
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(result["boxSetProposal"], {})
+
+
+if __name__ == "__main__":
+    unittest.main()

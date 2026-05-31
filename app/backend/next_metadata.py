@@ -522,6 +522,7 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "tmdbId": clean_text(payload.get("tmdbId") or payload.get("tmdb_id")),
         "imdbId": clean_text(payload.get("imdbId") or payload.get("imdb_id")),
         "memberOfBoxSet": bool(payload.get("memberOfBoxSet") or payload.get("member_of_box_set")),
+        "detectBoxSets": bool(payload.get("detectBoxSets") or payload.get("detect_box_sets") or payload.get("importBoxSets") or payload.get("import_box_sets")),
         "parentBoxSets": payload.get("parentBoxSets") or payload.get("parent_box_sets") or [],
     }
 
@@ -551,7 +552,7 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
         add("movie_details", base_payload)
     if title and "movie_details" not in capabilities:
         add("search_title", base_payload)
-    if query.get("memberOfBoxSet") and (title or fallback):
+    if (query.get("memberOfBoxSet") or query.get("detectBoxSets")) and (title or fallback or external_barcode):
         add("box_set_candidates", base_payload)
     return plan
 
@@ -1112,16 +1113,45 @@ def run_metadata_source_pipeline(
     current: dict[str, Any] | None = None,
     technical_current: dict[str, Any] | None = None,
     actor: dict[str, Any] | None = None,
+    exclude_plugin_ids: set[str] | None = None,
+    enable_metadata_lookup_bridge: bool = True,
 ) -> dict[str, Any]:
-    plugins = metadata_source_plugins(conn)
+    excluded = {str(item) for item in (exclude_plugin_ids or set()) if str(item)}
+    plugins = [plugin for plugin in metadata_source_plugins(conn) if str(plugin.get("id") or "") not in excluded]
     overwrite_enabled = preferred_provider_overwrite(conn)
     executions: list[dict[str, Any]] = []
     normalized_results: list[dict[str, Any]] = []
     target_format = query.get("format") or (current or {}).get("format") or ""
 
+    def metadata_lookup_bridge(
+        lookup_payload: dict[str, Any] | None = None,
+        *,
+        excludeProviders: list[str] | tuple[str, ...] | set[str] | None = None,
+        excludePluginIds: list[str] | tuple[str, ...] | set[str] | None = None,
+    ) -> dict[str, Any]:
+        payload = lookup_payload if isinstance(lookup_payload, dict) else {}
+        bridge_excluded = {MOVIEVAULT_PLUGIN_ID}
+        bridge_excluded.update(str(item) for item in (excludeProviders or []) if str(item))
+        bridge_excluded.update(str(item) for item in (excludePluginIds or []) if str(item))
+        bridge_query = query_from_payload(payload)
+        if not bridge_query.get("format") and query.get("format"):
+            bridge_query["format"] = query.get("format")
+            bridge_query["normalizedFormat"] = normalize_media_format(query.get("format"))
+        return run_metadata_source_pipeline(
+            conn,
+            query=bridge_query,
+            current={"format": bridge_query.get("format") or "", "metadata": {}},
+            technical_current={},
+            actor=actor,
+            exclude_plugin_ids=bridge_excluded,
+            enable_metadata_lookup_bridge=False,
+        )
+
     for plugin in plugins:
         config = plugin_config_from_db(conn, plugin["id"])
         context = plugin_execution_context(conn, plugin, config, actor)
+        if enable_metadata_lookup_bridge and str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID:
+            context["metadataLookup"] = metadata_lookup_bridge
         for planned in plugin_execution_plan(plugin, query):
             entrypoint = planned["entrypoint"]
             if plugin_requires_config(plugin, config, entrypoint):

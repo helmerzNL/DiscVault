@@ -34,8 +34,11 @@ jobs:
         id: version
         run: |
           SHA="$(git rev-parse HEAD)"
+          APP_VERSION="$(tr -d '[:space:]' < app/VERSION)"
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
+          elif [[ -n "${APP_VERSION}" ]]; then
+            VERSION="${APP_VERSION}"
           elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
             VERSION="beta-${SHA:0:7}"
           else
