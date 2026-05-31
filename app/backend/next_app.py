@@ -7894,6 +7894,16 @@ def ui_preview_html(
       });
       return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
     }
+    function appAdminPermissionTags(permissions, limit) {
+      const values = permissions || [];
+      const shown = values
+        .slice(0, limit || 8)
+        .map((permission) => `<span class="tag">${escapeHtml(permission)}</span>`);
+      if (values.length > shown.length) {
+        shown.push(`<span class="tag blue">+${formatNumber(values.length - shown.length)}</span>`);
+      }
+      return shown.join("") || `<span class="tag">${escapeHtml(tNext("appAdmin.noPermissions", "No permissions found."))}</span>`;
+    }
     function appAdminPermissionCheckboxes(selectedPermissions, disabled = false) {
       const selected = new Set((selectedPermissions || []).map(String));
       const domains = appAdminPermissionDomains((appAdmin.rbac || {}).permissions || []);
@@ -7939,7 +7949,7 @@ def ui_preview_html(
               <span class="tag ${allowed ? "good" : "blue"}">${escapeHtml(statusLabel)}</span>
             </div>
             <div class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.featureRequires", "Requires one of"))}</div>
-            <div class="admin-member-cloud">${permissionTags(feature.permissions || [], 4)}</div>
+            <div class="admin-member-cloud">${appAdminPermissionTags(feature.permissions || [], 4)}</div>
           </div>
         `;
       }).join("")}</div>`;
@@ -8103,7 +8113,7 @@ def ui_preview_html(
                   &middot;
                   ${escapeHtml(formatNumber((role.permissions || []).length))} ${escapeHtml(tNext("appAdmin.permissions", "permissions"))}
                 </div>
-                <div class="admin-member-cloud">${permissionTags(role.permissions || [], 10)}</div>
+                <div class="admin-member-cloud">${appAdminPermissionTags(role.permissions || [], 10)}</div>
               </div>
               <div class="profile-passkey-actions">
                 <button type="button" class="secondary-button" data-app-admin-role-select="${escapeHtml(role.id)}">${escapeHtml(tNext("common.view", "View"))}</button>
