@@ -343,6 +343,53 @@ def register_next_auth_routes(
                 (key, Jsonb(value), is_secret),
             )
 
+    def audit_event(
+        conn,
+        *,
+        event_type: str,
+        category: str = "security",
+        actor: dict[str, Any] | None = None,
+        target_type: str | None = None,
+        target_id: Any = None,
+        summary: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if not table_exists(conn, "audit_events"):
+            return
+        actor = actor or {}
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO audit_events (
+                    event_type,
+                    category,
+                    actor_user_id,
+                    actor_username,
+                    actor_role,
+                    target_type,
+                    target_id,
+                    summary,
+                    metadata,
+                    request_ip,
+                    user_agent
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    event_type,
+                    category,
+                    actor.get("id"),
+                    actor.get("username"),
+                    actor.get("role"),
+                    target_type,
+                    str(target_id) if target_id is not None else None,
+                    summary,
+                    Jsonb(metadata or {}),
+                    request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip(),
+                    request.headers.get("User-Agent"),
+                ),
+            )
+
     def configured_auth_enabled(conn) -> bool:
         return bool(setting_value(conn, "auth_enabled", False))
 
@@ -1117,6 +1164,25 @@ def register_next_auth_routes(
                             (user_id, _hash_invite_code(invite_code), username),
                         )
                 set_setting(conn, "auth_enabled", True)
+                audit_event(
+                    conn,
+                    event_type="auth.passkey_registered",
+                    category="security",
+                    actor={
+                        "id": caller.get("id") if caller else user_id,
+                        "username": caller.get("username") if caller else username,
+                        "role": primary_role(conn, caller["id"]) if caller else primary_role(conn, user_id),
+                    },
+                    target_type="user",
+                    target_id=user_id,
+                    summary=f"Registered passkey for {username}",
+                    metadata={
+                        "username": username,
+                        "createdUser": not bool(existing_user),
+                        "credentialName": credential_name,
+                        "inviteUsed": bool(invite_code),
+                    },
+                )
 
         token = _create_token(str(user_id), username)
         return cookie_response({"status": "ok", "token": token, "username": username}, token)
@@ -1204,6 +1270,20 @@ def register_next_auth_routes(
                         """,
                         (new_sign_count, credential_id),
                     )
+                audit_event(
+                    conn,
+                    event_type="auth.login",
+                    category="security",
+                    actor={
+                        "id": stored["user_id"],
+                        "username": stored["username"],
+                        "role": primary_role(conn, stored["user_id"]),
+                    },
+                    target_type="user",
+                    target_id=stored["user_id"],
+                    summary=f"{stored['username']} logged in with a passkey",
+                    metadata={"credentialId": credential_id},
+                )
 
         token = _create_token(str(stored["user_id"]), stored["username"])
         return cookie_response({"status": "ok", "token": token, "username": stored["username"]}, token)
@@ -1261,6 +1341,20 @@ def register_next_auth_routes(
                         (row["user_id"],),
                     )
                     remaining = int(cur.fetchone()["count"])
+                audit_event(
+                    conn,
+                    event_type="auth.recovery_login",
+                    category="security",
+                    actor={
+                        "id": row["user_id"],
+                        "username": row["username"],
+                        "role": primary_role(conn, row["user_id"]),
+                    },
+                    target_type="user",
+                    target_id=row["user_id"],
+                    summary=f"{row['username']} logged in with a recovery code",
+                    metadata={"remainingRecoveryCodes": remaining},
+                )
 
         token = _create_token(str(row["user_id"]), row["username"])
         return cookie_response(
@@ -1369,6 +1463,20 @@ def register_next_auth_routes(
                     cur.execute("UPDATE users SET updated_at=now() WHERE id IN (%s, %s)", (owner["id"], target_user_id))
                 assign_role(conn, target_user_id, "owner")
                 assign_role(conn, owner["id"], "admin")
+                audit_event(
+                    conn,
+                    event_type="auth.owner_transferred",
+                    category="security",
+                    actor=owner,
+                    target_type="user",
+                    target_id=target_user_id,
+                    summary=f"Ownership transferred to {target['username']}",
+                    metadata={
+                        "previousOwnerId": str(owner["id"]),
+                        "newOwnerId": str(target_user_id),
+                        "newOwnerUsername": target["username"],
+                    },
+                )
             updated_owner = user_admin_row(conn, owner["id"])
             updated_target = user_admin_row(conn, target_user_id)
             payload = auth_status_payload(conn)
@@ -1408,11 +1516,21 @@ def register_next_auth_routes(
         body = request.get_json(silent=True) or {}
         mode = str(body.get("mode") or "").strip().lower()
         with connect() as conn:
-            require_owner(conn)
+            owner = require_owner(conn)
             if mode == "advanced" and not feature_enabled(conn, "rbac.advanced_mode", True):
                 raise next_api_error("Advanced RBAC mode is not enabled by the current license", 403)
             with conn.transaction():
                 set_rbac_mode(conn, mode)
+                audit_event(
+                    conn,
+                    event_type="rbac.mode_changed",
+                    category="security",
+                    actor=owner,
+                    target_type="rbac",
+                    target_id="mode",
+                    summary=f"RBAC mode changed to {mode}",
+                    metadata={"mode": mode},
+                )
             return response(
                 {
                     "status": "ok",
@@ -1476,13 +1594,23 @@ def register_next_auth_routes(
                             """,
                             (role_id, permission_key),
                         )
+                audit_event(
+                    conn,
+                    event_type="rbac.role_created",
+                    category="security",
+                    actor=owner,
+                    target_type="role",
+                    target_id=role_id,
+                    summary=f"Created role {role_key}",
+                    metadata={"key": role_key, "name": name, "permissions": permissions},
+                )
             return response({"status": "ok", "role": role_by_identifier(conn, role_key)}, 201)
 
     @route("/api/next/auth/roles/<role_id>", "/api/auth/roles/<role_id>", methods=["PATCH"])
     def update_role(role_id: str):
         body = request.get_json(silent=True) or {}
         with connect() as conn:
-            require_owner(conn)
+            owner = require_owner(conn)
             custom_role_mutations_allowed(conn)
             role = role_by_identifier(conn, role_id)
             if not role:
@@ -1524,12 +1652,27 @@ def register_next_auth_routes(
                                 """,
                                 (role["id"], permission_key),
                             )
+                audit_event(
+                    conn,
+                    event_type="rbac.role_updated",
+                    category="security",
+                    actor=owner,
+                    target_type="role",
+                    target_id=role["id"],
+                    summary=f"Updated role {role['key']}",
+                    metadata={
+                        "key": role["key"],
+                        "fields": sorted([item.split("=")[0] for item in assignments]),
+                        "permissionsChanged": permissions is not None,
+                        "permissions": permissions,
+                    },
+                )
             return response({"status": "ok", "role": role_by_identifier(conn, str(role["id"]))})
 
     @route("/api/next/auth/roles/<role_id>", "/api/auth/roles/<role_id>", methods=["DELETE"])
     def delete_role(role_id: str):
         with connect() as conn:
-            require_owner(conn)
+            owner = require_owner(conn)
             custom_role_mutations_allowed(conn)
             role = role_by_identifier(conn, role_id)
             if not role:
@@ -1544,6 +1687,16 @@ def register_next_auth_routes(
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute("DELETE FROM roles WHERE id=%s", (role["id"],))
+                audit_event(
+                    conn,
+                    event_type="rbac.role_deleted",
+                    category="security",
+                    actor=owner,
+                    target_type="role",
+                    target_id=role["id"],
+                    summary=f"Deleted role {role['key']}",
+                    metadata={"key": role["key"], "name": role["name"]},
+                )
             return response({"status": "deleted"})
 
     @route("/api/next/auth/users", "/api/auth/users", methods=["GET"])
@@ -1620,6 +1773,16 @@ def register_next_auth_routes(
                         f"UPDATE users SET {', '.join(assignments)}, updated_at=now() WHERE id=%s",
                         (*params, user_uuid),
                     )
+                audit_event(
+                    conn,
+                    event_type="user.updated",
+                    category="security",
+                    actor=admin,
+                    target_type="user",
+                    target_id=user_uuid,
+                    summary=f"Updated user {target['username']}",
+                    metadata={"fields": sorted([item.split("=")[0] for item in assignments])},
+                )
             updated = user_admin_row(conn, user_uuid)
         return response({"status": "ok", "user": updated})
 
@@ -1637,6 +1800,16 @@ def register_next_auth_routes(
         with connect() as conn:
             admin = require_admin(conn)
             updated = set_user_global_roles(conn, actor=admin, user_id=user_uuid, role_keys=[role_key])
+            audit_event(
+                conn,
+                event_type="user.roles_updated",
+                category="security",
+                actor=admin,
+                target_type="user",
+                target_id=user_uuid,
+                summary=f"Updated roles for {updated['username']}",
+                metadata={"roles": [role_key]},
+            )
         return response({"status": "ok", "user": updated})
 
     @route("/api/next/auth/users/<user_id>/roles", "/api/auth/users/<user_id>/roles", methods=["PUT", "PATCH"])
@@ -1650,6 +1823,16 @@ def register_next_auth_routes(
         with connect() as conn:
             admin = require_admin(conn)
             updated = set_user_global_roles(conn, actor=admin, user_id=user_uuid, role_keys=role_keys)
+            audit_event(
+                conn,
+                event_type="user.roles_updated",
+                category="security",
+                actor=admin,
+                target_type="user",
+                target_id=user_uuid,
+                summary=f"Updated roles for {updated['username']}",
+                metadata={"roles": role_keys},
+            )
         return response({"status": "ok", "user": updated})
 
     @route("/api/next/auth/users/<user_id>", "/api/auth/users/<user_id>", methods=["DELETE"])
@@ -1672,6 +1855,16 @@ def register_next_auth_routes(
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute("DELETE FROM users WHERE id=%s", (user_uuid,))
+                audit_event(
+                    conn,
+                    event_type="user.deleted",
+                    category="security",
+                    actor=admin,
+                    target_type="user",
+                    target_id=user_uuid,
+                    summary=f"Deleted user {target['username']}",
+                    metadata={"username": target["username"], "role": target_role},
+                )
         return response({"status": "deleted"})
 
     @route("/api/next/auth/credentials", "/api/auth/credentials", methods=["GET"])
@@ -1726,6 +1919,16 @@ def register_next_auth_routes(
                     cur.execute("DELETE FROM passkey_credentials WHERE id=%s", (credential_id,))
                     cur.execute("SELECT COUNT(*) AS count FROM passkey_credentials")
                     remaining = int(cur.fetchone()["count"])
+                audit_event(
+                    conn,
+                    event_type="auth.passkey_deleted",
+                    category="security",
+                    actor={"id": user.get("id") if user else None, "username": user.get("username") if user else "system", "role": role},
+                    target_type="passkey",
+                    target_id=credential_id,
+                    summary="Deleted a passkey",
+                    metadata={"credentialUserId": str(credential_row["user_id"]), "remainingCredentials": remaining},
+                )
                 if remaining == 0:
                     set_setting(conn, "auth_enabled", False)
         return response({"status": "deleted", "remaining": remaining})
@@ -1735,11 +1938,21 @@ def register_next_auth_routes(
         body = request.get_json(silent=True) or {}
         enabled = bool(body.get("enabled", False))
         with connect() as conn:
-            require_admin(conn)
+            admin = require_admin(conn)
             if enabled and count_table(conn, "passkey_credentials") == 0:
                 raise next_api_error("Register a passkey before enabling authentication", 400)
             with conn.transaction():
                 set_setting(conn, "auth_enabled", enabled)
+                audit_event(
+                    conn,
+                    event_type="auth.toggled",
+                    category="security",
+                    actor=admin,
+                    target_type="auth",
+                    target_id="auth_enabled",
+                    summary=f"Authentication {'enabled' if enabled else 'disabled'}",
+                    metadata={"enabled": enabled},
+                )
         return response({"status": "ok", "auth_enabled": enabled})
 
     @route("/api/next/auth/registration", "/api/auth/registration", methods=["POST"])
@@ -1747,22 +1960,42 @@ def register_next_auth_routes(
         body = request.get_json(silent=True) or {}
         enabled = bool(body.get("enabled", False))
         with connect() as conn:
-            require_admin(conn)
+            admin = require_admin(conn)
             with conn.transaction():
                 set_setting(conn, "registration_enabled", enabled)
+                audit_event(
+                    conn,
+                    event_type="auth.registration_mode_changed",
+                    category="security",
+                    actor=admin,
+                    target_type="auth",
+                    target_id="registration_enabled",
+                    summary="Registration mode changed",
+                    metadata={"publicRegistration": enabled},
+                )
             payload = auth_status_payload(conn)
         return response({"status": "ok", **payload})
 
     @route("/api/next/auth/owner/settings", "/api/auth/owner/settings", methods=["GET", "POST"])
     def owner_settings():
         with connect() as conn:
-            require_owner(conn)
+            owner = require_owner(conn)
             if request.method == "POST":
                 body = request.get_json(silent=True) or {}
                 if "movievault_contribution_enabled" in body:
                     enabled = bool(body.get("movievault_contribution_enabled"))
                     with conn.transaction():
                         set_setting(conn, "movievault_contribution_enabled", enabled)
+                        audit_event(
+                            conn,
+                            event_type="metadata.receiver_setting_changed",
+                            category="plugins",
+                            actor=owner,
+                            target_type="setting",
+                            target_id="movievault_contribution_enabled",
+                            summary="MovieVault receiver setting changed",
+                            metadata={"enabled": enabled},
+                        )
             settings = {
                 "movievault_contribution_enabled": bool(
                     setting_value(conn, "movievault_contribution_enabled", False)
@@ -1802,6 +2035,16 @@ def register_next_auth_routes(
                             expires_at,
                         ),
                     )
+                audit_event(
+                    conn,
+                    event_type="invite.created",
+                    category="security",
+                    actor=admin,
+                    target_type="invite",
+                    target_id=invite_id,
+                    summary=f"Created invite for {username}",
+                    metadata={"username": username, "expiresAt": expires_at.isoformat()},
+                )
         return response(
             {
                 "status": "ok",
@@ -1834,11 +2077,21 @@ def register_next_auth_routes(
         if not invite_uuid:
             raise next_api_error("Invalid invite id", 400)
         with connect() as conn:
-            require_admin(conn)
+            admin = require_admin(conn)
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
                         "DELETE FROM invite_codes WHERE id=%s AND used_at IS NULL",
                         (invite_uuid,),
                     )
+                audit_event(
+                    conn,
+                    event_type="invite.deleted",
+                    category="security",
+                    actor=admin,
+                    target_type="invite",
+                    target_id=invite_uuid,
+                    summary="Deleted invite",
+                    metadata={},
+                )
         return response({"status": "deleted"})

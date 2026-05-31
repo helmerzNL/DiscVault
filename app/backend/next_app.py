@@ -6716,6 +6716,7 @@ def ui_preview_html(
           <button type="button" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
           <button type="button" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
           <button type="button" data-app-admin-tab="backup" data-next-i18n="appAdmin.tabBackup">Backup</button>
+          <button type="button" data-app-admin-tab="audit" data-next-i18n="appAdmin.tabAudit">Audit</button>
         </nav>
         <section class="app-admin-panel active" data-app-admin-panel="access">
           <section class="profile-grid">
@@ -7006,6 +7007,38 @@ def ui_preview_html(
             </div>
           </section>
         </section>
+        <section class="app-admin-panel" data-app-admin-panel="audit">
+          <section class="profile-grid">
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.auditLog">Audit log</h3>
+              <p data-next-i18n="appAdmin.auditLogHelp">Review recent security, admin, import, metadata, plugin and backup actions.</p>
+              <div class="profile-form">
+                <label for="appAdminAuditCategory">
+                  <span data-next-i18n="appAdmin.auditCategory">Category</span>
+                  <select id="appAdminAuditCategory">
+                    <option value="" data-next-i18n="appAdmin.auditAllCategories">All categories</option>
+                    <option value="security" data-next-i18n="appAdmin.auditSecurity">Security</option>
+                    <option value="admin" data-next-i18n="appAdmin.auditAdmin">Admin</option>
+                    <option value="import" data-next-i18n="importCenter.title">Import</option>
+                    <option value="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</option>
+                    <option value="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</option>
+                    <option value="backup" data-next-i18n="appAdmin.tabBackup">Backup</option>
+                    <option value="migration" data-next-i18n="migration.title">Migration</option>
+                    <option value="jobs" data-next-i18n="appAdmin.jobs">Jobs</option>
+                  </select>
+                </label>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="appAdminRefreshAuditButton" data-next-i18n="appAdmin.refreshAudit">Refresh audit</button>
+                </div>
+              </div>
+              <div class="login-message" id="appAdminAuditMessage"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.auditEvents">Recent events</h3>
+              <div class="profile-passkey-list" id="appAdminAuditList"></div>
+            </div>
+          </section>
+        </section>
       </section>
     </main>
   </div>
@@ -7067,6 +7100,8 @@ def ui_preview_html(
     let containerManagerType = "box_set";
     let appAdmin = {
       activeTab: "access",
+      auditCategory: "",
+      auditEvents: [],
       backup: null,
       backupReport: null,
       credentials: [],
@@ -7187,7 +7222,8 @@ def ui_preview_html(
         plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "digital_sources.connect", "digital_sources.manage", "collection.import"],
         digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
         metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"],
-        backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"]
+        backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"],
+        audit: ["admin.view_audit"]
       },
       importCenter: ["collection.import", "collection.add", "collection.add_own", "metadata.search"],
       groupNavigation: ["groups.view", "groups.create", "groups.invite"],
@@ -7214,7 +7250,8 @@ def ui_preview_html(
       {key: "backup.export", labelKey: "appAdmin.featureBackupExport", fallback: "Export collection backups", permissions: ["admin.backup", "collection.export_functional"]},
       {key: "backup.restore", labelKey: "appAdmin.featureBackupRestore", fallback: "Restore collection backups", permissions: ["admin.restore_functional"]},
       {key: "users.manage", labelKey: "appAdmin.featureUsers", fallback: "Manage users", permissions: ["users.view", "users.invite", "users.assign_roles", "users.disable"]},
-      {key: "rbac.manage", labelKey: "appAdmin.featureRbac", fallback: "Manage roles and RBAC mode", permissions: ["roles.view", "roles.manage", "security.manage_rbac_mode"]}
+      {key: "rbac.manage", labelKey: "appAdmin.featureRbac", fallback: "Manage roles and RBAC mode", permissions: ["roles.view", "roles.manage", "security.manage_rbac_mode"]},
+      {key: "audit.view", labelKey: "appAdmin.featureAudit", fallback: "View audit log", permissions: ["admin.view_audit"]}
     ];
     function currentRole() {
       return currentAuthStatus.role || (currentStartup.auth || {}).role || (state.user || {}).role || "";
@@ -7284,7 +7321,7 @@ def ui_preview_html(
       return true;
     }
     function allowedAppAdminTabs() {
-      return ["access", "users", "roles", "plugins", "digital", "metadata", "backup"].filter(canUseAdminTab);
+      return ["access", "users", "roles", "plugins", "digital", "metadata", "backup", "audit"].filter(canUseAdminTab);
     }
     function canUseAppAdmin() {
       return allowedAppAdminTabs().length > 0;
@@ -7769,6 +7806,44 @@ def ui_preview_html(
         </div>
       `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noBackupJobs", "No restore jobs yet."))}</div>`;
     }
+    function renderAppAdminAudit() {
+      const list = document.getElementById("appAdminAuditList");
+      const categorySelect = document.getElementById("appAdminAuditCategory");
+      if (categorySelect && categorySelect.value !== appAdmin.auditCategory) {
+        categorySelect.value = appAdmin.auditCategory || "";
+      }
+      if (!list) return;
+      const events = appAdmin.auditEvents || [];
+      list.innerHTML = events.length ? events.map((event) => {
+        const actor = event.actorUsername || event.actorRole || tNext("appAdmin.systemActor", "System");
+        const target = [event.targetType, event.targetId].filter(Boolean).join(": ");
+        const details = {
+          metadata: event.metadata || {},
+          requestIp: event.requestIp || null,
+          userAgent: event.userAgent || null
+        };
+        return `
+          <div class="profile-passkey">
+            <div class="profile-passkey-head">
+              <strong>${escapeHtml(event.summary || event.eventType || tNext("appAdmin.auditEvent", "Audit event"))}</strong>
+              <span class="tag">${escapeHtml(event.category || "system")}</span>
+            </div>
+            <div class="profile-passkey-meta">
+              ${escapeHtml(event.eventType || "-")}
+              &middot;
+              ${escapeHtml(shortDateTime(event.createdAt))}
+              &middot;
+              ${escapeHtml(tNext("appAdmin.auditActor", "Actor"))}: ${escapeHtml(actor)}
+              ${target ? ` &middot; ${escapeHtml(target)}` : ""}
+            </div>
+            <details>
+              <summary class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.auditDetails", "Audit details"))}</summary>
+              <pre class="job-json">${escapeHtml(jsonPreview(details))}</pre>
+            </details>
+          </div>
+        `;
+      }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noAuditEvents", "No audit events yet."))}</div>`;
+    }
     function renderAppAdminPlugins() {
       const list = document.getElementById("appAdminPluginsList");
       const plugins = appAdmin.plugins || [];
@@ -8247,6 +8322,7 @@ def ui_preview_html(
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
       renderAppAdminBackups(appAdmin.backup);
+      renderAppAdminAudit();
       setAppAdminTab(appAdmin.activeTab || "access");
       renderAppAdminVisibility();
       applyAppPermissionVisibility();
@@ -8262,7 +8338,9 @@ def ui_preview_html(
         const canLoadDigital = canUseAdminTab("digital") || canLoadPlugins;
         const canLoadBackup = canUseAdminTab("backup");
         const canLoadMetadata = canUseAdminTab("metadata");
-        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload] = await Promise.all([
+        const canLoadAudit = canUseAdminTab("audit");
+        const auditQuery = appAdmin.auditCategory ? `?limit=100&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=100";
+        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, auditPayload] = await Promise.all([
           canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/users").catch(() => ({users: [], roles: []})) : Promise.resolve({users: [], roles: []}),
           canLoadAccess ? authApiJson("/api/next/auth/credentials").catch(() => ({credentials: []})) : Promise.resolve({credentials: []}),
           canLoadAccess ? authApiJson("/api/next/auth/invite").catch(() => ({invites: []})) : Promise.resolve({invites: []}),
@@ -8272,7 +8350,8 @@ def ui_preview_html(
           canLoadDigital ? authApiJson("/api/next/digital-sources").catch(() => ({items: []})) : Promise.resolve({items: []}),
           canLoadBackup ? authApiJson("/api/next/backup/status").catch((error) => ({status: "error", error: error.message || String(error)})) : Promise.resolve(null),
           canLoadPlugins ? authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
-          canLoadMetadata ? authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []})) : Promise.resolve({jobs: []})
+          canLoadMetadata ? authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
+          canLoadAudit ? authApiJson(`/api/next/audit/events${auditQuery}`).catch(() => ({events: []})) : Promise.resolve({events: []})
         ]);
         appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
@@ -8286,6 +8365,7 @@ def ui_preview_html(
         appAdmin.backup = backupPayload || null;
         appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
         appAdmin.metadataJobs = metadataJobsPayload.jobs || [];
+        appAdmin.auditEvents = auditPayload.events || [];
         const configPayloads = canLoadPlugins ? await Promise.all(appAdmin.plugins.map((plugin) =>
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
@@ -8712,6 +8792,21 @@ def ui_preview_html(
         setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupLoaded", "Backup status loaded."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
+    }
+    async function refreshAppAdminAudit() {
+      if (!canUseAdminTab("audit")) return;
+      const categorySelect = document.getElementById("appAdminAuditCategory");
+      appAdmin.auditCategory = String(categorySelect?.value || "");
+      const query = appAdmin.auditCategory ? `?limit=100&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=100";
+      setAppAdminMessage("appAdminAuditMessage", tNext("appAdmin.loadingAudit", "Loading audit log..."));
+      try {
+        const payload = await authApiJson(`/api/next/audit/events${query}`);
+        appAdmin.auditEvents = payload.events || [];
+        renderAppAdminAudit();
+        setAppAdminMessage("appAdminAuditMessage", tNext("appAdmin.auditLoaded", "Audit log loaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminAuditMessage", error.message || String(error), "bad");
       }
     }
     function selectedAppAdminBackupFile() {
@@ -11961,6 +12056,8 @@ def ui_preview_html(
       document.getElementById("appAdminExportBackupButton")?.addEventListener("click", () => exportAppAdminBackupZip());
       document.getElementById("appAdminValidateBackupButton")?.addEventListener("click", () => validateAppAdminBackupZip());
       document.getElementById("appAdminRestoreBackupButton")?.addEventListener("click", () => restoreAppAdminBackupZip());
+      document.getElementById("appAdminRefreshAuditButton")?.addEventListener("click", () => refreshAppAdminAudit());
+      document.getElementById("appAdminAuditCategory")?.addEventListener("change", () => refreshAppAdminAudit());
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
         const healthButton = event.target.closest("[data-app-admin-plugin-health]");
@@ -20410,6 +20507,72 @@ def actor_job_payload(actor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def audit_event(
+    conn,
+    *,
+    event_type: str,
+    category: str = "system",
+    actor: dict[str, Any] | None = None,
+    target_type: str | None = None,
+    target_id: Any = None,
+    summary: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    if not table_exists(conn, "audit_events"):
+        return
+    actor = actor or {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO audit_events (
+                event_type,
+                category,
+                actor_user_id,
+                actor_username,
+                actor_role,
+                target_type,
+                target_id,
+                summary,
+                metadata,
+                request_ip,
+                user_agent
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                event_type,
+                category,
+                actor.get("id"),
+                actor.get("username"),
+                actor.get("role"),
+                target_type,
+                str(target_id) if target_id is not None else None,
+                summary,
+                Jsonb(json_ready(redact_sensitive_payload(metadata or {}))),
+                request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip(),
+                request.headers.get("User-Agent"),
+            ),
+        )
+
+
+def audit_event_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "eventType": row["event_type"],
+        "category": row["category"],
+        "actorUserId": row.get("actor_user_id"),
+        "actorUsername": row.get("actor_username"),
+        "actorRole": row.get("actor_role"),
+        "targetType": row.get("target_type"),
+        "targetId": row.get("target_id"),
+        "summary": row.get("summary"),
+        "metadata": redact_sensitive_payload(row.get("metadata") or {}),
+        "requestIp": row.get("request_ip"),
+        "userAgent": row.get("user_agent"),
+        "createdAt": row.get("created_at"),
+    }
+
+
 def metadata_refresh_jobs(
     conn,
     *,
@@ -21061,6 +21224,16 @@ def register_routes(flask_app: Flask) -> None:
                             """,
                             (group_uuid, actor["id"]),
                         )
+                audit_event(
+                    conn,
+                    event_type="group.created",
+                    category="admin",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary=f"Created media group {name}",
+                    metadata={"name": name, "publicId": public_id, "hideDigital": hide_digital},
+                )
             detail = media_group_detail_entity(conn, group_uuid)
         return response({"status": "ok", "group": detail}, 201)
 
@@ -21117,6 +21290,16 @@ def register_routes(flask_app: Flask) -> None:
                         (group_uuid, user_uuid, role),
                     )
                     cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
+                audit_event(
+                    conn,
+                    event_type="group.member_upserted",
+                    category="admin",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary="Updated media group member",
+                    metadata={"userId": str(user_uuid), "role": role},
+                )
             detail = media_group_detail_entity(conn, group_uuid)
         return response({"status": "ok", "group": detail})
 
@@ -21163,6 +21346,16 @@ def register_routes(flask_app: Flask) -> None:
                         (group_uuid, user_uuid),
                     )
                     cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
+                audit_event(
+                    conn,
+                    event_type="group.member_deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary="Removed media group member",
+                    metadata={"userId": str(user_uuid)},
+                )
             detail = media_group_detail_entity(conn, group_uuid)
         return response({"status": "deleted", "group": detail})
 
@@ -21234,7 +21427,7 @@ def register_routes(flask_app: Flask) -> None:
         if len(public_id) > 160:
             raise NextApiError("publicId must be 160 characters or fewer", 400)
         with connect() as conn:
-            require_next_permission(conn, "containers.edit")
+            actor = require_next_permission(conn, "containers.edit")
             if not table_exists(conn, "containers"):
                 raise NextApiError("Container table is not available", 503)
             with conn.transaction():
@@ -21261,6 +21454,16 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
+                audit_event(
+                    conn,
+                    event_type="container.created",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary=f"Created {container_type} {payload['title']}",
+                    metadata={"containerType": container_type, "publicId": public_id, "title": payload["title"]},
+                )
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail}, 201)
 
@@ -21273,7 +21476,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Container request body must be an object", 400)
         with connect() as conn:
-            require_next_permission(conn, "containers.edit")
+            actor = require_next_permission(conn, "containers.edit")
             existing = container_entity(conn, container_uuid)
             if not existing:
                 raise NextApiError("Container not found", 404)
@@ -21302,6 +21505,16 @@ def register_routes(flask_app: Flask) -> None:
                             container_uuid,
                         ),
                     )
+                audit_event(
+                    conn,
+                    event_type="container.updated",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary=f"Updated container {payload['title']}",
+                    metadata={"containerType": existing.get("container_type"), "title": payload["title"]},
+                )
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail})
 
@@ -21312,7 +21525,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("containerId is required", 400)
         deleted: dict[str, int] = {}
         with connect() as conn:
-            require_next_permission(conn, "containers.edit")
+            actor = require_next_permission(conn, "containers.edit")
             existing = container_entity(conn, container_uuid)
             if not existing:
                 raise NextApiError("Container not found", 404)
@@ -21335,6 +21548,20 @@ def register_routes(flask_app: Flask) -> None:
                         deleted["entity_media"] = max(int(cur.rowcount or 0), 0)
                     cur.execute("DELETE FROM containers WHERE id=%s", (container_uuid,))
                     deleted["containers"] = max(int(cur.rowcount or 0), 0)
+                audit_event(
+                    conn,
+                    event_type="container.deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary=f"Deleted container {existing.get('title')}",
+                    metadata={
+                        "containerType": existing.get("container_type"),
+                        "title": existing.get("title"),
+                        "deleted": deleted,
+                    },
+                )
         return response(
             {
                 "status": "ok",
@@ -21769,7 +21996,7 @@ def register_routes(flask_app: Flask) -> None:
                 plugin = cur.fetchone()
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
-            require_any_next_permission(conn, plugin_manage_permissions(plugin))
+            actor = require_any_next_permission(conn, plugin_manage_permissions(plugin))
 
             categories = plugin.get("categories") or []
             is_metadata_plugin = bool(
@@ -21814,6 +22041,20 @@ def register_routes(flask_app: Flask) -> None:
                             """,
                             (*params, plugin_id),
                         )
+                audit_event(
+                    conn,
+                    event_type="plugin.updated",
+                    category="plugins",
+                    actor=actor,
+                    target_type="plugin",
+                    target_id=plugin_id,
+                    summary=f"Updated plugin {plugin_id}",
+                    metadata={
+                        "enabled": enabled if has_enabled else None,
+                        "orderIndex": order_index if has_order else None,
+                        "categories": categories,
+                    },
+                )
 
             if table_exists(conn, "metadata_plugins"):
                 sync_metadata_plugin_registry(conn)
@@ -21882,6 +22123,20 @@ def register_routes(flask_app: Flask) -> None:
                 settings_value=body.get("settings"),
                 secrets_provided=has_secrets,
                 secrets_value=body.get("secrets"),
+            )
+            audit_event(
+                conn,
+                event_type="plugin.config_updated",
+                category="plugins",
+                actor=actor,
+                target_type="plugin",
+                target_id=plugin_id,
+                summary=f"Updated plugin configuration for {plugin_id}",
+                metadata={
+                    "settingsProvided": has_settings,
+                    "secretsProvided": has_secrets,
+                    "categories": plugin_row.get("categories") or [],
+                },
             )
 
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
@@ -22015,6 +22270,16 @@ def register_routes(flask_app: Flask) -> None:
             }
             with conn.transaction():
                 job = create_background_job(conn, job_type=PLUGIN_EXECUTION_JOB_TYPE, payload=job_payload)
+                audit_event(
+                    conn,
+                    event_type="plugin.job_queued",
+                    category="plugins",
+                    actor=actor,
+                    target_type="background_job",
+                    target_id=job.get("id"),
+                    summary=f"Queued {plugin_id}.{entrypoint}",
+                    metadata={"pluginId": plugin_id, "entrypoint": entrypoint, "payload": payload},
+                )
         return response({"status": "ok", "plugin": plugin, "job": job}, 201)
 
     @flask_app.get("/api/next/metadata/plugins")
@@ -22224,6 +22489,16 @@ def register_routes(flask_app: Flask) -> None:
                             },
                         )
             detail = movie_detail_entity(conn, movie_uuid)
+            audit_event(
+                conn,
+                event_type="movie.updated",
+                category="admin",
+                actor=actor,
+                target_type="movie",
+                target_id=movie_uuid,
+                summary=f"Updated movie {payload['title']}",
+                metadata={"title": payload["title"], "barcode": payload["barcode"]},
+            )
         return response({"status": "ok", "detail": detail})
 
     @flask_app.get("/api/next/people/<person_id>")
@@ -22250,6 +22525,16 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("People table is not available", 503)
             with conn.transaction():
                 result = refresh_person_filmography(conn, person_uuid, dry_run=dry_run, actor=actor)
+                audit_event(
+                    conn,
+                    event_type="metadata.person_filmography_previewed" if dry_run else "metadata.person_filmography_refreshed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_uuid,
+                    summary="Refreshed person filmography" if not dry_run else "Previewed person filmography refresh",
+                    metadata={"dryRun": dry_run, "result": result},
+                )
         return response({"status": "ok", "filmography": result})
 
     @flask_app.post("/api/next/movies/<movie_id>/media/primary")
@@ -22271,6 +22556,16 @@ def register_routes(flask_app: Flask) -> None:
                     media_id=media_uuid,
                     kind=kind,
                     actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="movie.media_primary_changed",
+                    category="admin",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Changed primary movie artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
                 )
         return response({"status": "ok", **result})
 
@@ -22299,6 +22594,16 @@ def register_routes(flask_app: Flask) -> None:
                     upload_info=upload_info,
                     primary=primary,
                     actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="movie.media_uploaded",
+                    category="admin",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Uploaded movie artwork",
+                    metadata={"kind": kind, "primary": primary, "result": result},
                 )
         return response({"status": "ok", **result}, 201)
 
@@ -22343,6 +22648,16 @@ def register_routes(flask_app: Flask) -> None:
                     existing = cur.fetchone()
                 if existing:
                     detail = movie_detail_entity(conn, existing["id"])
+                    audit_event(
+                        conn,
+                        event_type="movie.import_skipped",
+                        category="import",
+                        actor=actor,
+                        target_type="movie",
+                        target_id=existing["id"],
+                        summary="Import skipped because the movie already exists",
+                        metadata={"barcode": barcode, "title": title},
+                    )
                     return response(
                         {
                             "status": "ok",
@@ -22391,6 +22706,21 @@ def register_routes(flask_app: Flask) -> None:
                 movie_id = upsert["entityId"]
                 applied = apply_metadata_proposal(conn, movie_id, proposal, actor=actor)
                 detail = movie_detail_entity(conn, movie_id)
+                audit_event(
+                    conn,
+                    event_type="movie.imported",
+                    category="import",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_id,
+                    summary=f"Imported movie {import_title}",
+                    metadata={
+                        "barcode": barcode,
+                        "title": import_title,
+                        "sources": metadata_result.get("sources") or [],
+                        "applied": applied,
+                    },
+                )
 
         return response(
             {
@@ -22456,6 +22786,20 @@ def register_routes(flask_app: Flask) -> None:
                     )
                     for item in movie_ids
                 ]
+                audit_event(
+                    conn,
+                    event_type="metadata.refresh_queued",
+                    category="metadata",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=str(movie_ids[0]) if len(movie_ids) == 1 else None,
+                    summary=f"Queued metadata refresh for {len(movie_ids)} movie(s)",
+                    metadata={
+                        "movieIds": [str(item) for item in movie_ids],
+                        "dryRun": dry_run,
+                        "jobIds": [str(job.get("id")) for job in jobs],
+                    },
+                )
         return response({"status": "ok", "dryRun": dry_run, "queued": len(jobs), "jobs": jobs}, 201)
 
     @flask_app.post("/api/next/movies/<movie_id>/metadata/preview")
@@ -22479,7 +22823,18 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
-            result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
+            with conn.transaction():
+                result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
+                audit_event(
+                    conn,
+                    event_type="metadata.refresh_applied" if not dry_run else "metadata.refresh_previewed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Refreshed movie metadata" if not dry_run else "Previewed movie metadata refresh",
+                    metadata={"dryRun": dry_run, "result": result},
+                )
         return response({"status": "ok", "metadata": result})
 
     @flask_app.get("/api/next/movies/<movie_id>/metadata/jobs")
@@ -22514,6 +22869,16 @@ def register_routes(flask_app: Flask) -> None:
                         "dryRun": dry_run,
                         "requestedBy": actor_job_payload(actor),
                     },
+                )
+                audit_event(
+                    conn,
+                    event_type="metadata.refresh_queued",
+                    category="metadata",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Queued movie metadata refresh",
+                    metadata={"movieId": str(movie_uuid), "dryRun": dry_run, "jobId": job.get("id")},
                 )
         return response({"status": "ok", "job": job}, 201)
 
@@ -22679,6 +23044,47 @@ def register_routes(flask_app: Flask) -> None:
                 rows = cur.fetchall()
         return response({"status": "ok", "jobs": [job_row(row) for row in rows]})
 
+    @flask_app.get("/api/next/audit/events")
+    def audit_events():
+        limit = parse_int_arg("limit", 100, minimum=1, maximum=250)
+        category = clean_text(request.args.get("category") or "")
+        with connect() as conn:
+            require_next_permission(conn, "admin.view_audit")
+            if not table_exists(conn, "audit_events"):
+                return response({"status": "ok", "events": []})
+            clauses: list[str] = []
+            params: list[Any] = []
+            if category:
+                clauses.append("category=%s")
+                params.append(category)
+            where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                        id,
+                        event_type,
+                        category,
+                        actor_user_id,
+                        actor_username,
+                        actor_role,
+                        target_type,
+                        target_id,
+                        summary,
+                        metadata,
+                        request_ip,
+                        user_agent,
+                        created_at
+                    FROM audit_events
+                    {where}
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (*params, limit),
+                )
+                rows = cur.fetchall()
+        return response({"status": "ok", "events": [audit_event_row(row) for row in rows]})
+
     @flask_app.post("/api/next/jobs")
     def create_job():
         body = request.get_json(silent=True) or {}
@@ -22691,9 +23097,19 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(payload, dict):
             raise NextApiError("payload must be an object", 400)
         with connect() as conn:
-            require_next_permission(conn, "admin.view_jobs")
+            actor = require_next_permission(conn, "admin.view_jobs")
             with conn.transaction():
                 job = create_background_job(conn, job_type=job_type, payload=payload)
+                audit_event(
+                    conn,
+                    event_type="job.created",
+                    category="jobs",
+                    actor=actor,
+                    target_type="background_job",
+                    target_id=job.get("id"),
+                    summary=f"Queued {job_type}",
+                    metadata={"jobType": job_type, "payload": payload},
+                )
         return response({"status": "ok", "job": job}, 201)
 
     @flask_app.get("/api/next/migration/readiness")
@@ -22761,6 +23177,22 @@ def register_routes(flask_app: Flask) -> None:
             )
             with conn.transaction():
                 job = create_background_job(conn, job_type=job_type, payload=payload)
+                audit_event(
+                    conn,
+                    event_type="migration.started",
+                    category="migration",
+                    actor=actor,
+                    target_type="background_job",
+                    target_id=job.get("id"),
+                    summary="Started legacy DiscVault migration",
+                    metadata={
+                        "jobType": job_type,
+                        "sourceKind": selected_source.get("sourceKind"),
+                        "pluginId": import_source_id or selected_source.get("pluginId"),
+                        "readinessState": readiness.get("state"),
+                        "options": options,
+                    },
+                )
         return response({"status": "ok", "job": job, "readiness": readiness, "importPlan": import_plan}, 201)
 
     @flask_app.post("/api/next/migration/test-reset")
@@ -22781,6 +23213,16 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_admin_user(conn)
             with conn.transaction():
                 reset = reset_next_test_database(conn)
+                audit_event(
+                    conn,
+                    event_type="test_database.reset",
+                    category="admin",
+                    actor=actor,
+                    target_type="database",
+                    target_id="next-test",
+                    summary="Reset test database for migration testing",
+                    metadata={"reset": reset},
+                )
             readiness = migration_readiness(conn)
         return response(
             {
@@ -23037,6 +23479,16 @@ def register_routes(flask_app: Flask) -> None:
                 },
                 requested_by=actor,
             )
+            audit_event(
+                conn,
+                event_type="backup.exported",
+                category="backup",
+                actor=actor,
+                target_type="backup",
+                target_id=file_name,
+                summary="Exported functional collection backup",
+                metadata={"fileName": file_name, "sha256": summary.get("sha256"), "scope": "functional_collection"},
+            )
         result = send_file(
             output_path,
             mimetype="application/zip",
@@ -23053,9 +23505,20 @@ def register_routes(flask_app: Flask) -> None:
         data_dir = legacy_data_dir()
         backup_dir = backup_storage_dir(data_dir)
         with connect() as conn:
-            require_any_next_permission(conn, ("collection.import", "admin.restore_functional"))
+            actor = require_any_next_permission(conn, ("collection.import", "admin.restore_functional"))
         upload_path = uploaded_backup_file_path(backup_dir / "uploads" / "validate")
         report = validate_backup_zip(upload_path)
+        with connect() as conn:
+            audit_event(
+                conn,
+                event_type="backup.validated",
+                category="backup",
+                actor=actor,
+                target_type="backup",
+                target_id=upload_path.name,
+                summary="Validated functional collection backup",
+                metadata={"valid": bool(report.get("valid")), "report": report},
+            )
         status_code = 200 if report.get("valid") else 422
         return response(
             {
@@ -23097,6 +23560,16 @@ def register_routes(flask_app: Flask) -> None:
                         },
                         "validation": report,
                     },
+                )
+                audit_event(
+                    conn,
+                    event_type="backup.restore_queued",
+                    category="backup",
+                    actor=actor,
+                    target_type="background_job",
+                    target_id=job.get("id"),
+                    summary="Queued functional collection restore",
+                    metadata={"backupZip": str(upload_path), "validation": report},
                 )
         return response({"status": "ok", "job": job, "report": report}, 201)
 
