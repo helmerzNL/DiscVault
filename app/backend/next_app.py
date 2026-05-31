@@ -6761,8 +6761,70 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    const APP_PERMISSION_GROUPS = {
+      adminTabs: {
+        access: ["security.toggle_auth", "security.manage_invite_only", "users.view", "users.invite", "users.manage_passkeys"],
+        users: ["users.view", "users.invite", "users.disable", "users.delete", "users.assign_roles", "groups.view", "groups.create", "groups.invite"],
+        plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "digital_sources.connect", "digital_sources.manage", "collection.import"],
+        digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
+        metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"],
+        backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"]
+      },
+      importCenter: ["collection.import", "collection.add", "collection.add_own", "metadata.search"],
+      groupNavigation: ["groups.view", "groups.create", "groups.invite"],
+      containerManagement: ["containers.create", "containers.edit", "containers.delete", "collection.bulk_edit"],
+      metadataRefresh: ["metadata.refresh_one", "metadata.refresh_bulk"],
+      bulkMetadata: ["metadata.refresh_bulk"],
+      bulkGroups: ["groups.invite", "groups.create"],
+      bulkContainers: ["containers.edit", "collection.bulk_edit"],
+      bulkCollections: ["collection.bulk_edit"],
+      mediaAdd: ["collection.add", "collection.add_own", "collection.import"]
+    };
+    function currentRole() {
+      return currentAuthStatus.role || (currentStartup.auth || {}).role || (state.user || {}).role || "";
+    }
+    function currentPermissionSet() {
+      const values = [
+        ...((currentAuthStatus && currentAuthStatus.permissions) || []),
+        ...(((currentStartup.auth || {}).permissions) || []),
+        ...(((state.user || {}).permissions) || [])
+      ];
+      return new Set(values.filter(Boolean).map(String));
+    }
     function isNativeAdminUser() {
-      return !!currentAuthStatus.authenticated && ["owner", "admin"].includes(currentAuthStatus.role || "");
+      return !!currentAuthStatus.authenticated && ["owner", "admin"].includes(currentRole());
+    }
+    function hasPermission(permission) {
+      if (!appMode) return true;
+      if (!currentAuthStatus.authenticated) return false;
+      if (currentRole() === "owner") return true;
+      const permissions = currentPermissionSet();
+      if (permissions.has("*") || permissions.has(permission)) return true;
+      return permissions.size === 0 && currentRole() === "admin";
+    }
+    function hasAnyPermission(permissions) {
+      return (permissions || []).some((permission) => hasPermission(permission));
+    }
+    function canUseAdminTab(tab) {
+      const permissions = (APP_PERMISSION_GROUPS.adminTabs || {})[tab] || [];
+      if (!hasAnyPermission(permissions)) return false;
+      if (["access", "users"].includes(tab)) return isNativeAdminUser();
+      return true;
+    }
+    function allowedAppAdminTabs() {
+      return ["access", "users", "plugins", "digital", "metadata", "backup"].filter(canUseAdminTab);
+    }
+    function canUseAppAdmin() {
+      return allowedAppAdminTabs().length > 0;
+    }
+    function setVisible(selector, visible) {
+      document.querySelectorAll(selector).forEach((node) => node.classList.toggle("hidden", !visible));
+    }
+    function setElementVisible(node, visible) {
+      if (node) node.classList.toggle("hidden", !visible);
+    }
+    function closestCard(node) {
+      return node ? node.closest(".detail-card, .profile-card, .bulk-target") : null;
     }
     function appRegistrationModeLabel() {
       return currentAuthStatus.registration_enabled
@@ -6770,12 +6832,45 @@ def ui_preview_html(
         : tNext("appAdmin.inviteOnly", "Invite-only login");
     }
     function renderAppAdminVisibility() {
-      const allowed = isNativeAdminUser();
+      const allowed = canUseAppAdmin();
       document.getElementById("adminNavItem")?.classList.toggle("hidden", !allowed);
       document.getElementById("mobileAdminTab")?.classList.toggle("hidden", !allowed);
       document.getElementById("profileOpenAdminButton")?.classList.toggle("hidden", !allowed);
       const navMode = document.getElementById("navAdminMode");
       if (navMode) navMode.textContent = allowed ? appRegistrationModeLabel() : "-";
+    }
+    function applyAppPermissionVisibility() {
+      setVisible('[data-app-route="import"]', hasAnyPermission(APP_PERMISSION_GROUPS.importCenter));
+      setVisible('[data-app-route="groups"]', hasAnyPermission(APP_PERMISSION_GROUPS.groupNavigation));
+      renderAppAdminVisibility();
+      setElementVisible(document.querySelector('[data-preferences-tab="collectors"]'), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
+      setElementVisible(document.querySelector('[data-preferences-panel="collectors"]'), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
+      setElementVisible(closestCard(document.getElementById("containerManagerCreateForm")), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="boxset"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="vault"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="collection"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections));
+      document.querySelectorAll("#movieMetadataDryRunButton, #movieMetadataApplyButton").forEach((button) => {
+        button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
+      });
+      setElementVisible(document.getElementById("movieMetadataJobsButton"), hasAnyPermission(["admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"]));
+      const importCanStart = hasPermission("collection.import");
+      const importCanAdd = hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd);
+      document.getElementById("importCenterStartButton")?.classList.toggle("hidden", !importCanStart);
+      setElementVisible(closestCard(document.getElementById("importCenterSources")), importCanStart);
+      setElementVisible(closestCard(document.getElementById("importCenterPlan")), importCanStart);
+      setElementVisible(closestCard(document.getElementById("importCenterJobs")), importCanStart);
+      setElementVisible(document.querySelector(".barcode-scanner-shell"), importCanAdd);
+      setElementVisible(document.getElementById("importBarcodeForm"), importCanAdd);
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement) && document.querySelector('[data-preferences-tab="collectors"]')?.classList.contains("active")) {
+        setPreferenceTab("appearance");
+      }
+      const activeAdminTab = appAdmin.activeTab || "access";
+      if (activeAdminTab && !canUseAdminTab(activeAdminTab)) {
+        const first = allowedAppAdminTabs()[0];
+        if (first) setAppAdminTab(first);
+      }
     }
     function renderAppRegistrationMode(auth) {
       if (auth) currentAuthStatus = auth || {};
@@ -6798,6 +6893,7 @@ def ui_preview_html(
         submitButton.textContent = tNext("auth.createAccount", "Create account");
       }
       renderAppAdminVisibility();
+      applyAppPermissionVisibility();
     }
     function setAppAdminMessage(id, message, tone) {
       const node = document.getElementById(id);
@@ -6806,9 +6902,11 @@ def ui_preview_html(
       node.className = `login-message ${tone || ""}`.trim();
     }
     function setAppAdminTab(tab) {
-      appAdmin.activeTab = tab || "access";
+      const allowedTabs = allowedAppAdminTabs();
+      appAdmin.activeTab = allowedTabs.includes(tab) ? tab : (allowedTabs[0] || "");
       document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
         const active = button.dataset.appAdminTab === appAdmin.activeTab;
+        button.classList.toggle("hidden", !canUseAdminTab(button.dataset.appAdminTab));
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
       });
@@ -6880,7 +6978,40 @@ def ui_preview_html(
       if (direction === "up") return Math.max(1, siblingOrder - 1);
       return Math.min(10000, siblingOrder + 1);
     }
+    function appAdminCanManagePlugin(plugin) {
+      if (appAdminPluginHasCategory(plugin, "metadata_source") || appAdminPluginHasCategory(plugin, "metadata_receiver")) {
+        return hasAnyPermission(["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers"]);
+      }
+      if (appAdminPluginHasCategory(plugin, "digital_media_source")) {
+        return hasAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
+      }
+      if (appAdminPluginHasCategory(plugin, "import_source")) return hasPermission("collection.import");
+      return hasPermission("metadata.manage_plugins");
+    }
+    function appAdminCanConfigurePlugin(plugin) {
+      if (appAdminPluginHasCategory(plugin, "metadata_source")) return hasPermission("metadata.manage_plugin_settings");
+      if (appAdminPluginHasCategory(plugin, "metadata_receiver")) return hasAnyPermission(["metadata.manage_plugin_settings", "metadata.manage_receivers"]);
+      if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
+      if (appAdminPluginHasCategory(plugin, "import_source")) return hasPermission("collection.import");
+      return appAdminCanManagePlugin(plugin);
+    }
+    function appAdminCanViewPluginHealth(plugin) {
+      if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
+      if (appAdminPluginHasCategory(plugin, "import_source")) return hasPermission("collection.import");
+      return hasAnyPermission(["metadata.view_plugin_health", "metadata.manage_plugins", "metadata.manage_plugin_settings"]);
+    }
+    function appAdminCanExecutePlugin(plugin, entrypoint) {
+      const name = String(entrypoint || "");
+      if (appAdminPluginHasCategory(plugin, "digital_media_source")) {
+        return name === "sync_library"
+          ? hasAnyPermission(["digital_sources.sync", "digital_sources.manage"])
+          : hasAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
+      }
+      if (appAdminPluginHasCategory(plugin, "import_source")) return hasPermission("collection.import");
+      return appAdminCanManagePlugin(plugin);
+    }
     function renderAppAdminPluginConfig(plugin, config) {
+      if (!appAdminCanConfigurePlugin(plugin)) return "";
       const settings = appAdminPluginSchemaItems(plugin, "settings");
       const secrets = appAdminPluginSchemaItems(plugin, "secrets");
       if (!settings.length && !secrets.length) {
@@ -6934,6 +7065,8 @@ def ui_preview_html(
       const pluginIndex = orderedSection.findIndex((item) => item.id === plugin.id);
       const canMoveUp = pluginIndex > 0;
       const canMoveDown = pluginIndex >= 0 && pluginIndex < orderedSection.length - 1;
+      const canManage = appAdminCanManagePlugin(plugin);
+      const canViewHealth = appAdminCanViewPluginHealth(plugin);
       return `
         <div class="profile-passkey">
           <div class="profile-passkey-head">
@@ -6942,8 +7075,8 @@ def ui_preview_html(
               <div class="profile-passkey-meta">${escapeHtml(plugin.id)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
             </div>
             <div class="app-admin-plugin-order">
-              <button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>
-              <button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>
+              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>` : ""}
+              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>` : ""}
             </div>
             <span class="tag ${plugin.enabled ? "good" : ""}">${escapeHtml(plugin.enabled ? tNext("appAdmin.enabled", "Enabled") : tNext("appAdmin.disabled", "Disabled"))}</span>
           </div>
@@ -6962,11 +7095,11 @@ def ui_preview_html(
             ${plugin.premiumFeatureKey ? `<span class="tag blue">${escapeHtml(plugin.premiumFeatureKey)}</span>` : ""}
           </div>
           <div class="app-admin-plugin-actions">
-            <button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>
-            <button type="button" class="secondary-button" data-app-admin-plugin-health="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.checkHealth", "Check health"))}</button>
-            ${capabilities.includes("discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
-            ${capabilities.includes("inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
-            ${capabilities.includes("sync_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
+            ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>` : ""}
+            ${canViewHealth ? `<button type="button" class="secondary-button" data-app-admin-plugin-health="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.checkHealth", "Check health"))}</button>` : ""}
+            ${capabilities.includes("discover_library") && appAdminCanExecutePlugin(plugin, "discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
+            ${capabilities.includes("inspect_source") && appAdminCanExecutePlugin(plugin, "inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
+            ${capabilities.includes("sync_library") && appAdminCanExecutePlugin(plugin, "sync_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
           </div>
           ${renderAppAdminPluginConfig(plugin, config)}
           ${appAdminPluginHealthDetails(plugin.id)}
@@ -7228,12 +7361,32 @@ def ui_preview_html(
       return labels[role] || role || "member";
     }
     function renderAppAdmin() {
+      if (!canUseAppAdmin()) return;
       const mode = currentAuthStatus.registration_enabled ? "public" : "invite";
       document.getElementById("appAdminRegistrationMode").textContent = appRegistrationModeLabel();
       document.getElementById("appAdminUserCount").textContent = String((appAdmin.users || []).length || currentAuthStatus.user_count || "-");
       document.getElementById("appAdminCredentialCount").textContent = String(currentAuthStatus.credential_count ?? (appAdmin.credentials || []).length ?? "-");
+      const canManageRegistration = isNativeAdminUser() && hasPermission("security.manage_invite_only");
+      const canInviteUsers = isNativeAdminUser() && hasPermission("users.invite");
+      const canViewPasskeys = isNativeAdminUser() && hasPermission("users.manage_passkeys");
+      const canAssignRoles = isNativeAdminUser() && hasPermission("users.assign_roles");
+      const canDisableUsers = isNativeAdminUser() && hasPermission("users.disable");
+      const canViewUsers = isNativeAdminUser() && hasAnyPermission(["users.view", "users.assign_roles", "users.disable", "users.delete"]);
+      const canViewGroups = hasAnyPermission(["groups.view", "groups.create", "groups.invite"]);
+      const canManageGroups = hasAnyPermission(["groups.create", "groups.invite"]);
+      setElementVisible(closestCard(document.getElementById("appAdminUsersList")), canViewUsers);
+      setElementVisible(closestCard(document.getElementById("appAdminGroupsList")), canViewGroups);
+      setElementVisible(closestCard(document.getElementById("appAdminInviteForm")), canInviteUsers);
+      setElementVisible(closestCard(document.getElementById("appAdminCredentialsList")), canViewPasskeys);
+      setElementVisible(document.getElementById("appAdminGroupForm"), canManageGroups);
+      setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasPermission("admin.restore_functional"));
+      setElementVisible(document.getElementById("appAdminExportBackupButton"), hasAnyPermission(["admin.backup", "collection.export_functional"]));
+      setElementVisible(document.getElementById("appAdminValidateBackupButton"), hasPermission("admin.restore_functional"));
+      setElementVisible(document.getElementById("appAdminRestoreBackupButton"), hasPermission("admin.restore_functional"));
       document.querySelectorAll("[data-app-admin-registration-mode]").forEach((button) => {
         const active = button.dataset.appAdminRegistrationMode === mode;
+        button.classList.toggle("hidden", !canManageRegistration);
+        button.disabled = !canManageRegistration;
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
@@ -7256,8 +7409,8 @@ def ui_preview_html(
                 </div>
               </div>
               <div class="profile-passkey-actions">
-                <select data-app-admin-user-role="${escapeHtml(user.id)}" ${roleLocked ? "disabled" : ""}>${appAdminRoleOptions(user.role)}</select>
-                ${roleLocked ? "" : `<button type="button" class="secondary-button" data-app-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${escapeHtml(disabled ? tNext("appAdmin.enableUser", "Enable") : tNext("appAdmin.disableUser", "Disable"))}</button>`}
+                ${canAssignRoles ? `<select data-app-admin-user-role="${escapeHtml(user.id)}" ${roleLocked ? "disabled" : ""}>${appAdminRoleOptions(user.role)}</select>` : ""}
+                ${roleLocked || !canDisableUsers ? "" : `<button type="button" class="secondary-button" data-app-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${escapeHtml(disabled ? tNext("appAdmin.enableUser", "Enable") : tNext("appAdmin.disableUser", "Disable"))}</button>`}
               </div>
             </div>
           `;
@@ -7285,12 +7438,12 @@ def ui_preview_html(
                     <span class="tag ${member.role === "manager" ? "good" : ""}">
                       ${escapeHtml(member.display_name || member.username || member.user_id)}
                       ${escapeHtml(appAdminGroupRoleLabel(member.role))}
-                      <button type="button" class="inline-delete" data-app-admin-group-member-delete="${escapeHtml(group.id)}" data-user-id="${escapeHtml(member.user_id)}" aria-label="${escapeHtml(tNext("appAdmin.removeMember", "Remove member"))}">x</button>
+                      ${canManageGroups ? `<button type="button" class="inline-delete" data-app-admin-group-member-delete="${escapeHtml(group.id)}" data-user-id="${escapeHtml(member.user_id)}" aria-label="${escapeHtml(tNext("appAdmin.removeMember", "Remove member"))}">x</button>` : ""}
                     </span>
                   `).join("") : `<span class="tag">${escapeHtml(tNext("appAdmin.noMembers", "No members"))}</span>`}
                 </div>
               </div>
-              <div class="profile-passkey-actions admin-member-add">
+              <div class="profile-passkey-actions admin-member-add ${canManageGroups ? "" : "hidden"}">
                 <select data-app-admin-group-user="${escapeHtml(group.id)}">${userOptions}</select>
                 <select data-app-admin-group-role="${escapeHtml(group.id)}">${appAdminGroupRoleOptions("member", false)}</select>
                 <button type="button" class="secondary-button" data-app-admin-group-add="${escapeHtml(group.id)}">${escapeHtml(tNext("appAdmin.addMember", "Add member"))}</button>
@@ -7343,22 +7496,29 @@ def ui_preview_html(
       renderAppAdminBackups(appAdmin.backup);
       setAppAdminTab(appAdmin.activeTab || "access");
       renderAppAdminVisibility();
+      applyAppPermissionVisibility();
     }
     async function loadAppAdmin() {
-      if (!isNativeAdminUser()) return;
+      if (!canUseAppAdmin()) return;
       setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loading", "Loading admin data..."));
       try {
+        const canLoadAccess = canUseAdminTab("access");
+        const canLoadUsers = canUseAdminTab("users");
+        const canLoadPlugins = canUseAdminTab("plugins");
+        const canLoadDigital = canUseAdminTab("digital") || canLoadPlugins;
+        const canLoadBackup = canUseAdminTab("backup");
+        const canLoadMetadata = canUseAdminTab("metadata");
         const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload] = await Promise.all([
-          authApiJson("/api/next/auth/users"),
-          authApiJson("/api/next/auth/credentials"),
-          authApiJson("/api/next/auth/invite"),
-          authApiJson("/api/next/auth/rbac"),
-          authApiJson("/api/next/media-groups?limit=500").catch(() => ({groups: []})),
-          authApiJson("/api/next/plugins/registry").catch((error) => ({plugins: [], error: error.message || String(error)})),
-          authApiJson("/api/next/digital-sources").catch(() => ({items: []})),
-          authApiJson("/api/next/backup/status").catch((error) => ({status: "error", error: error.message || String(error)})),
-          authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})),
-          authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []}))
+          canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/users").catch(() => ({users: [], roles: []})) : Promise.resolve({users: [], roles: []}),
+          canLoadAccess ? authApiJson("/api/next/auth/credentials").catch(() => ({credentials: []})) : Promise.resolve({credentials: []}),
+          canLoadAccess ? authApiJson("/api/next/auth/invite").catch(() => ({invites: []})) : Promise.resolve({invites: []}),
+          canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/rbac").catch(() => ({roles: [], assignableRoles: []})) : Promise.resolve({roles: [], assignableRoles: []}),
+          canLoadUsers ? authApiJson("/api/next/media-groups?limit=500").catch(() => ({groups: []})) : Promise.resolve({groups: []}),
+          canLoadPlugins ? authApiJson("/api/next/plugins/registry").catch((error) => ({plugins: [], error: error.message || String(error)})) : Promise.resolve({plugins: []}),
+          canLoadDigital ? authApiJson("/api/next/digital-sources").catch(() => ({items: []})) : Promise.resolve({items: []}),
+          canLoadBackup ? authApiJson("/api/next/backup/status").catch((error) => ({status: "error", error: error.message || String(error)})) : Promise.resolve(null),
+          canLoadPlugins ? authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
+          canLoadMetadata ? authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []})) : Promise.resolve({jobs: []})
         ]);
         appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
@@ -7371,10 +7531,10 @@ def ui_preview_html(
         appAdmin.backup = backupPayload || null;
         appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
         appAdmin.metadataJobs = metadataJobsPayload.jobs || [];
-        const configPayloads = await Promise.all(appAdmin.plugins.map((plugin) =>
+        const configPayloads = canLoadPlugins ? await Promise.all(appAdmin.plugins.map((plugin) =>
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
-        ));
+        )) : [];
         appAdmin.pluginConfigs = {};
         configPayloads.forEach((payload) => {
           if (payload.plugin && payload.plugin.id) {
@@ -7390,7 +7550,7 @@ def ui_preview_html(
       }
     }
     async function setAppAdminRegistrationMode(mode) {
-      if (!isNativeAdminUser()) return;
+      if (!isNativeAdminUser() || !hasPermission("security.manage_invite_only")) return;
       const publicRegistration = mode === "public";
       setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.savingMode", "Saving registration mode..."));
       try {
@@ -7409,6 +7569,7 @@ def ui_preview_html(
     }
     async function createAppAdminInvite(event) {
       if (event) event.preventDefault();
+      if (!isNativeAdminUser() || !hasPermission("users.invite")) return;
       const input = document.getElementById("appAdminInviteUsername");
       const username = String(input?.value || "").trim();
       const output = document.getElementById("appAdminInviteCodeOutput");
@@ -7435,12 +7596,14 @@ def ui_preview_html(
       }
     }
     async function deleteAppAdminInvite(inviteId) {
+      if (!isNativeAdminUser() || !hasPermission("users.invite")) return;
       if (!inviteId) return;
       await authApiJson(`/api/next/auth/invite/${encodeURIComponent(inviteId)}`, {method: "DELETE"});
       await loadAppAdmin();
       setAppAdminMessage("appAdminInviteMessage", tNext("appAdmin.inviteDeleted", "Invite deleted."), "good");
     }
     async function updateAppAdminUserRole(userId, role) {
+      if (!isNativeAdminUser() || !hasPermission("users.assign_roles")) return;
       if (!userId || !role) return;
       setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.savingUser", "Saving user..."));
       try {
@@ -7456,6 +7619,7 @@ def ui_preview_html(
       }
     }
     async function updateAppAdminUserStatus(userId, status) {
+      if (!isNativeAdminUser() || !hasPermission("users.disable")) return;
       if (!userId || !status) return;
       setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.savingUser", "Saving user..."));
       try {
@@ -7472,6 +7636,7 @@ def ui_preview_html(
     }
     async function createAppAdminGroup(event) {
       if (event) event.preventDefault();
+      if (!hasPermission("groups.create")) return;
       const input = document.getElementById("appAdminGroupName");
       const name = String(input?.value || "").trim();
       if (!name) {
@@ -7494,6 +7659,7 @@ def ui_preview_html(
       }
     }
     async function addAppAdminGroupMember(groupId, userId, role) {
+      if (!hasAnyPermission(["groups.invite", "groups.create"])) return;
       if (!groupId || !userId) return;
       setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.savingGroup", "Saving group..."));
       try {
@@ -7509,6 +7675,7 @@ def ui_preview_html(
       }
     }
     async function removeAppAdminGroupMember(groupId, userId) {
+      if (!hasAnyPermission(["groups.invite", "groups.create"])) return;
       if (!groupId || !userId) return;
       setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.savingGroup", "Saving group..."));
       try {
@@ -7521,6 +7688,8 @@ def ui_preview_html(
     }
     async function setAppAdminPluginEnabled(pluginId, enabled) {
       if (!pluginId) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanManagePlugin(plugin)) return;
       setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.savingPlugin", "Saving plugin..."));
       try {
         const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}`, {
@@ -7554,6 +7723,7 @@ def ui_preview_html(
     async function moveAppAdminPlugin(pluginId, direction) {
       const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId);
       if (!plugin) return;
+      if (!appAdminCanManagePlugin(plugin)) return;
       const orderIndex = appAdminPluginMoveTarget(plugin, appAdminPluginSectionPeers(plugin), direction);
       if (!orderIndex) return;
       setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.movingPlugin", "Updating plugin order..."));
@@ -7572,6 +7742,8 @@ def ui_preview_html(
     }
     async function checkAppAdminPluginHealth(pluginId) {
       if (!pluginId) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanViewPluginHealth(plugin)) return;
       setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.checkingHealth", "Checking plugin health..."));
       try {
         const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/health`);
@@ -7592,6 +7764,8 @@ def ui_preview_html(
     }
     async function saveAppAdminPluginConfig(pluginId, row) {
       if (!pluginId || !row) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanConfigurePlugin(plugin)) return;
       const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) => !String(input.value || "").trim());
       if (missingRequired.length) {
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.fillRequiredPluginFields", "Fill the required plugin fields first."), "bad");
@@ -7624,6 +7798,8 @@ def ui_preview_html(
     }
     async function executeAppAdminPlugin(pluginId, entrypoint) {
       if (!pluginId || !entrypoint) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanExecutePlugin(plugin, entrypoint)) return;
       setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.executingPlugin", "Executing plugin..."));
       try {
         const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/execute`, {
@@ -7645,6 +7821,7 @@ def ui_preview_html(
       renderAppAdminPlugins();
     }
     async function refreshAppAdminPluginJobs() {
+      if (!canUseAdminTab("plugins")) return;
       try {
         const payload = await authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10");
         appAdmin.pluginJobs = payload.jobs || [];
@@ -7655,6 +7832,7 @@ def ui_preview_html(
       }
     }
     async function refreshAppAdminMetadataJobs() {
+      if (!canUseAdminTab("metadata")) return;
       setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.loadingMetadataJobs", "Loading metadata jobs..."));
       try {
         const payload = await authApiJson("/api/next/metadata/jobs?limit=20");
@@ -7666,6 +7844,7 @@ def ui_preview_html(
       }
     }
     async function refreshAppAdminDigitalSources() {
+      if (!canUseAdminTab("digital") && !canUseAdminTab("plugins")) return;
       setAppAdminMessage("appAdminDigitalMessage", tNext("appAdmin.loadingDigitalSources", "Loading digital sources..."));
       try {
         const payload = await authApiJson("/api/next/digital-sources");
@@ -7678,6 +7857,7 @@ def ui_preview_html(
       }
     }
     async function refreshAppAdminBackupStatus() {
+      if (!canUseAdminTab("backup")) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.loadingBackup", "Loading backup status..."));
       try {
         appAdmin.backup = await authApiJson("/api/next/backup/status");
@@ -7716,6 +7896,7 @@ def ui_preview_html(
       return `discvault-functional-${new Date().toISOString().slice(0, 10)}.zip`;
     }
     async function exportAppAdminBackupZip() {
+      if (!hasAnyPermission(["admin.backup", "collection.export_functional"])) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupExporting", "Creating backup ZIP..."));
       try {
         const response = await fetch("/api/next/backup/export", {
@@ -7744,6 +7925,7 @@ def ui_preview_html(
       }
     }
     async function validateAppAdminBackupZip() {
+      if (!hasPermission("admin.restore_functional")) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupValidating", "Validating backup ZIP..."));
       try {
         const payload = await uploadAppAdminBackupZip("/api/next/backup/validate");
@@ -7756,6 +7938,7 @@ def ui_preview_html(
       }
     }
     async function restoreAppAdminBackupZip() {
+      if (!hasPermission("admin.restore_functional")) return;
       if (!confirm(tNext("appAdmin.backupRestoreConfirm", "Restore this ZIP and replace the functional collection data? Auth, passkeys, plugins and secrets are not restored."))) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
       try {
@@ -7787,6 +7970,8 @@ def ui_preview_html(
     }
     async function queueAppAdminPluginJob(pluginId, entrypoint) {
       if (!pluginId || !entrypoint) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanExecutePlugin(plugin, entrypoint)) return;
       setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.queueingPluginJob", "Queueing plugin job..."));
       try {
         const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/jobs`, {
@@ -8003,6 +8188,7 @@ def ui_preview_html(
       renderPreferences();
       renderProfile();
       renderLibrary();
+      applyAppPermissionVisibility();
     }
     function renderLanguageSelect() {
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect").forEach((select) => {
@@ -8452,6 +8638,7 @@ def ui_preview_html(
         credit.job || credit.character || credit.credit_type || ""
       )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCrew", "No crew imported yet."))}</div>`;
       setMovieDetailMessage("");
+      applyAppPermissionVisibility();
     }
     function showMovieDetailLoading(movieId) {
       activeDetailMovieId = movieId || "";
@@ -9431,6 +9618,7 @@ def ui_preview_html(
       Quagga.onDetected(importScanner.quaggaHandler);
     }
     async function startImportBarcodeScanner() {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
       const viewport = document.getElementById("importScannerViewport");
       const placeholder = document.getElementById("importScannerPlaceholder");
       if (!viewport) return;
@@ -9515,8 +9703,14 @@ def ui_preview_html(
       renderImportPlan();
       renderImportJobs();
       renderBarcodeLookup();
+      applyAppPermissionVisibility();
     }
     async function loadImportCenter() {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) return;
+      if (!hasPermission("collection.import")) {
+        renderImportCenter();
+        return;
+      }
       setImportCenterMessage(tNext("importCenter.loading", "Loading import status..."));
       try {
         const [reportPayload, jobsPayload] = await Promise.all([
@@ -9534,6 +9728,7 @@ def ui_preview_html(
       }
     }
     async function startImportCenterImport() {
+      if (!hasPermission("collection.import")) return;
       const source = selectedImportSource(importCenter.report || {});
       const sourceId = importSourceId(source);
       if (!sourceId) {
@@ -9561,6 +9756,7 @@ def ui_preview_html(
     }
     async function previewBarcodeImport(event) {
       event?.preventDefault();
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
       const barcodeInput = document.getElementById("importBarcodeInput");
       const titleInput = document.getElementById("importTitleInput");
       const barcode = normalizeImportBarcode(barcodeInput?.value || "");
@@ -9585,6 +9781,7 @@ def ui_preview_html(
       }
     }
     async function addLookupMovie() {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
       const barcode = normalizeImportBarcode(document.getElementById("importBarcodeInput")?.value || "");
       const title = String(document.getElementById("importTitleInput")?.value || "").trim();
       if (!barcode && !title) {
@@ -9695,7 +9892,7 @@ def ui_preview_html(
       scrollPreviewTop();
     }
     function showAdminPage(pushUrl = true) {
-      if (!isNativeAdminUser()) {
+      if (!canUseAppAdmin()) {
         showLibraryPage(pushUrl);
         return;
       }
@@ -9721,6 +9918,10 @@ def ui_preview_html(
       scrollPreviewTop();
     }
     function showImportPage(pushUrl = true) {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) {
+        showLibraryPage(pushUrl);
+        return;
+      }
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -9784,6 +9985,7 @@ def ui_preview_html(
       if (route === "containers") document.querySelector(".side-stack")?.scrollIntoView({block: "start", behavior: "smooth"});
     }
     async function refreshActiveMovieMetadata(dryRun) {
+      if (!hasPermission("metadata.refresh_one")) return;
       if (!activeDetailMovieId) return;
       setMovieDetailMessage(dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
       try {
@@ -9927,6 +10129,7 @@ def ui_preview_html(
       });
     }
     async function queueBulkMetadataRefresh() {
+      if (!hasPermission("metadata.refresh_bulk")) return;
       const movieIds = Array.from(selectedMovieIds);
       const summary = document.getElementById("librarySummary");
       if (!movieIds.length) {
@@ -9973,6 +10176,7 @@ def ui_preview_html(
       });
     }
     async function applyBulkGroup(operation) {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups)) return;
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
       if (!movieIds.length) {
@@ -9993,6 +10197,7 @@ def ui_preview_html(
       }
     }
     async function applyBulkContainer(targetType, selectId) {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers)) return;
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
       if (!movieIds.length) {
@@ -10013,6 +10218,7 @@ def ui_preview_html(
       }
     }
     async function applyBulkCollection() {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)) return;
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
       try {
@@ -10069,7 +10275,8 @@ def ui_preview_html(
       });
     }
     function setPreferenceTab(tab) {
-      const selected = tab || "appearance";
+      let selected = tab || "appearance";
+      if (selected === "collectors" && !hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) selected = "appearance";
       document.querySelectorAll("[data-preferences-tab]").forEach((button) => {
         const active = button.dataset.preferencesTab === selected;
         button.classList.toggle("active", active);
@@ -10095,6 +10302,7 @@ def ui_preview_html(
         legacyList.innerHTML = preferenceRowsHtml(preferenceLabels);
         bindPreferenceList(legacyList);
       }
+      applyAppPermissionVisibility();
     }
     async function updatePreference(key, value) {
       preferences[key] = value;
@@ -10129,6 +10337,7 @@ def ui_preview_html(
       return sortedByTitle(containers.filter((container) => container.container_type === containerManagerType));
     }
     function renderContainerManager() {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) return;
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.classList.toggle("active", button.dataset.containerManagerType === containerManagerType);
       });
@@ -10168,6 +10377,7 @@ def ui_preview_html(
     }
     async function createManagedContainer(event) {
       event?.preventDefault();
+      if (!hasAnyPermission(["containers.create", "collection.bulk_edit"])) return;
       const input = document.getElementById("containerManagerTitle");
       const title = String(input?.value || "").trim();
       if (!title) {
@@ -10192,6 +10402,7 @@ def ui_preview_html(
       }
     }
     async function renameManagedContainer(containerId) {
+      if (!hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
       const input = document.querySelector(`[data-container-manager-title="${CSS.escape(containerId)}"]`);
       const title = String(input?.value || "").trim();
       if (!title) {
@@ -10215,6 +10426,7 @@ def ui_preview_html(
       }
     }
     async function deleteManagedContainer(containerId) {
+      if (!hasAnyPermission(["containers.delete", "collection.bulk_edit"])) return;
       const container = containers.find((item) => String(item.id) === String(containerId));
       const title = container?.title || tNext("common.untitled", "Untitled");
       const confirmed = window.confirm(tNext("containerManage.deleteConfirm", "Delete this item?").replace("{title}", title));
@@ -10307,6 +10519,7 @@ def ui_preview_html(
       renderProfilePasskeys();
       renderProfileRecovery();
       renderContainerManager();
+      applyAppPermissionVisibility();
     }
     function shortDateTime(value) {
       const text = String(value || "");
@@ -10649,8 +10862,8 @@ def ui_preview_html(
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
-      else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
-      else if (route.view === "import") showImportPage(false);
+      else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
+      else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
     }
