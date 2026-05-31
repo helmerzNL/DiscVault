@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v126";
+const SW_VERSION = "discvault-sw-v127";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -9,9 +9,16 @@ const APP_SHELL = [
   "/styles.css",
   "/manifest.json",
   "/version.json",
+  "/apple-touch-icon-152.png",
+  "/apple-touch-icon-167.png",
   "/apple-touch-icon.png",
   "/favicon-32.png",
   "/favicon-192.png",
+  "/favicon-512.png",
+  "/pwa-icon-192.png",
+  "/pwa-icon-512.png",
+  "/pwa-maskable-192.png",
+  "/pwa-maskable-512.png",
   "/icon.svg",
   "/logo.svg",
   "/js/i18n.js",
@@ -185,7 +192,7 @@ self.addEventListener("fetch", event => {
   }
 
   event.respondWith(
-    cacheFirst(request, APP_CACHE).catch(() => caches.match("/index.html"))
+    cacheFirst(request, APP_CACHE).catch(async () => (await caches.match("/")) || caches.match("/index.html"))
   );
 });
 
@@ -197,7 +204,7 @@ self.addEventListener("push", event => {
   const title   = data.title || "DiscVault";
   const options = {
     body:    data.body  || "",
-    icon:    "/favicon-192.png",
+    icon:    "/pwa-icon-192.png",
     badge:   "/favicon-32.png",
     data:    { url: data.url || "/" },
     vibrate: [100, 50, 100],

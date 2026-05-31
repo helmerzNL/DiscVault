@@ -19,7 +19,9 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html {
+    min-height: 100%;
     overscroll-behavior-x: none;
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -28,8 +30,27 @@
     font-family: 'DM Sans', sans-serif;
     font-weight: 300;
     min-height: 100vh;
+    min-height: 100dvh;
     line-height: 1.6;
     overscroll-behavior-x: none;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  @media (display-mode: standalone) {
+    body {
+      background-color: var(--bg);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    input,
+    textarea,
+    [contenteditable="true"] {
+      user-select: text;
+      -webkit-user-select: text;
+    }
   }
 
   body.modal-open {
@@ -2861,9 +2882,15 @@
   .pwa-install-banner.visible { transform: translateY(0); }
   .pwa-install-banner-icon {
     width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    background: var(--bg);
+    border: 1px solid var(--border);
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.5rem;
+    overflow: hidden;
+  }
+  .pwa-install-banner-icon img {
+    width: 100%;
+    height: 100%;
+    display: block;
   }
   .pwa-install-banner-text { flex: 1; min-width: 0; }
   .pwa-install-banner-text strong { display: block; font-size: 0.92rem; color: var(--text); }

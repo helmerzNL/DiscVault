@@ -2,17 +2,27 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>DiscVault — Collectie Beheer</title>
 
 <!-- PWA & iOS -->
+<meta name="application-name" content="DiscVault">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DiscVault">
-<meta name="theme-color" content="#0a0a0f">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
+<meta name="msapplication-TileColor" content="#111214">
+<meta name="msapplication-TileImage" content="/pwa-icon-192.png">
+<link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/pwa-icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/pwa-icon-512.png">
+<link rel="mask-icon" href="/icon.svg" color="#e8c547">
 <link rel="manifest" href="/manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -2234,7 +2244,9 @@
 <script src="/js/app.js"></script>
 <!-- PWA install banner -->
 <div id="pwaInstallBanner" class="pwa-install-banner">
-  <div class="pwa-install-banner-icon">📀</div>
+  <div class="pwa-install-banner-icon">
+    <img src="/pwa-icon-192.png" alt="" aria-hidden="true">
+  </div>
   <div class="pwa-install-banner-text">
     <strong data-i18n="pwa.title">Installeer DiscVault</strong>
     <span data-i18n="pwa.subtitle">Voeg toe aan je startscherm voor de beste ervaring</span>
