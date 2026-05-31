@@ -6283,10 +6283,11 @@ def ui_preview_html(
         </section>
         <nav class="app-admin-submenu detail-submenu" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
           <button type="button" class="active" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
-          <button type="button" data-app-admin-tab="users" data-next-i18n="appAdmin.tabUsers">Users</button>
-          <button type="button" data-app-admin-tab="groups" data-next-i18n="appAdmin.tabGroups">Groups</button>
+          <button type="button" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
           <button type="button" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
+          <button type="button" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
           <button type="button" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
+          <button type="button" data-app-admin-tab="backup" data-next-i18n="appAdmin.tabBackup">Backup</button>
         </nav>
         <section class="app-admin-panel active" data-app-admin-panel="access">
           <section class="profile-grid">
@@ -6339,29 +6340,29 @@ def ui_preview_html(
           </section>
         </section>
         <section class="app-admin-panel" data-app-admin-panel="users">
-          <div class="detail-card profile-card full">
-            <h3 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h3>
-            <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
-            <div class="profile-passkey-list" id="appAdminUsersList"></div>
-            <div class="login-message" id="appAdminUsersMessage"></div>
-          </div>
-        </section>
-        <section class="app-admin-panel" data-app-admin-panel="groups">
-          <div class="detail-card profile-card full">
-            <h3 data-next-i18n="appAdmin.groups">Groups</h3>
-            <p data-next-i18n="appAdmin.groupsHelp">Create media groups and manage which users are members.</p>
-            <form class="profile-form" id="appAdminGroupForm">
-              <label for="appAdminGroupName">
-                <span data-next-i18n="appAdmin.groupName">Group name</span>
-                <input id="appAdminGroupName" autocomplete="off" maxlength="120">
-              </label>
-              <div class="profile-form-actions">
-                <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
-              </div>
-            </form>
-            <div class="profile-passkey-list" id="appAdminGroupsList"></div>
-            <div class="login-message" id="appAdminGroupsMessage"></div>
-          </div>
+          <section class="profile-grid">
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h3>
+              <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
+              <div class="profile-passkey-list" id="appAdminUsersList"></div>
+              <div class="login-message" id="appAdminUsersMessage"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.groups">Groups</h3>
+              <p data-next-i18n="appAdmin.groupsHelp">Create media groups and manage which users are members.</p>
+              <form class="profile-form" id="appAdminGroupForm">
+                <label for="appAdminGroupName">
+                  <span data-next-i18n="appAdmin.groupName">Group name</span>
+                  <input id="appAdminGroupName" autocomplete="off" maxlength="120">
+                </label>
+                <div class="profile-form-actions">
+                  <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
+                </div>
+              </form>
+              <div class="profile-passkey-list" id="appAdminGroupsList"></div>
+              <div class="login-message" id="appAdminGroupsMessage"></div>
+            </div>
+          </section>
         </section>
         <section class="app-admin-panel" data-app-admin-panel="plugins">
           <section class="profile-grid">
@@ -6397,6 +6398,28 @@ def ui_preview_html(
             </div>
           </section>
         </section>
+        <section class="app-admin-panel" data-app-admin-panel="digital">
+          <section class="profile-grid">
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.digitalOperations">Digital sources</h3>
+              <p data-next-i18n="appAdmin.digitalOperationsHelp">Review connected Plex and Jellyfin libraries and their latest sync state.</p>
+              <div class="profile-meta">
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.digitalSources">Digital sources</span>
+                  <strong id="appAdminDigitalSourceTotal">-</strong>
+                </div>
+              </div>
+              <div class="profile-action-row">
+                <button type="button" class="secondary-button" id="appAdminRefreshDigitalSourcesButton" data-next-i18n="appAdmin.refreshDigitalSources">Refresh digital sources</button>
+              </div>
+              <div class="login-message" id="appAdminDigitalMessage"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.digitalMediaSources">Digital media sources</h3>
+              <div class="profile-passkey-list" id="appAdminDigitalSourcesList"></div>
+            </div>
+          </section>
+        </section>
         <section class="app-admin-panel" data-app-admin-panel="metadata">
           <section class="profile-grid">
             <div class="detail-card profile-card">
@@ -6410,6 +6433,47 @@ def ui_preview_html(
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.metadataJobs">Metadata jobs</h3>
               <div class="profile-passkey-list" id="appAdminMetadataJobsList"></div>
+            </div>
+          </section>
+        </section>
+        <section class="app-admin-panel" data-app-admin-panel="backup">
+          <section class="profile-grid">
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.backupOperations">Backup & restore</h3>
+              <p data-next-i18n="appAdmin.backupOperationsHelp">Export or restore only functional collection data. Auth, passkeys, plugins and secrets stay outside the backup.</p>
+              <div class="profile-meta">
+                <div class="profile-meta-row">
+                  <span data-next-i18n="appAdmin.backupStatus">Backup status</span>
+                  <strong id="appAdminBackupState">-</strong>
+                </div>
+              </div>
+              <div class="profile-action-row">
+                <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.refreshBackup">Refresh backup</button>
+                <button type="button" class="secondary-button" id="appAdminExportBackupButton" data-next-i18n="appAdmin.exportBackup">Export ZIP</button>
+              </div>
+              <div class="login-message" id="appAdminBackupMessage"></div>
+            </div>
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.backupUpload">Restore ZIP</h3>
+              <p data-next-i18n="appAdmin.backupUploadHelp">Validate a DiscVault backup ZIP before restoring it.</p>
+              <form class="profile-form" id="appAdminBackupForm">
+                <label for="appAdminBackupFile">
+                  <span data-next-i18n="appAdmin.backupFile">Backup ZIP</span>
+                  <input id="appAdminBackupFile" type="file" accept=".zip,application/zip">
+                </label>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="appAdminValidateBackupButton" data-next-i18n="appAdmin.validateBackup">Validate ZIP</button>
+                  <button type="button" class="secondary-button danger" id="appAdminRestoreBackupButton" data-next-i18n="appAdmin.restoreBackup">Restore ZIP</button>
+                </div>
+              </form>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.backupReport">Backup report</h3>
+              <div class="profile-passkey-list" id="appAdminBackupReport"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.backupJobs">Restore jobs</h3>
+              <div class="profile-passkey-list" id="appAdminBackupJobs"></div>
             </div>
           </section>
         </section>
@@ -6474,6 +6538,8 @@ def ui_preview_html(
     let containerManagerType = "box_set";
     let appAdmin = {
       activeTab: "access",
+      backup: null,
+      backupReport: null,
       credentials: [],
       digitalSources: [],
       groups: [],
@@ -6508,6 +6574,11 @@ def ui_preview_html(
         '"': "&quot;",
         "'": "&#39;"
       })[char]);
+    }
+    function formatNumber(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric.toLocaleString() : String(value);
     }
     function tNext(key, fallback) {
       return localeState.messages[key] || fallback || key;
@@ -6860,6 +6931,106 @@ def ui_preview_html(
         `;
       }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noMetadataJobs", "No metadata jobs yet."))}</div>`;
     }
+    function renderAppAdminDigitalSources() {
+      const list = document.getElementById("appAdminDigitalSourcesList");
+      const countNode = document.getElementById("appAdminDigitalSourceTotal");
+      const sources = appAdmin.digitalSources || [];
+      if (countNode) countNode.textContent = String(sources.length || 0);
+      if (!list) return;
+      list.innerHTML = sources.length ? sources.map((source) => {
+        const pluginId = source.plugin_id || source.pluginId || source.source_type || source.type || "-";
+        const itemCount = source.itemCount ?? source.item_count ?? source.items ?? 0;
+        const matchedCount = source.matchedCount ?? source.matched_count ?? source.matched ?? 0;
+        const status = source.status || source.sync_status || source.state || (source.enabled === false ? "disabled" : "active");
+        return `
+          <div class="profile-passkey">
+            <div class="profile-passkey-head">
+              <strong>${escapeHtml(source.name || pluginId)}</strong>
+              <span class="tag ${status === "active" || status === "completed" || status === "ok" ? "good" : ""}">${escapeHtml(String(status).replaceAll("_", " "))}</span>
+            </div>
+            <div class="profile-passkey-meta">
+              ${escapeHtml(pluginId)}
+              &middot;
+              ${escapeHtml(tNext("appAdmin.digitalSourceItems", "Items"))}: ${escapeHtml(formatNumber(itemCount))}
+              &middot;
+              ${escapeHtml(tNext("appAdmin.digitalSourceMatched", "Matched"))}: ${escapeHtml(formatNumber(matchedCount))}
+              ${source.updatedAt || source.updated_at ? ` &middot; ${escapeHtml(shortDateTime(source.updatedAt || source.updated_at))}` : ""}
+            </div>
+          </div>
+        `;
+      }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noDigitalSources", "No digital sources yet."))}</div>`;
+    }
+    function appAdminBackupCountsLine(counts) {
+      const values = counts || {};
+      return [
+        `${formatNumber(values.movies)} ${tNext("collection.movies", "Movies")}`,
+        `${formatNumber(values.containers)} ${tNext("appAdmin.backupContainers", "containers")}`,
+        `${formatNumber(values.mediaAssets || values.media_assets)} ${tNext("appAdmin.backupMediaAssets", "media assets")}`,
+        `${formatNumber(values.collection_items)} ${tNext("appAdmin.backupCollectionItems", "collection items")}`,
+        `${formatNumber(values.container_movies)} ${tNext("appAdmin.backupContainerMovies", "container movies")}`
+      ].join(", ");
+    }
+    function renderAppAdminBackupReport(report) {
+      const node = document.getElementById("appAdminBackupReport");
+      if (!node) return;
+      if (!report) {
+        node.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noBackupReport", "No backup report yet."))}</div>`;
+        return;
+      }
+      const media = report.media || {};
+      const tables = report.tables || {};
+      const tableTags = Object.entries(tables).slice(0, 12).map(([name, item]) => {
+        return `<span class="tag">${escapeHtml(name)} ${escapeHtml(formatNumber((item || {}).count))}</span>`;
+      }).join("");
+      const errors = (report.errors || []).map((item) => `<div class="login-message bad">${escapeHtml(item)}</div>`).join("");
+      const warnings = (report.warnings || []).map((item) => `<div class="login-message">${escapeHtml(item)}</div>`).join("");
+      node.innerHTML = `
+        <div class="profile-passkey">
+          <div class="profile-passkey-head">
+            <strong>${escapeHtml(report.valid ? tNext("appAdmin.backupZipValid", "ZIP is valid") : tNext("appAdmin.backupZipInvalid", "ZIP has validation issues"))}</strong>
+            <span class="tag ${report.valid ? "good" : "bad"}">${escapeHtml(report.scope || "unknown")}</span>
+          </div>
+          <div class="profile-passkey-meta">
+            ${escapeHtml(report.format || "-")} v${escapeHtml(report.formatVersion || "-")}
+            &middot;
+            ${escapeHtml(shortDateTime(report.createdAt))}
+          </div>
+          <div class="app-admin-plugin-meta">
+            <span class="tag ${media.missing ? "blue" : "good"}">${escapeHtml(formatNumber(media.embedded))} ${escapeHtml(tNext("appAdmin.backupEmbeddedMedia", "embedded media"))}</span>
+            <span class="tag ${media.missing ? "blue" : "good"}">${escapeHtml(formatNumber(media.missing))} ${escapeHtml(tNext("appAdmin.backupMissingMedia", "missing media"))}</span>
+          </div>
+          <div class="admin-member-cloud">${tableTags || `<span class="tag">${escapeHtml(tNext("appAdmin.noBackupTableCounts", "No table counts"))}</span>`}</div>
+          ${errors}
+          ${warnings}
+        </div>
+      `;
+    }
+    function renderAppAdminBackups(backup) {
+      const statusNode = document.getElementById("appAdminBackupState");
+      const jobsNode = document.getElementById("appAdminBackupJobs");
+      if (statusNode) {
+        statusNode.textContent = backup && backup.status === "ok"
+          ? `${backup.scope || "functional_collection"}; ${appAdminBackupCountsLine(backup.counts || {})}`
+          : tNext("appAdmin.noBackupStatus", "No backup status loaded.");
+      }
+      renderAppAdminBackupReport(appAdmin.backupReport);
+      if (!jobsNode) return;
+      const jobs = (backup && backup.latestJobs) || [];
+      jobsNode.innerHTML = jobs.length ? jobs.map((job) => `
+        <div class="profile-passkey">
+          <div class="profile-passkey-head">
+            <strong>${escapeHtml(job.jobType || "backup job")}</strong>
+            <span class="tag ${appAdminJobStatusClass(job.status)}">${escapeHtml(job.status || "-")}</span>
+          </div>
+          <div class="profile-passkey-meta">
+            ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(job.createdAt))}
+            &middot;
+            ${escapeHtml(tNext("appAdmin.finished", "Finished"))}: ${escapeHtml(shortDateTime(job.finishedAt))}
+          </div>
+          ${job.error ? `<div class="login-message bad">${escapeHtml(job.error)}</div>` : ""}
+        </div>
+      `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noBackupJobs", "No restore jobs yet."))}</div>`;
+    }
     function renderAppAdminPlugins() {
       const list = document.getElementById("appAdminPluginsList");
       const plugins = appAdmin.plugins || [];
@@ -6874,6 +7045,7 @@ def ui_preview_html(
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
       renderAppAdminPluginJobs();
       renderAppAdminMetadataJobs();
+      renderAppAdminDigitalSources();
       if (!list) return;
       if (!plugins.length) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
@@ -7041,6 +7213,8 @@ def ui_preview_html(
       }
       renderAppAdminPlugins();
       renderAppAdminMetadataJobs();
+      renderAppAdminDigitalSources();
+      renderAppAdminBackups(appAdmin.backup);
       setAppAdminTab(appAdmin.activeTab || "access");
       renderAppAdminVisibility();
     }
@@ -7048,7 +7222,7 @@ def ui_preview_html(
       if (!isNativeAdminUser()) return;
       setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loading", "Loading admin data..."));
       try {
-        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, pluginJobsPayload, metadataJobsPayload] = await Promise.all([
+        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload] = await Promise.all([
           authApiJson("/api/next/auth/users"),
           authApiJson("/api/next/auth/credentials"),
           authApiJson("/api/next/auth/invite"),
@@ -7056,6 +7230,7 @@ def ui_preview_html(
           authApiJson("/api/next/media-groups?limit=500").catch(() => ({groups: []})),
           authApiJson("/api/next/plugins/registry").catch((error) => ({plugins: [], error: error.message || String(error)})),
           authApiJson("/api/next/digital-sources").catch(() => ({items: []})),
+          authApiJson("/api/next/backup/status").catch((error) => ({status: "error", error: error.message || String(error)})),
           authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})),
           authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []}))
         ]);
@@ -7067,6 +7242,7 @@ def ui_preview_html(
         appAdmin.groups = groupsPayload.groups || [];
         appAdmin.plugins = pluginsPayload.plugins || [];
         appAdmin.digitalSources = digitalSourcesPayload.items || [];
+        appAdmin.backup = backupPayload || null;
         appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
         appAdmin.metadataJobs = metadataJobsPayload.jobs || [];
         const configPayloads = await Promise.all(appAdmin.plugins.map((plugin) =>
@@ -7364,9 +7540,106 @@ def ui_preview_html(
       }
     }
     async function refreshAppAdminDigitalSources() {
-      const payload = await authApiJson("/api/next/digital-sources").catch(() => ({items: []}));
-      appAdmin.digitalSources = payload.items || [];
-      renderAppAdminPlugins();
+      setAppAdminMessage("appAdminDigitalMessage", tNext("appAdmin.loadingDigitalSources", "Loading digital sources..."));
+      try {
+        const payload = await authApiJson("/api/next/digital-sources");
+        appAdmin.digitalSources = payload.items || [];
+        renderAppAdminPlugins();
+        renderAppAdminDigitalSources();
+        setAppAdminMessage("appAdminDigitalMessage", tNext("appAdmin.digitalSourcesLoaded", "Digital sources loaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminDigitalMessage", error.message || String(error), "bad");
+      }
+    }
+    async function refreshAppAdminBackupStatus() {
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.loadingBackup", "Loading backup status..."));
+      try {
+        appAdmin.backup = await authApiJson("/api/next/backup/status");
+        renderAppAdminBackups(appAdmin.backup);
+        setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupLoaded", "Backup status loaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
+    }
+    function selectedAppAdminBackupFile() {
+      const input = document.getElementById("appAdminBackupFile");
+      const file = input && input.files && input.files[0];
+      if (!file) throw new Error(tNext("appAdmin.backupSelectZip", "Select a DiscVault backup ZIP first."));
+      return file;
+    }
+    async function uploadAppAdminBackupZip(url) {
+      const formData = new FormData();
+      formData.append("file", selectedAppAdminBackupFile());
+      const response = await fetch(url, {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: authHeaders(),
+        body: formData
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok && !payload.report) {
+        throw new Error(payload.error || `${url} HTTP ${response.status}`);
+      }
+      return payload;
+    }
+    function appAdminBackupDownloadName(response) {
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i);
+      if (match && match[1]) return decodeURIComponent(match[1].replace(/"/g, ""));
+      return `discvault-functional-${new Date().toISOString().slice(0, 10)}.zip`;
+    }
+    async function exportAppAdminBackupZip() {
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupExporting", "Creating backup ZIP..."));
+      try {
+        const response = await fetch("/api/next/backup/export", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: authHeaders()
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || `Backup export HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = appAdminBackupDownloadName(response);
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        await refreshAppAdminBackupStatus();
+        setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupDownloaded", "Backup ZIP downloaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
+    }
+    async function validateAppAdminBackupZip() {
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupValidating", "Validating backup ZIP..."));
+      try {
+        const payload = await uploadAppAdminBackupZip("/api/next/backup/validate");
+        appAdmin.backupReport = payload.report || null;
+        renderAppAdminBackups(appAdmin.backup);
+        const valid = !!(payload.report && payload.report.valid);
+        setAppAdminMessage("appAdminBackupMessage", valid ? tNext("appAdmin.backupZipValid", "ZIP is valid") : tNext("appAdmin.backupZipInvalid", "ZIP has validation issues"), valid ? "good" : "bad");
+      } catch (error) {
+        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
+    }
+    async function restoreAppAdminBackupZip() {
+      if (!confirm(tNext("appAdmin.backupRestoreConfirm", "Restore this ZIP and replace the functional collection data? Auth, passkeys, plugins and secrets are not restored."))) return;
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
+      try {
+        const payload = await uploadAppAdminBackupZip("/api/next/backup/restore?confirm=restore-functional-collection");
+        appAdmin.backupReport = payload.report || null;
+        await refreshAppAdminBackupStatus();
+        setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueued", "Restore job queued."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
     }
     async function pollAppAdminPluginJob(jobId, pluginId) {
       for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -10034,6 +10307,11 @@ def ui_preview_html(
       });
       document.getElementById("appAdminRefreshPluginJobsButton")?.addEventListener("click", () => refreshAppAdminPluginJobs());
       document.getElementById("appAdminRefreshMetadataJobsButton")?.addEventListener("click", () => refreshAppAdminMetadataJobs());
+      document.getElementById("appAdminRefreshDigitalSourcesButton")?.addEventListener("click", () => refreshAppAdminDigitalSources());
+      document.getElementById("appAdminRefreshBackupButton")?.addEventListener("click", () => refreshAppAdminBackupStatus());
+      document.getElementById("appAdminExportBackupButton")?.addEventListener("click", () => exportAppAdminBackupZip());
+      document.getElementById("appAdminValidateBackupButton")?.addEventListener("click", () => validateAppAdminBackupZip());
+      document.getElementById("appAdminRestoreBackupButton")?.addEventListener("click", () => restoreAppAdminBackupZip());
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
         const healthButton = event.target.closest("[data-app-admin-plugin-health]");
