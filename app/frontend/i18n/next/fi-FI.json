@@ -986,5 +986,18 @@
   "movieDetail.savingArtwork": "Tallennetaan kuvitusta...",
   "movieDetail.artworkSaved": "Kuvitus tallennettu.",
   "preferences.saving": "Tallennetaan...",
-  "preferences.saved": "Asetukset tallennettu."
+  "preferences.saved": "Asetukset tallennettu.",
+  "preferences.showFeaturedHero": "Nayta nostettu esikatselu",
+  "preferences.showFeaturedHeroHelp": "Nayttaa suuren nostetun elokuvan etusivun ylaosassa.",
+  "preferences.showCollectionSearch": "Hakupalkki kokoelmassa",
+  "preferences.showCollectionSearchHelp": "Nayttaa hakupalkin kokoelman ylapuolella nimelle, viivakoodille, formaatille ja ryhmille.",
+  "preferences.showAutoVideos": "Nayta automaattiset videot",
+  "preferences.showAutoVideosHelp": "Nayttaa metatietolahteista automaattisesti keratyt videot. Pois paalta nayttaa vain itse lisaamasi videot.",
+  "preferences.showLocalTitle": "Elokuvan nimi paikallisella kielella",
+  "preferences.showLocalTitleHelp": "Nayttaa elokuvan nimen appin kielella, kun se on saatavilla. Pois paalta nayttaa aina alkuperaisen nimen.",
+  "preferences.showExtendedPeoplePages": "Laajennetut henkil?sivut",
+  "preferences.showExtendedPeoplePagesHelp": "Nayttaa digitaaliset elokuvat ja taydet filmografiat henkil?sivuilla. Pois paalta nayttaa vain omistetun fyysisen median.",
+  "containerDetail.overview": "Yleiskuva",
+  "containerDetail.sections": "Sailion osiot",
+  "migration.legacyAuthRequired": "Kirjaudu legacy owner/admin -passkeylla ennen migraation kaynnistamista."
 }

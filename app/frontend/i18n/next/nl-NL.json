@@ -1010,5 +1010,8 @@
   "collection.formatFilter": "Formaat",
   "common.all": "Alles",
   "collection.itemFilter": "Items",
-  "collection.tiles": "tegels"
+  "collection.tiles": "tegels",
+  "containerDetail.overview": "Overzicht",
+  "containerDetail.sections": "Containersecties",
+  "migration.legacyAuthRequired": "Log in met een legacy owner/admin-passkey voordat je de migratie start."
 }

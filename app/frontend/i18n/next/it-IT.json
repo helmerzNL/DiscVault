@@ -986,5 +986,18 @@
   "movieDetail.savingArtwork": "Salvataggio artwork...",
   "movieDetail.artworkSaved": "Artwork salvato.",
   "preferences.saving": "Salvataggio...",
-  "preferences.saved": "Preferenze salvate."
+  "preferences.saved": "Preferenze salvate.",
+  "preferences.showFeaturedHero": "Mostra anteprima in evidenza",
+  "preferences.showFeaturedHeroHelp": "Mostra un grande film in evidenza nella parte superiore della home page.",
+  "preferences.showCollectionSearch": "Barra di ricerca nella collezione",
+  "preferences.showCollectionSearchHelp": "Mostra una barra di ricerca sopra la collezione per titolo, codice a barre, formato e gruppi.",
+  "preferences.showAutoVideos": "Mostra video automatici",
+  "preferences.showAutoVideosHelp": "Mostra i video raccolti automaticamente tramite fonti di metadati. Disattivato mostra solo i video aggiunti da te.",
+  "preferences.showLocalTitle": "Titolo film nella lingua locale",
+  "preferences.showLocalTitleHelp": "Mostra il titolo del film nella lingua dell app quando disponibile. Disattivato mostra sempre il titolo originale.",
+  "preferences.showExtendedPeoplePages": "Pagine persone estese",
+  "preferences.showExtendedPeoplePagesHelp": "Mostra film digitali e filmografie complete nelle pagine persone. Disattivato mostra solo i media fisici posseduti.",
+  "containerDetail.overview": "Panoramica",
+  "containerDetail.sections": "Sezioni contenitore",
+  "migration.legacyAuthRequired": "Accedi con una passkey legacy owner/admin prima di avviare la migrazione."
 }

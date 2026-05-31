@@ -986,5 +986,18 @@
   "movieDetail.savingArtwork": "Artwork wird gespeichert...",
   "movieDetail.artworkSaved": "Artwork gespeichert.",
   "preferences.saving": "Speichern...",
-  "preferences.saved": "Einstellungen gespeichert."
+  "preferences.saved": "Einstellungen gespeichert.",
+  "preferences.showFeaturedHero": "Empfohlene Vorschau anzeigen",
+  "preferences.showFeaturedHeroHelp": "Zeigt oben auf der Startseite einen grossen empfohlenen Film.",
+  "preferences.showCollectionSearch": "Suchleiste in der Sammlung",
+  "preferences.showCollectionSearchHelp": "Zeigt oberhalb der Sammlung eine Suchleiste fuer Titel, Barcode, Format und Gruppenfilter.",
+  "preferences.showAutoVideos": "Automatische Videos anzeigen",
+  "preferences.showAutoVideosHelp": "Zeigt Videos, die automatisch ueber Metadatenquellen gesammelt wurden. Aus zeigt nur Videos, die du selbst hinzugefuegt hast.",
+  "preferences.showLocalTitle": "Filmtitel in lokaler Sprache",
+  "preferences.showLocalTitleHelp": "Zeigt den Filmtitel in der App-Sprache, wenn verfuegbar. Aus zeigt immer den Originaltitel.",
+  "preferences.showExtendedPeoplePages": "Erweiterte Personenseiten",
+  "preferences.showExtendedPeoplePagesHelp": "Zeigt digitale Filme und vollstaendige Filmografien auf Personenseiten. Aus zeigt nur physische Medien in deinem Besitz.",
+  "containerDetail.overview": "Uebersicht",
+  "containerDetail.sections": "Containerbereiche",
+  "migration.legacyAuthRequired": "Melde dich mit einem Legacy-Owner/Admin-Passkey an, bevor du die Migration startest."
 }

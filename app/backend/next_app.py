@@ -6018,9 +6018,39 @@ def ui_preview_html(
         linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 42%),
         var(--bg-elevated);
     }
+    .container-detail-submenu {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: 72px;
+      z-index: 5;
+      width: min(100%, 980px);
+      margin: 0 auto;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg-elevated) 78%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 6px;
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(20px) saturate(160%);
+    }
+    .container-detail-panel {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .container-detail-panel.hidden {
+      display: none;
+    }
+    .container-overview-grid {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
     .container-member-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
       gap: 12px;
     }
     .detail-mini-card {
@@ -6093,10 +6123,10 @@ def ui_preview_html(
       color: inherit;
       text-decoration: none;
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto;
-      gap: 9px;
+      grid-template-columns: 82px minmax(0, 1fr);
+      gap: 12px;
       padding: 9px;
-      align-items: stretch;
+      align-items: center;
       position: relative;
       overflow: hidden;
     }
@@ -6172,6 +6202,7 @@ def ui_preview_html(
       flex-wrap: wrap;
       justify-content: space-between;
       gap: 6px;
+      grid-column: 1 / -1;
     }
     .container-detail-page.container-editing .container-member-actions {
       display: flex;
@@ -6185,6 +6216,18 @@ def ui_preview_html(
     }
     .container-member-actions .detail-order-button {
       flex: 1 1 0;
+    }
+    .container-member-kind {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 760;
+      background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
     }
     .art-option-source {
       color: var(--muted);
@@ -7347,6 +7390,21 @@ def ui_preview_html(
         grid-template-columns: 1fr;
         padding: 12px;
       }
+      .container-detail-submenu {
+        position: static;
+        justify-content: flex-start;
+        overflow-x: auto;
+      }
+      .container-detail-submenu button {
+        flex: 0 0 auto;
+      }
+      .container-detail-panel,
+      .container-overview-grid {
+        grid-template-columns: 1fr;
+      }
+      .container-member-grid {
+        grid-template-columns: 1fr;
+      }
       .detail-card-head {
         align-items: stretch;
         flex-direction: column;
@@ -8039,121 +8097,144 @@ def ui_preview_html(
           </div>
         </section>
         <section class="movie-detail-body">
-          <div class="detail-card full hidden" id="containerEditPanel">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="containerDetail.editDetails">Edit details</h3>
-              <button type="button" class="secondary-button" id="containerEditCancelButton" data-next-i18n="common.close">Close</button>
-            </div>
-            <form class="profile-form" id="containerEditForm">
-              <label for="containerEditTitle">
-                <span data-next-i18n="containerDetail.fieldTitle">Title</span>
-                <input id="containerEditTitle" name="title" maxlength="240" autocomplete="off">
-              </label>
-              <label for="containerEditType">
-                <span data-next-i18n="containerDetail.fieldType">Type</span>
-                <select id="containerEditType" name="container_type">
-                  <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
-                  <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
-                  <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
-                </select>
-              </label>
-              <label for="containerEditYear">
-                <span data-next-i18n="containerDetail.fieldYear">Year</span>
-                <input id="containerEditYear" name="year" maxlength="40" autocomplete="off">
-              </label>
-              <label for="containerEditBarcode">
-                <span data-next-i18n="containerDetail.fieldBarcode">Barcode</span>
-                <input id="containerEditBarcode" name="barcode" maxlength="160" autocomplete="off">
-              </label>
-              <label for="containerEditBadge">
-                <span data-next-i18n="containerDetail.fieldBadge">Badge</span>
-                <input id="containerEditBadge" name="badge_label" maxlength="80" autocomplete="off">
-              </label>
-              <label for="containerEditDescription">
-                <span data-next-i18n="containerDetail.fieldDescription">Description</span>
-                <textarea id="containerEditDescription" name="description" maxlength="2000"></textarea>
-              </label>
-              <div class="profile-form-actions">
-                <button type="submit" class="secondary-button" data-next-i18n="containerDetail.saveDetails">Save details</button>
-                <span class="login-message" id="containerEditMessage"></span>
+          <nav class="detail-submenu container-detail-submenu" aria-label="Container sections" data-next-i18n-aria="containerDetail.sections">
+            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
+          </nav>
+          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
+            <div class="container-overview-grid">
+              <div class="detail-card">
+                <h3 data-next-i18n="containerDetail.overview">Overview</h3>
+                <div class="detail-fields" id="containerDetailOverviewFields"></div>
               </div>
-            </form>
-          </div>
-          <div class="detail-card full hidden" id="containerAddContentPanel">
-            <h3 data-next-i18n="containerDetail.addContent">Add content</h3>
-            <div class="container-add-panels">
-              <form class="profile-form" id="containerAddMovieForm">
-                <label for="containerAddMovieSelect">
-                  <span data-next-i18n="containerDetail.addMovie">Add movie</span>
-                  <select id="containerAddMovieSelect"></select>
+              <div class="detail-card">
+                <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
+                <div class="detail-fields" id="containerDetailMetadata"></div>
+              </div>
+            </div>
+            <div class="detail-card full hidden" id="containerEditPanel">
+              <div class="detail-card-head">
+                <h3 data-next-i18n="containerDetail.editDetails">Edit details</h3>
+                <button type="button" class="secondary-button" id="containerEditCancelButton" data-next-i18n="common.close">Close</button>
+              </div>
+              <form class="profile-form" id="containerEditForm">
+                <label for="containerEditTitle">
+                  <span data-next-i18n="containerDetail.fieldTitle">Title</span>
+                  <input id="containerEditTitle" name="title" maxlength="240" autocomplete="off">
                 </label>
-                <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" data-next-i18n="containerDetail.addMovieButton">Add movie</button>
-                </div>
-              </form>
-              <form class="profile-form" id="containerAddItemForm">
-                <label for="containerAddItemType">
-                  <span data-next-i18n="containerDetail.addCollectionItem">Add collection item</span>
-                  <select id="containerAddItemType">
-                    <option value="movie" data-next-i18n="containerDetail.type.movie">Movie</option>
+                <label for="containerEditType">
+                  <span data-next-i18n="containerDetail.fieldType">Type</span>
+                  <select id="containerEditType" name="container_type">
                     <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
-                    <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
                     <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
+                    <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
                   </select>
                 </label>
-                <label for="containerAddItemSelect">
-                  <span data-next-i18n="containerDetail.item">Item</span>
-                  <select id="containerAddItemSelect"></select>
+                <label for="containerEditYear">
+                  <span data-next-i18n="containerDetail.fieldYear">Year</span>
+                  <input id="containerEditYear" name="year" maxlength="40" autocomplete="off">
+                </label>
+                <label for="containerEditBarcode">
+                  <span data-next-i18n="containerDetail.fieldBarcode">Barcode</span>
+                  <input id="containerEditBarcode" name="barcode" maxlength="160" autocomplete="off">
+                </label>
+                <label for="containerEditBadge">
+                  <span data-next-i18n="containerDetail.fieldBadge">Badge</span>
+                  <input id="containerEditBadge" name="badge_label" maxlength="80" autocomplete="off">
+                </label>
+                <label for="containerEditDescription">
+                  <span data-next-i18n="containerDetail.fieldDescription">Description</span>
+                  <textarea id="containerEditDescription" name="description" maxlength="2000"></textarea>
                 </label>
                 <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" data-next-i18n="containerDetail.addItemButton">Add item</button>
+                  <button type="submit" class="secondary-button" data-next-i18n="containerDetail.saveDetails">Save details</button>
+                  <span class="login-message" id="containerEditMessage"></span>
                 </div>
               </form>
             </div>
-          </div>
-          <div class="detail-card full container-content-card">
-            <div class="detail-card-head">
-              <div>
-                <h3 data-next-i18n="containerDetail.memberMovies">Movies</h3>
-                <p data-next-i18n="containerDetail.memberMoviesHelp">Films linked directly to this container.</p>
+            <div class="detail-card full hidden" id="containerAddContentPanel">
+              <h3 data-next-i18n="containerDetail.addContent">Add content</h3>
+              <div class="container-add-panels">
+                <form class="profile-form" id="containerAddMovieForm">
+                  <label for="containerAddMovieSelect">
+                    <span data-next-i18n="containerDetail.addMovie">Add movie</span>
+                    <select id="containerAddMovieSelect"></select>
+                  </label>
+                  <div class="profile-form-actions">
+                    <button type="submit" class="secondary-button" data-next-i18n="containerDetail.addMovieButton">Add movie</button>
+                  </div>
+                </form>
+                <form class="profile-form" id="containerAddItemForm">
+                  <label for="containerAddItemType">
+                    <span data-next-i18n="containerDetail.addCollectionItem">Add collection item</span>
+                    <select id="containerAddItemType">
+                      <option value="movie" data-next-i18n="containerDetail.type.movie">Movie</option>
+                      <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
+                      <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
+                      <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
+                    </select>
+                  </label>
+                  <label for="containerAddItemSelect">
+                    <span data-next-i18n="containerDetail.item">Item</span>
+                    <select id="containerAddItemSelect"></select>
+                  </label>
+                  <div class="profile-form-actions">
+                    <button type="submit" class="secondary-button" data-next-i18n="containerDetail.addItemButton">Add item</button>
+                  </div>
+                </form>
               </div>
             </div>
-            <div class="container-member-grid" id="containerDetailMovies"></div>
           </div>
-          <div class="detail-card full container-content-card">
-            <div class="detail-card-head">
-              <div>
-                <h3 data-next-i18n="containerDetail.collectionItems">Collection items</h3>
-                <p data-next-i18n="containerDetail.collectionItemsHelp">Movies, vaults and box sets grouped in this collection.</p>
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
+            <div class="detail-card full container-content-card">
+              <div class="detail-card-head">
+                <div>
+                  <h3 data-next-i18n="containerDetail.memberMovies">Movies</h3>
+                  <p data-next-i18n="containerDetail.memberMoviesHelp">Films linked directly to this container.</p>
+                </div>
               </div>
+              <div class="container-member-grid" id="containerDetailMovies"></div>
             </div>
-            <div class="container-member-grid" id="containerDetailItems"></div>
-          </div>
-          <div class="detail-card">
-            <h3 data-next-i18n="containerDetail.identifiers">Identifiers</h3>
-            <div class="detail-grid" id="containerDetailIdentifiers"></div>
-          </div>
-          <div class="detail-card">
-            <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
-            <div class="detail-fields" id="containerDetailMetadata"></div>
-          </div>
-          <div class="detail-card">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="containerDetail.artwork">Artwork</h3>
-              <div class="detail-submenu" role="tablist" aria-label="Artwork" data-next-i18n-aria="containerDetail.artwork">
-                <button type="button" class="active" data-detail-tab="containerArtwork" data-detail-panel="containerArtworkPosters" data-next-i18n="movieDetail.posters">Posters</button>
-                <button type="button" data-detail-tab="containerArtwork" data-detail-panel="containerArtworkBackdrops" data-next-i18n="movieDetail.backdrops">Backdrops</button>
-                <button type="button" data-detail-tab="containerArtwork" data-detail-panel="containerArtworkVideos" data-next-i18n="movieDetail.videos">Videos</button>
+            <div class="detail-card full container-content-card">
+              <div class="detail-card-head">
+                <div>
+                  <h3 data-next-i18n="containerDetail.collectionItems">Collection items</h3>
+                  <p data-next-i18n="containerDetail.collectionItemsHelp">Movies, vaults and box sets grouped in this collection.</p>
+                </div>
               </div>
+              <div class="container-member-grid" id="containerDetailItems"></div>
             </div>
-            <div class="detail-subpanel" data-detail-panel-group="containerArtwork" id="containerArtworkPosters">
+          </div>
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailPostersPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.posters">Posters</h3>
               <div class="art-option-grid" id="containerDetailPosterArtwork"></div>
             </div>
-            <div class="detail-subpanel hidden" data-detail-panel-group="containerArtwork" id="containerArtworkBackdrops">
+          </div>
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailBackdropsPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.backdrops">Backdrops</h3>
               <div class="art-option-grid backdrops" id="containerDetailBackdropArtwork"></div>
             </div>
-            <div class="detail-subpanel hidden" data-detail-panel-group="containerArtwork" id="containerArtworkVideos">
+          </div>
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailVideosPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.videos">Videos</h3>
               <div class="detail-grid" id="containerDetailVideos"></div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailMetadataPanel">
+            <div class="detail-card">
+              <h3 data-next-i18n="containerDetail.identifiers">Identifiers</h3>
+              <div class="detail-grid" id="containerDetailIdentifiers"></div>
+            </div>
+            <div class="detail-card">
+              <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
+              <div class="detail-fields" id="containerDetailMetadataDetails"></div>
             </div>
           </div>
         </section>
@@ -11991,8 +12072,41 @@ def ui_preview_html(
           </a>
           <a class="container-member-copy" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}">
             <strong>${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</strong>
+            <span class="container-member-kind">${escapeHtml(tNext("containerDetail.type.movie", "Movie"))}</span>
             <span>${escapeHtml(subtitle || tNext("containerDetail.type.movie", "Movie"))}</span>
             ${debugIdHtml(movie.id, "Movie ID")}
+          </a>
+          ${orderControls}
+        </div>
+      `;
+    }
+    function containerMemberContainerCardHtml(item, index, total, canEdit) {
+      const metadata = item.metadata || {};
+      const itemId = item.entity_id || item.item_id || item.id || "";
+      const itemType = item.item_type || item.container_type || item.entity_type || "container";
+      const poster = usableImage(item.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster || metadata.poster_file);
+      const href = `/containers/${encodeURIComponent(itemId)}`;
+      const subtitle = [containerTypeLabel(itemType), item.year, item.badge_label].filter(Boolean).join(" / ");
+      const orderAttrs = `data-container-move-item="${escapeHtml(itemId || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
+      const removeAttrs = `data-container-remove-item="${escapeHtml(itemId || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
+      const orderControls = canEdit ? `
+        <div class="container-member-actions">
+          <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
+          <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
+        </div>
+      ` : "";
+      return `
+        <div class="container-member-card ${canEdit ? "editable" : ""}">
+          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-container="${escapeHtml(itemId || "")}">
+            ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(containerTypeLabel(itemType))}</span>`}
+            <span class="container-member-index">${escapeHtml(index + 1)}</span>
+          </a>
+          <a class="container-member-copy" href="${escapeHtml(href)}" data-open-container="${escapeHtml(itemId || "")}">
+            <strong>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</strong>
+            <span class="container-member-kind">${escapeHtml(containerTypeLabel(itemType))}</span>
+            <span>${escapeHtml(subtitle || containerTypeLabel(itemType))}</span>
+            ${debugIdHtml(itemId, "Container ID")}
           </a>
           ${orderControls}
         </div>
@@ -12562,6 +12676,15 @@ def ui_preview_html(
           <span>${escapeHtml(label)}</span>
         </span>
       `).join("");
+      document.getElementById("containerDetailOverviewFields").innerHTML = detailFieldRows([
+        [tNext("containerDetail.fieldType", "Type"), typeLabel],
+        [tNext("containerDetail.fieldYear", "Year"), container.year || summary.yearRange],
+        [tNext("containerDetail.aggregateFormats", "Formats"), summary.formats],
+        [tNext("containerDetail.aggregateMovieCount", "Movies in scope"), summary.movieCount || directMovieCount],
+        [tNext("containerDetail.items", "items"), collectionItemCount || directMovieCount],
+        [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
+        [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
+      ]);
       fillContainerEditForm(detail);
       renderContainerAddForms(detail);
       const memberMovies = detail.memberMovies || [];
@@ -12580,7 +12703,6 @@ def ui_preview_html(
       const itemCards = collectionItems.map((item, index) => {
         const itemId = item.entity_id || item.item_id || item.id || "";
         const itemType = item.item_type || item.container_type || item.entity_type || "movie";
-        const href = itemType === "movie" ? `/movies/${encodeURIComponent(itemId)}` : `/containers/${encodeURIComponent(itemId)}`;
         if (itemType === "movie") {
           const aggregateMovie = aggregateMovieById.get(String(itemId)) || {};
           const displayMovie = Object.assign({}, aggregateMovie, item, {
@@ -12595,14 +12717,7 @@ def ui_preview_html(
             orderKind: "item"
           });
         }
-        const subtitle = [
-          itemType === "movie" ? tNext("containerDetail.type.movie", "Movie") : containerTypeLabel(itemType),
-          item.year,
-          item.format
-        ].filter(Boolean).join(" / ");
-        return canEditContainerLinks
-          ? removableDetailCard(item.title, subtitle, href, "item", itemId, itemType, {orderKind: "item", canMoveUp: index > 0, canMoveDown: index < collectionItems.length - 1})
-          : miniCard(item.title, subtitle, href);
+        return containerMemberContainerCardHtml(item, index, collectionItems.length, canEditContainerLinks);
       });
       document.getElementById("containerDetailItems").innerHTML = itemCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noItems", "No collection items linked yet."))}</div>`;
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
@@ -12617,9 +12732,11 @@ def ui_preview_html(
         [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
         [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
       ]);
+      document.getElementById("containerDetailMetadataDetails").innerHTML = document.getElementById("containerDetailMetadata").innerHTML;
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("containerDetailVideos").innerHTML = videoCardsHtml(containerVideoItems(detail));
+      activateDetailTab("containerDetail", "containerDetailOverviewPanel");
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
     }
@@ -12632,15 +12749,18 @@ def ui_preview_html(
       document.getElementById("containerDetailDescription").textContent = "";
       document.getElementById("containerDetailTags").innerHTML = "";
       document.getElementById("containerDetailStats").innerHTML = "";
+      document.getElementById("containerDetailOverviewFields").innerHTML = "";
       document.getElementById("containerDetailMovies").innerHTML = "";
       document.getElementById("containerDetailItems").innerHTML = "";
       document.getElementById("containerDetailIdentifiers").innerHTML = "";
       document.getElementById("containerDetailMetadata").innerHTML = "";
+      document.getElementById("containerDetailMetadataDetails").innerHTML = "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = "";
       document.getElementById("containerDetailBackdropArtwork").innerHTML = "";
       document.getElementById("containerDetailVideos").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
       document.getElementById("containerDetailBackdrop").src = "";
+      activateDetailTab("containerDetail", "containerDetailOverviewPanel");
       setContainerDetailMessage("");
     }
     async function openAppContainerDetail(containerId, pushUrl = true) {

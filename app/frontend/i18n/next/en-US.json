@@ -1010,5 +1010,8 @@
   "collection.formatFilter": "Format",
   "common.all": "All",
   "collection.itemFilter": "Items",
-  "collection.tiles": "tiles"
+  "collection.tiles": "tiles",
+  "containerDetail.overview": "Overview",
+  "containerDetail.sections": "Container sections",
+  "migration.legacyAuthRequired": "Sign in with a legacy owner/admin passkey before starting migration."
 }
