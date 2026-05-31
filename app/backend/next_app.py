@@ -5864,10 +5864,17 @@ def ui_preview_html(
       backdrop-filter: blur(12px) saturate(150%);
     }
     .container-member-actions {
-      display: flex;
+      display: none;
       flex-wrap: wrap;
       justify-content: space-between;
       gap: 6px;
+    }
+    .container-detail-page.container-editing .container-member-actions {
+      display: flex;
+    }
+    .container-detail-page:not(.container-editing) .detail-mini-card .detail-remove-button,
+    .container-detail-page:not(.container-editing) .detail-mini-card .detail-order-button {
+      display: none;
     }
     .container-member-actions .detail-remove-button {
       flex: 1 1 100%;
@@ -11402,7 +11409,7 @@ def ui_preview_html(
       const meta = [
         typeLabel,
         showMemberBadge && memberCount ? `${memberCount} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
-        container.year || container.barcode || ""
+        container.year || ""
       ].filter(Boolean).join(" / ");
       const memberBadge = showMemberBadge && memberCount
         ? `<span class="container-member-badge" aria-label="${escapeHtml(tNext("preferences.showContainerMemberBadges", "Show member count on containers"))}">${escapeHtml(memberCount)}</span>`
@@ -11633,7 +11640,7 @@ def ui_preview_html(
     function containerMemberMovieCardHtml(movie, index, total, canEdit, options = {}) {
       const metadata = movie.metadata || {};
       const poster = usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
-      const subtitle = [movie.year, movie.format, movie.edition, movie.barcode].filter(Boolean).join(" / ");
+      const subtitle = [movie.year, movie.format, movie.edition].filter(Boolean).join(" / ");
       const href = `/movies/${encodeURIComponent(movie.id)}`;
       const removeAttrs = options.removeKind === "item"
         ? `data-container-remove-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
@@ -12092,10 +12099,12 @@ def ui_preview_html(
     function setContainerEditPanelVisible(show) {
       const panel = document.getElementById("containerEditPanel");
       const addPanel = document.getElementById("containerAddContentPanel");
+      const page = document.getElementById("containerDetailPage");
       const canEditContainers = collectorsModeEnabled() && hasPermission("containers.edit");
       if (!panel) return;
       panel.classList.toggle("hidden", !(show && canEditContainers));
       if (addPanel) addPanel.classList.toggle("hidden", !(show && canEditContainers));
+      if (page) page.classList.toggle("container-editing", !!(show && canEditContainers));
       if (show && canEditContainers) document.getElementById("containerEditTitle")?.focus();
     }
     function formTextValue(id) {
@@ -12263,8 +12272,7 @@ def ui_preview_html(
         const subtitle = [
           itemType === "movie" ? tNext("containerDetail.type.movie", "Movie") : containerTypeLabel(itemType),
           item.year,
-          item.format,
-          item.barcode
+          item.format
         ].filter(Boolean).join(" / ");
         return canEditContainerLinks
           ? removableDetailCard(item.title, subtitle, href, "item", itemId, itemType, {orderKind: "item", canMoveUp: index > 0, canMoveDown: index < collectionItems.length - 1})
