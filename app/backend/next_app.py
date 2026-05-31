@@ -3081,8 +3081,8 @@ def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict
                 "job": clean_text(row.get("job")),
                 "sort_order": row.get("sort_order"),
             }
-            job = clean_text(row.get("job")).lower()
-            credit_type = clean_text(row.get("credit_type")).lower()
+            job = (clean_text(row.get("job")) or "").lower()
+            credit_type = (clean_text(row.get("credit_type")) or "").lower()
             if "director" in job and len(preview["directors"]) < 3:
                 preview["directors"].append(credit)
             elif credit_type in {"actor", "cast"} and len(preview["actors"]) < 5:
