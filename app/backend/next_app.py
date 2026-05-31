@@ -4280,7 +4280,7 @@ def ui_preview_html(
     }
     .preview-layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
+      grid-template-columns: minmax(0, 1fr);
       gap: 18px;
       align-items: start;
     }
@@ -4470,10 +4470,6 @@ def ui_preview_html(
       height: 15px;
       display: block;
     }
-    .side-stack {
-      display: grid;
-      gap: 14px;
-    }
     .preview-collections {
       display: grid;
       gap: 10px;
@@ -4496,27 +4492,6 @@ def ui_preview_html(
     .preview-collection strong {
       font-size: 14px;
       line-height: 1.25;
-    }
-    .activity-list {
-      display: grid;
-      gap: 10px;
-    }
-    .activity {
-      display: grid;
-      grid-template-columns: 9px minmax(0, 1fr);
-      align-items: start;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.4;
-    }
-    .activity::before {
-      content: "";
-      width: 9px;
-      height: 9px;
-      margin-top: 4px;
-      border-radius: 50%;
-      background: var(--accent);
     }
     .preview-empty {
       padding: 18px;
@@ -6545,19 +6520,6 @@ def ui_preview_html(
             <span id="shownCount">""" + h(min(len(movies), 24)) + """</span>
           </div>
           <div class="poster-rail" id="posterRail">""" + movie_cards + """</div>
-        </div>
-        <div class="side-stack">
-          <div class="preview-panel">
-            <div class="panel-head">
-              <h2 data-next-i18n="uiPreview.activity">Activity</h2>
-              <span data-next-i18n="uiPreview.live">Live</span>
-            </div>
-            <div class="activity-list">
-              <div class="activity"><span data-next-i18n="uiPreview.activityMigration">Migrated collection data is available in PostgreSQL.</span></div>
-              <div class="activity"><span data-next-i18n="uiPreview.activityPlugins">Metadata and digital source plugins are ready for the new app shell.</span></div>
-              <div class="activity"><span data-next-i18n="uiPreview.activityDesign">Light and dark appearance modes are enabled for preview.</span></div>
-            </div>
-          </div>
         </div>
       </section>
       </section>
@@ -11892,7 +11854,6 @@ def ui_preview_html(
       }
       showLibraryPage(true, route || "library");
       if (route === "groups") document.getElementById("groupFilter")?.focus();
-      if (route === "containers") document.querySelector(".side-stack")?.scrollIntoView({block: "start", behavior: "smooth"});
     }
     async function saveMovieDetails(event) {
       event.preventDefault();
