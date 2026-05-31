@@ -996,5 +996,19 @@
   "collection.titleColumn": "Title",
   "collection.yearColumn": "Year",
   "collection.noCrew": "No crew",
-  "movieDetail.actors": "Actors"
+  "movieDetail.actors": "Actors",
+  "collection.format4k": "4K UHD",
+  "collection.formatBluray": "Blu-ray",
+  "collection.formatDvd": "DVD",
+  "collection.sort": "Sort",
+  "collection.sortTitleAsc": "Title A-Z",
+  "collection.sortTitleDesc": "Title Z-A",
+  "collection.sortAddedDesc": "Added newest first",
+  "collection.sortAddedAsc": "Added oldest first",
+  "collection.sortYearDesc": "Year newest first",
+  "collection.sortYearAsc": "Year oldest first",
+  "collection.formatFilter": "Format",
+  "common.all": "All",
+  "collection.itemFilter": "Items",
+  "collection.tiles": "tiles"
 }
