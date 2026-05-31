@@ -206,6 +206,8 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_extended_people_pages": False,
     "collectors_mode": False,
     "merge_editions_as_title": False,
+    "show_container_format_badges": True,
+    "show_container_member_badges": True,
     "show_digital_badge_on_tiles": True,
     "rating_country": "NL",
     "default_media_group_id": "",
@@ -221,6 +223,8 @@ APP_BOOLEAN_PREFERENCES = {
     "show_extended_people_pages",
     "collectors_mode",
     "merge_editions_as_title",
+    "show_container_format_badges",
+    "show_container_member_badges",
     "show_digital_badge_on_tiles",
 }
 APP_CHOICE_PREFERENCES = {
@@ -4490,6 +4494,26 @@ def ui_preview_html(
       text-overflow: ellipsis;
       backdrop-filter: blur(12px) saturate(150%);
     }
+    .container-member-badge {
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: rgba(9,12,18,.62);
+      border: 1px solid rgba(255,255,255,.42);
+      box-shadow: 0 10px 28px rgba(0,0,0,.18);
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1;
+      backdrop-filter: blur(14px) saturate(155%);
+    }
     .physical-format-badge {
       position: absolute;
       left: 8px;
@@ -5300,6 +5324,12 @@ def ui_preview_html(
     .detail-card-head h3 {
       margin: 0;
     }
+    .detail-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: .84rem;
+      line-height: 1.35;
+    }
     .detail-submenu {
       display: inline-flex;
       gap: 4px;
@@ -5411,11 +5441,22 @@ def ui_preview_html(
       justify-content: flex-end;
     }
     .language-picker {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: flex-end;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
       min-width: min(360px, 100%);
+    }
+    .language-picker select {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 34px 0 12px;
+      font: inherit;
+      font-size: .94rem;
+      font-weight: 700;
     }
     .country-picker-button {
       border: 1px solid var(--line);
@@ -5430,9 +5471,6 @@ def ui_preview_html(
     .country-picker-button.active {
       border-color: var(--accent);
       background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
-    }
-    .language-picker .country-picker-button {
-      min-height: 34px;
     }
     .country-list {
       display: flex;
@@ -5450,6 +5488,43 @@ def ui_preview_html(
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
       gap: 10px;
+    }
+    .container-detail-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .container-stat-pill {
+      min-width: 86px;
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 14px;
+      background: rgba(255,255,255,.12);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+      backdrop-filter: blur(14px) saturate(155%);
+      padding: 9px 11px;
+      display: grid;
+      gap: 2px;
+    }
+    .container-stat-pill strong {
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .container-stat-pill span {
+      color: color-mix(in srgb, var(--text) 74%, transparent);
+      font-size: .72rem;
+      font-weight: 720;
+      text-transform: uppercase;
+    }
+    .container-content-card {
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 42%),
+        var(--bg-elevated);
+    }
+    .container-member-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
+      gap: 12px;
     }
     .detail-mini-card {
       border: 1px solid var(--line);
@@ -5521,29 +5596,34 @@ def ui_preview_html(
       color: inherit;
       text-decoration: none;
       display: grid;
-      grid-template-columns: 58px minmax(0, 1fr);
-      gap: 11px;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 9px;
       padding: 9px;
-      align-items: center;
+      align-items: stretch;
       position: relative;
       overflow: hidden;
     }
     .container-member-card.editable {
-      grid-template-columns: 58px minmax(0, 1fr) auto;
+      padding-bottom: 10px;
     }
     .container-member-card:hover {
       border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      transform: translateY(-1px);
+      transition: transform 160ms ease, border-color 160ms ease;
     }
     .container-member-poster {
       aspect-ratio: 2 / 3;
-      border-radius: 7px;
+      border-radius: 10px;
       overflow: hidden;
       display: grid;
       place-items: center;
       background: linear-gradient(145deg, #30343c, #181a1f);
       color: rgba(255,255,255,.66);
-      font-size: .68rem;
+      font-size: .76rem;
+      font-weight: 760;
       text-align: center;
+      position: relative;
+      text-decoration: none;
     }
     .container-member-poster img {
       width: 100%;
@@ -5554,10 +5634,17 @@ def ui_preview_html(
     .container-member-copy {
       min-width: 0;
       display: grid;
-      gap: 5px;
+      gap: 4px;
+      color: inherit;
+      text-decoration: none;
     }
     .container-member-copy strong {
       overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-height: 1.2;
     }
     .container-member-copy span {
       color: var(--muted);
@@ -5565,12 +5652,35 @@ def ui_preview_html(
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
+    .container-member-index {
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      min-width: 24px;
+      height: 24px;
+      padding: 0 7px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: rgba(9,12,18,.6);
+      border: 1px solid rgba(255,255,255,.36);
+      font-size: 11px;
+      font-weight: 900;
+      backdrop-filter: blur(12px) saturate(150%);
+    }
     .container-member-actions {
       display: flex;
       flex-wrap: wrap;
-      justify-content: flex-end;
+      justify-content: space-between;
       gap: 6px;
-      max-width: 110px;
+    }
+    .container-member-actions .detail-remove-button {
+      flex: 1 1 100%;
+    }
+    .container-member-actions .detail-order-button {
+      flex: 1 1 0;
     }
     .art-option-source {
       color: var(--muted);
@@ -7395,6 +7505,7 @@ def ui_preview_html(
               <h2 class="movie-detail-title" id="containerDetailTitle">-</h2>
               <div class="hero-meta" id="containerDetailTags"></div>
               <p class="movie-detail-overview" id="containerDetailDescription"></p>
+              <div class="container-detail-stats" id="containerDetailStats"></div>
               <div class="movie-detail-actions">
                 <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
                 <button type="button" class="action hidden" id="containerMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
@@ -7477,13 +7588,23 @@ def ui_preview_html(
               </form>
             </div>
           </div>
-          <div class="detail-card full">
-            <h3 data-next-i18n="containerDetail.memberMovies">Movies</h3>
-            <div class="detail-grid" id="containerDetailMovies"></div>
+          <div class="detail-card full container-content-card">
+            <div class="detail-card-head">
+              <div>
+                <h3 data-next-i18n="containerDetail.memberMovies">Movies</h3>
+                <p data-next-i18n="containerDetail.memberMoviesHelp">Films linked directly to this container.</p>
+              </div>
+            </div>
+            <div class="container-member-grid" id="containerDetailMovies"></div>
           </div>
-          <div class="detail-card full">
-            <h3 data-next-i18n="containerDetail.collectionItems">Collection items</h3>
-            <div class="detail-grid" id="containerDetailItems"></div>
+          <div class="detail-card full container-content-card">
+            <div class="detail-card-head">
+              <div>
+                <h3 data-next-i18n="containerDetail.collectionItems">Collection items</h3>
+                <p data-next-i18n="containerDetail.collectionItemsHelp">Movies, vaults and box sets grouped in this collection.</p>
+              </div>
+            </div>
+            <div class="container-member-grid" id="containerDetailItems"></div>
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="containerDetail.identifiers">Identifiers</h3>
@@ -7637,7 +7758,10 @@ def ui_preview_html(
                     <strong data-next-i18n="preferences.language">Language</strong>
                     <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
                   </span>
-                  <div class="language-picker" id="profileLanguagePicker" role="group" aria-label="Language" data-next-i18n-aria="language.label"></div>
+                  <div class="language-picker" id="profileLanguagePicker">
+                    <span id="profileLanguageFlag" aria-hidden="true"></span>
+                    <select id="profileLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+                  </div>
                 </div>
               </div>
             </div>
@@ -10419,20 +10543,16 @@ def ui_preview_html(
     }
     function renderProfileLanguagePicker() {
       const picker = document.getElementById("profileLanguagePicker");
-      if (!picker) return;
-      picker.innerHTML = localeState.locales.map((item) => {
-        const active = item.locale === localeState.locale;
-        const label = item.nativeName || item.englishName || item.locale || "";
-        return `
-          <button type="button" class="country-picker-button ${active ? "active" : ""}" data-profile-language="${escapeHtml(item.locale)}" aria-pressed="${active ? "true" : "false"}">
-            ${flagIconHtml(languageFlagCode(item), label)}
-            <span>${escapeHtml(label)}</span>
-          </button>
-        `;
-      }).join("");
-      picker.querySelectorAll("[data-profile-language]").forEach((button) => {
-        button.addEventListener("click", () => loadLocale(button.dataset.profileLanguage));
-      });
+      const select = document.getElementById("profileLanguageSelect");
+      const flag = document.getElementById("profileLanguageFlag");
+      if (!picker || !select) return;
+      const active = localeState.locales.find((item) => item.locale === localeState.locale) || localeState.locales[0] || {};
+      if (flag) flag.innerHTML = flagIconHtml(languageFlagCode(active), active.nativeName || active.englishName || active.locale || "");
+      select.innerHTML = localeState.locales.map((item) => (
+        `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(languageLabel(item))}</option>`
+      )).join("");
+      select.value = localeState.locale;
+      select.onchange = () => loadLocale(select.value);
     }
     function setTheme(preference) {
       const selected = preference || "system";
@@ -10843,19 +10963,23 @@ def ui_preview_html(
     function containerPosterCardHtml(container, index) {
       const poster = usableImage(container.poster_url || container.backdrop_url);
       const typeLabel = containerTypeLabel(container.container_type);
-      const showFormatBadge = String(container.container_type || "") !== "collection";
+      const showFormatBadge = String(container.container_type || "") !== "collection" && preferences.show_container_format_badges !== false;
+      const showMemberBadge = preferences.show_container_member_badges !== false;
       const memberCount = movieIdSetForContainer(container.id).size;
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(typeLabel)}</span>`;
       const meta = [
         typeLabel,
-        memberCount ? `${memberCount} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
+        showMemberBadge && memberCount ? `${memberCount} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
         container.year || container.barcode || ""
       ].filter(Boolean).join(" / ");
+      const memberBadge = showMemberBadge && memberCount
+        ? `<span class="container-member-badge" aria-label="${escapeHtml(tNext("preferences.showContainerMemberBadges", "Show member count on containers"))}">${escapeHtml(memberCount)}</span>`
+        : "";
       const selected = index === 0 ? " selected" : "";
       const bulkSelected = selectedContainerIds.has(String(container.id || "")) ? " bulk-selected" : "";
       return `
         <button type="button" class="preview-poster container-tile${selected}${bulkSelected}" data-preview-container="${escapeHtml(container.id)}">
-          <span class="preview-poster-art">${posterHtml}${showFormatBadge ? physicalFormatBadgeHtml(containerFormatBadgeValue(container)) : ""}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
+          <span class="preview-poster-art">${posterHtml}${memberBadge}${showFormatBadge ? physicalFormatBadgeHtml(containerFormatBadgeValue(container)) : ""}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
           <span class="preview-poster-title">${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
           ${debugIdHtml(container.id, "Container ID")}
@@ -11074,22 +11198,31 @@ def ui_preview_html(
         </div>
       `;
     }
-    function containerMemberMovieCardHtml(movie, index, total, canEdit) {
+    function containerMemberMovieCardHtml(movie, index, total, canEdit, options = {}) {
       const metadata = movie.metadata || {};
       const poster = usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
       const subtitle = [movie.year, movie.format, movie.edition, movie.barcode].filter(Boolean).join(" / ");
       const href = `/movies/${encodeURIComponent(movie.id)}`;
+      const removeAttrs = options.removeKind === "item"
+        ? `data-container-remove-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
+        : `data-container-remove-movie="${escapeHtml(movie.id || "")}"`;
+      const orderAttrs = options.orderKind === "item"
+        ? `data-container-move-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
+        : `data-container-move-movie="${escapeHtml(movie.id || "")}"`;
       const orderControls = canEdit ? `
         <div class="container-member-actions">
-          <button type="button" class="detail-order-button" data-container-move-movie="${escapeHtml(movie.id || "")}" data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
-          <button type="button" class="detail-order-button" data-container-move-movie="${escapeHtml(movie.id || "")}" data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
-          <button type="button" class="detail-remove-button" data-container-remove-movie="${escapeHtml(movie.id || "")}">${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
+          <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
+          <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </div>
       ` : "";
       return `
         <div class="container-member-card ${canEdit ? "editable" : ""}">
           <a class="container-member-poster" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}">
             ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}
+            <span class="container-member-index">${escapeHtml(index + 1)}</span>
+            ${physicalFormatBadgeHtml(movie.format || movie.edition_type || metadata.format)}
+            ${digitalSourceBadgeHtml(movie)}
           </a>
           <a class="container-member-copy" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}">
             <strong>${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</strong>
@@ -11637,6 +11770,9 @@ def ui_preview_html(
       if (posterNode) {
         posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       }
+      const summary = detail.aggregateSummary || {};
+      const directMovieCount = (detail.memberMovies || []).length;
+      const collectionItemCount = (detail.collectionItems || []).length;
       document.getElementById("containerDetailType").textContent = typeLabel;
       document.getElementById("containerDetailTitle").textContent = title;
       document.getElementById("containerDetailDescription").textContent = container.description || metadata.description || tNext("containerDetail.noDescription", "No description imported yet.");
@@ -11644,10 +11780,21 @@ def ui_preview_html(
         typeLabel,
         container.year,
         container.barcode,
-        (detail.memberMovies || []).length ? `${(detail.memberMovies || []).length} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
-        (detail.collectionItems || []).length ? `${(detail.collectionItems || []).length} ${tNext("containerDetail.items", "items")}` : "",
+        directMovieCount ? `${directMovieCount} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
+        collectionItemCount ? `${collectionItemCount} ${tNext("containerDetail.items", "items")}` : "",
         appDebugMode && container.id ? `Container ID ${container.id}` : ""
       ]);
+      document.getElementById("containerDetailStats").innerHTML = [
+        [summary.movieCount || directMovieCount, tNext("containerDetail.aggregateMovieCount", "Movies in scope")],
+        [collectionItemCount || directMovieCount, tNext("containerDetail.items", "items")],
+        [summary.posterCount || 0, tNext("movieDetail.posters", "Posters")],
+        [summary.videoCount || 0, tNext("movieDetail.videos", "Videos")]
+      ].filter(([value]) => Number(value || 0) > 0).map(([value, label]) => `
+        <span class="container-stat-pill">
+          <strong>${escapeHtml(value)}</strong>
+          <span>${escapeHtml(label)}</span>
+        </span>
+      `).join("");
       fillContainerEditForm(detail);
       renderContainerAddForms(detail);
       const memberMovies = detail.memberMovies || [];
@@ -11667,6 +11814,20 @@ def ui_preview_html(
         const itemId = item.entity_id || item.item_id || item.id || "";
         const itemType = item.item_type || item.container_type || item.entity_type || "movie";
         const href = itemType === "movie" ? `/movies/${encodeURIComponent(itemId)}` : `/containers/${encodeURIComponent(itemId)}`;
+        if (itemType === "movie") {
+          const aggregateMovie = aggregateMovieById.get(String(itemId)) || {};
+          const displayMovie = Object.assign({}, aggregateMovie, item, {
+            id: itemId,
+            poster_url: item.poster_url || aggregateMovie.poster_url,
+            backdrop_url: item.backdrop_url || aggregateMovie.backdrop_url
+          });
+          return containerMemberMovieCardHtml(displayMovie, index, collectionItems.length, canEditContainerLinks, {
+            removeKind: "item",
+            removeValue: itemId,
+            itemType: "movie",
+            orderKind: "item"
+          });
+        }
         const subtitle = [
           itemType === "movie" ? tNext("containerDetail.type.movie", "Movie") : containerTypeLabel(itemType),
           item.year,
@@ -11683,7 +11844,6 @@ def ui_preview_html(
         item.identifier
       ));
       document.getElementById("containerDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noIdentifiers", "No identifiers yet."))}</div>`;
-      const summary = detail.aggregateSummary || {};
       document.getElementById("containerDetailMetadata").innerHTML = detailFieldRows([
         [tNext("containerDetail.aggregateMovieCount", "Movies in scope"), summary.movieCount || memberMovies.length],
         [tNext("containerDetail.aggregateYearRange", "Year range"), summary.yearRange],
@@ -11705,6 +11865,7 @@ def ui_preview_html(
       document.getElementById("containerDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("containerDetailDescription").textContent = "";
       document.getElementById("containerDetailTags").innerHTML = "";
+      document.getElementById("containerDetailStats").innerHTML = "";
       document.getElementById("containerDetailMovies").innerHTML = "";
       document.getElementById("containerDetailItems").innerHTML = "";
       document.getElementById("containerDetailIdentifiers").innerHTML = "";
@@ -13703,7 +13864,9 @@ def ui_preview_html(
     ];
     const preferenceCollectorLabels = [
       ["collectors_mode", "preferences.collectorsMode", "preferences.collectorsModeHelp"],
-      ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"]
+      ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"],
+      ["show_container_format_badges", "preferences.showContainerFormatBadges", "preferences.showContainerFormatBadgesHelp", "collectors_mode"],
+      ["show_container_member_badges", "preferences.showContainerMemberBadges", "preferences.showContainerMemberBadgesHelp", "collectors_mode"]
     ];
     const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
     function ratingCountryButtonsHtml(disabled = false) {
@@ -13731,13 +13894,14 @@ def ui_preview_html(
             </div>
           `;
         }
+        const active = disabled ? false : !!preferences[key];
         return `
           <div class="preference-row ${disabled ? "disabled" : ""}">
             <span>
               <strong>${escapeHtml(tNext(labelKey, key))}</strong>
               <span>${escapeHtml(tNext(helpKey, ""))}</span>
             </span>
-            <button type="button" class="switch ${preferences[key] ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${preferences[key] ? "true" : "false"}" ${disabled ? "disabled" : ""}></button>
+            <button type="button" class="switch ${active ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${active ? "true" : "false"}" ${disabled ? "disabled" : ""}></button>
           </div>
         `;
       }).join("");
@@ -13790,6 +13954,8 @@ def ui_preview_html(
       preferences[key] = value;
       if (key === "collectors_mode" && !value) {
         preferences.merge_editions_as_title = false;
+        preferences.show_container_format_badges = false;
+        preferences.show_container_member_badges = false;
       }
       renderPreferences();
       renderLibrary();
@@ -13798,7 +13964,11 @@ def ui_preview_html(
       if (message) message.textContent = tNext("preferences.saving", "Saving...");
       try {
         const patch = {[key]: value};
-        if (key === "collectors_mode" && !value) patch.merge_editions_as_title = false;
+        if (key === "collectors_mode" && !value) {
+          patch.merge_editions_as_title = false;
+          patch.show_container_format_badges = false;
+          patch.show_container_member_badges = false;
+        }
         const payload = await apiJson("/api/next/preferences", {
           method: "PATCH",
           headers: authHeaders({"Content-Type": "application/json"}),
