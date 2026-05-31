@@ -887,5 +887,13 @@
   "importCenter.addTab": "Skanna och lagg till",
   "importCenter.addEyebrow": "Snabbt tillagg",
   "importCenter.manualTitleCard": "Manuell sokning",
-  "importCenter.manualHelp": "Anvand detta om streckkoden inte kan lasas eller om du vill lagga till en film via titel."
+  "importCenter.manualHelp": "Anvand detta om streckkoden inte kan lasas eller om du vill lagga till en film via titel.",
+  "collection.viewMode": "Vy",
+  "collection.viewPoster": "Affischer",
+  "collection.viewList": "Lista",
+  "collection.viewDetail": "Detalj",
+  "collection.titleColumn": "Titel",
+  "collection.yearColumn": "Ar",
+  "collection.noCrew": "Ingen crew",
+  "movieDetail.actors": "Skadespelare"
 }

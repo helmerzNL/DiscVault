@@ -887,5 +887,13 @@
   "importCenter.addTab": "Skannaa ja lisaa",
   "importCenter.addEyebrow": "Pikalisays",
   "importCenter.manualTitleCard": "Manuaalinen haku",
-  "importCenter.manualHelp": "Kayta tata, jos viivakoodi ei ole luettavissa tai haluat lisata elokuvan nimella."
+  "importCenter.manualHelp": "Kayta tata, jos viivakoodi ei ole luettavissa tai haluat lisata elokuvan nimella.",
+  "collection.viewMode": "Nakyma",
+  "collection.viewPoster": "Julisteet",
+  "collection.viewList": "Luettelo",
+  "collection.viewDetail": "Tiedot",
+  "collection.titleColumn": "Nimi",
+  "collection.yearColumn": "Vuosi",
+  "collection.noCrew": "Ei tekijoita",
+  "movieDetail.actors": "Nayttelijat"
 }

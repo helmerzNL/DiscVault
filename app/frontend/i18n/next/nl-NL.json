@@ -988,5 +988,13 @@
   "importCenter.addTab": "Scan & voeg toe",
   "importCenter.addEyebrow": "Snel toevoegen",
   "importCenter.manualTitleCard": "Handmatig zoeken",
-  "importCenter.manualHelp": "Gebruik dit als de barcode niet leesbaar is of als je een film op titel wilt toevoegen."
+  "importCenter.manualHelp": "Gebruik dit als de barcode niet leesbaar is of als je een film op titel wilt toevoegen.",
+  "collection.viewMode": "Weergave",
+  "collection.viewPoster": "Posters",
+  "collection.viewList": "Lijst",
+  "collection.viewDetail": "Detail",
+  "collection.titleColumn": "Titel",
+  "collection.yearColumn": "Jaar",
+  "collection.noCrew": "Geen crew",
+  "movieDetail.actors": "Acteurs"
 }

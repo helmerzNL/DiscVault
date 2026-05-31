@@ -988,5 +988,13 @@
   "importCenter.addTab": "Scan & add",
   "importCenter.addEyebrow": "Quick add",
   "importCenter.manualTitleCard": "Manual search",
-  "importCenter.manualHelp": "Use this when the barcode is unreadable or you want to add a film by title."
+  "importCenter.manualHelp": "Use this when the barcode is unreadable or you want to add a film by title.",
+  "collection.viewMode": "View mode",
+  "collection.viewPoster": "Posters",
+  "collection.viewList": "List",
+  "collection.viewDetail": "Detail",
+  "collection.titleColumn": "Title",
+  "collection.yearColumn": "Year",
+  "collection.noCrew": "No crew",
+  "movieDetail.actors": "Actors"
 }

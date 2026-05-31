@@ -887,5 +887,13 @@
   "importCenter.addTab": "Scan og tilfoej",
   "importCenter.addEyebrow": "Hurtig tilfoejelse",
   "importCenter.manualTitleCard": "Manuel soegning",
-  "importCenter.manualHelp": "Brug dette hvis stregkoden ikke kan laeses, eller hvis du vil tilfoeje en film efter titel."
+  "importCenter.manualHelp": "Brug dette hvis stregkoden ikke kan laeses, eller hvis du vil tilfoeje en film efter titel.",
+  "collection.viewMode": "Visning",
+  "collection.viewPoster": "Plakater",
+  "collection.viewList": "Liste",
+  "collection.viewDetail": "Detalje",
+  "collection.titleColumn": "Titel",
+  "collection.yearColumn": "Ar",
+  "collection.noCrew": "Ingen crew",
+  "movieDetail.actors": "Skuespillere"
 }

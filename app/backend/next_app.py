@@ -3034,11 +3034,16 @@ def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict
     if not movie_ids:
         return movies
     credits_by_movie: dict[str, list[str]] = {str(movie_id): [] for movie_id in movie_ids}
+    preview_by_movie: dict[str, dict[str, list[dict[str, Any]]]] = {
+        str(movie_id): {"directors": [], "actors": []} for movie_id in movie_ids
+    }
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT
                 mc.movie_id,
+                p.id AS person_id,
+                p.public_id AS person_public_id,
                 p.name,
                 p.known_for,
                 mc.credit_type,
@@ -3062,8 +3067,29 @@ def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict
                 for field in ("name", "known_for", "credit_type", "character", "job")
                 if clean_text(row.get(field))
             )
+            preview = preview_by_movie.get(key)
+            if preview is None:
+                continue
+            name = clean_text(row.get("name"))
+            if not name:
+                continue
+            credit = {
+                "id": row.get("person_id"),
+                "public_id": row.get("person_public_id"),
+                "name": name,
+                "character": clean_text(row.get("character")),
+                "job": clean_text(row.get("job")),
+                "sort_order": row.get("sort_order"),
+            }
+            job = clean_text(row.get("job")).lower()
+            credit_type = clean_text(row.get("credit_type")).lower()
+            if "director" in job and len(preview["directors"]) < 3:
+                preview["directors"].append(credit)
+            elif credit_type in {"actor", "cast"} and len(preview["actors"]) < 5:
+                preview["actors"].append(credit)
     for movie in movies:
         movie["search_credits"] = " ".join(credits_by_movie.get(str(movie.get("id")), []))
+        movie["preview_credits"] = preview_by_movie.get(str(movie.get("id")), {"directors": [], "actors": []})
     return movies
 
 
@@ -4720,6 +4746,173 @@ def ui_preview_html(
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
       gap: 14px;
+    }
+    .detail-card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      align-items: center;
+    }
+    .view-mode-control {
+      flex: 0 0 auto;
+    }
+    .mode-list-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+      gap: 12px;
+    }
+    .mode-detail-grid {
+      display: block;
+      min-width: 0;
+      overflow-x: auto;
+    }
+    .mode-list-card {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      box-shadow: var(--shadow-soft);
+      padding: 10px;
+      color: var(--text);
+      cursor: pointer;
+      min-width: 0;
+    }
+    .mode-list-card:hover {
+      border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+      transform: translateY(-1px);
+    }
+    .mode-list-poster {
+      display: grid;
+      place-items: center;
+      width: 74px;
+      aspect-ratio: 2 / 3;
+      border-radius: 12px;
+      overflow: hidden;
+      background: linear-gradient(145deg, #30343c, #181a1f);
+      color: rgba(255,255,255,.72);
+      font-size: .75rem;
+      text-align: center;
+    }
+    .mode-list-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .mode-list-body {
+      display: grid;
+      align-content: start;
+      gap: 5px;
+      min-width: 0;
+    }
+    .mode-list-body strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: .98rem;
+    }
+    .mode-list-meta,
+    .mode-list-line {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35;
+      min-width: 0;
+    }
+    .mode-list-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: baseline;
+    }
+    .mode-list-line > span:first-child {
+      color: var(--muted-strong);
+      font-weight: 760;
+      min-width: 58px;
+    }
+    .inline-person-link,
+    .inline-person-text,
+    .mode-card-members button,
+    .mode-card-members span {
+      min-height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+      color: var(--text);
+      padding: 2px 8px;
+      font: inherit;
+      font-size: .78rem;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+    .inline-person-link,
+    .mode-card-members button {
+      cursor: pointer;
+    }
+    .inline-person-link:hover,
+    .mode-card-members button:hover {
+      border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+      color: var(--accent);
+    }
+    .muted-inline {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .mode-card-members {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 3px;
+    }
+    .mode-detail-table {
+      min-width: 820px;
+      display: grid;
+      gap: 6px;
+    }
+    .mode-detail-row {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.35fr) 82px 120px minmax(170px, 1fr) minmax(220px, 1.25fr);
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-elevated) 82%, transparent);
+      padding: 9px 10px;
+      cursor: pointer;
+    }
+    .mode-detail-head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: color-mix(in srgb, var(--bg-solid) 92%, transparent);
+      cursor: default;
+      box-shadow: 0 8px 18px rgba(0,0,0,.08);
+    }
+    .mode-detail-head button {
+      border: 0;
+      background: transparent;
+      color: var(--muted-strong);
+      font: inherit;
+      font-size: .78rem;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      padding: 0;
+      cursor: pointer;
+    }
+    .mode-detail-row > span {
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+      color: var(--muted);
+      font-size: .86rem;
+    }
+    .mode-detail-row strong {
+      color: var(--text);
     }
     .lists-history {
       display: grid;
@@ -7056,6 +7249,11 @@ def ui_preview_html(
             <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
           </label>
           <div class="collection-controls">
+            <div class="segmented compact view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+              <button type="button" class="active" data-library-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
+              <button type="button" data-library-view-mode="list" data-next-i18n="collection.viewList">List</button>
+              <button type="button" data-library-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+            </div>
             <label class="sort-menu" for="collectionSortSelect">
               <span data-next-i18n="collection.sort">Sort</span>
               <select id="collectionSortSelect" aria-label="Sort collection" data-next-i18n-aria="collection.sort">
@@ -7179,9 +7377,16 @@ def ui_preview_html(
         <section class="detail-card full lists-panel">
           <div class="detail-card-head">
             <h3 data-next-i18n="lists.collectionTitle">My viewing lists</h3>
-            <div class="detail-submenu" role="tablist" aria-label="Lists" data-next-i18n-aria="uiPreview.navLists">
-              <button type="button" class="active" data-lists-tab="watchlist" data-next-i18n="lists.watchlist">Watchlist</button>
-              <button type="button" data-lists-tab="watched" data-next-i18n="lists.watched">Watched</button>
+            <div class="detail-card-actions">
+              <div class="detail-submenu" role="tablist" aria-label="Lists" data-next-i18n-aria="uiPreview.navLists">
+                <button type="button" class="active" data-lists-tab="watchlist" data-next-i18n="lists.watchlist">Watchlist</button>
+                <button type="button" data-lists-tab="watched" data-next-i18n="lists.watched">Watched</button>
+              </div>
+              <div class="segmented compact view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                <button type="button" class="active" data-lists-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
+                <button type="button" data-lists-view-mode="list" data-next-i18n="collection.viewList">List</button>
+                <button type="button" data-lists-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+              </div>
             </div>
           </div>
           <div class="lists-grid" id="listsWatchlistGrid"></div>
@@ -8285,6 +8490,10 @@ def ui_preview_html(
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
     let collectionItemFilter = localStorage.getItem("dv_next_collection_item_filter") || "all";
+    let libraryViewMode = localStorage.getItem("dv_next_library_view_mode") || "poster";
+    let libraryDetailSort = JSON.parse(localStorage.getItem("dv_next_library_detail_sort") || '{"key":"title","direction":"asc"}');
+    let listsViewMode = localStorage.getItem("dv_next_lists_view_mode") || "poster";
+    let listsDetailSort = JSON.parse(localStorage.getItem("dv_next_lists_detail_sort") || '{"key":"title","direction":"asc"}');
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
@@ -10585,6 +10794,11 @@ def ui_preview_html(
         collectionItemFilter = "all";
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
       }
+      libraryViewMode = normalizeViewMode(libraryViewMode);
+      document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.libraryViewMode === libraryViewMode);
+        button.setAttribute("aria-pressed", button.dataset.libraryViewMode === libraryViewMode ? "true" : "false");
+      });
       const sortSelect = document.getElementById("collectionSortSelect");
       if (sortSelect && sortSelect.value !== collectionSortMode) sortSelect.value = collectionSortMode;
       document.querySelectorAll("[data-format-filter]").forEach((button) => {
@@ -10820,6 +11034,224 @@ def ui_preview_html(
       });
       return ids.size;
     }
+    function normalizeViewMode(value) {
+      return ["poster", "list", "detail"].includes(value) ? value : "poster";
+    }
+    function splitCreditText(value, limit = 5) {
+      return String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, limit)
+        .map((name) => ({name}));
+    }
+    function moviePreviewCredits(movie) {
+      const metadata = movie?.metadata || {};
+      const preview = movie?.preview_credits || {};
+      const directors = Array.isArray(preview.directors) && preview.directors.length
+        ? preview.directors
+        : splitCreditText(metadata.director || movie?.director, 3);
+      const actors = Array.isArray(preview.actors) && preview.actors.length
+        ? preview.actors
+        : splitCreditText(metadata.actor || movie?.actor, 5);
+      return {directors, actors};
+    }
+    function itemMovieRows(item) {
+      if (item?.kind === "movie") return item.movie ? [item.movie] : [];
+      if (item?.kind === "container") return containerMemberMovies(item.container?.id);
+      return [];
+    }
+    function itemDirectorCredits(item) {
+      const moviesForItem = itemMovieRows(item);
+      const seen = new Set();
+      const result = [];
+      moviesForItem.forEach((movie) => {
+        moviePreviewCredits(movie).directors.forEach((credit) => {
+          const key = String(credit.id || credit.name || "").toLowerCase();
+          if (!key || seen.has(key) || result.length >= 4) return;
+          seen.add(key);
+          result.push(credit);
+        });
+      });
+      return result;
+    }
+    function itemActorCredits(item) {
+      const moviesForItem = itemMovieRows(item);
+      const seen = new Set();
+      const result = [];
+      moviesForItem.forEach((movie) => {
+        moviePreviewCredits(movie).actors.forEach((credit) => {
+          const key = String(credit.id || credit.name || "").toLowerCase();
+          if (!key || seen.has(key) || result.length >= 6) return;
+          seen.add(key);
+          result.push(credit);
+        });
+      });
+      return result;
+    }
+    function creditText(credits) {
+      return (credits || []).map((credit) => credit.name).filter(Boolean).join(", ");
+    }
+    function personCreditLinksHtml(credits) {
+      const rows = (credits || []).filter((credit) => credit.name);
+      if (!rows.length) return `<span class="muted-inline">${escapeHtml(tNext("collection.noCrew", "No crew"))}</span>`;
+      return rows.map((credit) => {
+        const personId = credit.id || credit.person_id || "";
+        if (collectorsModeEnabled() && personId) {
+          return `<button type="button" class="inline-person-link" data-person-link="${escapeHtml(personId)}">${escapeHtml(credit.name)}</button>`;
+        }
+        return `<span class="inline-person-text">${escapeHtml(credit.name)}</span>`;
+      }).join("");
+    }
+    function itemTitleValue(item) {
+      return item?.kind === "container"
+        ? (item.container?.title || tNext("common.untitled", "Untitled"))
+        : (item.movie?.title || tNext("common.untitled", "Untitled"));
+    }
+    function itemYearLabel(item) {
+      if (item?.kind === "movie") return item.movie?.year || "";
+      const years = itemMovieRows(item).map((movie) => Number.parseInt(movie.year || "0", 10)).filter(Boolean);
+      if (!years.length) return item.container?.year || "";
+      const minYear = Math.min(...years);
+      const maxYear = Math.max(...years);
+      return minYear === maxYear ? String(minYear) : `${minYear}-${maxYear}`;
+    }
+    function itemFormatLabel(item) {
+      if (item?.kind === "movie") return physicalFormatLabel(item.movie?.format || item.movie?.edition_type || item.movie?.metadata?.format);
+      return containerTypeLabel(item.container?.container_type);
+    }
+    function itemPosterUrl(item) {
+      return item?.kind === "container"
+        ? usableImage(item.container?.poster_url || item.container?.backdrop_url)
+        : usableImage(item.movie?.poster_url);
+    }
+    function itemMembersHtml(item, limit = 6) {
+      if (item?.kind !== "container") return "";
+      const members = containerMemberMovies(item.container?.id).slice(0, limit);
+      if (!members.length) return "";
+      const overflow = movieIdSetForContainer(item.container?.id).size - members.length;
+      return `
+        <div class="mode-card-members">
+          ${members.map((movie) => `<button type="button" data-member-movie="${escapeHtml(movie.id)}">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</button>`).join("")}
+          ${overflow > 0 ? `<span>+${escapeHtml(overflow)}</span>` : ""}
+        </div>
+      `;
+    }
+    function libraryListItemHtml(item) {
+      const poster = itemPosterUrl(item);
+      const title = itemTitleValue(item);
+      const year = itemYearLabel(item);
+      const directors = itemDirectorCredits(item);
+      const actors = itemActorCredits(item);
+      const isContainer = item.kind === "container";
+      const targetAttr = isContainer
+        ? `data-preview-container="${escapeHtml(item.container?.id)}"`
+        : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
+      return `
+        <article class="mode-list-card ${isContainer ? "container-row" : ""}" ${targetAttr} tabindex="0">
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
+          <span class="mode-list-body">
+            <strong>${escapeHtml(title)}</strong>
+            <span class="mode-list-meta">${[year, itemFormatLabel(item)].filter(Boolean).map(escapeHtml).join(" / ")}</span>
+            <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.director", "Director"))}</span>${personCreditLinksHtml(directors)}</span>
+            <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.actors", "Actors"))}</span>${personCreditLinksHtml(actors)}</span>
+            ${itemMembersHtml(item)}
+            ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
+          </span>
+        </article>
+      `;
+    }
+    function detailSortValue(item, key) {
+      if (key === "year") return Number.parseInt(itemYearLabel(item) || "0", 10) || 0;
+      if (key === "format") return itemFormatLabel(item).toLowerCase();
+      if (key === "director") return creditText(itemDirectorCredits(item)).toLowerCase();
+      if (key === "actors") return creditText(itemActorCredits(item)).toLowerCase();
+      return itemTitleValue(item).toLowerCase();
+    }
+    function sortDetailItems(items, sortState) {
+      const state = sortState || {key: "title", direction: "asc"};
+      return [...(items || [])].sort((a, b) => {
+        const left = detailSortValue(a, state.key);
+        const right = detailSortValue(b, state.key);
+        const diff = typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right), localeState.locale || undefined, {sensitivity: "base"});
+        return state.direction === "desc" ? -diff : diff;
+      });
+    }
+    function detailSortButton(scope, key, label, sortState) {
+      const active = sortState?.key === key;
+      const direction = active ? sortState.direction : "";
+      const mark = active ? (direction === "desc" ? " v" : " ^") : "";
+      return `<button type="button" data-detail-sort-scope="${escapeHtml(scope)}" data-detail-sort-key="${escapeHtml(key)}">${escapeHtml(label)}${escapeHtml(mark)}</button>`;
+    }
+    function detailTableHtml(items, scope, sortState) {
+      const sorted = sortDetailItems(items, sortState);
+      return `
+        <div class="mode-detail-table" role="table">
+          <div class="mode-detail-row mode-detail-head" role="row">
+            <span role="columnheader">${detailSortButton(scope, "title", tNext("collection.titleColumn", "Title"), sortState)}</span>
+            <span role="columnheader">${detailSortButton(scope, "year", tNext("collection.yearColumn", "Year"), sortState)}</span>
+            <span role="columnheader">${detailSortButton(scope, "format", tNext("movieDetail.format", "Format"), sortState)}</span>
+            <span role="columnheader">${detailSortButton(scope, "director", tNext("movieDetail.director", "Director"), sortState)}</span>
+            <span role="columnheader">${detailSortButton(scope, "actors", tNext("movieDetail.actors", "Actors"), sortState)}</span>
+          </div>
+          ${sorted.map((item) => {
+            const isContainer = item.kind === "container";
+            const targetAttr = isContainer
+              ? `data-preview-container="${escapeHtml(item.container?.id)}"`
+              : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
+            return `
+              <div class="mode-detail-row" role="row" ${targetAttr} tabindex="0">
+                <span role="cell"><strong>${escapeHtml(itemTitleValue(item))}</strong>${isContainer ? itemMembersHtml(item, 4) : ""}</span>
+                <span role="cell">${escapeHtml(itemYearLabel(item))}</span>
+                <span role="cell">${escapeHtml(itemFormatLabel(item))}</span>
+                <span role="cell">${personCreditLinksHtml(itemDirectorCredits(item))}</span>
+                <span role="cell">${personCreditLinksHtml(itemActorCredits(item))}</span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+    function bindViewModeInteractions(root = document) {
+      root.querySelectorAll("[data-person-link]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openAppPersonDetail(button.dataset.personLink);
+        });
+      });
+      root.querySelectorAll("[data-member-movie]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openAppMovieDetail(button.dataset.memberMovie);
+        });
+      });
+      root.querySelectorAll("[data-detail-sort-scope]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const scope = button.dataset.detailSortScope || "library";
+          const key = button.dataset.detailSortKey || "title";
+          const current = scope === "lists" ? listsDetailSort : libraryDetailSort;
+          const next = {
+            key,
+            direction: current?.key === key && current.direction === "asc" ? "desc" : "asc"
+          };
+          if (scope === "lists") {
+            listsDetailSort = next;
+            localStorage.setItem("dv_next_lists_detail_sort", JSON.stringify(next));
+            renderListsView();
+          } else {
+            libraryDetailSort = next;
+            localStorage.setItem("dv_next_library_detail_sort", JSON.stringify(next));
+            renderLibrary();
+          }
+        });
+      });
+    }
     function digitalSourceBadgeHtml(movie) {
       if (preferences.show_digital_badge_on_tiles === false) return "";
       const sourceRows = Array.isArray(movie.digital_sources) ? movie.digital_sources : [];
@@ -10949,7 +11381,7 @@ def ui_preview_html(
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-      const meta = [movie.year, preferredContentRating(movie), movie.barcode].filter(Boolean).join(" / ") || "";
+      const meta = movie.year || "";
       const selected = index === 0 ? " selected" : "";
       return `
         <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
@@ -12865,12 +13297,7 @@ def ui_preview_html(
     function listMovieCardHtml(movie) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-      const meta = [
-        movie.year,
-        preferredContentRating(movie),
-        movie.watchlist_added_at ? `${tNext("lists.added", "Added")} ${formatAppDate(movie.watchlist_added_at)}` : "",
-        movie.last_watched ? `${tNext("lists.lastWatched", "Last watched")} ${formatAppDate(movie.last_watched)}` : ""
-      ].filter(Boolean).join(" / ");
+      const meta = movie.year || "";
       return `
         <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movie.id)}">
           <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
@@ -12916,20 +13343,40 @@ def ui_preview_html(
       document.querySelectorAll("[data-lists-tab]").forEach((button) => {
         button.classList.toggle("active", button.dataset.listsTab === listsState.active);
       });
+      listsViewMode = normalizeViewMode(listsViewMode);
+      document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.listsViewMode === listsViewMode);
+        button.setAttribute("aria-pressed", button.dataset.listsViewMode === listsViewMode ? "true" : "false");
+      });
       const watchlistGrid = document.getElementById("listsWatchlistGrid");
       const watchedList = document.getElementById("listsWatchedList");
       const empty = document.getElementById("listsEmptyMessage");
       if (watchlistGrid) watchlistGrid.classList.toggle("hidden", listsState.active !== "watchlist");
       if (watchedList) watchedList.classList.toggle("hidden", listsState.active !== "watched");
       updateListsCounts(listsState.counts);
+      const renderRows = (rows) => {
+        const items = (rows || []).map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
+        if (listsViewMode === "detail") return detailTableHtml(items, "lists", listsDetailSort);
+        if (listsViewMode === "list") return items.map(libraryListItemHtml).join("");
+        return (rows || []).map(listMovieCardHtml).join("");
+      };
+      const configureListNode = (node) => {
+        if (!node) return;
+        node.classList.toggle("lists-grid", listsViewMode === "poster");
+        node.classList.toggle("lists-history", false);
+        node.classList.toggle("mode-list-grid", listsViewMode === "list");
+        node.classList.toggle("mode-detail-grid", listsViewMode === "detail");
+      };
+      configureListNode(watchlistGrid);
+      configureListNode(watchedList);
       if (listsState.active === "watchlist") {
-        if (watchlistGrid) watchlistGrid.innerHTML = (listsState.watchlist || []).map(listMovieCardHtml).join("");
+        if (watchlistGrid) watchlistGrid.innerHTML = renderRows(listsState.watchlist || []);
         if (empty) {
           empty.textContent = tNext("lists.emptyWatchlist", "Your watchlist is empty.");
           empty.classList.toggle("hidden", !!(listsState.watchlist || []).length);
         }
       } else {
-        if (watchedList) watchedList.innerHTML = (listsState.watched || []).map(historyRowHtml).join("");
+        if (watchedList) watchedList.innerHTML = renderRows(listsState.watched || []);
         if (empty) {
           empty.textContent = tNext("lists.emptyWatched", "No watched films yet.");
           empty.classList.toggle("hidden", !!(listsState.watched || []).length);
@@ -12941,6 +13388,14 @@ def ui_preview_html(
           if (movieId) openAppMovieDetail(movieId);
         });
       });
+      document.querySelectorAll("#listsView [data-preview-movie]").forEach((row) => {
+        row.addEventListener("click", (event) => {
+          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          const movieId = row.dataset.previewMovie || "";
+          if (movieId) openAppMovieDetail(movieId);
+        });
+      });
+      bindViewModeInteractions(document.getElementById("listsView") || document);
     }
     async function loadListsView(force = false) {
       if (!hasPermission("watchlist.manage")) return;
@@ -13639,17 +14094,27 @@ def ui_preview_html(
       if (hero) hero.classList.toggle("hidden", preferences.show_featured_hero === false || displayItems.length === 0);
       const rail = document.getElementById("posterRail");
       if (rail) {
-        rail.innerHTML = displayItems.length
-          ? displayItems.slice(0, 80).map((item, index) => (
+        rail.classList.toggle("mode-list-grid", libraryViewMode === "list");
+        rail.classList.toggle("mode-detail-grid", libraryViewMode === "detail");
+        rail.classList.toggle("poster-rail", libraryViewMode === "poster");
+        rail.innerHTML = displayItems.length && libraryViewMode === "detail"
+          ? detailTableHtml(displayItems.slice(0, 120), "library", libraryDetailSort)
+          : displayItems.length
+            ? displayItems.slice(0, 80).map((item, index) => (
+                libraryViewMode === "list"
+                  ? libraryListItemHtml(item)
+                  : (
               item.kind === "container"
                 ? containerPosterCardHtml(item.container, index)
                 : posterCardHtml(item.movie, index)
-            )).join("")
-          : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
+                  )
+              )).join("")
+            : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
       }
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
         button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
-        button.addEventListener("click", () => {
+        button.addEventListener("click", (event) => {
+          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
           if (selectionMode) {
             toggleMovieSelection(button.dataset.previewMovie);
             return;
@@ -13662,6 +14127,7 @@ def ui_preview_html(
         button.classList.toggle("bulk-selected", selectedContainerIds.has(button.dataset.previewContainer));
         button.addEventListener("click", (event) => {
           event.preventDefault();
+          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
           if (selectionMode) {
             toggleContainerSelection(button.dataset.previewContainer);
             return;
@@ -13669,6 +14135,7 @@ def ui_preview_html(
           openAppContainerDetail(button.dataset.previewContainer);
         });
       });
+      bindViewModeInteractions(document.getElementById("libraryView") || document);
       const shownCount = document.getElementById("shownCount");
       if (shownCount) shownCount.textContent = String(displayItems.length);
       const summary = document.getElementById("librarySummary");
@@ -13869,14 +14336,20 @@ def ui_preview_html(
       ["show_container_member_badges", "preferences.showContainerMemberBadges", "preferences.showContainerMemberBadgesHelp", "collectors_mode"]
     ];
     const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
-    function ratingCountryButtonsHtml(disabled = false) {
+    function ratingCountryPickerHtml(disabled = false) {
       const selected = String(preferences.rating_country || "NL").toUpperCase();
-      return RATING_COUNTRIES_ORDER.map((code) => (
-        `<button type="button" class="country-picker-button ${code === selected ? "active" : ""}" data-preference-country="${escapeHtml(code)}" ${disabled ? "disabled" : ""}>
-          ${flagIconHtml(code, ratingCountryLabel(code))}
-          <span>${escapeHtml(ratingCountryLabel(code))}</span>
-        </button>`
+      const active = RATING_COUNTRIES_ORDER.includes(selected) ? selected : "NL";
+      const options = RATING_COUNTRIES_ORDER.map((code) => (
+        `<option value="${escapeHtml(code)}"${code === active ? " selected" : ""}>${escapeHtml(ratingCountryLabel(code))}</option>`
       )).join("");
+      return `
+        <div class="language-picker country-language-picker">
+          <span id="ratingCountryFlag" aria-hidden="true">${flagIconHtml(active, ratingCountryLabel(active))}</span>
+          <select id="ratingCountrySelect" data-preference-country-select aria-label="${escapeHtml(tNext("preferences.ratingCountry", "Content rating country"))}" ${disabled ? "disabled" : ""}>
+            ${options}
+          </select>
+        </div>
+      `;
     }
     function preferenceRowsHtml(items) {
       return items.map(([key, labelKey, helpKey, requiresKey]) => {
@@ -13889,7 +14362,7 @@ def ui_preview_html(
                 <span>${escapeHtml(tNext(helpKey, ""))}</span>
               </span>
               <div class="country-picker" data-preference-country-picker="${escapeHtml(key)}">
-                ${ratingCountryButtonsHtml(disabled)}
+                ${ratingCountryPickerHtml(disabled)}
               </div>
             </div>
           `;
@@ -13917,6 +14390,12 @@ def ui_preview_html(
         button.addEventListener("click", () => {
           if (button.disabled) return;
           updatePreference("rating_country", button.dataset.preferenceCountry);
+        });
+      });
+      list.querySelectorAll("[data-preference-country-select]").forEach((select) => {
+        select.addEventListener("change", () => {
+          if (select.disabled) return;
+          updatePreference("rating_country", select.value);
         });
       });
     }
@@ -14624,6 +15103,13 @@ def ui_preview_html(
         localStorage.setItem("dv_next_collection_sort", collectionSortMode);
         renderLibrary();
       });
+      document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+          libraryViewMode = normalizeViewMode(button.dataset.libraryViewMode);
+          localStorage.setItem("dv_next_library_view_mode", libraryViewMode);
+          renderLibrary();
+        });
+      });
       document.querySelectorAll("[data-format-filter]").forEach((button) => {
         button.addEventListener("click", () => {
           collectionFormatFilter = button.dataset.formatFilter || "all";
@@ -14653,6 +15139,13 @@ def ui_preview_html(
       document.querySelectorAll("[data-lists-tab]").forEach((button) => {
         button.addEventListener("click", () => {
           listsState.active = button.dataset.listsTab || "watchlist";
+          renderListsView();
+        });
+      });
+      document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+          listsViewMode = normalizeViewMode(button.dataset.listsViewMode);
+          localStorage.setItem("dv_next_lists_view_mode", listsViewMode);
           renderListsView();
         });
       });
@@ -21537,7 +22030,10 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 (user_id, limit),
             )
             rows = cur.fetchall()
-        return attach_media_group_availability(conn, attach_digital_availability(conn, [with_preview_media_urls(row) for row in rows]))
+        return attach_movie_search_credits(
+            conn,
+            attach_media_group_availability(conn, attach_digital_availability(conn, [with_preview_media_urls(row) for row in rows])),
+        )
     if kind == "watched":
         if not table_exists(conn, "watch_history"):
             return []
@@ -21576,7 +22072,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 row["format"] = snapshot.get("movie_format") or snapshot.get("format")
             if not row.get("poster_url"):
                 row["poster_url"] = snapshot.get("poster_file") or snapshot.get("poster")
-        return attach_media_group_availability(conn, attach_digital_availability(conn, rows))
+        return attach_movie_search_credits(conn, attach_media_group_availability(conn, attach_digital_availability(conn, rows)))
     return []
 
 

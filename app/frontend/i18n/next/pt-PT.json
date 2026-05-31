@@ -887,5 +887,13 @@
   "importCenter.addTab": "Ler e adicionar",
   "importCenter.addEyebrow": "Adicao rapida",
   "importCenter.manualTitleCard": "Pesquisa manual",
-  "importCenter.manualHelp": "Use isto se o codigo de barras nao for legivel ou se quiser adicionar um filme por titulo."
+  "importCenter.manualHelp": "Use isto se o codigo de barras nao for legivel ou se quiser adicionar um filme por titulo.",
+  "collection.viewMode": "Vista",
+  "collection.viewPoster": "Cartazes",
+  "collection.viewList": "Lista",
+  "collection.viewDetail": "Detalhe",
+  "collection.titleColumn": "Titulo",
+  "collection.yearColumn": "Ano",
+  "collection.noCrew": "Sem equipa",
+  "movieDetail.actors": "Atores"
 }
