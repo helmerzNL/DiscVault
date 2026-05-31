@@ -887,5 +887,13 @@
   "importCenter.addTab": "Scansiona e aggiungi",
   "importCenter.addEyebrow": "Aggiunta rapida",
   "importCenter.manualTitleCard": "Ricerca manuale",
-  "importCenter.manualHelp": "Usalo quando il codice a barre non e leggibile o vuoi aggiungere un film per titolo."
+  "importCenter.manualHelp": "Usalo quando il codice a barre non e leggibile o vuoi aggiungere un film per titolo.",
+  "collection.viewMode": "Vista",
+  "collection.viewPoster": "Poster",
+  "collection.viewList": "Elenco",
+  "collection.viewDetail": "Dettaglio",
+  "collection.titleColumn": "Titolo",
+  "collection.yearColumn": "Anno",
+  "collection.noCrew": "Nessuna troupe",
+  "movieDetail.actors": "Attori"
 }

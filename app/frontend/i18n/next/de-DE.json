@@ -887,5 +887,13 @@
   "importCenter.addTab": "Scannen & hinzufuegen",
   "importCenter.addEyebrow": "Schnell hinzufuegen",
   "importCenter.manualTitleCard": "Manuelle Suche",
-  "importCenter.manualHelp": "Nutze dies, wenn der Barcode nicht lesbar ist oder du einen Film per Titel hinzufuegen moechtest."
+  "importCenter.manualHelp": "Nutze dies, wenn der Barcode nicht lesbar ist oder du einen Film per Titel hinzufuegen moechtest.",
+  "collection.viewMode": "Ansicht",
+  "collection.viewPoster": "Poster",
+  "collection.viewList": "Liste",
+  "collection.viewDetail": "Details",
+  "collection.titleColumn": "Titel",
+  "collection.yearColumn": "Jahr",
+  "collection.noCrew": "Keine Crew",
+  "movieDetail.actors": "Darsteller"
 }

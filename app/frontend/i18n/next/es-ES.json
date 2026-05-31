@@ -887,5 +887,13 @@
   "importCenter.addTab": "Escanear y anadir",
   "importCenter.addEyebrow": "Alta rapida",
   "importCenter.manualTitleCard": "Busqueda manual",
-  "importCenter.manualHelp": "Usa esto si el codigo de barras no se lee o si quieres anadir una pelicula por titulo."
+  "importCenter.manualHelp": "Usa esto si el codigo de barras no se lee o si quieres anadir una pelicula por titulo.",
+  "collection.viewMode": "Vista",
+  "collection.viewPoster": "Carteles",
+  "collection.viewList": "Lista",
+  "collection.viewDetail": "Detalle",
+  "collection.titleColumn": "Titulo",
+  "collection.yearColumn": "Ano",
+  "collection.noCrew": "Sin equipo",
+  "movieDetail.actors": "Actores"
 }
