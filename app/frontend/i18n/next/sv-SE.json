@@ -876,5 +876,10 @@
   "notifications.prefGroupInvites": "Groups and invites",
   "notifications.prefGroupInvitesHelp": "Group changes, shared lists and future invitations.",
   "notifications.prefSecurity": "Security",
-  "notifications.prefSecurityHelp": "Passkey, recovery and account security messages."
+  "notifications.prefSecurityHelp": "Passkey, recovery and account security messages.",
+  "importCenter.sections": "Importdelar",
+  "importCenter.addTab": "Skanna och lagg till",
+  "importCenter.addEyebrow": "Snabbt tillagg",
+  "importCenter.manualTitleCard": "Manuell sokning",
+  "importCenter.manualHelp": "Anvand detta om streckkoden inte kan lasas eller om du vill lagga till en film via titel."
 }

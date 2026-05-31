@@ -977,5 +977,10 @@
   "notifications.prefGroupInvites": "Groups and invites",
   "notifications.prefGroupInvitesHelp": "Group changes, shared lists and future invitations.",
   "notifications.prefSecurity": "Security",
-  "notifications.prefSecurityHelp": "Passkey, recovery and account security messages."
+  "notifications.prefSecurityHelp": "Passkey, recovery and account security messages.",
+  "importCenter.sections": "Import sections",
+  "importCenter.addTab": "Scan & add",
+  "importCenter.addEyebrow": "Quick add",
+  "importCenter.manualTitleCard": "Manual search",
+  "importCenter.manualHelp": "Use this when the barcode is unreadable or you want to add a film by title."
 }

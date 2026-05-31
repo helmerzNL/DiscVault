@@ -4923,6 +4923,55 @@ def ui_preview_html(
       gap: 16px;
       align-items: start;
     }
+    .import-mode-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .import-mode-tabs::-webkit-scrollbar {
+      display: none;
+    }
+    .import-mode-tabs button {
+      flex: 0 0 auto;
+      min-height: 38px;
+      border: 0;
+      border-radius: 14px;
+      padding: 0 14px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-weight: 760;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .import-mode-tabs button.active {
+      background: var(--bg-elevated);
+      color: var(--text);
+      box-shadow: 0 10px 24px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.16);
+    }
+    .import-tab-panel.hidden {
+      display: none;
+    }
+    .import-tab-panel {
+      display: grid;
+      gap: 16px;
+    }
+    .import-scanner-card {
+      overflow: hidden;
+    }
+    .import-scanner-spotlight {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, .8fr);
+      gap: 16px;
+      align-items: start;
+      margin-top: 14px;
+    }
     .import-stack {
       display: grid;
       gap: 16px;
@@ -5002,24 +5051,36 @@ def ui_preview_html(
     .barcode-scanner-shell {
       display: grid;
       gap: 10px;
-      margin-top: 12px;
-      padding: 12px;
+      min-width: 0;
+      padding: 14px;
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      border-radius: 18px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 52%),
+        color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      box-shadow: var(--shadow-soft);
     }
     .barcode-scanner-viewport {
       position: relative;
       overflow: hidden;
       display: grid;
       place-items: center;
-      min-height: 220px;
-      aspect-ratio: 16 / 10;
+      min-height: 310px;
+      aspect-ratio: 16 / 11;
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 16px;
       background:
         linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 46%),
         color-mix(in srgb, var(--bg-solid) 88%, #000);
+    }
+    .import-manual-card {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+      padding: 14px;
     }
     .barcode-scanner-viewport video,
     .barcode-scanner-viewport canvas {
@@ -5068,9 +5129,8 @@ def ui_preview_html(
     }
     .import-barcode-form {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 8px;
-      margin-top: 12px;
     }
     .import-barcode-form label {
       display: grid;
@@ -6688,6 +6748,15 @@ def ui_preview_html(
       .import-grid {
         grid-template-columns: 1fr;
       }
+      .import-scanner-spotlight {
+        grid-template-columns: 1fr;
+      }
+      .barcode-scanner-viewport {
+        min-height: min(420px, 58vh);
+      }
+      .import-mode-tabs button {
+        flex: 1 0 auto;
+      }
       .import-barcode-form {
         grid-template-columns: 1fr;
       }
@@ -7046,38 +7115,24 @@ def ui_preview_html(
           </div>
           <div class="profile-hero-actions">
             <button type="button" class="secondary-button" id="importCenterRefreshButton" data-next-i18n="common.refresh">Refresh</button>
-            <button type="button" class="primary-button" id="importCenterStartButton" data-next-i18n="importCenter.start">Start import</button>
           </div>
         </section>
-        <section class="import-grid">
-          <div class="import-stack">
-            <div class="detail-card full">
-              <div class="import-card-head">
-                <div>
-                  <h3 data-next-i18n="importCenter.sources">Import sources</h3>
-                  <p class="import-source-meta" data-next-i18n="importCenter.sourcesHelp">Choose the plugin that should inspect and plan the import.</p>
-                </div>
-                <span class="tag" id="importCenterSourceCount">-</span>
+        <nav class="import-mode-tabs" aria-label="Import sections" data-next-i18n-aria="importCenter.sections">
+          <button type="button" class="active" data-import-tab="add" data-next-i18n="importCenter.addTab">Scan & add</button>
+          <button type="button" data-import-tab="sources" data-next-i18n="importCenter.sources">Import sources</button>
+          <button type="button" data-import-tab="plan" data-next-i18n="importCenter.plan">Plan</button>
+          <button type="button" data-import-tab="jobs" data-next-i18n="importCenter.jobs">Jobs</button>
+        </nav>
+        <section class="import-tab-panel" data-import-panel="add">
+          <div class="detail-card profile-card full import-scanner-card">
+            <div class="import-card-head">
+              <div>
+                <span class="eyebrow" data-next-i18n="importCenter.addEyebrow">Quick add</span>
+                <h3 data-next-i18n="importCenter.lookupTitle">Film toevoegen</h3>
+                <p data-next-i18n="importCenter.lookupHelp">Scan een barcode of zoek handmatig op barcode of titel voordat je een film toevoegt.</p>
               </div>
-              <div class="import-source-list" id="importCenterSources"></div>
             </div>
-            <div class="detail-card full">
-              <div class="import-card-head">
-                <div>
-                  <h3 data-next-i18n="importCenter.plan">Plan</h3>
-                  <p class="import-source-meta" data-next-i18n="importCenter.planHelp">Readiness, required actions and data counts for the selected source.</p>
-                </div>
-                <span class="tag" id="importCenterState">-</span>
-              </div>
-              <div class="profile-meta" id="importCenterPlan"></div>
-              <div class="import-counts" id="importCenterSourceCounts"></div>
-              <div class="login-message" id="importCenterMessage"></div>
-            </div>
-          </div>
-          <div class="import-stack">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="importCenter.lookupTitle">Film toevoegen</h3>
-              <p data-next-i18n="importCenter.lookupHelp">Scan een barcode of zoek handmatig op barcode of titel voordat je een film toevoegt.</p>
+            <div class="import-scanner-spotlight">
               <div class="barcode-scanner-shell">
                 <div class="import-card-head">
                   <div>
@@ -7085,7 +7140,7 @@ def ui_preview_html(
                     <p class="import-source-meta" data-next-i18n="importCenter.scanHelp">Werkt in de PWA via HTTPS met camera-toestemming.</p>
                   </div>
                   <div class="button-row compact">
-                    <button type="button" class="secondary-button" id="importScannerStartButton" data-next-i18n="importCenter.scanStart">Scan</button>
+                    <button type="button" class="primary-button" id="importScannerStartButton" data-next-i18n="importCenter.scanStart">Scan</button>
                     <button type="button" class="secondary-button hidden" id="importScannerStopButton" data-next-i18n="importCenter.scanStop">Stop</button>
                   </div>
                 </div>
@@ -7094,35 +7149,72 @@ def ui_preview_html(
                 </div>
                 <div class="login-message" id="importScannerMessage"></div>
               </div>
-              <form class="import-barcode-form" id="importBarcodeForm">
-                <label>
-                  <span data-next-i18n="importCenter.manualBarcode">Barcode</span>
-                  <input id="importBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
-                </label>
-                <label>
-                  <span data-next-i18n="importCenter.manualTitle">Titel</span>
-                  <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
-                </label>
-                <label>
-                  <span data-next-i18n="importCenter.manualYear">Jaar</span>
-                  <input id="importYearInput" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
-                </label>
-                <label>
-                  <span data-next-i18n="importCenter.manualFormat">Formaat</span>
-                  <input id="importFormatInput" autocomplete="off" maxlength="80" data-next-i18n-placeholder="importCenter.formatPlaceholder" placeholder="4K UHD">
-                </label>
-                <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Preview</button>
-                <button type="button" class="primary-button" id="importMovieAddButton" disabled data-next-i18n="importCenter.addMovie">Add movie</button>
-              </form>
-              <div class="import-result-list" id="importBarcodeResults"></div>
-            </div>
-            <div class="detail-card profile-card">
-              <div class="import-card-head">
-                <h3 data-next-i18n="importCenter.jobs">Jobs</h3>
-                <span class="tag" id="importCenterJobCount">-</span>
+              <div class="import-manual-card">
+                <div>
+                  <strong data-next-i18n="importCenter.manualTitleCard">Manual search</strong>
+                  <p class="import-source-meta" data-next-i18n="importCenter.manualHelp">Use this when the barcode is unreadable or you want to add a film by title.</p>
+                </div>
+                <form class="import-barcode-form" id="importBarcodeForm">
+                  <label>
+                    <span data-next-i18n="importCenter.manualBarcode">Barcode</span>
+                    <input id="importBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
+                  </label>
+                  <label>
+                    <span data-next-i18n="importCenter.manualTitle">Titel</span>
+                    <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                  </label>
+                  <label>
+                    <span data-next-i18n="importCenter.manualYear">Jaar</span>
+                    <input id="importYearInput" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
+                  </label>
+                  <label>
+                    <span data-next-i18n="importCenter.manualFormat">Formaat</span>
+                    <input id="importFormatInput" autocomplete="off" maxlength="80" data-next-i18n-placeholder="importCenter.formatPlaceholder" placeholder="4K UHD">
+                  </label>
+                  <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Preview</button>
+                  <button type="button" class="primary-button" id="importMovieAddButton" disabled data-next-i18n="importCenter.addMovie">Add movie</button>
+                </form>
               </div>
-              <div class="import-job-list" id="importCenterJobs"></div>
             </div>
+            <div class="import-result-list" id="importBarcodeResults"></div>
+          </div>
+        </section>
+        <section class="import-tab-panel hidden" data-import-panel="sources">
+          <div class="detail-card full">
+            <div class="import-card-head">
+              <div>
+                <h3 data-next-i18n="importCenter.sources">Import sources</h3>
+                <p class="import-source-meta" data-next-i18n="importCenter.sourcesHelp">Choose the plugin that should inspect and plan the import.</p>
+              </div>
+              <span class="tag" id="importCenterSourceCount">-</span>
+            </div>
+            <div class="import-source-list" id="importCenterSources"></div>
+          </div>
+        </section>
+        <section class="import-tab-panel hidden" data-import-panel="plan">
+          <div class="detail-card full">
+            <div class="import-card-head">
+              <div>
+                <h3 data-next-i18n="importCenter.plan">Plan</h3>
+                <p class="import-source-meta" data-next-i18n="importCenter.planHelp">Readiness, required actions and data counts for the selected source.</p>
+              </div>
+              <div class="button-row compact">
+                <span class="tag" id="importCenterState">-</span>
+                <button type="button" class="primary-button" id="importCenterStartButton" data-next-i18n="importCenter.start">Start import</button>
+              </div>
+            </div>
+            <div class="profile-meta" id="importCenterPlan"></div>
+            <div class="import-counts" id="importCenterSourceCounts"></div>
+            <div class="login-message" id="importCenterMessage"></div>
+          </div>
+        </section>
+        <section class="import-tab-panel hidden" data-import-panel="jobs">
+          <div class="detail-card profile-card full">
+            <div class="import-card-head">
+              <h3 data-next-i18n="importCenter.jobs">Jobs</h3>
+              <span class="tag" id="importCenterJobCount">-</span>
+            </div>
+            <div class="import-job-list" id="importCenterJobs"></div>
           </div>
         </section>
       </section>
@@ -8118,7 +8210,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null, addResult: null};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null, addResult: null, activeTab: "add"};
     let importScanner = {
       running: false,
       native: false,
@@ -8450,11 +8542,21 @@ def ui_preview_html(
       const importCanStart = hasPermission("collection.import");
       const importCanAdd = hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd);
       document.getElementById("importCenterStartButton")?.classList.toggle("hidden", !importCanStart);
-      setElementVisible(closestCard(document.getElementById("importCenterSources")), importCanStart);
-      setElementVisible(closestCard(document.getElementById("importCenterPlan")), importCanStart);
-      setElementVisible(closestCard(document.getElementById("importCenterJobs")), importCanStart);
-      setElementVisible(document.querySelector(".barcode-scanner-shell"), importCanAdd);
-      setElementVisible(document.getElementById("importBarcodeForm"), importCanAdd);
+      document.querySelectorAll('[data-import-tab="sources"], [data-import-tab="plan"], [data-import-tab="jobs"]').forEach((button) => {
+        setElementVisible(button, importCanStart);
+      });
+      setElementVisible(document.querySelector('[data-import-tab="add"]'), importCanAdd);
+      setElementVisible(document.querySelector('[data-import-panel="sources"]'), importCanStart);
+      setElementVisible(document.querySelector('[data-import-panel="plan"]'), importCanStart);
+      setElementVisible(document.querySelector('[data-import-panel="jobs"]'), importCanStart);
+      setElementVisible(document.querySelector('[data-import-panel="add"]'), importCanAdd);
+      const activeImportTab = Array.from(document.querySelectorAll("[data-import-tab]")).find((button) => button.dataset.importTab === (importCenter.activeTab || "add"));
+      if (!activeImportTab || activeImportTab.classList.contains("hidden")) {
+        importCenter.activeTab = importCanAdd ? "add" : (importCanStart ? "sources" : "add");
+      }
+      if (document.getElementById("importView") && !document.getElementById("importView").classList.contains("hidden")) {
+        renderImportTabs();
+      }
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement) && document.querySelector('[data-preferences-tab="collectors"]')?.classList.contains("active")) {
         setPreferenceTab("appearance");
       }
@@ -11972,6 +12074,19 @@ def ui_preview_html(
       const key = String(state || "unknown");
       return tNext(`importCenter.state.${key}`, key.replace(/_/g, " "));
     }
+    function setImportCenterTab(tab) {
+      importCenter.activeTab = tab || "add";
+      renderImportTabs();
+    }
+    function renderImportTabs() {
+      const active = importCenter.activeTab || "add";
+      document.querySelectorAll("[data-import-tab]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.importTab === active);
+      });
+      document.querySelectorAll("[data-import-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.importPanel !== active);
+      });
+    }
     function jsonPreview(value, maxLength = 1200) {
       if (value === null || value === undefined || value === "") return "";
       try {
@@ -12458,6 +12573,7 @@ def ui_preview_html(
       }).join("");
     }
     function renderImportCenter() {
+      renderImportTabs();
       renderImportSources();
       renderImportPlan();
       renderImportJobs();
@@ -14508,6 +14624,9 @@ def ui_preview_html(
       document.getElementById("importScannerStopButton")?.addEventListener("click", () => {
         stopImportBarcodeScanner();
         setImportScannerMessage(tNext("importCenter.scanStopped", "Scanner stopped."));
+      });
+      document.querySelectorAll("[data-import-tab]").forEach((button) => {
+        button.addEventListener("click", () => setImportCenterTab(button.dataset.importTab || "add"));
       });
       document.getElementById("importMovieAddButton")?.addEventListener("click", () => addLookupMovie());
       document.getElementById("importCenterSources")?.addEventListener("click", (event) => {
