@@ -24988,6 +24988,8 @@ PUBLIC_NEXT_PATHS = {
     "/app/admin/",
     "/ui-preview",
     "/ui-preview/",
+    "/api/next/app",
+    "/api/next/app/",
     "/api/next/app/import",
     "/api/next/app/import/",
     "/api/next/collection",
@@ -28381,6 +28383,8 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/")
     @flask_app.get("/app")
     @flask_app.get("/app/")
+    @flask_app.get("/api/next/app")
+    @flask_app.get("/api/next/app/")
     @flask_app.get("/profile")
     @flask_app.get("/app/profile")
     @flask_app.get("/lists")
