@@ -9142,11 +9142,15 @@ def ui_preview_html(
     function applyAppPermissionVisibility() {
       const collectorsEnabled = collectorsModeEnabled();
       const canManageContainers = collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
+      const canUseCollectorPreferences = hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
       setVisible('[data-app-route="import"]', hasAnyPermission(APP_PERMISSION_GROUPS.importCenter));
       setVisible('[data-app-route="lists"]', hasPermission("watchlist.manage"));
       renderAppAdminVisibility();
-      setElementVisible(document.querySelector('[data-preferences-tab="collectors"]'), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
-      setElementVisible(document.querySelector('[data-preferences-panel="collectors"]'), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
+      setElementVisible(document.querySelector('[data-preferences-tab="collectors"]'), canUseCollectorPreferences);
+      if (!canUseCollectorPreferences && activePreferenceTab === "collectors") {
+        activePreferenceTab = "appearance";
+      }
+      syncPreferencePanelVisibility();
       setElementVisible(closestCard(document.getElementById("containerManagerCreateForm")), canManageContainers);
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
@@ -9189,7 +9193,7 @@ def ui_preview_html(
       if (document.getElementById("importView") && !document.getElementById("importView").classList.contains("hidden")) {
         renderImportTabs();
       }
-      if (!hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement) && document.querySelector('[data-preferences-tab="collectors"]')?.classList.contains("active")) {
+      if (!canUseCollectorPreferences && document.querySelector('[data-preferences-tab="collectors"]')?.classList.contains("active")) {
         setPreferenceTab("appearance");
       }
       const activeAdminTab = appAdmin.activeTab || "access";
@@ -14708,6 +14712,9 @@ def ui_preview_html(
       document.querySelectorAll("[data-preferences-panel]").forEach((panel) => {
         panel.classList.toggle("hidden", panel.dataset.preferencesPanel !== selected);
       });
+    }
+    function syncPreferencePanelVisibility() {
+      setPreferenceTab(activePreferenceTab);
     }
     function renderPreferences() {
       const libraryList = document.getElementById("profilePreferenceList");
