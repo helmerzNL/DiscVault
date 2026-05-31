@@ -986,5 +986,18 @@
   "movieDetail.savingArtwork": "Enregistrement des visuels...",
   "movieDetail.artworkSaved": "Visuels enregistres.",
   "preferences.saving": "Enregistrement...",
-  "preferences.saved": "Preferences enregistrees."
+  "preferences.saved": "Preferences enregistrees.",
+  "preferences.showFeaturedHero": "Afficher la selection mise en avant",
+  "preferences.showFeaturedHeroHelp": "Affiche un grand film mis en avant en haut de la page d accueil.",
+  "preferences.showCollectionSearch": "Barre de recherche dans la collection",
+  "preferences.showCollectionSearchHelp": "Affiche une barre de recherche au-dessus de la collection pour le titre, le code-barres, le format et les groupes.",
+  "preferences.showAutoVideos": "Afficher les videos automatiques",
+  "preferences.showAutoVideosHelp": "Affiche les videos collectees automatiquement via les sources de metadonnees. Desactive affiche seulement les videos ajoutees par vous.",
+  "preferences.showLocalTitle": "Titre du film dans la langue locale",
+  "preferences.showLocalTitleHelp": "Affiche le titre du film dans la langue de l app lorsque disponible. Desactive affiche toujours le titre original.",
+  "preferences.showExtendedPeoplePages": "Pages de personnes etendues",
+  "preferences.showExtendedPeoplePagesHelp": "Affiche les films numeriques et les filmographies completes sur les pages de personnes. Desactive affiche seulement les medias physiques possedes.",
+  "containerDetail.overview": "Apercu",
+  "containerDetail.sections": "Sections du conteneur",
+  "migration.legacyAuthRequired": "Connectez-vous avec une passkey legacy owner/admin avant de lancer la migration."
 }

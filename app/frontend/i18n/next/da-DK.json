@@ -986,5 +986,18 @@
   "movieDetail.savingArtwork": "Gemmer artwork...",
   "movieDetail.artworkSaved": "Artwork gemt.",
   "preferences.saving": "Gemmer...",
-  "preferences.saved": "Indstillinger gemt."
+  "preferences.saved": "Indstillinger gemt.",
+  "preferences.showFeaturedHero": "Vis udvalgt forhandsvisning",
+  "preferences.showFeaturedHeroHelp": "Viser en stor udvalgt film overst pa startsiden.",
+  "preferences.showCollectionSearch": "Sogefelt i samlingen",
+  "preferences.showCollectionSearchHelp": "Viser et sogefelt over samlingen til titel, stregkode, format og grupper.",
+  "preferences.showAutoVideos": "Vis automatiske videoer",
+  "preferences.showAutoVideosHelp": "Viser videoer, der automatisk er hentet via metadatakilder. Fra viser kun videoer, du selv har tilfojet.",
+  "preferences.showLocalTitle": "Filmtitel pa lokalt sprog",
+  "preferences.showLocalTitleHelp": "Viser filmtitlen pa appens sprog, nar den findes. Fra viser altid originaltitlen.",
+  "preferences.showExtendedPeoplePages": "Udvidede personsider",
+  "preferences.showExtendedPeoplePagesHelp": "Viser digitale film og fulde filmografier pa personsider. Fra viser kun ejede fysiske medier.",
+  "containerDetail.overview": "Oversigt",
+  "containerDetail.sections": "Containersektioner",
+  "migration.legacyAuthRequired": "Log ind med en legacy owner/admin-passkey, for du starter migreringen."
 }

@@ -986,5 +986,18 @@
   "movieDetail.savingArtwork": "Lagrer artwork...",
   "movieDetail.artworkSaved": "Artwork lagret.",
   "preferences.saving": "Lagrer...",
-  "preferences.saved": "Innstillinger lagret."
+  "preferences.saved": "Innstillinger lagret.",
+  "preferences.showFeaturedHero": "Vis fremhevet forh?ndsvisning",
+  "preferences.showFeaturedHeroHelp": "Viser en stor fremhevet film overst pa startsiden.",
+  "preferences.showCollectionSearch": "Sokefelt i samlingen",
+  "preferences.showCollectionSearchHelp": "Viser et sokefelt over samlingen for tittel, strekkode, format og grupper.",
+  "preferences.showAutoVideos": "Vis automatiske videoer",
+  "preferences.showAutoVideosHelp": "Viser videoer som automatisk er hentet via metadatakilder. Av viser bare videoer du har lagt til selv.",
+  "preferences.showLocalTitle": "Filmtittel pa lokalt sprak",
+  "preferences.showLocalTitleHelp": "Viser filmtittelen pa appens sprak nar den finnes. Av viser alltid originaltittelen.",
+  "preferences.showExtendedPeoplePages": "Utvidede personsider",
+  "preferences.showExtendedPeoplePagesHelp": "Viser digitale filmer og fullstendige filmografier pa personsider. Av viser bare eide fysiske medier.",
+  "containerDetail.overview": "Oversikt",
+  "containerDetail.sections": "Containerseksjoner",
+  "migration.legacyAuthRequired": "Logg inn med en legacy owner/admin-passkey for du starter migreringen."
 }
