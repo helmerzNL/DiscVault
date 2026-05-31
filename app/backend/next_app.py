@@ -1606,6 +1606,12 @@ def migration_dashboard_html() -> str:
       letter-spacing: 0;
       box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 14px 38px rgba(0,0,0,.2);
     }
+    .login-mark img {
+      width: 34px;
+      height: 34px;
+      object-fit: contain;
+      display: block;
+    }
     .login-copy {
       display: grid;
       gap: 6px;
@@ -2112,7 +2118,7 @@ def migration_dashboard_html() -> str:
     <section class="card full auth-gate hidden" id="migrationAuthGate" aria-live="polite">
       <div class="auth-gate-top">
         <div class="login-brand">
-          <span class="login-mark" aria-hidden="true">DV</span>
+          <span class="login-mark" aria-hidden="true"><img src="/api/next/assets/logo.svg" alt=""></span>
           <div class="login-copy">
             <h2 data-next-i18n="auth.loginTitle">DiscVault</h2>
             <p data-next-i18n="auth.loginDescription">Log in with your Passkey</p>
