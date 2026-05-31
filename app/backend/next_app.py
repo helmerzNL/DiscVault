@@ -3903,6 +3903,8 @@ def ui_preview_html(
     }
     .nav-symbol.groups::before,
     .nav-symbol.groups::after,
+    .nav-symbol.lists::before,
+    .nav-symbol.lists::after,
     .nav-symbol.admin::before,
     .nav-symbol.admin::after {
       content: "";
@@ -3910,14 +3912,16 @@ def ui_preview_html(
       border-radius: 50%;
       background: currentColor;
     }
-    .nav-symbol.groups::before {
+    .nav-symbol.groups::before,
+    .nav-symbol.lists::before {
       width: 9px;
       height: 9px;
       left: 2px;
       top: 4px;
       box-shadow: 8px 0 0 currentColor;
     }
-    .nav-symbol.groups::after {
+    .nav-symbol.groups::after,
+    .nav-symbol.lists::after {
       width: 18px;
       height: 7px;
       left: 1px;
@@ -6565,7 +6569,7 @@ def ui_preview_html(
       </div>
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="groups"><span data-next-i18n="migration.groups">Groups</span><small id="navGroupCount">""" + h(counts.get("mediaGroups", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="groups"><span data-next-i18n="uiPreview.navLists">Lists</span><small id="navGroupCount">""" + h(counts.get("mediaGroups", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span data-next-i18n="importCenter.title">Import</span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span data-next-i18n="uiPreview.profile">Profile</span><small id="navProfileRole">-</small></button>
         <button type="button" class="nav-item hidden" id="adminNavItem" data-app-route="admin"><span data-next-i18n="uiPreview.admin">Admin</span><small id="navAdminMode">-</small></button>
@@ -7641,8 +7645,8 @@ def ui_preview_html(
       <span data-next-i18n="uiPreview.navLibrary">Library</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="groups">
-      <span class="nav-symbol groups" aria-hidden="true"></span>
-      <span data-next-i18n="migration.groups">Groups</span>
+      <span class="nav-symbol lists" aria-hidden="true"></span>
+      <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="import">
       <span class="nav-symbol import" aria-hidden="true"></span>
