@@ -199,6 +199,7 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "collectors_mode": False,
     "merge_editions_as_title": False,
     "show_digital_badge_on_tiles": True,
+    "rating_country": "NL",
     "default_media_group_id": "",
 }
 APP_PREFERENCE_ALIASES = {
@@ -216,6 +217,7 @@ APP_BOOLEAN_PREFERENCES = {
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
+    "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA"},
 }
 
 
@@ -2912,6 +2914,9 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                     m.year,
                     m.format,
                     m.edition,
+                    m.metadata->>'audience_rating' AS audience_rating,
+                    m.rating,
+                    mts.content_ratings,
                     concat_ws(' ',
                         m.metadata->>'actor',
                         m.metadata->>'director',
@@ -2933,6 +2938,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                     m.created_at,
                     m.updated_at
                 FROM movies m
+                LEFT JOIN movie_technical_specs mts ON mts.movie_id = m.id
                 LEFT JOIN LATERAL (
                     SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
                     FROM entity_media em
@@ -2978,6 +2984,9 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                 year,
                 format,
                 edition,
+                metadata->>'audience_rating' AS audience_rating,
+                rating,
+                NULL::jsonb AS content_ratings,
                 concat_ws(' ',
                     metadata->>'actor',
                     metadata->>'director',
@@ -9706,6 +9715,7 @@ def ui_preview_html(
       renderPreferences();
       renderProfile();
       renderLibrary();
+      if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
       applyAppPermissionVisibility();
     }
     function renderLanguageSelect() {
@@ -10022,6 +10032,72 @@ def ui_preview_html(
       const label = physicalFormatLabel(value);
       return label ? `<span class="physical-format-badge">${escapeHtml(label)}</span>` : "";
     }
+    const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA"];
+    function ratingCountryLabel(code) {
+      try {
+        const displayNames = new Intl.DisplayNames([localeState.locale || "en-US"], {type: "region"});
+        return displayNames.of(code) || code;
+      } catch (error) {
+        return code;
+      }
+    }
+    function contentRatingMap(value) {
+      if (!value) return {};
+      if (typeof value === "object" && !Array.isArray(value)) return value;
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value);
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch (error) {
+          return {};
+        }
+      }
+      return {};
+    }
+    function preferredContentRating(movie, technicalSpecs = null) {
+      const metadata = movie?.metadata || {};
+      const ratings = Object.assign(
+        {},
+        contentRatingMap(metadata.content_ratings || metadata.contentRatings),
+        contentRatingMap(movie?.content_ratings || movie?.contentRatings),
+        contentRatingMap(technicalSpecs?.content_ratings || technicalSpecs?.contentRatings)
+      );
+      const selected = String(preferences.rating_country || "NL").toUpperCase();
+      const rating = ratings[selected] || ratings[selected.toLowerCase()] || ratings.US || ratings.GB || "";
+      return valueText(rating || movie?.audience_rating || metadata.audience_rating || metadata.audienceRating || "");
+    }
+    function movieScoreLabel(movie) {
+      const value = valueText(movie?.rating || movie?.metadata?.rating || "");
+      return value ? `${tNext("movieDetail.rating", "Rating")} ${value}` : "";
+    }
+    function localeCandidates() {
+      const locale = String(localeState.locale || "en-US").replace("_", "-").toLowerCase();
+      const base = locale.split("-")[0];
+      return [...new Set([locale, base, "en-us", "en"])];
+    }
+    function localizedMovieOverview(movie, localizations) {
+      const rows = Array.isArray(localizations) ? localizations : [];
+      const byLang = new Map(rows.map((row) => [String(row.lang || "").replace("_", "-").toLowerCase(), row]));
+      for (const lang of localeCandidates()) {
+        const value = valueText(byLang.get(lang)?.overview);
+        if (value) return value;
+      }
+      const metadata = movie?.metadata || {};
+      const base = String(localeState.locale || "en-US").split("-")[0].toLowerCase();
+      const metadataCandidates = [
+        metadata[`overview_${base}`],
+        metadata[`plot_${base}`],
+        metadata.localized_overview,
+        metadata.localizedOverview,
+        metadata.overview,
+        metadata.plot
+      ];
+      for (const value of metadataCandidates) {
+        const text = valueText(value);
+        if (text) return text;
+      }
+      return valueText(movie?.overview);
+    }
     function containerFormatBadgeValue(container) {
       const metadata = container.metadata || {};
       const aggregate = metadata.aggregate || {};
@@ -10032,7 +10108,7 @@ def ui_preview_html(
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-      const meta = [movie.year, movie.barcode].filter(Boolean).join(" / ") || "";
+      const meta = [movie.year, preferredContentRating(movie), movie.barcode].filter(Boolean).join(" / ") || "";
       const selected = index === 0 ? " selected" : "";
       return `
         <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
@@ -10462,12 +10538,14 @@ def ui_preview_html(
         posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       }
       document.getElementById("movieDetailTitle").textContent = title;
-      document.getElementById("movieDetailOverview").textContent = movie.overview || tNext("movieDetail.noOverview", "No overview imported yet.");
+      document.getElementById("movieDetailOverview").textContent = localizedMovieOverview(movie, detail.localizations) || tNext("movieDetail.noOverview", "No overview imported yet.");
+      const contentRating = preferredContentRating(movie, specs);
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
-        movie.rating ? `${tNext("movieDetail.rating", "Rating")} ${movie.rating}` : "",
+        contentRating ? `${tNext("movieDetail.contentRating", "Content rating")} ${contentRating}` : "",
+        movieScoreLabel(movie),
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
         (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : ""
       ]);
@@ -10492,6 +10570,7 @@ def ui_preview_html(
         [tNext("movieDetail.regions", "Regions"), specs.regions || metadata.regions],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
         [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
+        [tNext("movieDetail.contentRating", "Content rating"), contentRating],
         [tNext("movieDetail.contentRatings", "Content ratings"), specs.content_ratings || metadata.content_ratings]
       ]);
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
@@ -12268,6 +12347,7 @@ def ui_preview_html(
       ["show_collection_search", "preferences.showCollectionSearch", "preferences.showCollectionSearchHelp"],
       ["show_auto_videos", "preferences.showAutoVideos", "preferences.showAutoVideosHelp"],
       ["show_local_title", "preferences.showLocalTitle", "preferences.showLocalTitleHelp"],
+      ["rating_country", "preferences.ratingCountry", "preferences.ratingCountryHelp"],
       ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"],
       ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"]
     ];
@@ -12276,9 +12356,28 @@ def ui_preview_html(
       ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"]
     ];
     const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
+    function ratingCountryOptionsHtml() {
+      const selected = String(preferences.rating_country || "NL").toUpperCase();
+      return RATING_COUNTRIES_ORDER.map((code) => (
+        `<option value="${escapeHtml(code)}" ${code === selected ? "selected" : ""}>${escapeHtml(ratingCountryLabel(code))}</option>`
+      )).join("");
+    }
     function preferenceRowsHtml(items) {
       return items.map(([key, labelKey, helpKey, requiresKey]) => {
         const disabled = requiresKey && !preferences[requiresKey];
+        if (key === "rating_country") {
+          return `
+            <div class="preference-control-row ${disabled ? "disabled" : ""}">
+              <span>
+                <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+                <span>${escapeHtml(tNext(helpKey, ""))}</span>
+              </span>
+              <select data-preference-select="${escapeHtml(key)}" ${disabled ? "disabled" : ""}>
+                ${ratingCountryOptionsHtml()}
+              </select>
+            </div>
+          `;
+        }
         return `
           <div class="preference-row ${disabled ? "disabled" : ""}">
             <span>
@@ -12295,6 +12394,12 @@ def ui_preview_html(
         button.addEventListener("click", () => {
           if (button.disabled) return;
           updatePreference(button.dataset.preferenceToggle, !preferences[button.dataset.preferenceToggle]);
+        });
+      });
+      list.querySelectorAll("[data-preference-select]").forEach((select) => {
+        select.addEventListener("change", () => {
+          if (select.disabled) return;
+          updatePreference(select.dataset.preferenceSelect, select.value);
         });
       });
     }
@@ -12335,6 +12440,7 @@ def ui_preview_html(
       }
       renderPreferences();
       renderLibrary();
+      if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
       const message = document.getElementById("preferencesMessage");
       if (message) message.textContent = tNext("preferences.saving", "Saving...");
       try {
@@ -12348,6 +12454,7 @@ def ui_preview_html(
         preferences = Object.assign({}, preferences, payload.preferences || {});
         renderPreferences();
         renderLibrary();
+        if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
         if (message) message.textContent = tNext("preferences.saved", "Saved.");
       } catch (error) {
         if (message) message.textContent = error.message || String(error);
@@ -18358,7 +18465,8 @@ def validate_app_preference(key: str, value: Any) -> Any:
     if key in APP_BOOLEAN_PREFERENCES:
         return parse_bool_value(value, default=bool(APP_PREFERENCE_DEFAULTS[key]))
     if key in APP_CHOICE_PREFERENCES:
-        text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip().lower()
+        text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip()
+        text = text.upper() if key == "rating_country" else text.lower()
         if text not in APP_CHOICE_PREFERENCES[key]:
             raise NextApiError(f"Invalid value for preference {key}", 400)
         return text
@@ -19192,6 +19300,22 @@ def movie_identifier_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+def movie_localization_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movie_localizations"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT lang, title, overview, updated_at
+            FROM movie_localizations
+            WHERE movie_id=%s
+            ORDER BY lang
+            """,
+            (movie_id,),
+        )
+        return cur.fetchall()
+
+
 def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     if not table_exists(conn, "movie_technical_specs"):
         return None
@@ -19869,6 +19993,7 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     return {
         "movie": movie,
         "identifiers": movie_identifier_entities(conn, movie_id),
+        "localizations": movie_localization_entities(conn, movie_id),
         "technicalSpecs": movie_technical_spec_entity(conn, movie_id),
         "credits": movie_credit_entities(conn, movie_id),
         "containers": movie_container_entities(conn, movie_id),

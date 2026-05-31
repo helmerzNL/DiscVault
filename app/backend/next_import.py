@@ -52,6 +52,7 @@ LEGACY_METADATA_SOURCE_ALIASES = {
 CLIENT_SYNC_SETTING_KEYS = {
     "auth_enabled",
     "registration_enabled",
+    "rating_country",
     "show_auto_videos",
     "show_local_title",
     "show_search_button",
