@@ -3218,6 +3218,7 @@ def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
 
 
 def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
+    user_id = user.get("id") if user else None
     counts = {
         "movies": count_table(conn, "movies"),
         "people": count_table(conn, "people"),
@@ -3230,14 +3231,17 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "digitalMediaItems": count_table(conn, "digital_media_items"),
         "users": count_table(conn, "users"),
     }
+    counts["personalLists"] = personal_list_counts(conn, user_id)
+    movies = collection_movie_preview_entities(conn)
+    movies = attach_personal_list_state(conn, movies, user_id)
     return {
         "counts": counts,
-        "movies": collection_movie_preview_entities(conn),
+        "movies": movies,
         "containers": collection_container_preview_entities(conn),
         "containerMembership": collection_container_membership_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200),
         "plugins": collection_plugin_preview_entities(conn),
-        "preferences": app_effective_preferences(conn, user.get("id") if user else None),
+        "preferences": app_effective_preferences(conn, user_id),
         "user": {
             "id": user.get("id"),
             "username": user.get("username"),
@@ -4584,11 +4588,186 @@ def ui_preview_html(
       min-width: 0;
     }
     .library-view.hidden,
+    .lists-view.hidden,
     .movie-detail-page.hidden,
     .container-detail-page.hidden,
     .profile-view.hidden,
     .import-view.hidden {
       display: none;
+    }
+    .lists-view {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .lists-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 55%),
+        var(--bg-elevated);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(24px) saturate(160%);
+      padding: clamp(18px, 3vw, 26px);
+    }
+    .lists-hero h2 {
+      margin: 6px 0 8px;
+      font-size: clamp(2rem, 4vw, 3.8rem);
+      line-height: .95;
+      letter-spacing: 0;
+    }
+    .lists-hero p {
+      margin: 0;
+      max-width: 68ch;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .lists-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .list-count-pill {
+      min-width: 92px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      text-align: center;
+    }
+    .list-count-pill strong {
+      display: block;
+      font-size: 1.25rem;
+      line-height: 1;
+    }
+    .list-count-pill span {
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .lists-panel {
+      display: grid;
+      gap: 16px;
+    }
+    .lists-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+      gap: 14px;
+    }
+    .lists-history {
+      display: grid;
+      gap: 10px;
+    }
+    .history-row {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      color: var(--text);
+      text-align: left;
+      padding: 8px;
+      cursor: pointer;
+    }
+    .history-row:disabled {
+      cursor: default;
+      opacity: .7;
+    }
+    .history-row img,
+    .history-row .history-poster-placeholder {
+      width: 54px;
+      aspect-ratio: 2 / 3;
+      border-radius: 8px;
+      object-fit: cover;
+      background: linear-gradient(145deg, #30343c, #181a1f);
+      display: grid;
+      place-items: center;
+      color: rgba(255,255,255,.7);
+    }
+    .history-row strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .history-row span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .movie-list-card {
+      display: grid;
+      gap: 12px;
+    }
+    .movie-list-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .list-pill-button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 14px;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .list-pill-button.active {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      color: var(--accent);
+    }
+    .watch-date-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .watch-date-row input {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+    }
+    .watch-history-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .watch-history-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      color: var(--text);
+      padding: 0 8px 0 12px;
+      font-size: .84rem;
+      font-weight: 700;
+    }
+    .watch-history-pill button {
+      width: 22px;
+      height: 22px;
+      border: 0;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--muted) 16%, transparent);
+      color: var(--muted);
+      cursor: pointer;
     }
     .movie-detail-page {
       display: grid;
@@ -6569,7 +6748,7 @@ def ui_preview_html(
       </div>
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="groups"><span data-next-i18n="uiPreview.navLists">Lists</span><small id="navGroupCount">""" + h(counts.get("mediaGroups", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="lists"><span data-next-i18n="uiPreview.navLists">Lists</span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span data-next-i18n="importCenter.title">Import</span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span data-next-i18n="uiPreview.profile">Profile</span><small id="navProfileRole">-</small></button>
         <button type="button" class="nav-item hidden" id="adminNavItem" data-app-route="admin"><span data-next-i18n="uiPreview.admin">Admin</span><small id="navAdminMode">-</small></button>
@@ -6693,6 +6872,37 @@ def ui_preview_html(
           <div class="poster-rail" id="posterRail">""" + movie_cards + """</div>
         </div>
       </section>
+      </section>
+      <section class="lists-view hidden" id="listsView" aria-labelledby="listsPageTitle">
+        <section class="lists-hero">
+          <div>
+            <span class="eyebrow" data-next-i18n="lists.eyebrow">Personal lists</span>
+            <h2 id="listsPageTitle" data-next-i18n="uiPreview.navLists">Lists</h2>
+            <p data-next-i18n="lists.description">Keep a personal watchlist and a watched history that follows you across devices.</p>
+          </div>
+          <div class="lists-counts">
+            <div class="list-count-pill">
+              <strong id="listsWatchlistCount">0</strong>
+              <span data-next-i18n="lists.watchlist">Watchlist</span>
+            </div>
+            <div class="list-count-pill">
+              <strong id="listsWatchedCount">0</strong>
+              <span data-next-i18n="lists.watched">Watched</span>
+            </div>
+          </div>
+        </section>
+        <section class="detail-card full lists-panel">
+          <div class="detail-card-head">
+            <h3 data-next-i18n="lists.collectionTitle">My viewing lists</h3>
+            <div class="detail-submenu" role="tablist" aria-label="Lists" data-next-i18n-aria="uiPreview.navLists">
+              <button type="button" class="active" data-lists-tab="watchlist" data-next-i18n="lists.watchlist">Watchlist</button>
+              <button type="button" data-lists-tab="watched" data-next-i18n="lists.watched">Watched</button>
+            </div>
+          </div>
+          <div class="lists-grid" id="listsWatchlistGrid"></div>
+          <div class="lists-history hidden" id="listsWatchedList"></div>
+          <div class="preview-empty hidden" id="listsEmptyMessage"></div>
+        </section>
       </section>
       <section class="import-view hidden" id="importView" aria-labelledby="importCenterTitle">
         <section class="import-hero">
@@ -6869,6 +7079,23 @@ def ui_preview_html(
                 <button type="submit" class="primary-button" data-next-i18n="movieDetail.saveDetails">Save details</button>
               </div>
             </form>
+          </div>
+          <div class="detail-card full movie-list-card" id="movieListStateCard">
+            <div class="detail-card-head">
+              <div>
+                <h3 data-next-i18n="lists.personalTitle">Personal lists</h3>
+                <p class="import-source-meta" id="movieListStateSummary" data-next-i18n="lists.personalHelp">Save this film for later or mark when you watched it.</p>
+              </div>
+              <div class="movie-list-actions">
+                <button type="button" class="list-pill-button" id="movieWatchlistToggleButton" data-next-i18n="lists.addToWatchlist">Add to Watchlist</button>
+                <button type="button" class="list-pill-button" id="movieWatchedTodayButton" data-next-i18n="lists.markWatchedToday">Watched today</button>
+              </div>
+            </div>
+            <div class="watch-date-row">
+              <input type="date" id="movieWatchedDateInput" aria-label="Watched date" data-next-i18n-aria="lists.watchedDate">
+              <button type="button" class="secondary-button" id="movieWatchedDateButton" data-next-i18n="lists.markWatchedDate">Add date</button>
+            </div>
+            <div class="watch-history-pills" id="movieWatchHistoryPills"></div>
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.release">Release</h3>
@@ -7644,7 +7871,7 @@ def ui_preview_html(
       <span class="nav-symbol library" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLibrary">Library</span>
     </button>
-    <button type="button" class="mobile-tab" data-app-route="groups">
+    <button type="button" class="mobile-tab" data-app-route="lists">
       <span class="nav-symbol lists" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
@@ -7681,6 +7908,7 @@ def ui_preview_html(
     let activePersonId = "";
     let activePersonPayload = null;
     let personReturnRoute = null;
+    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], counts: {}};
     let currentStartup = {};
     let currentAuthStatus = {};
     let profileCredentials = [];
@@ -8023,7 +8251,7 @@ def ui_preview_html(
       const collectorsEnabled = collectorsModeEnabled();
       const canManageContainers = collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
       setVisible('[data-app-route="import"]', hasAnyPermission(APP_PERMISSION_GROUPS.importCenter));
-      setVisible('[data-app-route="groups"]', hasAnyPermission(APP_PERMISSION_GROUPS.groupNavigation));
+      setVisible('[data-app-route="lists"]', hasPermission("watchlist.manage"));
       renderAppAdminVisibility();
       setElementVisible(document.querySelector('[data-preferences-tab="collectors"]'), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
       setElementVisible(document.querySelector('[data-preferences-panel="collectors"]'), hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement));
@@ -10749,6 +10977,108 @@ def ui_preview_html(
         if (input && document.activeElement !== input) input.value = value;
       });
     }
+    function renderMovieListState(detail) {
+      const state = detail.userState || {};
+      const watchButton = document.getElementById("movieWatchlistToggleButton");
+      const watchedButton = document.getElementById("movieWatchedTodayButton");
+      const summary = document.getElementById("movieListStateSummary");
+      const historyNode = document.getElementById("movieWatchHistoryPills");
+      const canUseLists = hasPermission("watchlist.manage");
+      document.getElementById("movieListStateCard")?.classList.toggle("hidden", !canUseLists);
+      if (!canUseLists) return;
+      if (watchButton) {
+        watchButton.classList.toggle("active", !!state.onWatchlist);
+        watchButton.textContent = state.onWatchlist
+          ? tNext("lists.inWatchlist", "In Watchlist")
+          : tNext("lists.addToWatchlist", "Add to Watchlist");
+      }
+      if (watchedButton) {
+        watchedButton.classList.toggle("active", !!state.lastWatched);
+        watchedButton.textContent = state.lastWatched
+          ? tNext("lists.watchedAgain", "Watched again")
+          : tNext("lists.markWatchedToday", "Watched today");
+      }
+      const lastWatched = state.lastWatched ? formatAppDate(state.lastWatched) : "";
+      if (summary) {
+        summary.textContent = lastWatched
+          ? `${tNext("lists.lastWatched", "Last watched")} ${lastWatched}`
+          : tNext("lists.personalHelp", "Save this film for later or mark when you watched it.");
+      }
+      if (historyNode) {
+        const history = Array.isArray(state.history) ? state.history : [];
+        historyNode.innerHTML = history.length
+          ? history.map((entry) => `
+              <span class="watch-history-pill">
+                ${escapeHtml(formatAppDate(entry.watched_at))}
+                <button type="button" data-delete-watch-history="${escapeHtml(entry.id)}" aria-label="${escapeHtml(tNext("lists.removeWatchedEntry", "Remove watched entry"))}">×</button>
+              </span>
+            `).join("")
+          : `<span class="import-source-meta">${escapeHtml(tNext("lists.noWatchHistoryForMovie", "No watched dates for this film yet."))}</span>`;
+      }
+    }
+    function updateMovieListCache(movieId, userState) {
+      movies = (movies || []).map((movie) => {
+        if (String(movie.id) !== String(movieId)) return movie;
+        return Object.assign({}, movie, {
+          on_watchlist: !!userState?.onWatchlist,
+          watchlist_added_at: userState?.watchlistAddedAt || null,
+          last_watched: userState?.lastWatched || null
+        });
+      });
+      listsState.loaded = false;
+      renderLibrary();
+      updateListsCounts({
+        watchlist: (movies || []).filter((movie) => movie.on_watchlist).length,
+        watchedMovies: (movies || []).filter((movie) => movie.last_watched).length
+      });
+    }
+    async function toggleActiveMovieWatchlist() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      const current = !!(activeDetailPayload?.userState || {}).onWatchlist;
+      setMovieDetailMessage(current ? tNext("lists.removingWatchlist", "Removing from Watchlist...") : tNext("lists.addingWatchlist", "Adding to Watchlist..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/watchlist`, {
+          method: current ? "DELETE" : "POST"
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        updateMovieListCache(activeDetailMovieId, activeDetailPayload.userState);
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(current ? tNext("lists.removedWatchlist", "Removed from Watchlist.") : tNext("lists.addedWatchlist", "Added to Watchlist."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function markActiveMovieWatched(watchedAt = "") {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      const body = watchedAt ? {watchedAt} : {};
+      setMovieDetailMessage(tNext("lists.markingWatched", "Adding watched date..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/watched`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        updateMovieListCache(activeDetailMovieId, activeDetailPayload.userState);
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.markedWatched", "Watched date added."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteActiveMovieWatchedEntry(entryId) {
+      if (!activeDetailMovieId || !entryId || !hasPermission("watchlist.manage")) return;
+      setMovieDetailMessage(tNext("lists.removingWatched", "Removing watched date..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/watched/${encodeURIComponent(entryId)}`, {method: "DELETE"});
+        activeDetailPayload.userState = payload.userState || {};
+        updateMovieListCache(activeDetailMovieId, activeDetailPayload.userState);
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.removedWatched", "Watched date removed."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
     function renderMovieDetail(detail) {
       activeDetailPayload = detail;
       const movie = detail.movie || {};
@@ -10780,6 +11110,7 @@ def ui_preview_html(
         appDebugMode && movie.id ? `Movie ID ${movie.id}` : ""
       ]);
       fillMovieEditForm(detail);
+      renderMovieListState(detail);
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
         [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
@@ -10868,6 +11199,8 @@ def ui_preview_html(
       document.getElementById("movieDetailTags").innerHTML = "";
       document.getElementById("movieDetailRelease").innerHTML = "";
       document.getElementById("movieDetailTechnical").innerHTML = "";
+      document.getElementById("movieListStateSummary").textContent = "";
+      document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
       document.getElementById("movieDetailLinks").innerHTML = "";
@@ -12071,6 +12404,120 @@ def ui_preview_html(
         renderBarcodeLookup();
       }
     }
+    function formatAppDate(value) {
+      if (!value) return "";
+      const text = String(value).slice(0, 10);
+      try {
+        return new Intl.DateTimeFormat(localeState.locale || "en-US", {dateStyle: "medium"}).format(new Date(`${text}T12:00:00`));
+      } catch (error) {
+        return text;
+      }
+    }
+    function listMovieCardHtml(movie) {
+      const poster = usableImage(movie.poster_url);
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const meta = [
+        movie.year,
+        preferredContentRating(movie),
+        movie.watchlist_added_at ? `${tNext("lists.added", "Added")} ${formatAppDate(movie.watchlist_added_at)}` : "",
+        movie.last_watched ? `${tNext("lists.lastWatched", "Last watched")} ${formatAppDate(movie.last_watched)}` : ""
+      ].filter(Boolean).join(" / ");
+      return `
+        <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movie.id)}">
+          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
+          <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
+          <span class="preview-poster-meta">${escapeHtml(meta)}</span>
+          ${debugIdHtml(movie.id, "Movie ID")}
+        </button>
+      `;
+    }
+    function historyRowHtml(entry) {
+      const poster = usableImage(entry.poster_url);
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span class="history-poster-placeholder">${escapeHtml(tNext("collection.noPoster", "No poster").slice(0, 1))}</span>`;
+      const movieId = entry.id || entry.movie_id || "";
+      const exists = entry.movie_exists !== false && !!movieId;
+      const meta = [
+        formatAppDate(entry.watched_at || entry.last_watched),
+        entry.year,
+        entry.format,
+        exists ? "" : tNext("lists.movieUnavailable", "Movie no longer exists")
+      ].filter(Boolean).join(" / ");
+      return `
+        <button type="button" class="history-row" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
+          ${posterHtml}
+          <span>
+            <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
+            <span>${escapeHtml(meta)}</span>
+          </span>
+          ${entry.on_watchlist ? `<span class="tag good">${escapeHtml(tNext("lists.watchlist", "Watchlist"))}</span>` : ""}
+        </button>
+      `;
+    }
+    function updateListsCounts(counts = listsState.counts || {}) {
+      const watchlistCount = counts.watchlist ?? (listsState.watchlist || []).length;
+      const watchedCount = counts.watchedMovies ?? counts.watchHistory ?? (listsState.watched || []).length;
+      const watchNode = document.getElementById("listsWatchlistCount");
+      const watchedNode = document.getElementById("listsWatchedCount");
+      const navNode = document.getElementById("navListCount");
+      if (watchNode) watchNode.textContent = String(watchlistCount || 0);
+      if (watchedNode) watchedNode.textContent = String(watchedCount || 0);
+      if (navNode) navNode.textContent = String(watchlistCount || 0);
+    }
+    function renderListsView() {
+      document.querySelectorAll("[data-lists-tab]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.listsTab === listsState.active);
+      });
+      const watchlistGrid = document.getElementById("listsWatchlistGrid");
+      const watchedList = document.getElementById("listsWatchedList");
+      const empty = document.getElementById("listsEmptyMessage");
+      if (watchlistGrid) watchlistGrid.classList.toggle("hidden", listsState.active !== "watchlist");
+      if (watchedList) watchedList.classList.toggle("hidden", listsState.active !== "watched");
+      updateListsCounts(listsState.counts);
+      if (listsState.active === "watchlist") {
+        if (watchlistGrid) watchlistGrid.innerHTML = (listsState.watchlist || []).map(listMovieCardHtml).join("");
+        if (empty) {
+          empty.textContent = tNext("lists.emptyWatchlist", "Your watchlist is empty.");
+          empty.classList.toggle("hidden", !!(listsState.watchlist || []).length);
+        }
+      } else {
+        if (watchedList) watchedList.innerHTML = (listsState.watched || []).map(historyRowHtml).join("");
+        if (empty) {
+          empty.textContent = tNext("lists.emptyWatched", "No watched films yet.");
+          empty.classList.toggle("hidden", !!(listsState.watched || []).length);
+        }
+      }
+      document.querySelectorAll("[data-list-movie]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const movieId = button.dataset.listMovie || "";
+          if (movieId) openAppMovieDetail(movieId);
+        });
+      });
+    }
+    async function loadListsView(force = false) {
+      if (!hasPermission("watchlist.manage")) return;
+      if (listsState.loaded && !force) {
+        renderListsView();
+        return;
+      }
+      const empty = document.getElementById("listsEmptyMessage");
+      if (empty) {
+        empty.textContent = tNext("collection.loading", "Loading...");
+        empty.classList.remove("hidden");
+      }
+      try {
+        const payload = await authApiJson("/api/next/lists?limit=500");
+        listsState.watchlist = payload.watchlist || [];
+        listsState.watched = payload.watched || [];
+        listsState.counts = payload.counts || {};
+        listsState.loaded = true;
+        renderListsView();
+      } catch (error) {
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      }
+    }
     function setActiveAppRoute(route) {
       if (route !== "import" && importScanner.running) {
         stopImportBarcodeScanner();
@@ -12087,6 +12534,7 @@ def ui_preview_html(
     }
     function showMovieDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -12098,6 +12546,7 @@ def ui_preview_html(
     }
     function showContainerDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -12109,6 +12558,7 @@ def ui_preview_html(
     }
     function showPersonDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -12122,6 +12572,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -12131,8 +12582,36 @@ def ui_preview_html(
         history.pushState({}, "", "/");
       }
     }
+    function showListsPage(pushUrl = true) {
+      if (!hasPermission("watchlist.manage")) {
+        showLibraryPage(pushUrl);
+        return;
+      }
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.remove("hidden");
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
+      setActiveAppRoute("lists");
+      renderListsView();
+      loadListsView();
+      if (pushUrl && appMode && window.location.pathname !== "/lists") {
+        history.pushState({view: "lists"}, "", "/lists");
+      }
+      scrollPreviewTop();
+    }
     function showProfilePage(pushUrl = true) {
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -12159,6 +12638,7 @@ def ui_preview_html(
         return;
       }
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -12185,6 +12665,7 @@ def ui_preview_html(
         return;
       }
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -12215,6 +12696,9 @@ def ui_preview_html(
       if (/^\\/app\\/profile\\/?$|^\\/profile\\/?$/.test(window.location.pathname)) {
         return {view: "profile"};
       }
+      if (/^\\/app\\/lists\\/?$|^\\/lists\\/?$/.test(window.location.pathname)) {
+        return {view: "lists"};
+      }
       const movieMatch = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
       if (movieMatch) {
         return {view: "movie", movieId: decodeURIComponent(movieMatch[1] || movieMatch[2])};
@@ -12242,8 +12726,11 @@ def ui_preview_html(
         showImportPage();
         return;
       }
+      if (route === "lists") {
+        showListsPage();
+        return;
+      }
       showLibraryPage(true, route || "library");
-      if (route === "groups") document.getElementById("groupFilter")?.focus();
     }
     async function saveMovieDetails(event) {
       event.preventDefault();
@@ -12407,10 +12894,10 @@ def ui_preview_html(
           : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
       }
       const navMovieCount = document.getElementById("navMovieCount");
-      const navGroupCount = document.getElementById("navGroupCount");
+      const navListCount = document.getElementById("navListCount");
       const containerPanelCount = document.getElementById("containerPanelCount");
       if (navMovieCount) navMovieCount.textContent = String(movies.length);
-      if (navGroupCount) navGroupCount.textContent = String(mediaGroups.length);
+      if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
       const firstItem = displayItems[0];
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
@@ -12853,6 +13340,11 @@ def ui_preview_html(
       renderPreferences();
       renderProfile();
       renderLibrary();
+      updateListsCounts((state.counts || {}).personalLists || {});
+      if (!document.getElementById("listsView")?.classList.contains("hidden")) {
+        listsState.loaded = false;
+        loadListsView(true);
+      }
     }
     function profileIdentity() {
       const auth = currentStartup.auth || {};
@@ -13243,6 +13735,7 @@ def ui_preview_html(
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
+      else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
     }
@@ -13355,6 +13848,12 @@ def ui_preview_html(
       document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
+      });
+      document.querySelectorAll("[data-lists-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+          listsState.active = button.dataset.listsTab || "watchlist";
+          renderListsView();
+        });
       });
       document.querySelectorAll("[data-preferences-tab]").forEach((button) => {
         button.addEventListener("click", () => setPreferenceTab(button.dataset.preferencesTab || "appearance"));
@@ -13566,6 +14065,16 @@ def ui_preview_html(
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => setMovieEditPanelVisible(true));
       document.getElementById("movieEditCancelButton")?.addEventListener("click", () => setMovieEditPanelVisible(false));
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
+      document.getElementById("movieWatchedTodayButton")?.addEventListener("click", () => markActiveMovieWatched());
+      document.getElementById("movieWatchedDateButton")?.addEventListener("click", () => {
+        const value = document.getElementById("movieWatchedDateInput")?.value || "";
+        if (value) markActiveMovieWatched(value);
+      });
+      document.getElementById("movieWatchHistoryPills")?.addEventListener("click", (event) => {
+        const deleteButton = event.target.closest("[data-delete-watch-history]");
+        if (deleteButton) deleteActiveMovieWatchedEntry(deleteButton.dataset.deleteWatchHistory);
+      });
       document.getElementById("containerEditToggleButton")?.addEventListener("click", () => setContainerEditPanelVisible(true));
       document.getElementById("containerEditCancelButton")?.addEventListener("click", () => setContainerEditPanelVisible(false));
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
@@ -13653,6 +14162,7 @@ def ui_preview_html(
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);
+        else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
         else if (route.view === "profile") showProfilePage(false);
         else {
           activeContainerId = "";
@@ -19799,6 +20309,252 @@ def attach_media_group_availability(conn, rows: list[dict[str, Any]]) -> list[di
     return rows
 
 
+def attach_personal_list_state(conn, rows: list[dict[str, Any]], user_id: UUID | str | None) -> list[dict[str, Any]]:
+    if not rows or not user_id:
+        return rows
+    ids = [row["id"] for row in rows if row.get("id")]
+    if not ids:
+        return rows
+    watchlist_by_movie: dict[Any, Any] = {}
+    watched_by_movie: dict[Any, Any] = {}
+    if table_exists(conn, "watchlist_items"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT movie_id, added_at
+                FROM watchlist_items
+                WHERE user_id=%s AND movie_id = ANY(%s)
+                """,
+                (user_id, ids),
+            )
+            watchlist_by_movie = {row["movie_id"]: row.get("added_at") for row in cur.fetchall()}
+    if table_exists(conn, "watch_history"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT movie_id, MAX(watched_at) AS watched_at
+                FROM watch_history
+                WHERE user_id=%s AND movie_id = ANY(%s)
+                GROUP BY movie_id
+                """,
+                (user_id, ids),
+            )
+            watched_by_movie = {row["movie_id"]: row.get("watched_at") for row in cur.fetchall()}
+    for row in rows:
+        movie_id = row.get("id")
+        row["on_watchlist"] = movie_id in watchlist_by_movie
+        row["watchlist_added_at"] = watchlist_by_movie.get(movie_id)
+        row["last_watched"] = watched_by_movie.get(movie_id)
+    return rows
+
+
+def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
+    if not user_id:
+        return {"watchlist": 0, "watchHistory": 0, "watchedMovies": 0}
+    counts = {"watchlist": 0, "watchHistory": 0, "watchedMovies": 0}
+    if table_exists(conn, "watchlist_items"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*)::int AS count FROM watchlist_items WHERE user_id=%s", (user_id,))
+            counts["watchlist"] = int((cur.fetchone() or {}).get("count") or 0)
+    if table_exists(conn, "watch_history"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*)::int AS count, COUNT(DISTINCT movie_id)::int AS movie_count
+                FROM watch_history
+                WHERE user_id=%s
+                """,
+                (user_id,),
+            )
+            row = cur.fetchone() or {}
+            counts["watchHistory"] = int(row.get("count") or 0)
+            counts["watchedMovies"] = int(row.get("movie_count") or 0)
+    return counts
+
+
+def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> dict[str, Any]:
+    state: dict[str, Any] = {
+        "onWatchlist": False,
+        "watchlistAddedAt": None,
+        "lastWatched": None,
+        "watchCount": 0,
+        "history": [],
+    }
+    if not user_id:
+        return state
+    if table_exists(conn, "watchlist_items"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT added_at
+                FROM watchlist_items
+                WHERE user_id=%s AND movie_id=%s
+                """,
+                (user_id, movie_id),
+            )
+            row = cur.fetchone()
+        if row:
+            state["onWatchlist"] = True
+            state["watchlistAddedAt"] = row.get("added_at")
+    if table_exists(conn, "watch_history"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, watched_at, created_at
+                FROM watch_history
+                WHERE user_id=%s AND movie_id=%s
+                ORDER BY watched_at DESC, created_at DESC
+                LIMIT 50
+                """,
+                (user_id, movie_id),
+            )
+            rows = cur.fetchall()
+        state["history"] = rows
+        state["watchCount"] = len(rows)
+        state["lastWatched"] = rows[0].get("watched_at") if rows else None
+    return state
+
+
+def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit: int = 200) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "movies"):
+        return []
+    limit = min(max(int(limit or 200), 1), 500)
+    media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+    poster_select = (
+        """
+                poster_asset.id AS poster_asset_id,
+                poster_asset.storage_backend AS poster_asset_storage_backend,
+                poster_asset.storage_key AS poster_asset_storage_key,
+                poster_asset.source_url AS poster_asset_source_url,
+                backdrop_asset.id AS backdrop_asset_id,
+                backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
+                backdrop_asset.storage_key AS backdrop_asset_storage_key,
+                backdrop_asset.source_url AS backdrop_asset_source_url,
+        """
+        if media_join
+        else """
+                NULL AS poster_asset_id,
+                NULL AS poster_asset_storage_backend,
+                NULL AS poster_asset_storage_key,
+                NULL AS poster_asset_source_url,
+                NULL AS backdrop_asset_id,
+                NULL AS backdrop_asset_storage_backend,
+                NULL AS backdrop_asset_storage_key,
+                NULL AS backdrop_asset_source_url,
+        """
+    )
+    poster_join = (
+        """
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='movie'
+                  AND em.entity_id=m.id
+                  AND ma.kind='poster'
+                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                LIMIT 1
+            ) poster_asset ON true
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='movie'
+                  AND em.entity_id=m.id
+                  AND ma.kind='backdrop'
+                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                LIMIT 1
+            ) backdrop_asset ON true
+        """
+        if media_join
+        else ""
+    )
+    base_select = f"""
+                m.id,
+                m.public_id,
+                m.barcode,
+                m.title,
+                m.sort_title,
+                m.original_title,
+                m.year,
+                m.format,
+                m.edition,
+                m.metadata,
+                m.metadata->>'poster_url' AS poster_url,
+                m.metadata->>'backdrop_url' AS backdrop_url,
+{poster_select}
+                m.created_at,
+                m.updated_at
+    """
+    if kind == "watchlist":
+        if not table_exists(conn, "watchlist_items"):
+            return []
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+{base_select},
+                    w.added_at AS watchlist_added_at,
+                    true AS on_watchlist,
+                    latest.watched_at AS last_watched
+                FROM watchlist_items w
+                JOIN movies m ON m.id = w.movie_id
+                {poster_join}
+                LEFT JOIN LATERAL (
+                    SELECT MAX(watched_at) AS watched_at
+                    FROM watch_history wh
+                    WHERE wh.user_id=w.user_id AND wh.movie_id=w.movie_id
+                ) latest ON true
+                WHERE w.user_id=%s
+                ORDER BY w.added_at DESC
+                LIMIT %s
+                """,
+                (user_id, limit),
+            )
+            rows = cur.fetchall()
+        return attach_media_group_availability(conn, attach_digital_availability(conn, [with_preview_media_urls(row) for row in rows]))
+    if kind == "watched":
+        if not table_exists(conn, "watch_history"):
+            return []
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    wh.id AS watch_history_id,
+                    wh.watched_at,
+                    wh.created_at AS watch_history_created_at,
+                    wh.snapshot,
+{base_select},
+                    EXISTS (
+                        SELECT 1 FROM watchlist_items w
+                        WHERE w.user_id=wh.user_id AND w.movie_id=wh.movie_id
+                    ) AS on_watchlist,
+                    wh.watched_at AS last_watched,
+                    m.id IS NOT NULL AS movie_exists
+                FROM watch_history wh
+                LEFT JOIN movies m ON m.id = wh.movie_id
+                {poster_join}
+                WHERE wh.user_id=%s
+                ORDER BY wh.watched_at DESC, wh.created_at DESC
+                LIMIT %s
+                """,
+                (user_id, limit),
+            )
+            rows = [with_preview_media_urls(row) for row in cur.fetchall()]
+        for row in rows:
+            snapshot = row.get("snapshot") if isinstance(row.get("snapshot"), dict) else {}
+            if not row.get("title"):
+                row["title"] = snapshot.get("movie_title") or snapshot.get("title")
+            if not row.get("year"):
+                row["year"] = snapshot.get("movie_year") or snapshot.get("year")
+            if not row.get("format"):
+                row["format"] = snapshot.get("movie_format") or snapshot.get("format")
+            if not row.get("poster_url"):
+                row["poster_url"] = snapshot.get("poster_file") or snapshot.get("poster")
+        return attach_media_group_availability(conn, attach_digital_availability(conn, rows))
+    return []
+
+
 def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
     if not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
         return []
@@ -24322,6 +25078,9 @@ def register_routes(flask_app: Flask) -> None:
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
             detail = movie_detail_entity(conn, movie_uuid)
+            user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
+            if detail:
+                detail["userState"] = personal_movie_state(conn, movie_uuid, user.get("id") if user else None)
         if not detail:
             raise NextApiError("Movie not found", 404)
         return response({"status": "ok", "detail": detail})
@@ -24408,6 +25167,181 @@ def register_routes(flask_app: Flask) -> None:
                 metadata={"title": payload["title"], "barcode": payload["barcode"]},
             )
         return response({"status": "ok", "detail": detail})
+
+    @flask_app.get("/api/next/lists")
+    def personal_lists():
+        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            return response(
+                {
+                    "status": "ok",
+                    "counts": personal_list_counts(conn, user_id),
+                    "watchlist": personal_list_movie_entities(conn, user_id, kind="watchlist", limit=limit),
+                    "watched": personal_list_movie_entities(conn, user_id, kind="watched", limit=limit),
+                }
+            )
+
+    @flask_app.get("/api/next/lists/watchlist")
+    def personal_watchlist():
+        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            return response(
+                {
+                    "status": "ok",
+                    "items": personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit),
+                    "counts": personal_list_counts(conn, actor.get("id")),
+                }
+            )
+
+    @flask_app.get("/api/next/lists/watched")
+    def personal_watched_list():
+        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            return response(
+                {
+                    "status": "ok",
+                    "items": personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit),
+                    "counts": personal_list_counts(conn, actor.get("id")),
+                }
+            )
+
+    @flask_app.post("/api/next/movies/<movie_id>/watchlist")
+    def add_movie_to_watchlist(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "watchlist_items"):
+                raise NextApiError("Watchlist table is not available", 503)
+            if not movie_entity(conn, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO watchlist_items (user_id, movie_id, added_at)
+                        VALUES (%s, %s, now())
+                        ON CONFLICT (user_id, movie_id) DO UPDATE SET added_at=EXCLUDED.added_at
+                        """,
+                        (actor.get("id"), movie_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="watchlist.added",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Added movie to watchlist",
+                    metadata={},
+                )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
+
+    @flask_app.delete("/api/next/movies/<movie_id>/watchlist")
+    def remove_movie_from_watchlist(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "watchlist_items"):
+                raise NextApiError("Watchlist table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM watchlist_items WHERE user_id=%s AND movie_id=%s",
+                        (actor.get("id"), movie_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="watchlist.removed",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Removed movie from watchlist",
+                    metadata={},
+                )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
+
+    @flask_app.get("/api/next/movies/<movie_id>/watched")
+    def movie_watch_history(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
+
+    @flask_app.post("/api/next/movies/<movie_id>/watched")
+    def mark_movie_watched(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Watched request body must be an object", 400)
+        watched_at = clean_text(body.get("watchedAt", body.get("watched_at"))) or (datetime.utcnow().isoformat(timespec="seconds") + "Z")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "watch_history"):
+                raise NextApiError("Watch history table is not available", 503)
+            movie = movie_entity(conn, movie_uuid)
+            if not movie:
+                raise NextApiError("Movie not found", 404)
+            snapshot = {
+                "movie_title": movie.get("title"),
+                "movie_year": movie.get("year"),
+                "movie_format": movie.get("format"),
+                "poster": movie.get("poster_url") or (movie.get("metadata") or {}).get("poster_url"),
+            }
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO watch_history (user_id, movie_id, watched_at, snapshot)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (actor.get("id"), movie_uuid, watched_at, Jsonb(snapshot)),
+                    )
+                audit_event(
+                    conn,
+                    event_type="watch_history.added",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Marked movie as watched",
+                    metadata={"watchedAt": watched_at},
+                )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))}, 201)
+
+    @flask_app.delete("/api/next/movies/<movie_id>/watched/<entry_id>")
+    def delete_movie_watch_history_entry(movie_id: str, entry_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        entry_uuid = parse_uuid(entry_id, "entryId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "watch_history"):
+                raise NextApiError("Watch history table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        DELETE FROM watch_history
+                        WHERE id=%s AND movie_id=%s AND user_id=%s
+                        """,
+                        (entry_uuid, movie_uuid, actor.get("id")),
+                    )
+                    deleted = int(cur.rowcount or 0)
+                audit_event(
+                    conn,
+                    event_type="watch_history.removed",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Removed watched entry",
+                    metadata={"entryId": str(entry_uuid), "deleted": deleted},
+                )
+            return response({"status": "ok", "deleted": deleted, "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
 
     @flask_app.get("/api/next/people/<person_id>")
     def person_detail(person_id: str):
