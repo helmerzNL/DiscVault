@@ -9,6 +9,7 @@ collection summary from the new schema.
 from __future__ import annotations
 
 import html as html_lib
+import base64
 import hashlib
 import io
 import json as json_lib
@@ -154,6 +155,13 @@ MEDIA_GROUP_MEMBER_ROLES = {"owner", "manager", "member", "viewer"}
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
 MOVIE_ARTWORK_KINDS = {"poster", "backdrop"}
+NOTIFICATION_PREF_DEFAULTS: dict[str, bool] = {
+    "app_updates": True,
+    "imports": True,
+    "metadata_jobs": True,
+    "group_invites": True,
+    "security": True,
+}
 NEXT_I18N_SOURCE_LOCALE = "en-US"
 NEXT_I18N_DEFAULT_LOCALE = "nl-NL"
 NEXT_I18N_LOCALES: tuple[dict[str, str], ...] = (
@@ -3232,6 +3240,7 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "users": count_table(conn, "users"),
     }
     counts["personalLists"] = personal_list_counts(conn, user_id)
+    counts["notifications"] = notification_counts(conn, user_id)
     movies = collection_movie_preview_entities(conn)
     movies = attach_personal_list_state(conn, movies, user_id)
     return {
@@ -3904,6 +3913,31 @@ def ui_preview_html(
       height: 12px;
       right: 4px;
       top: 4px;
+    }
+    .nav-symbol.notifications {
+      border: 2px solid currentColor;
+      border-radius: 10px 10px 8px 8px;
+      transform: translateY(1px);
+    }
+    .nav-symbol.notifications::before,
+    .nav-symbol.notifications::after {
+      content: "";
+      position: absolute;
+      background: currentColor;
+    }
+    .nav-symbol.notifications::before {
+      width: 6px;
+      height: 2px;
+      left: 5px;
+      bottom: -5px;
+      border-radius: 2px;
+    }
+    .nav-symbol.notifications::after {
+      width: 2px;
+      height: 3px;
+      left: 8px;
+      top: -5px;
+      border-radius: 2px;
     }
     .nav-symbol.groups::before,
     .nav-symbol.groups::after,
@@ -4589,6 +4623,7 @@ def ui_preview_html(
     }
     .library-view.hidden,
     .lists-view.hidden,
+    .notifications-view.hidden,
     .movie-detail-page.hidden,
     .container-detail-page.hidden,
     .profile-view.hidden,
@@ -4768,6 +4803,73 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--muted) 16%, transparent);
       color: var(--muted);
       cursor: pointer;
+    }
+    .notifications-view.hidden {
+      display: none;
+    }
+    .notifications-view {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .notification-list {
+      display: grid;
+      gap: 10px;
+    }
+    .notification-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      padding: 14px;
+      text-align: left;
+      color: var(--text);
+    }
+    .notification-card.unread {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent) 8%, var(--bg-solid));
+    }
+    .notification-card strong,
+    .notification-card span {
+      display: block;
+    }
+    .notification-card p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .notification-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .notification-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 6px;
+      background: var(--accent);
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent);
+    }
+    .notification-card:not(.unread) .notification-dot {
+      opacity: 0;
+    }
+    .push-device-list {
+      display: grid;
+      gap: 8px;
+    }
+    .push-device-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
     }
     .movie-detail-page {
       display: grid;
@@ -6749,6 +6851,7 @@ def ui_preview_html(
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span data-next-i18n="uiPreview.navLists">Lists</span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="notifications"><span data-next-i18n="uiPreview.navNotifications">Notifications</span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span data-next-i18n="importCenter.title">Import</span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span data-next-i18n="uiPreview.profile">Profile</span><small id="navProfileRole">-</small></button>
         <button type="button" class="nav-item hidden" id="adminNavItem" data-app-route="admin"><span data-next-i18n="uiPreview.admin">Admin</span><small id="navAdminMode">-</small></button>
@@ -6902,6 +7005,36 @@ def ui_preview_html(
           <div class="lists-grid" id="listsWatchlistGrid"></div>
           <div class="lists-history hidden" id="listsWatchedList"></div>
           <div class="preview-empty hidden" id="listsEmptyMessage"></div>
+        </section>
+      </section>
+      <section class="notifications-view hidden" id="notificationsView" aria-labelledby="notificationsPageTitle">
+        <section class="lists-hero">
+          <div>
+            <span class="eyebrow" data-next-i18n="notifications.eyebrow">Inbox</span>
+            <h2 id="notificationsPageTitle" data-next-i18n="uiPreview.navNotifications">Notifications</h2>
+            <p data-next-i18n="notifications.description">Updates, imports, invites and system messages in one quiet inbox.</p>
+          </div>
+          <div class="lists-counts">
+            <div class="list-count-pill">
+              <strong id="notificationsUnreadCount">0</strong>
+              <span data-next-i18n="notifications.unread">Unread</span>
+            </div>
+            <div class="list-count-pill">
+              <strong id="notificationsTotalCount">0</strong>
+              <span data-next-i18n="notifications.total">Total</span>
+            </div>
+          </div>
+        </section>
+        <section class="detail-card full lists-panel">
+          <div class="detail-card-head">
+            <h3 data-next-i18n="notifications.recent">Recent notifications</h3>
+            <div class="profile-form-actions">
+              <button type="button" class="secondary-button" id="notificationsRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+              <button type="button" class="secondary-button" id="notificationsMarkAllReadButton" data-next-i18n="notifications.markAllRead">Mark all read</button>
+            </div>
+          </div>
+          <div class="notification-list" id="notificationsList"></div>
+          <div class="preview-empty hidden" id="notificationsEmptyMessage"></div>
         </section>
       </section>
       <section class="import-view hidden" id="importView" aria-labelledby="importCenterTitle">
@@ -7424,6 +7557,35 @@ def ui_preview_html(
           <div class="detail-card profile-card full">
             <div class="detail-card-head">
               <div>
+                <h3 data-next-i18n="notifications.pushTitle">Push notifications</h3>
+                <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
+              </div>
+              <div class="profile-form-actions">
+                <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+                <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
+              </div>
+            </div>
+            <div class="profile-meta">
+              <div class="profile-meta-row">
+                <span data-next-i18n="notifications.browserState">Browser</span>
+                <strong id="pushBrowserState">-</strong>
+              </div>
+              <div class="profile-meta-row">
+                <span data-next-i18n="notifications.deviceState">This device</span>
+                <strong id="pushDeviceState">-</strong>
+              </div>
+            </div>
+            <div class="profile-action-row">
+              <button type="button" class="secondary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
+              <button type="button" class="secondary-button" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
+            </div>
+            <div class="preference-control-list" id="pushPreferenceList"></div>
+            <div class="push-device-list" id="pushDeviceList"></div>
+            <div class="login-message" id="pushProfileMessage"></div>
+          </div>
+          <div class="detail-card profile-card full">
+            <div class="detail-card-head">
+              <div>
                 <h3 data-next-i18n="containerManage.title">Collection structure</h3>
                 <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
               </div>
@@ -7875,6 +8037,10 @@ def ui_preview_html(
       <span class="nav-symbol lists" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
+    <button type="button" class="mobile-tab" data-app-route="notifications">
+      <span class="nav-symbol notifications" aria-hidden="true"></span>
+      <span data-next-i18n="uiPreview.navNotifications">Notifications</span>
+    </button>
     <button type="button" class="mobile-tab" data-app-route="import">
       <span class="nav-symbol import" aria-hidden="true"></span>
       <span data-next-i18n="importCenter.title">Import</span>
@@ -7909,6 +8075,8 @@ def ui_preview_html(
     let activePersonPayload = null;
     let personReturnRoute = null;
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], counts: {}};
+    let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
+    let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
     let currentStartup = {};
     let currentAuthStatus = {};
     let profileCredentials = [];
@@ -12518,6 +12686,303 @@ def ui_preview_html(
         }
       }
     }
+    function notificationUrl(notification) {
+      const payload = notification.payload || {};
+      const url = String(payload.url || "/notifications");
+      return url.startsWith("/") ? url : "/notifications";
+    }
+    function notificationCardHtml(notification) {
+      const unread = !notification.read_at;
+      const created = notification.created_at ? formatAppDate(notification.created_at) : "";
+      return `
+        <button type="button" class="notification-card ${unread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}">
+          <span>
+            <strong>${escapeHtml(notification.title || tNext("notifications.itemTitle", "Notification"))}</strong>
+            ${notification.body ? `<p>${escapeHtml(notification.body)}</p>` : ""}
+            <span class="notification-meta">${escapeHtml(created)}</span>
+          </span>
+          <span class="notification-dot" aria-hidden="true"></span>
+        </button>
+      `;
+    }
+    function updateNotificationCounts(counts = notificationsState.counts || {}) {
+      const unread = Number(counts.unread || 0);
+      const total = Number(counts.total || notificationsState.items.length || 0);
+      const navNode = document.getElementById("navNotificationCount");
+      const unreadNode = document.getElementById("notificationsUnreadCount");
+      const totalNode = document.getElementById("notificationsTotalCount");
+      if (navNode) navNode.textContent = String(unread);
+      if (unreadNode) unreadNode.textContent = String(unread);
+      if (totalNode) totalNode.textContent = String(total);
+    }
+    function renderNotificationsView() {
+      const list = document.getElementById("notificationsList");
+      const empty = document.getElementById("notificationsEmptyMessage");
+      updateNotificationCounts(notificationsState.counts);
+      if (list) {
+        list.innerHTML = (notificationsState.items || []).map(notificationCardHtml).join("");
+      }
+      if (empty) {
+        empty.textContent = tNext("notifications.empty", "No notifications yet.");
+        empty.classList.toggle("hidden", !!(notificationsState.items || []).length);
+      }
+      document.querySelectorAll("[data-notification-id]").forEach((button) => {
+        button.addEventListener("click", () => openNotification(button.dataset.notificationId));
+      });
+    }
+    async function loadNotifications(force = false) {
+      if (notificationsState.loaded && !force) {
+        renderNotificationsView();
+        return;
+      }
+      const empty = document.getElementById("notificationsEmptyMessage");
+      if (empty) {
+        empty.textContent = tNext("collection.loading", "Loading...");
+        empty.classList.remove("hidden");
+      }
+      try {
+        const payload = await authApiJson("/api/next/notifications?limit=100");
+        notificationsState.items = payload.notifications || [];
+        notificationsState.counts = payload.counts || {};
+        notificationsState.loaded = true;
+        renderNotificationsView();
+      } catch (error) {
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      }
+    }
+    async function openNotification(notificationId) {
+      const notification = (notificationsState.items || []).find((item) => String(item.id) === String(notificationId));
+      if (!notification) return;
+      try {
+        if (!notification.read_at) {
+          const payload = await authApiJson(`/api/next/notifications/${encodeURIComponent(notificationId)}`, {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({read: true})
+          });
+          notification.read_at = payload.notification?.read_at || new Date().toISOString();
+          notificationsState.counts = payload.counts || notificationsState.counts;
+          renderNotificationsView();
+        }
+      } catch (error) {
+        console.warn("Could not mark notification as read", error);
+      }
+      const url = notificationUrl(notification);
+      if (url === "/notifications") return;
+      history.pushState({}, "", url);
+      const route = appRouteFromPath();
+      if (route.view === "movie") openAppMovieDetail(route.movieId, false);
+      else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+      else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "import") showImportPage(false);
+      else if (route.view === "lists") showListsPage(false);
+      else showLibraryPage(false);
+    }
+    async function markAllNotificationsRead() {
+      try {
+        const payload = await authApiJson("/api/next/notifications/read-all", {method: "POST"});
+        notificationsState.items = payload.notifications || [];
+        notificationsState.counts = payload.counts || {};
+        notificationsState.loaded = true;
+        renderNotificationsView();
+      } catch (error) {
+        const empty = document.getElementById("notificationsEmptyMessage");
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      }
+    }
+    function pushSupported() {
+      return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    }
+    async function currentPushSubscription() {
+      if (!pushSupported()) return null;
+      const registration = await navigator.serviceWorker.ready;
+      return registration.pushManager.getSubscription();
+    }
+    function pushPreferenceRowsHtml(preferencesMap) {
+      const rows = [
+        ["app_updates", "notifications.prefAppUpdates", "notifications.prefAppUpdatesHelp"],
+        ["imports", "notifications.prefImports", "notifications.prefImportsHelp"],
+        ["metadata_jobs", "notifications.prefMetadataJobs", "notifications.prefMetadataJobsHelp"],
+        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
+        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"]
+      ];
+      return rows.map(([key, labelKey, helpKey]) => {
+        const enabled = preferencesMap[key] !== false;
+        return `
+          <div class="preference-control-row">
+            <span>
+              <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+              <span>${escapeHtml(tNext(helpKey, ""))}</span>
+            </span>
+            <button type="button" class="switch ${enabled ? "on" : ""}" data-push-pref="${escapeHtml(key)}" aria-pressed="${enabled ? "true" : "false"}"></button>
+          </div>
+        `;
+      }).join("");
+    }
+    function renderPushProfile() {
+      const browserState = document.getElementById("pushBrowserState");
+      const deviceState = document.getElementById("pushDeviceState");
+      const enableButton = document.getElementById("pushEnableButton");
+      const disableButton = document.getElementById("pushDisableButton");
+      const testButton = document.getElementById("pushTestButton");
+      const prefList = document.getElementById("pushPreferenceList");
+      const deviceList = document.getElementById("pushDeviceList");
+      const supported = pushSupported();
+      const permission = supported ? Notification.permission : "unsupported";
+      if (browserState) {
+        browserState.textContent = supported
+          ? (permission === "granted" ? tNext("notifications.permissionGranted", "Allowed") : permission === "denied" ? tNext("notifications.permissionDenied", "Blocked") : tNext("notifications.permissionDefault", "Not asked"))
+          : tNext("notifications.unsupported", "Unsupported");
+      }
+      if (deviceState) {
+        deviceState.textContent = pushProfile.subscribed
+          ? tNext("notifications.deviceEnabled", "Enabled")
+          : tNext("notifications.deviceDisabled", "Disabled");
+      }
+      if (enableButton) enableButton.disabled = !supported || pushProfile.subscribed || permission === "denied";
+      if (disableButton) disableButton.disabled = !pushProfile.subscribed;
+      if (testButton) testButton.disabled = !pushProfile.subscribed;
+      if (prefList) prefList.innerHTML = pushPreferenceRowsHtml(pushProfile.preferences || {});
+      if (deviceList) {
+        const subscriptions = pushProfile.subscriptions || [];
+        deviceList.innerHTML = subscriptions.length
+          ? subscriptions.map((item) => `
+              <div class="push-device-row">
+                <span>
+                  <strong>${escapeHtml(item.deviceLabel || tNext("notifications.device", "Device"))}</strong>
+                  <span class="notification-meta">${escapeHtml(item.current ? tNext("notifications.currentDevice", "Current device") : tNext("notifications.otherDevice", "Other device"))}</span>
+                </span>
+                ${item.isPrimary ? `<span class="tag good">${escapeHtml(tNext("notifications.primaryDevice", "Primary"))}</span>` : ""}
+              </div>
+            `).join("")
+          : `<div class="preview-empty">${escapeHtml(tNext("notifications.noDevices", "No devices connected yet."))}</div>`;
+      }
+    }
+    async function loadPushProfile() {
+      renderPushProfile();
+      if (!pushSupported()) {
+        pushProfile = Object.assign({}, pushProfile, {loaded: true, supported: false, subscribed: false, permission: "unsupported"});
+        renderPushProfile();
+        return;
+      }
+      try {
+        const subscription = await currentPushSubscription();
+        const endpoint = subscription?.endpoint ? `?endpoint=${encodeURIComponent(subscription.endpoint)}` : "";
+        const payload = await authApiJson(`/api/next/push/status${endpoint}`);
+        pushProfile = {
+          loaded: true,
+          supported: true,
+          subscribed: !!subscription && !!payload.currentSubscription,
+          permission: Notification.permission,
+          publicKey: payload.publicKey,
+          preferences: payload.preferences || {},
+          subscriptions: payload.subscriptions || []
+        };
+        updateNotificationCounts(payload.counts || notificationsState.counts);
+        renderPushProfile();
+      } catch (error) {
+        setPushProfileMessage(error.message || String(error), "bad");
+      }
+    }
+    function setPushProfileMessage(message, tone) {
+      const node = document.getElementById("pushProfileMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    async function enablePushNotifications() {
+      if (!pushSupported()) {
+        setPushProfileMessage(tNext("notifications.unsupported", "Push notifications are not supported by this browser."), "bad");
+        return;
+      }
+      setPushProfileMessage(tNext("notifications.enabling", "Enabling notifications..."));
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          setPushProfileMessage(tNext("notifications.permissionDenied", "Notifications are blocked."), "bad");
+          await loadPushProfile();
+          return;
+        }
+        const status = await authApiJson("/api/next/push/status");
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: base64urlToBuffer(status.publicKey)
+          });
+        }
+        await authApiJson("/api/next/push/subscribe", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            subscription: subscription.toJSON(),
+            deviceLabel: navigator.userAgent.includes("Mobile") ? "Mobile PWA" : "Desktop PWA"
+          })
+        });
+        setPushProfileMessage(tNext("notifications.enabled", "Notifications enabled."), "good");
+        await loadPushProfile();
+      } catch (error) {
+        setPushProfileMessage(error.message || String(error), "bad");
+      }
+    }
+    async function disablePushNotifications() {
+      setPushProfileMessage(tNext("notifications.disabling", "Disabling notifications..."));
+      try {
+        const subscription = await currentPushSubscription();
+        if (subscription) {
+          const endpoint = subscription.endpoint;
+          await subscription.unsubscribe().catch(() => {});
+          await authApiJson("/api/next/push/subscribe", {
+            method: "DELETE",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({endpoint})
+          });
+        }
+        setPushProfileMessage(tNext("notifications.disabled", "Notifications disabled on this device."), "good");
+        await loadPushProfile();
+      } catch (error) {
+        setPushProfileMessage(error.message || String(error), "bad");
+      }
+    }
+    async function updatePushPreference(key, enabled) {
+      pushProfile.preferences = Object.assign({}, pushProfile.preferences || {}, {[key]: enabled});
+      renderPushProfile();
+      try {
+        const payload = await authApiJson("/api/next/push/preferences", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({preferences: {[key]: enabled}})
+        });
+        pushProfile.preferences = payload.preferences || pushProfile.preferences;
+        setPushProfileMessage(tNext("notifications.preferencesSaved", "Notification preferences saved."), "good");
+        renderPushProfile();
+      } catch (error) {
+        setPushProfileMessage(error.message || String(error), "bad");
+      }
+    }
+    async function sendTestPushNotification() {
+      setPushProfileMessage(tNext("notifications.sendingTest", "Sending test notification..."));
+      try {
+        const payload = await authApiJson("/api/next/push/test", {method: "POST"});
+        notificationsState.loaded = false;
+        updateNotificationCounts(payload.counts || notificationsState.counts);
+        setPushProfileMessage(
+          payload.status === "ok"
+            ? tNext("notifications.testSent", "Test notification sent.")
+            : tNext("notifications.testSavedOnly", "Notification saved. Push delivery needs attention."),
+          payload.status === "ok" ? "good" : "bad"
+        );
+      } catch (error) {
+        setPushProfileMessage(error.message || String(error), "bad");
+      }
+    }
     function setActiveAppRoute(route) {
       if (route !== "import" && importScanner.running) {
         stopImportBarcodeScanner();
@@ -12535,6 +13000,7 @@ def ui_preview_html(
     function showMovieDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -12547,6 +13013,7 @@ def ui_preview_html(
     function showContainerDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -12559,6 +13026,7 @@ def ui_preview_html(
     function showPersonDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -12573,6 +13041,7 @@ def ui_preview_html(
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -12592,6 +13061,7 @@ def ui_preview_html(
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.remove("hidden");
@@ -12609,9 +13079,34 @@ def ui_preview_html(
       }
       scrollPreviewTop();
     }
+    function showNotificationsPage(pushUrl = true) {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.remove("hidden");
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
+      setActiveAppRoute("notifications");
+      renderNotificationsView();
+      loadNotifications();
+      if (pushUrl && appMode && window.location.pathname !== "/notifications") {
+        history.pushState({view: "notifications"}, "", "/notifications");
+      }
+      scrollPreviewTop();
+    }
     function showProfilePage(pushUrl = true) {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -12627,6 +13122,7 @@ def ui_preview_html(
       setActiveAppRoute("profile");
       renderProfile();
       loadProfileDetails();
+      loadPushProfile();
       if (pushUrl && appMode && window.location.pathname !== "/profile") {
         history.pushState({view: "profile"}, "", "/profile");
       }
@@ -12639,6 +13135,7 @@ def ui_preview_html(
       }
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -12666,6 +13163,7 @@ def ui_preview_html(
       }
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -12699,6 +13197,9 @@ def ui_preview_html(
       if (/^\\/app\\/lists\\/?$|^\\/lists\\/?$/.test(window.location.pathname)) {
         return {view: "lists"};
       }
+      if (/^\\/app\\/notifications\\/?$|^\\/notifications\\/?$/.test(window.location.pathname)) {
+        return {view: "notifications"};
+      }
       const movieMatch = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
       if (movieMatch) {
         return {view: "movie", movieId: decodeURIComponent(movieMatch[1] || movieMatch[2])};
@@ -12728,6 +13229,10 @@ def ui_preview_html(
       }
       if (route === "lists") {
         showListsPage();
+        return;
+      }
+      if (route === "notifications") {
+        showNotificationsPage();
         return;
       }
       showLibraryPage(true, route || "library");
@@ -13341,9 +13846,14 @@ def ui_preview_html(
       renderProfile();
       renderLibrary();
       updateListsCounts((state.counts || {}).personalLists || {});
+      updateNotificationCounts((state.counts || {}).notifications || {});
       if (!document.getElementById("listsView")?.classList.contains("hidden")) {
         listsState.loaded = false;
         loadListsView(true);
+      }
+      if (!document.getElementById("notificationsView")?.classList.contains("hidden")) {
+        notificationsState.loaded = false;
+        loadNotifications(true);
       }
     }
     function profileIdentity() {
@@ -13736,6 +14246,7 @@ def ui_preview_html(
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
       else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
+      else if (route.view === "notifications") showNotificationsPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
     }
@@ -13854,6 +14365,17 @@ def ui_preview_html(
           listsState.active = button.dataset.listsTab || "watchlist";
           renderListsView();
         });
+      });
+      document.getElementById("notificationsRefreshButton")?.addEventListener("click", () => loadNotifications(true));
+      document.getElementById("notificationsMarkAllReadButton")?.addEventListener("click", () => markAllNotificationsRead());
+      document.getElementById("pushEnableButton")?.addEventListener("click", () => enablePushNotifications());
+      document.getElementById("pushDisableButton")?.addEventListener("click", () => disablePushNotifications());
+      document.getElementById("pushRefreshButton")?.addEventListener("click", () => loadPushProfile());
+      document.getElementById("pushTestButton")?.addEventListener("click", () => sendTestPushNotification());
+      document.getElementById("pushPreferenceList")?.addEventListener("click", (event) => {
+        const prefButton = event.target.closest("[data-push-pref]");
+        if (!prefButton) return;
+        updatePushPreference(prefButton.dataset.pushPref, prefButton.getAttribute("aria-pressed") !== "true");
       });
       document.querySelectorAll("[data-preferences-tab]").forEach((button) => {
         button.addEventListener("click", () => setPreferenceTab(button.dataset.preferencesTab || "appearance"));
@@ -14163,6 +14685,7 @@ def ui_preview_html(
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);
         else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
+        else if (route.view === "notifications") showNotificationsPage(false);
         else if (route.view === "profile") showProfilePage(false);
         else {
           activeContainerId = "";
@@ -19205,6 +19728,204 @@ def app_settings_map(conn) -> dict[str, Any]:
         return {row["key"]: row["value"] for row in cur.fetchall()}
 
 
+def app_setting_value(conn, key: str, default: Any = None, *, include_secret: bool = False) -> Any:
+    if not table_exists(conn, "app_settings"):
+        return default
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT value
+            FROM app_settings
+            WHERE key=%s
+              AND (%s OR is_secret = false)
+            """,
+            (key, include_secret),
+        )
+        row = cur.fetchone()
+    return row["value"] if row else default
+
+
+def set_app_setting_value(conn, key: str, value: Any, *, is_secret: bool = False, actor_id: UUID | str | None = None) -> None:
+    if not table_exists(conn, "app_settings"):
+        raise NextApiError("App settings table is not available", 503)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO app_settings (key, value, is_secret, updated_at, updated_by)
+            VALUES (%s, %s, %s, now(), %s)
+            ON CONFLICT (key) DO UPDATE SET
+                value=EXCLUDED.value,
+                is_secret=EXCLUDED.is_secret,
+                updated_at=now(),
+                updated_by=EXCLUDED.updated_by
+            """,
+            (key, Jsonb(json_ready(value)), is_secret, actor_id),
+        )
+
+
+def push_vapid_subject() -> str:
+    return os.environ.get("VAPID_SUBJECT") or os.environ.get("DISCVAULT_VAPID_SUBJECT") or "mailto:no-reply@discvault.app"
+
+
+def get_or_create_push_vapid_keys(conn) -> tuple[str, str]:
+    public_key = app_setting_value(conn, "vapid_public_key", include_secret=False)
+    private_key = app_setting_value(conn, "vapid_private_key", include_secret=True)
+    if public_key and private_key:
+        return str(public_key), str(private_key)
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+    private = ec.generate_private_key(ec.SECP256R1(), default_backend())
+    public_bytes = private.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+    public_key = base64.urlsafe_b64encode(public_bytes).rstrip(b"=").decode("ascii")
+    private_raw = private.private_numbers().private_value.to_bytes(32, "big")
+    private_key = base64.urlsafe_b64encode(private_raw).rstrip(b"=").decode("ascii")
+    set_app_setting_value(conn, "vapid_public_key", public_key, is_secret=False)
+    set_app_setting_value(conn, "vapid_private_key", private_key, is_secret=True)
+    return public_key, private_key
+
+
+def notification_preference_map(conn, user_id: UUID | str | None) -> dict[str, bool]:
+    values = dict(NOTIFICATION_PREF_DEFAULTS)
+    if not user_id or not table_exists(conn, "notification_preferences"):
+        return values
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT pref_key, enabled
+            FROM notification_preferences
+            WHERE user_id=%s
+            """,
+            (user_id,),
+        )
+        for row in cur.fetchall():
+            if row["pref_key"] in values:
+                values[row["pref_key"]] = bool(row["enabled"])
+    return values
+
+
+def notification_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
+    if not user_id or not table_exists(conn, "user_notifications"):
+        return {"total": 0, "unread": 0}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE read_at IS NULL)::int AS unread
+            FROM user_notifications
+            WHERE user_id=%s
+            """,
+            (user_id,),
+        )
+        row = cur.fetchone() or {}
+    return {"total": int(row.get("total") or 0), "unread": int(row.get("unread") or 0)}
+
+
+def user_notification_rows(conn, user_id: UUID | str, limit: int = 100) -> list[dict[str, Any]]:
+    if not table_exists(conn, "user_notifications"):
+        return []
+    limit = min(max(int(limit or 100), 1), 250)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, event_id, title, body, payload, read_at, created_at
+            FROM user_notifications
+            WHERE user_id=%s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (user_id, limit),
+        )
+        return cur.fetchall()
+
+
+def create_user_notification(
+    conn,
+    user_id: UUID | str,
+    *,
+    title: str,
+    body: str = "",
+    url: str = "/notifications",
+    pref_key: str = "app_updates",
+    payload: dict[str, Any] | None = None,
+    send_push: bool = True,
+) -> dict[str, Any]:
+    if not table_exists(conn, "user_notifications"):
+        raise NextApiError("Notifications table is not available", 503)
+    notification_payload = dict(payload or {})
+    notification_payload.setdefault("url", url)
+    notification_payload.setdefault("prefKey", pref_key)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO user_notifications (user_id, title, body, payload)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id, event_id, title, body, payload, read_at, created_at
+            """,
+            (user_id, title, body, Jsonb(json_ready(notification_payload))),
+        )
+        notification = cur.fetchone() or {}
+    errors: list[str] = []
+    if send_push and notification_preference_map(conn, user_id).get(pref_key, True):
+        errors = send_push_to_user(conn, user_id, title=title, body=body, url=url)
+    notification["pushErrors"] = errors
+    return notification
+
+
+def send_push_to_user(conn, user_id: UUID | str, *, title: str, body: str = "", url: str = "/notifications") -> list[str]:
+    if not table_exists(conn, "push_subscriptions"):
+        return ["Push subscriptions table is not available"]
+    public_key, private_key = get_or_create_push_vapid_keys(conn)
+    del public_key
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, endpoint, p256dh, auth
+            FROM push_subscriptions
+            WHERE user_id=%s
+            ORDER BY is_primary DESC, updated_at DESC
+            """,
+            (user_id,),
+        )
+        subscriptions = cur.fetchall()
+    if not subscriptions:
+        return ["No push subscription found for this user"]
+    try:
+        from pywebpush import webpush
+    except Exception as exc:
+        return [f"pywebpush is not available: {exc}"]
+    errors: list[str] = []
+    stale_endpoints: list[str] = []
+    for subscription in subscriptions:
+        endpoint = str(subscription.get("endpoint") or "")
+        try:
+            headers = None
+            if "notify.windows.com" in endpoint or "wns.windows.com" in endpoint:
+                headers = {"X-WNS-Type": "wns/raw", "Content-Type": "application/octet-stream"}
+            webpush(
+                subscription_info={
+                    "endpoint": endpoint,
+                    "keys": {"p256dh": subscription.get("p256dh"), "auth": subscription.get("auth")},
+                },
+                data=json_lib.dumps({"title": title, "body": body, "url": url}),
+                vapid_private_key=private_key,
+                vapid_claims={"sub": push_vapid_subject()},
+                ttl=86400,
+                headers=headers,
+            )
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            errors.append(f"Push failed ({status or 'unknown'}): {exc}")
+            if status in {404, 410} and endpoint:
+                stale_endpoints.append(endpoint)
+    if stale_endpoints:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM push_subscriptions WHERE endpoint = ANY(%s)", (stale_endpoints,))
+    return errors
+
+
 def normalized_app_preference_key(key: Any) -> str:
     text = str(key or "").strip()
     return APP_PREFERENCE_ALIASES.get(text, text)
@@ -19459,6 +20180,17 @@ def require_next_admin_user(conn) -> dict[str, Any]:
     if role not in {"owner", "admin"}:
         raise NextApiError("Admin access required", 403)
     user["role"] = role
+    return user
+
+
+def require_next_authenticated_user(conn) -> dict[str, Any]:
+    if not next_auth_effective_enabled(conn, table_exists):
+        return {"id": None, "username": "system", "role": "owner", "permissions": ["*"]}
+    user = next_auth_current_user(conn)
+    if not user:
+        raise NextApiError("Unauthorized", 401)
+    user["role"] = next_user_primary_role(conn, user["id"])
+    user["permissions"] = sorted(next_user_permission_keys(conn, user["id"]))
     return user
 
 
@@ -23151,6 +23883,14 @@ PUBLIC_NEXT_PATHS = {
     "/app/",
     "/app/import",
     "/app/import/",
+    "/app/lists",
+    "/app/lists/",
+    "/app/notifications",
+    "/app/notifications/",
+    "/app/profile",
+    "/app/profile/",
+    "/app/admin",
+    "/app/admin/",
     "/ui-preview",
     "/ui-preview/",
     "/api/next/app",
@@ -23174,6 +23914,9 @@ PUBLIC_NEXT_PREFIXES = (
     "/api/next/assets/",
     "/api/next/i18n/",
     "/api/next/media/assets/",
+    "/app/movies/",
+    "/app/containers/",
+    "/app/people/",
 )
 
 
@@ -23647,6 +24390,302 @@ def register_routes(flask_app: Flask) -> None:
             with conn.transaction():
                 preferences = set_app_user_preferences(conn, user["id"], updates)
         return response({"status": "ok", "preferences": preferences, "userScoped": True, "updated": True})
+
+    @flask_app.get("/api/next/push/status")
+    def next_push_status():
+        endpoint = str(request.args.get("endpoint") or "").strip()
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Push requires a signed-in user", 401)
+            public_key, _ = get_or_create_push_vapid_keys(conn)
+            subscriptions: list[dict[str, Any]] = []
+            current_subscription = None
+            if table_exists(conn, "push_subscriptions"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, endpoint, device_label, user_agent, is_primary, created_at, updated_at
+                        FROM push_subscriptions
+                        WHERE user_id=%s
+                        ORDER BY is_primary DESC, updated_at DESC
+                        """,
+                        (user_id,),
+                    )
+                    subscriptions = cur.fetchall()
+                for subscription in subscriptions:
+                    if endpoint and subscription.get("endpoint") == endpoint:
+                        current_subscription = subscription
+                        break
+            return response(
+                {
+                    "status": "ok",
+                    "publicKey": public_key,
+                    "subject": push_vapid_subject(),
+                    "preferences": notification_preference_map(conn, user_id),
+                    "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
+                    "subscriptions": [
+                        {
+                            "id": item.get("id"),
+                            "deviceLabel": item.get("device_label"),
+                            "userAgent": item.get("user_agent"),
+                            "isPrimary": item.get("is_primary"),
+                            "createdAt": item.get("created_at"),
+                            "updatedAt": item.get("updated_at"),
+                            "current": endpoint and item.get("endpoint") == endpoint,
+                        }
+                        for item in subscriptions
+                    ],
+                    "currentSubscription": current_subscription,
+                    "counts": notification_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/push/subscribe")
+    def next_push_subscribe():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Push subscription request body must be an object", 400)
+        subscription = body.get("subscription") if isinstance(body.get("subscription"), dict) else body
+        endpoint = str(subscription.get("endpoint") or "").strip()
+        keys = subscription.get("keys") if isinstance(subscription.get("keys"), dict) else {}
+        p256dh = str(keys.get("p256dh") or "").strip()
+        auth = str(keys.get("auth") or "").strip()
+        if not endpoint or not p256dh or not auth:
+            raise NextApiError("Push subscription endpoint and keys are required", 400)
+        device_label = clean_text(body.get("deviceLabel", body.get("device_label"))) or "DiscVault device"
+        user_agent = str(body.get("userAgent") or request.headers.get("User-Agent") or "")[:500]
+        requested_primary = parse_bool_value(body.get("isPrimary", body.get("is_primary")), default=False)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Push requires a signed-in user", 401)
+            if not table_exists(conn, "push_subscriptions"):
+                raise NextApiError("Push subscriptions table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*)::int AS count FROM push_subscriptions WHERE user_id=%s", (user_id,))
+                    first_subscription = int((cur.fetchone() or {}).get("count") or 0) == 0
+                    is_primary = bool(requested_primary or first_subscription)
+                    if is_primary:
+                        cur.execute("UPDATE push_subscriptions SET is_primary=false WHERE user_id=%s", (user_id,))
+                    cur.execute(
+                        """
+                        INSERT INTO push_subscriptions (
+                            user_id, endpoint, p256dh, auth, user_agent, device_label, is_primary, created_at, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, now(), now())
+                        ON CONFLICT (endpoint) DO UPDATE SET
+                            user_id=EXCLUDED.user_id,
+                            p256dh=EXCLUDED.p256dh,
+                            auth=EXCLUDED.auth,
+                            user_agent=EXCLUDED.user_agent,
+                            device_label=EXCLUDED.device_label,
+                            is_primary=EXCLUDED.is_primary,
+                            updated_at=now()
+                        RETURNING id, endpoint, device_label, user_agent, is_primary, created_at, updated_at
+                        """,
+                        (user_id, endpoint, p256dh, auth, user_agent, device_label, is_primary),
+                    )
+                    subscription_row = cur.fetchone()
+                audit_event(
+                    conn,
+                    event_type="push.subscribed",
+                    category="personal",
+                    actor=actor,
+                    target_type="push_subscription",
+                    target_id=subscription_row.get("id") if subscription_row else None,
+                    summary="Enabled push notifications",
+                    metadata={"isPrimary": is_primary},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "subscription": subscription_row,
+                    "preferences": notification_preference_map(conn, user_id),
+                    "counts": notification_counts(conn, user_id),
+                },
+                201,
+            )
+
+    @flask_app.delete("/api/next/push/subscribe")
+    def next_push_unsubscribe():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Push unsubscribe request body must be an object", 400)
+        endpoint = str(body.get("endpoint") or "").strip()
+        if not endpoint:
+            raise NextApiError("endpoint is required", 400)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Push requires a signed-in user", 401)
+            if not table_exists(conn, "push_subscriptions"):
+                raise NextApiError("Push subscriptions table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM push_subscriptions WHERE user_id=%s AND endpoint=%s RETURNING id",
+                        (user_id, endpoint),
+                    )
+                    deleted = cur.fetchone()
+                audit_event(
+                    conn,
+                    event_type="push.unsubscribed",
+                    category="personal",
+                    actor=actor,
+                    target_type="push_subscription",
+                    target_id=deleted.get("id") if deleted else None,
+                    summary="Disabled push notifications",
+                    metadata={},
+                )
+            return response({"status": "deleted", "deleted": bool(deleted), "counts": notification_counts(conn, user_id)})
+
+    @flask_app.patch("/api/next/push/preferences")
+    def patch_next_push_preferences():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Push preferences request body must be an object", 400)
+        updates = body.get("preferences", body)
+        if not isinstance(updates, dict):
+            raise NextApiError("preferences must be an object", 400)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Push preferences require a signed-in user", 401)
+            if not table_exists(conn, "notification_preferences"):
+                raise NextApiError("Notification preferences table is not available", 503)
+            normalized: dict[str, bool] = {}
+            for key, value in updates.items():
+                if key in NOTIFICATION_PREF_DEFAULTS:
+                    normalized[key] = parse_bool_value(value, default=NOTIFICATION_PREF_DEFAULTS[key])
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    for key, enabled in normalized.items():
+                        cur.execute(
+                            """
+                            INSERT INTO notification_preferences (user_id, pref_key, enabled, updated_at)
+                            VALUES (%s, %s, %s, now())
+                            ON CONFLICT (user_id, pref_key) DO UPDATE SET
+                                enabled=EXCLUDED.enabled,
+                                updated_at=now()
+                            """,
+                            (user_id, key, enabled),
+                        )
+            return response({"status": "ok", "preferences": notification_preference_map(conn, user_id)})
+
+    @flask_app.post("/api/next/push/test")
+    def next_push_test():
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Push test requires a signed-in user", 401)
+            with conn.transaction():
+                notification = create_user_notification(
+                    conn,
+                    user_id,
+                    title="DiscVault",
+                    body="Push notifications are working.",
+                    url="/notifications",
+                    pref_key="security",
+                    payload={"type": "push_test"},
+                    send_push=True,
+                )
+                audit_event(
+                    conn,
+                    event_type="push.test",
+                    category="personal",
+                    actor=actor,
+                    target_type="user_notification",
+                    target_id=notification.get("id"),
+                    summary="Sent push test notification",
+                    metadata={"pushErrors": notification.get("pushErrors") or []},
+                )
+            return response(
+                {
+                    "status": "ok" if not notification.get("pushErrors") else "degraded",
+                    "notification": notification,
+                    "counts": notification_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.get("/api/next/notifications")
+    def next_notifications():
+        limit = min(max(int(request.args.get("limit", 100)), 1), 250)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Notifications require a signed-in user", 401)
+            return response(
+                {
+                    "status": "ok",
+                    "notifications": user_notification_rows(conn, user_id, limit=limit),
+                    "counts": notification_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.patch("/api/next/notifications/<notification_id>")
+    def patch_next_notification(notification_id: str):
+        notification_uuid = parse_uuid(notification_id, "notificationId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Notification request body must be an object", 400)
+        mark_read = parse_bool_value(body.get("read", True), default=True)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Notifications require a signed-in user", 401)
+            if not table_exists(conn, "user_notifications"):
+                raise NextApiError("Notifications table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE user_notifications
+                        SET read_at = CASE WHEN %s THEN COALESCE(read_at, now()) ELSE NULL END
+                        WHERE id=%s AND user_id=%s
+                        RETURNING id, event_id, title, body, payload, read_at, created_at
+                        """,
+                        (mark_read, notification_uuid, user_id),
+                    )
+                    notification = cur.fetchone()
+            if not notification:
+                raise NextApiError("Notification not found", 404)
+            return response({"status": "ok", "notification": notification, "counts": notification_counts(conn, user_id)})
+
+    @flask_app.post("/api/next/notifications/read-all")
+    def mark_all_next_notifications_read():
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Notifications require a signed-in user", 401)
+            if not table_exists(conn, "user_notifications"):
+                raise NextApiError("Notifications table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE user_notifications
+                        SET read_at=COALESCE(read_at, now())
+                        WHERE user_id=%s AND read_at IS NULL
+                        """,
+                        (user_id,),
+                    )
+            return response(
+                {
+                    "status": "ok",
+                    "notifications": user_notification_rows(conn, user_id, limit=100),
+                    "counts": notification_counts(conn, user_id),
+                }
+            )
 
     @flask_app.get("/api/next/stats")
     def stats():
@@ -26145,6 +27184,10 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/")
     @flask_app.get("/profile")
     @flask_app.get("/app/profile")
+    @flask_app.get("/lists")
+    @flask_app.get("/app/lists")
+    @flask_app.get("/notifications")
+    @flask_app.get("/app/notifications")
     @flask_app.get("/admin")
     @flask_app.get("/app/admin")
     @flask_app.get("/import")
