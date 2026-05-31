@@ -5004,6 +5004,74 @@ def ui_preview_html(
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
+    .container-member-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      color: inherit;
+      text-decoration: none;
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr);
+      gap: 11px;
+      padding: 9px;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .container-member-card.editable {
+      grid-template-columns: 58px minmax(0, 1fr) auto;
+    }
+    .container-member-card:hover {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+    }
+    .container-member-poster {
+      aspect-ratio: 2 / 3;
+      border-radius: 7px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #30343c, #181a1f);
+      color: rgba(255,255,255,.66);
+      font-size: .68rem;
+      text-align: center;
+    }
+    .container-member-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .container-member-copy {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+    .container-member-copy strong {
+      overflow-wrap: anywhere;
+    }
+    .container-member-copy span {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .container-member-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      max-width: 110px;
+    }
+    .art-option-source {
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.25;
+      min-height: 1.2em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .person-card {
       min-width: 0;
       border: 1px solid var(--line);
@@ -6714,6 +6782,8 @@ def ui_preview_html(
               <p class="movie-detail-overview" id="containerDetailDescription"></p>
               <div class="movie-detail-actions">
                 <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
+                <button type="button" class="action hidden" id="containerMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
+                <button type="button" class="action secondary hidden" id="containerMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
               </div>
               <div class="detail-message" id="containerDetailMessage"></div>
             </div>
@@ -6760,7 +6830,7 @@ def ui_preview_html(
               </div>
             </form>
           </div>
-          <div class="detail-card full" id="containerAddContentPanel">
+          <div class="detail-card full hidden" id="containerAddContentPanel">
             <h3 data-next-i18n="containerDetail.addContent">Add content</h3>
             <div class="container-add-panels">
               <form class="profile-form" id="containerAddMovieForm">
@@ -6805,11 +6875,16 @@ def ui_preview_html(
             <div class="detail-grid" id="containerDetailIdentifiers"></div>
           </div>
           <div class="detail-card">
+            <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
+            <div class="detail-fields" id="containerDetailMetadata"></div>
+          </div>
+          <div class="detail-card">
             <div class="detail-card-head">
               <h3 data-next-i18n="containerDetail.artwork">Artwork</h3>
               <div class="detail-submenu" role="tablist" aria-label="Artwork" data-next-i18n-aria="containerDetail.artwork">
                 <button type="button" class="active" data-detail-tab="containerArtwork" data-detail-panel="containerArtworkPosters" data-next-i18n="movieDetail.posters">Posters</button>
                 <button type="button" data-detail-tab="containerArtwork" data-detail-panel="containerArtworkBackdrops" data-next-i18n="movieDetail.backdrops">Backdrops</button>
+                <button type="button" data-detail-tab="containerArtwork" data-detail-panel="containerArtworkVideos" data-next-i18n="movieDetail.videos">Videos</button>
               </div>
             </div>
             <div class="detail-subpanel" data-detail-panel-group="containerArtwork" id="containerArtworkPosters">
@@ -6817,6 +6892,9 @@ def ui_preview_html(
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="containerArtwork" id="containerArtworkBackdrops">
               <div class="art-option-grid backdrops" id="containerDetailBackdropArtwork"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="containerArtwork" id="containerArtworkVideos">
+              <div class="detail-grid" id="containerDetailVideos"></div>
             </div>
           </div>
         </section>
@@ -7726,13 +7804,15 @@ def ui_preview_html(
       document.querySelectorAll("#movieMetadataDryRunButton, #movieMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       });
+      document.querySelectorAll("#containerMetadataDryRunButton, #containerMetadataApplyButton").forEach((button) => {
+        button.classList.toggle("hidden", !(collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh)));
+      });
       setElementVisible(document.getElementById("movieMetadataJobsButton"), hasAnyPermission(["admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"]));
       const canEditMovies = hasPermission("collection.edit_all");
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
       if (!canEditMovies) setMovieEditPanelVisible(false);
       const canEditContainers = collectorsEnabled && hasPermission("containers.edit");
       setElementVisible(document.getElementById("containerEditToggleButton"), canEditContainers);
-      setElementVisible(document.getElementById("containerAddContentPanel"), canEditContainers);
       if (!canEditContainers) setContainerEditPanelVisible(false);
       if (!collectorsEnabled && activeContainerId) {
         activeContainerId = "";
@@ -10062,7 +10142,30 @@ def ui_preview_html(
     function containerMediaImage(detail, kind) {
       const container = detail.container || {};
       const metadata = container.metadata || {};
-      return mediaAssetImage(detail.mediaAssets, kind) || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
+      return mediaAssetImage(detail.mediaAssets, kind)
+        || mediaAssetImage(detail.aggregateMediaAssets, kind)
+        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
+    }
+    function containerArtworkOptionsHtml(detail, kind, emptyKey) {
+      const ownAssets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
+      const aggregateAssets = (detail.aggregateMediaAssets || []).filter((asset) => asset.kind === kind);
+      const assets = [...ownAssets, ...aggregateAssets];
+      const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
+      if (!assets.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext(emptyKey || "movieDetail.noArtwork", "No artwork options yet."))}</div>`;
+      }
+      return assets.map((asset) => {
+        const url = mediaAssetUrl(asset);
+        const preview = url ? `<img src="${escapeHtml(url)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        const sourceTitle = asset.sourceMovieTitle || asset.source_movie_title || asset.provider_id || "";
+        const source = sourceTitle ? `${tNext("containerDetail.fromMovie", "From")} ${sourceTitle}` : "";
+        return `
+          <div class="${className}">
+            <div class="art-option-preview">${preview}</div>
+            <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source || (asset.is_primary ? tNext("movieDetail.primary", "Primary") : ""))}</div>
+          </div>
+        `;
+      }).join("");
     }
     function removableDetailCard(title, subtitle, href, action, actionValue, itemType, options = {}) {
       const attrs = action === "movie"
@@ -10087,6 +10190,31 @@ def ui_preview_html(
           </a>
           ${orderControls}
           <button type="button" class="detail-remove-button" ${attrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
+        </div>
+      `;
+    }
+    function containerMemberMovieCardHtml(movie, index, total, canEdit) {
+      const metadata = movie.metadata || {};
+      const poster = usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
+      const subtitle = [movie.year, movie.format, movie.edition, movie.barcode].filter(Boolean).join(" / ");
+      const href = `/movies/${encodeURIComponent(movie.id)}`;
+      const orderControls = canEdit ? `
+        <div class="container-member-actions">
+          <button type="button" class="detail-order-button" data-container-move-movie="${escapeHtml(movie.id || "")}" data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
+          <button type="button" class="detail-order-button" data-container-move-movie="${escapeHtml(movie.id || "")}" data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          <button type="button" class="detail-remove-button" data-container-remove-movie="${escapeHtml(movie.id || "")}">${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
+        </div>
+      ` : "";
+      return `
+        <div class="container-member-card ${canEdit ? "editable" : ""}">
+          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}">
+            ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}
+          </a>
+          <a class="container-member-copy" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}">
+            <strong>${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</strong>
+            <span>${escapeHtml(subtitle || tNext("containerDetail.type.movie", "Movie"))}</span>
+          </a>
+          ${orderControls}
         </div>
       `;
     }
@@ -10141,6 +10269,27 @@ def ui_preview_html(
           <span>${escapeHtml([video.type, video.source].filter(Boolean).join(" / ") || tNext("movieDetail.openVideo", "Open video"))}</span>
         </a>
       `).join("");
+    }
+    function containerVideoItems(detail) {
+      const container = detail.container || {};
+      const metadata = container.metadata || {};
+      const videos = [];
+      const seen = new Set();
+      const addVideo = (item) => {
+        const url = usableVideoUrl(item?.url || item?.video_url || item?.href || "");
+        if (!url || seen.has(url)) return;
+        seen.add(url);
+        const movieTitle = item?.sourceMovieTitle || item?.source_movie_title || item?.movieTitle || "";
+        videos.push({
+          label: item?.label || item?.name || item?.title || item?.type || tNext("movieDetail.video", "Video"),
+          type: item?.type || "",
+          source: [movieTitle, item?.source || item?.provider || ""].filter(Boolean).join(" / "),
+          url
+        });
+      };
+      (Array.isArray(metadata.videos) ? metadata.videos : []).forEach(addVideo);
+      (detail.aggregateVideos || []).forEach(addVideo);
+      return videos;
     }
     function detailTagHtml(values) {
       return values.filter(Boolean).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
@@ -10339,9 +10488,12 @@ def ui_preview_html(
     }
     function setContainerEditPanelVisible(show) {
       const panel = document.getElementById("containerEditPanel");
+      const addPanel = document.getElementById("containerAddContentPanel");
+      const canEditContainers = collectorsModeEnabled() && hasPermission("containers.edit");
       if (!panel) return;
-      panel.classList.toggle("hidden", !show);
-      if (show) document.getElementById("containerEditTitle")?.focus();
+      panel.classList.toggle("hidden", !(show && canEditContainers));
+      if (addPanel) addPanel.classList.toggle("hidden", !(show && canEditContainers));
+      if (show && canEditContainers) document.getElementById("containerEditTitle")?.focus();
     }
     function formTextValue(id) {
       return (document.getElementById(id)?.value || "").trim();
@@ -10461,20 +10613,14 @@ def ui_preview_html(
       renderContainerAddForms(detail);
       const memberMovies = detail.memberMovies || [];
       const canEditContainerLinks = hasPermission("containers.edit");
+      const aggregateMovieById = new Map((detail.aggregateMovies || []).map((movie) => [String(movie.id), movie]));
       const movieCards = memberMovies.map((movie, index) => {
-        const subtitle = [movie.year, movie.format, movie.barcode].filter(Boolean).join(" / ");
-        const href = `/movies/${encodeURIComponent(movie.id)}`;
-        return canEditContainerLinks
-          ? removableDetailCard(
-              movie.title,
-              subtitle,
-              href,
-              "movie",
-              movie.id,
-              "movie",
-              {orderKind: "movie", canMoveUp: index > 0, canMoveDown: index < memberMovies.length - 1}
-            )
-          : miniCard(movie.title, subtitle, href);
+        const aggregateMovie = aggregateMovieById.get(String(movie.id)) || {};
+        const displayMovie = Object.assign({}, aggregateMovie, movie, {
+          poster_url: movie.poster_url || aggregateMovie.poster_url,
+          backdrop_url: movie.backdrop_url || aggregateMovie.backdrop_url
+        });
+        return containerMemberMovieCardHtml(displayMovie, index, memberMovies.length, canEditContainerLinks);
       });
       document.getElementById("containerDetailMovies").innerHTML = movieCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noMovies", "No movies linked yet."))}</div>`;
       const collectionItems = detail.collectionItems || [];
@@ -10498,9 +10644,19 @@ def ui_preview_html(
         item.identifier
       ));
       document.getElementById("containerDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noIdentifiers", "No identifiers yet."))}</div>`;
-      document.getElementById("containerDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
-      document.getElementById("containerDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      const summary = detail.aggregateSummary || {};
+      document.getElementById("containerDetailMetadata").innerHTML = detailFieldRows([
+        [tNext("containerDetail.aggregateMovieCount", "Movies in scope"), summary.movieCount || memberMovies.length],
+        [tNext("containerDetail.aggregateYearRange", "Year range"), summary.yearRange],
+        [tNext("containerDetail.aggregateFormats", "Formats"), summary.formats],
+        [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
+        [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
+      ]);
+      document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
+      document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      document.getElementById("containerDetailVideos").innerHTML = videoCardsHtml(containerVideoItems(detail));
       setContainerDetailMessage("");
+      applyAppPermissionVisibility();
     }
     function showContainerDetailLoading(containerId) {
       activeContainerId = containerId || "";
@@ -10513,8 +10669,10 @@ def ui_preview_html(
       document.getElementById("containerDetailMovies").innerHTML = "";
       document.getElementById("containerDetailItems").innerHTML = "";
       document.getElementById("containerDetailIdentifiers").innerHTML = "";
+      document.getElementById("containerDetailMetadata").innerHTML = "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = "";
       document.getElementById("containerDetailBackdropArtwork").innerHTML = "";
+      document.getElementById("containerDetailVideos").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
       document.getElementById("containerDetailBackdrop").src = "";
       setContainerDetailMessage("");
@@ -11712,6 +11870,24 @@ def ui_preview_html(
         console.log("metadata refresh", payload);
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function refreshActiveContainerMetadata(dryRun) {
+      if (!hasPermission("metadata.refresh_one")) return;
+      if (!activeContainerId) return;
+      setContainerDetailMessage(dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}/metadata/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({dryRun})
+        });
+        if (payload.detail) renderContainerDetail(payload.detail);
+        if (!dryRun) await loadAppSnapshot();
+        setContainerDetailMessage(dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed."), "good");
+        console.log("container metadata refresh", payload);
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
     async function loadActiveMovieJobs() {
@@ -12929,6 +13105,8 @@ def ui_preview_html(
       document.getElementById("containerEditToggleButton")?.addEventListener("click", () => setContainerEditPanelVisible(true));
       document.getElementById("containerEditCancelButton")?.addEventListener("click", () => setContainerEditPanelVisible(false));
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
+      document.getElementById("containerMetadataDryRunButton")?.addEventListener("click", () => refreshActiveContainerMetadata(true));
+      document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
@@ -20783,16 +20961,346 @@ def collection_item_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
     return sorted(items, key=lambda item: (item.get("sort_order") or 0, str(item.get("title") or "").lower()))
 
 
+def container_aggregate_movie_entities(conn, container_id: UUID, *, max_depth: int = 4) -> list[dict[str, Any]]:
+    if (
+        not table_exists(conn, "containers")
+        or not table_exists(conn, "movies")
+        or not table_exists(conn, "container_movies")
+        or not table_exists(conn, "collection_items")
+    ):
+        return container_member_movie_entities(conn, container_id)
+    media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+    media_select = (
+        """
+                poster_asset.id AS poster_asset_id,
+                poster_asset.storage_backend AS poster_asset_storage_backend,
+                poster_asset.storage_key AS poster_asset_storage_key,
+                poster_asset.source_url AS poster_asset_source_url,
+                backdrop_asset.id AS backdrop_asset_id,
+                backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
+                backdrop_asset.storage_key AS backdrop_asset_storage_key,
+                backdrop_asset.source_url AS backdrop_asset_source_url,
+        """
+        if media_join
+        else """
+                NULL AS poster_asset_id,
+                NULL AS poster_asset_storage_backend,
+                NULL AS poster_asset_storage_key,
+                NULL AS poster_asset_source_url,
+                NULL AS backdrop_asset_id,
+                NULL AS backdrop_asset_storage_backend,
+                NULL AS backdrop_asset_storage_key,
+                NULL AS backdrop_asset_source_url,
+        """
+    )
+    media_join_sql = (
+        """
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='poster'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) poster_asset ON true
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND ma.kind='backdrop'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) backdrop_asset ON true
+        """
+        if media_join
+        else ""
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            WITH RECURSIVE container_tree(id, depth, path) AS (
+                SELECT %s::uuid, 0, ARRAY[%s::uuid]
+                UNION ALL
+                SELECT ci.item_id, ct.depth + 1, ct.path || ci.item_id
+                FROM collection_items ci
+                JOIN container_tree ct ON ct.id = ci.collection_id
+                WHERE ci.item_type <> 'movie'
+                  AND ct.depth < %s
+                  AND NOT ci.item_id = ANY(ct.path)
+            ),
+            movie_links AS (
+                SELECT cm.movie_id, ct.depth, cm.sort_order, cm.created_at AS linked_at
+                FROM container_tree ct
+                JOIN container_movies cm ON cm.container_id = ct.id
+                UNION ALL
+                SELECT ci.item_id AS movie_id, ct.depth, ci.sort_order, ci.created_at AS linked_at
+                FROM container_tree ct
+                JOIN collection_items ci ON ci.collection_id = ct.id AND ci.item_type='movie'
+            ),
+            ranked AS (
+                SELECT DISTINCT ON (m.id)
+                    m.id,
+                    m.public_id,
+                    m.barcode,
+                    m.title,
+                    m.sort_title,
+                    m.original_title,
+                    m.year,
+                    m.release_date,
+                    m.format,
+                    m.edition,
+                    m.edition_type,
+                    m.country,
+                    m.language,
+                    m.runtime_minutes,
+                    m.overview,
+                    m.rating,
+                    m.trailer_url,
+                    m.metadata,
+                    m.created_at,
+                    m.updated_at,
+                    COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
+                    COALESCE(m.metadata->>'backdrop_url', backdrop_asset.source_url) AS backdrop_url,
+{media_select}
+                    ml.depth,
+                    ml.sort_order,
+                    ml.linked_at
+                FROM movie_links ml
+                JOIN movies m ON m.id = ml.movie_id
+                {media_join_sql}
+                ORDER BY m.id, ml.depth, ml.sort_order, lower(COALESCE(m.sort_title, m.title))
+            )
+            SELECT *
+            FROM ranked
+            ORDER BY depth, sort_order, lower(COALESCE(sort_title, title)), year NULLS LAST
+            """,
+            (container_id, container_id, max_depth),
+        )
+        rows = cur.fetchall()
+    return [with_preview_media_urls(row) for row in rows]
+
+
+def container_aggregate_media_asset_entities(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    assets: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add_asset(asset: dict[str, Any], source_movie: dict[str, Any] | None = None) -> None:
+        kind = clean_text(asset.get("kind"))
+        url = media_asset_public_url(asset) or server_usable_image(asset.get("url") or asset.get("source_url"))
+        if kind not in {"poster", "backdrop"} or not url:
+            return
+        key = (kind, url)
+        if key in seen:
+            return
+        seen.add(key)
+        row = dict(asset)
+        row["url"] = url
+        if source_movie:
+            row["sourceMovieId"] = str(source_movie.get("id") or "")
+            row["sourceMovieTitle"] = source_movie.get("title") or source_movie.get("original_title") or ""
+        assets.append(row)
+
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    movie_by_id = {str(movie.get("id")): movie for movie in movies if movie.get("id")}
+    if movie_ids and table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    ma.id,
+                    ma.kind,
+                    ma.variant,
+                    ma.storage_backend,
+                    ma.storage_key,
+                    ma.source_url,
+                    ma.provider_id,
+                    ma.content_type,
+                    ma.width,
+                    ma.height,
+                    ma.size_bytes,
+                    ma.sha256,
+                    ma.metadata,
+                    em.role,
+                    em.is_primary,
+                    em.sort_order,
+                    em.entity_id AS source_movie_id,
+                    m.title AS source_movie_title
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                JOIN movies m ON m.id = em.entity_id
+                WHERE em.entity_type='movie'
+                  AND em.entity_id = ANY(%s)
+                  AND ma.kind IN ('poster', 'backdrop')
+                ORDER BY lower(m.title), ma.kind, em.is_primary DESC, em.sort_order, ma.created_at
+                """,
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                source_movie = movie_by_id.get(str(row.get("source_movie_id"))) or {
+                    "id": row.get("source_movie_id"),
+                    "title": row.get("source_movie_title"),
+                }
+                add_asset(row, source_movie)
+
+    for movie in movies:
+        for kind in ("poster", "backdrop"):
+            url = server_usable_image(movie.get(f"{kind}_url"))
+            if url:
+                add_asset(
+                    {
+                        "id": f"aggregate:{kind}:{movie.get('id')}",
+                        "kind": kind,
+                        "source_url": url,
+                        "provider_id": "aggregate",
+                        "is_primary": False,
+                    },
+                    movie,
+                )
+    return assets
+
+
+def container_aggregate_video_entities(movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    videos: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_video(movie: dict[str, Any], item: dict[str, Any]) -> None:
+        url = clean_text(item.get("url") or item.get("video_url") or item.get("href"))
+        if not url or not url.startswith(("http://", "https://")) or url in seen:
+            return
+        seen.add(url)
+        videos.append(
+            {
+                "label": clean_text(item.get("label") or item.get("name") or item.get("title") or item.get("type")) or "Video",
+                "type": clean_text(item.get("type")),
+                "source": clean_text(item.get("source") or item.get("provider")),
+                "url": url,
+                "sourceMovieId": str(movie.get("id") or ""),
+                "sourceMovieTitle": movie.get("title") or movie.get("original_title") or "",
+            }
+        )
+
+    for movie in movies:
+        metadata = movie.get("metadata") if isinstance(movie.get("metadata"), dict) else {}
+        add_video(movie, {"label": "Trailer", "type": "Trailer", "source": "metadata", "url": movie.get("trailer_url") or metadata.get("trailer_url")})
+        for item in metadata.get("videos") if isinstance(metadata.get("videos"), list) else []:
+            if isinstance(item, dict):
+                add_video(movie, item)
+    return videos
+
+
+def container_aggregate_summary(movies: list[dict[str, Any]], assets: list[dict[str, Any]], videos: list[dict[str, Any]]) -> dict[str, Any]:
+    years = sorted({int(str(movie.get("year"))) for movie in movies if str(movie.get("year") or "").isdigit()})
+    formats = sorted({clean_text(movie.get("format")) for movie in movies if clean_text(movie.get("format"))}, key=str.lower)
+    poster_count = len([asset for asset in assets if asset.get("kind") == "poster"])
+    backdrop_count = len([asset for asset in assets if asset.get("kind") == "backdrop"])
+    return {
+        "movieCount": len(movies),
+        "memberTitles": [movie.get("title") for movie in movies if movie.get("title")],
+        "formats": ", ".join(formats),
+        "yearRange": f"{years[0]}-{years[-1]}" if len(years) > 1 else (str(years[0]) if years else ""),
+        "posterCount": poster_count,
+        "backdropCount": backdrop_count,
+        "artwork": f"{poster_count} posters / {backdrop_count} backdrops",
+        "videoCount": len(videos),
+    }
+
+
+def refresh_container_metadata(
+    conn,
+    container_id: UUID,
+    *,
+    dry_run: bool,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    container = container_entity(conn, container_id)
+    if not container:
+        raise NextApiError("Container not found", 404)
+    movies = container_aggregate_movie_entities(conn, container_id)
+    assets = container_aggregate_media_asset_entities(conn, movies)
+    videos = container_aggregate_video_entities(movies)
+    summary = container_aggregate_summary(movies, assets, videos)
+    metadata = container.get("metadata") if isinstance(container.get("metadata"), dict) else {}
+    description = clean_text(container.get("description"))
+    generated_description = ""
+    if summary.get("memberTitles"):
+        titles = ", ".join(summary["memberTitles"][:8])
+        suffix = "..." if len(summary["memberTitles"]) > 8 else ""
+        generated_description = f"Contains {summary.get('movieCount', 0)} movies: {titles}{suffix}"
+
+    metadata_updates = {
+        "aggregate": summary,
+        "videos": videos[:80],
+    }
+    if assets:
+        primary_poster = next((asset for asset in assets if asset.get("kind") == "poster"), None)
+        primary_backdrop = next((asset for asset in assets if asset.get("kind") == "backdrop"), None)
+        if primary_poster:
+            metadata_updates["poster_url"] = primary_poster.get("url")
+        if primary_backdrop:
+            metadata_updates["backdrop_url"] = primary_backdrop.get("url")
+
+    proposal = {
+        "containerId": str(container_id),
+        "dryRun": dry_run,
+        "movieCount": summary.get("movieCount", 0),
+        "metadataUpdates": metadata_updates,
+        "description": description or generated_description,
+    }
+    if dry_run:
+        return {"dryRun": True, "changed": False, "proposal": proposal, "summary": summary}
+
+    next_metadata = dict(metadata)
+    next_metadata.update(metadata_updates)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE containers
+            SET metadata=%s,
+                description=COALESCE(NULLIF(description, ''), %s),
+                updated_at=now()
+            WHERE id=%s
+            """,
+            (Jsonb(json_ready(next_metadata)), generated_description or None, container_id),
+        )
+    revision = 0
+    if table_exists(conn, "sync_changes"):
+        revision = next_revision(conn)
+        sync_change(
+            conn,
+            revision=revision,
+            entity_type="container",
+            entity_id=str(container_id),
+            operation="container.metadata_refresh",
+            payload={
+                "containerId": str(container_id),
+                "summary": summary,
+                "actor": actor_job_payload(actor or {}) if actor else None,
+            },
+        )
+    return {"dryRun": False, "changed": True, "revision": revision, "applied": proposal, "summary": summary}
+
+
 def container_detail_entity(conn, container_id: UUID) -> dict[str, Any] | None:
     container = container_entity(conn, container_id)
     if not container:
         return None
+    aggregate_movies = container_aggregate_movie_entities(conn, container_id)
+    aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
+    aggregate_videos = container_aggregate_video_entities(aggregate_movies)
     return {
         "container": container,
         "identifiers": container_identifier_entities(conn, container_id),
         "memberMovies": container_member_movie_entities(conn, container_id),
         "collectionItems": collection_item_entities(conn, container_id),
         "mediaAssets": entity_media_asset_entities(conn, "container", container_id),
+        "aggregateMovies": aggregate_movies,
+        "aggregateMediaAssets": aggregate_assets,
+        "aggregateVideos": aggregate_videos,
+        "aggregateSummary": container_aggregate_summary(aggregate_movies, aggregate_assets, aggregate_videos),
     }
 
 
@@ -23849,6 +24357,32 @@ def register_routes(flask_app: Flask) -> None:
         if not detail:
             raise NextApiError("Container not found", 404)
         return response({"status": "ok", "detail": detail})
+
+    @flask_app.post("/api/next/containers/<container_id>/metadata/refresh")
+    def container_metadata_refresh(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Metadata refresh body must be an object", 400)
+        dry_run = parse_bool_value(body.get("dryRun", body.get("dry_run")), default=False)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "containers"):
+                raise NextApiError("Container table is not available", 503)
+            with conn.transaction():
+                result = refresh_container_metadata(conn, container_uuid, dry_run=dry_run, actor=actor)
+                audit_event(
+                    conn,
+                    event_type="container.metadata_refresh_applied" if not dry_run else "container.metadata_refresh_previewed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary="Refreshed container metadata" if not dry_run else "Previewed container metadata refresh",
+                    metadata={"dryRun": dry_run, "result": result},
+                )
+                detail = container_detail_entity(conn, container_uuid)
+        return response({"status": "ok", "metadata": result, "detail": detail})
 
     @flask_app.get("/api/next/containers/<container_id>/view")
     @flask_app.get("/api/next/app/containers/<container_id>")
