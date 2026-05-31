@@ -751,5 +751,17 @@
   "appAdmin.featureBackupExport": "Eksporter samlingsbackups",
   "appAdmin.featureBackupRestore": "Gendan samlingsbackups",
   "appAdmin.featureUsers": "Administrer brugere",
-  "appAdmin.featureRbac": "Administrer roller og RBAC-tilstand"
+  "appAdmin.featureRbac": "Administrer roller og RBAC-tilstand",
+  "appAdmin.roleSimulator": "Rolle-simulator",
+  "appAdmin.roleSimulatorHelp": "Vis appen som en rolle uden at ændre din rigtige Owner-session.",
+  "appAdmin.simulateRole": "Simuler rolle",
+  "appAdmin.startRoleSimulation": "Start simulering",
+  "appAdmin.stopRoleSimulation": "Stop simulering",
+  "appAdmin.simulationActiveFor": "Tester som {role}",
+  "appAdmin.simulationAdminNote": "Backend-kald bruger stadig din rigtige session.",
+  "appAdmin.simulationInactive": "Simulering er slået fra.",
+  "appAdmin.simulated": "Simuleret",
+  "appAdmin.permissionMatrix": "Rettighedsmatrix",
+  "appAdmin.permissionMatrixHelp": "Sammenlign hvilke app-funktioner hver rolle kan bruge.",
+  "appAdmin.features": "Funktioner"
 }

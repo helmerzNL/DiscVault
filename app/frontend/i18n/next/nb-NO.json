@@ -751,5 +751,17 @@
   "appAdmin.featureBackupExport": "Eksporter samlingsbackuper",
   "appAdmin.featureBackupRestore": "Gjenopprett samlingsbackuper",
   "appAdmin.featureUsers": "Administrer brukere",
-  "appAdmin.featureRbac": "Administrer roller og RBAC-modus"
+  "appAdmin.featureRbac": "Administrer roller og RBAC-modus",
+  "appAdmin.roleSimulator": "Rolle-simulator",
+  "appAdmin.roleSimulatorHelp": "Forhåndsvis appen som en rolle uten å endre din ekte Owner-økt.",
+  "appAdmin.simulateRole": "Simuler rolle",
+  "appAdmin.startRoleSimulation": "Start simulering",
+  "appAdmin.stopRoleSimulation": "Stopp simulering",
+  "appAdmin.simulationActiveFor": "Tester som {role}",
+  "appAdmin.simulationAdminNote": "Backend-kall bruker fortsatt din ekte økt.",
+  "appAdmin.simulationInactive": "Simulering er av.",
+  "appAdmin.simulated": "Simulert",
+  "appAdmin.permissionMatrix": "Tillatelsesmatrise",
+  "appAdmin.permissionMatrixHelp": "Sammenlign hvilke app-funksjoner hver rolle kan bruke.",
+  "appAdmin.features": "Funksjoner"
 }

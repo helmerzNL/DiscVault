@@ -751,5 +751,17 @@
   "appAdmin.featureBackupExport": "Exportar backups da coleção",
   "appAdmin.featureBackupRestore": "Restaurar backups da coleção",
   "appAdmin.featureUsers": "Gerir utilizadores",
-  "appAdmin.featureRbac": "Gerir funções e modo RBAC"
+  "appAdmin.featureRbac": "Gerir funções e modo RBAC",
+  "appAdmin.roleSimulator": "Simulador de funções",
+  "appAdmin.roleSimulatorHelp": "Pré-visualize a app como uma função sem alterar a sua sessão Owner real.",
+  "appAdmin.simulateRole": "Simular função",
+  "appAdmin.startRoleSimulation": "Iniciar simulação",
+  "appAdmin.stopRoleSimulation": "Parar simulação",
+  "appAdmin.simulationActiveFor": "A testar como {role}",
+  "appAdmin.simulationAdminNote": "Os pedidos backend continuam a usar a sua sessão real.",
+  "appAdmin.simulationInactive": "A simulação está desligada.",
+  "appAdmin.simulated": "Simulado",
+  "appAdmin.permissionMatrix": "Matriz de permissões",
+  "appAdmin.permissionMatrixHelp": "Compare que funcionalidades cada função pode usar.",
+  "appAdmin.features": "Funcionalidades"
 }

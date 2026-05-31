@@ -845,5 +845,17 @@
   "appAdmin.featureBackupExport": "Export collection backups",
   "appAdmin.featureBackupRestore": "Restore collection backups",
   "appAdmin.featureUsers": "Manage users",
-  "appAdmin.featureRbac": "Manage roles and RBAC mode"
+  "appAdmin.featureRbac": "Manage roles and RBAC mode",
+  "appAdmin.roleSimulator": "Role simulator",
+  "appAdmin.roleSimulatorHelp": "Preview the app as a role without changing your real Owner session.",
+  "appAdmin.simulateRole": "Simulate role",
+  "appAdmin.startRoleSimulation": "Start simulation",
+  "appAdmin.stopRoleSimulation": "Stop simulation",
+  "appAdmin.simulationActiveFor": "Testing as {role}",
+  "appAdmin.simulationAdminNote": "Backend requests still use your real session.",
+  "appAdmin.simulationInactive": "Simulation is off.",
+  "appAdmin.simulated": "Simulated",
+  "appAdmin.permissionMatrix": "Permission matrix",
+  "appAdmin.permissionMatrixHelp": "Compare which app features each role can use.",
+  "appAdmin.features": "Features"
 }
