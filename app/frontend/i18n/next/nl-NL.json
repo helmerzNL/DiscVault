@@ -845,5 +845,17 @@
   "appAdmin.featureBackupExport": "Collectiebackups exporteren",
   "appAdmin.featureBackupRestore": "Collectiebackups herstellen",
   "appAdmin.featureUsers": "Gebruikers beheren",
-  "appAdmin.featureRbac": "Rollen en RBAC-modus beheren"
+  "appAdmin.featureRbac": "Rollen en RBAC-modus beheren",
+  "appAdmin.roleSimulator": "Rolsimulator",
+  "appAdmin.roleSimulatorHelp": "Bekijk de app als een rol zonder je echte Owner-sessie te wijzigen.",
+  "appAdmin.simulateRole": "Rol simuleren",
+  "appAdmin.startRoleSimulation": "Simulatie starten",
+  "appAdmin.stopRoleSimulation": "Simulatie stoppen",
+  "appAdmin.simulationActiveFor": "Testen als {role}",
+  "appAdmin.simulationAdminNote": "Backendverzoeken gebruiken nog steeds je echte sessie.",
+  "appAdmin.simulationInactive": "Simulatie staat uit.",
+  "appAdmin.simulated": "Gesimuleerd",
+  "appAdmin.permissionMatrix": "Permissiematrix",
+  "appAdmin.permissionMatrixHelp": "Vergelijk welke appfuncties elke rol kan gebruiken.",
+  "appAdmin.features": "Functies"
 }

@@ -5259,6 +5259,32 @@ def ui_preview_html(
       color: var(--bg-solid);
       border-color: var(--text);
     }
+    .app-simulation-banner {
+      position: sticky;
+      top: 14px;
+      z-index: 30;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .16);
+      backdrop-filter: blur(22px) saturate(1.2);
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: .88rem;
+      font-weight: 720;
+    }
+    .app-simulation-banner.hidden {
+      display: none;
+    }
+    .app-simulation-banner .secondary-button {
+      min-height: 34px;
+      white-space: nowrap;
+    }
     .app-admin-role-layout {
       display: grid;
       grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr);
@@ -5329,6 +5355,63 @@ def ui_preview_html(
     }
     .app-admin-feature-row .admin-member-cloud {
       margin-top: 0;
+    }
+    .app-admin-matrix {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      -webkit-overflow-scrolling: touch;
+    }
+    .app-admin-matrix table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: .78rem;
+    }
+    .app-admin-matrix th,
+    .app-admin-matrix td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px;
+      text-align: center;
+      vertical-align: middle;
+    }
+    .app-admin-matrix th:first-child,
+    .app-admin-matrix td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      text-align: left;
+      background: color-mix(in srgb, var(--bg-solid) 90%, transparent);
+      min-width: 210px;
+    }
+    .app-admin-matrix thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: color-mix(in srgb, var(--bg-solid) 94%, transparent);
+      color: var(--muted);
+      font-weight: 780;
+    }
+    .app-admin-matrix thead th:first-child {
+      z-index: 3;
+    }
+    .app-admin-matrix tr:last-child td {
+      border-bottom: 0;
+    }
+    .app-admin-matrix-feature {
+      display: grid;
+      gap: 3px;
+    }
+    .app-admin-matrix-feature strong {
+      color: var(--text);
+      font-size: .82rem;
+    }
+    .app-admin-matrix-feature small {
+      color: var(--muted);
+      font-size: .68rem;
+      overflow-wrap: anywhere;
     }
     .app-admin-permission-grid {
       display: grid;
@@ -5811,6 +5894,14 @@ def ui_preview_html(
       .app-admin-feature-list {
         grid-template-columns: 1fr;
       }
+      .app-simulation-banner {
+        position: static;
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .app-simulation-banner .secondary-button {
+        width: 100%;
+      }
       .profile-passkey-actions .secondary-button {
         width: 100%;
       }
@@ -5942,6 +6033,10 @@ def ui_preview_html(
           <span aria-hidden="true">/</span>
           <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
         </label>
+      </div>
+      <div class="app-simulation-banner hidden" id="appRoleSimulationBanner">
+        <span id="appRoleSimulationBannerText"></span>
+        <button type="button" class="secondary-button" id="appRoleSimulationStopButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
       </div>
       <section class="library-view" id="libraryView">
       <section class="hero" id="previewHero">
@@ -6743,6 +6838,21 @@ def ui_preview_html(
                 </div>
               </form>
             </div>
+            <div class="detail-card profile-card" id="appAdminRoleSimulatorCard">
+              <h3 data-next-i18n="appAdmin.roleSimulator">Role simulator</h3>
+              <p data-next-i18n="appAdmin.roleSimulatorHelp">Preview the app as a role without changing your real Owner session.</p>
+              <div class="profile-form">
+                <label for="appAdminRoleSimulationSelect">
+                  <span data-next-i18n="appAdmin.simulateRole">Simulate role</span>
+                  <select id="appAdminRoleSimulationSelect"></select>
+                </label>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="appAdminStartSimulationButton" data-next-i18n="appAdmin.startRoleSimulation">Start simulation</button>
+                  <button type="button" class="secondary-button" id="appAdminStopSimulationButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
+                </div>
+              </div>
+              <div class="login-message" id="appAdminSimulatorMessage"></div>
+            </div>
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.roles">Roles</h3>
               <p data-next-i18n="appAdmin.rolesHelp">Basic roles are fixed presets. In Advanced mode the Owner can create and maintain custom roles.</p>
@@ -6775,6 +6885,11 @@ def ui_preview_html(
                   </div>
                 </div>
               </div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.permissionMatrix">Permission matrix</h3>
+              <p data-next-i18n="appAdmin.permissionMatrixHelp">Compare which app features each role can use.</p>
+              <div id="appAdminPermissionMatrix"></div>
             </div>
           </section>
         </section>
@@ -6967,6 +7082,7 @@ def ui_preview_html(
       rbac: {},
       roles: [],
       assignableRoles: [],
+      simulation: {active: false, roleId: ""},
       selectedRoleId: "",
       users: []
     };
@@ -7111,12 +7227,38 @@ def ui_preview_html(
       ];
       return new Set(values.filter(Boolean).map(String));
     }
+    function appAdminRoleById(roleId) {
+      const roles = (appAdmin.rbac && appAdmin.rbac.roles) || appAdmin.roles || [];
+      return roles.find((role) => String(role.id) === String(roleId)) || null;
+    }
+    function appAdminRolePermissionSet(role) {
+      return new Set(((role && role.permissions) || []).filter(Boolean).map(String));
+    }
+    function appAdminSimulatedRole() {
+      if (!appMode || !currentAuthStatus.authenticated || currentRole() !== "owner" || !(appAdmin.simulation || {}).active) return null;
+      return appAdminRoleById((appAdmin.simulation || {}).roleId);
+    }
     function isNativeAdminUser() {
       return !!currentAuthStatus.authenticated && ["owner", "admin"].includes(currentRole());
+    }
+    function hasActualPermission(permission) {
+      if (!appMode) return true;
+      if (!currentAuthStatus.authenticated) return false;
+      if (currentRole() === "owner") return true;
+      const permissions = currentPermissionSet();
+      if (permissions.has("*") || permissions.has(permission)) return true;
+      return permissions.size === 0 && currentRole() === "admin";
     }
     function hasPermission(permission) {
       if (!appMode) return true;
       if (!currentAuthStatus.authenticated) return false;
+      const simulatedRole = appAdminSimulatedRole();
+      if (simulatedRole) {
+        if (simulatedRole.key === "owner") return true;
+        const simulatedPermissions = appAdminRolePermissionSet(simulatedRole);
+        if (simulatedPermissions.has("*") || simulatedPermissions.has(permission)) return true;
+        return simulatedPermissions.size === 0 && simulatedRole.key === "admin";
+      }
       if (currentRole() === "owner") return true;
       const permissions = currentPermissionSet();
       if (permissions.has("*") || permissions.has(permission)) return true;
@@ -7125,8 +7267,8 @@ def ui_preview_html(
     function hasAnyPermission(permissions) {
       return (permissions || []).some((permission) => hasPermission(permission));
     }
-    function appAdminRolePermissionSet(role) {
-      return new Set(((role && role.permissions) || []).filter(Boolean).map(String));
+    function hasActualAnyPermission(permissions) {
+      return (permissions || []).some((permission) => hasActualPermission(permission));
     }
     function appAdminRoleAllowsFeature(role, permissions) {
       if (!role) return false;
@@ -7137,7 +7279,7 @@ def ui_preview_html(
     }
     function canUseAdminTab(tab) {
       const permissions = (APP_PERMISSION_GROUPS.adminTabs || {})[tab] || [];
-      if (!hasAnyPermission(permissions)) return false;
+      if (!hasActualAnyPermission(permissions)) return false;
       if (["access", "users"].includes(tab)) return isNativeAdminUser();
       return true;
     }
@@ -7317,34 +7459,34 @@ def ui_preview_html(
     }
     function appAdminCanManagePlugin(plugin) {
       if (appAdminPluginHasCategory(plugin, "metadata_source") || appAdminPluginHasCategory(plugin, "metadata_receiver")) {
-        return hasAnyPermission(["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers"]);
+        return hasActualAnyPermission(["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers"]);
       }
       if (appAdminPluginHasCategory(plugin, "digital_media_source")) {
-        return hasAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
+        return hasActualAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
       }
-      if (appAdminPluginHasCategory(plugin, "import_source")) return hasPermission("collection.import");
-      return hasPermission("metadata.manage_plugins");
+      if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
+      return hasActualPermission("metadata.manage_plugins");
     }
     function appAdminCanConfigurePlugin(plugin) {
-      if (appAdminPluginHasCategory(plugin, "metadata_source")) return hasPermission("metadata.manage_plugin_settings");
-      if (appAdminPluginHasCategory(plugin, "metadata_receiver")) return hasAnyPermission(["metadata.manage_plugin_settings", "metadata.manage_receivers"]);
-      if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
-      if (appAdminPluginHasCategory(plugin, "import_source")) return hasPermission("collection.import");
+      if (appAdminPluginHasCategory(plugin, "metadata_source")) return hasActualPermission("metadata.manage_plugin_settings");
+      if (appAdminPluginHasCategory(plugin, "metadata_receiver")) return hasActualAnyPermission(["metadata.manage_plugin_settings", "metadata.manage_receivers"]);
+      if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasActualAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
+      if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
       return appAdminCanManagePlugin(plugin);
     }
     function appAdminCanViewPluginHealth(plugin) {
-      if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
-      if (appAdminPluginHasCategory(plugin, "import_source")) return hasPermission("collection.import");
-      return hasAnyPermission(["metadata.view_plugin_health", "metadata.manage_plugins", "metadata.manage_plugin_settings"]);
+      if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasActualAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
+      if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
+      return hasActualAnyPermission(["metadata.view_plugin_health", "metadata.manage_plugins", "metadata.manage_plugin_settings"]);
     }
     function appAdminCanExecutePlugin(plugin, entrypoint) {
       const name = String(entrypoint || "");
       if (appAdminPluginHasCategory(plugin, "digital_media_source")) {
         return name === "sync_library"
-          ? hasAnyPermission(["digital_sources.sync", "digital_sources.manage"])
-          : hasAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
+          ? hasActualAnyPermission(["digital_sources.sync", "digital_sources.manage"])
+          : hasActualAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
       }
-      if (appAdminPluginHasCategory(plugin, "import_source")) return hasPermission("collection.import");
+      if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
       return appAdminCanManagePlugin(plugin);
     }
     function renderAppAdminPluginConfig(plugin, config) {
@@ -7727,12 +7869,127 @@ def ui_preview_html(
         `;
       }).join("")}</div>`;
     }
+    function appAdminRoleDisplayName(role) {
+      return (role && (role.name || role.key)) || "-";
+    }
+    function appAdminRoleOptionHtml(roles, selectedRoleId) {
+      return (roles || []).map((role) => `
+        <option value="${escapeHtml(role.id)}" ${String(role.id) === String(selectedRoleId) ? "selected" : ""}>
+          ${escapeHtml(appAdminRoleDisplayName(role))} (${escapeHtml(role.key || "-")})
+        </option>
+      `).join("");
+    }
+    function appAdminSimulationLabel(role) {
+      return tNext("appAdmin.simulationActiveFor", "Testing as {role}").replace("{role}", appAdminRoleDisplayName(role));
+    }
+    function renderAppRoleSimulationBanner() {
+      const role = appAdminSimulatedRole();
+      const banner = document.getElementById("appRoleSimulationBanner");
+      const text = document.getElementById("appRoleSimulationBannerText");
+      if (banner) banner.classList.toggle("hidden", !role);
+      if (text) text.textContent = role ? appAdminSimulationLabel(role) : "";
+    }
+    function renderAppAdminRoleSimulator(roles) {
+      const roleList = roles || [];
+      const canSimulate = currentRole() === "owner" && roleList.length > 0;
+      const card = document.getElementById("appAdminRoleSimulatorCard");
+      const select = document.getElementById("appAdminRoleSimulationSelect");
+      const startButton = document.getElementById("appAdminStartSimulationButton");
+      const stopButton = document.getElementById("appAdminStopSimulationButton");
+      const message = document.getElementById("appAdminSimulatorMessage");
+      setElementVisible(card, canSimulate);
+      if (!canSimulate) {
+        appAdmin.simulation = {active: false, roleId: ""};
+        renderAppRoleSimulationBanner();
+        return;
+      }
+      if (!appAdmin.simulation.roleId || !appAdminRoleById(appAdmin.simulation.roleId)) {
+        appAdmin.simulation.roleId = (appAdminSelectedRole() || roleList[0] || {}).id || "";
+      }
+      const role = appAdminSimulatedRole();
+      if (select) {
+        select.innerHTML = appAdminRoleOptionHtml(roleList, appAdmin.simulation.roleId);
+        select.value = appAdmin.simulation.roleId || "";
+      }
+      if (startButton) startButton.disabled = !!role || !appAdmin.simulation.roleId;
+      if (stopButton) stopButton.disabled = !role;
+      if (message) {
+        message.textContent = role
+          ? `${appAdminSimulationLabel(role)}. ${tNext("appAdmin.simulationAdminNote", "Backend requests still use your real session.")}`
+          : tNext("appAdmin.simulationInactive", "Simulation is off.");
+        message.className = `login-message ${role ? "info" : ""}`.trim();
+      }
+      renderAppRoleSimulationBanner();
+    }
+    function renderAppAdminPermissionMatrix(roles) {
+      const node = document.getElementById("appAdminPermissionMatrix");
+      if (!node) return;
+      const roleList = roles || [];
+      if (!roleList.length) {
+        node.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noRoles", "No roles found."))}</div>`;
+        return;
+      }
+      const headers = roleList.map((role) => `
+        <th scope="col">
+          ${escapeHtml(appAdminRoleDisplayName(role))}
+          <div class="profile-passkey-meta">${escapeHtml(role.key || "")}</div>
+        </th>
+      `).join("");
+      const rows = APP_FEATURE_PREVIEW.map((feature) => {
+        const cells = roleList.map((role) => {
+          const allowed = appAdminRoleAllowsFeature(role, feature.permissions);
+          return `<td><span class="tag ${allowed ? "good" : "blue"}">${escapeHtml(allowed ? tNext("appAdmin.featureAllowed", "Allowed") : tNext("appAdmin.featureBlocked", "Blocked"))}</span></td>`;
+        }).join("");
+        return `
+          <tr>
+            <td>
+              <span class="app-admin-matrix-feature">
+                <strong>${escapeHtml(tNext(feature.labelKey, feature.fallback))}</strong>
+                <small>${escapeHtml((feature.permissions || []).join(", "))}</small>
+              </span>
+            </td>
+            ${cells}
+          </tr>
+        `;
+      }).join("");
+      node.innerHTML = `
+        <div class="app-admin-matrix">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">${escapeHtml(tNext("appAdmin.features", "Features"))}</th>
+                ${headers}
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+    function refreshAppPermissionSurface() {
+      applyAppPermissionVisibility();
+      if (!document.getElementById("libraryView")?.classList.contains("hidden")) renderLibrary();
+      if (!document.getElementById("importView")?.classList.contains("hidden")) renderImportCenter();
+      renderAppRoleSimulationBanner();
+    }
+    function setAppAdminRoleSimulation(active) {
+      if (currentRole() !== "owner") return;
+      const roles = (appAdmin.rbac && appAdmin.rbac.roles) || appAdmin.roles || [];
+      const select = document.getElementById("appAdminRoleSimulationSelect");
+      const roleId = (select && select.value) || appAdmin.simulation.roleId || (appAdminSelectedRole() || roles[0] || {}).id || "";
+      appAdmin.simulation = {active: !!active && !!roleId, roleId: active ? roleId : ""};
+      renderAppAdminRbac();
+      refreshAppPermissionSurface();
+    }
     function renderAppAdminRbac() {
       const rbac = appAdmin.rbac || {};
       const roles = rbac.roles || appAdmin.roles || [];
       const permissions = rbac.permissions || [];
       const selectedRole = appAdminSelectedRole();
       if (selectedRole) appAdmin.selectedRoleId = selectedRole.id;
+      if ((appAdmin.simulation || {}).active && !appAdminRoleById(appAdmin.simulation.roleId)) {
+        appAdmin.simulation = {active: false, roleId: ""};
+      }
       const customRoles = roles.filter((role) => role.custom);
       const mode = rbac.mode || "basic";
       const canSwitch = currentRole() === "owner" && rbac.canSwitchMode !== false;
@@ -7752,15 +8009,17 @@ def ui_preview_html(
       if (createForm) setElementVisible(closestCard(createForm), canManage);
       const rolesList = document.getElementById("appAdminRolesList");
       if (rolesList) {
+        const simulatedRole = appAdminSimulatedRole();
         rolesList.innerHTML = roles.length ? roles.map((role) => {
           const selected = selectedRole && String(selectedRole.id) === String(role.id);
+          const simulated = simulatedRole && String(simulatedRole.id) === String(role.id);
           const canEdit = canManage && role.custom;
           return `
             <div class="profile-passkey ${selected ? "selected" : ""}">
               <div>
                 <div class="profile-passkey-head">
                   <strong>${escapeHtml(role.name || role.key)}</strong>
-                  <span class="tag ${role.assignable ? "good" : ""}">${escapeHtml(role.assignable ? tNext("appAdmin.assignable", "Assignable") : tNext("appAdmin.protectedRole", "Protected"))}</span>
+                  <span class="tag ${simulated ? "blue" : role.assignable ? "good" : ""}">${escapeHtml(simulated ? tNext("appAdmin.simulated", "Simulated") : role.assignable ? tNext("appAdmin.assignable", "Assignable") : tNext("appAdmin.protectedRole", "Protected"))}</span>
                 </div>
                 <div class="profile-passkey-meta">
                   ${escapeHtml(role.key)}
@@ -7805,6 +8064,8 @@ def ui_preview_html(
           : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.selectRoleToEdit", "Select a role to edit."))}</div>`;
       }
       if (featurePreview) featurePreview.innerHTML = appAdminRoleFeaturePreviewHtml(selectedRole);
+      renderAppAdminRoleSimulator(roles);
+      renderAppAdminPermissionMatrix(roles);
       const message = document.getElementById("appAdminRbacMessage");
       if (message && !message.textContent) {
         message.textContent = mode === "advanced"
@@ -7857,23 +8118,23 @@ def ui_preview_html(
       document.getElementById("appAdminRegistrationMode").textContent = appRegistrationModeLabel();
       document.getElementById("appAdminUserCount").textContent = String((appAdmin.users || []).length || currentAuthStatus.user_count || "-");
       document.getElementById("appAdminCredentialCount").textContent = String(currentAuthStatus.credential_count ?? (appAdmin.credentials || []).length ?? "-");
-      const canManageRegistration = isNativeAdminUser() && hasPermission("security.manage_invite_only");
-      const canInviteUsers = isNativeAdminUser() && hasPermission("users.invite");
-      const canViewPasskeys = isNativeAdminUser() && hasPermission("users.manage_passkeys");
-      const canAssignRoles = isNativeAdminUser() && hasPermission("users.assign_roles");
-      const canDisableUsers = isNativeAdminUser() && hasPermission("users.disable");
-      const canViewUsers = isNativeAdminUser() && hasAnyPermission(["users.view", "users.assign_roles", "users.disable", "users.delete"]);
-      const canViewGroups = hasAnyPermission(["groups.view", "groups.create", "groups.invite"]);
-      const canManageGroups = hasAnyPermission(["groups.create", "groups.invite"]);
+      const canManageRegistration = isNativeAdminUser() && hasActualPermission("security.manage_invite_only");
+      const canInviteUsers = isNativeAdminUser() && hasActualPermission("users.invite");
+      const canViewPasskeys = isNativeAdminUser() && hasActualPermission("users.manage_passkeys");
+      const canAssignRoles = isNativeAdminUser() && hasActualPermission("users.assign_roles");
+      const canDisableUsers = isNativeAdminUser() && hasActualPermission("users.disable");
+      const canViewUsers = isNativeAdminUser() && hasActualAnyPermission(["users.view", "users.assign_roles", "users.disable", "users.delete"]);
+      const canViewGroups = hasActualAnyPermission(["groups.view", "groups.create", "groups.invite"]);
+      const canManageGroups = hasActualAnyPermission(["groups.create", "groups.invite"]);
       setElementVisible(closestCard(document.getElementById("appAdminUsersList")), canViewUsers);
       setElementVisible(closestCard(document.getElementById("appAdminGroupsList")), canViewGroups);
       setElementVisible(closestCard(document.getElementById("appAdminInviteForm")), canInviteUsers);
       setElementVisible(closestCard(document.getElementById("appAdminCredentialsList")), canViewPasskeys);
       setElementVisible(document.getElementById("appAdminGroupForm"), canManageGroups);
-      setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasPermission("admin.restore_functional"));
-      setElementVisible(document.getElementById("appAdminExportBackupButton"), hasAnyPermission(["admin.backup", "collection.export_functional"]));
-      setElementVisible(document.getElementById("appAdminValidateBackupButton"), hasPermission("admin.restore_functional"));
-      setElementVisible(document.getElementById("appAdminRestoreBackupButton"), hasPermission("admin.restore_functional"));
+      setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasActualPermission("admin.restore_functional"));
+      setElementVisible(document.getElementById("appAdminExportBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
+      setElementVisible(document.getElementById("appAdminValidateBackupButton"), hasActualPermission("admin.restore_functional"));
+      setElementVisible(document.getElementById("appAdminRestoreBackupButton"), hasActualPermission("admin.restore_functional"));
       document.querySelectorAll("[data-app-admin-registration-mode]").forEach((button) => {
         const active = button.dataset.appAdminRegistrationMode === mode;
         button.classList.toggle("hidden", !canManageRegistration);
@@ -8044,7 +8305,7 @@ def ui_preview_html(
       }
     }
     async function setAppAdminRegistrationMode(mode) {
-      if (!isNativeAdminUser() || !hasPermission("security.manage_invite_only")) return;
+      if (!isNativeAdminUser() || !hasActualPermission("security.manage_invite_only")) return;
       const publicRegistration = mode === "public";
       setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.savingMode", "Saving registration mode..."));
       try {
@@ -8063,7 +8324,7 @@ def ui_preview_html(
     }
     async function createAppAdminInvite(event) {
       if (event) event.preventDefault();
-      if (!isNativeAdminUser() || !hasPermission("users.invite")) return;
+      if (!isNativeAdminUser() || !hasActualPermission("users.invite")) return;
       const input = document.getElementById("appAdminInviteUsername");
       const username = String(input?.value || "").trim();
       const output = document.getElementById("appAdminInviteCodeOutput");
@@ -8090,14 +8351,14 @@ def ui_preview_html(
       }
     }
     async function deleteAppAdminInvite(inviteId) {
-      if (!isNativeAdminUser() || !hasPermission("users.invite")) return;
+      if (!isNativeAdminUser() || !hasActualPermission("users.invite")) return;
       if (!inviteId) return;
       await authApiJson(`/api/next/auth/invite/${encodeURIComponent(inviteId)}`, {method: "DELETE"});
       await loadAppAdmin();
       setAppAdminMessage("appAdminInviteMessage", tNext("appAdmin.inviteDeleted", "Invite deleted."), "good");
     }
     async function updateAppAdminUserRole(userId, role) {
-      if (!isNativeAdminUser() || !hasPermission("users.assign_roles")) return;
+      if (!isNativeAdminUser() || !hasActualPermission("users.assign_roles")) return;
       if (!userId || !role) return;
       setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.savingUser", "Saving user..."));
       try {
@@ -8113,7 +8374,7 @@ def ui_preview_html(
       }
     }
     async function updateAppAdminUserStatus(userId, status) {
-      if (!isNativeAdminUser() || !hasPermission("users.disable")) return;
+      if (!isNativeAdminUser() || !hasActualPermission("users.disable")) return;
       if (!userId || !status) return;
       setAppAdminMessage("appAdminUsersMessage", tNext("appAdmin.savingUser", "Saving user..."));
       try {
@@ -8222,7 +8483,7 @@ def ui_preview_html(
     }
     async function createAppAdminGroup(event) {
       if (event) event.preventDefault();
-      if (!hasPermission("groups.create")) return;
+      if (!hasActualPermission("groups.create")) return;
       const input = document.getElementById("appAdminGroupName");
       const name = String(input?.value || "").trim();
       if (!name) {
@@ -8245,7 +8506,7 @@ def ui_preview_html(
       }
     }
     async function addAppAdminGroupMember(groupId, userId, role) {
-      if (!hasAnyPermission(["groups.invite", "groups.create"])) return;
+      if (!hasActualAnyPermission(["groups.invite", "groups.create"])) return;
       if (!groupId || !userId) return;
       setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.savingGroup", "Saving group..."));
       try {
@@ -8261,7 +8522,7 @@ def ui_preview_html(
       }
     }
     async function removeAppAdminGroupMember(groupId, userId) {
-      if (!hasAnyPermission(["groups.invite", "groups.create"])) return;
+      if (!hasActualAnyPermission(["groups.invite", "groups.create"])) return;
       if (!groupId || !userId) return;
       setAppAdminMessage("appAdminGroupsMessage", tNext("appAdmin.savingGroup", "Saving group..."));
       try {
@@ -8482,7 +8743,7 @@ def ui_preview_html(
       return `discvault-functional-${new Date().toISOString().slice(0, 10)}.zip`;
     }
     async function exportAppAdminBackupZip() {
-      if (!hasAnyPermission(["admin.backup", "collection.export_functional"])) return;
+      if (!hasActualAnyPermission(["admin.backup", "collection.export_functional"])) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupExporting", "Creating backup ZIP..."));
       try {
         const response = await fetch("/api/next/backup/export", {
@@ -8511,7 +8772,7 @@ def ui_preview_html(
       }
     }
     async function validateAppAdminBackupZip() {
-      if (!hasPermission("admin.restore_functional")) return;
+      if (!hasActualPermission("admin.restore_functional")) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupValidating", "Validating backup ZIP..."));
       try {
         const payload = await uploadAppAdminBackupZip("/api/next/backup/validate");
@@ -8524,7 +8785,7 @@ def ui_preview_html(
       }
     }
     async function restoreAppAdminBackupZip() {
-      if (!hasPermission("admin.restore_functional")) return;
+      if (!hasActualPermission("admin.restore_functional")) return;
       if (!confirm(tNext("appAdmin.backupRestoreConfirm", "Restore this ZIP and replace the functional collection data? Auth, passkeys, plugins and secrets are not restored."))) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
       try {
@@ -11646,6 +11907,14 @@ def ui_preview_html(
       document.getElementById("appAdminRoleEditForm")?.addEventListener("submit", (event) => saveAppAdminRole(event));
       document.getElementById("appAdminSelectAllPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(true));
       document.getElementById("appAdminClearPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(false));
+      document.getElementById("appAdminRoleSimulationSelect")?.addEventListener("change", (event) => {
+        appAdmin.simulation.roleId = event.target.value || "";
+        if ((appAdmin.simulation || {}).active) refreshAppPermissionSurface();
+        renderAppAdminRbac();
+      });
+      document.getElementById("appAdminStartSimulationButton")?.addEventListener("click", () => setAppAdminRoleSimulation(true));
+      document.getElementById("appAdminStopSimulationButton")?.addEventListener("click", () => setAppAdminRoleSimulation(false));
+      document.getElementById("appRoleSimulationStopButton")?.addEventListener("click", () => setAppAdminRoleSimulation(false));
       document.getElementById("appAdminRolesList")?.addEventListener("click", (event) => {
         const selectButton = event.target.closest("[data-app-admin-role-select]");
         const deleteButton = event.target.closest("[data-app-admin-role-delete]");

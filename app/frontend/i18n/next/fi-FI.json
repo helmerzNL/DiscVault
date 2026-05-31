@@ -751,5 +751,17 @@
   "appAdmin.featureBackupExport": "Vie kokoelman varmuuskopiot",
   "appAdmin.featureBackupRestore": "Palauta kokoelman varmuuskopiot",
   "appAdmin.featureUsers": "Hallitse käyttäjiä",
-  "appAdmin.featureRbac": "Hallitse rooleja ja RBAC-tilaa"
+  "appAdmin.featureRbac": "Hallitse rooleja ja RBAC-tilaa",
+  "appAdmin.roleSimulator": "Roolisimulaattori",
+  "appAdmin.roleSimulatorHelp": "Esikatsele sovellusta roolina muuttamatta oikeaa Owner-istuntoasi.",
+  "appAdmin.simulateRole": "Simuloi roolia",
+  "appAdmin.startRoleSimulation": "Aloita simulointi",
+  "appAdmin.stopRoleSimulation": "Lopeta simulointi",
+  "appAdmin.simulationActiveFor": "Testataan roolina {role}",
+  "appAdmin.simulationAdminNote": "Backend-pyynnöt käyttävät yhä oikeaa istuntoasi.",
+  "appAdmin.simulationInactive": "Simulointi on pois päältä.",
+  "appAdmin.simulated": "Simuloitu",
+  "appAdmin.permissionMatrix": "Oikeusmatriisi",
+  "appAdmin.permissionMatrixHelp": "Vertaa, mitä sovellustoimintoja kukin rooli voi käyttää.",
+  "appAdmin.features": "Toiminnot"
 }
