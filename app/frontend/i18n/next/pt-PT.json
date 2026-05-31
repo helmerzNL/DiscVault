@@ -54,6 +54,7 @@
   "common.close": "Fechar",
   "common.edit": "Editar",
   "language.label": "Idioma",
+  "uiPreview.navLists": "Listas",
   "migration.containers": "Contentores",
   "migration.dataDirectory": "Diretório de dados",
   "migration.databaseHash": "Hash da base de dados",

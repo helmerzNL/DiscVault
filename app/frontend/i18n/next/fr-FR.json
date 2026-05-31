@@ -54,6 +54,7 @@
   "common.close": "Fermer",
   "common.edit": "Modifier",
   "language.label": "Langue",
+  "uiPreview.navLists": "Listes",
   "migration.containers": "Conteneurs",
   "migration.containersHelp": "Box-sets et collections",
   "migration.dataDirectory": "Répertoire de données",

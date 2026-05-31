@@ -54,6 +54,7 @@
   "common.close": "Sulje",
   "common.edit": "Muokkaa",
   "language.label": "Kieli",
+  "uiPreview.navLists": "Listat",
   "migration.containers": "Säiliöt",
   "migration.containersHelp": "Box-setit ja kokoelmat",
   "migration.dataDirectory": "Datakansio",
