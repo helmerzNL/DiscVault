@@ -286,6 +286,114 @@ def html_response(html: str):
     return result
 
 
+PWA_ICON_ASSETS = {
+    "apple-touch-icon-152.png",
+    "apple-touch-icon-167.png",
+    "apple-touch-icon.png",
+    "favicon-32.png",
+    "favicon-192.png",
+    "favicon-512.png",
+    "header-logo.svg",
+    "icon.svg",
+    "logo.svg",
+    "pwa-icon-192.png",
+    "pwa-icon-512.png",
+    "pwa-maskable-192.png",
+    "pwa-maskable-512.png",
+}
+
+
+def pwa_manifest_payload(asset_prefix: str = "/api/next/assets", start_url: str = "/") -> dict[str, Any]:
+    assets = asset_prefix.rstrip("/")
+    return {
+        "id": "/",
+        "name": "DiscVault",
+        "short_name": "DiscVault",
+        "description": "4K UHD Blu-ray Collection Manager",
+        "lang": "nl-NL",
+        "dir": "ltr",
+        "start_url": start_url,
+        "scope": "/",
+        "display": "standalone",
+        "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+        "orientation": "any",
+        "background_color": "#0a0a0f",
+        "theme_color": "#111214",
+        "categories": ["entertainment", "lifestyle", "productivity"],
+        "prefer_related_applications": False,
+        "launch_handler": {"client_mode": ["navigate-existing", "auto"]},
+        "icons": [
+            {
+                "src": f"{assets}/pwa-icon-192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": f"{assets}/pwa-icon-512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": f"{assets}/pwa-maskable-192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "maskable",
+            },
+            {
+                "src": f"{assets}/pwa-maskable-512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "maskable",
+            },
+        ],
+        "shortcuts": [
+            {
+                "name": "Collectie",
+                "short_name": "Collectie",
+                "url": "/",
+                "icons": [{"src": f"{assets}/pwa-icon-192.png", "sizes": "192x192", "type": "image/png"}],
+            },
+            {
+                "name": "Toevoegen",
+                "short_name": "Toevoegen",
+                "url": "/import",
+                "icons": [{"src": f"{assets}/pwa-icon-192.png", "sizes": "192x192", "type": "image/png"}],
+            },
+            {
+                "name": "Profiel",
+                "short_name": "Profiel",
+                "url": "/profile",
+                "icons": [{"src": f"{assets}/pwa-icon-192.png", "sizes": "192x192", "type": "image/png"}],
+            },
+        ],
+    }
+
+
+def pwa_head_tags(asset_prefix: str = "/api/next/assets", manifest_href: str = "/manifest.json") -> str:
+    assets = asset_prefix.rstrip("/")
+    return f"""
+  <meta name="application-name" content="DiscVault">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="DiscVault">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
+  <meta name="msapplication-TileColor" content="#111214">
+  <meta name="msapplication-TileImage" content="{assets}/pwa-icon-192.png">
+  <link rel="manifest" href="{manifest_href}">
+  <link rel="apple-touch-icon" sizes="152x152" href="{assets}/apple-touch-icon-152.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="{assets}/apple-touch-icon-167.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="{assets}/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="{assets}/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="{assets}/pwa-icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="{assets}/pwa-icon-512.png">
+  <link rel="mask-icon" href="{assets}/icon.svg" color="#e8c547">""".rstrip()
+
+
 def next_i18n_dir() -> Path:
     configured = os.environ.get("DISCVAULT_NEXT_I18N_DIR", "").strip()
     if configured:
@@ -1222,8 +1330,9 @@ def migration_dashboard_html() -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>DiscVault Data Migration</title>
+""" + pwa_head_tags() + """
   <style>
     :root {
       color-scheme: dark;
@@ -3237,8 +3346,9 @@ def ui_preview_html(
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>""" + h(title) + """</title>
+""" + pwa_head_tags() + """
   <script>
     (function () {
       try {
@@ -3289,15 +3399,36 @@ def ui_preview_html(
       --shadow-soft: 0 12px 34px rgba(0, 0, 0, 0.26);
     }
     * { box-sizing: border-box; }
+    html {
+      min-height: 100%;
+      overscroll-behavior: none;
+    }
     body {
       margin: 0;
       min-height: 100vh;
+      min-height: 100dvh;
       font-family: var(--font-sans);
       color: var(--text);
       background:
         linear-gradient(180deg, rgba(255,255,255,0.48), transparent 32rem),
         var(--bg);
       letter-spacing: 0;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    @media (display-mode: standalone) {
+      body {
+        background-color: var(--bg);
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      input,
+      textarea,
+      [contenteditable="true"] {
+        user-select: text;
+        -webkit-user-select: text;
+      }
     }
     html[data-theme="dark"] body {
       background:
@@ -7134,6 +7265,17 @@ def ui_preview_html(
       selectedRoleId: "",
       users: []
     };
+    function registerAppServiceWorker() {
+      if (!("serviceWorker" in navigator)) return;
+      const canRegister = location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1";
+      if (!canRegister) return;
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/service-worker.js", {updateViaCache: "none"})
+          .then((registration) => registration.update().catch(() => {}))
+          .catch((error) => console.warn("DiscVault service worker registration failed", error));
+      });
+    }
+    registerAppServiceWorker();
     let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null, addResult: null};
     let importScanner = {
       running: false,
@@ -12385,8 +12527,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>DiscVault Next Collection</title>
+""" + pwa_head_tags() + """
   <script>
     (function () {
       try {
@@ -16321,8 +16464,9 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>""" + h(title) + """ - DiscVault Next</title>
+""" + pwa_head_tags() + """
   <style>
     :root {
       color-scheme: dark;
@@ -16838,8 +16982,9 @@ def container_detail_html(detail: dict[str, Any]) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>""" + h(title) + """ - DiscVault Next</title>
+""" + pwa_head_tags() + """
   <style>
     :root {
       color-scheme: dark;
@@ -20743,6 +20888,7 @@ PUBLIC_NEXT_PATHS = {
     "/api/next/collection/",
     "/api/next/health",
     "/api/next/i18n",
+    "/api/next/manifest.json",
     "/api/next/ui-preview",
     "/api/next/ui-preview/",
     "/api/next/migration",
@@ -20844,23 +20990,44 @@ def register_routes(flask_app: Flask) -> None:
             200 if is_ready else 503,
         )
 
+    @flask_app.get("/manifest.json")
+    @flask_app.get("/api/next/manifest.json")
+    def next_pwa_manifest():
+        result = jsonify(pwa_manifest_payload())
+        result.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return result
+
+    @flask_app.get("/service-worker.js")
+    def next_service_worker():
+        path = next_frontend_dir() / "service-worker.js"
+        if not path.exists() or not path.is_file():
+            raise NextApiError("Service worker not found", 404)
+        result = send_file(path, mimetype="application/javascript")
+        result.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return result
+
     @flask_app.get("/api/next/assets/<path:asset_name>")
     def next_frontend_asset(asset_name: str):
-        allowed_assets = {
-            "apple-touch-icon.png",
-            "favicon-32.png",
-            "favicon-192.png",
-            "header-logo.svg",
-            "icon.svg",
-            "logo.svg",
-        }
         safe_name = Path(asset_name).name
-        if safe_name != asset_name or safe_name not in allowed_assets:
+        if safe_name != asset_name or safe_name not in PWA_ICON_ASSETS:
             raise NextApiError("Asset not found", 404)
         path = next_frontend_dir() / safe_name
         if not path.exists() or not path.is_file():
             raise NextApiError("Asset not found", 404)
         return send_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+
+    @flask_app.get("/apple-touch-icon-152.png")
+    @flask_app.get("/apple-touch-icon-167.png")
+    @flask_app.get("/apple-touch-icon.png")
+    @flask_app.get("/favicon-32.png")
+    @flask_app.get("/favicon-192.png")
+    @flask_app.get("/favicon-512.png")
+    @flask_app.get("/pwa-icon-192.png")
+    @flask_app.get("/pwa-icon-512.png")
+    @flask_app.get("/pwa-maskable-192.png")
+    @flask_app.get("/pwa-maskable-512.png")
+    def next_root_pwa_asset():
+        return next_frontend_asset(request.path.rsplit("/", 1)[-1])
 
     @flask_app.get("/api/next/i18n")
     def next_i18n_manifest():
