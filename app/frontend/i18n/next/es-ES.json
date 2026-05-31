@@ -37,7 +37,7 @@
   "collection.movies": "Películas",
   "collection.noPoster": "Sin póster",
   "collection.people": "Personas",
-  "collection.searchPlaceholder": "Buscar título, código de barras, formato...",
+  "collection.searchPlaceholder": "Buscar titulo, codigo de barras, formato, equipo...",
   "collection.signInRequired": "Inicio de sesión requerido",
   "collection.signInRequiredMessage": "Inicia sesión con tu passkey para cargar la colección.",
   "collection.shown": "mostradas",

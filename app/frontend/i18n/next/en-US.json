@@ -52,7 +52,7 @@
   "collection.movies": "Movies",
   "collection.noPoster": "No poster",
   "collection.people": "People",
-  "collection.searchPlaceholder": "Search title, barcode, format...",
+  "collection.searchPlaceholder": "Search title, barcode, format, crew...",
   "collection.signInRequired": "Sign in required",
   "collection.signInRequiredMessage": "Sign in with your passkey to load the collection.",
   "collection.shown": "shown",

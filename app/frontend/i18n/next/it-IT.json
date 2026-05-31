@@ -37,7 +37,7 @@
   "collection.movies": "Film",
   "collection.noPoster": "Nessun poster",
   "collection.people": "Persone",
-  "collection.searchPlaceholder": "Cerca titolo, codice a barre, formato...",
+  "collection.searchPlaceholder": "Cerca titolo, codice a barre, formato, crew...",
   "collection.signInRequired": "Accesso richiesto",
   "collection.signInRequiredMessage": "Accedi con la tua passkey per caricare la collezione.",
   "collection.shown": "mostrati",

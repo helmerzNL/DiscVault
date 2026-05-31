@@ -37,7 +37,7 @@
   "collection.movies": "Film",
   "collection.noPoster": "Ingen plakat",
   "collection.people": "Personer",
-  "collection.searchPlaceholder": "Søg titel, stregkode, format...",
+  "collection.searchPlaceholder": "Sog titel, stregkode, format, crew...",
   "collection.signInRequired": "Login kræves",
   "collection.signInRequiredMessage": "Log ind med din passkey for at indlæse samlingen.",
   "collection.shown": "vist",

@@ -37,7 +37,7 @@
   "collection.movies": "Elokuvat",
   "collection.noPoster": "Ei julistetta",
   "collection.people": "Henkilöt",
-  "collection.searchPlaceholder": "Hae otsikkoa, viivakoodia, formaattia...",
+  "collection.searchPlaceholder": "Hae otsikkoa, viivakoodia, formaattia, crew...",
   "collection.signInRequired": "Kirjautuminen vaaditaan",
   "collection.signInRequiredMessage": "Kirjaudu passkeyllä ladataksesi kokoelman.",
   "collection.shown": "näytetty",

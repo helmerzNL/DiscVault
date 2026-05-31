@@ -37,7 +37,7 @@
   "collection.movies": "Filme",
   "collection.noPoster": "Kein Poster",
   "collection.people": "Personen",
-  "collection.searchPlaceholder": "Titel, Barcode, Format suchen...",
+  "collection.searchPlaceholder": "Titel, Barcode, Format, Crew suchen...",
   "collection.signInRequired": "Anmeldung erforderlich",
   "collection.signInRequiredMessage": "Melde dich mit deinem Passkey an, um die Sammlung zu laden.",
   "collection.shown": "angezeigt",
