@@ -3947,6 +3947,15 @@ def ui_preview_html(
       align-items: center;
       margin-top: 22px;
     }
+    .startup-language {
+      margin-top: 18px;
+      width: min(360px, 100%);
+    }
+    .startup-language span {
+      color: var(--muted);
+      font-size: .86rem;
+      font-weight: 700;
+    }
     .login-primary,
     .primary-button {
       min-height: 44px;
@@ -7501,6 +7510,10 @@ def ui_preview_html(
         </div>
       </div>
       <div class="startup-steps" id="startupSteps"></div>
+      <label class="language-picker startup-language">
+        <span data-next-i18n="language.label">Language</span>
+        <select id="startupLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+      </label>
       <div class="startup-actions">
         <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
         <button type="button" class="secondary-button" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
@@ -11033,7 +11046,7 @@ def ui_preview_html(
       applyAppPermissionVisibility();
     }
     function renderLanguageSelect() {
-      document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect").forEach((select) => {
+      document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
         select.innerHTML = localeState.locales.map((item) => (
           `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(languageLabel(item))}</option>`
         )).join("");
@@ -15385,7 +15398,7 @@ def ui_preview_html(
       renderLanguageSelect();
       loadLocale(localeState.locale);
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
-      document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect").forEach((select) => {
+      document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
         select.addEventListener("change", (event) => loadLocale(event.target.value));
       });
       document.querySelectorAll("[data-theme-choice]").forEach((button) => {
