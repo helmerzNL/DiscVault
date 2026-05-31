@@ -11,12 +11,14 @@ try:
     from app.backend.next_app import NextApiError
     from app.backend.next_app import container_payload
     from app.backend.next_app import normalize_container_type
+    from app.backend.next_app import with_preview_media_urls
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
     if exc.name != "flask":
         raise
     NextApiError = None
     container_payload = None
     normalize_container_type = None
+    with_preview_media_urls = None
 
 
 @unittest.skipIf(container_payload is None, "Flask is not installed in this test environment")
@@ -55,6 +57,28 @@ class NextContainerPolicyTests(unittest.TestCase):
         self.assertIsNone(payload["barcode"])
         self.assertIsNone(payload["badge_label"])
         self.assertEqual(payload["metadata"], {"sync_revision": 1})
+
+    def test_preview_media_urls_falls_back_to_container_metadata_artwork(self):
+        row = {
+            "id": "container-1",
+            "metadata": {
+                "poster_url": "https://image.example/poster.jpg",
+                "backdrop_url": "https://image.example/backdrop.jpg",
+            },
+            "poster_asset_id": None,
+            "poster_asset_storage_backend": None,
+            "poster_asset_storage_key": None,
+            "poster_asset_source_url": None,
+            "backdrop_asset_id": None,
+            "backdrop_asset_storage_backend": None,
+            "backdrop_asset_storage_key": None,
+            "backdrop_asset_source_url": None,
+        }
+
+        preview = with_preview_media_urls(row)
+
+        self.assertEqual(preview["poster_url"], "https://image.example/poster.jpg")
+        self.assertEqual(preview["backdrop_url"], "https://image.example/backdrop.jpg")
 
 
 if __name__ == "__main__":

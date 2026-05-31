@@ -3341,6 +3341,9 @@ def with_preview_media_urls(row: dict[str, Any]) -> dict[str, Any]:
             "source_url": data.pop(f"{kind}_asset_source_url", None),
         }
         url = media_asset_public_url(asset)
+        metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+        if not url:
+            url = first_usable_image(metadata.get(f"{kind}_url"), metadata.get(f"{kind}Url"), metadata.get(kind))
         if url:
             data[f"{kind}_url"] = url
     return data
@@ -26927,7 +26930,7 @@ def register_routes(flask_app: Flask) -> None:
                     """,
                     params,
                 )
-                items = cur.fetchall()
+                items = [with_preview_media_urls(row) for row in cur.fetchall()]
         return response({"status": "ok", "items": items})
 
     @flask_app.get("/api/next/containers/<container_id>")
