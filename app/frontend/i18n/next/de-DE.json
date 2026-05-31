@@ -592,5 +592,14 @@
   "preferences.theme": "Design",
   "preferences.themeHelp": "Systemdesign folgen oder eine feste Darstellung waehlen.",
   "preferences.language": "Sprache",
-  "preferences.languageHelp": "Waehle die Sprache fuer DiscVault auf diesem Geraet."
+  "preferences.languageHelp": "Waehle die Sprache fuer DiscVault auf diesem Geraet.",
+  "appAdmin.tabMetadata": "Metadaten",
+  "appAdmin.metadataOperations": "Metadaten",
+  "appAdmin.metadataOperationsHelp": "Pruefe Metadaten-Aktualisierungen und Quellenaktivitaet ausserhalb des Importablaufs.",
+  "appAdmin.refreshMetadataJobs": "Metadatenjobs aktualisieren",
+  "appAdmin.metadataJobs": "Metadatenjobs",
+  "appAdmin.metadataJob": "Metadatenjob",
+  "appAdmin.noMetadataJobs": "Noch keine Metadatenjobs.",
+  "appAdmin.loadingMetadataJobs": "Metadatenjobs werden geladen...",
+  "appAdmin.metadataJobsLoaded": "Metadatenjobs geladen."
 }

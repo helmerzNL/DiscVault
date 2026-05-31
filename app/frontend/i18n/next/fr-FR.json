@@ -592,5 +592,14 @@
   "preferences.theme": "Theme",
   "preferences.themeHelp": "Suivre le theme du systeme ou choisir une apparence fixe.",
   "preferences.language": "Langue",
-  "preferences.languageHelp": "Choisis la langue de DiscVault sur cet appareil."
+  "preferences.languageHelp": "Choisis la langue de DiscVault sur cet appareil.",
+  "appAdmin.tabMetadata": "Metadonnees",
+  "appAdmin.metadataOperations": "Metadonnees",
+  "appAdmin.metadataOperationsHelp": "Consulte les taches de rafraichissement et l activite des sources hors du flux d import.",
+  "appAdmin.refreshMetadataJobs": "Actualiser les taches metadata",
+  "appAdmin.metadataJobs": "Taches metadata",
+  "appAdmin.metadataJob": "Tache metadata",
+  "appAdmin.noMetadataJobs": "Aucune tache metadata pour le moment.",
+  "appAdmin.loadingMetadataJobs": "Chargement des taches metadata...",
+  "appAdmin.metadataJobsLoaded": "Taches metadata chargees."
 }

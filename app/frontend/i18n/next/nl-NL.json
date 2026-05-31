@@ -686,5 +686,14 @@
   "preferences.theme": "Thema",
   "preferences.themeHelp": "Volg het systeemthema of kies een vaste weergave.",
   "preferences.language": "Taal",
-  "preferences.languageHelp": "Kies de taal voor DiscVault op dit apparaat."
+  "preferences.languageHelp": "Kies de taal voor DiscVault op dit apparaat.",
+  "appAdmin.tabMetadata": "Metadata",
+  "appAdmin.metadataOperations": "Metadata",
+  "appAdmin.metadataOperationsHelp": "Bekijk metadata-ververstaken en bronactiviteit los van de importflow.",
+  "appAdmin.refreshMetadataJobs": "Metadatataken verversen",
+  "appAdmin.metadataJobs": "Metadatataken",
+  "appAdmin.metadataJob": "Metadatataak",
+  "appAdmin.noMetadataJobs": "Nog geen metadatataken.",
+  "appAdmin.loadingMetadataJobs": "Metadatataken laden...",
+  "appAdmin.metadataJobsLoaded": "Metadatataken geladen."
 }

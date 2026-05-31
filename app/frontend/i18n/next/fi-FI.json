@@ -592,5 +592,14 @@
   "preferences.theme": "Teema",
   "preferences.themeHelp": "Seuraa jarjestelman teemaa tai valitse pysyva ulkoasu.",
   "preferences.language": "Kieli",
-  "preferences.languageHelp": "Valitse DiscVaultin kieli talla laitteella."
+  "preferences.languageHelp": "Valitse DiscVaultin kieli talla laitteella.",
+  "appAdmin.tabMetadata": "Metatiedot",
+  "appAdmin.metadataOperations": "Metatiedot",
+  "appAdmin.metadataOperationsHelp": "Tarkastele metatietojen paivitystehtavia ja lahdeaktiivisuutta importin ulkopuolella.",
+  "appAdmin.refreshMetadataJobs": "Paivita metatietotehtavat",
+  "appAdmin.metadataJobs": "Metatietotehtavat",
+  "appAdmin.metadataJob": "Metatietotehtava",
+  "appAdmin.noMetadataJobs": "Ei viela metatietotehtavia.",
+  "appAdmin.loadingMetadataJobs": "Ladataan metatietotehtavia...",
+  "appAdmin.metadataJobsLoaded": "Metatietotehtavat ladattu."
 }

@@ -4128,9 +4128,9 @@ def ui_preview_html(
       z-index: 2;
     }
     .digital-source-badge {
-      min-width: 22px;
-      height: 22px;
-      padding: 0 6px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
       border-radius: 999px;
       display: inline-grid;
       place-items: center;
@@ -4142,6 +4142,11 @@ def ui_preview_html(
       line-height: 1;
       backdrop-filter: blur(12px) saturate(150%);
       box-shadow: 0 6px 18px rgba(0,0,0,.24);
+    }
+    .digital-source-badge svg {
+      width: 15px;
+      height: 15px;
+      display: block;
     }
     .side-stack {
       display: grid;
@@ -5852,11 +5857,6 @@ def ui_preview_html(
                 <h3 data-next-i18n="importCenter.jobs">Jobs</h3>
                 <span class="tag" id="importCenterJobCount">-</span>
               </div>
-              <div class="detail-submenu import-job-tabs" role="tablist" aria-label="Import job type" data-next-i18n-aria="importCenter.jobs">
-                <button type="button" class="active" data-import-job-type="migration.import_sqlite" data-next-i18n="importCenter.jobType.collection">Collection</button>
-                <button type="button" data-import-job-type="metadata.refresh_movie" data-next-i18n="importCenter.jobType.metadata">Metadata</button>
-                <button type="button" data-import-job-type="plugin.execute" data-next-i18n="importCenter.jobType.plugins">Plugins</button>
-              </div>
               <div class="import-job-list" id="importCenterJobs"></div>
             </div>
           </div>
@@ -6286,6 +6286,7 @@ def ui_preview_html(
           <button type="button" data-app-admin-tab="users" data-next-i18n="appAdmin.tabUsers">Users</button>
           <button type="button" data-app-admin-tab="groups" data-next-i18n="appAdmin.tabGroups">Groups</button>
           <button type="button" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
+          <button type="button" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
         </nav>
         <section class="app-admin-panel active" data-app-admin-panel="access">
           <section class="profile-grid">
@@ -6396,6 +6397,22 @@ def ui_preview_html(
             </div>
           </section>
         </section>
+        <section class="app-admin-panel" data-app-admin-panel="metadata">
+          <section class="profile-grid">
+            <div class="detail-card profile-card">
+              <h3 data-next-i18n="appAdmin.metadataOperations">Metadata</h3>
+              <p data-next-i18n="appAdmin.metadataOperationsHelp">Review metadata refresh jobs and source activity away from the import workflow.</p>
+              <div class="profile-action-row">
+                <button type="button" class="secondary-button" id="appAdminRefreshMetadataJobsButton" data-next-i18n="appAdmin.refreshMetadataJobs">Refresh metadata jobs</button>
+              </div>
+              <div class="login-message" id="appAdminMetadataMessage"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.metadataJobs">Metadata jobs</h3>
+              <div class="profile-passkey-list" id="appAdminMetadataJobsList"></div>
+            </div>
+          </section>
+        </section>
       </section>
     </main>
   </div>
@@ -6465,12 +6482,13 @@ def ui_preview_html(
       pluginExecutions: {},
       pluginHealth: {},
       pluginJobs: [],
+      metadataJobs: [],
       plugins: [],
       roles: [],
       assignableRoles: [],
       users: []
     };
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", selectedJobType: "migration.import_sqlite", barcodeLookup: null};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null};
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
     const localeState = {
@@ -6808,6 +6826,40 @@ def ui_preview_html(
         `;
       }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPluginJobs", "No plugin jobs yet."))}</div>`;
     }
+    function renderAppAdminMetadataJobs() {
+      const node = document.getElementById("appAdminMetadataJobsList");
+      if (!node) return;
+      const jobs = appAdmin.metadataJobs || [];
+      node.innerHTML = jobs.length ? jobs.map((job) => {
+        const payload = job.payload || {};
+        const result = job.result || {};
+        const movieId = payload.movieId || result.movieId || "";
+        const dryRun = payload.dryRun ?? result.dryRun;
+        const details = {
+          payload,
+          result: result.result || result,
+          error: job.error || null
+        };
+        return `
+          <div class="profile-passkey">
+            <div class="profile-passkey-head">
+              <strong>${escapeHtml(movieId ? String(movieId).slice(0, 8) : tNext("appAdmin.metadataJob", "Metadata job"))}</strong>
+              <span class="tag ${appAdminJobStatusClass(job.status)}">${escapeHtml(job.status || "-")}</span>
+            </div>
+            <div class="profile-passkey-meta">
+              ${escapeHtml(job.jobType || "metadata.refresh_movie")} &middot;
+              ${escapeHtml((job.createdAt || "").slice(0, 19))}
+              ${dryRun !== undefined ? ` &middot; ${escapeHtml(tNext("importCenter.dryRun", "Dry run"))}: ${escapeHtml(String(dryRun))}` : ""}
+            </div>
+            ${job.error ? `<div class="login-message bad">${escapeHtml(job.error)}</div>` : ""}
+            <details>
+              <summary class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.jobDetails", "Job details"))}</summary>
+              <pre class="job-json">${escapeHtml(jsonPreview(details))}</pre>
+            </details>
+          </div>
+        `;
+      }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noMetadataJobs", "No metadata jobs yet."))}</div>`;
+    }
     function renderAppAdminPlugins() {
       const list = document.getElementById("appAdminPluginsList");
       const plugins = appAdmin.plugins || [];
@@ -6821,6 +6873,7 @@ def ui_preview_html(
       if (configNode) configNode.textContent = String(configNeeded);
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
       renderAppAdminPluginJobs();
+      renderAppAdminMetadataJobs();
       if (!list) return;
       if (!plugins.length) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
@@ -6987,6 +7040,7 @@ def ui_preview_html(
         `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPasskeys", "No passkeys found."))}</div>`;
       }
       renderAppAdminPlugins();
+      renderAppAdminMetadataJobs();
       setAppAdminTab(appAdmin.activeTab || "access");
       renderAppAdminVisibility();
     }
@@ -6994,7 +7048,7 @@ def ui_preview_html(
       if (!isNativeAdminUser()) return;
       setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loading", "Loading admin data..."));
       try {
-        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, pluginJobsPayload] = await Promise.all([
+        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, pluginJobsPayload, metadataJobsPayload] = await Promise.all([
           authApiJson("/api/next/auth/users"),
           authApiJson("/api/next/auth/credentials"),
           authApiJson("/api/next/auth/invite"),
@@ -7002,7 +7056,8 @@ def ui_preview_html(
           authApiJson("/api/next/media-groups?limit=500").catch(() => ({groups: []})),
           authApiJson("/api/next/plugins/registry").catch((error) => ({plugins: [], error: error.message || String(error)})),
           authApiJson("/api/next/digital-sources").catch(() => ({items: []})),
-          authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []}))
+          authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})),
+          authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []}))
         ]);
         appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
@@ -7013,6 +7068,7 @@ def ui_preview_html(
         appAdmin.plugins = pluginsPayload.plugins || [];
         appAdmin.digitalSources = digitalSourcesPayload.items || [];
         appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
+        appAdmin.metadataJobs = metadataJobsPayload.jobs || [];
         const configPayloads = await Promise.all(appAdmin.plugins.map((plugin) =>
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
@@ -7294,6 +7350,17 @@ def ui_preview_html(
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginJobsLoaded", "Plugin jobs loaded."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function refreshAppAdminMetadataJobs() {
+      setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.loadingMetadataJobs", "Loading metadata jobs..."));
+      try {
+        const payload = await authApiJson("/api/next/metadata/jobs?limit=20");
+        appAdmin.metadataJobs = payload.jobs || [];
+        renderAppAdminMetadataJobs();
+        setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.metadataJobsLoaded", "Metadata jobs loaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
       }
     }
     async function refreshAppAdminDigitalSources() {
@@ -7622,10 +7689,18 @@ def ui_preview_html(
       if (!names.length && !Number(movie.digital_count || 0)) return "";
       const uniqueNames = [...new Set(names.length ? names : [tNext("uiPreview.digitalItems", "Digital links")])].slice(0, 3);
       return `<span class="digital-source-badges" aria-label="${escapeHtml(tNext("preferences.showDigitalBadgeOnTiles", "Show Plex/Jellyfin badge on movie tiles"))}">` + uniqueNames.map((name) => {
-        const lower = String(name).toLowerCase();
-        const shortName = lower.includes("jellyfin") ? "J" : lower.includes("plex") ? "P" : String(name).slice(0, 1).toUpperCase();
-        return `<span class="digital-source-badge" title="${escapeHtml(name)}">${escapeHtml(shortName || "D")}</span>`;
+        return `<span class="digital-source-badge" title="${escapeHtml(name)}">${digitalSourceLogoHtml(name)}</span>`;
       }).join("") + `</span>`;
+    }
+    function digitalSourceLogoHtml(name) {
+      const lower = String(name || "").toLowerCase();
+      if (lower.includes("plex")) {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="#E5A00D"><path d="M3.987 8.409c-.96 0-1.587.28-2.12.933v-.72H0v8.88s.038.018.127.037c.138.03.821.187 1.331-.249.441-.377.542-.814.542-1.318v-1.283c.533.573 1.147.813 2 .813 1.84 0 3.253-1.493 3.253-3.48 0-2.12-1.36-3.613-3.266-3.613Zm16.748 5.595.406.591c.391.614.894.906 1.492.908.621-.012 1.064-.562 1.226-.755 0 0-.307-.27-.686-.72-.517-.614-1.214-1.755-1.24-1.803l-1.198 1.779Zm-3.205-1.955c0-2.08-1.52-3.64-3.52-3.64s-3.467 1.587-3.467 3.573a3.48 3.48 0 0 0 3.507 3.52c1.413 0 2.626-.84 3.253-2.293h-2.04l-.093.093c-.427.4-.72.533-1.227.533-.787 0-1.373-.506-1.453-1.266h4.986c.04-.214.054-.307.054-.52Zm-7.671-.219c0 .769.11 1.701.868 2.722l.056.069c-.306.526-.742.88-1.248.88-.399 0-.814-.211-1.138-.579a2.177 2.177 0 0 1-.538-1.441V6.409H9.86l-.001 5.421Zm9.283 3.46h-2.39l2.247-3.332-2.247-3.335h2.39l2.248 3.335-2.248 3.332Zm1.593-1.286Zm-17.162-.342c-.933 0-1.68-.773-1.68-1.72s.76-1.666 1.68-1.666c.92 0 1.68.733 1.68 1.68 0 .946-.733 1.706-1.68 1.706Zm18.361-1.974L24 8.622h-2.391l-.87 1.293 1.195 1.773Zm-9.404-.466c.16-.706.72-1.133 1.493-1.133.773 0 1.373.467 1.507 1.133h-3Z"/></svg>';
+      }
+      if (lower.includes("jellyfin")) {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="#00A4DC"><path d="M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0C25.384 18.573 15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189.518 1.04 7.348 1.027 7.86 0 .511-1.027-2.874-7.19-3.93-7.19z"/></svg>';
+      }
+      return `<span>${escapeHtml(String(name || "D").slice(0, 1).toUpperCase())}</span>`;
     }
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
@@ -8562,14 +8637,6 @@ def ui_preview_html(
         return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
       }
     }
-    function importJobTypeLabel(jobType) {
-      const labels = {
-        "migration.import_sqlite": tNext("importCenter.jobType.collection", "Collection"),
-        "metadata.refresh_movie": tNext("importCenter.jobType.metadata", "Metadata"),
-        "plugin.execute": tNext("importCenter.jobType.plugins", "Plugins")
-      };
-      return labels[jobType] || jobType || tNext("importCenter.jobs", "Jobs");
-    }
     function renderImportSources() {
       const report = importCenter.report || {};
       const sources = report.importSources || [];
@@ -8654,11 +8721,6 @@ def ui_preview_html(
       const list = document.getElementById("importCenterJobs");
       const count = document.getElementById("importCenterJobCount");
       const jobs = importCenter.jobs || [];
-      document.querySelectorAll("[data-import-job-type]").forEach((button) => {
-        const active = button.dataset.importJobType === importCenter.selectedJobType;
-        button.classList.toggle("active", active);
-        button.setAttribute("aria-selected", active ? "true" : "false");
-      });
       if (count) count.textContent = `${jobs.length || 0}`;
       if (!list) return;
       if (!jobs.length) {
@@ -8681,7 +8743,7 @@ def ui_preview_html(
         return `
           <div class="import-job-card">
             <div class="import-job-head">
-              <strong>${escapeHtml(importJobTypeLabel(job.jobType || job.job_type || "import"))}</strong>
+              <strong>${escapeHtml(tNext("importCenter.jobType.collection", "Collection import"))}</strong>
               <span class="tag ${job.status === "completed" ? "good" : ""}">${escapeHtml(job.status || "-")}</span>
             </div>
             <div class="import-job-meta">
@@ -8748,10 +8810,9 @@ def ui_preview_html(
     async function loadImportCenter() {
       setImportCenterMessage(tNext("importCenter.loading", "Loading import status..."));
       try {
-        const selectedJobType = importCenter.selectedJobType || "migration.import_sqlite";
         const [reportPayload, jobsPayload] = await Promise.all([
           authApiJson("/api/next/migration/report"),
-          authApiJson(`/api/next/jobs?jobType=${encodeURIComponent(selectedJobType)}&limit=20`).catch(() => ({jobs: []}))
+          authApiJson("/api/next/jobs?jobType=migration.import_sqlite&limit=20").catch(() => ({jobs: []}))
         ]);
         importCenter.report = reportPayload.report || {};
         importCenter.jobs = jobsPayload.jobs || [];
@@ -9972,6 +10033,7 @@ def ui_preview_html(
         }
       });
       document.getElementById("appAdminRefreshPluginJobsButton")?.addEventListener("click", () => refreshAppAdminPluginJobs());
+      document.getElementById("appAdminRefreshMetadataJobsButton")?.addEventListener("click", () => refreshAppAdminMetadataJobs());
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
         const healthButton = event.target.closest("[data-app-admin-plugin-health]");
@@ -10002,12 +10064,6 @@ def ui_preview_html(
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
-      document.querySelectorAll("[data-import-job-type]").forEach((button) => {
-        button.addEventListener("click", () => {
-          importCenter.selectedJobType = button.dataset.importJobType || "migration.import_sqlite";
-          loadImportCenter();
-        });
-      });
       document.getElementById("importCenterSources")?.addEventListener("click", (event) => {
         const sourceButton = event.target.closest("[data-import-source]");
         if (!sourceButton) return;
