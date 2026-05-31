@@ -415,8 +415,12 @@ def supported_next_locales() -> list[dict[str, str]]:
     for item in NEXT_I18N_LOCALES:
         locale = dict(item)
         flag = NEXT_I18N_FLAGS.get(locale["locale"], "")
+        flag_code = locale["locale"].split("-", 1)[-1].lower()
+        if flag_code == "dk":
+            flag_code = "da"
         locale["flag"] = flag
-        locale["label"] = f"{flag} {locale['nativeName']} ({locale['locale']})".strip()
+        locale["flagCode"] = flag_code
+        locale["label"] = f"{flag} {locale['nativeName']}".strip()
         locales.append(locale)
     return locales
 
@@ -5058,6 +5062,13 @@ def ui_preview_html(
       gap: 8px;
       justify-content: flex-end;
     }
+    .language-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      min-width: min(360px, 100%);
+    }
     .country-picker-button {
       border: 1px solid var(--line);
       border-radius: 999px;
@@ -5071,6 +5082,9 @@ def ui_preview_html(
     .country-picker-button.active {
       border-color: var(--accent);
       background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+    }
+    .language-picker .country-picker-button {
+      min-height: 34px;
     }
     .country-list {
       display: flex;
@@ -6098,6 +6112,7 @@ def ui_preview_html(
       line-height: 1.4;
     }
     .preference-control-row .segmented,
+    .preference-control-row .language-picker,
     .preference-control-row select {
       width: 100%;
       min-width: 0;
@@ -7158,13 +7173,13 @@ def ui_preview_html(
                     <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
                   </div>
                 </div>
-                <label class="preference-control-row" for="nextLanguageSelect">
+                <div class="preference-control-row">
                   <span>
                     <strong data-next-i18n="preferences.language">Language</strong>
                     <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
                   </span>
-                  <select id="nextLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
-                </label>
+                  <div class="language-picker" id="profileLanguagePicker" role="group" aria-label="Language" data-next-i18n-aria="language.label"></div>
+                </div>
               </div>
             </div>
             <div class="detail-subpanel hidden" data-preferences-panel="library">
@@ -9886,11 +9901,33 @@ def ui_preview_html(
         )).join("");
         select.value = localeState.locale;
       });
+      renderProfileLanguagePicker();
     }
     function languageLabel(item) {
-      const flag = item.flag ? `${item.flag} ` : "";
       const name = item.nativeName || item.englishName || item.locale || "";
-      return item.label || `${flag}${name} (${item.locale || ""})`.trim();
+      return item.label || name;
+    }
+    function languageFlagCode(item) {
+      const locale = item?.locale || "";
+      const code = item?.flagCode || locale.split("-", 2)[1] || item?.legacy || locale;
+      return flagCodeForCountry(code);
+    }
+    function renderProfileLanguagePicker() {
+      const picker = document.getElementById("profileLanguagePicker");
+      if (!picker) return;
+      picker.innerHTML = localeState.locales.map((item) => {
+        const active = item.locale === localeState.locale;
+        const label = item.nativeName || item.englishName || item.locale || "";
+        return `
+          <button type="button" class="country-picker-button ${active ? "active" : ""}" data-profile-language="${escapeHtml(item.locale)}" aria-pressed="${active ? "true" : "false"}">
+            ${flagIconHtml(languageFlagCode(item), label)}
+            <span>${escapeHtml(label)}</span>
+          </button>
+        `;
+      }).join("");
+      picker.querySelectorAll("[data-profile-language]").forEach((button) => {
+        button.addEventListener("click", () => loadLocale(button.dataset.profileLanguage));
+      });
     }
     function setTheme(preference) {
       const selected = preference || "system";
