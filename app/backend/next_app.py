@@ -4439,6 +4439,14 @@ def ui_preview_html(
     .import-barcode-form button {
       min-height: 40px;
     }
+    .movie-edit-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .movie-edit-grid label.wide {
+      grid-column: 1 / -1;
+    }
     .movie-detail-page .movie-detail-hero {
       min-height: min(520px, 56vh);
       border: 1px solid var(--line);
@@ -5645,6 +5653,9 @@ def ui_preview_html(
       .import-barcode-form {
         grid-template-columns: 1fr;
       }
+      .movie-edit-grid {
+        grid-template-columns: 1fr;
+      }
       .profile-hero-actions {
         justify-content: stretch;
       }
@@ -5961,6 +5972,14 @@ def ui_preview_html(
                   <span data-next-i18n="importCenter.manualTitle">Titel</span>
                   <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
                 </label>
+                <label>
+                  <span data-next-i18n="importCenter.manualYear">Jaar</span>
+                  <input id="importYearInput" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
+                </label>
+                <label>
+                  <span data-next-i18n="importCenter.manualFormat">Formaat</span>
+                  <input id="importFormatInput" autocomplete="off" maxlength="80" data-next-i18n-placeholder="importCenter.formatPlaceholder" placeholder="4K UHD">
+                </label>
                 <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Preview</button>
                 <button type="button" class="primary-button" id="importMovieAddButton" disabled data-next-i18n="importCenter.addMovie">Add movie</button>
               </form>
@@ -5988,6 +6007,7 @@ def ui_preview_html(
               <div class="hero-meta" id="movieDetailTags"></div>
               <p class="movie-detail-overview" id="movieDetailOverview"></p>
               <div class="movie-detail-actions">
+                <button type="button" class="action secondary hidden" id="movieEditToggleButton" data-next-i18n="common.edit">Edit</button>
                 <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
                 <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
                 <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Refresh history</button>
@@ -5997,6 +6017,71 @@ def ui_preview_html(
           </div>
         </section>
         <section class="movie-detail-body">
+          <div class="detail-card full hidden" id="movieEditPanel">
+            <div class="detail-card-head">
+              <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
+              <button type="button" class="secondary-button" id="movieEditCancelButton" data-next-i18n="common.close">Close</button>
+            </div>
+            <form class="profile-form" id="movieEditForm">
+              <div class="movie-edit-grid">
+                <label for="movieEditTitle">
+                  <span data-next-i18n="movieDetail.fieldTitle">Title</span>
+                  <input id="movieEditTitle" name="title" maxlength="300" autocomplete="off" required>
+                </label>
+                <label for="movieEditOriginalTitle">
+                  <span data-next-i18n="movieDetail.originalTitle">Original title</span>
+                  <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
+                </label>
+                <label for="movieEditSortTitle">
+                  <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
+                  <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
+                </label>
+                <label for="movieEditYear">
+                  <span data-next-i18n="movieDetail.fieldYear">Year</span>
+                  <input id="movieEditYear" name="year" maxlength="40" autocomplete="off">
+                </label>
+                <label for="movieEditBarcode">
+                  <span data-next-i18n="movieDetail.barcode">Barcode</span>
+                  <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
+                </label>
+                <label for="movieEditFormat">
+                  <span data-next-i18n="movieDetail.format">Format</span>
+                  <input id="movieEditFormat" name="format" maxlength="80" autocomplete="off">
+                </label>
+                <label for="movieEditEdition">
+                  <span data-next-i18n="movieDetail.edition">Edition</span>
+                  <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
+                </label>
+                <label for="movieEditReleaseDate">
+                  <span data-next-i18n="movieDetail.releaseDate">Release date</span>
+                  <input id="movieEditReleaseDate" name="release_date" autocomplete="off" placeholder="YYYY-MM-DD">
+                </label>
+                <label for="movieEditCountry">
+                  <span data-next-i18n="movieDetail.country">Country</span>
+                  <input id="movieEditCountry" name="country" maxlength="80" autocomplete="off">
+                </label>
+                <label for="movieEditLanguage">
+                  <span data-next-i18n="movieDetail.language">Language</span>
+                  <input id="movieEditLanguage" name="language" maxlength="80" autocomplete="off">
+                </label>
+                <label for="movieEditLocation">
+                  <span data-next-i18n="movieDetail.location">Location</span>
+                  <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
+                </label>
+                <label for="movieEditOverview" class="wide">
+                  <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
+                  <textarea id="movieEditOverview" name="overview" maxlength="5000"></textarea>
+                </label>
+                <label for="movieEditNotes" class="wide">
+                  <span data-next-i18n="movieDetail.fieldNotes">Notes</span>
+                  <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
+                </label>
+              </div>
+              <div class="profile-form-actions">
+                <button type="submit" class="primary-button" data-next-i18n="movieDetail.saveDetails">Save details</button>
+              </div>
+            </form>
+          </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.release">Release</h3>
             <div class="detail-fields" id="movieDetailRelease"></div>
@@ -6060,13 +6145,19 @@ def ui_preview_html(
               <h2 class="movie-detail-title" id="containerDetailTitle">-</h2>
               <div class="hero-meta" id="containerDetailTags"></div>
               <p class="movie-detail-overview" id="containerDetailDescription"></p>
+              <div class="movie-detail-actions">
+                <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
+              </div>
               <div class="detail-message" id="containerDetailMessage"></div>
             </div>
           </div>
         </section>
         <section class="movie-detail-body">
-          <div class="detail-card full">
-            <h3 data-next-i18n="containerDetail.editDetails">Edit details</h3>
+          <div class="detail-card full hidden" id="containerEditPanel">
+            <div class="detail-card-head">
+              <h3 data-next-i18n="containerDetail.editDetails">Edit details</h3>
+              <button type="button" class="secondary-button" id="containerEditCancelButton" data-next-i18n="common.close">Close</button>
+            </div>
             <form class="profile-form" id="containerEditForm">
               <label for="containerEditTitle">
                 <span data-next-i18n="containerDetail.fieldTitle">Title</span>
@@ -6102,7 +6193,7 @@ def ui_preview_html(
               </div>
             </form>
           </div>
-          <div class="detail-card full">
+          <div class="detail-card full" id="containerAddContentPanel">
             <h3 data-next-i18n="containerDetail.addContent">Add content</h3>
             <div class="container-add-panels">
               <form class="profile-form" id="containerAddMovieForm">
@@ -6855,6 +6946,13 @@ def ui_preview_html(
         button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       });
       setElementVisible(document.getElementById("movieMetadataJobsButton"), hasAnyPermission(["admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"]));
+      const canEditMovies = hasPermission("collection.edit_all");
+      setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
+      if (!canEditMovies) setMovieEditPanelVisible(false);
+      const canEditContainers = hasPermission("containers.edit");
+      setElementVisible(document.getElementById("containerEditToggleButton"), canEditContainers);
+      setElementVisible(document.getElementById("containerAddContentPanel"), canEditContainers);
+      if (!canEditContainers) setContainerEditPanelVisible(false);
       const importCanStart = hasPermission("collection.import");
       const importCanAdd = hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd);
       document.getElementById("importCenterStartButton")?.classList.toggle("hidden", !importCanStart);
@@ -8349,8 +8447,13 @@ def ui_preview_html(
         <strong>${escapeHtml(title || tNext("common.untitled", "Untitled"))}</strong>
         <span>${escapeHtml(subtitle || "")}</span>
       `;
+      let linkAttrs = "";
+      const movieMatch = String(href || "").match(/\\/movies\\/([^/?#]+)/);
+      const containerMatch = String(href || "").match(/\\/containers\\/([^/?#]+)/);
+      if (movieMatch) linkAttrs = ` data-open-movie="${escapeHtml(decodeURIComponent(movieMatch[1]))}"`;
+      if (containerMatch) linkAttrs = ` data-open-container="${escapeHtml(decodeURIComponent(containerMatch[1]))}"`;
       return href
-        ? `<a class="detail-mini-card" href="${escapeHtml(href)}">${body}</a>`
+        ? `<a class="detail-mini-card" href="${escapeHtml(href)}"${linkAttrs}>${body}</a>`
         : `<div class="detail-mini-card">${body}</div>`;
     }
     function personImageUrl(credit) {
@@ -8539,6 +8642,34 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `detail-message ${tone || ""}`.trim();
     }
+    function setMovieEditPanelVisible(show) {
+      const panel = document.getElementById("movieEditPanel");
+      if (!panel) return;
+      panel.classList.toggle("hidden", !show);
+      if (show) document.getElementById("movieEditTitle")?.focus();
+    }
+    function fillMovieEditForm(detail) {
+      const movie = detail.movie || {};
+      const fields = {
+        movieEditTitle: movie.title || "",
+        movieEditOriginalTitle: movie.original_title || "",
+        movieEditSortTitle: movie.sort_title || "",
+        movieEditYear: movie.year || "",
+        movieEditBarcode: movie.barcode || "",
+        movieEditFormat: movie.format || "",
+        movieEditEdition: movie.edition || "",
+        movieEditReleaseDate: movie.release_date || "",
+        movieEditCountry: movie.country || "",
+        movieEditLanguage: movie.language || "",
+        movieEditLocation: movie.location || "",
+        movieEditOverview: movie.overview || "",
+        movieEditNotes: movie.notes || ""
+      };
+      Object.entries(fields).forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input && document.activeElement !== input) input.value = value;
+      });
+    }
     function renderMovieDetail(detail) {
       activeDetailPayload = detail;
       const movie = detail.movie || {};
@@ -8566,6 +8697,7 @@ def ui_preview_html(
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
         (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : ""
       ]);
+      fillMovieEditForm(detail);
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
         [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
@@ -8643,6 +8775,7 @@ def ui_preview_html(
     function showMovieDetailLoading(movieId) {
       activeDetailMovieId = movieId || "";
       activeDetailPayload = null;
+      setMovieEditPanelVisible(false);
       document.getElementById("movieDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("movieDetailOverview").textContent = "";
       document.getElementById("movieDetailTags").innerHTML = "";
@@ -8684,6 +8817,7 @@ def ui_preview_html(
       showLibraryPage(false);
       activeDetailMovieId = "";
       activeDetailPayload = null;
+      setMovieEditPanelVisible(false);
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
@@ -8693,6 +8827,12 @@ def ui_preview_html(
       if (!node) return;
       node.textContent = message || "";
       node.className = `detail-message ${tone || ""}`.trim();
+    }
+    function setContainerEditPanelVisible(show) {
+      const panel = document.getElementById("containerEditPanel");
+      if (!panel) return;
+      panel.classList.toggle("hidden", !show);
+      if (show) document.getElementById("containerEditTitle")?.focus();
     }
     function formTextValue(id) {
       return (document.getElementById(id)?.value || "").trim();
@@ -8811,15 +8951,22 @@ def ui_preview_html(
       fillContainerEditForm(detail);
       renderContainerAddForms(detail);
       const memberMovies = detail.memberMovies || [];
-      const movieCards = memberMovies.map((movie, index) => removableDetailCard(
-        movie.title,
-        [movie.year, movie.format, movie.barcode].filter(Boolean).join(" / "),
-        `/movies/${encodeURIComponent(movie.id)}`,
-        "movie",
-        movie.id,
-        "movie",
-        {orderKind: "movie", canMoveUp: index > 0, canMoveDown: index < memberMovies.length - 1}
-      ));
+      const canEditContainerLinks = hasPermission("containers.edit");
+      const movieCards = memberMovies.map((movie, index) => {
+        const subtitle = [movie.year, movie.format, movie.barcode].filter(Boolean).join(" / ");
+        const href = `/movies/${encodeURIComponent(movie.id)}`;
+        return canEditContainerLinks
+          ? removableDetailCard(
+              movie.title,
+              subtitle,
+              href,
+              "movie",
+              movie.id,
+              "movie",
+              {orderKind: "movie", canMoveUp: index > 0, canMoveDown: index < memberMovies.length - 1}
+            )
+          : miniCard(movie.title, subtitle, href);
+      });
       document.getElementById("containerDetailMovies").innerHTML = movieCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noMovies", "No movies linked yet."))}</div>`;
       const collectionItems = detail.collectionItems || [];
       const itemCards = collectionItems.map((item, index) => {
@@ -8832,7 +8979,9 @@ def ui_preview_html(
           item.format,
           item.barcode
         ].filter(Boolean).join(" / ");
-        return removableDetailCard(item.title, subtitle, href, "item", itemId, itemType, {orderKind: "item", canMoveUp: index > 0, canMoveDown: index < collectionItems.length - 1});
+        return canEditContainerLinks
+          ? removableDetailCard(item.title, subtitle, href, "item", itemId, itemType, {orderKind: "item", canMoveUp: index > 0, canMoveDown: index < collectionItems.length - 1})
+          : miniCard(item.title, subtitle, href);
       });
       document.getElementById("containerDetailItems").innerHTML = itemCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noItems", "No collection items linked yet."))}</div>`;
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
@@ -8847,6 +8996,7 @@ def ui_preview_html(
     function showContainerDetailLoading(containerId) {
       activeContainerId = containerId || "";
       activeContainerPayload = null;
+      setContainerEditPanelVisible(false);
       document.getElementById("containerDetailType").textContent = tNext("containerDetail.title", "Container details");
       document.getElementById("containerDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("containerDetailDescription").textContent = "";
@@ -8885,6 +9035,7 @@ def ui_preview_html(
       showLibraryPage(false);
       activeContainerId = "";
       activeContainerPayload = null;
+      setContainerEditPanelVisible(false);
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
@@ -9067,6 +9218,7 @@ def ui_preview_html(
         });
         renderContainerDetail(payload.detail || {});
         await loadAppSnapshot();
+        setContainerEditPanelVisible(false);
         setContainerDetailMessage(tNext("containerDetail.saved", "Container saved."), "good");
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
@@ -9761,6 +9913,8 @@ def ui_preview_html(
       const titleInput = document.getElementById("importTitleInput");
       const barcode = normalizeImportBarcode(barcodeInput?.value || "");
       const title = String(titleInput?.value || "").trim();
+      const year = String(document.getElementById("importYearInput")?.value || "").trim();
+      const format = String(document.getElementById("importFormatInput")?.value || "").trim();
       if (!barcode && !title) {
         setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
         return;
@@ -9770,7 +9924,7 @@ def ui_preview_html(
         const payload = await authApiJson("/api/next/metadata/lookup", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({barcode, title})
+          body: JSON.stringify({barcode, title, year, format})
         });
         importCenter.barcodeLookup = payload;
         renderBarcodeLookup();
@@ -9784,6 +9938,8 @@ def ui_preview_html(
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
       const barcode = normalizeImportBarcode(document.getElementById("importBarcodeInput")?.value || "");
       const title = String(document.getElementById("importTitleInput")?.value || "").trim();
+      const year = String(document.getElementById("importYearInput")?.value || "").trim();
+      const format = String(document.getElementById("importFormatInput")?.value || "").trim();
       if (!barcode && !title) {
         setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
         return;
@@ -9795,7 +9951,7 @@ def ui_preview_html(
         const payload = await authApiJson("/api/next/import/movie", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({barcode, title})
+          body: JSON.stringify({barcode, title, year, format})
         });
         importCenter.addResult = payload;
         const movie = payload.movie || (payload.detail && payload.detail.movie) || {};
@@ -9983,6 +10139,44 @@ def ui_preview_html(
       showLibraryPage(true, route || "library");
       if (route === "groups") document.getElementById("groupFilter")?.focus();
       if (route === "containers") document.querySelector(".side-stack")?.scrollIntoView({block: "start", behavior: "smooth"});
+    }
+    async function saveMovieDetails(event) {
+      event.preventDefault();
+      if (!hasPermission("collection.edit_all") || !activeDetailMovieId) return;
+      const title = formTextValue("movieEditTitle");
+      if (!title) {
+        setMovieDetailMessage(tNext("movieDetail.titleRequired", "Title is required."), "bad");
+        return;
+      }
+      setMovieDetailMessage(tNext("movieDetail.saving", "Saving movie..."));
+      const body = {
+        title,
+        originalTitle: formTextValue("movieEditOriginalTitle"),
+        sortTitle: formTextValue("movieEditSortTitle"),
+        year: formTextValue("movieEditYear"),
+        barcode: formTextValue("movieEditBarcode"),
+        format: formTextValue("movieEditFormat"),
+        edition: formTextValue("movieEditEdition"),
+        releaseDate: formTextValue("movieEditReleaseDate"),
+        country: formTextValue("movieEditCountry"),
+        language: formTextValue("movieEditLanguage"),
+        location: formTextValue("movieEditLocation"),
+        overview: formTextValue("movieEditOverview"),
+        notes: formTextValue("movieEditNotes")
+      };
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieEditPanelVisible(false);
+        setMovieDetailMessage(tNext("movieDetail.saved", "Movie saved."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
     }
     async function refreshActiveMovieMetadata(dryRun) {
       if (!hasPermission("metadata.refresh_one")) return;
@@ -11102,6 +11296,11 @@ def ui_preview_html(
       document.getElementById("createContainerForm")?.addEventListener("submit", (event) => createContainer(event));
       document.getElementById("movieDetailBackButton")?.addEventListener("click", () => closeAppMovieDetail());
       document.getElementById("containerDetailBackButton")?.addEventListener("click", () => closeAppContainerDetail());
+      document.getElementById("movieEditToggleButton")?.addEventListener("click", () => setMovieEditPanelVisible(true));
+      document.getElementById("movieEditCancelButton")?.addEventListener("click", () => setMovieEditPanelVisible(false));
+      document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      document.getElementById("containerEditToggleButton")?.addEventListener("click", () => setContainerEditPanelVisible(true));
+      document.getElementById("containerEditCancelButton")?.addEventListener("click", () => setContainerEditPanelVisible(false));
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
@@ -16929,6 +17128,70 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+MOVIE_EDIT_FIELD_LIMITS = {
+    "title": 300,
+    "sort_title": 300,
+    "original_title": 300,
+    "year": 40,
+    "barcode": 160,
+    "format": 80,
+    "edition": 160,
+    "country": 80,
+    "language": 80,
+    "location": 160,
+    "overview": 5000,
+    "notes": 5000,
+}
+
+
+def parse_optional_date(value: Any, field_name: str) -> date | None:
+    text = clean_text(value)
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError as exc:
+        raise NextApiError(f"{field_name} must use YYYY-MM-DD", 400) from exc
+
+
+def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> dict[str, Any]:
+    def pick_text(column: str, *aliases: str) -> str | None:
+        keys = (column, *aliases)
+        if any(key in body for key in keys):
+            raw = next(body[key] for key in keys if key in body)
+            value = clean_text(raw)
+        else:
+            value = existing.get(column)
+        if value and len(str(value)) > MOVIE_EDIT_FIELD_LIMITS[column]:
+            raise NextApiError(f"{column} must be {MOVIE_EDIT_FIELD_LIMITS[column]} characters or fewer", 400)
+        return value
+
+    if "releaseDate" in body or "release_date" in body:
+        release_date = parse_optional_date(body.get("releaseDate", body.get("release_date")), "releaseDate")
+    else:
+        release_date = existing.get("release_date")
+
+    title = pick_text("title")
+    if not title:
+        raise NextApiError("Movie title is required", 400)
+
+    return {
+        "title": title,
+        "sort_title": pick_text("sort_title", "sortTitle"),
+        "original_title": pick_text("original_title", "originalTitle"),
+        "year": pick_text("year"),
+        "barcode": pick_text("barcode"),
+        "release_date": release_date,
+        "format": pick_text("format"),
+        "edition": pick_text("edition"),
+        "country": pick_text("country"),
+        "language": pick_text("language"),
+        "overview": pick_text("overview"),
+        "notes": pick_text("notes"),
+        "location": pick_text("location"),
+    }
+
+
 def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     with conn.cursor() as cur:
         cur.execute(
@@ -21115,6 +21378,79 @@ def register_routes(flask_app: Flask) -> None:
             detail = movie_detail_entity(conn, movie_uuid)
         if not detail:
             raise NextApiError("Movie not found", 404)
+        return response({"status": "ok", "detail": detail})
+
+    @flask_app.patch("/api/next/movies/<movie_id>")
+    def update_movie(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Movie request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            payload = movie_update_payload(body, existing=existing)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE movies
+                        SET title=%s,
+                            sort_title=%s,
+                            original_title=%s,
+                            year=%s,
+                            barcode=%s,
+                            release_date=%s,
+                            format=%s,
+                            edition=%s,
+                            country=%s,
+                            language=%s,
+                            overview=%s,
+                            notes=%s,
+                            location=%s,
+                            updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (
+                            payload["title"],
+                            payload["sort_title"],
+                            payload["original_title"],
+                            payload["year"],
+                            payload["barcode"],
+                            payload["release_date"],
+                            payload["format"],
+                            payload["edition"],
+                            payload["country"],
+                            payload["language"],
+                            payload["overview"],
+                            payload["notes"],
+                            payload["location"],
+                            movie_uuid,
+                        ),
+                    )
+                    revision = next_revision(conn) if table_exists(conn, "sync_state") else 0
+                    entity = movie_entity(conn, movie_uuid) or {}
+                    if revision and table_exists(conn, "sync_changes"):
+                        sync_change(
+                            conn,
+                            revision=revision,
+                            entity_type="movie",
+                            entity_id=str(movie_uuid),
+                            operation="upsert",
+                            payload={
+                                "entity": entity,
+                                "clientId": "next-app",
+                                "clientMutationId": f"edit-movie-{uuid.uuid4()}",
+                                "actor": actor_job_payload(actor),
+                            },
+                        )
+            detail = movie_detail_entity(conn, movie_uuid)
         return response({"status": "ok", "detail": detail})
 
     @flask_app.get("/api/next/people/<person_id>")
