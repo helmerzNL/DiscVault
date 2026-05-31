@@ -23,6 +23,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 from uuid import UUID
 
 from flask import Flask, Response, jsonify, request, send_file
@@ -2190,7 +2191,7 @@ def migration_dashboard_html() -> str:
         </label>
         <div class="actions">
           <button type="button" class="primary" id="migrationFlowStartButton" disabled data-next-i18n="migration.start">Start Migration</button>
-          <a class="button primary completion-open-button hidden" id="migrationFlowAppButton" href="/app">Open DiscVault 26</a>
+          <a class="button primary completion-open-button hidden" id="migrationFlowAppButton" href="/">Open DiscVault 26</a>
           <button type="button" id="migrationFlowRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           <button type="button" class="danger hidden" id="migrationTestResetButton" data-next-i18n="migration.testResetButton">Reset test database</button>
         </div>
@@ -3528,8 +3529,92 @@ def media_asset_public_url(asset: dict[str, Any] | None) -> str:
     return server_usable_image(asset.get("source_url"))
 
 
-def with_preview_media_urls(row: dict[str, Any]) -> dict[str, Any]:
+def legacy_media_relative_path(kind: str, value: Any) -> str | None:
+    text = str(value or "").strip().replace("\\", "/")
+    if not text or text.startswith(("http://", "https://", "/api/next/media/")):
+        return None
+    text = text.split("?", 1)[0].split("#", 1)[0].lstrip("/")
+    for prefix in ("api/images/", "api/posters/"):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    if kind == "poster" and text.startswith("offline/poster/"):
+        text = text.removeprefix("offline/poster/")
+    if kind == "backdrop" and text.startswith("offline/backdrop/"):
+        text = "posters/_variants/backdrop/" + text.removeprefix("offline/backdrop/")
+    if kind == "poster" and not text.startswith("posters/"):
+        text = "posters/" + text
+    elif kind == "backdrop":
+        if text.startswith("_variants/backdrop/"):
+            text = "posters/" + text
+        elif not text.startswith("posters/"):
+            text = "posters/_variants/backdrop/" + text
+    parts = [part for part in text.split("/") if part]
+    if not parts or any(part in ("..", ".", "") for part in parts):
+        return None
+    return "/".join(parts)
+
+
+def legacy_media_path(kind: str, value: Any) -> Path | None:
+    relative = legacy_media_relative_path(kind, value)
+    if not relative:
+        return None
+    data_dir = legacy_data_dir().resolve()
+    candidate = (data_dir / Path(*relative.split("/"))).resolve()
+    try:
+        candidate.relative_to(data_dir)
+    except ValueError:
+        return None
+    if not candidate.exists() or not candidate.is_file():
+        return None
+    return candidate
+
+
+def legacy_media_public_url(kind: str, value: Any) -> str:
+    existing = server_usable_image(value)
+    if existing:
+        return existing
+    relative = legacy_media_relative_path(kind, value)
+    if not relative or not legacy_media_path(kind, relative):
+        return ""
+    return f"/api/next/media/legacy/{kind}/{quote(relative, safe='/')}"
+
+
+def legacy_metadata_image_url(metadata: dict[str, Any], kind: str) -> str:
+    if kind == "poster":
+        return (
+            first_usable_image(metadata.get("poster_url"), metadata.get("posterUrl"), metadata.get("poster"))
+            or legacy_media_public_url("poster", metadata.get("poster_file"))
+            or legacy_media_public_url("poster", metadata.get("poster_url"))
+            or legacy_media_public_url("poster", metadata.get("posterUrl"))
+            or legacy_media_public_url("poster", metadata.get("poster"))
+        )
+    return (
+        first_usable_image(metadata.get("backdrop_url"), metadata.get("backdropUrl"), metadata.get("backdrop"))
+        or legacy_media_public_url("backdrop", metadata.get("backdrop_url"))
+        or legacy_media_public_url("backdrop", metadata.get("backdropUrl"))
+        or legacy_media_public_url("backdrop", metadata.get("backdrop"))
+        or legacy_media_public_url("backdrop", metadata.get("poster_file"))
+    )
+
+
+def with_legacy_metadata_media_urls(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return row
     data = dict(row)
+    metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    metadata = dict(metadata)
+    poster = legacy_metadata_image_url(metadata, "poster")
+    backdrop = legacy_metadata_image_url(metadata, "backdrop")
+    if poster:
+        metadata["poster_url"] = poster
+    if backdrop:
+        metadata["backdrop_url"] = backdrop
+    data["metadata"] = metadata
+    return data
+
+
+def with_preview_media_urls(row: dict[str, Any]) -> dict[str, Any]:
+    data = with_legacy_metadata_media_urls(row) or dict(row)
     for kind in ("poster", "backdrop"):
         asset = {
             "id": data.pop(f"{kind}_asset_id", None),
@@ -3541,6 +3626,8 @@ def with_preview_media_urls(row: dict[str, Any]) -> dict[str, Any]:
         metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
         if not url:
             url = first_usable_image(metadata.get(f"{kind}_url"), metadata.get(f"{kind}Url"), metadata.get(kind))
+        if not url:
+            url = legacy_metadata_image_url(metadata, kind)
         if url:
             data[f"{kind}_url"] = url
     return data
@@ -8769,6 +8856,7 @@ def ui_preview_html(
     };
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
+    let activePreferenceTab = "appearance";
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
       messages: {},
@@ -14611,6 +14699,7 @@ def ui_preview_html(
     function setPreferenceTab(tab) {
       let selected = tab || "appearance";
       if (selected === "collectors" && !hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) selected = "appearance";
+      activePreferenceTab = selected;
       document.querySelectorAll("[data-preferences-tab]").forEach((button) => {
         const active = button.dataset.preferencesTab === selected;
         button.classList.toggle("active", active);
@@ -14637,6 +14726,7 @@ def ui_preview_html(
         bindPreferenceList(legacyList);
       }
       applyAppPermissionVisibility();
+      setPreferenceTab(activePreferenceTab);
     }
     async function updatePreference(key, value) {
       preferences[key] = value;
@@ -19331,7 +19421,7 @@ def container_detail_image(media_assets: list[dict[str, Any]], metadata: dict[st
             metadata.get("backdrop_urls"),
             metadata.get("backdropUrls"),
         ]
-    return first_usable_image(*primary_assets, *metadata_values, *other_assets)
+    return first_usable_image(*primary_assets, *metadata_values, *other_assets) or legacy_metadata_image_url(metadata, kind)
 
 
 def movie_detail_image(media_assets: list[dict[str, Any]], metadata: dict[str, Any], kind: str) -> str:
@@ -23804,7 +23894,7 @@ def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
             """,
             (container_id,),
         )
-        return cur.fetchone()
+        return with_legacy_metadata_media_urls(cur.fetchone())
 
 
 def container_identifier_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
@@ -24891,8 +24981,6 @@ PUBLIC_NEXT_PATHS = {
     "/app/admin/",
     "/ui-preview",
     "/ui-preview/",
-    "/api/next/app",
-    "/api/next/app/",
     "/api/next/app/import",
     "/api/next/app/import/",
     "/api/next/collection",
@@ -24912,6 +25000,7 @@ PUBLIC_NEXT_PREFIXES = (
     "/api/next/assets/",
     "/api/next/i18n/",
     "/api/next/media/assets/",
+    "/api/next/media/legacy/",
     "/app/movies/",
     "/app/containers/",
     "/app/people/",
@@ -27858,6 +27947,18 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Container not found", 404)
         return html_response(container_detail_html(detail))
 
+    @flask_app.get("/api/next/media/legacy/<kind>/<path:filename>")
+    def legacy_media(kind: str, filename: str):
+        if kind not in {"poster", "backdrop"}:
+            raise NextApiError("Unsupported legacy media kind", 404)
+        path = legacy_media_path(kind, filename)
+        if not path:
+            raise NextApiError("Legacy media file not found", 404)
+        mimetype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        result = send_file(path, mimetype=mimetype, conditional=True, max_age=86400)
+        result.headers["Cache-Control"] = "public, max-age=86400"
+        return result
+
     @flask_app.get("/api/next/media/assets/<media_id>")
     def media_asset(media_id: str):
         media_uuid = parse_uuid(media_id, "mediaId")
@@ -28262,8 +28363,6 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/collection")
     @flask_app.get("/api/next/collection/")
-    @flask_app.get("/api/next/app")
-    @flask_app.get("/api/next/app/")
     def collection_dashboard():
         with connect() as conn:
             if next_auth_effective_enabled(conn, table_exists):
