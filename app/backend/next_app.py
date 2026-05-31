@@ -6701,7 +6701,7 @@ def ui_preview_html(
                 </label>
                 <label for="movieEditFormat">
                   <span data-next-i18n="movieDetail.format">Format</span>
-                  <input id="movieEditFormat" name="format" maxlength="80" autocomplete="off">
+                  <select id="movieEditFormat" name="format"></select>
                 </label>
                 <label for="movieEditEdition">
                   <span data-next-i18n="movieDetail.edition">Edition</span>
@@ -10346,15 +10346,56 @@ def ui_preview_html(
       panel.classList.toggle("hidden", !show);
       if (show) document.getElementById("movieEditTitle")?.focus();
     }
+    const MOVIE_FORMAT_OPTIONS = [
+      {value: "Blu-ray", collectorOnly: false},
+      {value: "DVD", collectorOnly: false},
+      {value: "HD DVD", collectorOnly: true},
+      {value: "LaserDisc", collectorOnly: true},
+      {value: "Ultra HD Blu-ray", collectorOnly: false},
+      {value: "VCD/SVCD", collectorOnly: true}
+    ];
+    function normalizedMovieFormatValue(value) {
+      const text = String(value || "").trim();
+      const lower = text.toLowerCase();
+      if (!text) return "";
+      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "Ultra HD Blu-ray";
+      if (lower.includes("blu")) return "Blu-ray";
+      if (lower.includes("hd dvd")) return "HD DVD";
+      if (lower.includes("laser")) return "LaserDisc";
+      if (lower.includes("vcd") || lower.includes("svcd")) return "VCD/SVCD";
+      if (lower.includes("dvd")) return "DVD";
+      return text;
+    }
+    function renderMovieEditFormatOptions(selectedValue = "") {
+      const select = document.getElementById("movieEditFormat");
+      if (!select) return;
+      const normalized = normalizedMovieFormatValue(selectedValue);
+      const collectorMode = collectorsModeEnabled();
+      const allowed = MOVIE_FORMAT_OPTIONS.filter((item) => collectorMode || !item.collectorOnly);
+      const allowedValues = new Set(allowed.map((item) => item.value));
+      const knownValues = new Set(MOVIE_FORMAT_OPTIONS.map((item) => item.value));
+      const customOption = normalized && !allowedValues.has(normalized) && !knownValues.has(normalized)
+        ? [{value: normalized, collectorOnly: false}]
+        : [];
+      select.innerHTML = [
+        `<option value=""></option>`,
+        ...allowed,
+        ...customOption
+      ].map((item) => {
+        if (typeof item === "string") return item;
+        return `<option value="${escapeHtml(item.value)}">${escapeHtml(item.value)}</option>`;
+      }).join("");
+      select.value = normalized;
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
+      renderMovieEditFormatOptions(movie.format || "");
       const fields = {
         movieEditTitle: movie.title || "",
         movieEditOriginalTitle: movie.original_title || "",
         movieEditSortTitle: movie.sort_title || "",
         movieEditYear: movie.year || "",
         movieEditBarcode: movie.barcode || "",
-        movieEditFormat: movie.format || "",
         movieEditEdition: movie.edition || "",
         movieEditReleaseDate: movie.release_date || "",
         movieEditCountry: movie.country || "",
