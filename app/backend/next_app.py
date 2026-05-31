@@ -2322,6 +2322,7 @@ def migration_dashboard_html() -> str:
       return found ? found.legacy : String(locale || "nl-NL").split("-", 1)[0];
     }
     function preferredNextLocale() {
+      if (localStorage.getItem("dv_next_locale")) return normalizeNextLocale(localStorage.getItem("dv_next_locale"));
       if (localStorage.getItem("dv_lang")) return normalizeNextLocale(localStorage.getItem("dv_lang"));
       const browserLocales = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
       for (const locale of browserLocales) return normalizeNextLocale(locale);
@@ -2503,7 +2504,10 @@ def migration_dashboard_html() -> str:
     async function setNextLocale(locale, options) {
       const normalized = normalizeNextLocale(locale);
       nextI18n.locale = normalized;
-      if (options && options.persist) localStorage.setItem("dv_lang", legacyLocale(normalized));
+      if (options && options.persist) {
+        localStorage.setItem("dv_next_locale", normalized);
+        localStorage.setItem("dv_lang", legacyLocale(normalized));
+      }
       try {
         const response = await fetch(`/api/next/i18n/${encodeURIComponent(normalized)}`, {cache: "no-store"});
         if (response.ok) {
@@ -11040,6 +11044,7 @@ def ui_preview_html(
         localeState.locale = payload.locale || normalized;
         localeState.messages = payload.messages || {};
         localStorage.setItem("dv_next_locale", localeState.locale);
+        localStorage.setItem("dv_lang", legacyLocaleForApp(localeState.locale));
       } catch (error) {
         console.warn("Next i18n catalog unavailable", error);
       }
@@ -11062,6 +11067,12 @@ def ui_preview_html(
         select.value = localeState.locale;
       });
       renderProfileLanguagePicker();
+    }
+    function legacyLocaleForApp(locale) {
+      const found = localeState.locales.find((item) => item.locale === locale);
+      if (found && found.legacy) return found.legacy;
+      if (locale === "nb-NO") return "no";
+      return String(locale || "nl-NL").split("-", 1)[0];
     }
     function languageLabel(item) {
       const name = item.nativeName || item.englishName || item.locale || "";
@@ -17307,7 +17318,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       return found ? found.legacy : String(locale || "nl-NL").split("-", 1)[0];
     }
     function preferredNextLocale() {
-      const stored = localStorage.getItem("dv_lang");
+      const stored = localStorage.getItem("dv_next_locale") || localStorage.getItem("dv_lang");
       if (stored) return normalizeNextLocale(stored);
       const browserLocales = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
       for (const locale of browserLocales) {
@@ -17353,6 +17364,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const normalized = normalizeNextLocale(locale);
       nextI18n.locale = normalized;
       if (options && options.persist) {
+        localStorage.setItem("dv_next_locale", normalized);
         localStorage.setItem("dv_lang", legacyLocale(normalized));
       }
       try {
