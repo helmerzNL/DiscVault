@@ -1,4 +1,5 @@
 import os
+import importlib
 import sqlite3
 import sys
 import tempfile
@@ -13,15 +14,24 @@ repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
+sys.modules.setdefault(
+    "requests",
+    types.SimpleNamespace(
+        get=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests")),
+        HTTPError=Exception,
+    ),
+)
+
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
 from app.backend.next_plugins.trakt import plugin as trakt_plugin
 
 
 class FakeResponse:
-    def __init__(self, payload=None, status_code=200):
+    def __init__(self, payload=None, status_code=200, text=""):
         self._payload = payload if payload is not None else {}
         self.status_code = status_code
+        self.text = text
 
     def json(self):
         return self._payload
@@ -60,6 +70,77 @@ class NextPluginRuntimeTests(unittest.TestCase):
                 self.assertIn("inspect_source", plugin.runtime["entrypoints"])
                 self.assertIn("plan_import", plugin.runtime["entrypoints"])
                 self.assertIn("import_source", plugin.runtime["entrypoints"])
+
+    def test_personal_list_source_plugins_are_discoverable(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        for plugin_id in ("trakt", "plex", "jellyfin"):
+            with self.subTest(plugin_id=plugin_id):
+                plugin = plugins[plugin_id]
+                self.assertIn("personal_list_source", plugin.manifest["categories"])
+                self.assertIn("sync_personal_lists", plugin.runtime["entrypoints"])
+
+    def test_plex_personal_lists_maps_viewed_at_history(self):
+        def fake_get(url, params=None, timeout=None):
+            if url.endswith("/status/sessions/history/all"):
+                return FakeResponse(
+                    text="""
+                    <MediaContainer>
+                      <Video ratingKey="42" title="Back to the Future" year="1985" viewedAt="1772337600">
+                        <Guid id="imdb://tt0088763" />
+                        <Guid id="tmdb://105" />
+                      </Video>
+                    </MediaContainer>
+                    """
+                )
+            if url.endswith("/identity"):
+                return FakeResponse(text='<MediaContainer machineIdentifier="plex-machine" friendlyName="Plex Home" />')
+            raise AssertionError(url)
+
+        fake_requests = types.SimpleNamespace(get=Mock(side_effect=fake_get), HTTPError=FakeHTTPError)
+        with patch.dict(sys.modules, {"requests": fake_requests}):
+            plex_plugin = importlib.import_module("app.backend.next_plugins.plex.plugin")
+            result = plex_plugin.sync_personal_lists(
+                {},
+                {"settings": {"baseUrl": "https://plex.local"}, "secrets": {"token": "plex-token"}},
+            )
+
+        watched = result["personalLists"]["watched"]
+        self.assertEqual(result["counts"]["watched"], 1)
+        self.assertEqual(watched[0]["watchedAt"], "2026-03-01T04:00:00+00:00")
+        self.assertEqual(watched[0]["imdbId"], "tt0088763")
+
+    def test_jellyfin_personal_lists_maps_last_played_date(self):
+        def fake_get(url, params=None, headers=None, timeout=None):
+            if url.endswith("/Users/user-1/Items"):
+                return FakeResponse(
+                    {
+                        "Items": [
+                            {
+                                "Id": "jf-42",
+                                "Name": "Back to the Future",
+                                "ProductionYear": 1985,
+                                "ProviderIds": {"Imdb": "tt0088763", "Tmdb": "105"},
+                                "UserData": {"Played": True, "PlayCount": 2, "LastPlayedDate": "2026-05-31T20:15:00.0000000Z"},
+                            }
+                        ]
+                    }
+                )
+            raise AssertionError(url)
+
+        fake_requests = types.SimpleNamespace(get=Mock(side_effect=fake_get), HTTPError=FakeHTTPError)
+        with patch.dict(sys.modules, {"requests": fake_requests}):
+            jellyfin_plugin = importlib.import_module("app.backend.next_plugins.jellyfin.plugin")
+            result = jellyfin_plugin.sync_personal_lists(
+                {},
+                {"settings": {"baseUrl": "https://jellyfin.local", "userId": "user-1"}, "secrets": {"token": "jf-token"}},
+            )
+
+        watched = result["personalLists"]["watched"]
+        self.assertEqual(result["counts"]["watched"], 1)
+        self.assertEqual(watched[0]["watchedAt"], "2026-05-31T20:15:00.0000000Z")
+        self.assertEqual(watched[0]["plays"], 2)
 
     def test_trakt_health_reports_token_status_separately(self):
         def fake_get(url, headers=None, params=None, timeout=None):

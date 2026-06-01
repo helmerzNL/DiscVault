@@ -1,14 +1,15 @@
 {
   "id": "plex",
   "name": "Plex",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
-  "categories": ["digital_media_source"],
+  "categories": ["digital_media_source", "personal_list_source"],
   "capabilities": [
     "discover_library",
     "sync_library",
-    "playback_deeplink"
+    "playback_deeplink",
+    "sync_personal_lists"
   ],
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
@@ -44,6 +45,7 @@
   "orderIndex": 110,
   "entitlements": {
     "connect": "digital_source.plex.connect",
-    "sync": "digital_source.plex.sync"
+    "sync": "digital_source.plex.sync",
+    "personal_sync": "personal_list.plex.sync"
   }
 }
