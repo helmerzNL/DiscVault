@@ -10437,7 +10437,7 @@ def ui_preview_html(
       pluginExecutions: {},
       pluginHealth: {},
       pluginJobs: [],
-      movieVaultConnection: null,
+      movieVaultConnections: {},
       metadataJobs: [],
       plugins: [],
       rbac: {},
@@ -11000,8 +11000,8 @@ def ui_preview_html(
       `;
     }
     function renderAppAdminMovieVaultConnection(plugin) {
-      if (!plugin || plugin.id !== "movievault") return "";
-      const connection = appAdmin.movieVaultConnection || {};
+      if (!plugin || !["movievault", "movievault_26"].includes(plugin.id)) return "";
+      const connection = (appAdmin.movieVaultConnections || {})[plugin.id] || {};
       const linkStatus = connection.linkStatus || (connection.tokenSet ? "active" : "unlinked");
       const connected = linkStatus === "active" && connection.tokenSet;
       const resetRequired = !!connection.requiresReset;
@@ -11030,8 +11030,8 @@ def ui_preview_html(
             ${escapeHtml(tNext("appAdmin.movievaultLastHandshake", "Last handshake"))}: ${escapeHtml(shortDateTime(connection.lastHandshakeAt))}
           </div>
           ${canRefresh ? `<div class="app-admin-plugin-actions">
-            <button type="button" class="secondary-button" data-app-admin-movievault-refresh="true">${escapeHtml(tNext("appAdmin.movievaultRefreshConnection", "Refresh connection"))}</button>
-            ${canReset ? `<button type="button" class="secondary-button danger" data-app-admin-movievault-reset="true">${escapeHtml(tNext("appAdmin.movievaultResetConnection", "Reset connection"))}</button>` : ""}
+            <button type="button" class="secondary-button" data-app-admin-movievault-refresh="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.movievaultRefreshConnection", "Refresh connection"))}</button>
+            ${canReset ? `<button type="button" class="secondary-button danger" data-app-admin-movievault-reset="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.movievaultResetConnection", "Reset connection"))}</button>` : ""}
           </div>` : ""}
         </div>
       `;
@@ -12051,16 +12051,22 @@ def ui_preview_html(
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
         )) : [];
-        const movieVaultPayload = canLoadPlugins && appAdmin.plugins.some((plugin) => plugin.id === "movievault")
-          ? await authApiJson("/api/next/plugins/movievault/connection").catch(() => null)
-          : null;
+        const movieVaultConnectionPayloads = canLoadPlugins ? await Promise.all(appAdmin.plugins
+          .filter((plugin) => ["movievault", "movievault_26"].includes(plugin.id))
+          .map((plugin) => authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/connection`)
+            .catch(() => ({plugin, connection: null})))
+        ) : [];
         appAdmin.pluginConfigs = {};
         configPayloads.forEach((payload) => {
           if (payload.plugin && payload.plugin.id) {
             appAdmin.pluginConfigs[payload.plugin.id] = payload.config || {};
           }
         });
-        appAdmin.movieVaultConnection = movieVaultPayload ? (movieVaultPayload.connection || null) : null;
+        appAdmin.movieVaultConnections = {};
+        movieVaultConnectionPayloads.forEach((payload) => {
+          const pluginId = payload?.plugin?.id;
+          if (pluginId) appAdmin.movieVaultConnections[pluginId] = payload.connection || null;
+        });
         appAdmin.usersCount = appAdmin.users.length || currentAuthStatus.user_count;
         renderAppAdmin();
         setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loaded", "Admin data loaded."), "good");
@@ -12533,26 +12539,28 @@ def ui_preview_html(
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
     }
-    async function refreshAppAdminMovieVaultConnection(reset = false) {
+    async function refreshAppAdminMovieVaultConnection(pluginId = "movievault", reset = false) {
       if (reset && !confirm(tNext("appAdmin.movievaultResetConfirm", "Reset the local MovieVault instance and reconnect as a new DiscVault instance?"))) return;
       setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.movievaultRefreshing", "Refreshing MovieVault connection..."));
       try {
-        const payload = await authApiJson("/api/next/plugins/movievault/connection/refresh", {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/connection/refresh`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({reset: !!reset})
         });
-        appAdmin.movieVaultConnection = payload.connection || null;
-        if (payload.config) appAdmin.pluginConfigs.movievault = payload.config;
+        appAdmin.movieVaultConnections = appAdmin.movieVaultConnections || {};
+        appAdmin.movieVaultConnections[pluginId] = payload.connection || null;
+        if (payload.config) appAdmin.pluginConfigs[pluginId] = payload.config;
         if (payload.plugin) {
-          appAdmin.plugins = appAdmin.plugins.map((plugin) => plugin.id === "movievault" ? payload.plugin : plugin);
+          appAdmin.plugins = appAdmin.plugins.map((plugin) => plugin.id === pluginId ? payload.plugin : plugin);
         }
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.movievaultRefreshed", "MovieVault connection refreshed."), "good");
       } catch (error) {
-        await authApiJson("/api/next/plugins/movievault/connection")
+        await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/connection`)
           .then((payload) => {
-            appAdmin.movieVaultConnection = payload.connection || null;
+            appAdmin.movieVaultConnections = appAdmin.movieVaultConnections || {};
+            appAdmin.movieVaultConnections[pluginId] = payload.connection || null;
             renderAppAdminPlugins();
           })
           .catch(() => {});
@@ -18860,8 +18868,8 @@ def ui_preview_html(
         if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down", moveButton.dataset.sectionCategory || "");
         if (exportButton) exportAppAdminPlugin(exportButton.dataset.appAdminPluginExport);
         if (deleteButton) deleteAppAdminPlugin(deleteButton.dataset.appAdminPluginDelete);
-        if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(false);
-        if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(true);
+        if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(movieVaultRefreshButton.dataset.appAdminMovievaultRefresh || "movievault", false);
+        if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(movieVaultResetButton.dataset.appAdminMovievaultReset || "movievault", true);
       });
       document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -32153,8 +32161,12 @@ def register_routes(flask_app: Flask) -> None:
             config = plugin_config_from_db(conn, plugin_id)
         return response({"status": "ok", "plugin": plugin, "config": config})
 
-    @flask_app.get("/api/next/plugins/movievault/connection")
-    def movievault_connection():
+    @flask_app.get("/api/next/plugins/movievault/connection", defaults={"plugin_id": MOVIEVAULT_PLUGIN_ID})
+    @flask_app.get("/api/next/plugins/<plugin_id>/connection")
+    def movievault_connection(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not is_movievault_plugin(plugin_id):
+            raise NextApiError("MovieVault plugin not found", 404)
         with connect() as conn:
             require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
             if not table_exists(conn, "plugins"):
@@ -32164,11 +32176,11 @@ def register_routes(flask_app: Flask) -> None:
             else:
                 sync_plugin_registry(conn, table_exists, Jsonb)
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            plugin = next((item for item in registry["plugins"] if item["id"] == MOVIEVAULT_PLUGIN_ID), None)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
             if not plugin:
                 raise NextApiError("MovieVault plugin not found", 404)
-            config = plugin_config_from_db(conn, MOVIEVAULT_PLUGIN_ID)
-            connection = movievault_connection_status(conn)
+            config = plugin_config_from_db(conn, plugin_id)
+            connection = movievault_connection_status(conn, plugin_id)
         return response(
             {
                 "status": "ok",
@@ -32182,8 +32194,12 @@ def register_routes(flask_app: Flask) -> None:
             }
         )
 
-    @flask_app.post("/api/next/plugins/movievault/connection/refresh")
-    def refresh_movievault_plugin_connection():
+    @flask_app.post("/api/next/plugins/movievault/connection/refresh", defaults={"plugin_id": MOVIEVAULT_PLUGIN_ID})
+    @flask_app.post("/api/next/plugins/<plugin_id>/connection/refresh")
+    def refresh_movievault_plugin_connection(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not is_movievault_plugin(plugin_id):
+            raise NextApiError("MovieVault plugin not found", 404)
         body = request.get_json(silent=True) or {}
         reset = bool(body.get("reset"))
         with connect() as conn:
@@ -32195,7 +32211,7 @@ def register_routes(flask_app: Flask) -> None:
             else:
                 sync_plugin_registry(conn, table_exists, Jsonb)
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            plugin = next((item for item in registry["plugins"] if item["id"] == MOVIEVAULT_PLUGIN_ID), None)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
             if not plugin:
                 raise NextApiError("MovieVault plugin not found", 404)
             actor = require_any_next_permission(conn, plugin_manage_permissions(plugin))
@@ -32203,28 +32219,29 @@ def register_routes(flask_app: Flask) -> None:
             status_code = 200
             error = None
             try:
-                refresh_movievault_connection(conn, actor_id=actor.get("id"), reset=reset)
-                summary = "MovieVault connection refreshed"
+                refresh_movievault_connection(conn, plugin_id=plugin_id, actor_id=actor.get("id"), reset=reset)
+                summary = f"MovieVault connection refreshed for {plugin_id}"
             except MovieVaultInstanceRevoked as exc:
                 status = "error"
                 status_code = 409
                 error = str(exc)
-                summary = "MovieVault connection revoked"
+                summary = f"MovieVault connection revoked for {plugin_id}"
             except MovieVaultConnectionError as exc:
                 status = "error"
                 status_code = 409
                 error = str(exc)
-                summary = "MovieVault connection refresh failed"
-            connection = movievault_connection_status(conn)
+                summary = f"MovieVault connection refresh failed for {plugin_id}"
+            connection = movievault_connection_status(conn, plugin_id)
             audit_event(
                 conn,
                 event_type="plugin.movievault_connection_refreshed" if status == "ok" else "plugin.movievault_connection_failed",
                 category="plugins",
                 actor=actor,
                 target_type="plugin",
-                target_id=MOVIEVAULT_PLUGIN_ID,
+                target_id=plugin_id,
                 summary=summary,
                 metadata={
+                    "pluginId": plugin_id,
                     "reset": reset,
                     "status": status,
                     "error": error,
@@ -32234,8 +32251,8 @@ def register_routes(flask_app: Flask) -> None:
                 },
             )
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            plugin = next((item for item in registry["plugins"] if item["id"] == MOVIEVAULT_PLUGIN_ID), plugin)
-            config = plugin_config_from_db(conn, MOVIEVAULT_PLUGIN_ID)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), plugin)
+            config = plugin_config_from_db(conn, plugin_id)
         payload = {
             "status": status,
             "plugin": plugin,
