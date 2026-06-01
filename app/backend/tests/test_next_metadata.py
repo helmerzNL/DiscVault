@@ -190,6 +190,15 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertIn("box_set_candidates", [item["entrypoint"] for item in plan])
 
+    def test_preview_lookup_uses_fast_barcode_plan(self):
+        query = query_from_payload({"barcode": "5051892000000", "detectBoxSets": True, "previewMode": True})
+        plan = plugin_execution_plan(
+            {"capabilities": ["search_barcode", "movie_details", "box_set_candidates"]},
+            query,
+        )
+
+        self.assertEqual([item["entrypoint"] for item in plan], ["search_barcode"])
+
     def test_media_format_normalization(self):
         self.assertEqual(normalize_media_format("Ultra HD Blu-ray"), "4K UHD")
         self.assertEqual(normalize_media_format("Blu ray"), "Blu-ray")

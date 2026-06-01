@@ -1138,5 +1138,18 @@
   "profile.sections": "Profielsecties",
   "profile.tabAccount": "Account",
   "profile.tabNotifications": "Notificaties",
-  "profile.tabStructure": "Structuur"
+  "profile.tabStructure": "Structuur",
+  "importCenter.fileTitle": "Importbestand",
+  "importCenter.fileHelp": "Upload een CSV-, TSV-, JSON-, XML- of ZIP-bestand. DiscVault vraagt de ingeschakelde importplugins welke het bestand herkent.",
+  "importCenter.fileBrowse": "Importeren / bladeren",
+  "importCenter.fileSelected": "Geselecteerd bestand",
+  "importCenter.fileUploading": "Uploaden en plugins controleren...",
+  "importCenter.fileReady": "Bestand herkend. Controleer de import voordat je start.",
+  "importCenter.fileUnrecognized": "Geen ingeschakelde importplugin herkende dit bestand.",
+  "importCenter.fileSupported": "Ondersteund: CSV, TSV, JSON, XML en ZIP.",
+  "importCenter.fileCandidates": "Plugincontroles",
+  "importCenter.fileChosenSource": "Gekozen bron",
+  "importCenter.fileNoFile": "Kies eerst een bestand.",
+  "importCenter.fileRecognized": "Herkend",
+  "importCenter.fileNotRecognized": "Niet herkend"
 }

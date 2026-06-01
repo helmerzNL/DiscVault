@@ -1064,5 +1064,18 @@
   "profile.sections": "Profiiliosiot",
   "profile.tabAccount": "Tili",
   "profile.tabNotifications": "Ilmoitukset",
-  "profile.tabStructure": "Rakenne"
+  "profile.tabStructure": "Rakenne",
+  "importCenter.fileTitle": "Tuontitiedosto",
+  "importCenter.fileHelp": "Lataa CSV-, TSV-, JSON-, XML- tai ZIP-tiedosto. DiscVault kysyy kaytossa olevilta tuontilisailta, mika tunnistaa sen.",
+  "importCenter.fileBrowse": "Tuo / selaa",
+  "importCenter.fileSelected": "Valittu tiedosto",
+  "importCenter.fileUploading": "Ladataan ja tarkistetaan lisia...",
+  "importCenter.fileReady": "Tiedosto tunnistettu. Tarkista tuonti ennen kaynnistysta.",
+  "importCenter.fileUnrecognized": "Mikaan kaytossa oleva tuontilisa ei tunnistanut tiedostoa.",
+  "importCenter.fileSupported": "Tuettu: CSV, TSV, JSON, XML ja ZIP.",
+  "importCenter.fileCandidates": "Lisien tarkistukset",
+  "importCenter.fileChosenSource": "Valittu lahde",
+  "importCenter.fileNoFile": "Valitse ensin tiedosto.",
+  "importCenter.fileRecognized": "Tunnistettu",
+  "importCenter.fileNotRecognized": "Ei tunnistettu"
 }

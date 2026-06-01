@@ -190,6 +190,10 @@ TEST_DATABASE_RESET_TABLES = (
 MEDIA_GROUP_MEMBER_ROLES = {"owner", "manager", "member", "viewer"}
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_IMPORT_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_IMPORT_ARCHIVE_BYTES = 100 * 1024 * 1024
+IMPORT_UPLOAD_EXTENSIONS = {".csv", ".tsv", ".json", ".xml", ".zip"}
+IMPORT_ARCHIVE_EXTENSIONS = {".csv", ".tsv", ".json", ".xml"}
 MOVIE_ARTWORK_KINDS = {"poster", "backdrop"}
 NOTIFICATION_PREF_DEFAULTS: dict[str, bool] = {
     "app_updates": True,
@@ -1541,6 +1545,150 @@ def import_source_payload_for_path(
     if column_mapping:
         payload["columnMapping"] = column_mapping
     return payload
+
+
+def import_upload_root() -> Path:
+    return Path(legacy_data_dir()) / "import" / "uploads"
+
+
+def safe_import_upload_filename(filename: str | None) -> str:
+    name = Path(filename or "collection-import").name.strip()
+    name = re.sub(r"[^A-Za-z0-9._ -]+", "_", name).strip(" ._")
+    return name or f"collection-import-{uuid.uuid4().hex}"
+
+
+def store_import_upload(destination_dir: Path) -> tuple[Path, str, int]:
+    uploaded = request.files.get("file") or request.files.get("import") or request.files.get("source")
+    if not uploaded or not uploaded.filename:
+        raise NextApiError("Import file is required", 400)
+    suffix = Path(uploaded.filename).suffix.lower()
+    if suffix not in IMPORT_UPLOAD_EXTENSIONS:
+        allowed = ", ".join(sorted(IMPORT_UPLOAD_EXTENSIONS))
+        raise NextApiError(f"Unsupported import file type. Supported: {allowed}", 400)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    filename = safe_import_upload_filename(uploaded.filename)
+    target = destination_dir / filename
+    if target.exists():
+        target = destination_dir / f"{target.stem}-{uuid.uuid4().hex[:8]}{target.suffix}"
+        filename = target.name
+    uploaded.save(target)
+    size_bytes = target.stat().st_size
+    if size_bytes > MAX_IMPORT_UPLOAD_BYTES:
+        try:
+            target.unlink()
+        except OSError:
+            pass
+        raise NextApiError("Import file is too large", 413)
+    return target, filename, size_bytes
+
+
+def extract_import_upload_archive(archive_path: Path, destination_dir: Path) -> Path:
+    extract_dir = destination_dir / "extracted"
+    extract_dir.mkdir(parents=True, exist_ok=True)
+    total_size = 0
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            for member in archive.infolist():
+                if member.is_dir():
+                    continue
+                member_path = Path(member.filename)
+                if member_path.is_absolute() or ".." in member_path.parts:
+                    raise NextApiError("Import archive contains an unsafe path", 400)
+                suffix = member_path.suffix.lower()
+                if suffix not in IMPORT_ARCHIVE_EXTENSIONS:
+                    continue
+                total_size += int(member.file_size or 0)
+                if total_size > MAX_IMPORT_ARCHIVE_BYTES:
+                    raise NextApiError("Import archive is too large after extraction", 413)
+                target = extract_dir / member_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(member) as source, target.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+    except zipfile.BadZipFile as exc:
+        raise NextApiError("Import archive is not a valid ZIP file", 400) from exc
+    if not any(path.is_file() for path in extract_dir.rglob("*")):
+        raise NextApiError("Import archive does not contain a supported import file", 400)
+    return extract_dir
+
+
+def import_upload_candidates(
+    conn,
+    *,
+    source_path: Path,
+    plugins: list[dict[str, Any]],
+    actor: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    candidates: list[dict[str, Any]] = []
+    best_preview: dict[str, Any] | None = None
+    def score(preview: dict[str, Any]) -> int:
+        counts = ((preview.get("actionPreview") or {}).get("counts") or {})
+        if counts.get("total") is not None:
+            try:
+                return int(counts.get("total") or 0)
+            except (TypeError, ValueError):
+                return 0
+        source_counts = (preview.get("source") or {}).get("sourceCounts") or {}
+        total = 0
+        for value in source_counts.values():
+            try:
+                total += int(value or 0)
+            except (TypeError, ValueError):
+                continue
+        return total
+
+    for plugin in plugins:
+        plugin_id = str(plugin.get("id") or "")
+        if not plugin_id:
+            continue
+        payload = import_source_payload_for_path(plugin_id, str(source_path))
+        try:
+            source, execution = inspect_import_source_plugin(conn, plugin, payload, actor)
+            summary = import_source_summary(source, execution)
+            candidates.append(summary)
+            if not source.get("found") or not source.get("readable"):
+                continue
+            preview = inspect_import_source_selection(
+                conn,
+                plugin_id=plugin_id,
+                payload=payload,
+                actor=actor,
+            )
+            if best_preview is None:
+                best_preview = preview
+                continue
+            if score(preview) > score(best_preview):
+                best_preview = preview
+        except NextApiError as exc:
+            candidates.append(
+                {
+                    "pluginId": plugin_id,
+                    "pluginName": plugin.get("name") or plugin_id,
+                    "status": "error",
+                    "found": False,
+                    "readable": False,
+                    "runtimeStatus": "error",
+                    "runtimeState": "error",
+                    "sourcePath": str(source_path),
+                    "sourceCounts": {},
+                    "warnings": [str(exc)],
+                }
+            )
+        except Exception as exc:
+            candidates.append(
+                {
+                    "pluginId": plugin_id,
+                    "pluginName": plugin.get("name") or plugin_id,
+                    "status": "error",
+                    "found": False,
+                    "readable": False,
+                    "runtimeStatus": "error",
+                    "runtimeState": "error",
+                    "sourcePath": str(source_path),
+                    "sourceCounts": {},
+                    "warnings": [str(exc)],
+                }
+            )
+    return candidates, best_preview
 
 
 def plan_migration_import_job(
@@ -6032,6 +6180,26 @@ def ui_preview_html(
       align-items: start;
       margin-top: 14px;
     }
+    .import-file-upload-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+    }
+    .import-file-upload-card .login-message,
+    .import-file-summary {
+      grid-column: 1 / -1;
+    }
+    .import-file-summary {
+      display: grid;
+      gap: 6px;
+    }
     .import-stack {
       display: grid;
       gap: 16px;
@@ -8320,6 +8488,15 @@ def ui_preview_html(
       .import-scanner-spotlight {
         grid-template-columns: 1fr;
       }
+      .import-file-upload-card {
+        grid-template-columns: 1fr;
+      }
+      .import-file-upload-card .button-row {
+        justify-content: stretch;
+      }
+      .import-file-upload-card button {
+        width: 100%;
+      }
       .barcode-scanner-viewport {
         min-height: min(420px, 58vh);
       }
@@ -8795,6 +8972,19 @@ def ui_preview_html(
                 <h3 data-next-i18n="importCenter.lookupTitle">Film toevoegen</h3>
                 <p data-next-i18n="importCenter.lookupHelp">Scan een barcode of zoek handmatig op barcode of titel voordat je een film toevoegt.</p>
               </div>
+            </div>
+            <div class="import-file-upload-card" id="importFileUploadCard">
+              <div>
+                <strong data-next-i18n="importCenter.fileTitle">Import file</strong>
+                <p class="import-source-meta" data-next-i18n="importCenter.fileHelp">Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.</p>
+                <div class="import-source-meta" id="importFileName" data-next-i18n="importCenter.fileSupported">Supported: CSV, TSV, JSON, XML and ZIP.</div>
+              </div>
+              <div class="button-row compact">
+                <input class="hidden" id="importFileInput" type="file" accept=".csv,.tsv,.json,.xml,.zip,application/json,text/csv,text/tab-separated-values,application/xml,text/xml,application/zip">
+                <button type="button" class="primary-button" id="importFileBrowseButton" data-next-i18n="importCenter.fileBrowse">Import / browse</button>
+              </div>
+              <div class="login-message" id="importFileMessage"></div>
+              <div class="import-file-summary" id="importFileSummary"></div>
             </div>
             <div class="import-scanner-spotlight">
               <div class="barcode-scanner-shell">
@@ -10039,7 +10229,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, columnMapping: {}, reviewDecisions: {}, barcodeLookup: null, addResult: null, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, barcodeLookup: null, addResult: null, activeTab: "add"};
     let importScanner = {
       running: false,
       native: false,
@@ -10077,6 +10267,13 @@ def ui_preview_html(
       if (value === null || value === undefined || value === "") return "-";
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric.toLocaleString() : String(value);
+    }
+    function formatFileSize(value) {
+      const bytes = Number(value || 0);
+      if (!Number.isFinite(bytes) || bytes <= 0) return "-";
+      if (bytes < 1024) return `${bytes.toLocaleString()} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
     function tNext(key, fallback) {
       return localeState.messages[key] || fallback || key;
@@ -10159,7 +10356,20 @@ def ui_preview_html(
       return headers;
     }
     async function apiJson(url, options) {
-      const response = await fetch(url, Object.assign({cache: "no-store"}, options || {}));
+      const incoming = Object.assign({}, options || {});
+      const timeoutMs = Number(incoming.timeoutMs || 0);
+      delete incoming.timeoutMs;
+      const controller = timeoutMs > 0 && !incoming.signal ? new AbortController() : null;
+      const timeout = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+      let response;
+      try {
+        response = await fetch(url, Object.assign({cache: "no-store"}, incoming, controller ? {signal: controller.signal} : {}));
+      } catch (error) {
+        if (error.name === "AbortError") throw new Error(`HTTP request timed out after ${Math.round(timeoutMs / 1000)} seconds`);
+        throw error;
+      } finally {
+        if (timeout) window.clearTimeout(timeout);
+      }
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const error = new Error(payload.error || `HTTP ${response.status}`);
@@ -10381,6 +10591,7 @@ def ui_preview_html(
       const importCanStart = hasPermission("collection.import");
       const importCanAdd = hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd);
       document.getElementById("importCenterStartButton")?.classList.toggle("hidden", !importCanStart);
+      setElementVisible(document.getElementById("importFileUploadCard"), importCanStart);
       document.querySelectorAll('[data-import-tab="sources"], [data-import-tab="plan"], [data-import-tab="jobs"]').forEach((button) => {
         setElementVisible(button, importCanStart);
       });
@@ -14465,6 +14676,12 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function setImportFileMessage(message, tone) {
+      const node = document.getElementById("importFileMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
     function importSourceId(source) {
       return String((source || {}).pluginId || (source || {}).id || "");
     }
@@ -14544,6 +14761,45 @@ def ui_preview_html(
           </button>
         `;
       }).join("");
+    }
+    function renderImportFileUpload() {
+      const summary = document.getElementById("importFileSummary");
+      const fileName = document.getElementById("importFileName");
+      if (!summary) return;
+      const upload = importCenter.upload || {};
+      const candidates = importCenter.uploadCandidates || [];
+      const selected = importPreviewSource();
+      if (fileName) {
+        fileName.textContent = upload.fileName
+          ? `${tNext("importCenter.fileSelected", "Selected file")}: ${upload.fileName}`
+          : tNext("importCenter.fileSupported", "Supported: CSV, TSV, JSON, XML and ZIP.");
+      }
+      if (!upload.fileName && !candidates.length) {
+        summary.innerHTML = "";
+        return;
+      }
+      const recognized = !!(selected && importSourceId(selected) && selected.found && selected.readable);
+      summary.innerHTML = `
+        <div class="import-counts">
+          ${upload.sizeBytes ? `<span class="tag">${escapeHtml(formatFileSize(upload.sizeBytes))}</span>` : ""}
+          ${upload.archive ? `<span class="tag">ZIP</span>` : ""}
+          ${recognized ? `<span class="tag good">${escapeHtml(tNext("importCenter.fileRecognized", "Recognized"))}</span>` : `<span class="tag">${escapeHtml(tNext("importCenter.fileNotRecognized", "Not recognized"))}</span>`}
+        </div>
+        ${selected && importSourceId(selected) ? `
+          <div class="import-source-meta">
+            ${escapeHtml(tNext("importCenter.fileChosenSource", "Chosen source"))}: ${escapeHtml(selected.pluginName || selected.pluginId || "-")}
+          </div>
+        ` : ""}
+        ${candidates.length ? `
+          <div class="import-source-meta">${escapeHtml(tNext("importCenter.fileCandidates", "Plugin checks"))}</div>
+          <div class="import-counts">
+            ${candidates.map((candidate) => {
+              const ok = candidate.found && candidate.readable;
+              return `<span class="tag ${ok ? "good" : ""}">${escapeHtml(candidate.pluginName || candidate.pluginId || "-")}</span>`;
+            }).join("")}
+          </div>
+        ` : ""}
+      `;
     }
     function importPreviewSource() {
       return (importCenter.preview && importCenter.preview.source) || selectedImportSource(importCenter.report || {});
@@ -15380,6 +15636,7 @@ def ui_preview_html(
     function renderImportCenter() {
       renderImportTabs();
       renderImportSources();
+      renderImportFileUpload();
       renderImportPlan();
       renderImportMapping();
       renderImportReview();
@@ -15438,6 +15695,38 @@ def ui_preview_html(
         setImportCenterMessage(error.message || String(error), "bad");
       }
     }
+    async function uploadImportSourceFile(file) {
+      if (!hasPermission("collection.import")) return;
+      if (!file) {
+        setImportFileMessage(tNext("importCenter.fileNoFile", "Choose a file first."), "bad");
+        return;
+      }
+      const data = new FormData();
+      data.append("file", file);
+      setImportFileMessage(tNext("importCenter.fileUploading", "Uploading and checking plugins..."));
+      try {
+        const payload = await authApiJson("/api/next/import/source/upload", {
+          method: "POST",
+          body: data
+        });
+        importCenter.upload = payload.upload || null;
+        importCenter.uploadCandidates = payload.candidates || [];
+        importCenter.preview = payload.preview || null;
+        importCenter.reviewDecisions = {};
+        importCenter.columnMapping = {};
+        if (payload.selectedSourceId) importCenter.selectedSourceId = payload.selectedSourceId;
+        if (importCenter.upload?.sourcePath) importCenter.sourcePath = importCenter.upload.sourcePath;
+        renderImportCenter();
+        if (payload.recognized) {
+          setImportFileMessage(tNext("importCenter.fileReady", "File recognized. Review the import before starting."), "good");
+          setImportCenterTab(importReviewRows().length ? "review" : "plan");
+        } else {
+          setImportFileMessage(tNext("importCenter.fileUnrecognized", "No enabled import plugin recognized this file."), "bad");
+        }
+      } catch (error) {
+        setImportFileMessage(error.message || String(error), "bad");
+      }
+    }
     async function startImportCenterImport() {
       if (!hasPermission("collection.import")) return;
       const source = selectedImportSource(importCenter.report || {});
@@ -15491,7 +15780,8 @@ def ui_preview_html(
         const payload = await authApiJson("/api/next/metadata/lookup", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({barcode, title, year, format, detectBoxSets: true})
+          timeoutMs: 30000,
+          body: JSON.stringify({barcode, title, year, format, detectBoxSets: true, previewMode: true})
         });
         importCenter.barcodeLookup = payload;
         renderBarcodeLookup();
@@ -17752,6 +18042,14 @@ def ui_preview_html(
       document.getElementById("importHistoryStatusFilter")?.addEventListener("change", () => renderImportJobs());
       document.getElementById("importHistoryPluginFilter")?.addEventListener("change", () => renderImportJobs());
       document.getElementById("importSourceInspectButton")?.addEventListener("click", () => inspectSelectedImportSource());
+      document.getElementById("importFileBrowseButton")?.addEventListener("click", () => {
+        document.getElementById("importFileInput")?.click();
+      });
+      document.getElementById("importFileInput")?.addEventListener("change", (event) => {
+        const file = event.target.files && event.target.files[0];
+        uploadImportSourceFile(file);
+        event.target.value = "";
+      });
       document.getElementById("importSourcePathInput")?.addEventListener("input", (event) => {
         importCenter.sourcePath = String(event.target.value || "").trim();
         importCenter.preview = null;
@@ -30798,6 +31096,76 @@ def register_routes(flask_app: Flask) -> None:
                 actor=actor,
             )
         return response({"status": "ok", "preview": result})
+
+    @flask_app.post("/api/next/import/source/upload")
+    def upload_import_source_file():
+        if request.content_length and request.content_length > MAX_IMPORT_UPLOAD_BYTES:
+            raise NextApiError("Import file is too large", 413)
+        requested_plugin_id = clean_text(
+            request.form.get("importSourceId")
+            or request.form.get("pluginId")
+            or request.args.get("importSourceId")
+            or request.args.get("pluginId")
+        )
+        upload_id = uuid.uuid4().hex
+        upload_dir = import_upload_root() / upload_id
+        upload_path, filename, size_bytes = store_import_upload(upload_dir)
+        source_path = upload_path
+        archive = upload_path.suffix.lower() == ".zip"
+        if archive:
+            source_path = extract_import_upload_archive(upload_path, upload_dir)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.import")
+            plugins = import_source_plugins(conn)
+            if requested_plugin_id:
+                plugin = import_source_plugin_by_id(conn, requested_plugin_id)
+                if not plugin:
+                    raise NextApiError(f"Import source plugin is not available: {requested_plugin_id}", 409)
+                plugins = [plugin]
+            candidates, preview = import_upload_candidates(
+                conn,
+                source_path=source_path,
+                plugins=plugins,
+                actor=actor,
+            )
+            selected_source_id = None
+            if preview and isinstance(preview.get("source"), dict):
+                selected_source_id = preview["source"].get("pluginId")
+            recognized = bool(preview and selected_source_id)
+            if recognized:
+                audit_event(
+                    conn,
+                    event_type="import_source.uploaded",
+                    category="import",
+                    actor=actor,
+                    target_type="plugin",
+                    target_id=selected_source_id,
+                    summary=f"Uploaded import file {filename}",
+                    metadata={
+                        "fileName": filename,
+                        "sizeBytes": size_bytes,
+                        "sourcePath": str(source_path),
+                        "pluginId": selected_source_id,
+                        "archive": archive,
+                    },
+                )
+        return response(
+            {
+                "status": "ok",
+                "recognized": recognized,
+                "selectedSourceId": selected_source_id,
+                "preview": preview,
+                "candidates": candidates,
+                "upload": {
+                    "id": upload_id,
+                    "fileName": filename,
+                    "sizeBytes": size_bytes,
+                    "uploadedFile": str(upload_path),
+                    "sourcePath": str(source_path),
+                    "archive": archive,
+                },
+            }
+        )
 
     @flask_app.post("/api/next/import/source/start")
     def start_import_source():

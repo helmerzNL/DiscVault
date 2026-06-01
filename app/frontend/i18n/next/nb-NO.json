@@ -1064,5 +1064,18 @@
   "profile.sections": "Profilseksjoner",
   "profile.tabAccount": "Konto",
   "profile.tabNotifications": "Varsler",
-  "profile.tabStructure": "Struktur"
+  "profile.tabStructure": "Struktur",
+  "importCenter.fileTitle": "Importfil",
+  "importCenter.fileHelp": "Last opp en CSV-, TSV-, JSON-, XML- eller ZIP-fil. DiscVault spor de aktive importtilleggene hvilket som gjenkjenner den.",
+  "importCenter.fileBrowse": "Importer / bla gjennom",
+  "importCenter.fileSelected": "Valgt fil",
+  "importCenter.fileUploading": "Laster opp og kontrollerer tillegg...",
+  "importCenter.fileReady": "Filen ble gjenkjent. Se gjennom importen foer du starter.",
+  "importCenter.fileUnrecognized": "Ingen aktive importtillegg gjenkjente denne filen.",
+  "importCenter.fileSupported": "Stottes: CSV, TSV, JSON, XML og ZIP.",
+  "importCenter.fileCandidates": "Tilleggskontroller",
+  "importCenter.fileChosenSource": "Valgt kilde",
+  "importCenter.fileNoFile": "Velg en fil forst.",
+  "importCenter.fileRecognized": "Gjenkjent",
+  "importCenter.fileNotRecognized": "Ikke gjenkjent"
 }
