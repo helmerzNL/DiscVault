@@ -12698,7 +12698,7 @@ def ui_preview_html(
       const resolution = {create: [], map: {}, skip: [], createMissing: false};
       const targetLines = targets.map((target, index) => {
         return `${index + 1}. ${target.name || target.public_id || target.id}`;
-      }).join("\n");
+      }).join("\\n");
       for (const group of missing) {
         const key = appAdminBackupGroupKey(group);
         const label = group.name || group.publicId || group.backupGroupId || tNext("appAdmin.backupGroup", "Backup group");
@@ -12706,7 +12706,7 @@ def ui_preview_html(
           "appAdmin.backupGroupResolutionPrompt",
           "The backup contains a group that does not exist here: {group}. Type an existing group number/name to attach these movies, leave empty to create it, or type skip."
         ).replace("{group}", label);
-        if (targetLines) promptText += `\n\n${targetLines}`;
+        if (targetLines) promptText += `\\n\\n${targetLines}`;
         const answer = window.prompt(promptText, "");
         if (answer === null) throw new Error(tNext("appAdmin.backupRestoreCancelled", "Restore cancelled."));
         const value = answer.trim();
