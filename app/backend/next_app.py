@@ -1073,6 +1073,7 @@ def normalize_import_source_result(
         ),
         "sourceCounts": source_counts if isinstance(source_counts, dict) else {},
         "mediaExtensions": media_extensions if isinstance(media_extensions, dict) else {},
+        "mapping": result.get("mapping") if isinstance(result.get("mapping"), dict) else {},
         "mediaMigrationMode": clean_text(
             result.get("mediaMigrationMode") or result.get("media_migration_mode")
         ) or "reference_existing_files",
@@ -1115,6 +1116,7 @@ def import_source_summary(source: dict[str, Any], execution: dict[str, Any]) -> 
         "sourceDatabaseHash": source.get("sourceDatabaseHash"),
         "sourceCounts": source.get("sourceCounts") or {},
         "mediaExtensions": source.get("mediaExtensions") or {},
+        "mapping": source.get("mapping") or {},
         "sample": source.get("sample") or [],
         "warnings": source.get("warnings") or [],
     }
@@ -1457,15 +1459,88 @@ def import_source_plugin_by_id(conn, plugin_id: str | None) -> dict[str, Any] | 
     return None
 
 
-def import_source_payload_for_path(plugin_id: str, source_path: str) -> dict[str, Any]:
-    if not source_path:
+def normalize_import_column_mapping(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
         return {}
+    mapping: dict[str, str] = {}
+    allowed = {
+        "externalId",
+        "title",
+        "originalTitle",
+        "year",
+        "releaseDate",
+        "barcode",
+        "format",
+        "edition",
+        "country",
+        "language",
+        "overview",
+        "runtime",
+        "rating",
+        "director",
+        "actor",
+        "genre",
+        "imdbId",
+        "tmdbId",
+        "poster",
+        "backdrop",
+        "sourceUrl",
+        "collectionTitle",
+        "boxSetTitle",
+        "vaultTitle",
+        "watchedAt",
+        "watchlisted",
+        "tags",
+    }
+    for key, raw in value.items():
+        field = clean_text(key)
+        column = clean_text(raw)
+        if field in allowed and column:
+            mapping[field] = column
+    return mapping
+
+
+def normalize_import_review(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    decisions: list[dict[str, Any]] = []
+    for raw in value.get("decisions") or []:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            index = int(raw.get("index"))
+        except (TypeError, ValueError):
+            index = None
+        action = clean_text(raw.get("action"))
+        if not index or index < 1 or action not in {"import", "update", "create", "skip"}:
+            continue
+        decisions.append(
+            {
+                "index": index,
+                "action": action,
+                "note": clean_text(raw.get("note")),
+            }
+        )
+    return {"decisions": decisions} if decisions else {}
+
+
+def import_source_payload_for_path(
+    plugin_id: str,
+    source_path: str,
+    column_mapping: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    column_mapping = column_mapping or {}
+    if not source_path:
+        return {"columnMapping": column_mapping} if column_mapping else {}
     if plugin_id == "discvault_legacy_import":
         path = Path(source_path)
         if path.suffix.lower() in {".db", ".sqlite", ".sqlite3"}:
             return {"sqliteDb": source_path, "dataDir": str(path.parent)}
         return {"dataDir": source_path}
-    return {"sourcePath": source_path}
+    payload = {"sourcePath": source_path}
+    if column_mapping:
+        payload["columnMapping"] = column_mapping
+    return payload
 
 
 def plan_migration_import_job(
@@ -1489,6 +1564,7 @@ def plan_migration_import_job(
         "sqliteDb": source.get("sqliteDb"),
         "sourcePath": options.get("sourcePath") or source.get("sourcePath"),
         "sourceDatabaseHash": source.get("sourceDatabaseHash"),
+        "columnMapping": options.get("columnMapping") or {},
         "includeSecurity": options.get("includeSecurity"),
         "includePersonal": options.get("includePersonal"),
         "importMediaReferences": options.get("importMediaReferences"),
@@ -1517,7 +1593,14 @@ def plan_migration_import_job(
     if job_type == "plugin.execute" and clean_text(job_payload.get("entrypoint")) != "import_source":
         raise NextApiError(f"Unsupported plugin import entrypoint: {job_payload.get('entrypoint')}", 409)
     job_payload = dict(job_payload)
+    if job_type == "plugin.execute":
+        plugin_payload = dict(job_payload.get("payload") or {})
+        if options.get("columnMapping"):
+            plugin_payload["columnMapping"] = options.get("columnMapping")
+        job_payload["payload"] = plugin_payload
     job_payload["requestedBy"] = actor_job_payload(actor)
+    if options.get("importReview"):
+        job_payload["importReview"] = options.get("importReview")
     job_payload["importSource"] = {
         "pluginId": plugin_id,
         "pluginName": plugin.get("name"),
@@ -5956,7 +6039,8 @@ def ui_preview_html(
     }
     .import-source-list,
     .import-job-list,
-    .import-result-list {
+    .import-result-list,
+    .import-review-list {
       display: grid;
       gap: 10px;
       min-width: 0;
@@ -5996,6 +6080,44 @@ def ui_preview_html(
     .import-source-head strong,
     .import-job-head strong {
       overflow-wrap: anywhere;
+    }
+    .import-history-section {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .import-history-section h4 {
+      margin: 0;
+      font-size: .88rem;
+    }
+    .import-history-list {
+      display: grid;
+      gap: 6px;
+    }
+    .import-history-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 9px 10px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .import-history-row strong {
+      overflow-wrap: anywhere;
+    }
+    .import-history-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    .import-history-actions button {
+      min-height: 32px;
+      border-radius: 11px;
+      padding: 0 10px;
+      font-size: .8rem;
     }
     .import-source-meta,
     .import-job-meta,
@@ -6056,6 +6178,72 @@ def ui_preview_html(
     }
     .import-preview-card strong {
       overflow-wrap: anywhere;
+    }
+    .import-mapping-card {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+    }
+    .import-mapping-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+    }
+    .import-mapping-grid label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 760;
+    }
+    .import-mapping-grid select,
+    .import-review-action select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: var(--field);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+    }
+    .import-review-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .import-review-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(150px, .26fr);
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      padding: 12px;
+    }
+    .import-review-row.is-skip {
+      opacity: .68;
+    }
+    .import-review-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+    .import-review-action {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 760;
     }
     .import-conflict-list {
       display: flex;
@@ -8114,6 +8302,21 @@ def ui_preview_html(
       .import-grid {
         grid-template-columns: 1fr;
       }
+      .import-card-head,
+      .import-review-row,
+      .import-history-row {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+      .import-history-actions {
+        justify-content: stretch;
+      }
+      .import-history-actions button {
+        width: 100%;
+      }
+      .import-mapping-grid {
+        grid-template-columns: 1fr;
+      }
       .import-scanner-spotlight {
         grid-template-columns: 1fr;
       }
@@ -8581,6 +8784,7 @@ def ui_preview_html(
           <button type="button" class="active" data-import-tab="add" data-next-i18n="importCenter.addTab">Scan & add</button>
           <button type="button" data-import-tab="sources" data-next-i18n="importCenter.sources">Import sources</button>
           <button type="button" data-import-tab="plan" data-next-i18n="importCenter.plan">Plan</button>
+          <button type="button" data-import-tab="review" data-next-i18n="importCenter.review">Review</button>
           <button type="button" data-import-tab="jobs" data-next-i18n="importCenter.jobs">Jobs</button>
         </nav>
         <section class="import-tab-panel" data-import-panel="add">
@@ -8672,16 +8876,58 @@ def ui_preview_html(
             </div>
             <p class="import-source-meta" data-next-i18n="importCenter.sourcePathHelp">Override the configured plugin path for one preview/import run.</p>
             <div class="profile-meta" id="importCenterPlan"></div>
+            <div class="import-mapping-card" id="importCenterMappingCard">
+              <div class="import-card-head">
+                <div>
+                  <h3 data-next-i18n="importCenter.mappingTitle">Column mapping</h3>
+                  <p class="import-source-meta" data-next-i18n="importCenter.mappingHelp">Adjust how DiscVault reads columns before previewing or importing.</p>
+                </div>
+                <button type="button" class="secondary-button" id="importMappingResetButton" data-next-i18n="importCenter.mappingReset">Use detected mapping</button>
+              </div>
+              <div class="import-mapping-grid" id="importCenterMapping"></div>
+            </div>
             <div class="import-preview-grid" id="importCenterPreview"></div>
             <div class="import-counts" id="importCenterSourceCounts"></div>
             <div class="login-message" id="importCenterMessage"></div>
           </div>
         </section>
+        <section class="import-tab-panel hidden" data-import-panel="review">
+          <div class="detail-card full">
+            <div class="import-card-head">
+              <div>
+                <h3 data-next-i18n="importCenter.reviewTitle">Review import</h3>
+                <p class="import-source-meta" data-next-i18n="importCenter.reviewHelp">Confirm creates, updates, skips and proposed container links before starting the job.</p>
+              </div>
+              <div class="button-row compact">
+                <button type="button" class="secondary-button" id="importReviewAllButton" data-next-i18n="importCenter.reviewImportAll">Import all</button>
+                <button type="button" class="secondary-button" id="importReviewSkipUpdatesButton" data-next-i18n="importCenter.reviewSkipUpdates">Skip updates</button>
+                <button type="button" class="primary-button" id="importReviewStartButton" data-next-i18n="importCenter.start">Start import</button>
+              </div>
+            </div>
+            <div class="import-review-summary" id="importCenterReviewSummary"></div>
+            <div class="import-review-list" id="importCenterReview"></div>
+          </div>
+        </section>
         <section class="import-tab-panel hidden" data-import-panel="jobs">
           <div class="detail-card profile-card full">
             <div class="import-card-head">
-              <h3 data-next-i18n="importCenter.jobs">Jobs</h3>
-              <span class="tag" id="importCenterJobCount">-</span>
+              <div>
+                <h3 data-next-i18n="importCenter.historyTitle">Import history</h3>
+                <p class="import-source-meta" data-next-i18n="importCenter.historyHelp">Review completed imports, created items, warnings and linked containers.</p>
+              </div>
+              <div class="button-row compact">
+                <select id="importHistoryStatusFilter" aria-label="Import status filter" data-next-i18n-aria="importCenter.historyStatusFilter">
+                  <option value="all" data-next-i18n="importCenter.historyAllStatuses">All statuses</option>
+                  <option value="completed" data-next-i18n="importCenter.historyCompleted">Completed</option>
+                  <option value="failed" data-next-i18n="importCenter.historyFailed">Failed</option>
+                  <option value="pending" data-next-i18n="importCenter.historyPending">Pending</option>
+                  <option value="running" data-next-i18n="importCenter.historyRunning">Running</option>
+                </select>
+                <select id="importHistoryPluginFilter" aria-label="Import plugin filter" data-next-i18n-aria="importCenter.historyPluginFilter">
+                  <option value="all" data-next-i18n="importCenter.historyAllSources">All sources</option>
+                </select>
+                <span class="tag" id="importCenterJobCount">-</span>
+              </div>
             </div>
             <div class="import-job-list" id="importCenterJobs"></div>
           </div>
@@ -9793,7 +10039,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, barcodeLookup: null, addResult: null, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, columnMapping: {}, reviewDecisions: {}, barcodeLookup: null, addResult: null, activeTab: "add"};
     let importScanner = {
       running: false,
       native: false,
@@ -14302,6 +14548,170 @@ def ui_preview_html(
     function importPreviewSource() {
       return (importCenter.preview && importCenter.preview.source) || selectedImportSource(importCenter.report || {});
     }
+    const IMPORT_MAPPING_FIELDS = [
+      ["title", "Title"],
+      ["originalTitle", "Original title"],
+      ["year", "Year"],
+      ["barcode", "Barcode"],
+      ["format", "Format"],
+      ["edition", "Edition"],
+      ["country", "Country"],
+      ["language", "Language"],
+      ["overview", "Plot"],
+      ["director", "Director"],
+      ["actor", "Actors"],
+      ["genre", "Genre"],
+      ["imdbId", "IMDb ID"],
+      ["tmdbId", "TMDb ID"],
+      ["poster", "Poster"],
+      ["backdrop", "Backdrop"],
+      ["sourceUrl", "Source URL"],
+      ["collectionTitle", "Collection"],
+      ["boxSetTitle", "Box-set"],
+      ["vaultTitle", "Vault"],
+      ["watchedAt", "Watched date"],
+      ["watchlisted", "Watchlist"],
+      ["tags", "Tags"]
+    ];
+    function importMappingSource() {
+      return (importCenter.preview && importCenter.preview.source && importCenter.preview.source.mapping)
+        || (selectedImportSource(importCenter.report || {}).mapping)
+        || {};
+    }
+    function effectiveImportColumnMapping() {
+      const mapping = importMappingSource();
+      return {
+        ...(mapping.detected || {}),
+        ...(mapping.effective || {}),
+        ...(importCenter.columnMapping || {})
+      };
+    }
+    function collectImportColumnMapping() {
+      const mapping = {};
+      document.querySelectorAll("[data-import-mapping-field]").forEach((select) => {
+        if (select.value) mapping[select.dataset.importMappingField] = select.value;
+      });
+      importCenter.columnMapping = mapping;
+      return mapping;
+    }
+    function resetImportColumnMapping() {
+      const mapping = importMappingSource();
+      importCenter.columnMapping = {...(mapping.detected || {})};
+      importCenter.preview = null;
+      renderImportCenter();
+    }
+    function renderImportMapping() {
+      const node = document.getElementById("importCenterMapping");
+      const card = document.getElementById("importCenterMappingCard");
+      if (!node || !card) return;
+      const mapping = importMappingSource();
+      const columns = mapping.availableColumns || [];
+      if (!columns.length) {
+        card.classList.add("hidden");
+        return;
+      }
+      card.classList.remove("hidden");
+      const effective = effectiveImportColumnMapping();
+      node.innerHTML = IMPORT_MAPPING_FIELDS.map(([field, fallback]) => {
+        const current = effective[field] || "";
+        return `
+          <label>
+            <span>${escapeHtml(tNext(`importCenter.mapping.${field}`, fallback))}</span>
+            <select data-import-mapping-field="${escapeHtml(field)}">
+              <option value="">${escapeHtml(tNext("importCenter.mappingAuto", "Auto"))}</option>
+              ${columns.map((column) => `<option value="${escapeHtml(column)}" ${column === current ? "selected" : ""}>${escapeHtml(column)}</option>`).join("")}
+            </select>
+          </label>
+        `;
+      }).join("");
+    }
+    function importReviewRows() {
+      const preview = importCenter.preview || {};
+      const actionPreview = preview.actionPreview || {};
+      return actionPreview.actions || [];
+    }
+    function setImportReviewMode(mode) {
+      const rows = importReviewRows();
+      const decisions = {};
+      rows.forEach((row) => {
+        const index = Number(row.index || 0);
+        if (!index) return;
+        if (mode === "skipUpdates" && row.action === "update") {
+          decisions[index] = "skip";
+        } else {
+          decisions[index] = row.action === "update" ? "update" : "create";
+        }
+      });
+      importCenter.reviewDecisions = decisions;
+      renderImportReview();
+    }
+    function collectImportReview() {
+      const decisions = [];
+      document.querySelectorAll("[data-import-review-action]").forEach((select) => {
+        const index = Number(select.dataset.importReviewAction || 0);
+        const action = select.value || "import";
+        if (index && action) decisions.push({index, action});
+      });
+      importCenter.reviewDecisions = Object.fromEntries(decisions.map((item) => [item.index, item.action]));
+      return {decisions};
+    }
+    function renderImportReview() {
+      const list = document.getElementById("importCenterReview");
+      const summary = document.getElementById("importCenterReviewSummary");
+      const startButton = document.getElementById("importReviewStartButton");
+      if (!list || !summary) return;
+      const rows = importReviewRows();
+      const containers = ((importCenter.preview || {}).actionPreview || {}).containers || [];
+      if (!rows.length) {
+        summary.innerHTML = "";
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.reviewEmpty", "Inspect a source before reviewing the import."))}</div>`;
+        if (startButton) startButton.disabled = true;
+        return;
+      }
+      const decisions = importCenter.reviewDecisions || {};
+      const counts = rows.reduce((acc, row) => {
+        const action = decisions[row.index] || row.action || "import";
+        acc[action] = (acc[action] || 0) + 1;
+        return acc;
+      }, {});
+      summary.innerHTML = `
+        <span class="tag">${escapeHtml(tNext("importCenter.actionTotal", "Total"))} ${escapeHtml(rows.length)}</span>
+        <span class="tag good">${escapeHtml(tNext("importCenter.action.create", "Create"))} ${escapeHtml(counts.create || 0)}</span>
+        <span class="tag">${escapeHtml(tNext("importCenter.action.update", "Update"))} ${escapeHtml(counts.update || 0)}</span>
+        <span class="tag">${escapeHtml(tNext("importCenter.action.skip", "Skip"))} ${escapeHtml(counts.skip || 0)}</span>
+        <span class="tag">${escapeHtml(tNext("importCenter.containerPreview", "Container proposals"))} ${escapeHtml(containers.length || 0)}</span>
+      `;
+      list.innerHTML = rows.map((row) => {
+        const action = decisions[row.index] || row.action || "import";
+        const title = row.title || tNext("common.untitled", "Untitled");
+        const meta = [row.year, row.format, row.barcode].filter(Boolean).join(" / ");
+        const match = row.match ? (row.match.title || row.match.id || "") : "";
+        const containerTags = (row.containers || []).map((container) => `<span class="tag">${escapeHtml(container.containerType || container.type)} ${escapeHtml(container.title || "")}</span>`).join("");
+        return `
+          <div class="import-review-row ${action === "skip" ? "is-skip" : ""}">
+            <div>
+              <div class="import-review-title">
+                <span>${escapeHtml(title)}</span>
+                <span class="tag ${row.action === "create" ? "good" : ""}">${escapeHtml(tNext(`importCenter.action.${row.action}`, row.action || "import"))}</span>
+              </div>
+              <div class="import-source-meta">${escapeHtml(meta || row.sourceFile || "")}</div>
+              ${match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml(match)}</div>` : ""}
+              ${containerTags ? `<div class="import-counts">${containerTags}</div>` : ""}
+            </div>
+            <label class="import-review-action">
+              <span>${escapeHtml(tNext("importCenter.reviewDecision", "Decision"))}</span>
+              <select data-import-review-action="${escapeHtml(row.index)}">
+                ${row.action === "update"
+                  ? `<option value="update" ${action === "update" ? "selected" : ""}>${escapeHtml(tNext("importCenter.action.update", "Update"))}</option>`
+                  : `<option value="create" ${action === "create" ? "selected" : ""}>${escapeHtml(tNext("importCenter.action.create", "Create"))}</option>`}
+                <option value="skip" ${action === "skip" ? "selected" : ""}>${escapeHtml(tNext("importCenter.action.skip", "Skip"))}</option>
+              </select>
+            </label>
+          </div>
+        `;
+      }).join("");
+      if (startButton) startButton.disabled = false;
+    }
     function renderImportPreview() {
       const previewNode = document.getElementById("importCenterPreview");
       if (!previewNode) return;
@@ -14444,10 +14854,112 @@ def ui_preview_html(
       `;
       renderImportPreview();
     }
+    function importJobPluginId(job) {
+      const payload = job.payload || {};
+      const result = job.result || {};
+      const persistence = result.persistence || {};
+      return payload.pluginId
+        || result.pluginId
+        || (payload.importSource || {}).pluginId
+        || persistence.pluginId
+        || "";
+    }
+    function importJobPersistence(job) {
+      const result = job.result || {};
+      return result.persistence || result.summary || result.result || {};
+    }
+    function importHistoryFilteredJobs() {
+      const statusFilter = document.getElementById("importHistoryStatusFilter")?.value || "all";
+      const pluginFilter = document.getElementById("importHistoryPluginFilter")?.value || "all";
+      return (importCenter.jobs || []).filter((job) => {
+        if (statusFilter !== "all" && String(job.status || "") !== statusFilter) return false;
+        if (pluginFilter !== "all" && importJobPluginId(job) !== pluginFilter) return false;
+        return true;
+      });
+    }
+    function renderImportHistoryFilters() {
+      const select = document.getElementById("importHistoryPluginFilter");
+      if (!select) return;
+      const current = select.value || "all";
+      const plugins = Array.from(new Set((importCenter.jobs || []).map(importJobPluginId).filter(Boolean))).sort();
+      select.innerHTML = `<option value="all">${escapeHtml(tNext("importCenter.historyAllSources", "All sources"))}</option>`
+        + plugins.map((pluginId) => `<option value="${escapeHtml(pluginId)}" ${pluginId === current ? "selected" : ""}>${escapeHtml(pluginId)}</option>`).join("");
+      if (current !== "all" && !plugins.includes(current)) select.value = "all";
+    }
+    function renderImportJobContainers(persistence) {
+      const containers = persistence.containers || [];
+      const collectionId = persistence.collectionId || persistence.collection_id || "";
+      const rows = [];
+      if (collectionId) {
+        rows.push({
+          id: collectionId,
+          title: tNext("importCenter.importCollection", "Import collection"),
+          containerType: "collection"
+        });
+      }
+      containers.forEach((container) => rows.push(container));
+      if (!rows.length) return "";
+      return `
+        <div class="import-history-section">
+          <h4>${escapeHtml(tNext("importCenter.historyContainers", "Containers"))}</h4>
+          <div class="import-history-list">
+            ${rows.slice(0, 8).map((container) => `
+              <div class="import-history-row">
+                <div>
+                  <strong>${escapeHtml(container.title || container.id || "-")}</strong>
+                  <div class="import-source-meta">${escapeHtml(container.containerType || "collection")}</div>
+                </div>
+                ${container.id ? `<div class="import-history-actions"><button type="button" class="secondary-button" data-import-open-container="${escapeHtml(container.id)}">${escapeHtml(tNext("importCenter.openCollection", "Open"))}</button></div>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+    function renderImportJobMovies(persistence) {
+      const movies = persistence.movies || [];
+      if (!movies.length) return "";
+      return `
+        <div class="import-history-section">
+          <h4>${escapeHtml(tNext("importCenter.historyMovies", "Movies"))}</h4>
+          <div class="import-history-list">
+            ${movies.slice(0, 10).map((movie) => `
+              <div class="import-history-row">
+                <div>
+                  <strong>${escapeHtml(movie.title || movie.id || "-")}</strong>
+                  <div class="import-source-meta">${escapeHtml([movie.year, movie.barcode, movie.action].filter(Boolean).join(" / "))}</div>
+                </div>
+                ${movie.id ? `<div class="import-history-actions"><button type="button" class="secondary-button" data-open-movie="${escapeHtml(movie.id)}">${escapeHtml(tNext("common.open", "Open"))}</button></div>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+    function renderImportJobWarnings(persistence, job) {
+      const warnings = [
+        ...((persistence.warnings || []).map((item) => String(item))),
+        ...((persistence.errors || []).map((item) => item.error || JSON.stringify(item))),
+        ...(job.error ? [job.error] : [])
+      ].filter(Boolean);
+      if (!warnings.length) return "";
+      return `
+        <div class="import-history-section">
+          <h4>${escapeHtml(tNext("importCenter.historyWarnings", "Warnings"))}</h4>
+          <div class="import-counts">
+            ${warnings.slice(0, 6).map((warning) => `<span class="tag bad">${escapeHtml(warning)}</span>`).join("")}
+          </div>
+        </div>
+      `;
+    }
     function renderImportJobs() {
       const list = document.getElementById("importCenterJobs");
       const count = document.getElementById("importCenterJobCount");
-      const jobs = importCenter.jobs || [];
+      const active = document.activeElement;
+      if (!active || !["importHistoryStatusFilter", "importHistoryPluginFilter"].includes(active.id)) {
+        renderImportHistoryFilters();
+      }
+      const jobs = importHistoryFilteredJobs();
       if (count) count.textContent = `${jobs.length || 0}`;
       if (!list) return;
       if (!jobs.length) {
@@ -14457,9 +14969,9 @@ def ui_preview_html(
       list.innerHTML = jobs.map((job) => {
         const result = job.result || {};
         const payload = job.payload || {};
-        const summary = result.summary || result.result || {};
-        const counters = (summary && summary.counters) || result.persistence || (result.result && result.result.applied) || (result.result && result.result.stats) || {};
-        const pluginId = payload.pluginId || result.pluginId || "";
+        const persistence = importJobPersistence(job);
+        const counters = (persistence && persistence.counters) || persistence || (result.result && result.result.applied) || (result.result && result.result.stats) || {};
+        const pluginId = importJobPluginId(job);
         const entrypoint = payload.entrypoint || result.entrypoint || "";
         const movieId = payload.movieId || (result.result && result.result.movieId) || result.movieId || "";
         const jobTitle = job.jobType === "plugin.execute" && entrypoint === "import_source"
@@ -14488,6 +15000,9 @@ def ui_preview_html(
               ${payload.dryRun !== undefined ? `<span class="tag ${payload.dryRun ? "" : "good"}">${escapeHtml(tNext("importCenter.dryRun", "Dry run"))} ${escapeHtml(String(payload.dryRun))}</span>` : ""}
             </div>
             <div class="import-counts">${importCountChips(counters || {}, 5)}</div>
+            ${renderImportJobContainers(persistence)}
+            ${renderImportJobMovies(persistence)}
+            ${renderImportJobWarnings(persistence, job)}
             <details>
               <summary class="import-result-meta">${escapeHtml(tNext("importCenter.jobDetails", "Job details"))}</summary>
               <pre class="job-json">${escapeHtml(jsonPreview(details))}</pre>
@@ -14866,6 +15381,8 @@ def ui_preview_html(
       renderImportTabs();
       renderImportSources();
       renderImportPlan();
+      renderImportMapping();
+      renderImportReview();
       renderImportJobs();
       renderBarcodeLookup();
       applyAppPermissionVisibility();
@@ -14905,14 +15422,16 @@ def ui_preview_html(
       }
       const input = document.getElementById("importSourcePathInput");
       importCenter.sourcePath = String(input?.value || "").trim();
+      const columnMapping = collectImportColumnMapping();
       setImportCenterMessage(tNext("importCenter.inspecting", "Inspecting source..."));
       try {
         const payload = await authApiJson("/api/next/import/source/inspect", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({importSourceId: sourceId, sourcePath: importCenter.sourcePath})
+          body: JSON.stringify({importSourceId: sourceId, sourcePath: importCenter.sourcePath, columnMapping})
         });
         importCenter.preview = payload.preview || null;
+        importCenter.reviewDecisions = {};
         renderImportCenter();
         setImportCenterMessage(tNext("importCenter.inspectReady", "Source preview ready."), "good");
       } catch (error) {
@@ -14931,6 +15450,8 @@ def ui_preview_html(
       try {
         const pathInput = document.getElementById("importSourcePathInput");
         importCenter.sourcePath = String(pathInput?.value || importCenter.sourcePath || "").trim();
+        const columnMapping = collectImportColumnMapping();
+        const importReview = collectImportReview();
         const endpoint = sourceId === "discvault_legacy_import" ? "/api/next/migration/start" : "/api/next/import/source/start";
         const payload = await authApiJson(endpoint, {
           method: "POST",
@@ -14938,6 +15459,8 @@ def ui_preview_html(
           body: JSON.stringify({
             importSourceId: sourceId,
             sourcePath: importCenter.sourcePath,
+            columnMapping,
+            importReview,
             includeSecurity: true,
             includePersonal: false,
             importMediaReferences: true
@@ -17222,10 +17745,31 @@ def ui_preview_html(
       document.getElementById("profileRevokeRecoveryButton")?.addEventListener("click", () => revokeRecoveryCodes());
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
+      document.getElementById("importReviewStartButton")?.addEventListener("click", () => startImportCenterImport());
+      document.getElementById("importReviewAllButton")?.addEventListener("click", () => setImportReviewMode("all"));
+      document.getElementById("importReviewSkipUpdatesButton")?.addEventListener("click", () => setImportReviewMode("skipUpdates"));
+      document.getElementById("importMappingResetButton")?.addEventListener("click", () => resetImportColumnMapping());
+      document.getElementById("importHistoryStatusFilter")?.addEventListener("change", () => renderImportJobs());
+      document.getElementById("importHistoryPluginFilter")?.addEventListener("change", () => renderImportJobs());
       document.getElementById("importSourceInspectButton")?.addEventListener("click", () => inspectSelectedImportSource());
       document.getElementById("importSourcePathInput")?.addEventListener("input", (event) => {
         importCenter.sourcePath = String(event.target.value || "").trim();
         importCenter.preview = null;
+      });
+      document.getElementById("importCenterMapping")?.addEventListener("change", () => {
+        collectImportColumnMapping();
+        importCenter.preview = null;
+        renderImportReview();
+      });
+      document.getElementById("importCenterReview")?.addEventListener("change", () => {
+        collectImportReview();
+        renderImportReview();
+      });
+      document.getElementById("importCenterJobs")?.addEventListener("click", (event) => {
+        const containerButton = event.target.closest("[data-import-open-container]");
+        const movieButton = event.target.closest("[data-open-movie]");
+        if (containerButton) openAppContainerDetail(containerButton.dataset.importOpenContainer);
+        if (movieButton) openMovieDetail(movieButton.dataset.openMovie);
       });
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
       document.getElementById("importScannerStartButton")?.addEventListener("click", () => startImportBarcodeScanner());
@@ -17244,6 +17788,8 @@ def ui_preview_html(
         const source = selectedImportSource(importCenter.report || {});
         importCenter.sourcePath = source.sourcePath || "";
         importCenter.preview = null;
+        importCenter.columnMapping = {};
+        importCenter.reviewDecisions = {};
         renderImportCenter();
       });
       document.getElementById("profilePasskeyList")?.addEventListener("click", (event) => {
@@ -30241,7 +30787,8 @@ def register_routes(flask_app: Flask) -> None:
         if not plugin_id:
             raise NextApiError("importSourceId is required", 400)
         source_path = clean_text(body.get("sourcePath") or body.get("source_path") or body.get("path"))
-        payload = import_source_payload_for_path(plugin_id, source_path)
+        column_mapping = normalize_import_column_mapping(body.get("columnMapping") or body.get("column_mapping"))
+        payload = import_source_payload_for_path(plugin_id, source_path, column_mapping)
         with connect() as conn:
             actor = require_next_permission(conn, "collection.import")
             result = inspect_import_source_selection(
@@ -30261,6 +30808,8 @@ def register_routes(flask_app: Flask) -> None:
         if not plugin_id:
             raise NextApiError("importSourceId is required", 400)
         source_path = clean_text(body.get("sourcePath") or body.get("source_path") or body.get("path"))
+        column_mapping = normalize_import_column_mapping(body.get("columnMapping") or body.get("column_mapping"))
+        import_review = normalize_import_review(body.get("importReview") or body.get("import_review"))
         options = {
             "includeSecurity": False,
             "includePersonal": parse_bool_value(body.get("includePersonal", body.get("include_personal")), default=True),
@@ -30270,8 +30819,10 @@ def register_routes(flask_app: Flask) -> None:
                 default=True,
             ),
             "sourcePath": source_path,
+            "columnMapping": column_mapping,
+            "importReview": import_review,
         }
-        inspect_payload = import_source_payload_for_path(plugin_id, source_path)
+        inspect_payload = import_source_payload_for_path(plugin_id, source_path, column_mapping)
         with connect() as conn:
             actor = require_next_permission(conn, "collection.import")
             plugin = import_source_plugin_by_id(conn, plugin_id)
