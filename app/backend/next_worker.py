@@ -825,10 +825,55 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                 if not isinstance(item, dict):
                     continue
                 try:
-                    movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
+                    local_container_cache: dict[tuple[str, str], UUID] = {}
+                    local_container_titles: dict[tuple[str, str], str] = {}
+                    local_container_created: set[UUID] = set()
+                    local_linked = 0
+                    local_container_links = 0
+                    with conn.transaction():
+                        movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
+                        if container_id and link_import_movie_to_container(
+                            conn,
+                            container_id=container_id,
+                            container_type="collection",
+                            movie_id=movie_id,
+                            sort_order=index,
+                        ):
+                            local_linked += 1
+                        if table_exists(conn, "containers"):
+                            for spec in import_item_container_specs(item):
+                                key = (spec["containerType"], spec["title"].casefold())
+                                spec_container_id = container_cache.get(key) or local_container_cache.get(key)
+                                if not spec_container_id:
+                                    local_container_titles[key] = spec["title"]
+                                    spec_container_id, was_container_created = upsert_import_container(
+                                        conn,
+                                        plugin_id=plugin_id,
+                                        source_hash=source_hash,
+                                        container_type=spec["containerType"],
+                                        title=spec["title"],
+                                        source_path=source_path,
+                                        source_kind=source_kind,
+                                    )
+                                    local_container_cache[key] = spec_container_id
+                                    if was_container_created:
+                                        local_container_created.add(spec_container_id)
+                                if link_import_movie_to_container(
+                                    conn,
+                                    container_id=spec_container_id,
+                                    container_type=spec["containerType"],
+                                    movie_id=movie_id,
+                                    sort_order=index,
+                                ):
+                                    local_container_links += 1
                     imported += 1
                     created += 1 if was_created else 0
                     updated += 0 if was_created else 1
+                    linked += local_linked
+                    container_links += local_container_links
+                    container_cache.update(local_container_cache)
+                    container_titles.update(local_container_titles)
+                    container_created.update(local_container_created)
                     imported_movies.append(
                         {
                             "index": index,
@@ -840,40 +885,6 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                             "reviewAction": clean_text(item.get("importReviewAction")),
                         }
                     )
-                    if container_id and link_import_movie_to_container(
-                        conn,
-                        container_id=container_id,
-                        container_type="collection",
-                        movie_id=movie_id,
-                        sort_order=index,
-                    ):
-                        linked += 1
-                    if table_exists(conn, "containers"):
-                        for spec in import_item_container_specs(item):
-                            key = (spec["containerType"], spec["title"].casefold())
-                            spec_container_id = container_cache.get(key)
-                            if not spec_container_id:
-                                container_titles[key] = spec["title"]
-                                spec_container_id, was_container_created = upsert_import_container(
-                                    conn,
-                                    plugin_id=plugin_id,
-                                    source_hash=source_hash,
-                                    container_type=spec["containerType"],
-                                    title=spec["title"],
-                                    source_path=source_path,
-                                    source_kind=source_kind,
-                                )
-                                container_cache[key] = spec_container_id
-                                if was_container_created:
-                                    container_created.add(spec_container_id)
-                            if link_import_movie_to_container(
-                                conn,
-                                container_id=spec_container_id,
-                                container_type=spec["containerType"],
-                                movie_id=movie_id,
-                                sort_order=index,
-                            ):
-                                container_links += 1
                 except Exception as exc:
                     errors.append({"index": index, "title": item.get("title"), "error": str(exc)})
 
