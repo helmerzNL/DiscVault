@@ -424,6 +424,8 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
     persist_summary = {}
     if entrypoint == "sync_library":
         persist_summary = persist_digital_sync(plugin_id, execution.get("result") or {})
+    elif entrypoint == "sync_personal_lists":
+        persist_summary = persist_personal_list_sync(plugin_id, execution.get("result") or {}, queued_actor)
     elif entrypoint == "import_source":
         reviewed_result = apply_collection_import_review(
             execution.get("result") or {},
@@ -959,6 +961,137 @@ def match_digital_movie(conn, *, tmdb_id: str = "", imdb_id: str = "", title: st
             if row:
                 return row["id"]
     return None
+
+
+def parsed_plugin_datetime(value: Any) -> str | None:
+    text = clean_text(value)
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text).isoformat()
+    except ValueError:
+        return clean_text(value)
+
+
+def personal_list_items(result: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    lists = result.get("personalLists") or result.get("personal_lists") or {}
+    if not isinstance(lists, dict):
+        lists = {}
+    values = lists.get(key) or result.get(key) or []
+    return [item for item in values if isinstance(item, dict)] if isinstance(values, list) else []
+
+
+def personal_list_match_movie(conn, item: dict[str, Any]):
+    return match_digital_movie(
+        conn,
+        tmdb_id=clean_text(item.get("tmdbId") or item.get("tmdb_id")),
+        imdb_id=clean_text(item.get("imdbId") or item.get("imdb_id")),
+        title=clean_text(item.get("title")),
+        year=clean_text(item.get("year")),
+    )
+
+
+def persist_personal_list_sync(
+    plugin_id: str,
+    result: dict[str, Any],
+    queued_actor: dict[str, Any] | None,
+) -> dict[str, Any]:
+    actor_id = clean_text((queued_actor or {}).get("id"))
+    if not actor_id:
+        return {"skipped": True, "reason": "personal list sync requires a queued user"}
+    watchlist = personal_list_items(result, "watchlist")
+    watched = personal_list_items(result, "watched")
+    summary = {
+        "pluginId": plugin_id,
+        "watchlist": {"items": len(watchlist), "matched": 0, "upserted": 0, "unmatched": []},
+        "watched": {"items": len(watched), "matched": 0, "created": 0, "existing": 0, "unmatched": []},
+    }
+    with connect() as conn:
+        if not table_exists(conn, "watchlist_items") or not table_exists(conn, "watch_history"):
+            return {"skipped": True, "reason": "personal list tables are not initialized"}
+
+        with conn.transaction():
+            with conn.cursor() as cur:
+                for item in watchlist:
+                    movie_id = personal_list_match_movie(conn, item)
+                    if not movie_id:
+                        summary["watchlist"]["unmatched"].append(
+                            {
+                                "title": clean_text(item.get("title")),
+                                "year": clean_text(item.get("year")),
+                                "tmdbId": clean_text(item.get("tmdbId") or item.get("tmdb_id")),
+                                "imdbId": clean_text(item.get("imdbId") or item.get("imdb_id")),
+                            }
+                        )
+                        continue
+                    summary["watchlist"]["matched"] += 1
+                    added_at = parsed_plugin_datetime(item.get("addedAt") or item.get("listedAt")) or datetime.utcnow().isoformat()
+                    cur.execute(
+                        """
+                        INSERT INTO watchlist_items (user_id, movie_id, added_at)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (user_id, movie_id) DO UPDATE SET added_at=EXCLUDED.added_at
+                        """,
+                        (actor_id, movie_id, added_at),
+                    )
+                    summary["watchlist"]["upserted"] += 1
+
+                for item in watched:
+                    movie_id = personal_list_match_movie(conn, item)
+                    watched_at = parsed_plugin_datetime(item.get("watchedAt") or item.get("lastWatchedAt"))
+                    if not movie_id or not watched_at:
+                        summary["watched"]["unmatched"].append(
+                            {
+                                "title": clean_text(item.get("title")),
+                                "year": clean_text(item.get("year")),
+                                "tmdbId": clean_text(item.get("tmdbId") or item.get("tmdb_id")),
+                                "imdbId": clean_text(item.get("imdbId") or item.get("imdb_id")),
+                                "reason": "not_matched" if not movie_id else "missing_watched_at",
+                            }
+                        )
+                        continue
+                    summary["watched"]["matched"] += 1
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM watch_history
+                        WHERE user_id=%s
+                          AND movie_id=%s
+                          AND watched_at=%s
+                        LIMIT 1
+                        """,
+                        (actor_id, movie_id, watched_at),
+                    )
+                    if cur.fetchone():
+                        summary["watched"]["existing"] += 1
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO watch_history (user_id, movie_id, watched_at, snapshot)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (
+                            actor_id,
+                            movie_id,
+                            watched_at,
+                            Jsonb(
+                                json_ready(
+                                    {
+                                        "source": plugin_id,
+                                        "title": item.get("title"),
+                                        "year": item.get("year"),
+                                        "plays": item.get("plays"),
+                                        "tmdbId": item.get("tmdbId") or item.get("tmdb_id"),
+                                        "imdbId": item.get("imdbId") or item.get("imdb_id"),
+                                    }
+                                )
+                            ),
+                        ),
+                    )
+                    summary["watched"]["created"] += 1
+    return summary
 
 
 def persist_digital_sync(plugin_id: str, result: dict[str, Any]) -> dict[str, Any]:

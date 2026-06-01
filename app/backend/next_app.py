@@ -7729,6 +7729,22 @@ def ui_preview_html(
       margin: 0;
       font-size: .95rem;
     }
+    .app-admin-plugin-tab-panel {
+      display: none;
+      min-width: 0;
+    }
+    .app-admin-plugin-tab-panel.active {
+      display: block;
+    }
+    .plugin-submenu {
+      width: 100%;
+      max-width: 100%;
+      flex-wrap: wrap;
+    }
+    .plugin-submenu button {
+      flex: 1 1 148px;
+      min-width: 0;
+    }
     .app-admin-plugin-meta,
     .app-admin-plugin-actions {
       display: flex;
@@ -8720,7 +8736,6 @@ def ui_preview_html(
       </div>
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="people"><span data-next-i18n="people.title">People</span><small id="navPeopleCount">""" + h(counts.get("people", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span data-next-i18n="uiPreview.navLists">Lists</span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="notifications"><span data-next-i18n="uiPreview.navNotifications">Notifications</span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span data-next-i18n="importCenter.title">Import</span><small id="navImportState">-</small></button>
@@ -9968,7 +9983,7 @@ def ui_preview_html(
         </section>
         <section class="app-admin-panel" data-app-admin-panel="plugins">
           <section class="profile-grid">
-            <div class="detail-card profile-card">
+            <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.plugins">Plugins</h3>
               <p data-next-i18n="appAdmin.pluginsHelp">Manage metadata, receiver, digital media and import source plugins.</p>
               <div class="profile-meta">
@@ -9985,27 +10000,46 @@ def ui_preview_html(
                   <strong id="appAdminDigitalSourceCount">-</strong>
                 </div>
               </div>
-              <div class="profile-action-row">
-                <button type="button" class="secondary-button" id="appAdminRefreshPluginJobsButton" data-next-i18n="appAdmin.refreshPluginJobs">Refresh plugin jobs</button>
+              <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin sections" data-next-i18n-aria="appAdmin.plugins">
+                <button type="button" class="active" data-app-admin-plugin-tab="registry" data-next-i18n="appAdmin.plugins">Plugins</button>
+                <button type="button" data-app-admin-plugin-tab="packages" data-next-i18n="appAdmin.pluginPackages">Plugin packages</button>
+                <button type="button" data-app-admin-plugin-tab="jobs" data-next-i18n="appAdmin.pluginJobs">Plugin jobs</button>
               </div>
               <div class="login-message" id="appAdminPluginsMessage"></div>
             </div>
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.pluginPackages">Plugin packages</h3>
-              <p data-next-i18n="appAdmin.pluginPackagesHelp">Export installed plugins or install a compatible DiscVault plugin ZIP.</p>
-              <div class="app-admin-plugin-import">
-                <input type="file" id="appAdminPluginImportFile" accept=".zip,application/zip">
-                <button type="button" class="secondary-button" id="appAdminImportPluginButton" data-next-i18n="appAdmin.importPlugin">Import plugin</button>
+            <div class="app-admin-plugin-tab-panel active full" data-app-admin-plugin-panel="registry">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
+                <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin types" data-next-i18n-aria="appAdmin.pluginRegistry">
+                  <button type="button" class="active" data-app-admin-plugin-type-tab="metadata_source" data-next-i18n="appAdmin.pluginTypeMetadataSources">Metadata sources</button>
+                  <button type="button" data-app-admin-plugin-type-tab="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</button>
+                  <button type="button" data-app-admin-plugin-type-tab="digital_media_source" data-next-i18n="appAdmin.pluginTypeDigitalSources">Digital media sources</button>
+                  <button type="button" data-app-admin-plugin-type-tab="personal_list_source" data-next-i18n="appAdmin.pluginTypePersonalListSources">Personal list sources</button>
+                  <button type="button" data-app-admin-plugin-type-tab="import_source" data-next-i18n="appAdmin.pluginTypeImportSources">Import sources</button>
+                  <button type="button" data-app-admin-plugin-type-tab="other" data-next-i18n="appAdmin.pluginTypeOther">Other plugins</button>
+                </div>
+                <div class="profile-passkey-list" id="appAdminPluginsList"></div>
               </div>
-              <p class="profile-passkey-meta" data-next-i18n="appAdmin.pluginImportHelp">Imported ZIP files must contain manifest.json, plugin.py, a version and a compatible DiscVault plugin API declaration.</p>
             </div>
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.pluginJobs">Plugin jobs</h3>
-              <div class="profile-passkey-list" id="appAdminPluginJobsList"></div>
+            <div class="app-admin-plugin-tab-panel full" data-app-admin-plugin-panel="packages">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.pluginPackages">Plugin packages</h3>
+                <p data-next-i18n="appAdmin.pluginPackagesHelp">Export installed plugins or install a compatible DiscVault plugin ZIP.</p>
+                <div class="app-admin-plugin-import">
+                  <input type="file" id="appAdminPluginImportFile" accept=".zip,application/zip">
+                  <button type="button" class="secondary-button" id="appAdminImportPluginButton" data-next-i18n="appAdmin.importPlugin">Import plugin</button>
+                </div>
+                <p class="profile-passkey-meta" data-next-i18n="appAdmin.pluginImportHelp">Imported ZIP files must contain manifest.json, plugin.py, a version and a compatible DiscVault plugin API declaration.</p>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
-              <div class="profile-passkey-list" id="appAdminPluginsList"></div>
+            <div class="app-admin-plugin-tab-panel full" data-app-admin-plugin-panel="jobs">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.pluginJobs">Plugin jobs</h3>
+                <div class="profile-action-row">
+                  <button type="button" class="secondary-button" id="appAdminRefreshPluginJobsButton" data-next-i18n="appAdmin.refreshPluginJobs">Refresh plugin jobs</button>
+                </div>
+                <div class="profile-passkey-list" id="appAdminPluginJobsList"></div>
+              </div>
             </div>
           </section>
         </section>
@@ -10205,6 +10239,8 @@ def ui_preview_html(
     let containerManagerType = "box_set";
     let appAdmin = {
       activeTab: "access",
+      activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "registry",
+      activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "metadata_source",
       auditCategory: "",
       auditEvents: [],
       backup: null,
@@ -10686,6 +10722,30 @@ def ui_preview_html(
         panel.classList.toggle("active", panel.dataset.appAdminPanel === appAdmin.activeTab);
       });
     }
+    function setAppAdminPluginTab(tab) {
+      const allowed = ["registry", "packages", "jobs"];
+      appAdmin.activePluginTab = allowed.includes(tab) ? tab : "registry";
+      localStorage.setItem("dv_next_admin_plugin_tab", appAdmin.activePluginTab);
+      document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
+        const active = button.dataset.appAdminPluginTab === appAdmin.activePluginTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll("[data-app-admin-plugin-panel]").forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.appAdminPluginPanel === appAdmin.activePluginTab);
+      });
+    }
+    function setAppAdminPluginTypeTab(tab, render = true) {
+      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "import_source", "other"];
+      appAdmin.activePluginTypeTab = allowed.includes(tab) ? tab : "metadata_source";
+      localStorage.setItem("dv_next_admin_plugin_type_tab", appAdmin.activePluginTypeTab);
+      document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
+        const active = button.dataset.appAdminPluginTypeTab === appAdmin.activePluginTypeTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      if (render) renderAppAdminPlugins();
+    }
     function appAdminPluginHasCategory(plugin, category) {
       return (plugin.categories || []).includes(category);
     }
@@ -10694,6 +10754,7 @@ def ui_preview_html(
         metadata_source: tNext("appAdmin.pluginTypeMetadataSources", "Metadata sources"),
         metadata_receiver: tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"),
         digital_media_source: tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"),
+        personal_list_source: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
         import_source: tNext("appAdmin.pluginTypeImportSources", "Import sources")
       };
       return labels[category] || tNext("appAdmin.pluginTypeOther", "Other plugins");
@@ -10803,6 +10864,7 @@ def ui_preview_html(
       if (appAdminPluginHasCategory(plugin, "digital_media_source")) {
         return hasActualAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
       }
+      if (appAdminPluginHasCategory(plugin, "personal_list_source")) return hasActualPermission("watchlist.manage");
       if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
       return hasActualPermission("metadata.manage_plugins");
     }
@@ -10813,11 +10875,13 @@ def ui_preview_html(
       if (appAdminPluginHasCategory(plugin, "metadata_source")) return hasActualPermission("metadata.manage_plugin_settings");
       if (appAdminPluginHasCategory(plugin, "metadata_receiver")) return hasActualAnyPermission(["metadata.manage_plugin_settings", "metadata.manage_receivers"]);
       if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasActualAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
+      if (appAdminPluginHasCategory(plugin, "personal_list_source")) return hasActualPermission("watchlist.manage");
       if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
       return appAdminCanManagePlugin(plugin);
     }
     function appAdminCanViewPluginHealth(plugin) {
       if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasActualAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
+      if (appAdminPluginHasCategory(plugin, "personal_list_source")) return hasActualAnyPermission(["watchlist.manage", "admin.view_settings"]);
       if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
       return hasActualAnyPermission(["metadata.view_plugin_health", "metadata.manage_plugins", "metadata.manage_plugin_settings"]);
     }
@@ -10828,6 +10892,7 @@ def ui_preview_html(
           ? hasActualAnyPermission(["digital_sources.sync", "digital_sources.manage"])
           : hasActualAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
       }
+      if (appAdminPluginHasCategory(plugin, "personal_list_source")) return hasActualPermission("watchlist.manage");
       if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
       return appAdminCanManagePlugin(plugin);
     }
@@ -10910,6 +10975,7 @@ def ui_preview_html(
             ${appAdminPluginHasCategory(plugin, "metadata_source") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.metadataSource", "Metadata source"))}</span>` : ""}
             ${appAdminPluginHasCategory(plugin, "metadata_receiver") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.metadataReceiver", "Metadata receiver"))}</span>` : ""}
             ${appAdminPluginHasCategory(plugin, "digital_media_source") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.digitalMediaSource", "Digital media source"))}</span>` : ""}
+            ${appAdminPluginHasCategory(plugin, "personal_list_source") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.personalListSource", "Personal list source"))}</span>` : ""}
             ${appAdminPluginHasCategory(plugin, "import_source") ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.importSource", "Import source"))}</span>` : ""}
             ${digitalSource ? `<span class="tag good">${escapeHtml(tNext("appAdmin.digitalItems", "{count} digital items").replace("{count}", String(digitalSource.itemCount || digitalSource.item_count || 0)))}</span>` : ""}
             ${latestJob ? `<span class="tag ${appAdminJobStatusClass(latestJob.status)}">${escapeHtml(tNext("appAdmin.job", "Job"))} ${escapeHtml(latestJob.status || "-")}</span>` : ""}
@@ -10925,6 +10991,7 @@ def ui_preview_html(
             ${capabilities.includes("discover_library") && appAdminCanExecutePlugin(plugin, "discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
             ${capabilities.includes("inspect_source") && appAdminCanExecutePlugin(plugin, "inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
             ${capabilities.includes("sync_library") && appAdminCanExecutePlugin(plugin, "sync_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
+            ${capabilities.includes("sync_personal_lists") && appAdminCanExecutePlugin(plugin, "sync_personal_lists") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_personal_lists">${escapeHtml(tNext("appAdmin.queuePersonalListSync", "Queue list sync"))}</button>` : ""}
           </div>
           ${renderAppAdminMovieVaultConnection(plugin)}
           ${renderAppAdminPluginConfig(plugin, config)}
@@ -11169,6 +11236,7 @@ def ui_preview_html(
       renderAppAdminPluginJobs();
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
+      setAppAdminPluginTab(appAdmin.activePluginTab);
       if (!list) return;
       if (!plugins.length) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
@@ -11177,16 +11245,40 @@ def ui_preview_html(
       const metadataSourcePlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source"));
       const metadataReceiverPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver"));
       const digitalPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "digital_media_source"));
+      const personalListPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "personal_list_source"));
       const importPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source"));
-      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...importPlugins].map((plugin) => plugin.id));
+      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...importPlugins].map((plugin) => plugin.id));
       const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
-      list.innerHTML = [
-        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeMetadataSources", "Metadata sources"), metadataSourcePlugins, "metadata_source"),
-        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"), metadataReceiverPlugins, "metadata_receiver"),
-        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"), digitalPlugins, "digital_media_source"),
-        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeImportSources", "Import sources"), importPlugins, "import_source"),
-        renderAppAdminPluginSection(tNext("appAdmin.pluginTypeOther", "Other plugins"), otherPlugins, "other")
-      ].filter(Boolean).join("");
+      const sections = {
+        metadata_source: {
+          title: tNext("appAdmin.pluginTypeMetadataSources", "Metadata sources"),
+          plugins: metadataSourcePlugins
+        },
+        metadata_receiver: {
+          title: tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"),
+          plugins: metadataReceiverPlugins
+        },
+        digital_media_source: {
+          title: tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"),
+          plugins: digitalPlugins
+        },
+        personal_list_source: {
+          title: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
+          plugins: personalListPlugins
+        },
+        import_source: {
+          title: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
+          plugins: importPlugins
+        },
+        other: {
+          title: tNext("appAdmin.pluginTypeOther", "Other plugins"),
+          plugins: otherPlugins
+        }
+      };
+      setAppAdminPluginTypeTab(appAdmin.activePluginTypeTab, false);
+      const activeSection = sections[appAdmin.activePluginTypeTab] || sections.metadata_source;
+      list.innerHTML = renderAppAdminPluginSection(activeSection.title, activeSection.plugins, appAdmin.activePluginTypeTab)
+        || `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
     }
     function appAdminRbacModeLabel(mode) {
       return mode === "advanced"
@@ -11975,12 +12067,16 @@ def ui_preview_html(
       if (appAdminPluginHasCategory(plugin, "digital_media_source")) {
         return plugins.filter((item) => appAdminPluginHasCategory(item, "digital_media_source"));
       }
+      if (appAdminPluginHasCategory(plugin, "personal_list_source")) {
+        return plugins.filter((item) => appAdminPluginHasCategory(item, "personal_list_source"));
+      }
       if (appAdminPluginHasCategory(plugin, "import_source")) {
         return plugins.filter((item) => appAdminPluginHasCategory(item, "import_source"));
       }
       return plugins.filter((item) => !appAdminPluginHasCategory(item, "metadata_source")
         && !appAdminPluginHasCategory(item, "metadata_receiver")
         && !appAdminPluginHasCategory(item, "digital_media_source")
+        && !appAdminPluginHasCategory(item, "personal_list_source")
         && !appAdminPluginHasCategory(item, "import_source"));
     }
     async function moveAppAdminPlugin(pluginId, direction, sectionCategory = "") {
@@ -16903,11 +16999,9 @@ def ui_preview_html(
       }
       const navMovieCount = document.getElementById("navMovieCount");
       const navListCount = document.getElementById("navListCount");
-      const navPeopleCount = document.getElementById("navPeopleCount");
       const containerPanelCount = document.getElementById("containerPanelCount");
       if (navMovieCount) navMovieCount.textContent = String(movies.length);
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
-      if (navPeopleCount) navPeopleCount.textContent = String((state.counts || {}).people || "");
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
       const firstItem = displayItems[0];
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
@@ -18034,6 +18128,12 @@ def ui_preview_html(
       document.getElementById("appAdminDebugButton")?.addEventListener("click", () => setAppDebugMode(!appDebugMode));
       document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminTab(button.dataset.appAdminTab));
+      });
+      document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
+      });
+      document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminPluginTypeTab(button.dataset.appAdminPluginTypeTab));
       });
       document.querySelectorAll("[data-app-admin-registration-mode]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminRegistrationMode(button.dataset.appAdminRegistrationMode));
@@ -24041,6 +24141,7 @@ PLUGIN_REGISTRY_VIEW_PERMISSIONS = (
     "digital_sources.connect",
     "digital_sources.sync",
     "digital_sources.manage",
+    "watchlist.manage",
     "collection.import",
     "admin.view_settings",
 )
@@ -24050,6 +24151,7 @@ PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
     "metadata.manage_receivers",
     "digital_sources.connect",
     "digital_sources.manage",
+    "watchlist.manage",
     "collection.import",
 )
 
@@ -24064,6 +24166,8 @@ def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> t
     categories = plugin_category_set(plugin)
     if entrypoint == "sync_library":
         return ("digital_sources.sync", "digital_sources.manage")
+    if entrypoint == "sync_personal_lists":
+        return ("watchlist.manage",)
     if entrypoint in {"discover_library", "playback_deeplink"}:
         return ("digital_sources.view", "digital_sources.connect", "digital_sources.manage")
     if entrypoint in {"inspect_source", "plan_import", "import_source"}:
@@ -24074,6 +24178,8 @@ def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> t
         permissions = ["metadata.view_plugin_health", "metadata.manage_plugins"]
         if "digital_media_source" in categories:
             permissions.extend(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"])
+        if "personal_list_source" in categories:
+            permissions.extend(["watchlist.manage", "admin.view_settings"])
         if "import_source" in categories:
             permissions.extend(["collection.import", "admin.restore_functional"])
         return tuple(dict.fromkeys(permissions))
@@ -24081,6 +24187,8 @@ def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> t
         return ("collection.import", "admin.restore_functional")
     if "digital_media_source" in categories:
         return ("digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage")
+    if "personal_list_source" in categories:
+        return ("watchlist.manage",)
     return (
         "metadata.search",
         "metadata.refresh_one",
@@ -24098,6 +24206,8 @@ def plugin_manage_permissions(plugin: dict[str, Any]) -> tuple[str, ...]:
         permissions.append("metadata.manage_receivers")
     if "digital_media_source" in categories:
         permissions.extend(["digital_sources.connect", "digital_sources.manage"])
+    if "personal_list_source" in categories:
+        permissions.append("watchlist.manage")
     if "import_source" in categories:
         permissions.append("collection.import")
     return tuple(dict.fromkeys(permissions or list(PLUGIN_REGISTRY_MANAGE_PERMISSIONS)))
@@ -24210,7 +24320,7 @@ def validate_import_plugin_root(plugin_root: Path) -> dict[str, Any]:
     kind = str(manifest.get("kind") or "").strip()
     if not isinstance(categories, list):
         categories = [kind] if kind else []
-    valid = {"metadata_source", "metadata_receiver", "digital_media_source", "import_source"}
+    valid = {"metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "import_source"}
     if not {str(item) for item in categories}.intersection(valid):
         raise NextApiError("Plugin manifest must declare a supported category", 400)
     return manifest
