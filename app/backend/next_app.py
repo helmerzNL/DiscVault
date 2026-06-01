@@ -8411,8 +8411,7 @@ def ui_preview_html(
         z-index: 20;
         min-height: 66px;
         padding: 7px;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+        display: flex;
         gap: 4px;
         border: 1px solid color-mix(in srgb, var(--line-strong) 80%, transparent);
         border-radius: 22px;
@@ -8430,6 +8429,7 @@ def ui_preview_html(
         box-shadow: 0 20px 60px rgba(0,0,0,.46);
       }
       .mobile-tab {
+        flex: 1 1 0;
         min-width: 0;
         min-height: 52px;
         border: 0;
@@ -10332,10 +10332,6 @@ def ui_preview_html(
     <button type="button" class="mobile-tab" data-app-route="lists">
       <span class="nav-symbol lists" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLists">Lists</span>
-    </button>
-    <button type="button" class="mobile-tab" data-app-route="people">
-      <span class="nav-symbol people" aria-hidden="true"></span>
-      <span data-next-i18n="people.title">People</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="notifications">
       <span class="nav-symbol notifications" aria-hidden="true"></span>
