@@ -22,12 +22,16 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
 try:
     from .next_import import clean_text
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
+    from .next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
+    from .next_movievault_connection import is_movievault_plugin
     from .next_movievault_connection import movievault_plugin_context
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import sync_plugin_registry
 except ImportError:  # pragma: no cover - supports direct module execution
     from next_import import clean_text
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
+    from next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
+    from next_movievault_connection import is_movievault_plugin
     from next_movievault_connection import movievault_plugin_context
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import sync_plugin_registry
@@ -359,7 +363,7 @@ def plugin_execution_context(
         conn,
         str(plugin.get("id") or ""),
         context,
-        ensure_token=str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID,
+        ensure_token=is_movievault_plugin(str(plugin.get("id") or "")),
         actor_id=actor.get("id") if actor else None,
     )
 
@@ -367,7 +371,7 @@ def plugin_execution_context(
 def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint == "health_check":
         return False
-    if str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID:
+    if is_movievault_plugin(str(plugin.get("id") or "")):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -1141,7 +1145,7 @@ def run_metadata_source_pipeline(
         excludePluginIds: list[str] | tuple[str, ...] | set[str] | None = None,
     ) -> dict[str, Any]:
         payload = lookup_payload if isinstance(lookup_payload, dict) else {}
-        bridge_excluded = {MOVIEVAULT_PLUGIN_ID}
+        bridge_excluded = set(MOVIEVAULT_PLUGIN_IDS)
         bridge_excluded.update(str(item) for item in (excludeProviders or []) if str(item))
         bridge_excluded.update(str(item) for item in (excludePluginIds or []) if str(item))
         bridge_query = query_from_payload(payload)
@@ -1161,7 +1165,7 @@ def run_metadata_source_pipeline(
     for plugin in plugins:
         config = plugin_config_from_db(conn, plugin["id"])
         context = plugin_execution_context(conn, plugin, config, actor)
-        if enable_metadata_lookup_bridge and str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID:
+        if enable_metadata_lookup_bridge and is_movievault_plugin(str(plugin.get("id") or "")):
             context["metadataLookup"] = metadata_lookup_bridge
         for planned in plugin_execution_plan(plugin, query):
             entrypoint = planned["entrypoint"]
