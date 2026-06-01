@@ -6677,7 +6677,25 @@ def ui_preview_html(
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-top: 18px;
+    }
+    .movie-detail-action-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(22px) saturate(150%);
+      padding: 12px;
+    }
+    .movie-detail-action-strip .detail-message {
+      margin-top: 0;
+      flex: 1 1 220px;
+      text-align: right;
     }
     .movie-detail-body {
       display: grid;
@@ -8487,10 +8505,18 @@ def ui_preview_html(
       }
       .movie-detail-actions {
         align-items: stretch;
+        flex: 1 1 100%;
       }
       .movie-detail-actions .action,
       .movie-detail-actions .secondary-button {
         width: 100%;
+      }
+      .movie-detail-action-strip {
+        display: grid;
+        margin-top: 10px;
+      }
+      .movie-detail-action-strip .detail-message {
+        text-align: left;
       }
       .movie-detail-body {
         grid-template-columns: 1fr;
@@ -9219,17 +9245,19 @@ def ui_preview_html(
               <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
               <div class="hero-meta" id="movieDetailTags"></div>
               <p class="movie-detail-overview" id="movieDetailOverview"></p>
-              <div class="movie-detail-actions">
-                <button type="button" class="action secondary hidden" id="movieEditToggleButton" data-next-i18n="common.edit">Edit</button>
-                <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
-                <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
-                <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Refresh history</button>
-                <button type="button" class="action danger hidden" id="movieDeleteButton" data-next-i18n="movieDetail.deleteMovie">Delete movie</button>
-              </div>
-              <div class="detail-message" id="movieDetailMessage"></div>
             </div>
           </div>
         </section>
+        <div class="movie-detail-action-strip">
+          <div class="movie-detail-actions">
+            <button type="button" class="action secondary hidden" id="movieEditToggleButton" data-next-i18n="common.edit">Edit</button>
+            <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
+            <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
+            <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Refresh history</button>
+            <button type="button" class="action danger hidden" id="movieDeleteButton" data-next-i18n="movieDetail.deleteMovie">Delete movie</button>
+          </div>
+          <div class="detail-message" id="movieDetailMessage"></div>
+        </div>
         <section class="movie-detail-body">
           <div class="detail-card full hidden" id="movieEditPanel">
             <div class="detail-card-head">
@@ -9398,16 +9426,18 @@ def ui_preview_html(
               <div class="hero-meta" id="containerDetailTags"></div>
               <p class="movie-detail-overview" id="containerDetailDescription"></p>
               <div class="container-detail-stats" id="containerDetailStats"></div>
-              <div class="movie-detail-actions">
-                <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
-                <button type="button" class="action hidden" id="containerMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
-                <button type="button" class="action secondary hidden" id="containerMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
-                <button type="button" class="action danger hidden" id="containerDeleteButton" data-next-i18n="containerDetail.deleteContainer">Delete container</button>
-              </div>
-              <div class="detail-message" id="containerDetailMessage"></div>
             </div>
           </div>
         </section>
+        <div class="movie-detail-action-strip">
+          <div class="movie-detail-actions">
+            <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
+            <button type="button" class="action hidden" id="containerMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
+            <button type="button" class="action secondary hidden" id="containerMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
+            <button type="button" class="action danger hidden" id="containerDeleteButton" data-next-i18n="containerDetail.deleteContainer">Delete container</button>
+          </div>
+          <div class="detail-message" id="containerDetailMessage"></div>
+        </div>
         <section class="movie-detail-body">
           <nav class="detail-submenu container-detail-submenu" aria-label="Container sections" data-next-i18n-aria="containerDetail.sections">
             <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
@@ -14422,8 +14452,6 @@ def ui_preview_html(
         appDebugMode && container.id ? `Container ID ${container.id}` : ""
       ]);
       document.getElementById("containerDetailStats").innerHTML = [
-        [summary.movieCount || directMovieCount, tNext("containerDetail.aggregateMovieCount", "Movies in scope")],
-        [collectionItemCount || directMovieCount, tNext("containerDetail.items", "items")],
         [summary.posterCount || 0, tNext("movieDetail.posters", "Posters")],
         [summary.videoCount || 0, tNext("movieDetail.videos", "Videos")]
       ].filter(([value]) => Number(value || 0) > 0).map(([value, label]) => `
