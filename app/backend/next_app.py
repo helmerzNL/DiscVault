@@ -7736,6 +7736,17 @@ def ui_preview_html(
     .app-admin-plugin-tab-panel.active {
       display: block;
     }
+    .app-admin-panel[data-app-admin-panel="plugins"] .profile-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .app-admin-panel[data-app-admin-panel="plugins"] .app-admin-plugin-tab-panel {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+    .app-admin-panel[data-app-admin-panel="plugins"] .profile-card,
+    .app-admin-panel[data-app-admin-panel="plugins"] .profile-passkey-list {
+      width: 100%;
+    }
     .plugin-submenu {
       width: 100%;
       max-width: 100%;
