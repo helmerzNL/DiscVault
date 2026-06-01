@@ -17,7 +17,7 @@ JsonbFactory = Callable[[Any], Any]
 TableExists = Callable[[Any, str], bool]
 
 DEFAULT_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
-VALID_CATEGORIES = {"metadata_source", "metadata_receiver", "digital_media_source", "import_source"}
+VALID_CATEGORIES = {"metadata_source", "metadata_receiver", "digital_media_source", "import_source", "personal_list_source"}
 PLUGIN_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,80}$")
 DISCVAULT_PLUGIN_API_VERSION = "next-1"
 SUPPORTED_PLUGIN_API_VERSIONS = {DISCVAULT_PLUGIN_API_VERSION}
@@ -37,6 +37,7 @@ PLUGIN_ENTRYPOINTS = (
     "receive_metadata",
     "discover_library",
     "sync_library",
+    "sync_personal_lists",
     "playback_deeplink",
     "inspect_source",
     "plan_import",
