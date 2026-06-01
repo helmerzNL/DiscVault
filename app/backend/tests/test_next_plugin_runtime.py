@@ -84,6 +84,37 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(item["boxSetTitle"], "The Lord of the Rings")
         self.assertEqual(item["vaultTitle"], "Middle-earth 4K")
 
+    def test_collection_import_plugin_supports_manual_column_mapping(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_file = Path(temp_dir) / "custom.csv"
+            export_file.write_text(
+                "Filmnaam,Jaarcode,Groep\n"
+                "Dune,2021,Sci-Fi Favorites\n",
+                encoding="utf-8",
+            )
+
+            execution = run_plugin_entrypoint(
+                "import_mymovies_dk",
+                "import_source",
+                {
+                    "sourcePath": str(export_file),
+                    "columnMapping": {
+                        "title": "Filmnaam",
+                        "year": "Jaarcode",
+                        "collectionTitle": "Groep",
+                    },
+                },
+                {},
+            )
+
+        result = execution["result"]
+        self.assertEqual(execution["status"], "ok")
+        self.assertEqual(result["status"], "completed")
+        item = result["items"][0]
+        self.assertEqual(item["title"], "Dune")
+        self.assertEqual(item["year"], "2021")
+        self.assertEqual(item["collectionTitle"], "Sci-Fi Favorites")
+
     def test_legacy_import_plugin_inspects_sqlite_source(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             data_dir = Path(temp_dir)

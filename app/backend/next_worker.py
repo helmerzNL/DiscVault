@@ -425,7 +425,12 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
     if entrypoint == "sync_library":
         persist_summary = persist_digital_sync(plugin_id, execution.get("result") or {})
     elif entrypoint == "import_source":
-        persist_summary = persist_collection_import(plugin_id, execution.get("result") or {}, queued_actor)
+        reviewed_result = apply_collection_import_review(
+            execution.get("result") or {},
+            payload.get("importReview") or payload.get("import_review") or {},
+        )
+        execution = {**execution, "result": reviewed_result}
+        persist_summary = persist_collection_import(plugin_id, reviewed_result, queued_actor)
     return {
         "workerId": worker_id,
         "handled": True,
@@ -434,6 +439,56 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
         "entrypoint": entrypoint,
         "execution": execution,
         "persistence": persist_summary,
+    }
+
+
+def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(result, dict) or not isinstance(review, dict):
+        return result
+    items = result.get("items")
+    decisions = review.get("decisions")
+    if not isinstance(items, list) or not isinstance(decisions, list):
+        return result
+    decision_by_index: dict[int, str] = {}
+    for raw in decisions:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            index = int(raw.get("index"))
+        except (TypeError, ValueError):
+            continue
+        action = clean_text(raw.get("action"))
+        if index >= 1 and action in {"import", "update", "create", "skip"}:
+            decision_by_index[index] = action
+    if not decision_by_index:
+        return result
+    kept: list[Any] = []
+    skipped: list[dict[str, Any]] = []
+    for index, item in enumerate(items, start=1):
+        action = decision_by_index.get(index, "import")
+        if action == "skip":
+            skipped.append(
+                {
+                    "index": index,
+                    "title": item.get("title") if isinstance(item, dict) else None,
+                    "reason": "review_skip",
+                }
+            )
+            continue
+        if isinstance(item, dict):
+            item = {**item, "importReviewAction": action}
+        kept.append(item)
+    counts = dict(result.get("counts") or {})
+    counts["movies"] = len(kept)
+    counts["reviewSkipped"] = len(skipped)
+    return {
+        **result,
+        "items": kept,
+        "counts": counts,
+        "review": {
+            "decisions": len(decision_by_index),
+            "skipped": skipped[:100],
+        },
     }
 
 
@@ -765,6 +820,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             updated = 0
             linked = 0
             errors = []
+            imported_movies: list[dict[str, Any]] = []
             for index, item in enumerate(items[:5000], start=1):
                 if not isinstance(item, dict):
                     continue
@@ -773,6 +829,17 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                     imported += 1
                     created += 1 if was_created else 0
                     updated += 0 if was_created else 1
+                    imported_movies.append(
+                        {
+                            "index": index,
+                            "id": str(movie_id),
+                            "title": clean_text(item.get("title")),
+                            "year": clean_text(item.get("year")),
+                            "barcode": clean_text(item.get("barcode")),
+                            "action": "created" if was_created else "updated",
+                            "reviewAction": clean_text(item.get("importReviewAction")),
+                        }
+                    )
                     if container_id and link_import_movie_to_container(
                         conn,
                         container_id=container_id,
@@ -822,6 +889,9 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "containersCreated": len(container_created),
         "containersTouched": len(container_cache) + (1 if container_id else 0),
         "collectionId": str(container_id) if container_id else None,
+        "movies": imported_movies[:200],
+        "review": result.get("review") if isinstance(result.get("review"), dict) else {},
+        "warnings": result.get("warnings") if isinstance(result.get("warnings"), list) else [],
         "containers": [
             {"containerType": key[0], "title": container_titles.get(key, key[1]), "id": str(value)}
             for key, value in container_cache.items()
