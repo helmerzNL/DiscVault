@@ -1959,6 +1959,9 @@ def startup_status_payload(conn) -> dict[str, Any]:
     if readiness["migrations"]["state"] != "ready":
         phase = "schema_blocked"
         message = "PostgreSQL migrations must finish before DiscVault Next can start."
+    elif not auth_ready:
+        phase = "owner_setup"
+        message = "Create the first owner passkey to finish setup."
     elif migration_blocks_collection:
         if readiness["state"] == "running":
             phase = "migration_running"
@@ -1972,10 +1975,6 @@ def startup_status_payload(conn) -> dict[str, Any]:
         else:
             phase = "migration_required"
             message = "Legacy DiscVault data is ready to migrate."
-    elif not auth_ready:
-        phase = "owner_setup"
-        message = "Create the first owner passkey to finish setup."
-
     source_counts = readiness["legacyData"]["sourceCounts"] or {}
     legacy_found = bool(readiness["legacyData"]["found"])
     steps = [
@@ -1986,31 +1985,8 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "detail": (
                 f"{user_count} user(s), {credential_count} passkey(s)"
                 if auth_ready
-                else "Import legacy users or create the first owner after migration."
+                else "Create the first owner passkey for this DiscVault Next environment."
             ),
-        },
-        {
-            "key": "source",
-            "label": "Legacy data",
-            "state": "complete" if legacy_found else "skipped",
-            "detail": (
-                f"{source_counts.get('movies', 0)} movies, {source_counts.get('users', 0)} users, "
-                f"{source_counts.get('groups', 0)} groups"
-                if legacy_found
-                else "No legacy SQLite database detected."
-            ),
-        },
-        {
-            "key": "migration",
-            "label": "Migration",
-            "state": (
-                "complete"
-                if readiness["state"] in {"already_completed", "not_required"}
-                else "active"
-                if readiness["state"] in {"running", "ready_for_confirmation", "ready_for_security_backfill"}
-                else "blocked"
-            ),
-            "detail": readiness["state"],
         },
         {
             "key": "collection",
@@ -2019,13 +1995,43 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "detail": "Ready to browse." if phase == "ready" else "Available after setup is complete.",
         },
     ]
+    if legacy_found or readiness["state"] not in {"not_required"}:
+        steps.insert(
+            1,
+            {
+                "key": "source",
+                "label": "Legacy data",
+                "state": "complete" if legacy_found else "skipped",
+                "detail": (
+                    f"{source_counts.get('movies', 0)} movies, {source_counts.get('users', 0)} users, "
+                    f"{source_counts.get('groups', 0)} groups"
+                    if legacy_found
+                    else "No legacy SQLite database detected."
+                ),
+            },
+        )
+        steps.insert(
+            2,
+            {
+                "key": "migration",
+                "label": "Migration",
+                "state": (
+                    "complete"
+                    if readiness["state"] in {"already_completed", "not_required"}
+                    else "active"
+                    if readiness["state"] in {"running", "ready_for_confirmation", "ready_for_security_backfill"}
+                    else "blocked"
+                ),
+                "detail": readiness["state"],
+            },
+        )
 
     return {
         "phase": phase,
         "ready": phase == "ready",
         "message": message,
         "canUseCollection": phase == "ready",
-        "canStartMigration": bool(readiness["canStart"] and can_manage_migration),
+        "canStartMigration": bool(readiness["canStart"] and can_manage_migration and auth_ready),
         "canCreateOwner": phase == "owner_setup",
         "canSignIn": bool(auth_effective and not user),
         "canSwitchAccount": bool(auth_effective and user and migration_blocks_collection and not can_manage_migration),
@@ -8847,6 +8853,7 @@ def ui_preview_html(
         <select id="startupLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </label>
       <div class="startup-actions">
+        <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
         <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
         <button type="button" class="secondary-button" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
         <button type="button" class="secondary-button" id="startupLogoutButton" data-next-i18n="auth.signOut">Sign out</button>
@@ -10643,6 +10650,21 @@ def ui_preview_html(
       if (!node) return;
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
+    }
+    function setStartupGateMessage(message, tone) {
+      const node = document.getElementById("startupMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `startup-message ${tone || ""}`.trim();
+    }
+    function webauthnUnavailableReason() {
+      if (!window.PublicKeyCredential || !navigator.credentials) {
+        return tNext("auth.passkeyUnavailable", "This browser does not support passkeys.");
+      }
+      if (!window.isSecureContext) {
+        return tNext("auth.passkeyHttpsRequired", "Open this app over HTTPS to use passkeys.");
+      }
+      return "";
     }
     const APP_PERMISSION_GROUPS = {
       adminTabs: {
@@ -12931,6 +12953,64 @@ def ui_preview_html(
       } catch (error) {
         const cancelled = error && error.name === "NotAllowedError";
         setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : String(error.message || error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function registerStartupOwnerPasskey() {
+      const unavailable = webauthnUnavailableReason();
+      if (unavailable) {
+        setStartupGateMessage(unavailable, "bad");
+        return;
+      }
+      const button = document.getElementById("startupOwnerPasskeyButton");
+      if (button) button.disabled = true;
+      const username = "admin";
+      const displayName = tNext("auth.firstOwner", "First owner");
+      const credentialName = tNext("auth.ownerPasskey", "Owner passkey");
+      setStartupGateMessage(tNext("auth.waitingForPasskey", "Waiting for your passkey prompt..."), "info");
+      try {
+        const optionsPayload = await apiJson("/api/next/auth/register/options", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({username, display_name: displayName})
+        });
+        const options = optionsPayload.options || optionsPayload.publicKey || {};
+        if (!options.user || !options.challenge) throw new Error("Invalid passkey registration options");
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.user.id = base64urlToBuffer(options.user.id);
+        options.excludeCredentials = (options.excludeCredentials || []).map((credential) => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id)
+        }));
+        const attestation = await navigator.credentials.create({publicKey: options});
+        const credential = {
+          id: attestation.id,
+          rawId: bufferToBase64url(attestation.rawId),
+          response: {
+            attestationObject: bufferToBase64url(attestation.response.attestationObject),
+            clientDataJSON: bufferToBase64url(attestation.response.clientDataJSON)
+          },
+          type: attestation.type,
+          authenticatorAttachment: attestation.authenticatorAttachment
+        };
+        const verified = await apiJson("/api/next/auth/register/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            user_id: optionsPayload.user_id,
+            username,
+            display_name: displayName,
+            credential_name: credentialName,
+            credential
+          })
+        });
+        if (verified.token) localStorage.setItem("dv_next_token", verified.token);
+        setStartupGateMessage(tNext("auth.passkeyCreated", "Passkey created. You are signed in."), "good");
+        await refreshAppFlow();
+      } catch (error) {
+        const cancelled = error && error.name === "NotAllowedError";
+        setStartupGateMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : (error.message || tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -18028,8 +18108,17 @@ def ui_preview_html(
       }
       const migrationLink = document.getElementById("startupMigrationLink");
       if (migrationLink) migrationLink.classList.toggle("hidden", !startup.canStartMigration && !["migration_required", "migration_running", "migration_pending_non_admin"].includes(phase));
+      const ownerPasskeyButton = document.getElementById("startupOwnerPasskeyButton");
+      const ownerPasskeyUnavailable = startup.canCreateOwner ? webauthnUnavailableReason() : "";
+      if (ownerPasskeyButton) {
+        ownerPasskeyButton.classList.toggle("hidden", !startup.canCreateOwner);
+        ownerPasskeyButton.disabled = !!ownerPasskeyUnavailable;
+      }
       const message = document.getElementById("startupMessage");
-      if (message) message.textContent = startup.message || "";
+      if (message) {
+        message.textContent = ownerPasskeyUnavailable || startup.message || "";
+        message.className = `startup-message ${ownerPasskeyUnavailable ? "bad" : ""}`.trim();
+      }
     }
     async function loadAppSnapshot() {
       const payload = await apiJson("/api/next/app/snapshot", {headers: authHeaders()});
@@ -18968,9 +19057,9 @@ def ui_preview_html(
       document.getElementById("appRecoveryForm")?.addEventListener("submit", (event) => loginRecovery(event));
       document.getElementById("profileSignOutButton")?.addEventListener("click", () => logoutApp());
       document.getElementById("startupRefreshButton")?.addEventListener("click", () => refreshAppFlow().catch((error) => {
-        const node = document.getElementById("startupMessage");
-        if (node) node.textContent = error.message || String(error);
+        setStartupGateMessage(error.message || String(error), "bad");
       }));
+      document.getElementById("startupOwnerPasskeyButton")?.addEventListener("click", () => registerStartupOwnerPasskey());
       document.getElementById("startupLogoutButton")?.addEventListener("click", () => logoutApp());
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -20955,13 +21044,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       };
       node.innerHTML = rows.map((step, index) => {
         const state = step.state || "pending";
-        const marker = state === "complete" ? "OK" : String(index + 1);
+        const marker = state === "complete" ? "OK" : state === "skipped" ? "-" : String(index + 1);
+        const detail = step.detail || details[step.key] || state;
         return `
           <div class="startup-step ${escapeHtml(state)}">
             <div class="startup-step-marker">${escapeHtml(marker)}</div>
             <div>
               <strong>${escapeHtml(labels[step.key] || step.label || step.key || tNext("startup.step", "Step"))}</strong>
-              <span>${escapeHtml(details[step.key] || step.detail || state)}</span>
+              <span>${escapeHtml(detail)}</span>
             </div>
           </div>
         `;
@@ -21060,18 +21150,26 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         button.disabled = false;
       }
     }
-    async function registerOwnerPasskey() {
+    function setStartupMessage(message, tone) {
+      const node = document.getElementById("startupMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    async function registerOwnerPasskey(triggerButton = null) {
       setAuthStatus("Create owner passkey clicked.", "info");
       const unavailable = webauthnUnavailableReason();
       if (unavailable) {
         setAuthStatus(unavailable, "bad");
+        setStartupMessage(unavailable, "bad");
         return;
       }
-      const username = document.getElementById("authUsername").value.trim() || "admin";
-      const credentialName = document.getElementById("authCredentialName").value.trim() || "Owner passkey";
-      const button = document.getElementById("authSetupButton");
-      button.disabled = true;
+      const username = document.getElementById("authUsername")?.value.trim() || "admin";
+      const credentialName = document.getElementById("authCredentialName")?.value.trim() || "Owner passkey";
+      const button = triggerButton || document.getElementById("authSetupButton");
+      if (button) button.disabled = true;
       setAuthStatus("Waiting for your passkey prompt...", "info");
+      setStartupMessage(tNext("auth.waitingForPasskey", "Waiting for your passkey prompt..."), "info");
       try {
         const optionsPayload = await authJson("/api/next/auth/register/options", {
           method: "POST",
@@ -21108,12 +21206,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         authToken = verified.token || "";
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         setAuthStatus("Passkey created. You are signed in.", "good");
+        setStartupMessage(tNext("auth.passkeyCreated", "Passkey created. You are signed in."), "good");
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
         setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+        setStartupMessage(error.name === "NotAllowedError" ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : error.message, "bad");
       } finally {
-        button.disabled = false;
+        if (button) button.disabled = false;
       }
     }
     async function registerInvitedPasskey() {
