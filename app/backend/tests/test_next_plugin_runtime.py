@@ -2,8 +2,11 @@ import os
 import sqlite3
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
+from unittest.mock import patch
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -12,6 +15,27 @@ if repo_root not in sys.path:
 
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
+from app.backend.next_plugins.trakt import plugin as trakt_plugin
+
+
+class FakeResponse:
+    def __init__(self, payload=None, status_code=200):
+        self._payload = payload if payload is not None else {}
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code < 400:
+            return
+        error = FakeHTTPError(f"{self.status_code} error")
+        error.response = self
+        raise error
+
+
+class FakeHTTPError(Exception):
+    pass
 
 
 class NextPluginRuntimeTests(unittest.TestCase):
@@ -36,6 +60,48 @@ class NextPluginRuntimeTests(unittest.TestCase):
                 self.assertIn("inspect_source", plugin.runtime["entrypoints"])
                 self.assertIn("plan_import", plugin.runtime["entrypoints"])
                 self.assertIn("import_source", plugin.runtime["entrypoints"])
+
+    def test_trakt_health_reports_token_status_separately(self):
+        def fake_get(url, headers=None, params=None, timeout=None):
+            if url.endswith("/movies/tron-legacy-2010"):
+                self.assertNotIn("Authorization", headers or {})
+                return FakeResponse({"title": "Tron: Legacy"})
+            if url.endswith("/users/settings"):
+                self.assertEqual(headers.get("Authorization"), "Bearer bad-token")
+                return FakeResponse({"error": "unauthorized"}, 401)
+            raise AssertionError(url)
+
+        context = {
+            "secrets": {"clientId": "client-id", "accessToken": "bad-token"},
+            "settings": {"username": "me"},
+        }
+        fake_requests = types.SimpleNamespace(get=Mock(side_effect=fake_get), HTTPError=FakeHTTPError)
+        with patch.dict(sys.modules, {"requests": fake_requests}):
+            health = trakt_plugin.health_check(context)
+
+        self.assertEqual(health["status"], "available")
+        self.assertEqual(health["tokenStatus"], "invalid")
+        self.assertEqual(health["tokenHttpStatus"], 401)
+
+    def test_trakt_public_user_sync_does_not_send_bearer_token(self):
+        calls = []
+
+        def fake_get(url, headers=None, params=None, timeout=None):
+            calls.append((url, headers or {}))
+            self.assertNotIn("Authorization", headers or {})
+            return FakeResponse([])
+
+        context = {
+            "secrets": {"client_id": "client-id", "access_token": "unused-token"},
+            "settings": {"username": "public-user"},
+        }
+        fake_requests = types.SimpleNamespace(get=Mock(side_effect=fake_get), HTTPError=FakeHTTPError)
+        with patch.dict(sys.modules, {"requests": fake_requests}):
+            result = trakt_plugin.sync_personal_lists({}, context)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["counts"], {"watchlist": 0, "watched": 0})
+        self.assertTrue(any("/users/public-user/watchlist/movies" in url for url, _ in calls))
 
     def test_letterboxd_import_plugin_parses_export_csv(self):
         with tempfile.TemporaryDirectory() as temp_dir:
