@@ -523,6 +523,7 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "imdbId": clean_text(payload.get("imdbId") or payload.get("imdb_id")),
         "memberOfBoxSet": bool(payload.get("memberOfBoxSet") or payload.get("member_of_box_set")),
         "detectBoxSets": bool(payload.get("detectBoxSets") or payload.get("detect_box_sets") or payload.get("importBoxSets") or payload.get("import_box_sets")),
+        "previewMode": bool(payload.get("previewMode") or payload.get("preview_mode")),
         "parentBoxSets": payload.get("parentBoxSets") or payload.get("parent_box_sets") or [],
     }
 
@@ -541,6 +542,16 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
             plan.append({"entrypoint": entrypoint, "payload": payload})
 
     base_payload = dict(query)
+    if query.get("previewMode"):
+        if external_barcode:
+            add("search_barcode", {**base_payload, "barcode": external_barcode})
+            return plan
+        if title:
+            if "search_title" in capabilities:
+                add("search_title", base_payload)
+            else:
+                add("movie_details", base_payload)
+            return plan
     if external_barcode:
         add("search_barcode", {**base_payload, "barcode": external_barcode})
     if tmdb_id or imdb_id:

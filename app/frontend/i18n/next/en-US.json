@@ -1138,5 +1138,18 @@
   "profile.sections": "Profile sections",
   "profile.tabAccount": "Account",
   "profile.tabNotifications": "Notifications",
-  "profile.tabStructure": "Structure"
+  "profile.tabStructure": "Structure",
+  "importCenter.fileTitle": "Import file",
+  "importCenter.fileHelp": "Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.",
+  "importCenter.fileBrowse": "Import / browse",
+  "importCenter.fileSelected": "Selected file",
+  "importCenter.fileUploading": "Uploading and checking plugins...",
+  "importCenter.fileReady": "File recognized. Review the import before starting.",
+  "importCenter.fileUnrecognized": "No enabled import plugin recognized this file.",
+  "importCenter.fileSupported": "Supported: CSV, TSV, JSON, XML and ZIP.",
+  "importCenter.fileCandidates": "Plugin checks",
+  "importCenter.fileChosenSource": "Chosen source",
+  "importCenter.fileNoFile": "Choose a file first.",
+  "importCenter.fileRecognized": "Recognized",
+  "importCenter.fileNotRecognized": "Not recognized"
 }

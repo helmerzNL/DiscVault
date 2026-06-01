@@ -1064,5 +1064,18 @@
   "profile.sections": "Profilsektioner",
   "profile.tabAccount": "Konto",
   "profile.tabNotifications": "Notifikationer",
-  "profile.tabStructure": "Struktur"
+  "profile.tabStructure": "Struktur",
+  "importCenter.fileTitle": "Importfil",
+  "importCenter.fileHelp": "Upload en CSV-, TSV-, JSON-, XML- eller ZIP-fil. DiscVault spoerger de aktive importplugins, hvilken der genkender den.",
+  "importCenter.fileBrowse": "Importer / gennemse",
+  "importCenter.fileSelected": "Valgt fil",
+  "importCenter.fileUploading": "Uploader og kontrollerer plugins...",
+  "importCenter.fileReady": "Filen blev genkendt. Gennemgaa importen foer start.",
+  "importCenter.fileUnrecognized": "Ingen aktiv importplugin genkendte denne fil.",
+  "importCenter.fileSupported": "Understoettet: CSV, TSV, JSON, XML og ZIP.",
+  "importCenter.fileCandidates": "Plugin-kontroller",
+  "importCenter.fileChosenSource": "Valgt kilde",
+  "importCenter.fileNoFile": "Vaelg foerst en fil.",
+  "importCenter.fileRecognized": "Genkendt",
+  "importCenter.fileNotRecognized": "Ikke genkendt"
 }
