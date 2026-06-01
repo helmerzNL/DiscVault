@@ -1977,6 +1977,9 @@ def startup_status_payload(conn) -> dict[str, Any]:
             message = "Legacy DiscVault data is ready to migrate."
     source_counts = readiness["legacyData"]["sourceCounts"] or {}
     legacy_found = bool(readiness["legacyData"]["found"])
+    show_migration_context = phase != "owner_setup" and (
+        legacy_found or readiness["state"] not in {"not_required"}
+    )
     steps = [
         {
             "key": "auth",
@@ -1995,7 +1998,7 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "detail": "Ready to browse." if phase == "ready" else "Available after setup is complete.",
         },
     ]
-    if legacy_found or readiness["state"] not in {"not_required"}:
+    if show_migration_context:
         steps.insert(
             1,
             {
@@ -2026,6 +2029,42 @@ def startup_status_payload(conn) -> dict[str, Any]:
             },
         )
 
+    migration_payload = {
+        "state": readiness["state"],
+        "canStart": readiness["canStart"],
+        "requiresConfirmation": readiness["requiresConfirmation"],
+        "requiredActions": readiness["requiredActions"],
+        "activeJob": readiness["activeJob"],
+        "latestRun": readiness["latestRun"],
+        "legacyData": {
+            "pluginId": readiness["legacyData"].get("pluginId"),
+            "pluginName": readiness["legacyData"].get("pluginName"),
+            "sourceKind": readiness["legacyData"].get("sourceKind"),
+            "status": readiness["legacyData"].get("status"),
+            "found": readiness["legacyData"]["found"],
+            "readable": readiness["legacyData"]["readable"],
+            "sourceCounts": readiness["legacyData"]["sourceCounts"],
+            "mediaExtensions": readiness["legacyData"]["mediaExtensions"],
+        },
+        "importSources": readiness.get("importSources") or [],
+    }
+    if not show_migration_context:
+        migration_payload = {
+            "state": "",
+            "canStart": False,
+            "requiresConfirmation": False,
+            "requiredActions": [],
+            "activeJob": None,
+            "latestRun": None,
+            "legacyData": {
+                "found": False,
+                "readable": False,
+                "sourceCounts": {},
+                "mediaExtensions": {},
+            },
+            "importSources": [],
+        }
+
     return {
         "phase": phase,
         "ready": phase == "ready",
@@ -2046,25 +2085,7 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "userCount": user_count,
             "credentialCount": credential_count,
         },
-        "migration": {
-            "state": readiness["state"],
-            "canStart": readiness["canStart"],
-            "requiresConfirmation": readiness["requiresConfirmation"],
-            "requiredActions": readiness["requiredActions"],
-            "activeJob": readiness["activeJob"],
-            "latestRun": readiness["latestRun"],
-            "legacyData": {
-                "pluginId": readiness["legacyData"].get("pluginId"),
-                "pluginName": readiness["legacyData"].get("pluginName"),
-                "sourceKind": readiness["legacyData"].get("sourceKind"),
-                "status": readiness["legacyData"].get("status"),
-                "found": readiness["legacyData"]["found"],
-                "readable": readiness["legacyData"]["readable"],
-                "sourceCounts": readiness["legacyData"]["sourceCounts"],
-                "mediaExtensions": readiness["legacyData"]["mediaExtensions"],
-            },
-            "importSources": readiness.get("importSources") or [],
-        },
+        "migration": migration_payload,
     }
 
 
@@ -21060,6 +21081,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function renderStartupFacts(startup) {
       const node = document.getElementById("startupFacts");
       if (!node) return;
+      if ((startup.phase || "") === "owner_setup") {
+        node.innerHTML = "";
+        node.classList.add("hidden");
+        return;
+      }
       const migration = startup.migration || {};
       const legacyData = migration.legacyData || {};
       const sourceCounts = legacyData.sourceCounts || {};
@@ -21103,11 +21129,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const auth = startup.auth || {};
       const legacyData = migration.legacyData || {};
       const sourceCounts = legacyData.sourceCounts || {};
+      const showMigrationContext = phase !== "owner_setup" && !!migration.state;
       document.getElementById("startupMeta").innerHTML = [
-        migration.state ? `${tNext("startup.metaMigration", "Migration")}: ${translatedState(migration.state)}` : "",
-        legacyData.pluginName ? `${tNext("startup.metaSource", "Source")}: ${legacyData.pluginName}` : "",
-        Number(sourceCounts.movies || 0) ? `${number(sourceCounts.movies)} ${tNext("startup.metaLegacyMovies", "legacy movies")}` : "",
-        Number(sourceCounts.groups || 0) ? `${number(sourceCounts.groups)} ${tNext("startup.metaLegacyGroups", "legacy groups")}` : "",
+        showMigrationContext ? `${tNext("startup.metaMigration", "Migration")}: ${translatedState(migration.state)}` : "",
+        showMigrationContext && legacyData.pluginName ? `${tNext("startup.metaSource", "Source")}: ${legacyData.pluginName}` : "",
+        showMigrationContext && Number(sourceCounts.movies || 0) ? `${number(sourceCounts.movies)} ${tNext("startup.metaLegacyMovies", "legacy movies")}` : "",
+        showMigrationContext && Number(sourceCounts.groups || 0) ? `${number(sourceCounts.groups)} ${tNext("startup.metaLegacyGroups", "legacy groups")}` : "",
         auth.role ? `${tNext("startup.metaSignedIn", "Signed in")}: ${auth.role}` : ""
       ].filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("");
       renderStartupSteps(startup.steps);
@@ -21120,9 +21147,9 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           ? tNext("startup.switchAccount", "Switch Account")
           : tNext("auth.signIn", "Sign in");
       const startupMigrationButton = document.getElementById("startupStartMigrationButton");
-      startupMigrationButton.classList.toggle("hidden", !startup.canStartMigration);
+      startupMigrationButton.classList.toggle("hidden", !showMigrationContext || !startup.canStartMigration);
       startupMigrationButton.textContent = tNext("startup.openMigrationGuide", "Open migration guide");
-      document.getElementById("startupMigrationButton").classList.toggle("hidden", !migration.state);
+      document.getElementById("startupMigrationButton").classList.toggle("hidden", !showMigrationContext);
       document.getElementById("startupRefreshButton").classList.toggle("hidden", phase === "ready");
       const statusMessage = phase === "migration_pending_non_admin"
         ? tNext("startup.status.pendingNonAdmin", "Ask the owner or administrator to finish migration, or switch to an account with migration rights.")
