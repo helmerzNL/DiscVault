@@ -15721,7 +15721,7 @@ def ui_preview_html(
           </div>
           <div class="import-result-meta">${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}: ${escapeHtml(String(boxSetProposal.movies.length))}</div>
           <div class="import-counts">
-            ${(boxSetProposal.movies || []).slice(0, 8).map((member) => `<span class="tag">${escapeHtml(member.title || "")}${member.year ? ` (${escapeHtml(member.year)})` : ""}</span>`).join("")}
+            ${(boxSetProposal.movies || []).slice(0, 8).map((member) => `<span class="tag">${escapeHtml(member.title || "")}${member.year ? ` (${escapeHtml(member.year)})` : ""}${member.format ? ` · ${escapeHtml(member.format)}` : ""}</span>`).join("")}
           </div>
         </div>
       ` : "";
@@ -31157,6 +31157,122 @@ def register_routes(flask_app: Flask) -> None:
                         return row["movie_id"]
         return None
 
+    def merge_box_set_member_enrichment(member: dict[str, Any], metadata_result: dict[str, Any], fallback_format: str) -> dict[str, Any]:
+        proposal = metadata_result.get("proposal") if isinstance(metadata_result, dict) else {}
+        if not isinstance(proposal, dict):
+            return member
+        movie_updates = proposal.get("movieUpdates") or {}
+        metadata_updates = proposal.get("metadataUpdates") or {}
+        technical_updates = proposal.get("technicalUpdates") or {}
+        media_updates = proposal.get("mediaUpdates") or {}
+        identifiers = proposal.get("identifiers") or {}
+        enriched = dict(member)
+
+        def fill(target: str, *values: Any, overwrite: bool = False) -> None:
+            if not overwrite and enriched.get(target) not in (None, "", [], {}):
+                return
+            for value in values:
+                if value not in (None, "", [], {}):
+                    enriched[target] = value
+                    return
+
+        discovered_format = (
+            movie_updates.get("format")
+            or technical_updates.get("format")
+            or metadata_updates.get("format")
+            or ""
+        )
+        # For box-set members the detected release format is more important
+        # than the parent box-set fallback, because mixed-format sets exist.
+        if discovered_format and (not enriched.get("format") or clean_text(enriched.get("format")) == clean_text(fallback_format)):
+            enriched["format"] = discovered_format
+
+        fill("overview", movie_updates.get("overview"), metadata_updates.get("overview"), metadata_updates.get("plot"))
+        fill("plot", metadata_updates.get("plot"), movie_updates.get("overview"))
+        fill("releaseDate", movie_updates.get("release_date"), metadata_updates.get("release_date"))
+        fill("release_date", movie_updates.get("release_date"), metadata_updates.get("release_date"))
+        fill("runtimeMinutes", movie_updates.get("runtime_minutes"), metadata_updates.get("runtime_minutes"))
+        fill("runtime", movie_updates.get("runtime_minutes"), metadata_updates.get("runtime_minutes"))
+        fill("genre", metadata_updates.get("genre"))
+        fill("director", metadata_updates.get("director"))
+        fill("actor", metadata_updates.get("actor"))
+        fill("producer", metadata_updates.get("producer"))
+        fill("studios", metadata_updates.get("studios"))
+
+        poster_update = media_updates.get("poster") if isinstance(media_updates.get("poster"), dict) else {}
+        backdrop_update = media_updates.get("backdrop") if isinstance(media_updates.get("backdrop"), dict) else {}
+        poster_url = metadata_updates.get("poster_url") or poster_update.get("sourceUrl")
+        backdrop_url = metadata_updates.get("backdrop_url") or backdrop_update.get("sourceUrl")
+        fill("poster", poster_url)
+        fill("posterUrl", poster_url)
+        fill("poster_url", poster_url)
+        fill("backdrop", backdrop_url)
+        fill("backdropUrl", backdrop_url)
+        fill("backdrop_url", backdrop_url)
+        fill("backdropUrls", metadata_updates.get("backdrop_urls"))
+        fill("backdrop_urls", metadata_updates.get("backdrop_urls"))
+
+        if identifiers.get("tmdb") and not (enriched.get("tmdbId") or enriched.get("tmdb_id")):
+            enriched["tmdbId"] = str(identifiers["tmdb"])
+            enriched["tmdb_id"] = str(identifiers["tmdb"])
+        if identifiers.get("imdb") and not (enriched.get("imdbId") or enriched.get("imdb_id")):
+            enriched["imdbId"] = str(identifiers["imdb"])
+            enriched["imdb_id"] = str(identifiers["imdb"])
+
+        if technical_updates:
+            enriched["technicalSpecs"] = {**(enriched.get("technicalSpecs") or {}), **technical_updates}
+        source_summary = [
+            item
+            for item in (metadata_result.get("sourceSummary") or [])
+            if item.get("state") in {"applied", "hit"}
+        ]
+        if source_summary:
+            enriched["metadataPluginEnrichment"] = [
+                {
+                    "pluginId": item.get("pluginId"),
+                    "state": item.get("state"),
+                    "reason": item.get("reason"),
+                }
+                for item in source_summary
+            ]
+        return {key: value for key, value in enriched.items() if value not in (None, "", [], {})}
+
+    def enrich_box_set_member_for_import(
+        conn,
+        member: dict[str, Any],
+        *,
+        proposal: dict[str, Any],
+        body: dict[str, Any],
+        actor: dict[str, Any],
+        fallback_format: str,
+    ) -> dict[str, Any]:
+        title = clean_text(member.get("title") or member.get("originalTitle") or member.get("original_title"))
+        if not title and not (member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id")):
+            return member
+        lookup_payload = {
+            "title": title,
+            "year": clean_text(member.get("year")),
+            "tmdbId": clean_text(member.get("tmdbId") or member.get("tmdb_id")),
+            "imdbId": clean_text(member.get("imdbId") or member.get("imdb_id")),
+            "barcode": clean_text(member.get("barcode")),
+            "format": clean_text(member.get("format")),
+            "parentBoxSets": [
+                {
+                    "title": clean_text(proposal.get("title") or proposal.get("name")),
+                    "barcode": clean_text(proposal.get("barcode") or body.get("barcode")),
+                    "format": clean_text(proposal.get("format") or body.get("format") or fallback_format),
+                }
+            ],
+        }
+        try:
+            metadata_result = lookup_metadata_sources(conn, lookup_payload, actor)
+        except Exception as exc:
+            return {
+                **member,
+                "metadataPluginWarning": str(exc),
+            }
+        return merge_box_set_member_enrichment(member, metadata_result, fallback_format)
+
     def box_set_member_import_payload(member: dict[str, Any], *, box_set_title: str, fallback_format: str, barcode: str) -> dict[str, Any]:
         metadata = {}
         for key in (
@@ -31173,6 +31289,8 @@ def register_routes(flask_app: Flask) -> None:
             "backdropUrls",
             "identifiedBy",
             "memberConfidence",
+            "metadataPluginEnrichment",
+            "metadataPluginWarning",
             "sourceRef",
         ):
             value = member.get(key)
@@ -31195,6 +31313,10 @@ def register_routes(flask_app: Flask) -> None:
         }
 
     def box_set_member_metadata_proposal(member: dict[str, Any]) -> dict[str, Any]:
+        movie_updates = {}
+        member_format = clean_text(member.get("format"))
+        if member_format:
+            movie_updates["format"] = member_format
         metadata_updates = {}
         for source, target in (
             ("genre", "genre"),
@@ -31233,8 +31355,29 @@ def register_routes(flask_app: Flask) -> None:
                 "sourceLabel": "MovieVault",
                 "sourceRef": clean_text(member.get("sourceRef")),
             }
+        raw_technical = member.get("technicalSpecs") if isinstance(member.get("technicalSpecs"), dict) else {}
+        technical_updates = {}
+        for source, target in (
+            ("hdr", "hdr"),
+            ("packaging", "packaging"),
+            ("screen_ratios", "screen_ratios"),
+            ("screenRatios", "screen_ratios"),
+            ("audio_tracks", "audio_tracks"),
+            ("audioTracks", "audio_tracks"),
+            ("subtitles", "subtitles"),
+            ("regions", "regions"),
+            ("content_ratings", "content_ratings"),
+            ("contentRatings", "content_ratings"),
+        ):
+            value = member.get(source)
+            if value in (None, "", [], {}):
+                value = raw_technical.get(source)
+            if value not in (None, "", [], {}):
+                technical_updates[target] = value
         return {
+            "movieUpdates": movie_updates,
             "metadataUpdates": metadata_updates,
+            "technicalUpdates": technical_updates,
             "identifiers": box_set_member_identifiers(member),
             "mediaUpdates": media_updates,
         }
@@ -31283,6 +31426,14 @@ def register_routes(flask_app: Flask) -> None:
         imported_movies = []
         applied_members = []
         for index, member in enumerate(members[:50], start=1):
+            member = enrich_box_set_member_for_import(
+                conn,
+                member,
+                proposal=proposal,
+                body=body,
+                actor=actor,
+                fallback_format=fallback_format,
+            )
             existing_id = existing_movie_for_box_set_member(conn, member)
             member_barcode = clean_text(member.get("barcode")) or synthetic_box_set_member_barcode(title, barcode, index)
             payload = box_set_member_import_payload(
