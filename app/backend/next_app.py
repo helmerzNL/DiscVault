@@ -15011,7 +15011,7 @@ def ui_preview_html(
         return;
       }
       if (returnRoute?.view === "people") {
-        showPeoplePage(pushUrl);
+        showLibraryPage(pushUrl);
         return;
       }
       showLibraryPage(false);
@@ -16747,7 +16747,7 @@ def ui_preview_html(
       if (route.view === "movie") openAppMovieDetail(route.movieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
-      else if (route.view === "people") showPeoplePage(false);
+      else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "import") showImportPage(false);
       else if (route.view === "lists") showListsPage(false);
       else showLibraryPage(false);
@@ -16958,7 +16958,7 @@ def ui_preview_html(
       if (route !== "import" && importScanner.running) {
         stopImportBarcodeScanner();
       }
-      document.querySelectorAll(".mobile-tabbar [data-app-route='people']").forEach((node) => node.remove());
+      document.querySelectorAll("[data-app-route='people'], [data-mobile-route='people']").forEach((node) => node.remove());
       document.querySelectorAll("[data-app-route]").forEach((node) => {
         node.classList.toggle("active", node.dataset.appRoute === route);
       });
@@ -17028,6 +17028,8 @@ def ui_preview_html(
       }
     }
     function showPeoplePage(pushUrl = true) {
+      showLibraryPage(pushUrl);
+      return;
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
@@ -18561,7 +18563,7 @@ def ui_preview_html(
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
-      else if (route.view === "people") showPeoplePage(false);
+      else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
       else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
@@ -19126,7 +19128,7 @@ def ui_preview_html(
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
-        else if (route.view === "people") showPeoplePage(false);
+        else if (route.view === "people") showLibraryPage(false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);
         else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
