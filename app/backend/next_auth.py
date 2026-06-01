@@ -32,6 +32,7 @@ TableExists = Callable[[Any, str], bool]
 
 SESSION_COOKIE_NAME = "dv_next_session"
 SESSION_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60
+API_TOKEN_PREFIX = "dvapi_"
 RBAC_MODE_SETTING = "rbac_mode"
 RBAC_MODES = {"basic", "advanced"}
 RBAC_BASIC_ROLE_KEYS = ("admin", "media_editor", "media_fan", "media_viewer")
@@ -145,11 +146,25 @@ def _verify_token(token: str) -> dict[str, Any] | None:
         return None
 
 
+def next_create_api_token_value() -> str:
+    return f"{API_TOKEN_PREFIX}{secrets.token_urlsafe(32)}"
+
+
+def next_api_token_hash(value: Any) -> str:
+    token = str(value or "").strip()
+    return hashlib.sha256(f"disc-vault-next-api-token:{_jwt_secret()}:{token}".encode("utf-8")).hexdigest()
+
+
 def _bearer_token() -> str:
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         return auth_header[7:].strip()
     return ""
+
+
+def _bearer_api_token() -> str:
+    token = _bearer_token()
+    return token if token.startswith(API_TOKEN_PREFIX) else ""
 
 
 def _session_cookie_token() -> str:
@@ -217,6 +232,9 @@ def next_auth_current_user(conn) -> dict[str, Any] | None:
     payload = _current_user_payload()
     user_id = payload.get("sub") if payload else None
     if not user_id:
+        api_token = _bearer_api_token()
+        if api_token:
+            return next_auth_current_api_token_user(conn, api_token)
         return None
     with conn.cursor() as cur:
         cur.execute(
@@ -228,6 +246,54 @@ def next_auth_current_user(conn) -> dict[str, Any] | None:
             (user_id,),
         )
         return cur.fetchone()
+
+
+def _auth_table_exists(conn, table_name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
+        row = cur.fetchone()
+    return bool(row and row["table_name"])
+
+
+def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
+    if not _auth_table_exists(conn, "api_access_tokens") or not _auth_table_exists(conn, "users"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                u.id,
+                u.username,
+                u.display_name,
+                u.first_name,
+                u.last_name,
+                u.status,
+                u.created_at,
+                u.updated_at,
+                t.id AS api_token_id,
+                t.name AS api_token_name,
+                t.scopes AS api_token_scopes,
+                t.permission_keys AS api_token_permission_keys
+            FROM api_access_tokens t
+            JOIN users u ON u.id = t.user_id
+            WHERE t.token_hash=%s
+              AND t.revoked_at IS NULL
+              AND (t.expires_at IS NULL OR t.expires_at > now())
+              AND u.status='active'
+            """,
+            (next_api_token_hash(token),),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        cur.execute("UPDATE api_access_tokens SET last_used_at=now() WHERE id=%s", (row["api_token_id"],))
+    row["apiToken"] = {
+        "id": row.pop("api_token_id"),
+        "name": row.pop("api_token_name"),
+        "scopes": row.pop("api_token_scopes") or [],
+        "permissionKeys": row.pop("api_token_permission_keys") or [],
+    }
+    return row
 
 
 def _parse_uuid(value: Any) -> UUID | None:

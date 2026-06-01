@@ -1,0 +1,33 @@
+{
+  "id": "discvault_mcp",
+  "name": "DiscVault MCP Server",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "kind": "mcp",
+  "categories": ["system", "mcp"],
+  "capabilities": [
+    "mcp",
+    "search_collection",
+    "get_collection_stats",
+    "get_movie_details",
+    "add_movie",
+    "delete_movie",
+    "lookup_barcode",
+    "list_all_movies",
+    "get_watchlist",
+    "get_watch_history",
+    "get_groups"
+  ],
+  "defaultEnabled": true,
+  "orderIndex": 910,
+  "requiresSecrets": false,
+  "systemPlugin": true,
+  "deletable": false,
+  "entitlements": {
+    "use": "mcp.use",
+    "tokens": "api.tokens.manage"
+  },
+  "settingsSchema": {},
+  "settingsSchemaVersion": 1
+}
