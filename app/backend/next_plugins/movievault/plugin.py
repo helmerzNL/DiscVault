@@ -190,7 +190,50 @@ def _member_needs_identification(member):
     return not (member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id"))
 
 
-def _merge_member_enrichment(member, enrichment):
+def _format_key(value):
+    text = _text(value).casefold().replace("-", " ").replace("_", " ").replace("/", " ")
+    text = " ".join(text.split())
+    if not text:
+        return ""
+    if "ultra hd" in text or "uhd" in text or "4k" in text:
+        return "ultra_hd_blu_ray"
+    if "blu ray" in text or "bluray" in text or text == "bd":
+        return "blu_ray"
+    if text in {"dvd", "dvd video"}:
+        return "dvd"
+    if "hd dvd" in text or "hddvd" in text:
+        return "hd_dvd"
+    if "laserdisc" in text or "laser disc" in text:
+        return "laserdisc"
+    if "svcd" in text or "vcd" in text:
+        return "vcd_svcd"
+    return text
+
+
+def _selected_format(context=None, item=None):
+    context = context or {}
+    item = item or {}
+    return _text(
+        _first_value(
+            {**item, **context},
+            "selectedFormat",
+            "selected_format",
+            "format",
+            "mediaType",
+            "media_type",
+            "editionFormat",
+            "edition_format",
+        )
+    )
+
+
+def _compatible_format(candidate, expected):
+    candidate_key = _format_key(candidate)
+    expected_key = _format_key(expected)
+    return not candidate_key or not expected_key or candidate_key == expected_key
+
+
+def _merge_member_enrichment(member, enrichment, expected_format=""):
     proposal = enrichment.get("proposal") if isinstance(enrichment, dict) else {}
     proposal = proposal if isinstance(proposal, dict) else {}
     movie_updates = proposal.get("movieUpdates") or {}
@@ -219,9 +262,13 @@ def _merge_member_enrichment(member, enrichment):
             continue
         for key in keys:
             value = movie_updates.get(key) or metadata_updates.get(key)
+            if target == "format" and expected_format and not _compatible_format(value, expected_format):
+                continue
             if value not in (None, "", [], {}):
                 enriched[target] = value
                 break
+    if expected_format and not enriched.get("format"):
+        enriched["format"] = expected_format
 
     if identifiers.get("tmdb") and not (enriched.get("tmdbId") or enriched.get("tmdb_id")):
         enriched["tmdbId"] = str(identifiers["tmdb"])
@@ -268,7 +315,8 @@ def _identify_member_with_other_plugins(member, context):
         enrichment = lookup(query, excludeProviders=["movievault"])
     except Exception as exc:  # Fallback discovery should never make MovieVault unusable.
         return {**member, "identificationWarning": str(exc)}, None
-    return _merge_member_enrichment(member, enrichment or {}), enrichment
+    expected_format = member.get("format") or (context or {}).get("selectedFormat") or (context or {}).get("format") or ""
+    return _merge_member_enrichment(member, enrichment or {}, expected_format), enrichment
 
 
 def _normalize_box_set_proposal(payload, context=None):
@@ -286,6 +334,7 @@ def _normalize_box_set_proposal(payload, context=None):
             item = nested
 
     title = _text(_first_value(item, "title", "name", "boxSetTitle", "box_set_title"))
+    selected_format = _selected_format(context, item)
     raw_members = _member_list(item)
     members = []
     lookup_summaries = []
@@ -294,8 +343,12 @@ def _normalize_box_set_proposal(payload, context=None):
         member = _normalize_member(raw_member, index)
         if not member:
             continue
+        if selected_format and not member.get("format"):
+            member["format"] = selected_format
+        if selected_format and member.get("format") and not _compatible_format(member.get("format"), selected_format):
+            member["format"] = selected_format
         if _member_needs_identification(member):
-            member, enrichment = _identify_member_with_other_plugins(member, context or {})
+            member, enrichment = _identify_member_with_other_plugins(member, {**(context or {}), "selectedFormat": selected_format})
             if isinstance(enrichment, dict):
                 lookup_summaries.append(
                     {
@@ -328,7 +381,7 @@ def _normalize_box_set_proposal(payload, context=None):
         "barcode": _text(_first_value(item, "barcode", "ean", "upc")),
         "year": _parse_year(_first_value(item, "year", "releaseYear", "release_year")),
         "year_range": _text(_first_value(item, "yearRange", "year_range")),
-        "format": _text(_first_value(item, "format", "mediaType", "media_type")),
+        "format": selected_format or _text(_first_value(item, "format", "mediaType", "media_type")),
         "poster": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
         "poster_url": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
         "backdrop": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),

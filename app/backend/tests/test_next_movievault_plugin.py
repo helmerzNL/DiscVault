@@ -79,6 +79,62 @@ class MovieVaultPluginBoxSetTests(unittest.TestCase):
         self.assertIn("poster_url", proposal["movies"][0])
         self.assertEqual(proposal["metadata_plugin_fallbacks"][0]["sourceOrder"], ["tmdb", "omdb", "bluray_com"])
 
+    def test_box_set_member_format_keeps_selected_parent_edition(self):
+        def metadata_lookup(payload, **_kwargs):
+            return {
+                "sourceOrder": ["tmdb", "bluray_com"],
+                "sourceSummary": [{"pluginId": "bluray_com", "state": "hit"}],
+                "proposal": {
+                    "movieUpdates": {
+                        "title": payload["title"],
+                        "format": "4K UHD",
+                    },
+                    "identifiers": {"tmdb": "603"},
+                },
+            }
+
+        proposal = movievault_plugin._normalize_box_set_proposal(
+            {
+                "items": [
+                    {
+                        "boxSetTitle": "DVD Trilogy",
+                        "format": "DVD",
+                        "movies": [
+                            {"title": "Movie One"},
+                            {"title": "Movie Two"},
+                        ],
+                    }
+                ]
+            },
+            {"metadataLookup": metadata_lookup, "format": "DVD"},
+        )
+
+        self.assertEqual(proposal["format"], "DVD")
+        self.assertEqual([movie["format"] for movie in proposal["movies"]], ["DVD", "DVD"])
+        self.assertEqual(proposal["movies"][0]["tmdbId"], "603")
+
+    def test_box_set_members_without_provider_match_still_remain_importable(self):
+        def metadata_lookup(_payload, **_kwargs):
+            return {"sourceSummary": [], "proposal": {}}
+
+        proposal = movievault_plugin._normalize_box_set_proposal(
+            {
+                "items": [
+                    {
+                        "boxSetTitle": "Manual Only Box",
+                        "format": "Blu-ray",
+                        "movies": ["First Feature", "Second Feature"],
+                    }
+                ]
+            },
+            {"metadataLookup": metadata_lookup},
+        )
+
+        self.assertEqual(proposal["member_count"], 2)
+        self.assertEqual(proposal["member_confidence"], "candidate")
+        self.assertEqual([movie["title"] for movie in proposal["movies"]], ["First Feature", "Second Feature"])
+        self.assertEqual([movie["format"] for movie in proposal["movies"]], ["Blu-ray", "Blu-ray"])
+
     def test_box_set_candidates_returns_miss_when_movievault_has_no_members(self):
         original_get = movievault_plugin._get
         try:

@@ -1397,7 +1397,7 @@ def apply_primary_media_update(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT ma.id, ma.source_url, ma.storage_key
+            SELECT ma.id, ma.source_url, ma.storage_key, ma.metadata
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type='movie'
@@ -1413,6 +1413,31 @@ def apply_primary_media_update(
         current = cur.fetchone()
         if current and str(current["id"] if isinstance(current, dict) else current[0]) == str(media_id):
             return None
+        current_metadata = current.get("metadata") if isinstance(current, dict) else (current[3] if current else {})
+        current_metadata = current_metadata if isinstance(current_metadata, dict) else {}
+        if current and (
+            current_metadata.get("lockedPrimary")
+            or current_metadata.get("locked_primary")
+            or current_metadata.get("userSelectedPrimary")
+            or current_metadata.get("user_selected_primary")
+            or current_metadata.get("source") in {"upload", "user_upload", "manual_selection"}
+        ):
+            linked = link_media_option(
+                conn,
+                movie_id=movie_id,
+                kind=kind,
+                source_url=source_url,
+                provider_id=provider_id,
+                sort_order=30,
+            )
+            return {
+                "kind": kind,
+                "mediaId": str(media_id),
+                "sourceUrl": source_url,
+                "providerId": provider_id,
+                "lockedPrimary": True,
+                "option": linked,
+            }
         cur.execute(
             """
             UPDATE entity_media
@@ -1448,6 +1473,37 @@ def apply_primary_media_update(
         "sourceUrl": source_url,
         "providerId": provider_id,
     }
+
+
+def has_locked_primary_media(conn, *, movie_id: UUID, kind: str) -> bool:
+    if kind not in {"poster", "backdrop"} or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ma.metadata
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='movie'
+              AND em.entity_id=%s
+              AND em.role=%s
+              AND ma.kind=%s
+              AND em.is_primary=true
+            ORDER BY em.sort_order, ma.created_at
+            LIMIT 1
+            """,
+            (movie_id, kind, kind),
+        )
+        row = cur.fetchone()
+    metadata = row.get("metadata") if isinstance(row, dict) and row else {}
+    metadata = metadata if isinstance(metadata, dict) else {}
+    return bool(
+        metadata.get("lockedPrimary")
+        or metadata.get("locked_primary")
+        or metadata.get("userSelectedPrimary")
+        or metadata.get("user_selected_primary")
+        or metadata.get("source") in {"upload", "user_upload", "manual_selection"}
+    )
 
 
 def link_media_option(
@@ -1515,6 +1571,14 @@ def apply_metadata_proposal(
     media_updates = proposal.get("mediaUpdates") or {}
     identifiers = proposal.get("identifiers") or {}
     provenance = proposal.get("provenance") or []
+    metadata_updates = dict(metadata_updates)
+    if metadata_updates:
+        if has_locked_primary_media(conn, movie_id=movie_uuid, kind="poster"):
+            for key in ("poster_url", "posterUrl", "poster"):
+                metadata_updates.pop(key, None)
+        if has_locked_primary_media(conn, movie_id=movie_uuid, kind="backdrop"):
+            for key in ("backdrop_url", "backdropUrl", "backdrop"):
+                metadata_updates.pop(key, None)
     changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers)
 
     if not changed:
