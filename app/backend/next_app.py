@@ -63,6 +63,8 @@ try:
     from .next_backup import validate_backup_zip
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_effective_enabled
+    from .next_auth import next_api_token_hash
+    from .next_auth import next_create_api_token_value
     from .next_auth import next_generate_recovery_codes
     from .next_auth import next_recovery_code_hash
     from .next_auth import register_next_auth_routes
@@ -107,6 +109,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import validate_backup_zip
     from next_auth import next_auth_current_user
     from next_auth import next_auth_effective_enabled
+    from next_auth import next_api_token_hash
+    from next_auth import next_create_api_token_value
     from next_auth import next_generate_recovery_codes
     from next_auth import next_recovery_code_hash
     from next_auth import register_next_auth_routes
@@ -132,6 +136,18 @@ MIGRATION_LEGACY_AUTH_CHALLENGE_KEY = "migration:legacy-auth"
 MIGRATION_LEGACY_AUTH_GRANT_PREFIX = "migration:legacy-grant:"
 MIGRATION_LEGACY_AUTH_GRANT_SECONDS = 30 * 60
 PLUGIN_EXECUTION_JOB_TYPE = "plugin.execute"
+MCP_TOOL_NAMES = (
+    "search_collection",
+    "get_collection_stats",
+    "get_movie_details",
+    "add_movie",
+    "delete_movie",
+    "lookup_barcode",
+    "list_all_movies",
+    "get_watchlist",
+    "get_watch_history",
+    "get_groups",
+)
 TARGET_DATA_TABLES = (
     "movies",
     "people",
@@ -9674,6 +9690,7 @@ def ui_preview_html(
                 <button type="button" data-profile-tab="notifications" data-next-i18n="profile.tabNotifications">Notifications</button>
                 <button type="button" data-profile-tab="structure" data-next-i18n="profile.tabStructure">Structure</button>
                 <button type="button" data-profile-tab="security" data-next-i18n="profile.security">Security</button>
+                <button type="button" data-profile-tab="api" data-next-i18n="profile.apiMcp">API & MCP</button>
                 <button type="button" data-profile-tab="about" data-next-i18n="profile.about">About</button>
               </nav>
             </div>
@@ -9868,6 +9885,34 @@ def ui_preview_html(
                   <div class="login-message" id="profileRecoveryMessage"></div>
                 </section>
               </div>
+            </div>
+            <div class="detail-subpanel profile-panel hidden" data-profile-panel="api">
+              <div class="profile-section-grid">
+                <section class="profile-section-box">
+                  <h4 data-next-i18n="profile.apiMcp">API & MCP</h4>
+                  <p data-next-i18n="profile.apiMcpHelp">Create scoped access tokens for external API clients and the DiscVault MCP server.</p>
+                  <div class="profile-meta" id="profileApiMcpSummary"></div>
+                </section>
+                <section class="profile-section-box">
+                  <h4 data-next-i18n="profile.createAccessToken">Create access token</h4>
+                  <form class="profile-form" id="profileApiTokenForm">
+                    <label for="profileApiTokenNameInput">
+                      <span data-next-i18n="profile.tokenName">Token name</span>
+                      <input id="profileApiTokenNameInput" maxlength="120" autocomplete="off" placeholder="DiscVault MCP">
+                    </label>
+                    <div class="profile-passkey-list" id="profileApiPermissionList"></div>
+                    <div class="profile-form-actions">
+                      <button type="submit" class="secondary-button" id="profileCreateApiTokenButton" data-next-i18n="profile.createToken">Create token</button>
+                    </div>
+                  </form>
+                  <div class="recovery-codes hidden" id="profileNewApiToken"></div>
+                  <div class="login-message" id="profileApiMessage"></div>
+                </section>
+              </div>
+              <section class="profile-section-box">
+                <h4 data-next-i18n="profile.accessTokens">Access tokens</h4>
+                <div class="profile-passkey-list" id="profileApiTokenList"></div>
+              </section>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="about">
               <section class="profile-section-box">
@@ -10124,6 +10169,7 @@ def ui_preview_html(
                   <button type="button" data-app-admin-plugin-type-tab="digital_media_source" data-next-i18n="appAdmin.pluginTypeDigitalSources">Digital media sources</button>
                   <button type="button" data-app-admin-plugin-type-tab="personal_list_source" data-next-i18n="appAdmin.pluginTypePersonalListSources">Personal list sources</button>
                   <button type="button" data-app-admin-plugin-type-tab="import_source" data-next-i18n="appAdmin.pluginTypeImportSources">Import sources</button>
+                  <button type="button" data-app-admin-plugin-type-tab="system" data-next-i18n="appAdmin.pluginTypeSystem">System integrations</button>
                   <button type="button" data-app-admin-plugin-type-tab="other" data-next-i18n="appAdmin.pluginTypeOther">Other plugins</button>
                 </div>
                 <div class="profile-passkey-list" id="appAdminPluginsList"></div>
@@ -10343,6 +10389,7 @@ def ui_preview_html(
     let currentAuthStatus = {};
     let profileCredentials = [];
     let profileRecovery = {};
+    let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
     let containerManagerType = "box_set";
     let appAdmin = {
@@ -10848,7 +10895,7 @@ def ui_preview_html(
       });
     }
     function setAppAdminPluginTypeTab(tab, render = true) {
-      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "import_source", "other"];
+      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "import_source", "system", "other"];
       appAdmin.activePluginTypeTab = allowed.includes(tab) ? tab : "metadata_source";
       localStorage.setItem("dv_next_admin_plugin_type_tab", appAdmin.activePluginTypeTab);
       document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
@@ -10867,7 +10914,10 @@ def ui_preview_html(
         metadata_receiver: tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"),
         digital_media_source: tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"),
         personal_list_source: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
-        import_source: tNext("appAdmin.pluginTypeImportSources", "Import sources")
+        import_source: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
+        system: tNext("appAdmin.pluginTypeSystem", "System integrations"),
+        mcp: tNext("appAdmin.pluginTypeMcp", "MCP"),
+        api: tNext("appAdmin.pluginTypeApi", "API")
       };
       return labels[category] || tNext("appAdmin.pluginTypeOther", "Other plugins");
     }
@@ -10970,6 +11020,9 @@ def ui_preview_html(
       return Math.min(10000, siblingOrder + 1);
     }
     function appAdminCanManagePlugin(plugin) {
+      if (appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api")) {
+        return hasActualAnyPermission(["mcp.use", "api.tokens.manage", "admin.view_settings"]);
+      }
       if (appAdminPluginHasCategory(plugin, "metadata_source") || appAdminPluginHasCategory(plugin, "metadata_receiver")) {
         return hasActualAnyPermission(["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers"]);
       }
@@ -10981,9 +11034,17 @@ def ui_preview_html(
       return hasActualPermission("metadata.manage_plugins");
     }
     function appAdminCanDeletePlugin(plugin) {
+      const manifest = plugin.manifest || {};
+      if (manifest.systemPlugin || manifest.deletable === false) return false;
       return hasActualPermission("plugins.delete") && appAdminCanManagePlugin(plugin);
     }
+    function appAdminCanExportPlugin(plugin) {
+      const manifest = plugin.manifest || {};
+      if (manifest.systemPlugin || manifest.deletable === false) return false;
+      return appAdminCanManagePlugin(plugin);
+    }
     function appAdminCanConfigurePlugin(plugin) {
+      if (appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api")) return false;
       if (appAdminPluginHasCategory(plugin, "metadata_source")) return hasActualPermission("metadata.manage_plugin_settings");
       if (appAdminPluginHasCategory(plugin, "metadata_receiver")) return hasActualAnyPermission(["metadata.manage_plugin_settings", "metadata.manage_receivers"]);
       if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasActualAnyPermission(["digital_sources.connect", "digital_sources.manage"]);
@@ -10992,6 +11053,7 @@ def ui_preview_html(
       return appAdminCanManagePlugin(plugin);
     }
     function appAdminCanViewPluginHealth(plugin) {
+      if (appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api")) return hasActualAnyPermission(["mcp.use", "api.read", "api.write", "api.tokens.manage", "admin.view_settings"]);
       if (appAdminPluginHasCategory(plugin, "digital_media_source")) return hasActualAnyPermission(["digital_sources.view", "digital_sources.connect", "digital_sources.manage"]);
       if (appAdminPluginHasCategory(plugin, "personal_list_source")) return hasActualAnyPermission(["watchlist.manage", "admin.view_settings"]);
       if (appAdminPluginHasCategory(plugin, "import_source")) return hasActualPermission("collection.import");
@@ -11097,7 +11159,7 @@ def ui_preview_html(
           </div>
           <div class="app-admin-plugin-actions">
             ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>` : ""}
-            ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-export="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.exportPlugin", "Export"))}</button>` : ""}
+            ${appAdminCanExportPlugin(plugin) ? `<button type="button" class="secondary-button" data-app-admin-plugin-export="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.exportPlugin", "Export"))}</button>` : ""}
             ${appAdminCanDeletePlugin(plugin) ? `<button type="button" class="secondary-button danger" data-app-admin-plugin-delete="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.deletePlugin", "Delete"))}</button>` : ""}
             ${canViewHealth ? `<button type="button" class="secondary-button" data-app-admin-plugin-health="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.checkHealth", "Check health"))}</button>` : ""}
             ${capabilities.includes("discover_library") && appAdminCanExecutePlugin(plugin, "discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
@@ -11359,7 +11421,8 @@ def ui_preview_html(
       const digitalPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "digital_media_source"));
       const personalListPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "personal_list_source"));
       const importPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source"));
-      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...importPlugins].map((plugin) => plugin.id));
+      const systemPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api"));
+      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...importPlugins, ...systemPlugins].map((plugin) => plugin.id));
       const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
       const sections = {
         metadata_source: {
@@ -11381,6 +11444,10 @@ def ui_preview_html(
         import_source: {
           title: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
           plugins: importPlugins
+        },
+        system: {
+          title: tNext("appAdmin.pluginTypeSystem", "System integrations"),
+          plugins: systemPlugins
         },
         other: {
           title: tNext("appAdmin.pluginTypeOther", "Other plugins"),
@@ -12185,11 +12252,17 @@ def ui_preview_html(
       if (appAdminPluginHasCategory(plugin, "import_source")) {
         return plugins.filter((item) => appAdminPluginHasCategory(item, "import_source"));
       }
+      if (appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api")) {
+        return plugins.filter((item) => appAdminPluginHasCategory(item, "system") || appAdminPluginHasCategory(item, "mcp") || appAdminPluginHasCategory(item, "api"));
+      }
       return plugins.filter((item) => !appAdminPluginHasCategory(item, "metadata_source")
         && !appAdminPluginHasCategory(item, "metadata_receiver")
         && !appAdminPluginHasCategory(item, "digital_media_source")
         && !appAdminPluginHasCategory(item, "personal_list_source")
-        && !appAdminPluginHasCategory(item, "import_source"));
+        && !appAdminPluginHasCategory(item, "import_source")
+        && !appAdminPluginHasCategory(item, "system")
+        && !appAdminPluginHasCategory(item, "mcp")
+        && !appAdminPluginHasCategory(item, "api"));
     }
     async function moveAppAdminPlugin(pluginId, direction, sectionCategory = "") {
       const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId);
@@ -17516,6 +17589,9 @@ def ui_preview_html(
       if (tab === "structure") {
         return collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
       }
+      if (tab === "api") {
+        return !!(profileApiAccess && profileApiAccess.manageable);
+      }
       return true;
     }
     function setProfileTab(tab) {
@@ -17798,6 +17874,7 @@ def ui_preview_html(
       if (removeAvatarButton) removeAvatarButton.disabled = !profile.avatarUrl;
       renderProfilePasskeys();
       renderProfileRecovery();
+      renderProfileApiAccess();
       renderContainerManager();
       applyAppPermissionVisibility();
     }
@@ -17872,6 +17949,92 @@ def ui_preview_html(
         `;
       }
     }
+    function setProfileApiMessage(message, tone) {
+      const node = document.getElementById("profileApiMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function renderProfileApiAccess(newToken) {
+      const summary = document.getElementById("profileApiMcpSummary");
+      const permissionList = document.getElementById("profileApiPermissionList");
+      const tokenList = document.getElementById("profileApiTokenList");
+      const newTokenNode = document.getElementById("profileNewApiToken");
+      const form = document.getElementById("profileApiTokenForm");
+      const access = profileApiAccess || {};
+      if (summary) {
+        const allowed = access.allowedPermissions || [];
+        summary.innerHTML = `
+          <div class="profile-meta-row">
+            <span>${escapeHtml(tNext("profile.apiEndpoint", "API endpoint"))}</span>
+            <strong>/api/next/api/v1</strong>
+          </div>
+          <div class="profile-meta-row">
+            <span>${escapeHtml(tNext("profile.mcpEndpoint", "MCP endpoint"))}</span>
+            <strong>/mcp</strong>
+          </div>
+          <div class="profile-meta-row">
+            <span>${escapeHtml(tNext("profile.tokenPermissions", "Token permissions"))}</span>
+            <strong>${escapeHtml(String(allowed.length))}</strong>
+          </div>
+        `;
+      }
+      if (form) form.classList.toggle("hidden", !access.manageable);
+      if (permissionList) {
+        const permissions = access.allowedPermissions || [];
+        permissionList.innerHTML = permissions.length ? `
+          <div class="profile-passkey">
+            <div class="profile-passkey-head">
+              <strong>${escapeHtml(tNext("profile.chooseTokenPermissions", "Choose token permissions"))}</strong>
+              <span class="tag blue">${escapeHtml(tNext("profile.scopedToken", "Scoped token"))}</span>
+            </div>
+            <div class="app-admin-permission-grid">
+              ${permissions.map((permission) => `
+                <label>
+                  <input type="checkbox" data-profile-api-permission="${escapeHtml(permission)}" ${["api.read", "mcp.use", "mcp.tool.search_collection"].includes(permission) ? "checked" : ""}>
+                  <span>${escapeHtml(permission)}</span>
+                </label>
+              `).join("")}
+            </div>
+          </div>
+        ` : `<div class="preview-empty">${escapeHtml(tNext("profile.noApiPermissions", "No API or MCP permissions available."))}</div>`;
+      }
+      if (newTokenNode) {
+        if (newToken) {
+          newTokenNode.classList.remove("hidden");
+          newTokenNode.innerHTML = `
+            <strong>${escapeHtml(tNext("profile.copyTokenNow", "Copy this token now. It will not be shown again."))}</strong>
+            <div class="recovery-code-grid"><span class="recovery-code">${escapeHtml(newToken)}</span></div>
+          `;
+        } else {
+          newTokenNode.classList.add("hidden");
+          newTokenNode.innerHTML = "";
+        }
+      }
+      if (tokenList) {
+        const tokens = access.tokens || [];
+        tokenList.innerHTML = tokens.length ? tokens.map((token) => {
+          const revoked = !!token.revokedAt;
+          const permissionKeys = token.permissionKeys || [];
+          return `
+            <div class="profile-passkey ${revoked ? "disabled" : ""}">
+              <div class="profile-passkey-head">
+                <strong>${escapeHtml(token.name || "API token")}</strong>
+                <span class="tag ${revoked ? "" : "good"}">${escapeHtml(revoked ? tNext("profile.revoked", "Revoked") : tNext("profile.active", "Active"))}</span>
+              </div>
+              <div class="profile-passkey-meta">
+                ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(token.createdAt))}
+                &middot;
+                ${escapeHtml(tNext("profile.lastUsed", "Last used"))}: ${escapeHtml(shortDateTime(token.lastUsedAt))}
+              </div>
+              <div class="admin-member-cloud">${permissionKeys.slice(0, 12).map((permission) => `<span class="tag">${escapeHtml(permission)}</span>`).join("")}</div>
+              ${!revoked ? `<div class="profile-passkey-actions"><button type="button" class="secondary-button danger" data-profile-api-token-revoke="${escapeHtml(token.id)}">${escapeHtml(tNext("profile.revokeToken", "Revoke token"))}</button></div>` : ""}
+            </div>
+          `;
+        }).join("") : `<div class="preview-empty">${escapeHtml(tNext("profile.noAccessTokens", "No access tokens yet."))}</div>`;
+      }
+      syncProfilePanelVisibility();
+    }
     async function loadProfileDetails() {
       if (!appMode) return;
       try {
@@ -17879,6 +18042,7 @@ def ui_preview_html(
         state.user = Object.assign({}, state.user || {}, payload.user || {});
         profileCredentials = payload.credentials || [];
         profileRecovery = payload.recovery || {};
+        profileApiAccess = payload.apiAccess || profileApiAccess;
         renderProfile();
       } catch (error) {
         setProfileSecurityMessage(error.message || String(error), "bad");
@@ -18024,6 +18188,48 @@ def ui_preview_html(
         setProfileRecoveryMessage(error.message || String(error), "bad");
       } finally {
         if (button) button.disabled = false;
+      }
+    }
+    async function createProfileApiToken() {
+      const nameInput = document.getElementById("profileApiTokenNameInput");
+      const button = document.getElementById("profileCreateApiTokenButton");
+      const permissionKeys = Array.from(document.querySelectorAll("[data-profile-api-permission]:checked")).map((node) => node.dataset.profileApiPermission);
+      if (!permissionKeys.length) {
+        setProfileApiMessage(tNext("profile.chooseOnePermission", "Choose at least one permission."), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      setProfileApiMessage(tNext("profile.creatingToken", "Creating token..."));
+      try {
+        const payload = await authApiJson("/api/next/profile/api-tokens", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            name: String(nameInput?.value || "").trim() || "DiscVault API token",
+            permissionKeys
+          })
+        });
+        profileApiAccess = payload.apiAccess || profileApiAccess;
+        if (nameInput) nameInput.value = "";
+        renderProfileApiAccess(payload.token);
+        setProfileApiMessage(tNext("profile.tokenCreated", "Access token created."), "good");
+      } catch (error) {
+        setProfileApiMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function revokeProfileApiToken(tokenId) {
+      if (!tokenId) return;
+      if (!window.confirm(tNext("profile.revokeTokenConfirm", "Revoke this access token?"))) return;
+      setProfileApiMessage(tNext("profile.revokingToken", "Revoking token..."));
+      try {
+        const payload = await authApiJson(`/api/next/profile/api-tokens/${encodeURIComponent(tokenId)}`, {method: "DELETE"});
+        profileApiAccess = payload.apiAccess || profileApiAccess;
+        renderProfileApiAccess();
+        setProfileApiMessage(tNext("profile.tokenRevoked", "Access token revoked."), "good");
+      } catch (error) {
+        setProfileApiMessage(error.message || String(error), "bad");
       }
     }
     function setProfileEditMessage(message, tone) {
@@ -18449,6 +18655,14 @@ def ui_preview_html(
       document.getElementById("profileAddPasskeyButton")?.addEventListener("click", () => addProfilePasskey());
       document.getElementById("profileGenerateRecoveryButton")?.addEventListener("click", () => generateRecoveryCodes());
       document.getElementById("profileRevokeRecoveryButton")?.addEventListener("click", () => revokeRecoveryCodes());
+      document.getElementById("profileApiTokenForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        createProfileApiToken();
+      });
+      document.getElementById("profileApiTokenList")?.addEventListener("click", (event) => {
+        const revokeButton = event.target.closest("[data-profile-api-token-revoke]");
+        if (revokeButton) revokeProfileApiToken(revokeButton.dataset.profileApiTokenRevoke);
+      });
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
       document.getElementById("importReviewStartButton")?.addEventListener("click", () => startImportCenterImport());
@@ -24271,6 +24485,108 @@ def next_profile_recovery_payload(conn, user_id: UUID | str) -> dict[str, Any]:
     }
 
 
+def permission_key_catalog(conn) -> set[str]:
+    if not table_exists(conn, "permissions"):
+        return set()
+    with conn.cursor() as cur:
+        cur.execute("SELECT key FROM permissions")
+        return {str(row["key"]) for row in cur.fetchall()}
+
+
+def api_access_token_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "name": row.get("name"),
+        "scopes": row.get("scopes") or [],
+        "permissionKeys": row.get("permission_keys") or row.get("permissionKeys") or [],
+        "createdAt": row.get("created_at"),
+        "lastUsedAt": row.get("last_used_at"),
+        "expiresAt": row.get("expires_at"),
+        "revokedAt": row.get("revoked_at"),
+    }
+
+
+def profile_api_access_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
+    permissions = set(actor.get("permissions") or [])
+    if actor.get("role") == "owner":
+        permissions.update(permission_key_catalog(conn))
+    manageable = any(
+        key in permissions
+        for key in ("api.tokens.manage", "api.read", "api.write", "mcp.use")
+    ) or bool({key for key in permissions if key.startswith("mcp.tool.")})
+    tokens: list[dict[str, Any]] = []
+    if table_exists(conn, "api_access_tokens") and actor.get("id"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
+                FROM api_access_tokens
+                WHERE user_id=%s
+                ORDER BY revoked_at NULLS FIRST, created_at DESC
+                """,
+                (actor["id"],),
+            )
+            tokens = [api_access_token_row(row) for row in cur.fetchall()]
+    return {
+        "available": table_exists(conn, "api_access_tokens"),
+        "manageable": manageable,
+        "tokens": tokens,
+        "allowedPermissions": sorted(
+            key for key in permissions
+            if key.startswith("api.") or key == "mcp.use" or key.startswith("mcp.tool.")
+        ),
+        "mcpTools": [
+            {"name": tool, "permission": f"mcp.tool.{tool}"}
+            for tool in MCP_TOOL_NAMES
+        ],
+    }
+
+
+def normalize_api_token_permissions(conn, actor: dict[str, Any], raw_values: Any) -> list[str]:
+    if raw_values in (None, ""):
+        raw_values = []
+    if not isinstance(raw_values, list):
+        raise NextApiError("permissionKeys must be an array", 400)
+    known = permission_key_catalog(conn)
+    actor_permissions = set(actor.get("permissions") or [])
+    if actor.get("role") == "owner":
+        actor_permissions.update(known)
+    normalized: list[str] = []
+    for item in raw_values:
+        key = clean_text(item)
+        if not key:
+            continue
+        if key not in known:
+            raise NextApiError(f"Unknown permission: {key}", 400)
+        if not (key.startswith("api.") or key == "mcp.use" or key.startswith("mcp.tool.")):
+            raise NextApiError(f"Permission is not valid for API tokens: {key}", 400)
+        if key not in actor_permissions:
+            raise NextApiError(f"You cannot grant API token permission: {key}", 403)
+        if key not in normalized:
+            normalized.append(key)
+    if not normalized:
+        defaults = [
+            key
+            for key in ("api.read", "mcp.use", "mcp.tool.search_collection", "mcp.tool.get_collection_stats", "mcp.tool.get_movie_details")
+            if key in actor_permissions
+        ]
+        normalized = defaults
+    if not normalized:
+        raise NextApiError("No API or MCP token permissions are available for this user", 403)
+    return normalized
+
+
+def api_token_scopes_for_permissions(permission_keys: list[str]) -> list[str]:
+    scopes: list[str] = []
+    if "api.read" in permission_keys:
+        scopes.append("read")
+    if "api.write" in permission_keys:
+        scopes.append("write")
+    if "mcp.use" in permission_keys or any(key.startswith("mcp.tool.") for key in permission_keys):
+        scopes.append("mcp")
+    return scopes
+
+
 def require_next_admin_user(conn) -> dict[str, Any]:
     if not next_auth_effective_enabled(conn, table_exists):
         return {"id": None, "username": "system", "role": "owner"}
@@ -24311,6 +24627,27 @@ def next_user_permission_keys(conn, user_id: UUID | str) -> set[str]:
         return {str(row["permission_key"]) for row in cur.fetchall()}
 
 
+def actor_api_token_permission_keys(actor: dict[str, Any]) -> set[str] | None:
+    token = actor.get("apiToken") or actor.get("api_token")
+    if not isinstance(token, dict):
+        return None
+    return {str(item) for item in (token.get("permissionKeys") or token.get("permission_keys") or [])}
+
+
+def actor_token_allows_permission(actor: dict[str, Any], permission_key: str) -> bool:
+    token_permissions = actor_api_token_permission_keys(actor)
+    if token_permissions is None:
+        return True
+    return "*" in token_permissions or permission_key in token_permissions
+
+
+def actor_token_allows_any_permission(actor: dict[str, Any], permission_keys: tuple[str, ...]) -> bool:
+    token_permissions = actor_api_token_permission_keys(actor)
+    if token_permissions is None:
+        return True
+    return "*" in token_permissions or bool(token_permissions.intersection(permission_keys))
+
+
 def require_next_permission(conn, permission_key: str) -> dict[str, Any]:
     if not next_auth_effective_enabled(conn, table_exists):
         return {
@@ -24326,6 +24663,8 @@ def require_next_permission(conn, permission_key: str) -> dict[str, Any]:
     permissions = next_user_permission_keys(conn, user["id"])
     if role != "owner" and permission_key not in permissions:
         raise NextApiError(f"Permission required: {permission_key}", 403)
+    if not actor_token_allows_permission(user, permission_key):
+        raise NextApiError(f"API token permission required: {permission_key}", 403)
     user["role"] = role
     user["permissions"] = sorted(permissions)
     return user
@@ -24346,6 +24685,8 @@ def require_any_next_permission(conn, permission_keys: tuple[str, ...]) -> dict[
     permissions = next_user_permission_keys(conn, user["id"])
     if role != "owner" and not permissions.intersection(permission_keys):
         raise NextApiError(f"One of these permissions is required: {', '.join(permission_keys)}", 403)
+    if not actor_token_allows_any_permission(user, permission_keys):
+        raise NextApiError(f"API token requires one of these permissions: {', '.join(permission_keys)}", 403)
     user["role"] = role
     user["permissions"] = sorted(permissions)
     return user
@@ -24365,6 +24706,10 @@ PLUGIN_REGISTRY_VIEW_PERMISSIONS = (
     "digital_sources.manage",
     "watchlist.manage",
     "collection.import",
+    "mcp.use",
+    "api.read",
+    "api.write",
+    "api.tokens.manage",
     "admin.view_settings",
 )
 PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
@@ -24375,6 +24720,8 @@ PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
     "digital_sources.manage",
     "watchlist.manage",
     "collection.import",
+    "mcp.use",
+    "api.tokens.manage",
 )
 
 
@@ -24386,6 +24733,8 @@ def plugin_category_set(plugin: dict[str, Any]) -> set[str]:
 
 def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> tuple[str, ...]:
     categories = plugin_category_set(plugin)
+    if {"mcp", "api", "system"}.intersection(categories):
+        return ("mcp.use", "api.read", "api.write", "api.tokens.manage", "admin.view_settings")
     if entrypoint == "sync_library":
         return ("digital_sources.sync", "digital_sources.manage")
     if entrypoint == "sync_personal_lists":
@@ -24422,6 +24771,8 @@ def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> t
 def plugin_manage_permissions(plugin: dict[str, Any]) -> tuple[str, ...]:
     categories = plugin_category_set(plugin)
     permissions: list[str] = []
+    if {"mcp", "api", "system"}.intersection(categories):
+        permissions.extend(["mcp.use", "api.tokens.manage", "admin.view_settings"])
     if {"metadata_source", "metadata_receiver"}.intersection(categories):
         permissions.extend(["metadata.manage_plugins", "metadata.manage_plugin_settings"])
     if "metadata_receiver" in categories:
@@ -24440,6 +24791,9 @@ def require_plugin_action_permission(conn, plugin: dict[str, Any], entrypoint: s
 
 
 def require_plugin_delete_permission(conn, plugin: dict[str, Any]) -> dict[str, Any]:
+    manifest = plugin.get("manifest") or {}
+    if manifest.get("systemPlugin") or manifest.get("deletable") is False:
+        raise NextApiError("System plugins cannot be deleted", 400)
     actor = require_any_next_permission(conn, ("plugins.delete",))
     if actor.get("role") == "owner":
         return actor
@@ -24460,6 +24814,9 @@ def plugin_archive_filename(plugin: dict[str, Any]) -> str:
 
 
 def write_plugin_archive(plugin: dict[str, Any], destination: Path) -> None:
+    manifest = plugin.get("manifest") or {}
+    if manifest.get("systemPlugin") or manifest.get("deletable") is False:
+        raise NextApiError("System plugins cannot be exported", 400)
     plugin_id = str(plugin.get("id") or "").strip()
     source_path = Path(str(plugin.get("sourcePath") or ""))
     if not plugin_id or not source_path.exists() or not source_path.is_dir():
@@ -24524,6 +24881,8 @@ def validate_import_plugin_root(plugin_root: Path) -> dict[str, Any]:
     plugin_id = str(manifest.get("id") or "").strip()
     if not PLUGIN_ID_PATTERN.match(plugin_id):
         raise NextApiError("Plugin manifest contains an invalid id", 400)
+    if plugin_id in {"discvault_mcp", "discvault_api"} or manifest.get("systemPlugin"):
+        raise NextApiError("System plugin ids are reserved", 400)
     if not str(manifest.get("name") or "").strip():
         raise NextApiError("Plugin manifest must declare a name", 400)
     if not str(manifest.get("version") or "").strip():
@@ -29136,12 +29495,123 @@ def register_routes(flask_app: Flask) -> None:
                 credentials = cur.fetchall()
             user_payload = next_profile_user_payload(conn, user)
             user_payload["credentialCount"] = len(credentials)
+            user["permissions"] = sorted(next_user_permission_keys(conn, user["id"]))
             return response(
                 {
                     "status": "ok",
                     "user": user_payload,
                     "credentials": credentials,
                     "recovery": next_profile_recovery_payload(conn, user["id"]),
+                    "apiAccess": profile_api_access_payload(conn, user),
+                }
+            )
+
+    @flask_app.get("/api/next/profile/api-tokens")
+    def get_next_profile_api_tokens():
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            actor["permissions"] = sorted(next_user_permission_keys(conn, actor["id"]))
+            return response({"status": "ok", "apiAccess": profile_api_access_payload(conn, actor)})
+
+    @flask_app.post("/api/next/profile/api-tokens")
+    def create_next_profile_api_token():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("API token request body must be an object", 400)
+        name = clean_text(body.get("name")) or "DiscVault API token"
+        if len(name) > 120:
+            raise NextApiError("name must be 120 characters or fewer", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "api.tokens.manage")
+            if not table_exists(conn, "api_access_tokens"):
+                raise NextApiError("API token table is not available", 503)
+            permission_keys = normalize_api_token_permissions(conn, actor, body.get("permissionKeys") or body.get("permissions"))
+            token_value = next_create_api_token_value()
+            scopes = api_token_scopes_for_permissions(permission_keys)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO api_access_tokens (
+                            user_id,
+                            name,
+                            token_hash,
+                            scopes,
+                            permission_keys,
+                            created_by,
+                            expires_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, NULL)
+                        RETURNING id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
+                        """,
+                        (
+                            actor["id"],
+                            name,
+                            next_api_token_hash(token_value),
+                            Jsonb(scopes),
+                            Jsonb(permission_keys),
+                            actor["id"],
+                        ),
+                    )
+                    token_row = cur.fetchone()
+                audit_event(
+                    conn,
+                    event_type="api_token.created",
+                    category="security",
+                    actor=actor,
+                    target_type="api_access_token",
+                    target_id=token_row["id"],
+                    summary=f"Created API token {name}",
+                    metadata={"scopes": scopes, "permissionKeys": permission_keys},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "token": token_value,
+                    "apiToken": api_access_token_row(token_row),
+                    "apiAccess": profile_api_access_payload(conn, actor),
+                },
+                201,
+            )
+
+    @flask_app.delete("/api/next/profile/api-tokens/<token_id>")
+    def revoke_next_profile_api_token(token_id: str):
+        token_uuid = parse_uuid(token_id, "tokenId")
+        if not token_uuid:
+            raise NextApiError("tokenId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "api.tokens.manage")
+            if not table_exists(conn, "api_access_tokens"):
+                raise NextApiError("API token table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE api_access_tokens
+                        SET revoked_at=COALESCE(revoked_at, now())
+                        WHERE id=%s AND user_id=%s
+                        RETURNING id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
+                        """,
+                        (token_uuid, actor["id"]),
+                    )
+                    token_row = cur.fetchone()
+                    if not token_row:
+                        raise NextApiError("API token not found", 404)
+                audit_event(
+                    conn,
+                    event_type="api_token.revoked",
+                    category="security",
+                    actor=actor,
+                    target_type="api_access_token",
+                    target_id=token_uuid,
+                    summary=f"Revoked API token {token_row.get('name')}",
+                    metadata={"scopes": token_row.get("scopes") or [], "permissionKeys": token_row.get("permission_keys") or []},
+                )
+            return response(
+                {
+                    "status": "deleted",
+                    "apiToken": api_access_token_row(token_row),
+                    "apiAccess": profile_api_access_payload(conn, actor),
                 }
             )
 
@@ -30632,6 +31102,470 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 rows = cur.fetchall()
         return response({"status": "ok", "settings": rows})
+
+    @flask_app.get("/api/next/api/v1/movies")
+    def public_api_movies():
+        limit = min(max(int(request.args.get("limit", 100)), 1), 1000)
+        offset = max(int(request.args.get("offset", 0)), 0)
+        query = clean_text(request.args.get("q") or request.args.get("query"))
+        media_format = clean_text(request.args.get("format"))
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("api.read", "mcp.tool.search_collection") if query or media_format else ("api.read", "mcp.tool.list_all_movies"),
+            )
+            if not table_exists(conn, "movies"):
+                return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
+            filters = []
+            params: list[Any] = []
+            if query:
+                filters.append(
+                    """(
+                        lower(m.title) LIKE lower(%s)
+                        OR lower(COALESCE(m.original_title, '')) LIKE lower(%s)
+                        OR m.barcode=%s
+                        OR lower(COALESCE(m.metadata::text, '')) LIKE lower(%s)
+                    )"""
+                )
+                params.extend([f"%{query}%", f"%{query}%", query, f"%{query}%"])
+            if media_format:
+                filters.append("m.format=%s")
+                params.append(media_format)
+            where = f"WHERE {' AND '.join(filters)}" if filters else ""
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                        m.id,
+                        m.public_id,
+                        m.barcode,
+                        m.title,
+                        m.sort_title,
+                        m.original_title,
+                        m.year,
+                        m.release_date,
+                        m.format,
+                        m.edition,
+                        m.country,
+                        m.language,
+                        m.overview,
+                        m.rating,
+                        m.location,
+                        m.metadata,
+                        m.created_at,
+                        m.updated_at
+                    FROM movies m
+                    {where}
+                    ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                    LIMIT %s OFFSET %s
+                    """,
+                    (*params, limit, offset),
+                )
+                items = cur.fetchall()
+            audit_event(
+                conn,
+                event_type="api.movies_read",
+                category="api",
+                actor=actor,
+                summary="Read movies through the public API",
+                metadata={"limit": limit, "offset": offset, "query": query, "format": media_format},
+            )
+        return response({"status": "ok", "items": items, "limit": limit, "offset": offset})
+
+    @flask_app.post("/api/next/api/v1/movies")
+    def public_api_create_movie():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Movie request body must be an object", 400)
+        title = clean_text(body.get("title"))
+        if not title:
+            raise NextApiError("title is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("api.write", "mcp.tool.add_movie"))
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            payload = movie_update_payload(body, existing={"title": title})
+            movie_id = uuid.uuid4()
+            public_id = clean_text(body.get("public_id") or body.get("publicId")) or f"api-movie-{movie_id}"
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO movies (
+                            id,
+                            public_id,
+                            title,
+                            sort_title,
+                            original_title,
+                            year,
+                            barcode,
+                            release_date,
+                            format,
+                            edition,
+                            country,
+                            language,
+                            overview,
+                            notes,
+                            location,
+                            owner_id,
+                            metadata,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        """,
+                        (
+                            movie_id,
+                            public_id,
+                            payload["title"],
+                            payload["sort_title"],
+                            payload["original_title"],
+                            payload["year"],
+                            payload["barcode"],
+                            payload["release_date"],
+                            payload["format"],
+                            payload["edition"],
+                            payload["country"],
+                            payload["language"],
+                            payload["overview"],
+                            payload["notes"],
+                            payload["location"],
+                            actor.get("id"),
+                            Jsonb(body.get("metadata") if isinstance(body.get("metadata"), dict) else {}),
+                        ),
+                    )
+                audit_event(
+                    conn,
+                    event_type="api.movie_created",
+                    category="api",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_id,
+                    summary=f"Created movie {payload['title']} through the public API",
+                    metadata={"barcode": payload["barcode"]},
+                )
+            detail = movie_detail_entity(conn, movie_id)
+        return response({"status": "ok", "detail": detail}, 201)
+
+    @flask_app.get("/api/next/api/v1/movies/<movie_id>")
+    def public_api_movie_detail(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            require_any_next_permission(conn, ("api.read", "mcp.tool.get_movie_details"))
+            detail = movie_detail_entity(conn, movie_uuid)
+        if not detail:
+            raise NextApiError("Movie not found", 404)
+        return response({"status": "ok", "detail": detail})
+
+    @flask_app.patch("/api/next/api/v1/movies/<movie_id>")
+    def public_api_update_movie(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Movie request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "api.write")
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            payload = movie_update_payload(body, existing=existing)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE movies
+                        SET title=%s,
+                            sort_title=%s,
+                            original_title=%s,
+                            year=%s,
+                            barcode=%s,
+                            release_date=%s,
+                            format=%s,
+                            edition=%s,
+                            country=%s,
+                            language=%s,
+                            overview=%s,
+                            notes=%s,
+                            location=%s,
+                            updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (
+                            payload["title"],
+                            payload["sort_title"],
+                            payload["original_title"],
+                            payload["year"],
+                            payload["barcode"],
+                            payload["release_date"],
+                            payload["format"],
+                            payload["edition"],
+                            payload["country"],
+                            payload["language"],
+                            payload["overview"],
+                            payload["notes"],
+                            payload["location"],
+                            movie_uuid,
+                        ),
+                    )
+                audit_event(
+                    conn,
+                    event_type="api.movie_updated",
+                    category="api",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary=f"Updated movie {payload['title']} through the public API",
+                    metadata={"barcode": payload["barcode"]},
+                )
+            detail = movie_detail_entity(conn, movie_uuid)
+        return response({"status": "ok", "detail": detail})
+
+    @flask_app.delete("/api/next/api/v1/movies/<movie_id>")
+    def public_api_delete_movie(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("api.write", "mcp.tool.delete_movie"))
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            permissions = set(actor.get("permissions") or [])
+            mcp_delete_allowed = (
+                (actor.get("role") == "owner" or "mcp.tool.delete_movie" in permissions)
+                and actor_token_allows_permission(actor, "mcp.tool.delete_movie")
+            )
+            if not mcp_delete_allowed and not actor_can_delete_movie(actor, existing):
+                raise NextApiError("Permission required: collection.delete_all", 403)
+            with conn.transaction():
+                existing, deleted = delete_movie_records(conn, movie_uuid)
+                audit_event(
+                    conn,
+                    event_type="api.movie_deleted",
+                    category="api",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary=f"Deleted movie {existing.get('title')} through the public API",
+                    metadata={"deleted": deleted},
+                )
+        return response({"status": "ok", "movieId": str(movie_uuid), "deleted": deleted})
+
+    @flask_app.get("/api/next/api/v1/containers")
+    def public_api_containers():
+        with connect() as conn:
+            require_next_permission(conn, "api.read")
+            items = all_container_entities(conn, limit=1000) if table_exists(conn, "containers") else []
+        return response({"status": "ok", "items": items})
+
+    @flask_app.post("/api/next/api/v1/containers")
+    def public_api_create_container():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Container request body must be an object", 400)
+        container_type = normalize_container_type(body.get("containerType", body.get("container_type")))
+        payload = container_payload(body)
+        container_uuid = uuid.uuid4()
+        public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"api-container-{container_uuid.hex[:12]}"
+        if len(public_id) > 160:
+            raise NextApiError("publicId must be 160 characters or fewer", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "api.write")
+            if not table_exists(conn, "containers"):
+                raise NextApiError("Container table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM containers WHERE public_id=%s", (public_id,))
+                    if cur.fetchone():
+                        raise NextApiError("A container with this public id already exists", 409)
+                    cur.execute(
+                        """
+                        INSERT INTO containers (
+                            id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        """,
+                        (
+                            container_uuid,
+                            public_id,
+                            container_type,
+                            payload["title"],
+                            payload["barcode"],
+                            payload["badge_label"],
+                            payload["year"],
+                            payload["description"],
+                            Jsonb(json_ready(payload["metadata"])),
+                        ),
+                    )
+                audit_event(
+                    conn,
+                    event_type="api.container_created",
+                    category="api",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary=f"Created {container_type} {payload['title']} through the public API",
+                    metadata={"containerType": container_type, "publicId": public_id, "title": payload["title"]},
+                )
+            detail = container_detail_entity(conn, container_uuid)
+        return response({"status": "ok", "detail": detail}, 201)
+
+    @flask_app.get("/api/next/api/v1/containers/<container_id>")
+    def public_api_container_detail(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        with connect() as conn:
+            require_next_permission(conn, "api.read")
+            detail = container_detail_entity(conn, container_uuid)
+        if not detail:
+            raise NextApiError("Container not found", 404)
+        return response({"status": "ok", "detail": detail})
+
+    @flask_app.patch("/api/next/api/v1/containers/<container_id>")
+    def public_api_update_container(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Container request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "api.write")
+            existing = container_entity(conn, container_uuid)
+            if not existing:
+                raise NextApiError("Container not found", 404)
+            payload = container_payload(body, existing=existing)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE containers
+                        SET title=%s,
+                            barcode=%s,
+                            badge_label=%s,
+                            year=%s,
+                            description=%s,
+                            metadata=%s,
+                            updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (
+                            payload["title"],
+                            payload["barcode"],
+                            payload["badge_label"],
+                            payload["year"],
+                            payload["description"],
+                            Jsonb(json_ready(payload["metadata"])),
+                            container_uuid,
+                        ),
+                    )
+                audit_event(
+                    conn,
+                    event_type="api.container_updated",
+                    category="api",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary=f"Updated container {payload['title']} through the public API",
+                    metadata={"containerType": existing.get("container_type"), "title": payload["title"]},
+                )
+            detail = container_detail_entity(conn, container_uuid)
+        return response({"status": "ok", "detail": detail})
+
+    @flask_app.delete("/api/next/api/v1/containers/<container_id>")
+    def public_api_delete_container(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "api.write")
+            with conn.transaction():
+                existing, deleted = delete_container_records(conn, container_uuid)
+                audit_event(
+                    conn,
+                    event_type="api.container_deleted",
+                    category="api",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary=f"Deleted container {existing.get('title')} through the public API",
+                    metadata={
+                        "containerType": existing.get("container_type"),
+                        "title": existing.get("title"),
+                        "deleted": deleted,
+                    },
+                )
+        return response({"status": "ok", "containerId": str(container_uuid), "deleted": deleted})
+
+    @flask_app.get("/api/next/api/v1/stats")
+    def public_api_stats():
+        with connect() as conn:
+            require_any_next_permission(conn, ("api.read", "mcp.tool.get_collection_stats"))
+            counts = {
+                "movies": count_table(conn, "movies"),
+                "people": count_table(conn, "people"),
+                "movieCredits": count_table(conn, "movie_credits"),
+                "containers": count_table(conn, "containers"),
+                "mediaGroups": count_table(conn, "media_groups"),
+                "mediaAssets": count_table(conn, "media_assets"),
+                "users": count_table(conn, "users"),
+            }
+            return response({"status": "ok", "counts": counts})
+
+    @flask_app.get("/api/next/api/v1/lookup/<barcode>")
+    def public_api_lookup_barcode(barcode: str):
+        query_barcode = clean_text(barcode)
+        if not query_barcode:
+            raise NextApiError("barcode is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.lookup_barcode"))
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            metadata = lookup_metadata_sources(conn, {"barcode": query_barcode, "detectBoxSets": True}, actor)
+        return response({"status": "ok", "barcode": query_barcode, "metadata": metadata})
+
+    @flask_app.get("/api/next/api/v1/watchlist")
+    def public_api_watchlist():
+        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watchlist"))
+            return response(
+                {
+                    "status": "ok",
+                    "items": personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit),
+                    "counts": personal_list_counts(conn, actor.get("id")),
+                }
+            )
+
+    @flask_app.get("/api/next/api/v1/watched")
+    def public_api_watched():
+        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watch_history"))
+            return response(
+                {
+                    "status": "ok",
+                    "items": personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit),
+                    "counts": personal_list_counts(conn, actor.get("id")),
+                }
+            )
+
+    @flask_app.get("/api/next/api/v1/groups")
+    def public_api_groups():
+        with connect() as conn:
+            require_any_next_permission(conn, ("api.read", "mcp.tool.get_groups"))
+            groups = media_group_entities(conn, limit=500) if table_exists(conn, "media_groups") else []
+        return response({"status": "ok", "items": groups})
+
+    @flask_app.get("/api/next/mcp/catalog")
+    def mcp_catalog():
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("mcp.use", "api.tokens.manage", "admin.view_settings"))
+            permissions = set(actor.get("permissions") or [])
+            if actor.get("role") == "owner":
+                permissions.update(permission_key_catalog(conn))
+            tools = [
+                {
+                    "name": tool,
+                    "permission": f"mcp.tool.{tool}",
+                    "allowed": f"mcp.tool.{tool}" in permissions,
+                }
+                for tool in MCP_TOOL_NAMES
+            ]
+        return response({"status": "ok", "endpoint": "/mcp", "tools": tools})
 
     @flask_app.get("/api/next/plugins/registry")
     def plugins_registry():

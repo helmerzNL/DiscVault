@@ -85,6 +85,44 @@ services:
     networks:
       - discvault-next
 
+  next-mcp:
+    image: ${DISCVAULT_NEXT_IMAGE}
+    restart: unless-stopped
+    working_dir: /opt/discvault/mcp-server
+    command:
+      [
+        "python",
+        "server.py",
+        "--http",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "6090"
+      ]
+    environment:
+      DISCVAULT_API: http://next-api:5000
+      DISCVAULT_MCP_VERSION: ${BUILD_VERSION}
+      TZ: ${TZ}
+    ports:
+      - "${DISCVAULT_NEXT_MCP_PORT:-6090}:6090"
+    depends_on:
+      next-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:6090/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - discvault-next
+
   import-sqlite:
     image: ${DISCVAULT_NEXT_IMAGE}
     profiles: ["tools"]
