@@ -29,7 +29,7 @@ from typing import Any
 from urllib.parse import quote
 from uuid import UUID
 
-from flask import Flask, Response, jsonify, request, send_file
+from flask import Flask, Response, current_app, jsonify, request, send_file
 from flask import after_this_request
 from flask_cors import CORS
 from psycopg.rows import dict_row
@@ -5663,6 +5663,7 @@ def ui_preview_html(
       color: rgba(255,255,255,.72);
       font-size: .75rem;
       text-align: center;
+      position: relative;
     }
     .mode-list-poster img {
       width: 100%;
@@ -5859,14 +5860,48 @@ def ui_preview_html(
       gap: 6px;
       min-width: 0;
     }
+    .personal-list-version-badges {
+      display: contents;
+    }
+    .mode-list-poster .digital-source-badges {
+      left: 5px;
+      top: 5px;
+      transform: scale(.82);
+      transform-origin: top left;
+    }
+    .mode-list-poster .physical-format-badge {
+      left: 5px;
+      bottom: 5px;
+      max-width: calc(100% - 10px);
+      font-size: 8px;
+      padding: 4px 6px;
+    }
+    .mode-list-line .personal-list-version-badges,
+    .watched-detail-row .personal-list-version-badges {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .mode-list-line .digital-source-badges,
+    .watched-detail-row .digital-source-badges,
+    .mode-list-line .physical-format-badge,
+    .watched-detail-row .physical-format-badge {
+      position: static;
+      transform: none;
+    }
+    .mode-list-line .digital-source-badge,
+    .watched-detail-row .digital-source-badge {
+      width: 22px;
+      height: 22px;
+    }
     .watched-detail-table {
-      min-width: 680px;
+      min-width: 760px;
       display: grid;
       gap: 6px;
     }
     .watched-detail-row {
       display: grid;
-      grid-template-columns: minmax(260px, 1fr) minmax(160px, 220px) 72px;
+      grid-template-columns: minmax(260px, 1fr) minmax(150px, 210px) minmax(120px, 170px) 72px;
       gap: 12px;
       align-items: center;
       border: 1px solid var(--line);
@@ -5874,6 +5909,9 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
       padding: 9px 10px;
       cursor: pointer;
+    }
+    .watchlist-detail-table .watched-detail-row {
+      grid-template-columns: minmax(260px, 1fr) minmax(120px, 180px) minmax(140px, 200px);
     }
     .watched-detail-row.head {
       cursor: default;
@@ -13261,7 +13299,16 @@ def ui_preview_html(
     }
     function digitalSourceBadgeHtml(movie) {
       if (preferences.show_digital_badge_on_tiles === false) return "";
-      const sourceRows = Array.isArray(movie.digital_sources) ? movie.digital_sources : [];
+      const snapshot = movie?.snapshot || {};
+      const sourceRows = Array.isArray(movie?.digital_sources)
+        ? movie.digital_sources
+        : Array.isArray(movie?.digitalSources)
+          ? movie.digitalSources
+          : Array.isArray(snapshot.digital_sources)
+            ? snapshot.digital_sources
+            : Array.isArray(snapshot.digitalSources)
+              ? snapshot.digitalSources
+              : [];
       const names = sourceRows.map((source) => (
         source.source_name || source.name || source.plugin_id || source.source || ""
       )).filter(Boolean);
@@ -16008,16 +16055,37 @@ def ui_preview_html(
         return text;
       }
     }
+    function personalListMovieId(entry) {
+      const value = entry?.id || entry?.movie_id || entry?.list_movie_id || entry?.snapshot?.movie_id || "";
+      return value && value !== "null" ? value : "";
+    }
+    function personalListMovieExists(entry) {
+      return entry?.movie_exists !== false && !!personalListMovieId(entry);
+    }
+    function personalListFormatValue(entry) {
+      const snapshot = entry?.snapshot || {};
+      return entry?.format || entry?.edition_type || entry?.metadata?.format || snapshot.movie_format || snapshot.format || snapshot.edition_type || "";
+    }
+    function personalListVersionBadgesHtml(entry) {
+      const physical = physicalFormatBadgeHtml(personalListFormatValue(entry));
+      const digital = digitalSourceBadgeHtml(entry);
+      return physical || digital ? `<span class="personal-list-version-badges">${digital}${physical}</span>` : "";
+    }
+    function unavailableMovieLabelHtml(entry) {
+      return personalListMovieExists(entry) ? "" : `<span class="tag warning">${escapeHtml(tNext("lists.movieUnavailable", "Movie no longer exists"))}</span>`;
+    }
     function listMovieCardHtml(movie) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       const meta = movie.year || "";
+      const movieId = personalListMovieId(movie);
+      const exists = personalListMovieExists(movie);
       return `
-        <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movie.id)}">
-          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
+        <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
+          <span class="preview-poster-art">${posterHtml}${personalListVersionBadgesHtml(movie)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
-          <span class="preview-poster-meta">${escapeHtml(meta)}</span>
-          ${debugIdHtml(movie.id, "Movie ID")}
+          <span class="preview-poster-meta">${escapeHtml(meta)}${unavailableMovieLabelHtml(movie)}</span>
+          ${debugIdHtml(movieId, "Movie ID")}
         </button>
       `;
     }
@@ -16051,29 +16119,48 @@ def ui_preview_html(
     function watchedPosterCardHtml(entry) {
       const poster = usableImage(entry.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-      const movieId = entry.id || entry.movie_id || "";
-      const exists = entry.movie_exists !== false && !!movieId;
+      const movieId = personalListMovieId(entry);
+      const exists = personalListMovieExists(entry);
       return `
         <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
-          <span class="preview-poster-art">${posterHtml}</span>
+          <span class="preview-poster-art">${posterHtml}${personalListVersionBadgesHtml(entry)}</span>
           <span class="preview-poster-title">${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</span>
-          <span class="preview-poster-meta watched-poster-meta">${escapeHtml(watchedDateValue(entry))}${watchlistStatusIconHtml(entry)}</span>
+          <span class="preview-poster-meta watched-poster-meta">${escapeHtml(watchedDateValue(entry))}${watchlistStatusIconHtml(entry)}${unavailableMovieLabelHtml(entry)}</span>
           ${debugIdHtml(movieId, "Movie ID")}
         </button>
       `;
     }
     function watchedListItemHtml(entry) {
       const poster = usableImage(entry.poster_url);
-      const movieId = entry.id || entry.movie_id || "";
-      const exists = entry.movie_exists !== false && !!movieId;
+      const movieId = personalListMovieId(entry);
+      const exists = personalListMovieExists(entry);
       return `
         <article class="mode-list-card watched-list-card" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}${personalListVersionBadgesHtml(entry)}</span>
           <span class="mode-list-body">
             <span class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
             <span class="mode-list-line"><span>${escapeHtml(tNext("lists.watchedDate", "Watched Date"))}</span><span class="watched-date-value">${escapeHtml(watchedDateValue(entry))}</span></span>
+            <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span>${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span></span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("lists.watchlist", "Watchlist"))}</span>${watchlistStatusIconHtml(entry)}</span>
+            ${unavailableMovieLabelHtml(entry)}
+            ${debugIdHtml(movieId, "Movie ID")}
+          </span>
+        </article>
+      `;
+    }
+    function watchlistListItemHtml(entry) {
+      const poster = usableImage(entry.poster_url);
+      const movieId = personalListMovieId(entry);
+      const exists = personalListMovieExists(entry);
+      return `
+        <article class="mode-list-card watched-list-card" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}${personalListVersionBadgesHtml(entry)}</span>
+          <span class="mode-list-body">
+            <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
+            <span class="mode-list-meta">${[entry.year, formatAppDate(entry.watchlist_added_at)].filter(Boolean).map(escapeHtml).join(" / ")}</span>
+            <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span>${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span></span>
+            ${unavailableMovieLabelHtml(entry)}
             ${debugIdHtml(movieId, "Movie ID")}
           </span>
         </article>
@@ -16085,16 +16172,40 @@ def ui_preview_html(
           <div class="watched-detail-row head" role="row">
             <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
             <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.watchedDate", "Watched Date"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
             <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.watchlist", "Watchlist"))}</span>
           </div>
           ${(entries || []).map((entry) => {
-            const movieId = entry.id || entry.movie_id || "";
-            const exists = entry.movie_exists !== false && !!movieId;
+            const movieId = personalListMovieId(entry);
+            const exists = personalListMovieExists(entry);
             return `
               <div class="watched-detail-row" role="row" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${debugIdHtml(movieId, "Movie ID")}</span>
+                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
                 <span role="cell">${escapeHtml(watchedDateValue(entry))}</span>
+                <span role="cell">${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span>
                 <span role="cell">${watchlistStatusIconHtml(entry)}</span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+    function watchlistDetailTableHtml(entries) {
+      return `
+        <div class="watched-detail-table watchlist-detail-table" role="table">
+          <div class="watched-detail-row head" role="row">
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.added", "Added"))}</span>
+          </div>
+          ${(entries || []).map((entry) => {
+            const movieId = personalListMovieId(entry);
+            const exists = personalListMovieExists(entry);
+            return `
+              <div class="watched-detail-row" role="row" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
+                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
+                <span role="cell">${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span>
+                <span role="cell">${escapeHtml(formatAppDate(entry.watchlist_added_at))}</span>
               </div>
             `;
           }).join("")}
@@ -16121,12 +16232,12 @@ def ui_preview_html(
     function historyRowHtml(entry) {
       const poster = usableImage(entry.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span class="history-poster-placeholder">${escapeHtml(tNext("collection.noPoster", "No poster").slice(0, 1))}</span>`;
-      const movieId = entry.id || entry.movie_id || "";
-      const exists = entry.movie_exists !== false && !!movieId;
+      const movieId = personalListMovieId(entry);
+      const exists = personalListMovieExists(entry);
       const meta = [
         formatAppDate(entry.watched_at || entry.last_watched),
         entry.year,
-        entry.format,
+        physicalFormatLabel(personalListFormatValue(entry)),
         exists ? "" : tNext("lists.movieUnavailable", "Movie no longer exists")
       ].filter(Boolean).join(" / ");
       return `
@@ -16166,9 +16277,8 @@ def ui_preview_html(
       if (watchedList) watchedList.classList.toggle("hidden", listsState.active !== "watched");
       updateListsCounts(listsState.counts);
       const renderRows = (rows) => {
-        const items = (rows || []).map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
-        if (listsViewMode === "detail") return detailTableHtml(items, "lists", listsDetailSort);
-        if (listsViewMode === "list") return items.map(libraryListItemHtml).join("");
+        if (listsViewMode === "detail") return watchlistDetailTableHtml(rows || []);
+        if (listsViewMode === "list") return (rows || []).map(watchlistListItemHtml).join("");
         return (rows || []).map(listMovieCardHtml).join("");
       };
       const configureListNode = (node, watched = false) => {
@@ -25157,7 +25267,7 @@ def attach_digital_availability(conn, rows: list[dict[str, Any]]) -> list[dict[s
     for row in rows:
         summary = by_movie.get(row.get("id")) or {}
         row["digital_count"] = int(summary.get("digital_count") or 0)
-        row["digital_sources"] = summary.get("digital_sources") or []
+        row["digital_sources"] = summary.get("digital_sources") or row.get("digital_sources") or []
     return rows
 
 
@@ -25245,7 +25355,9 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT COUNT(*)::int AS count, COUNT(DISTINCT movie_id)::int AS movie_count
+                SELECT
+                    COUNT(*)::int AS count,
+                    COUNT(DISTINCT COALESCE(movie_id::text, snapshot->>'movie_id', snapshot->>'movie_title', snapshot->>'title'))::int AS movie_count
                 FROM watch_history
                 WHERE user_id=%s
                 """,
@@ -25255,6 +25367,213 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
             counts["watchHistory"] = int(row.get("count") or 0)
             counts["watchedMovies"] = int(row.get("movie_count") or 0)
     return counts
+
+
+def personal_list_movie_snapshot(conn, movie_id: UUID) -> dict[str, Any]:
+    detail = movie_detail_entity(conn, movie_id) or {}
+    movie = detail.get("movie") or movie_entity(conn, movie_id) or {}
+    metadata = movie.get("metadata") if isinstance(movie.get("metadata"), dict) else {}
+    digital_items = detail.get("digitalItems") or []
+    identifiers = detail.get("identifiers") or []
+    poster_url = (
+        movie.get("poster_url")
+        or metadata.get("poster_url")
+        or metadata.get("posterUrl")
+        or metadata.get("poster")
+    )
+    backdrop_url = (
+        movie.get("backdrop_url")
+        or metadata.get("backdrop_url")
+        or metadata.get("backdropUrl")
+        or metadata.get("backdrop")
+    )
+    return json_ready(
+        {
+            "movie_id": str(movie.get("id") or movie_id),
+            "public_id": movie.get("public_id"),
+            "barcode": movie.get("barcode"),
+            "title": movie.get("title"),
+            "movie_title": movie.get("title"),
+            "sort_title": movie.get("sort_title"),
+            "original_title": movie.get("original_title"),
+            "year": movie.get("year"),
+            "movie_year": movie.get("year"),
+            "format": movie.get("format"),
+            "movie_format": movie.get("format"),
+            "edition": movie.get("edition"),
+            "edition_type": movie.get("edition_type"),
+            "poster_url": poster_url,
+            "poster": poster_url,
+            "backdrop_url": backdrop_url,
+            "digital_sources": [
+                {
+                    "source_id": item.get("source_id"),
+                    "source_name": item.get("source_name"),
+                    "source_type": item.get("source_type"),
+                    "library_name": item.get("library_name"),
+                    "variant_count": item.get("variant_count"),
+                }
+                for item in digital_items
+            ],
+            "identifiers": [
+                {
+                    "provider_id": item.get("provider_id"),
+                    "identifier_type": item.get("identifier_type"),
+                    "identifier": item.get("identifier"),
+                }
+                for item in identifiers
+            ],
+        }
+    )
+
+
+def personal_list_snapshot_match_movie(conn, snapshot: dict[str, Any]) -> UUID | None:
+    if not snapshot or not table_exists(conn, "movies"):
+        return None
+    barcode = clean_text(snapshot.get("barcode"))
+    public_id = clean_text(snapshot.get("public_id"))
+    title = clean_text(snapshot.get("title") or snapshot.get("movie_title"))
+    year = clean_text(snapshot.get("year") or snapshot.get("movie_year"))
+    with conn.cursor() as cur:
+        if barcode:
+            cur.execute("SELECT id FROM movies WHERE barcode=%s LIMIT 1", (barcode,))
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+        if public_id:
+            cur.execute("SELECT id FROM movies WHERE public_id=%s LIMIT 1", (public_id,))
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+        identifiers = snapshot.get("identifiers") if isinstance(snapshot.get("identifiers"), list) else []
+        if identifiers and table_exists(conn, "movie_identifiers"):
+            for item in identifiers:
+                if not isinstance(item, dict):
+                    continue
+                provider_id = clean_text(item.get("provider_id") or item.get("provider"))
+                identifier = clean_text(item.get("identifier") or item.get("value"))
+                identifier_type = clean_text(item.get("identifier_type") or item.get("identifierType")) or "movie_id"
+                if not provider_id or not identifier:
+                    continue
+                cur.execute(
+                    """
+                    SELECT movie_id AS id
+                    FROM movie_identifiers
+                    WHERE provider_id=%s AND identifier_type=%s AND identifier=%s
+                    LIMIT 1
+                    """,
+                    (provider_id, identifier_type, identifier),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row["id"]
+        if title:
+            if year:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM movies
+                    WHERE lower(title)=lower(%s) AND year=%s
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (title, year),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM movies
+                    WHERE lower(title)=lower(%s)
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (title,),
+                )
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+    return None
+
+
+def apply_personal_list_snapshot_fallback(row: dict[str, Any]) -> dict[str, Any]:
+    snapshot = row.get("snapshot") if isinstance(row.get("snapshot"), dict) else {}
+    if not snapshot:
+        return row
+    if not row.get("title"):
+        row["title"] = snapshot.get("movie_title") or snapshot.get("title")
+    if not row.get("sort_title"):
+        row["sort_title"] = snapshot.get("sort_title") or row.get("title")
+    if not row.get("original_title"):
+        row["original_title"] = snapshot.get("original_title")
+    if not row.get("year"):
+        row["year"] = snapshot.get("movie_year") or snapshot.get("year")
+    if not row.get("format"):
+        row["format"] = snapshot.get("movie_format") or snapshot.get("format")
+    if not row.get("edition"):
+        row["edition"] = snapshot.get("edition")
+    if not row.get("edition_type"):
+        row["edition_type"] = snapshot.get("edition_type")
+    if not row.get("barcode"):
+        row["barcode"] = snapshot.get("barcode")
+    if not row.get("poster_url"):
+        row["poster_url"] = snapshot.get("poster_url") or snapshot.get("poster_file") or snapshot.get("poster")
+    if not row.get("backdrop_url"):
+        row["backdrop_url"] = snapshot.get("backdrop_url") or snapshot.get("backdrop")
+    if not row.get("digital_items") and snapshot.get("digital_sources"):
+        row["digital_items"] = snapshot.get("digital_sources")
+        row["digital_sources"] = snapshot.get("digital_sources")
+    if not row.get("digital_sources") and snapshot.get("digitalSources"):
+        row["digital_sources"] = snapshot.get("digitalSources")
+    if not row.get("snapshot_format"):
+        row["snapshot_format"] = snapshot.get("movie_format") or snapshot.get("format")
+    if row.get("movie_exists") is None:
+        row["movie_exists"] = bool(row.get("id"))
+    return row
+
+
+def relink_personal_list_snapshot(conn, row: dict[str, Any], *, kind: str) -> dict[str, Any]:
+    if row.get("movie_exists") is not False:
+        return row
+    snapshot = row.get("snapshot") if isinstance(row.get("snapshot"), dict) else {}
+    matched_movie_id = personal_list_snapshot_match_movie(conn, snapshot)
+    if not matched_movie_id:
+        return row
+    row["id"] = matched_movie_id
+    row["movie_id"] = matched_movie_id
+    row["movie_exists"] = True
+    try:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                if kind == "watchlist" and row.get("watchlist_item_id"):
+                    cur.execute(
+                        "SELECT id FROM watchlist_items WHERE user_id=%s AND movie_id=%s LIMIT 1",
+                        (row.get("list_user_id"), matched_movie_id),
+                    )
+                    if not cur.fetchone():
+                        cur.execute(
+                            "UPDATE watchlist_items SET movie_id=%s WHERE id=%s AND movie_id IS NULL",
+                            (matched_movie_id, row.get("watchlist_item_id")),
+                        )
+                elif kind == "watched" and row.get("watch_history_id"):
+                    cur.execute(
+                        "UPDATE watch_history SET movie_id=%s WHERE id=%s AND movie_id IS NULL",
+                        (matched_movie_id, row.get("watch_history_id")),
+                    )
+    except Exception:
+        current_app.logger.warning("Unable to relink personal list snapshot", exc_info=True)
+    return row
+
+
+def finalize_personal_list_rows(conn, rows: list[dict[str, Any]], *, kind: str) -> list[dict[str, Any]]:
+    finalized: list[dict[str, Any]] = []
+    for row in rows:
+        with_preview = with_preview_media_urls(row)
+        apply_personal_list_snapshot_fallback(with_preview)
+        relink_personal_list_snapshot(conn, with_preview, kind=kind)
+        apply_personal_list_snapshot_fallback(with_preview)
+        finalized.append(with_preview)
+    return finalized
 
 
 def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> dict[str, Any]:
@@ -25271,7 +25590,7 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT added_at
+                SELECT added_at, snapshot
                 FROM watchlist_items
                 WHERE user_id=%s AND movie_id=%s
                 """,
@@ -25364,6 +25683,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 m.year,
                 m.format,
                 m.edition,
+                m.edition_type,
                 m.metadata,
                 m.metadata->>'poster_url' AS poster_url,
                 m.metadata->>'backdrop_url' AS backdrop_url,
@@ -25378,12 +25698,17 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
             cur.execute(
                 f"""
                 SELECT
+                    w.id AS watchlist_item_id,
+                    w.user_id AS list_user_id,
+                    w.movie_id AS list_movie_id,
+                    w.snapshot,
 {base_select},
                     w.added_at AS watchlist_added_at,
                     true AS on_watchlist,
-                    latest.watched_at AS last_watched
+                    latest.watched_at AS last_watched,
+                    m.id IS NOT NULL AS movie_exists
                 FROM watchlist_items w
-                JOIN movies m ON m.id = w.movie_id
+                LEFT JOIN movies m ON m.id = w.movie_id
                 {poster_join}
                 LEFT JOIN LATERAL (
                     SELECT MAX(watched_at) AS watched_at
@@ -25396,10 +25721,10 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 """,
                 (user_id, limit),
             )
-            rows = cur.fetchall()
+            rows = finalize_personal_list_rows(conn, cur.fetchall(), kind="watchlist")
         return attach_movie_search_credits(
             conn,
-            attach_media_group_availability(conn, attach_digital_availability(conn, [with_preview_media_urls(row) for row in rows])),
+            attach_media_group_availability(conn, attach_digital_availability(conn, rows)),
         )
     if kind == "watched":
         if not table_exists(conn, "watch_history"):
@@ -25409,6 +25734,8 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 f"""
                 SELECT
                     wh.id AS watch_history_id,
+                    wh.user_id AS list_user_id,
+                    wh.movie_id AS list_movie_id,
                     wh.watched_at,
                     wh.created_at AS watch_history_created_at,
                     wh.snapshot,
@@ -25428,17 +25755,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 """,
                 (user_id, limit),
             )
-            rows = [with_preview_media_urls(row) for row in cur.fetchall()]
-        for row in rows:
-            snapshot = row.get("snapshot") if isinstance(row.get("snapshot"), dict) else {}
-            if not row.get("title"):
-                row["title"] = snapshot.get("movie_title") or snapshot.get("title")
-            if not row.get("year"):
-                row["year"] = snapshot.get("movie_year") or snapshot.get("year")
-            if not row.get("format"):
-                row["format"] = snapshot.get("movie_format") or snapshot.get("format")
-            if not row.get("poster_url"):
-                row["poster_url"] = snapshot.get("poster_file") or snapshot.get("poster")
+            rows = finalize_personal_list_rows(conn, cur.fetchall(), kind="watched")
         return attach_movie_search_credits(conn, attach_media_group_availability(conn, attach_digital_availability(conn, rows)))
     return []
 
@@ -31210,16 +31527,36 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Watchlist table is not available", 503)
             if not movie_entity(conn, movie_uuid):
                 raise NextApiError("Movie not found", 404)
+            snapshot = personal_list_movie_snapshot(conn, movie_uuid)
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        INSERT INTO watchlist_items (user_id, movie_id, added_at)
-                        VALUES (%s, %s, now())
-                        ON CONFLICT (user_id, movie_id) DO UPDATE SET added_at=EXCLUDED.added_at
+                        SELECT id
+                        FROM watchlist_items
+                        WHERE user_id=%s AND movie_id=%s
+                        LIMIT 1
                         """,
                         (actor.get("id"), movie_uuid),
                     )
+                    existing = cur.fetchone()
+                    if existing:
+                        cur.execute(
+                            """
+                            UPDATE watchlist_items
+                            SET added_at=now(), snapshot=%s
+                            WHERE id=%s
+                            """,
+                            (Jsonb(snapshot), existing.get("id")),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO watchlist_items (user_id, movie_id, added_at, snapshot)
+                            VALUES (%s, %s, now(), %s)
+                            """,
+                            (actor.get("id"), movie_uuid, Jsonb(snapshot)),
+                        )
                 audit_event(
                     conn,
                     event_type="watchlist.added",
@@ -31278,12 +31615,7 @@ def register_routes(flask_app: Flask) -> None:
             movie = movie_entity(conn, movie_uuid)
             if not movie:
                 raise NextApiError("Movie not found", 404)
-            snapshot = {
-                "movie_title": movie.get("title"),
-                "movie_year": movie.get("year"),
-                "movie_format": movie.get("format"),
-                "poster": movie.get("poster_url") or (movie.get("metadata") or {}).get("poster_url"),
-            }
+            snapshot = personal_list_movie_snapshot(conn, movie_uuid)
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
