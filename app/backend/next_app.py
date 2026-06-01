@@ -1499,7 +1499,7 @@ def migration_dashboard_html() -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>DiscVault Data Migration</title>
 """ + pwa_head_tags() + """
   <style>
@@ -3818,7 +3818,7 @@ def ui_preview_html(
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>""" + h(title) + """</title>
 """ + pwa_head_tags() + """
   <script>
@@ -3874,6 +3874,7 @@ def ui_preview_html(
     html {
       min-height: 100%;
       overscroll-behavior: none;
+      touch-action: pan-x pan-y;
     }
     body {
       margin: 0;
@@ -4261,6 +4262,8 @@ def ui_preview_html(
     }
     .nav-symbol.groups::before,
     .nav-symbol.groups::after,
+    .nav-symbol.people::before,
+    .nav-symbol.people::after,
     .nav-symbol.lists::before,
     .nav-symbol.lists::after,
     .nav-symbol.admin::before,
@@ -4271,6 +4274,7 @@ def ui_preview_html(
       background: currentColor;
     }
     .nav-symbol.groups::before,
+    .nav-symbol.people::before,
     .nav-symbol.lists::before {
       width: 9px;
       height: 9px;
@@ -4279,6 +4283,7 @@ def ui_preview_html(
       box-shadow: 8px 0 0 currentColor;
     }
     .nav-symbol.groups::after,
+    .nav-symbol.people::after,
     .nav-symbol.lists::after {
       width: 18px;
       height: 7px;
@@ -5235,6 +5240,114 @@ def ui_preview_html(
     .lists-history {
       display: grid;
       gap: 10px;
+    }
+    .watched-day-section {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: color-mix(in srgb, var(--bg-elevated) 84%, transparent);
+      box-shadow: var(--shadow-soft);
+    }
+    .watched-day-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 2px;
+    }
+    .watched-day-head strong {
+      font-size: 1rem;
+    }
+    .watched-day-head span {
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 760;
+    }
+    .watched-group-grid {
+      display: grid;
+      gap: 12px;
+    }
+    .watched-group-grid.poster {
+      grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    }
+    .watched-group-grid.list {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+    }
+    .watched-list-card .mode-list-body {
+      align-content: center;
+    }
+    .watched-column-label {
+      color: var(--muted-strong);
+      font-size: .72rem;
+      font-weight: 850;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+    .watched-date-value {
+      color: var(--muted);
+      font-size: .86rem;
+      font-weight: 700;
+    }
+    .watched-watchlist-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--line));
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      color: var(--accent);
+      font-size: .88rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .watched-watchlist-icon.empty {
+      border-color: transparent;
+      background: transparent;
+      color: transparent;
+    }
+    .watched-poster-meta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .watched-detail-table {
+      min-width: 680px;
+      display: grid;
+      gap: 6px;
+    }
+    .watched-detail-row {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) minmax(160px, 220px) 72px;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 9px 10px;
+      cursor: pointer;
+    }
+    .watched-detail-row.head {
+      cursor: default;
+      background: color-mix(in srgb, var(--bg-solid) 94%, transparent);
+    }
+    .watched-detail-row > span {
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .86rem;
+    }
+    .watched-detail-row strong {
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .history-row {
       display: grid;
@@ -6317,6 +6430,83 @@ def ui_preview_html(
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
+    .people-view {
+      display: grid;
+      gap: 18px;
+    }
+    .people-hero {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: clamp(18px, 4vw, 34px);
+      min-height: 220px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: end;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.04)),
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, var(--bg-solid)), var(--bg-elevated));
+      box-shadow: var(--shadow-soft);
+    }
+    .people-hero h2 {
+      margin: 4px 0 8px;
+      font-size: clamp(2rem, 5vw, 4.4rem);
+      letter-spacing: 0;
+      line-height: .96;
+    }
+    .people-hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 68ch;
+    }
+    .people-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .people-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 12px;
+    }
+    .people-browser-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      font: inherit;
+    }
+    .people-browser-card:hover {
+      border-color: color-mix(in srgb, var(--accent) 44%, var(--line));
+      transform: translateY(-1px);
+    }
+    .people-browser-card .person-avatar {
+      width: 64px;
+      height: 64px;
+    }
+    .people-browser-copy {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+    .people-browser-copy strong {
+      overflow-wrap: anywhere;
+    }
+    .people-browser-copy span {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.34;
+    }
     .person-detail-page .movie-detail-hero {
       background:
         radial-gradient(circle at 18% 22%, rgba(255,255,255,.18), transparent 34%),
@@ -6599,6 +6789,7 @@ def ui_preview_html(
       gap: 16px;
     }
     .profile-submenu {
+      width: max-content;
       max-width: 100%;
     }
     .profile-panel {
@@ -7514,9 +7705,18 @@ def ui_preview_html(
         position: static;
         justify-content: flex-start;
         overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .container-detail-submenu::-webkit-scrollbar,
+      .import-mode-tabs::-webkit-scrollbar {
+        display: none;
       }
       .container-detail-submenu button {
         flex: 0 0 auto;
+        max-width: min(74vw, 260px);
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .container-detail-panel,
       .container-overview-grid {
@@ -7531,9 +7731,18 @@ def ui_preview_html(
       }
       .detail-submenu {
         width: 100%;
+        justify-content: flex-start;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .detail-submenu::-webkit-scrollbar {
+        display: none;
       }
       .detail-submenu button {
-        flex: 1;
+        flex: 0 0 auto;
+        max-width: min(74vw, 260px);
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .profile-hero {
         align-items: stretch;
@@ -7554,6 +7763,9 @@ def ui_preview_html(
       }
       .import-mode-tabs button {
         flex: 1 0 auto;
+        max-width: min(74vw, 260px);
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .import-barcode-form {
         grid-template-columns: 1fr;
@@ -7574,8 +7786,13 @@ def ui_preview_html(
       .profile-section-grid {
         grid-template-columns: 1fr;
       }
-      .profile-submenu button {
-        flex: 1 0 auto;
+      .profile-submenu,
+      .app-admin-submenu {
+        width: 100%;
+      }
+      .profile-submenu button,
+      .app-admin-submenu button {
+        flex: 0 0 auto;
       }
       .profile-meta-row {
         grid-template-columns: 1fr;
@@ -7613,6 +7830,41 @@ def ui_preview_html(
       }
       .container-add-panels {
         grid-template-columns: 1fr;
+      }
+      .profile-form-actions,
+      .profile-action-row,
+      .app-admin-plugin-actions,
+      .app-admin-plugin-import {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .profile-form-actions .secondary-button,
+      .profile-form-actions .primary-button,
+      .profile-action-row .secondary-button,
+      .profile-action-row .primary-button,
+      .app-admin-plugin-actions .secondary-button,
+      .app-admin-plugin-actions .primary-button,
+      .app-admin-plugin-import .secondary-button,
+      .app-admin-plugin-import .primary-button {
+        width: 100%;
+      }
+    }
+    @media (max-width: 420px) {
+      .detail-submenu,
+      .container-detail-submenu,
+      .import-mode-tabs {
+        gap: 3px;
+        padding: 3px;
+      }
+      .detail-submenu button,
+      .container-detail-submenu button,
+      .import-mode-tabs button {
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: .76rem;
+      }
+      .mobile-tab span:last-child {
+        font-size: .62rem;
       }
       .detail-mini-card.sortable {
         grid-template-columns: minmax(0, 1fr) auto auto;
@@ -7727,6 +7979,7 @@ def ui_preview_html(
       </div>
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="people"><span data-next-i18n="people.title">People</span><small id="navPeopleCount">""" + h(counts.get("people", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span data-next-i18n="uiPreview.navLists">Lists</span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="notifications"><span data-next-i18n="uiPreview.navNotifications">Notifications</span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span data-next-i18n="importCenter.title">Import</span><small id="navImportState">-</small></button>
@@ -7857,6 +8110,34 @@ def ui_preview_html(
           <div class="poster-rail" id="posterRail">""" + movie_cards + """</div>
         </div>
       </section>
+      </section>
+      <section class="people-view hidden" id="peopleView" aria-labelledby="peoplePageTitle">
+        <section class="people-hero">
+          <div>
+            <span class="eyebrow" data-next-i18n="people.eyebrow">Cast & crew</span>
+            <h2 id="peoplePageTitle" data-next-i18n="people.title">People</h2>
+            <p data-next-i18n="people.description">Browse actors, directors and crew from your physical and digital collection.</p>
+          </div>
+          <div class="list-count-pill">
+            <strong id="peopleResultCount">0</strong>
+            <span data-next-i18n="personDetail.credits">credits</span>
+          </div>
+        </section>
+        <section class="detail-card full">
+          <div class="people-toolbar">
+            <label class="searchbox">
+              <span aria-hidden="true">/</span>
+              <input id="peopleSearch" type="search" placeholder="Search people..." data-next-i18n-placeholder="people.searchPlaceholder">
+            </label>
+            <div class="segmented compact" id="peopleRoleFilter" role="group" aria-label="People filter" data-next-i18n-aria="people.filter">
+              <button type="button" class="active" data-people-role="all" data-next-i18n="common.all">All</button>
+              <button type="button" data-people-role="actor" data-next-i18n="personDetail.acting">Acting</button>
+              <button type="button" data-people-role="crew" data-next-i18n="personDetail.crew">Crew</button>
+            </div>
+          </div>
+          <div class="people-grid" id="peopleGrid"></div>
+          <div class="preview-empty hidden" id="peopleEmpty" data-next-i18n="people.noResults">No people found.</div>
+        </section>
       </section>
       <section class="lists-view hidden" id="listsView" aria-labelledby="listsPageTitle">
         <section class="lists-hero">
@@ -8398,6 +8679,7 @@ def ui_preview_html(
             <div class="detail-card-head">
               <h3 data-next-i18n="personDetail.appearances">Appearances</h3>
               <div class="person-credit-controls">
+                <button type="button" class="secondary-button hidden" id="personMetadataRefreshButton" data-next-i18n="personDetail.refreshMetadata">Refresh person</button>
                 <button type="button" class="secondary-button hidden" id="personFilmographyRefreshButton" data-next-i18n="personDetail.refreshFilmography">Refresh filmography</button>
                 <div class="detail-submenu" role="tablist" aria-label="Appearances" data-next-i18n-aria="personDetail.appearances">
                   <button type="button" class="active" data-detail-tab="personCreditScope" data-detail-panel="personScopeCollection" data-next-i18n="personDetail.collection">Collection</button>
@@ -9049,6 +9331,10 @@ def ui_preview_html(
       <span class="nav-symbol lists" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
+    <button type="button" class="mobile-tab" data-app-route="people">
+      <span class="nav-symbol people" aria-hidden="true"></span>
+      <span data-next-i18n="people.title">People</span>
+    </button>
     <button type="button" class="mobile-tab" data-app-route="notifications">
       <span class="nav-symbol notifications" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navNotifications">Notifications</span>
@@ -9067,6 +9353,9 @@ def ui_preview_html(
     </button>
   </nav>
   <script>
+    document.addEventListener("gesturestart", (event) => event.preventDefault(), {passive: false});
+    document.addEventListener("gesturechange", (event) => event.preventDefault(), {passive: false});
+    document.addEventListener("gestureend", (event) => event.preventDefault(), {passive: false});
     const appMode = document.body.dataset.appMode === "true";
     const initialMovieId = JSON.parse(document.getElementById("initialMovieId").textContent || '""');
     let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
@@ -9090,6 +9379,7 @@ def ui_preview_html(
     let activePersonId = "";
     let activePersonPayload = null;
     let personReturnRoute = null;
+    let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], counts: {}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
@@ -9243,6 +9533,7 @@ def ui_preview_html(
       localStorage.setItem("dv_next_debug_mode", appDebugMode ? "true" : "false");
       renderAppDebugButton();
       renderLibrary();
+      renderPeopleView();
       if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
       if (activeContainerPayload) renderContainerDetail(activeContainerPayload);
       if (activePersonPayload) renderPersonDetail(activePersonPayload);
@@ -12235,6 +12526,79 @@ def ui_preview_html(
         </button>
       `;
     }
+    function peopleBrowserCardHtml(person) {
+      const image = personImageUrl(person);
+      const name = person.name || tNext("common.untitled", "Untitled");
+      const avatar = image
+        ? `<img src="${escapeHtml(image)}" alt="">`
+        : escapeHtml(initialsFromName(name));
+      const counts = [
+        person.movie_count ? `${person.movie_count} ${tNext("collection.movies", "movies").toLowerCase()}` : "",
+        person.actor_count ? `${person.actor_count} ${tNext("personDetail.acting", "Acting").toLowerCase()}` : "",
+        person.crew_count ? `${person.crew_count} ${tNext("personDetail.crew", "Crew").toLowerCase()}` : ""
+      ].filter(Boolean).join(" / ");
+      const subtitle = [person.known_for, counts].filter(Boolean).join(" / ");
+      return `
+        <button type="button" class="people-browser-card" data-open-person="${escapeHtml(person.id || "")}">
+          <span class="person-avatar">${avatar}</span>
+          <span class="people-browser-copy">
+            <strong>${escapeHtml(name)}</strong>
+            <span>${escapeHtml(subtitle || tNext("people.noKnownFor", "Collection person"))}</span>
+            ${debugIdHtml(person.id, "Person ID")}
+          </span>
+        </button>
+      `;
+    }
+    function renderPeopleView() {
+      const grid = document.getElementById("peopleGrid");
+      const empty = document.getElementById("peopleEmpty");
+      const count = document.getElementById("peopleResultCount");
+      if (!grid) return;
+      document.getElementById("peopleSearch") && (document.getElementById("peopleSearch").value = peopleState.query || "");
+      document.querySelectorAll("[data-people-role]").forEach((button) => {
+        const active = button.dataset.peopleRole === peopleState.role;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      if (peopleState.loading) {
+        grid.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("collection.loading", "Loading..."))}</div>`;
+        if (empty) empty.classList.add("hidden");
+        if (count) count.textContent = "0";
+        return;
+      }
+      const items = peopleState.items || [];
+      grid.innerHTML = items.map(peopleBrowserCardHtml).join("");
+      if (empty) empty.classList.toggle("hidden", !!items.length);
+      if (count) count.textContent = String(items.length);
+    }
+    async function loadPeopleView(force = false) {
+      if (peopleState.loading) return;
+      if (peopleState.loaded && !force) {
+        renderPeopleView();
+        return;
+      }
+      peopleState.loading = true;
+      renderPeopleView();
+      try {
+        const params = new URLSearchParams();
+        if (peopleState.query) params.set("q", peopleState.query);
+        if (peopleState.role && peopleState.role !== "all") params.set("role", peopleState.role);
+        params.set("limit", "180");
+        const payload = await authApiJson(`/api/next/people?${params.toString()}`);
+        peopleState.items = payload.people || [];
+        peopleState.loaded = true;
+      } catch (error) {
+        peopleState.items = [];
+        const empty = document.getElementById("peopleEmpty");
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      } finally {
+        peopleState.loading = false;
+        renderPeopleView();
+      }
+    }
     function isActingCredit(credit) {
       return ["actor", "cast"].includes(String(credit?.credit_type || credit?.creditType || "").toLowerCase());
     }
@@ -13171,7 +13535,9 @@ def ui_preview_html(
       const counts = detail.counts || {};
       const extendedPeople = !!preferences.show_extended_people_pages;
       const canRefreshFilmography = extendedPeople && personHasTmdbIdentifier(detail);
+      const canRefreshMetadata = personHasTmdbIdentifier(detail);
       const image = usableImage(person.profile_url || person.profileUrl || "");
+      const metadata = person.metadata || {};
       const avatarNode = document.getElementById("personDetailAvatar");
       if (avatarNode) {
         avatarNode.innerHTML = image ? `<img src="${escapeHtml(image)}" alt="">` : escapeHtml(initialsFromName(name));
@@ -13192,7 +13558,8 @@ def ui_preview_html(
         [tNext("personDetail.birthDate", "Birth date"), person.birth_date],
         [tNext("personDetail.deathDate", "Death date"), person.death_date],
         [tNext("personDetail.placeOfBirth", "Place of birth"), person.place_of_birth],
-        [tNext("personDetail.publicId", "Public ID"), person.public_id]
+        [tNext("personDetail.publicId", "Public ID"), person.public_id],
+        [appDebugMode ? tNext("personDetail.metadataProvenance", "Metadata provenance") : "", appDebugMode ? [metadata.person_metadata_source, metadata.person_metadata_source_ref, metadata.filmography_source_ref].filter(Boolean).join(" / ") : ""]
       ]);
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
         `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
@@ -13201,6 +13568,7 @@ def ui_preview_html(
       document.getElementById("personDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noIdentifiers", "No identifiers yet."))}</div>`;
       document.getElementById("personDigitalScopeTab")?.classList.toggle("hidden", !extendedPeople);
       document.getElementById("personFilmographyScopeTab")?.classList.toggle("hidden", !extendedPeople);
+      document.getElementById("personMetadataRefreshButton")?.classList.toggle("hidden", !canRefreshMetadata);
       document.getElementById("personFilmographyRefreshButton")?.classList.toggle("hidden", !canRefreshFilmography);
       activateDetailTab("personCreditScope", "personScopeCollection");
       activateDetailTab("personCollectionCredits", "personCreditsActing");
@@ -13223,8 +13591,26 @@ def ui_preview_html(
       document.getElementById("personDetailCrew").innerHTML = "";
       document.getElementById("personDetailDigital").innerHTML = "";
       document.getElementById("personDetailFilmography").innerHTML = "";
+      document.getElementById("personMetadataRefreshButton")?.classList.add("hidden");
       document.getElementById("personFilmographyRefreshButton")?.classList.add("hidden");
       setPersonDetailMessage("");
+    }
+    async function refreshActivePersonMetadata(dryRun = false) {
+      if (!activePersonId) return;
+      setPersonDetailMessage(tNext("personDetail.refreshingMetadata", "Refreshing person metadata..."), "info");
+      try {
+        const payload = await authApiJson(`/api/next/people/${encodeURIComponent(activePersonId)}/metadata/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({dryRun})
+        });
+        const detail = payload.metadata?.detail || payload.detail || activePersonPayload || {};
+        renderPersonDetail(detail);
+        setPersonDetailMessage(tNext("personDetail.metadataRefreshed", "Person metadata refreshed."), "good");
+        peopleState.loaded = false;
+      } catch (error) {
+        setPersonDetailMessage(error.message || String(error), "bad");
+      }
     }
     async function refreshActivePersonFilmography(dryRun = false) {
       if (!activePersonId) return;
@@ -13252,6 +13638,7 @@ def ui_preview_html(
       personReturnRoute = returnRoute || null;
       showPersonDetailLoading(personId);
       showPersonDetailPage();
+      if (personReturnRoute?.view === "people") setActiveAppRoute("people");
       if (pushUrl && appMode) {
         const nextPath = `/people/${encodeURIComponent(personId)}`;
         if (window.location.pathname !== nextPath) {
@@ -13270,6 +13657,10 @@ def ui_preview_html(
       personReturnRoute = null;
       if (returnRoute?.view === "movie" && returnRoute.movieId) {
         openAppMovieDetail(returnRoute.movieId, pushUrl);
+        return;
+      }
+      if (returnRoute?.view === "people") {
+        showPeoplePage(pushUrl);
         return;
       }
       showLibraryPage(false);
@@ -14146,6 +14537,103 @@ def ui_preview_html(
         </button>
       `;
     }
+    function watchedDateKey(entry) {
+      return String(entry?.watched_at || entry?.last_watched || "").slice(0, 10) || "unknown";
+    }
+    function watchedDateLabel(dateKey) {
+      if (!dateKey || dateKey === "unknown") return tNext("lists.watchedDateUnknown", "Unknown date");
+      if (dateKey === localDateString(0)) return tNext("lists.today", "Today");
+      if (dateKey === localDateString(-1)) return tNext("lists.yesterday", "Yesterday");
+      return formatAppDate(dateKey);
+    }
+    function watchedDateValue(entry) {
+      return formatAppDate(entry?.watched_at || entry?.last_watched) || tNext("lists.watchedDateUnknown", "Unknown date");
+    }
+    function watchlistStatusIconHtml(entry) {
+      const label = tNext("lists.onWatchlist", "Also on Watchlist");
+      return entry?.on_watchlist
+        ? `<span class="watched-watchlist-icon" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">★</span>`
+        : `<span class="watched-watchlist-icon empty" aria-hidden="true">★</span>`;
+    }
+    function watchedGroups(entries) {
+      const groups = new Map();
+      (entries || []).forEach((entry) => {
+        const key = watchedDateKey(entry);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(entry);
+      });
+      return [...groups.entries()].map(([date, rows]) => ({date, rows}));
+    }
+    function watchedPosterCardHtml(entry) {
+      const poster = usableImage(entry.poster_url);
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const movieId = entry.id || entry.movie_id || "";
+      const exists = entry.movie_exists !== false && !!movieId;
+      return `
+        <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
+          <span class="preview-poster-art">${posterHtml}</span>
+          <span class="preview-poster-title">${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</span>
+          <span class="preview-poster-meta watched-poster-meta">${escapeHtml(watchedDateValue(entry))}${watchlistStatusIconHtml(entry)}</span>
+          ${debugIdHtml(movieId, "Movie ID")}
+        </button>
+      `;
+    }
+    function watchedListItemHtml(entry) {
+      const poster = usableImage(entry.poster_url);
+      const movieId = entry.id || entry.movie_id || "";
+      const exists = entry.movie_exists !== false && !!movieId;
+      return `
+        <article class="mode-list-card watched-list-card" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
+          <span class="mode-list-body">
+            <span class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+            <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
+            <span class="mode-list-line"><span>${escapeHtml(tNext("lists.watchedDate", "Watched Date"))}</span><span class="watched-date-value">${escapeHtml(watchedDateValue(entry))}</span></span>
+            <span class="mode-list-line"><span>${escapeHtml(tNext("lists.watchlist", "Watchlist"))}</span>${watchlistStatusIconHtml(entry)}</span>
+            ${debugIdHtml(movieId, "Movie ID")}
+          </span>
+        </article>
+      `;
+    }
+    function watchedDetailTableHtml(entries) {
+      return `
+        <div class="watched-detail-table" role="table">
+          <div class="watched-detail-row head" role="row">
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.watchedDate", "Watched Date"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.watchlist", "Watchlist"))}</span>
+          </div>
+          ${(entries || []).map((entry) => {
+            const movieId = entry.id || entry.movie_id || "";
+            const exists = entry.movie_exists !== false && !!movieId;
+            return `
+              <div class="watched-detail-row" role="row" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
+                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${debugIdHtml(movieId, "Movie ID")}</span>
+                <span role="cell">${escapeHtml(watchedDateValue(entry))}</span>
+                <span role="cell">${watchlistStatusIconHtml(entry)}</span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+    function watchedGroupsHtml(entries) {
+      const mode = normalizeViewMode(listsViewMode);
+      return watchedGroups(entries).map((group) => {
+        const body = mode === "detail"
+          ? `<div class="mode-detail-grid">${watchedDetailTableHtml(group.rows)}</div>`
+          : `<div class="watched-group-grid ${escapeHtml(mode)}">${group.rows.map(mode === "list" ? watchedListItemHtml : watchedPosterCardHtml).join("")}</div>`;
+        return `
+          <section class="watched-day-section">
+            <header class="watched-day-head">
+              <strong>${escapeHtml(watchedDateLabel(group.date))}</strong>
+              <span>${escapeHtml(group.rows.length)} ${escapeHtml(tNext(group.rows.length === 1 ? "lists.watchedEntry" : "lists.watchedEntries", group.rows.length === 1 ? "film watched" : "films watched"))}</span>
+            </header>
+            ${body}
+          </section>
+        `;
+      }).join("");
+    }
     function historyRowHtml(entry) {
       const poster = usableImage(entry.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span class="history-poster-placeholder">${escapeHtml(tNext("collection.noPoster", "No poster").slice(0, 1))}</span>`;
@@ -14199,15 +14687,15 @@ def ui_preview_html(
         if (listsViewMode === "list") return items.map(libraryListItemHtml).join("");
         return (rows || []).map(listMovieCardHtml).join("");
       };
-      const configureListNode = (node) => {
+      const configureListNode = (node, watched = false) => {
         if (!node) return;
-        node.classList.toggle("lists-grid", listsViewMode === "poster");
-        node.classList.toggle("lists-history", false);
-        node.classList.toggle("mode-list-grid", listsViewMode === "list");
-        node.classList.toggle("mode-detail-grid", listsViewMode === "detail");
+        node.classList.toggle("lists-grid", !watched && listsViewMode === "poster");
+        node.classList.toggle("lists-history", watched);
+        node.classList.toggle("mode-list-grid", !watched && listsViewMode === "list");
+        node.classList.toggle("mode-detail-grid", !watched && listsViewMode === "detail");
       };
       configureListNode(watchlistGrid);
-      configureListNode(watchedList);
+      configureListNode(watchedList, true);
       if (listsState.active === "watchlist") {
         if (watchlistGrid) watchlistGrid.innerHTML = renderRows(listsState.watchlist || []);
         if (empty) {
@@ -14215,7 +14703,7 @@ def ui_preview_html(
           empty.classList.toggle("hidden", !!(listsState.watchlist || []).length);
         }
       } else {
-        if (watchedList) watchedList.innerHTML = renderRows(listsState.watched || []);
+        if (watchedList) watchedList.innerHTML = watchedGroupsHtml(listsState.watched || []);
         if (empty) {
           empty.textContent = tNext("lists.emptyWatched", "No watched films yet.");
           empty.classList.toggle("hidden", !!(listsState.watched || []).length);
@@ -14352,6 +14840,7 @@ def ui_preview_html(
       if (route.view === "movie") openAppMovieDetail(route.movieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "people") showPeoplePage(false);
       else if (route.view === "import") showImportPage(false);
       else if (route.view === "lists") showListsPage(false);
       else showLibraryPage(false);
@@ -14575,6 +15064,7 @@ def ui_preview_html(
     function showMovieDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
@@ -14588,6 +15078,7 @@ def ui_preview_html(
     function showContainerDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
@@ -14601,6 +15092,7 @@ def ui_preview_html(
     function showPersonDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
@@ -14616,6 +15108,7 @@ def ui_preview_html(
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
@@ -14626,12 +15119,38 @@ def ui_preview_html(
         history.pushState({}, "", "/");
       }
     }
+    function showPeoplePage(pushUrl = true) {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.remove("hidden");
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
+      setActiveAppRoute("people");
+      renderPeopleView();
+      loadPeopleView();
+      if (pushUrl && appMode && window.location.pathname !== "/people") {
+        history.pushState({view: "people"}, "", "/people");
+      }
+      scrollPreviewTop();
+    }
     function showListsPage(pushUrl = true) {
       if (!hasPermission("watchlist.manage")) {
         showLibraryPage(pushUrl);
         return;
       }
       document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -14657,6 +15176,7 @@ def ui_preview_html(
     function showNotificationsPage(pushUrl = true) {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -14681,6 +15201,7 @@ def ui_preview_html(
     function showProfilePage(pushUrl = true) {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
@@ -14710,6 +15231,7 @@ def ui_preview_html(
       }
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
@@ -14738,6 +15260,7 @@ def ui_preview_html(
       }
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -14772,6 +15295,9 @@ def ui_preview_html(
       if (/^\\/app\\/lists\\/?$|^\\/lists\\/?$/.test(window.location.pathname)) {
         return {view: "lists"};
       }
+      if (/^\\/app\\/people\\/?$|^\\/people\\/?$/.test(window.location.pathname)) {
+        return {view: "people"};
+      }
       if (/^\\/app\\/notifications\\/?$|^\\/notifications\\/?$/.test(window.location.pathname)) {
         return {view: "notifications"};
       }
@@ -14804,6 +15330,10 @@ def ui_preview_html(
       }
       if (route === "lists") {
         showListsPage();
+        return;
+      }
+      if (route === "people") {
+        showPeoplePage();
         return;
       }
       if (route === "notifications") {
@@ -14987,9 +15517,11 @@ def ui_preview_html(
       }
       const navMovieCount = document.getElementById("navMovieCount");
       const navListCount = document.getElementById("navListCount");
+      const navPeopleCount = document.getElementById("navPeopleCount");
       const containerPanelCount = document.getElementById("containerPanelCount");
       if (navMovieCount) navMovieCount.textContent = String(movies.length);
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
+      if (navPeopleCount) navPeopleCount.textContent = String((state.counts || {}).people || "");
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
       const firstItem = displayItems[0];
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
@@ -15882,6 +16414,7 @@ def ui_preview_html(
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "people") showPeoplePage(false);
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
       else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
@@ -16005,6 +16538,25 @@ def ui_preview_html(
       document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
+      });
+      let peopleSearchTimer = null;
+      document.getElementById("peopleSearch")?.addEventListener("input", (event) => {
+        peopleState.query = event.target.value || "";
+        peopleState.loaded = false;
+        clearTimeout(peopleSearchTimer);
+        peopleSearchTimer = setTimeout(() => loadPeopleView(true), 220);
+      });
+      document.querySelectorAll("[data-people-role]").forEach((button) => {
+        button.addEventListener("click", () => {
+          peopleState.role = button.dataset.peopleRole || "all";
+          peopleState.loaded = false;
+          loadPeopleView(true);
+        });
+      });
+      document.getElementById("peopleGrid")?.addEventListener("click", (event) => {
+        const person = event.target.closest("[data-open-person]");
+        if (!person) return;
+        openAppPersonDetail(person.dataset.openPerson, true, {view: "people"});
       });
       document.querySelectorAll("[data-lists-tab]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -16290,6 +16842,7 @@ def ui_preview_html(
         openAppMovieDetail(movieLink.dataset.openMovie);
       });
       document.getElementById("personFilmographyRefreshButton")?.addEventListener("click", () => refreshActivePersonFilmography(false));
+      document.getElementById("personMetadataRefreshButton")?.addEventListener("click", () => refreshActivePersonMetadata(false));
       document.getElementById("containerDetailPage")?.addEventListener("click", (event) => {
         const movieLink = event.target.closest("[data-open-movie]");
         const containerLink = event.target.closest("[data-open-container]");
@@ -16349,6 +16902,7 @@ def ui_preview_html(
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
+        else if (route.view === "people") showPeoplePage(false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);
         else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
@@ -16396,7 +16950,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>DiscVault Next Collection</title>
 """ + pwa_head_tags() + """
   <script>
@@ -20357,7 +20911,7 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>""" + h(title) + """ - DiscVault Next</title>
 """ + pwa_head_tags() + """
   <style>
@@ -20874,7 +21428,7 @@ def container_detail_html(detail: dict[str, Any]) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>""" + h(title) + """ - DiscVault Next</title>
 """ + pwa_head_tags() + """
   <style>
@@ -23688,6 +24242,112 @@ def person_entity(conn, person_id: UUID) -> dict[str, Any] | None:
     return data
 
 
+def people_list_entities(
+    conn,
+    *,
+    query: str = "",
+    role: str = "all",
+    limit: int = 120,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "people"):
+        return []
+    limit = max(1, min(int(limit or 120), 500))
+    search = clean_text(query).lower()
+    role_filter = (clean_text(role) or "all").lower()
+    if role_filter not in {"all", "actor", "crew"}:
+        role_filter = "all"
+
+    media_join = table_exists(conn, "media_assets")
+    credits_join = table_exists(conn, "movie_credits")
+    profile_select = (
+        """
+                ma.storage_backend AS profile_storage_backend,
+                ma.storage_key AS profile_storage_key,
+                ma.source_url AS profile_source_url
+        """
+        if media_join
+        else """
+                NULL AS profile_storage_backend,
+                NULL AS profile_storage_key,
+                NULL AS profile_source_url
+        """
+    )
+    profile_join = "LEFT JOIN media_assets ma ON ma.id = p.profile_asset_id" if media_join else ""
+    counts_cte = (
+        """
+            WITH credit_counts AS (
+                SELECT
+                    person_id,
+                    COUNT(*)::int AS credit_count,
+                    COUNT(DISTINCT movie_id)::int AS movie_count,
+                    COUNT(*) FILTER (WHERE lower(credit_type) IN ('actor', 'cast'))::int AS actor_count,
+                    COUNT(*) FILTER (WHERE lower(credit_type) NOT IN ('actor', 'cast'))::int AS crew_count
+                FROM movie_credits
+                GROUP BY person_id
+            )
+        """
+        if credits_join
+        else "WITH credit_counts AS (SELECT NULL::uuid AS person_id, 0::int AS credit_count, 0::int AS movie_count, 0::int AS actor_count, 0::int AS crew_count WHERE false)"
+    )
+    search_like = f"%{search}%"
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            {counts_cte}
+            SELECT
+                p.id,
+                p.public_id,
+                p.name,
+                p.birth_date,
+                p.death_date,
+                p.place_of_birth,
+                p.known_for,
+                p.profile_asset_id,
+                p.metadata,
+                p.created_at,
+                p.updated_at,
+                COALESCE(cc.credit_count, 0) AS credit_count,
+                COALESCE(cc.movie_count, 0) AS movie_count,
+                COALESCE(cc.actor_count, 0) AS actor_count,
+                COALESCE(cc.crew_count, 0) AS crew_count,
+{profile_select}
+            FROM people p
+            LEFT JOIN credit_counts cc ON cc.person_id = p.id
+            {profile_join}
+            WHERE (%s = '' OR lower(p.name) LIKE %s OR lower(COALESCE(p.known_for, '')) LIKE %s)
+              AND (
+                %s = 'all'
+                OR (%s = 'actor' AND COALESCE(cc.actor_count, 0) > 0)
+                OR (%s = 'crew' AND COALESCE(cc.crew_count, 0) > 0)
+              )
+            ORDER BY COALESCE(cc.movie_count, 0) DESC, lower(p.name)
+            LIMIT %s
+            """,
+            (search, search_like, search_like, role_filter, role_filter, role_filter, limit),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+    for row in rows:
+        profile_url = media_asset_public_url(
+            {
+                "id": row.get("profile_asset_id"),
+                "storage_backend": row.pop("profile_storage_backend", None),
+                "storage_key": row.pop("profile_storage_key", None),
+                "source_url": row.pop("profile_source_url", None),
+            }
+        )
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        if not profile_url:
+            profile_url = server_usable_image(
+                metadata.get("profile_url")
+                or metadata.get("profileUrl")
+                or metadata.get("photo_url")
+                or metadata.get("photoUrl")
+            )
+        if profile_url:
+            row["profile_url"] = profile_url
+    return rows
+
+
 def person_identifier_entities(conn, person_id: UUID) -> list[dict[str, Any]]:
     if not table_exists(conn, "person_identifiers"):
         return []
@@ -24137,6 +24797,19 @@ def person_detail_entity(conn, person_id: UUID) -> dict[str, Any] | None:
     }
 
 
+def person_metadata_plugin(conn) -> dict[str, Any] | None:
+    if not table_exists(conn, "plugins"):
+        return None
+    sync_metadata_plugin_registry(conn)
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    for plugin in registry.get("plugins") or []:
+        runtime = plugin.get("runtime") or {}
+        entrypoints = runtime.get("entrypoints") or []
+        if plugin.get("id") == "tmdb" and "person_details" in entrypoints:
+            return plugin
+    return None
+
+
 def person_filmography_plugin(conn) -> dict[str, Any] | None:
     if not table_exists(conn, "plugins"):
         return None
@@ -24148,6 +24821,121 @@ def person_filmography_plugin(conn) -> dict[str, Any] | None:
         if plugin.get("id") == "tmdb" and "person_filmography" in entrypoints:
             return plugin
     return None
+
+
+def refresh_person_metadata(
+    conn,
+    person_id: UUID,
+    *,
+    dry_run: bool = False,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    detail = person_detail_entity(conn, person_id)
+    if not detail:
+        raise NextApiError("Person not found", 404)
+    tmdb_id = detail.get("tmdbId") or ""
+    if not tmdb_id:
+        raise NextApiError("Person has no TMDb identifier", 409)
+    plugin = person_metadata_plugin(conn)
+    if not plugin:
+        raise NextApiError("No enabled person metadata plugin is available", 503)
+    if not plugin.get("enabled"):
+        raise NextApiError("TMDb plugin must be enabled before refreshing person metadata", 409)
+    config = plugin_config_from_db(conn, str(plugin["id"]))
+    if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
+        raise NextApiError("TMDb plugin configuration is incomplete", 409)
+
+    context = plugin_execution_context(conn, plugin, config, actor)
+    execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
+    result = execution.get("result") or {}
+    if execution.get("status") != "ok":
+        raise NextApiError(execution.get("error") or "Person metadata plugin execution failed", 422)
+
+    updates = {
+        "name": clean_text(result.get("name")),
+        "birth_date": clean_text(result.get("birthday") or result.get("birthDate")),
+        "death_date": clean_text(result.get("deathday") or result.get("deathDate")),
+        "place_of_birth": clean_text(result.get("placeOfBirth") or result.get("place_of_birth")),
+        "known_for": clean_text(result.get("knownFor") or result.get("known_for")),
+        "biography": clean_text(result.get("biography")),
+        "profile_url": first_usable_image(result.get("profileUrl"), result.get("profile_url"), result.get("photoUrl"), result.get("photo_url")),
+        "language": clean_text(result.get("language")) or "en-US",
+        "source": clean_text(result.get("provider")) or plugin.get("id"),
+        "source_ref": clean_text(result.get("sourceRef")) or f"tmdb:person:{tmdb_id}",
+    }
+    preview_detail = json_ready(detail)
+    preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
+    preview_metadata = preview_person.get("metadata") if isinstance(preview_person.get("metadata"), dict) else {}
+    preview_metadata = dict(preview_metadata)
+    for key in ("name", "birth_date", "death_date", "place_of_birth", "known_for"):
+        if updates.get(key):
+            preview_person[key] = updates[key]
+    if updates["profile_url"]:
+        preview_person["profile_url"] = updates["profile_url"]
+        preview_metadata["profile_url"] = updates["profile_url"]
+    if updates["biography"]:
+        preview_person["biography"] = updates["biography"]
+        preview_metadata["biography"] = updates["biography"]
+    preview_metadata["person_metadata_source"] = updates["source"]
+    preview_metadata["person_metadata_source_ref"] = updates["source_ref"]
+    preview_metadata["person_metadata_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    preview_person["metadata"] = preview_metadata
+    preview_detail["person"] = preview_person
+
+    if not dry_run:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE people
+                SET
+                    name=COALESCE(NULLIF(%s, ''), name),
+                    birth_date=COALESCE(NULLIF(%s, '')::date, birth_date),
+                    death_date=COALESCE(NULLIF(%s, '')::date, death_date),
+                    place_of_birth=COALESCE(NULLIF(%s, ''), place_of_birth),
+                    known_for=COALESCE(NULLIF(%s, ''), known_for),
+                    metadata=%s,
+                    updated_at=now()
+                WHERE id=%s
+                """,
+                (
+                    updates["name"],
+                    updates["birth_date"],
+                    updates["death_date"],
+                    updates["place_of_birth"],
+                    updates["known_for"],
+                    Jsonb(json_ready(preview_metadata)),
+                    person_id,
+                ),
+            )
+            if updates["biography"] and table_exists(conn, "person_localizations"):
+                cur.execute(
+                    """
+                    INSERT INTO person_localizations (person_id, lang, biography, updated_at)
+                    VALUES (%s, %s, %s, now())
+                    ON CONFLICT (person_id, lang) DO UPDATE
+                    SET biography=EXCLUDED.biography, updated_at=now()
+                    """,
+                    (person_id, updates["language"], updates["biography"]),
+                )
+        detail = person_detail_entity(conn, person_id) or preview_detail
+    else:
+        detail = preview_detail
+
+    return {
+        "dryRun": dry_run,
+        "plugin": {
+            "id": plugin.get("id"),
+            "name": plugin.get("name"),
+        },
+        "execution": {
+            "status": execution.get("status"),
+            "state": execution.get("state"),
+            "elapsedMs": execution.get("elapsedMs"),
+            "entrypoint": execution.get("entrypoint"),
+        },
+        "result": result,
+        "detail": detail,
+    }
 
 
 def refresh_person_filmography(
@@ -28413,6 +29201,17 @@ def register_routes(flask_app: Flask) -> None:
                 )
             return response({"status": "ok", "deleted": deleted, "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
 
+    @flask_app.get("/api/next/people")
+    def people_list():
+        query = clean_text(request.args.get("q"))
+        role = clean_text(request.args.get("role")) or "all"
+        limit = int(request.args.get("limit") or 120)
+        with connect() as conn:
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            people = people_list_entities(conn, query=query, role=role, limit=limit)
+        return response({"status": "ok", "people": people, "query": query, "role": role, "limit": limit})
+
     @flask_app.get("/api/next/people/<person_id>")
     def person_detail(person_id: str):
         person_uuid = parse_uuid(person_id, "personId")
@@ -28423,6 +29222,31 @@ def register_routes(flask_app: Flask) -> None:
         if not detail:
             raise NextApiError("Person not found", 404)
         return response({"status": "ok", "detail": detail})
+
+    @flask_app.post("/api/next/people/<person_id>/metadata/refresh")
+    def refresh_person_metadata_route(person_id: str):
+        person_uuid = parse_uuid(person_id, "personId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Person metadata refresh body must be an object", 400)
+        dry_run = bool(body.get("dryRun", body.get("dry_run", False)))
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            with conn.transaction():
+                result = refresh_person_metadata(conn, person_uuid, dry_run=dry_run, actor=actor)
+                audit_event(
+                    conn,
+                    event_type="metadata.person_previewed" if dry_run else "metadata.person_refreshed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_uuid,
+                    summary="Refreshed person metadata" if not dry_run else "Previewed person metadata refresh",
+                    metadata={"dryRun": dry_run, "result": result},
+                )
+        return response({"status": "ok", "metadata": result})
 
     @flask_app.post("/api/next/people/<person_id>/filmography/refresh")
     def refresh_person_filmography_route(person_id: str):

@@ -273,6 +273,32 @@ def movie_details(payload, context=None):
     return _normalize_details(_details(context or {}, items[0]["tmdbId"]))
 
 
+def person_details(payload, context=None):
+    tmdb_id = str((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id") or "").strip()
+    if not tmdb_id:
+        return {"status": "miss", "provider": "tmdb", "reason": "tmdbId is required"}
+    data = _request(context or {}, f"/person/{tmdb_id}", language=_language(context))
+    aliases = data.get("also_known_as") or [] if data else []
+    name = (data.get("name") if data else "") or (aliases[0] if aliases else "")
+    profile_url = _image(data.get("profile_path")) if data.get("profile_path") else ""
+    return {
+        "status": "hit" if name else "miss",
+        "provider": "tmdb",
+        "sourceLabel": "TMDb",
+        "sourceRef": f"tmdb:person:{tmdb_id}",
+        "tmdbId": tmdb_id,
+        "name": name,
+        "biography": data.get("biography") or "",
+        "birthday": data.get("birthday") or "",
+        "deathday": data.get("deathday") or "",
+        "placeOfBirth": data.get("place_of_birth") or "",
+        "knownFor": data.get("known_for_department") or "",
+        "profileUrl": profile_url,
+        "profilePath": data.get("profile_path") or "",
+        "language": _language(context),
+    }
+
+
 def person_filmography(payload, context=None):
     tmdb_id = str((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id") or "").strip()
     if not tmdb_id:
