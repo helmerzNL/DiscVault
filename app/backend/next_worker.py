@@ -16,7 +16,7 @@ import re
 import signal
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -970,7 +970,10 @@ def parsed_plugin_datetime(value: Any) -> str | None:
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
     try:
-        return datetime.fromisoformat(text).isoformat()
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).replace(microsecond=0).isoformat()
     except ValueError:
         return clean_text(value)
 
@@ -1059,10 +1062,11 @@ def persist_personal_list_sync(
                         FROM watch_history
                         WHERE user_id=%s
                           AND movie_id=%s
-                          AND watched_at=%s
+                          AND watched_at BETWEEN (%s::timestamptz - interval '2 minutes')
+                                           AND (%s::timestamptz + interval '2 minutes')
                         LIMIT 1
                         """,
-                        (actor_id, movie_id, watched_at),
+                        (actor_id, movie_id, watched_at, watched_at),
                     )
                     if cur.fetchone():
                         summary["watched"]["existing"] += 1

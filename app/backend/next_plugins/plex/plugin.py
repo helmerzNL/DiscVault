@@ -1,5 +1,6 @@
 import re
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 
 import requests
 
@@ -133,6 +134,57 @@ def _items_for_section(context, section):
     return items
 
 
+def _plex_datetime(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        return datetime.fromtimestamp(int(text), tz=timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError):
+        return text
+
+
+def _watched_history_items(context):
+    base_url = _base_url(context)
+    token = _token(context)
+    root = _request_xml(
+        f"{base_url}/status/sessions/history/all",
+        token,
+        timeout=30,
+        type="1",
+        includeGuids="1",
+    )
+    machine_id = _server_info(context).get("machineIdentifier", "")
+    items = []
+    for video in root.findall(".//Video"):
+        viewed_at = _plex_datetime(video.get("viewedAt") or video.get("lastViewedAt"))
+        if not viewed_at:
+            continue
+        external_id = video.get("ratingKey", "") or video.get("key", "").split("/")[-1]
+        tmdb_id, imdb_id = _ids_from_video(video)
+        items.append(
+            {
+                "externalId": external_id,
+                "title": video.get("title", ""),
+                "year": str(video.get("year", "") or ""),
+                "tmdbId": tmdb_id,
+                "imdbId": imdb_id,
+                "watchedAt": viewed_at,
+                "lastWatchedAt": viewed_at,
+                "plays": 1,
+                "source": "plex",
+                "sourceUrl": f"plex://server/{machine_id}/details?key=/library/metadata/{external_id}" if machine_id and external_id else "",
+                "metadata": {
+                    "guid": video.get("guid", ""),
+                    "ratingKey": external_id,
+                    "historyKey": video.get("historyKey", ""),
+                    "viewedAt": video.get("viewedAt", ""),
+                },
+            }
+        )
+    return items
+
+
 def health_check(context=None):
     context = context or {}
     if not _configured(context):
@@ -214,4 +266,38 @@ def sync_library(payload=None, context=None):
         "created": 0,
         "updated": len(items),
         "deleted": 0,
+    }
+
+
+def sync_personal_lists(payload=None, context=None):
+    context = context or {}
+    if not _configured(context):
+        return {
+            "status": "needs_configuration",
+            "connector": "plex",
+            "source": {"name": "Plex", "type": "plex"},
+            "personalLists": {"watchlist": [], "watched": []},
+            "counts": {"watchlist": 0, "watched": 0},
+        }
+    if _base_url(context).endswith(".example"):
+        return {
+            "status": "configured",
+            "connector": "plex",
+            "source": {"name": "Plex Example", "type": "plex", "baseUrl": _base_url(context), "machineId": "example-plex"},
+            "personalLists": {"watchlist": [], "watched": []},
+            "counts": {"watchlist": 0, "watched": 0},
+        }
+    watched = _watched_history_items(context)
+    server = _server_info(context)
+    return {
+        "status": "completed",
+        "connector": "plex",
+        "source": {
+            "name": server.get("friendlyName") or "Plex",
+            "type": "plex",
+            "baseUrl": _base_url(context),
+            "machineId": server.get("machineIdentifier", ""),
+        },
+        "personalLists": {"watchlist": [], "watched": watched},
+        "counts": {"watchlist": 0, "watched": len(watched)},
     }
