@@ -373,7 +373,14 @@ def process_functional_restore(payload: dict[str, Any], worker_id: str) -> dict[
         raise RuntimeError(f"DiscVault data directory not found: {data_dir}")
     try:
         with connect() as conn:
-            summary = restore_functional_backup(conn, backup_zip, data_dir=data_dir)
+            summary = restore_functional_backup(
+                conn,
+                backup_zip,
+                data_dir=data_dir,
+                include_personal_lists=bool_value(payload.get("includePersonalLists"), default=False),
+                personal_list_user_id=payload.get("personalListUserId"),
+                group_resolution=payload.get("groupResolution") if isinstance(payload.get("groupResolution"), dict) else {},
+            )
     except NextBackupError as exc:
         raise RuntimeError(str(exc)) from exc
     return {

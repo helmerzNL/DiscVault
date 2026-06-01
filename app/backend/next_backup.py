@@ -1,8 +1,9 @@
 """Functional collection backup and restore helpers for DiscVault Next.
 
-The backup format intentionally covers shared collection data only. It excludes
-auth, passkeys, invite codes, plugin configuration, plugin secrets, subscription
-state, personal watchlists, and notifications.
+The backup format intentionally covers movie-related collection data only. It
+excludes auth, passkeys, invite codes, plugin configuration, plugin secrets,
+subscription state, and notifications. Personal watchlists and watch history can
+be included explicitly.
 """
 
 from __future__ import annotations
@@ -35,6 +36,8 @@ EXCLUDED_SCOPES = (
     "push_subscriptions",
 )
 
+OPTIONAL_PERSONAL_SCOPES = ("personal_watchlists", "watch_history")
+
 
 @dataclass(frozen=True)
 class TableSpec:
@@ -43,7 +46,7 @@ class TableSpec:
     jsonb_columns: frozenset[str] = frozenset()
 
 
-BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
+CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
     TableSpec(
         "media_assets",
         (
@@ -191,9 +194,56 @@ BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
     ),
 )
 
+MEDIA_GROUP_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
+    TableSpec(
+        "media_groups",
+        (
+            "id",
+            "public_id",
+            "name",
+            "created_by",
+            "hide_digital",
+            "metadata",
+            "created_at",
+            "updated_at",
+        ),
+        frozenset({"metadata"}),
+    ),
+    TableSpec(
+        "media_group_movies",
+        ("group_id", "movie_id", "metadata", "created_at", "updated_at"),
+        frozenset({"metadata"}),
+    ),
+)
+
+PERSONAL_LIST_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
+    TableSpec(
+        "watchlist_items",
+        ("id", "user_id", "movie_id", "added_at", "snapshot"),
+        frozenset({"snapshot"}),
+    ),
+    TableSpec(
+        "watch_history",
+        ("id", "user_id", "movie_id", "watched_at", "created_at", "snapshot"),
+        frozenset({"snapshot"}),
+    ),
+)
+
+BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
+    *CORE_BACKUP_TABLE_SPECS,
+    *MEDIA_GROUP_BACKUP_TABLE_SPECS,
+    *PERSONAL_LIST_BACKUP_TABLE_SPECS,
+)
+
 BACKUP_TABLES = tuple(spec.name for spec in BACKUP_TABLE_SPECS)
 TABLE_SPEC_BY_NAME = {spec.name: spec for spec in BACKUP_TABLE_SPECS}
+OPTIONAL_BACKUP_TABLES = tuple(
+    spec.name for spec in (*MEDIA_GROUP_BACKUP_TABLE_SPECS, *PERSONAL_LIST_BACKUP_TABLE_SPECS)
+)
 RESTORE_DELETE_ORDER = (
+    "media_group_movies",
+    "watchlist_items",
+    "watch_history",
     "entity_media",
     "collection_items",
     "container_movies",
@@ -208,7 +258,8 @@ RESTORE_DELETE_ORDER = (
     "people",
     "movies",
 )
-RESTORE_INSERT_ORDER = BACKUP_TABLES
+RESTORE_INSERT_ORDER = tuple(spec.name for spec in CORE_BACKUP_TABLE_SPECS)
+PERSONAL_LIST_INSERT_ORDER = tuple(spec.name for spec in PERSONAL_LIST_BACKUP_TABLE_SPECS)
 
 
 class BackupError(RuntimeError):
@@ -238,7 +289,60 @@ def backup_storage_dir(data_dir: Path | None = None) -> Path:
     if configured:
         return Path(configured).expanduser()
     root = data_dir or Path(os.environ.get("DISCVAULT_LEGACY_DATA_DIR") or "/data")
-    return root / "backups" / "next"
+    return root / "backups"
+
+
+def safe_backup_filename(value: str) -> str:
+    name = Path(str(value or "")).name
+    if not name.lower().endswith(".zip") or name in {"", ".", ".."}:
+        raise BackupError("Invalid backup file name")
+    if "/" in name or "\\" in name:
+        raise BackupError("Invalid backup file name")
+    return name
+
+
+def stored_backup_path(backup_dir: Path, file_name: str) -> Path:
+    safe_name = safe_backup_filename(file_name)
+    root = backup_dir.resolve()
+    path = (root / safe_name).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise BackupError("Backup file is outside the backup directory") from exc
+    return path
+
+
+def list_backup_archives(backup_dir: Path, *, limit: int = 10) -> list[dict[str, Any]]:
+    if not backup_dir.exists():
+        return []
+    items: list[dict[str, Any]] = []
+    for path in sorted(backup_dir.glob("*.zip"), key=lambda item: item.stat().st_mtime, reverse=True):
+        try:
+            stat = path.stat()
+            report = validate_backup_zip(path)
+        except OSError:
+            continue
+        manifest = report.get("generator") or {}
+        items.append(
+            {
+                "fileName": path.name,
+                "sizeBytes": stat.st_size,
+                "modifiedAt": datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z"),
+                "createdAt": report.get("createdAt"),
+                "valid": bool(report.get("valid")),
+                "scope": report.get("scope"),
+                "description": manifest.get("description") or "DiscVault movie collection backup",
+                "sha256": sha256_file(path),
+                "tables": report.get("tables") or {},
+                "warnings": report.get("warnings") or [],
+                "errors": report.get("errors") or [],
+            }
+        )
+        if len(items) >= limit:
+            break
+    return items
 
 
 def sha256_file(path: Path) -> str:
@@ -291,6 +395,13 @@ def fetch_table_rows(conn, spec: TableSpec) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute(query)
         return [dict(row) for row in cur.fetchall()]
+
+
+def backup_specs(*, include_personal_lists: bool = False) -> tuple[TableSpec, ...]:
+    specs = (*CORE_BACKUP_TABLE_SPECS, *MEDIA_GROUP_BACKUP_TABLE_SPECS)
+    if include_personal_lists:
+        specs = (*specs, *PERSONAL_LIST_BACKUP_TABLE_SPECS)
+    return specs
 
 
 def write_json(zf: zipfile.ZipFile, name: str, payload: Any) -> None:
@@ -358,19 +469,27 @@ def export_functional_backup(
     output_path: Path,
     *,
     data_dir: Path,
+    include_personal_lists: bool = False,
     generator: dict[str, Any] | None = None,
     requested_by: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tables: dict[str, list[dict[str, Any]]] = {}
     table_summary: dict[str, dict[str, Any]] = {}
-    for spec in BACKUP_TABLE_SPECS:
+    for spec in backup_specs(include_personal_lists=include_personal_lists):
         rows = fetch_table_rows(conn, spec)
         if spec.name == "movies":
             rows = [{**row, "owner_id": None} for row in rows]
+        if spec.name == "media_groups":
+            rows = [{**row, "created_by": None} for row in rows]
         tables[spec.name] = rows
         table_summary[spec.name] = {"count": len(rows)}
 
+    excluded_scopes = [
+        scope
+        for scope in EXCLUDED_SCOPES
+        if not (include_personal_lists and scope in OPTIONAL_PERSONAL_SCOPES)
+    ]
     manifest = {
         "format": BACKUP_FORMAT,
         "formatVersion": BACKUP_FORMAT_VERSION,
@@ -380,12 +499,16 @@ def export_functional_backup(
         "requestedBy": {
             "role": requested_by.get("role") if requested_by else None,
         },
-        "excludedScopes": list(EXCLUDED_SCOPES),
+        "options": {
+            "includePersonalLists": bool(include_personal_lists),
+            "includeMediaGroups": True,
+        },
+        "excludedScopes": excluded_scopes,
         "tables": table_summary,
     }
 
     with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-        for table_name in BACKUP_TABLES:
+        for table_name, rows in tables.items():
             write_json(zf, f"data/{table_name}.json", tables[table_name])
         manifest["media"] = add_media_files(
             zf,
@@ -416,8 +539,12 @@ def load_json_member(zf: zipfile.ZipFile, name: str) -> Any:
 
 def load_backup_tables(zf: zipfile.ZipFile) -> dict[str, list[dict[str, Any]]]:
     tables: dict[str, list[dict[str, Any]]] = {}
+    names = set(zf.namelist())
     for table_name in BACKUP_TABLES:
         member = f"data/{table_name}.json"
+        if member not in names and table_name in OPTIONAL_BACKUP_TABLES:
+            tables[table_name] = []
+            continue
         rows = load_json_member(zf, member)
         if not isinstance(rows, list):
             raise BackupError(f"Backup member must be a JSON array: {member}")
@@ -432,6 +559,7 @@ def validate_relationships(tables: dict[str, list[dict[str, Any]]]) -> list[str]
     movie_ids = {str(row.get("id")) for row in tables["movies"] if row.get("id")}
     person_ids = {str(row.get("id")) for row in tables["people"] if row.get("id")}
     container_ids = {str(row.get("id")) for row in tables["containers"] if row.get("id")}
+    media_group_ids = {str(row.get("id")) for row in tables.get("media_groups", []) if row.get("id")}
     container_type_by_id = {
         str(row.get("id")): str(row.get("container_type") or "")
         for row in tables["containers"]
@@ -456,6 +584,13 @@ def validate_relationships(tables: dict[str, list[dict[str, Any]]]) -> list[str]
     check("container_movies", "container_id", container_ids, "container")
     check("container_movies", "movie_id", movie_ids, "movie")
     check("collection_items", "collection_id", container_ids, "collection container")
+    if tables.get("media_group_movies"):
+        check("media_group_movies", "group_id", media_group_ids, "media group")
+        check("media_group_movies", "movie_id", movie_ids, "movie")
+    if tables.get("watchlist_items"):
+        check("watchlist_items", "movie_id", movie_ids, "movie")
+    if tables.get("watch_history"):
+        check("watch_history", "movie_id", movie_ids, "movie")
 
     for index, row in enumerate(tables["containers"], start=1):
         primary = row.get("primary_movie_id")
@@ -578,6 +713,78 @@ def validate_backup_zip(backup_zip: Path | str) -> dict[str, Any]:
         }
 
 
+def backup_restore_plan(conn, backup_zip: Path | str) -> dict[str, Any]:
+    backup_zip = Path(backup_zip)
+    report = validate_backup_zip(backup_zip)
+    if not report.get("valid"):
+        return {"valid": False, "report": report, "mediaGroups": {"missing": [], "existing": []}}
+    with zipfile.ZipFile(backup_zip) as zf:
+        tables = load_backup_tables(zf)
+
+    backup_groups = tables.get("media_groups") or []
+    if not backup_groups or not table_exists(conn, "media_groups"):
+        return {"valid": True, "report": report, "mediaGroups": {"missing": [], "existing": []}}
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, public_id, name FROM media_groups")
+        existing_rows = [dict(row) for row in cur.fetchall()]
+    existing_by_id = {str(row.get("id") or ""): row for row in existing_rows}
+    existing_by_public_id = {str(row.get("public_id") or ""): row for row in existing_rows}
+    existing_by_name = {str(row.get("name") or "").strip().lower(): row for row in existing_rows}
+
+    missing: list[dict[str, Any]] = []
+    existing: list[dict[str, Any]] = []
+    for group in backup_groups:
+        public_id = str(group.get("public_id") or "")
+        name = str(group.get("name") or "")
+        source_id = str(group.get("id") or "")
+        match = existing_by_id.get(source_id) or existing_by_public_id.get(public_id) or existing_by_name.get(name.strip().lower())
+        item = {
+            "backupGroupId": group.get("id"),
+            "publicId": public_id,
+            "name": name,
+            "movieCount": sum(1 for row in tables.get("media_group_movies", []) if str(row.get("group_id")) == str(group.get("id"))),
+        }
+        if match:
+            existing.append(
+                {
+                    **item,
+                    "targetGroupId": match.get("id"),
+                    "targetPublicId": match.get("public_id"),
+                    "targetName": match.get("name"),
+                }
+            )
+        else:
+            missing.append(item)
+    return {
+        "valid": True,
+        "report": report,
+        "mediaGroups": {
+            "missing": missing,
+            "existing": existing,
+            "availableTargets": existing_rows,
+        },
+    }
+
+
+def normalize_group_resolution(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"create": [], "map": {}, "skip": [], "createMissing": False}
+    create = value.get("create") if isinstance(value.get("create"), list) else []
+    skip = value.get("skip") if isinstance(value.get("skip"), list) else []
+    mapping = value.get("map") if isinstance(value.get("map"), dict) else {}
+    return {
+        "create": [str(item) for item in create],
+        "skip": [str(item) for item in skip],
+        "map": {str(key): str(target) for key, target in mapping.items() if target},
+        "createMissing": bool(value.get("createMissing")),
+    }
+
+
+def group_resolution_key(group: dict[str, Any]) -> str:
+    return str(group.get("public_id") or group.get("id") or group.get("name") or "")
+
+
 def restore_media_files(backup_zip: Path, data_dir: Path, tables: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     root = data_dir.resolve()
     restored = 0
@@ -639,11 +846,13 @@ def insert_rows(conn, spec: TableSpec, rows: list[dict[str, Any]]) -> int:
     return len(rows)
 
 
-def clear_functional_tables(conn) -> None:
+def clear_functional_tables(conn, *, include_personal_lists: bool = False) -> None:
     from psycopg import sql
 
     with conn.cursor() as cur:
         for table in RESTORE_DELETE_ORDER:
+            if table in PERSONAL_LIST_INSERT_ORDER and not include_personal_lists:
+                continue
             if table_exists(conn, table):
                 cur.execute(sql.SQL("DELETE FROM {table}").format(table=sql.Identifier(table)))
         if table_exists(conn, "media_assets"):
@@ -660,6 +869,202 @@ def clear_functional_tables(conn) -> None:
                 )
             else:
                 cur.execute("DELETE FROM media_assets")
+
+
+def _row_by_uuid(conn, table: str, row_id: Any) -> dict[str, Any] | None:
+    if not row_id or not table_exists(conn, table):
+        return None
+    from psycopg import sql
+
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("SELECT * FROM {table} WHERE id=%s").format(table=sql.Identifier(table)),
+            (row_id,),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def restore_media_group_links(
+    conn,
+    tables: dict[str, list[dict[str, Any]]],
+    *,
+    group_resolution: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not table_exists(conn, "media_groups") or not table_exists(conn, "media_group_movies"):
+        return {"groupsCreated": 0, "groupsMapped": 0, "groupsSkipped": 0, "linksRestored": 0, "missing": []}
+
+    resolution = normalize_group_resolution(group_resolution)
+    backup_groups = tables.get("media_groups") or []
+    links = tables.get("media_group_movies") or []
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, public_id, name FROM media_groups")
+        existing_rows = [dict(row) for row in cur.fetchall()]
+    existing_by_id = {str(row.get("id") or ""): row for row in existing_rows}
+    existing_by_public_id = {str(row.get("public_id") or ""): row for row in existing_rows}
+    existing_by_name = {str(row.get("name") or "").strip().lower(): row for row in existing_rows}
+
+    group_map: dict[str, Any] = {}
+    created = 0
+    mapped = 0
+    skipped = 0
+    missing: list[dict[str, Any]] = []
+
+    with conn.cursor() as cur:
+        for group in backup_groups:
+            source_id = str(group.get("id") or "")
+            public_id = str(group.get("public_id") or "")
+            name = str(group.get("name") or "")
+            key = group_resolution_key(group)
+            if key in resolution["skip"] or source_id in resolution["skip"] or public_id in resolution["skip"]:
+                skipped += 1
+                continue
+            explicit_target = (
+                resolution["map"].get(source_id)
+                or resolution["map"].get(public_id)
+                or resolution["map"].get(key)
+            )
+            if explicit_target:
+                target = _row_by_uuid(conn, "media_groups", explicit_target)
+                if target:
+                    group_map[source_id] = target["id"]
+                    mapped += 1
+                    continue
+            match = existing_by_id.get(source_id) or existing_by_public_id.get(public_id) or existing_by_name.get(name.strip().lower())
+            if match:
+                group_map[source_id] = match["id"]
+                mapped += 1
+                continue
+            should_create = resolution["createMissing"] or key in resolution["create"] or source_id in resolution["create"] or public_id in resolution["create"]
+            if not should_create:
+                missing.append(
+                    {
+                        "backupGroupId": source_id,
+                        "publicId": public_id,
+                        "name": name,
+                        "movieCount": sum(1 for row in links if str(row.get("group_id")) == source_id),
+                    }
+                )
+                continue
+            cur.execute(
+                """
+                INSERT INTO media_groups (
+                    id, public_id, name, created_by, hide_digital, metadata, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, NULL, %s, %s, COALESCE(%s, now()), COALESCE(%s, now()))
+                ON CONFLICT (public_id) DO UPDATE SET
+                    name=EXCLUDED.name,
+                    hide_digital=EXCLUDED.hide_digital,
+                    metadata=EXCLUDED.metadata,
+                    updated_at=now()
+                RETURNING id
+                """,
+                (
+                    group.get("id"),
+                    public_id or f"restored-group-{source_id[:12]}",
+                    name or "Restored group",
+                    bool(group.get("hide_digital")),
+                    adapt_value(TABLE_SPEC_BY_NAME["media_groups"], "metadata", group.get("metadata") or {}),
+                    group.get("created_at"),
+                    group.get("updated_at"),
+                ),
+            )
+            row = cur.fetchone()
+            if row:
+                group_map[source_id] = row["id"]
+                created += 1
+
+        restored = 0
+        for link in links:
+            target_group_id = group_map.get(str(link.get("group_id") or ""))
+            movie_id = link.get("movie_id")
+            if not target_group_id or not movie_id:
+                continue
+            cur.execute(
+                """
+                INSERT INTO media_group_movies (group_id, movie_id, metadata, created_at, updated_at)
+                VALUES (%s, %s, %s, COALESCE(%s, now()), COALESCE(%s, now()))
+                ON CONFLICT (group_id, movie_id) DO UPDATE SET
+                    metadata=EXCLUDED.metadata,
+                    updated_at=now()
+                """,
+                (
+                    target_group_id,
+                    movie_id,
+                    adapt_value(TABLE_SPEC_BY_NAME["media_group_movies"], "metadata", link.get("metadata") or {}),
+                    link.get("created_at"),
+                    link.get("updated_at"),
+                ),
+            )
+            restored += 1
+
+    if missing:
+        raise BackupError("Media group restore resolution is required")
+    return {
+        "groupsCreated": created,
+        "groupsMapped": mapped,
+        "groupsSkipped": skipped,
+        "linksRestored": restored,
+        "missing": missing,
+    }
+
+
+def restore_personal_lists(conn, tables: dict[str, list[dict[str, Any]]], *, user_id: Any | None) -> dict[str, Any]:
+    if not user_id:
+        return {"watchlist_items": 0, "watch_history": 0, "skipped": "No target user was provided"}
+    if table_exists(conn, "users"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE id=%s", (user_id,))
+            if not cur.fetchone():
+                return {"watchlist_items": 0, "watch_history": 0, "skipped": "Target user does not exist"}
+    counters: dict[str, int] = {"watchlist_items": 0, "watch_history": 0}
+    with conn.cursor() as cur:
+        if table_exists(conn, "watchlist_items"):
+            for row in tables.get("watchlist_items") or []:
+                if not row.get("movie_id"):
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO watchlist_items (id, user_id, movie_id, added_at, snapshot)
+                    VALUES (%s, %s, %s, COALESCE(%s, now()), %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        user_id=EXCLUDED.user_id,
+                        movie_id=EXCLUDED.movie_id,
+                        added_at=EXCLUDED.added_at,
+                        snapshot=EXCLUDED.snapshot
+                    """,
+                    (
+                        row.get("id"),
+                        user_id,
+                        row.get("movie_id"),
+                        row.get("added_at"),
+                        adapt_value(TABLE_SPEC_BY_NAME["watchlist_items"], "snapshot", row.get("snapshot") or {}),
+                    ),
+                )
+                counters["watchlist_items"] += 1
+        if table_exists(conn, "watch_history"):
+            for row in tables.get("watch_history") or []:
+                cur.execute(
+                    """
+                    INSERT INTO watch_history (id, user_id, movie_id, watched_at, created_at, snapshot)
+                    VALUES (%s, %s, %s, %s, COALESCE(%s, now()), %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        user_id=EXCLUDED.user_id,
+                        movie_id=EXCLUDED.movie_id,
+                        watched_at=EXCLUDED.watched_at,
+                        snapshot=EXCLUDED.snapshot
+                    """,
+                    (
+                        row.get("id"),
+                        user_id,
+                        row.get("movie_id"),
+                        row.get("watched_at"),
+                        row.get("created_at"),
+                        adapt_value(TABLE_SPEC_BY_NAME["watch_history"], "snapshot", row.get("snapshot") or {}),
+                    ),
+                )
+                counters["watch_history"] += 1
+    return counters
 
 
 def bump_restore_revision(conn, summary: dict[str, Any]) -> int | None:
@@ -703,6 +1108,9 @@ def restore_functional_backup(
     *,
     data_dir: Path,
     dry_run: bool = False,
+    include_personal_lists: bool = False,
+    personal_list_user_id: Any | None = None,
+    group_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     report = validate_backup_zip(backup_zip)
     if not report.get("valid"):
@@ -719,16 +1127,28 @@ def restore_functional_backup(
     media_summary = restore_media_files(backup_zip, data_dir, tables)
     counters: dict[str, int] = {}
     with conn.transaction():
-        clear_functional_tables(conn)
+        clear_functional_tables(conn, include_personal_lists=include_personal_lists)
         for table_name in RESTORE_INSERT_ORDER:
             spec = TABLE_SPEC_BY_NAME[table_name]
             counters[table_name] = insert_rows(conn, spec, tables[table_name])
+        group_summary = restore_media_group_links(
+            conn,
+            tables,
+            group_resolution=group_resolution,
+        )
+        personal_summary = (
+            restore_personal_lists(conn, tables, user_id=personal_list_user_id)
+            if include_personal_lists
+            else {"watchlist_items": 0, "watch_history": 0}
+        )
         revision = bump_restore_revision(
             conn,
             {
                 "backupFile": backup_zip.name,
                 "tables": counters,
                 "media": media_summary,
+                "mediaGroups": group_summary,
+                "personalLists": personal_summary,
             },
         )
 
@@ -738,6 +1158,8 @@ def restore_functional_backup(
         "backupFile": backup_zip.name,
         "tables": counters,
         "media": media_summary,
+        "mediaGroups": group_summary,
+        "personalLists": personal_summary,
         "revision": revision,
         "report": report,
     }
