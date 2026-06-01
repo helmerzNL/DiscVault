@@ -996,6 +996,106 @@ def personal_list_match_movie(conn, item: dict[str, Any]):
     )
 
 
+def personal_list_movie_snapshot(conn, movie_id: UUID | str | None, item: dict[str, Any] | None = None, *, plugin_id: str = "") -> dict[str, Any]:
+    item = item or {}
+    snapshot: dict[str, Any] = {
+        "source": plugin_id,
+        "title": item.get("title"),
+        "movie_title": item.get("title"),
+        "year": item.get("year"),
+        "movie_year": item.get("year"),
+        "format": item.get("format") or item.get("mediaFormat") or item.get("media_format"),
+        "movie_format": item.get("format") or item.get("mediaFormat") or item.get("media_format"),
+        "poster_url": item.get("posterUrl") or item.get("poster_url") or item.get("poster"),
+        "poster": item.get("posterUrl") or item.get("poster_url") or item.get("poster"),
+        "watchedAt": item.get("watchedAt") or item.get("lastWatchedAt"),
+        "addedAt": item.get("addedAt") or item.get("listedAt"),
+        "plays": item.get("plays"),
+        "traktId": item.get("traktId") or item.get("trakt_id"),
+        "tmdbId": item.get("tmdbId") or item.get("tmdb_id"),
+        "imdbId": item.get("imdbId") or item.get("imdb_id"),
+        "sourceUrl": item.get("sourceUrl") or item.get("source_url"),
+        "metadata": item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
+    }
+    if movie_id and table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    public_id,
+                    barcode,
+                    title,
+                    sort_title,
+                    original_title,
+                    year,
+                    format,
+                    edition,
+                    edition_type,
+                    metadata
+                FROM movies
+                WHERE id=%s
+                LIMIT 1
+                """,
+                (movie_id,),
+            )
+            movie = cur.fetchone() or {}
+        metadata = movie.get("metadata") if isinstance(movie.get("metadata"), dict) else {}
+        poster_url = (
+            metadata.get("poster_url")
+            or metadata.get("posterUrl")
+            or metadata.get("poster")
+            or snapshot.get("poster_url")
+        )
+        backdrop_url = metadata.get("backdrop_url") or metadata.get("backdropUrl") or metadata.get("backdrop")
+        snapshot.update(
+            {
+                "movie_id": str(movie.get("id") or movie_id),
+                "public_id": movie.get("public_id"),
+                "barcode": movie.get("barcode"),
+                "title": movie.get("title") or snapshot.get("title"),
+                "movie_title": movie.get("title") or snapshot.get("movie_title"),
+                "sort_title": movie.get("sort_title"),
+                "original_title": movie.get("original_title"),
+                "year": movie.get("year") or snapshot.get("year"),
+                "movie_year": movie.get("year") or snapshot.get("movie_year"),
+                "format": movie.get("format") or snapshot.get("format"),
+                "movie_format": movie.get("format") or snapshot.get("movie_format"),
+                "edition": movie.get("edition"),
+                "edition_type": movie.get("edition_type"),
+                "poster_url": poster_url,
+                "poster": poster_url,
+                "backdrop_url": backdrop_url,
+            }
+        )
+        if table_exists(conn, "movie_identifiers"):
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT provider_id, identifier_type, identifier
+                    FROM movie_identifiers
+                    WHERE movie_id=%s
+                    """,
+                    (movie_id,),
+                )
+                snapshot["identifiers"] = cur.fetchall()
+        if table_exists(conn, "digital_media_items") and table_exists(conn, "digital_media_sources"):
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT dms.plugin_id, dms.name AS source_name, dms.source_type
+                    FROM digital_media_items dmi
+                    JOIN digital_media_sources dms ON dms.id=dmi.source_id
+                    WHERE dmi.matched_movie_id=%s
+                    GROUP BY dms.plugin_id, dms.name, dms.source_type
+                    ORDER BY dms.name
+                    """,
+                    (movie_id,),
+                )
+                snapshot["digital_sources"] = cur.fetchall()
+    return json_ready({key: value for key, value in snapshot.items() if value not in (None, "", [], {})})
+
+
 def persist_personal_list_sync(
     plugin_id: str,
     result: dict[str, Any],
@@ -1031,14 +1131,34 @@ def persist_personal_list_sync(
                         continue
                     summary["watchlist"]["matched"] += 1
                     added_at = parsed_plugin_datetime(item.get("addedAt") or item.get("listedAt")) or datetime.utcnow().isoformat()
+                    snapshot = personal_list_movie_snapshot(conn, movie_id, item, plugin_id=plugin_id)
                     cur.execute(
                         """
-                        INSERT INTO watchlist_items (user_id, movie_id, added_at)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (user_id, movie_id) DO UPDATE SET added_at=EXCLUDED.added_at
+                        SELECT id
+                        FROM watchlist_items
+                        WHERE user_id=%s AND movie_id=%s
+                        LIMIT 1
                         """,
-                        (actor_id, movie_id, added_at),
+                        (actor_id, movie_id),
                     )
+                    existing = cur.fetchone()
+                    if existing:
+                        cur.execute(
+                            """
+                            UPDATE watchlist_items
+                            SET added_at=%s, snapshot=%s
+                            WHERE id=%s
+                            """,
+                            (added_at, Jsonb(snapshot), existing.get("id")),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO watchlist_items (user_id, movie_id, added_at, snapshot)
+                            VALUES (%s, %s, %s, %s)
+                            """,
+                            (actor_id, movie_id, added_at, Jsonb(snapshot)),
+                        )
                     summary["watchlist"]["upserted"] += 1
 
                 for item in watched:
@@ -1071,6 +1191,7 @@ def persist_personal_list_sync(
                     if cur.fetchone():
                         summary["watched"]["existing"] += 1
                         continue
+                    snapshot = personal_list_movie_snapshot(conn, movie_id, item, plugin_id=plugin_id)
                     cur.execute(
                         """
                         INSERT INTO watch_history (user_id, movie_id, watched_at, snapshot)
@@ -1080,22 +1201,7 @@ def persist_personal_list_sync(
                             actor_id,
                             movie_id,
                             watched_at,
-                            Jsonb(
-                                json_ready(
-                                    {
-                                        "source": plugin_id,
-                                        "title": item.get("title"),
-                                        "year": item.get("year"),
-                                        "watchedAt": item.get("watchedAt") or item.get("lastWatchedAt"),
-                                        "plays": item.get("plays"),
-                                        "traktId": item.get("traktId") or item.get("trakt_id"),
-                                        "tmdbId": item.get("tmdbId") or item.get("tmdb_id"),
-                                        "imdbId": item.get("imdbId") or item.get("imdb_id"),
-                                        "sourceUrl": item.get("sourceUrl") or item.get("source_url"),
-                                        "metadata": item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
-                                    }
-                                )
-                            ),
+                            Jsonb(snapshot),
                         ),
                     )
                     summary["watched"]["created"] += 1
