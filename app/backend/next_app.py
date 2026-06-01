@@ -6317,28 +6317,47 @@ def ui_preview_html(
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
-    .person-detail-page .movie-detail-summary {
-      grid-template-columns: minmax(92px, 132px) minmax(0, 1fr);
+    .person-detail-page .movie-detail-hero {
+      background:
+        radial-gradient(circle at 18% 22%, rgba(255,255,255,.18), transparent 34%),
+        linear-gradient(145deg, #252932, #111214);
     }
-    .person-detail-avatar {
-      width: min(132px, 28vw);
-      aspect-ratio: 1;
-      border: 1px solid rgba(255,255,255,.32);
-      border-radius: 999px;
+    .person-detail-page .movie-detail-hero::before {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.72), rgba(0,0,0,.30) 58%, rgba(0,0,0,.10)),
+        linear-gradient(0deg, rgba(0,0,0,.74), rgba(0,0,0,.10) 68%);
+    }
+    .person-detail-page .movie-detail-summary {
+      grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+      max-width: 1080px;
+      align-items: end;
+    }
+    .person-detail-portrait {
+      width: min(220px, 34vw);
+      aspect-ratio: 2 / 3;
+      border: 1px solid rgba(255,255,255,.28);
+      border-radius: var(--radius);
       overflow: hidden;
       display: grid;
       place-items: center;
       background: linear-gradient(145deg, rgba(255,255,255,.24), rgba(255,255,255,.08));
       color: #fff;
-      font-size: 1.55rem;
+      font-size: 2rem;
       font-weight: 820;
-      box-shadow: 0 22px 48px rgba(0,0,0,.24);
+      box-shadow: 0 28px 70px rgba(0,0,0,.38);
     }
-    .person-detail-avatar img {
+    .person-detail-portrait img {
+      position: static;
+      inset: auto;
       width: 100%;
       height: 100%;
       object-fit: cover;
+      opacity: 1;
       display: block;
+    }
+    .person-detail-copy {
+      min-width: 0;
+      max-width: 82ch;
     }
     .person-credit-card {
       min-width: 0;
@@ -7470,6 +7489,13 @@ def ui_preview_html(
         grid-template-columns: minmax(88px, 32vw) minmax(0, 1fr);
         gap: 12px;
       }
+      .person-detail-page .movie-detail-summary {
+        grid-template-columns: minmax(96px, 34vw) minmax(0, 1fr);
+      }
+      .person-detail-portrait {
+        width: min(34vw, 138px);
+        border-radius: 18px;
+      }
       .movie-detail-title {
         font-size: clamp(1.65rem, 9vw, 3rem);
       }
@@ -8349,8 +8375,8 @@ def ui_preview_html(
         <section class="movie-detail-hero" id="personDetailHero">
           <button type="button" class="movie-detail-back" id="personDetailBackButton" data-next-i18n="personDetail.backToMovie">Back</button>
           <div class="movie-detail-summary">
-            <div class="person-detail-avatar" id="personDetailAvatar">DV</div>
-            <div>
+            <div class="person-detail-portrait" id="personDetailAvatar">DV</div>
+            <div class="person-detail-copy">
               <span class="eyebrow" data-next-i18n="personDetail.title">Person details</span>
               <h2 class="movie-detail-title" id="personDetailTitle">-</h2>
               <div class="hero-meta" id="personDetailTags"></div>
@@ -12006,7 +12032,7 @@ def ui_preview_html(
       }
       return {};
     }
-    function preferredContentRating(movie, technicalSpecs = null) {
+    function preferredContentRatingInfo(movie, technicalSpecs = null) {
       const metadata = movie?.metadata || {};
       const ratings = Object.assign(
         {},
@@ -12015,25 +12041,32 @@ def ui_preview_html(
         contentRatingMap(technicalSpecs?.content_ratings || technicalSpecs?.contentRatings)
       );
       const selected = String(preferences.rating_country || "NL").toUpperCase();
-      const rating = ratings[selected] || ratings[selected.toLowerCase()] || ratings.US || ratings.GB || "";
-      return valueText(rating || movie?.audience_rating || metadata.audience_rating || metadata.audienceRating || "");
+      const candidates = [
+        selected,
+        selected.toLowerCase(),
+        "US",
+        "GB",
+        "CA",
+        "NL"
+      ];
+      for (const country of candidates) {
+        const rating = ratings[country] || ratings[String(country).toLowerCase()];
+        const text = valueText(rating);
+        if (text) return {country: String(country).toUpperCase(), rating: text};
+      }
+      const fallback = valueText(movie?.audience_rating || metadata.audience_rating || metadata.audienceRating || "");
+      return fallback ? {country: "", rating: fallback} : {country: "", rating: ""};
     }
-    function contentRatingsListHtml(value) {
-      const ratings = contentRatingMap(value);
-      const keys = [...new Set([
-        ...RATING_COUNTRIES_ORDER,
-        ...Object.keys(ratings || {}).map((key) => String(key || "").toUpperCase())
-      ])].filter((key) => ratings[key] || ratings[key.toLowerCase()]);
-      if (!keys.length) return "";
-      const items = keys.map((key) => {
-        const rating = ratings[key] || ratings[key.toLowerCase()];
-        return `<span class="country-list-item">${flagIconHtml(key, ratingCountryLabel(key))}<span>${escapeHtml(key)} ${escapeHtml(valueText(rating))}</span></span>`;
-      }).join("");
+    function preferredContentRating(movie, technicalSpecs = null) {
+      return preferredContentRatingInfo(movie, technicalSpecs).rating;
+    }
+    function contentRatingValueHtml(info) {
+      if (!info?.rating) return "";
       return `
-        <div class="detail-field">
-          <span>${escapeHtml(tNext("movieDetail.contentRatings", "Content ratings"))}</span>
-          <strong class="country-list">${items}</strong>
-        </div>
+        <span class="country-list-item">
+          ${info.country ? flagIconHtml(info.country, ratingCountryLabel(info.country)) : ""}
+          <span>${escapeHtml(info.rating)}</span>
+        </span>
       `;
     }
     function movieScoreLabel(movie) {
@@ -12134,13 +12167,19 @@ def ui_preview_html(
     }
     function detailFieldRows(entries) {
       const rows = entries
-        .map(([label, value]) => [label, valueText(value)])
+        .map(([label, value]) => {
+          if (value && typeof value === "object" && !Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, "html")) {
+            return [label, valueText(value.text), value.html || ""];
+          }
+          const text = valueText(value);
+          return [label, text, escapeHtml(text)];
+        })
         .filter(([, value]) => value);
       return rows.length
-        ? rows.map(([label, value]) => `
+        ? rows.map(([label, value, html]) => `
             <div class="detail-field">
               <span>${escapeHtml(label)}</span>
-              <strong>${escapeHtml(value)}</strong>
+              <strong>${html}</strong>
             </div>
           `).join("")
         : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
@@ -12699,7 +12738,8 @@ def ui_preview_html(
       }
       document.getElementById("movieDetailTitle").textContent = title;
       document.getElementById("movieDetailOverview").textContent = localizedMovieOverview(movie, detail.localizations) || tNext("movieDetail.noOverview", "No overview imported yet.");
-      const contentRating = preferredContentRating(movie, specs);
+      const contentRatingInfo = preferredContentRatingInfo(movie, specs);
+      const contentRating = contentRatingInfo.rating;
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
         movie.format,
@@ -12725,7 +12765,6 @@ def ui_preview_html(
         [tNext("movieDetail.genre", "Genre"), metadata.genre],
         [tNext("movieDetail.studios", "Studios"), metadata.studios]
       ]);
-      const contentRatings = specs.content_ratings || specs.contentRatings || metadata.content_ratings || metadata.contentRatings;
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows([
         ["HDR", specs.hdr || metadata.hdr],
         [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
@@ -12733,8 +12772,8 @@ def ui_preview_html(
         [tNext("movieDetail.regions", "Regions"), specs.regions || metadata.regions],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
         [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
-        [tNext("movieDetail.contentRating", "Content rating"), contentRating]
-      ]) + contentRatingsListHtml(contentRatings);
+        [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}]
+      ]);
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
@@ -19787,8 +19826,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         ["Screen ratio", specs.screen_ratios || metadata.screen_ratios],
         ["Audio", specs.audio_tracks || metadata.audio_tracks],
         ["Subtitles", specs.subtitles || metadata.subtitles],
-        ["Regions", specs.regions || metadata.regions],
-        ["Content ratings", specs.content_ratings || metadata.content_ratings]
+        ["Regions", specs.regions || metadata.regions]
       ]);
       document.getElementById("detailContainers").innerHTML = (detail.containers || []).length
         ? detail.containers.map((container) => field(`${container.container_type} / ${container.relationship}`, container.title)).join("")
@@ -20686,7 +20724,6 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
             ("Audio", specs.get("audio_tracks") or metadata.get("audio_tracks")),
             ("Subtitles", specs.get("subtitles") or metadata.get("subtitles")),
             ("Regions", specs.get("regions") or metadata.get("regions")),
-            ("Content ratings", specs.get("content_ratings") or metadata.get("content_ratings")),
         ]) + """</div>
       </div>
       <div class="panel">
