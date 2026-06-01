@@ -1,4 +1,4 @@
-﻿ALTER TABLE watchlist_items
+ALTER TABLE watchlist_items
     ADD COLUMN IF NOT EXISTS id uuid DEFAULT gen_random_uuid();
 
 UPDATE watchlist_items
