@@ -123,11 +123,8 @@ def _plugin_config(conn) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def _search_url(conn) -> str:
-    settings, _secrets_ref = _plugin_config(conn)
     value = (
-        settings.get("baseUrl")
-        or settings.get("searchUrl")
-        or _setting_value(conn, "movievault_search_url", "")
+        _setting_value(conn, "movievault_search_url", "")
         or os.environ.get("MOVIEVAULT_SEARCH_URL")
         or os.environ.get("MOVIEVAULT_BASE_URL")
         or DEFAULT_SEARCH_URL
@@ -136,10 +133,8 @@ def _search_url(conn) -> str:
 
 
 def _ingest_url(conn) -> str:
-    settings, _secrets_ref = _plugin_config(conn)
     value = (
-        settings.get("ingestUrl")
-        or _setting_value(conn, "movievault_ingest_url", "")
+        _setting_value(conn, "movievault_ingest_url", "")
         or os.environ.get("MOVIEVAULT_INGEST_URL")
         or DEFAULT_INGEST_URL
     )
@@ -565,7 +560,6 @@ def movievault_plugin_context(
     safe_context = dict(context or {})
     settings = dict(safe_context.get("settings") or {})
     secrets_payload = dict(safe_context.get("secrets") or {})
-    settings.setdefault("baseUrl", _search_url(conn))
     status = movievault_connection_status(conn)
     token = stored_movievault_token(conn)
     connection_error = ""

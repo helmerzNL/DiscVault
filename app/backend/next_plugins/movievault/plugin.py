@@ -15,8 +15,7 @@ def _secrets(context):
 def _base_url(context):
     movievault = (context or {}).get("movievault") or {}
     return str(
-        _settings(context).get("baseUrl")
-        or movievault.get("searchUrl")
+        movievault.get("searchUrl")
         or os.environ.get("MOVIEVAULT_SEARCH_URL")
         or os.environ.get("MOVIEVAULT_BASE_URL")
         or "https://search.discvault.eu"
@@ -412,7 +411,6 @@ def health_check(context=None):
                 "lastHandshakeAt": connection.get("lastHandshakeAt"),
                 "linkStatus": connection.get("linkStatus"),
                 "requiresReset": bool(connection.get("requiresReset")),
-                "searchUrl": connection.get("searchUrl"),
                 "tokenPrefix": connection.get("tokenPrefix"),
                 "tokenSet": bool(connection.get("tokenSet")),
             },
