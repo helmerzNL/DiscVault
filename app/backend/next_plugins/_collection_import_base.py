@@ -181,6 +181,9 @@ class CollectionImportPlugin:
         poster = text(first_value(row, aliases.get("poster", ())))
         backdrop = text(first_value(row, aliases.get("backdrop", ())))
         source_url = text(first_value(row, aliases.get("sourceUrl", ())))
+        collection_title = text(first_value(row, aliases.get("collection", ())))
+        box_set_title = text(first_value(row, aliases.get("boxSet", ())))
+        vault_title = text(first_value(row, aliases.get("vault", ())))
         movie = {
             "externalId": text(first_value(row, aliases.get("externalId", ()))) or f"{source_file.name}:{index}",
             "title": title,
@@ -205,6 +208,9 @@ class CollectionImportPlugin:
             "sourceUrl": source_url if is_url(source_url) else "",
             "sourceFile": str(source_file),
             "sourceProvider": self.plugin_id,
+            "collectionTitle": collection_title,
+            "boxSetTitle": box_set_title,
+            "vaultTitle": vault_title,
         }
         watched_at = text(first_value(row, aliases.get("watchedAt", ())))
         watchlisted = bool_value(first_value(row, aliases.get("watchlisted", ())), default=False)
