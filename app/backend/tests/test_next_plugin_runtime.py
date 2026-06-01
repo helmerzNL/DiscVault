@@ -103,6 +103,50 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(result["counts"], {"watchlist": 0, "watched": 0})
         self.assertTrue(any("/users/public-user/watchlist/movies" in url for url, _ in calls))
 
+    def test_trakt_private_sync_maps_history_dates_to_watched_at(self):
+        def fake_get(url, headers=None, params=None, timeout=None):
+            self.assertEqual(headers.get("Authorization"), "Bearer access-token")
+            if url.endswith("/sync/watchlist/movies"):
+                return FakeResponse([])
+            if url.endswith("/sync/history/movies"):
+                return FakeResponse(
+                    [
+                        {
+                            "id": 991,
+                            "watched_at": "2026-05-30T20:15:00.000Z",
+                            "movie": {
+                                "title": "Back to the Future",
+                                "year": 1985,
+                                "ids": {"trakt": 3088, "slug": "back-to-the-future-1985", "imdb": "tt0088763", "tmdb": 105},
+                            },
+                        },
+                        {
+                            "id": 992,
+                            "watched_at": "2026-05-31T20:15:00.000Z",
+                            "movie": {
+                                "title": "Back to the Future",
+                                "year": 1985,
+                                "ids": {"trakt": 3088, "slug": "back-to-the-future-1985", "imdb": "tt0088763", "tmdb": 105},
+                            },
+                        },
+                    ]
+                )
+            raise AssertionError(url)
+
+        context = {
+            "secrets": {"clientId": "client-id", "accessToken": "access-token"},
+            "settings": {"username": "me"},
+        }
+        fake_requests = types.SimpleNamespace(get=Mock(side_effect=fake_get), HTTPError=FakeHTTPError)
+        with patch.dict(sys.modules, {"requests": fake_requests}):
+            result = trakt_plugin.sync_personal_lists({}, context)
+
+        watched = result["personalLists"]["watched"]
+        self.assertEqual(result["counts"]["watched"], 2)
+        self.assertEqual(watched[0]["watchedAt"], "2026-05-30T20:15:00.000Z")
+        self.assertEqual(watched[1]["watchedAt"], "2026-05-31T20:15:00.000Z")
+        self.assertEqual(watched[0]["metadata"]["historyId"], 991)
+
     def test_letterboxd_import_plugin_parses_export_csv(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             export_file = Path(temp_dir) / "watched.csv"

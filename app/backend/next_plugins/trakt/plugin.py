@@ -142,6 +142,24 @@ def _normalize_many(items: Any, *, list_kind: str) -> list[dict[str, Any]]:
     return normalized
 
 
+def _normalize_history_many(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    normalized = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        movie = _normalize_movie(item, list_kind="watched")
+        watched_at = _text(item.get("watched_at") or item.get("watchedAt"))
+        if movie and watched_at:
+            movie["watchedAt"] = watched_at
+            movie["lastWatchedAt"] = watched_at
+            movie["plays"] = 1
+            movie.setdefault("metadata", {})["historyId"] = item.get("id")
+            normalized.append(movie)
+    return normalized
+
+
 def health_check(context=None):
     context = context or {}
     username = _username(context)
@@ -212,8 +230,13 @@ def sync_personal_lists(payload=None, context=None):
         path = "/sync/watchlist/movies" if username == "me" else f"/users/{username}/watchlist/movies"
         watchlist = _normalize_many(_get_json(path, context, authorize=private_lists), list_kind="watchlist")
     if _bool_setting(context, "syncWatched", True):
-        path = "/sync/watched/movies" if username == "me" else f"/users/{username}/watched/movies"
-        watched = _normalize_many(_get_json(path, context, authorize=private_lists), list_kind="watched")
+        if private_lists and _bool_setting(context, "syncWatchedHistory", True):
+            watched = _normalize_history_many(
+                _get_json("/sync/history/movies", context, {"page": 1, "limit": 100})
+            )
+        if not watched:
+            path = "/sync/watched/movies" if username == "me" else f"/users/{username}/watched/movies"
+            watched = _normalize_many(_get_json(path, context, authorize=private_lists), list_kind="watched")
 
     return {
         "status": "completed",
