@@ -1,6 +1,3 @@
-import requests
-
-
 TMDB_API = "https://api.themoviedb.org/3"
 IMAGE_BASE = "https://image.tmdb.org/t/p/original"
 
@@ -22,6 +19,8 @@ def _language(context):
 
 
 def _request(context, path, **params):
+    import requests
+
     api_key = _api_key(context)
     if not api_key:
         raise RuntimeError("TMDb API key is not configured")
