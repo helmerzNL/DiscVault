@@ -1057,6 +1057,13 @@ def normalize_import_source_result(
         "pluginName": plugin.get("name"),
         "sourceKind": clean_text(result.get("sourceKind") or result.get("source_kind")),
         "status": clean_text(result.get("status") or execution.get("state") or "unknown"),
+        "sourcePath": str(
+            result.get("sourcePath")
+            or result.get("source_path")
+            or result.get("path")
+            or result.get("file")
+            or ""
+        ),
         "dataDir": str(result.get("dataDir") or result.get("data_dir") or data_dir),
         "sqliteDb": str(result.get("sqliteDb") or result.get("sqlite_db") or sqlite_db),
         "found": bool(result.get("found")),
@@ -1086,6 +1093,7 @@ def normalize_import_source_result(
                 default=True,
             ),
         },
+        "sample": result.get("sample") if isinstance(result.get("sample"), list) else [],
         "warnings": [str(item) for item in warnings],
     }
 
@@ -1096,6 +1104,7 @@ def import_source_summary(source: dict[str, Any], execution: dict[str, Any]) -> 
         "pluginName": source.get("pluginName"),
         "sourceKind": source.get("sourceKind"),
         "status": source.get("status"),
+        "sourcePath": source.get("sourcePath"),
         "dataDir": source.get("dataDir"),
         "sqliteDb": source.get("sqliteDb"),
         "mediaMigrationMode": source.get("mediaMigrationMode"),
@@ -1106,15 +1115,164 @@ def import_source_summary(source: dict[str, Any], execution: dict[str, Any]) -> 
         "sourceDatabaseHash": source.get("sourceDatabaseHash"),
         "sourceCounts": source.get("sourceCounts") or {},
         "mediaExtensions": source.get("mediaExtensions") or {},
+        "sample": source.get("sample") or [],
         "warnings": source.get("warnings") or [],
     }
 
 
-def inspect_import_source_plugin(conn, plugin: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def inspect_import_source_plugin(
+    conn,
+    plugin: dict[str, Any],
+    payload: dict[str, Any] | None = None,
+    actor: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     config = plugin_config_from_db(conn, str(plugin.get("id")))
-    context = plugin_execution_context(conn, plugin, config)
-    execution = run_plugin_entrypoint(str(plugin.get("id")), "inspect_source", {}, context)
+    context = plugin_execution_context(conn, plugin, config, actor)
+    execution = run_plugin_entrypoint(str(plugin.get("id")), "inspect_source", payload or {}, context)
     return normalize_import_source_result(plugin, execution), execution
+
+
+def import_source_item_identifiers(item: dict[str, Any]) -> dict[str, str]:
+    identifiers: dict[str, str] = {}
+    if not isinstance(item, dict):
+        return identifiers
+    tmdb_id = clean_text(item.get("tmdbId") or item.get("tmdb_id"))
+    imdb_id = clean_text(item.get("imdbId") or item.get("imdb_id"))
+    if tmdb_id:
+        identifiers["tmdb"] = tmdb_id
+    if imdb_id:
+        identifiers["imdb"] = imdb_id
+    raw_identifiers = item.get("identifiers")
+    if isinstance(raw_identifiers, dict):
+        for provider, identifier in raw_identifiers.items():
+            provider_id = clean_text(provider).lower()
+            value = clean_text(identifier)
+            if provider_id and value:
+                identifiers[provider_id] = value
+    return identifiers
+
+
+def import_source_conflicts(conn, items: list[dict[str, Any]], *, limit: int = 50) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movies"):
+        return []
+    conflicts: list[dict[str, Any]] = []
+    for index, item in enumerate(items[:limit], start=1):
+        if not isinstance(item, dict):
+            continue
+        title = clean_text(item.get("title") or item.get("name"))
+        year = clean_text(item.get("year") or item.get("releaseYear") or item.get("release_year"))
+        barcode = clean_text(item.get("barcode"))
+        match: dict[str, Any] | None = None
+        with conn.cursor() as cur:
+            if barcode:
+                cur.execute(
+                    "SELECT id, title, year, barcode FROM movies WHERE barcode=%s LIMIT 1",
+                    (barcode,),
+                )
+                row = cur.fetchone()
+                if row:
+                    match = {
+                        "id": str(row["id"]),
+                        "title": row.get("title"),
+                        "year": row.get("year"),
+                        "barcode": row.get("barcode"),
+                        "reason": "barcode",
+                    }
+            if not match and table_exists(conn, "movie_identifiers"):
+                for provider, identifier in import_source_item_identifiers(item).items():
+                    cur.execute(
+                        """
+                        SELECT m.id, m.title, m.year, m.barcode
+                        FROM movie_identifiers mi
+                        JOIN movies m ON m.id=mi.movie_id
+                        WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
+                        LIMIT 1
+                        """,
+                        (provider, identifier),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        match = {
+                            "id": str(row["id"]),
+                            "title": row.get("title"),
+                            "year": row.get("year"),
+                            "barcode": row.get("barcode"),
+                            "reason": provider,
+                        }
+                        break
+            if not match and title and year:
+                cur.execute(
+                    """
+                    SELECT id, title, year, barcode
+                    FROM movies
+                    WHERE lower(title)=lower(%s) AND year=%s
+                    LIMIT 1
+                    """,
+                    (title, year),
+                )
+                row = cur.fetchone()
+                if row:
+                    match = {
+                        "id": str(row["id"]),
+                        "title": row.get("title"),
+                        "year": row.get("year"),
+                        "barcode": row.get("barcode"),
+                        "reason": "title_year",
+                    }
+        conflicts.append(
+            {
+                "index": index,
+                "title": title,
+                "year": year,
+                "barcode": barcode,
+                "state": "existing" if match else "new",
+                "match": match,
+            }
+        )
+    return conflicts
+
+
+def inspect_import_source_selection(
+    conn,
+    *,
+    plugin_id: str,
+    payload: dict[str, Any],
+    actor: dict[str, Any],
+) -> dict[str, Any]:
+    plugin = import_source_plugin_by_id(conn, plugin_id)
+    if not plugin:
+        raise NextApiError(f"Import source plugin is not available: {plugin_id}", 409)
+    source, execution = inspect_import_source_plugin(conn, plugin, payload, actor)
+    if execution.get("status") != "ok":
+        raise NextApiError(
+            f"Import source inspection failed: {execution.get('error') or execution.get('state')}",
+            502,
+        )
+    sample = source.get("sample") or []
+    conflicts = import_source_conflicts(conn, sample) if isinstance(sample, list) else []
+    plan: dict[str, Any] | None = None
+    if source.get("readable") and "plan_import" in plugin_runtime_entrypoints(plugin):
+        config = plugin_config_from_db(conn, plugin_id)
+        context = plugin_execution_context(conn, plugin, config, actor)
+        plan_execution = run_plugin_entrypoint(plugin_id, "plan_import", payload, context)
+        if plan_execution.get("status") == "ok" and isinstance(plan_execution.get("result"), dict):
+            plan = plan_execution["result"]
+        else:
+            plan = {
+                "status": plan_execution.get("state") or "error",
+                "canStart": False,
+                "error": plan_execution.get("error"),
+            }
+    return {
+        "source": source,
+        "execution": {
+            "status": execution.get("status"),
+            "state": execution.get("state"),
+            "error": execution.get("error"),
+        },
+        "conflicts": conflicts,
+        "plan": plan,
+    }
 
 
 def import_source_readiness_probe(conn) -> dict[str, Any]:
@@ -1159,6 +1317,17 @@ def import_source_plugin_by_id(conn, plugin_id: str | None) -> dict[str, Any] | 
     return None
 
 
+def import_source_payload_for_path(plugin_id: str, source_path: str) -> dict[str, Any]:
+    if not source_path:
+        return {}
+    if plugin_id == "discvault_legacy_import":
+        path = Path(source_path)
+        if path.suffix.lower() in {".db", ".sqlite", ".sqlite3"}:
+            return {"sqliteDb": source_path, "dataDir": str(path.parent)}
+        return {"dataDir": source_path}
+    return {"sourcePath": source_path}
+
+
 def plan_migration_import_job(
     conn,
     *,
@@ -1178,6 +1347,7 @@ def plan_migration_import_job(
     payload = {
         "dataDir": source.get("dataDir"),
         "sqliteDb": source.get("sqliteDb"),
+        "sourcePath": options.get("sourcePath") or source.get("sourcePath"),
         "sourceDatabaseHash": source.get("sourceDatabaseHash"),
         "includeSecurity": options.get("includeSecurity"),
         "includePersonal": options.get("includePersonal"),
@@ -1212,6 +1382,7 @@ def plan_migration_import_job(
         "pluginId": plugin_id,
         "pluginName": plugin.get("name"),
         "sourceKind": source.get("sourceKind"),
+        "sourcePath": options.get("sourcePath") or source.get("sourcePath"),
     }
     return job_type, job_payload, plan
 
@@ -5704,6 +5875,54 @@ def ui_preview_html(
       gap: 6px;
       margin-top: 10px;
     }
+    .import-source-config {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+      margin: 14px 0 6px;
+    }
+    .import-source-config label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 760;
+    }
+    .import-source-config input {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--field);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+    }
+    .import-preview-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .import-preview-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      padding: 12px;
+    }
+    .import-preview-card strong {
+      overflow-wrap: anywhere;
+    }
+    .import-conflict-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
     .button-row {
       display: flex;
       flex-wrap: wrap;
@@ -8304,7 +8523,16 @@ def ui_preview_html(
                 <button type="button" class="primary-button" id="importCenterStartButton" data-next-i18n="importCenter.start">Start import</button>
               </div>
             </div>
+            <div class="import-source-config">
+              <label>
+                <span data-next-i18n="importCenter.sourcePath">Source path</span>
+                <input id="importSourcePathInput" autocomplete="off" data-next-i18n-placeholder="importCenter.sourcePathPlaceholder" placeholder="/data/import/source">
+              </label>
+              <button type="button" class="secondary-button" id="importSourceInspectButton" data-next-i18n="importCenter.inspect">Inspect source</button>
+            </div>
+            <p class="import-source-meta" data-next-i18n="importCenter.sourcePathHelp">Override the configured plugin path for one preview/import run.</p>
             <div class="profile-meta" id="importCenterPlan"></div>
+            <div class="import-preview-grid" id="importCenterPreview"></div>
             <div class="import-counts" id="importCenterSourceCounts"></div>
             <div class="login-message" id="importCenterMessage"></div>
           </div>
@@ -9425,7 +9653,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", barcodeLookup: null, addResult: null, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, barcodeLookup: null, addResult: null, activeTab: "add"};
     let importScanner = {
       running: false,
       native: false,
@@ -13868,6 +14096,7 @@ def ui_preview_html(
     }
     function importStateLabel(state) {
       const key = String(state || "unknown");
+      if (key === "ok") return tNext("importCenter.ready", "Ready");
       return tNext(`importCenter.state.${key}`, key.replace(/_/g, " "));
     }
     function setImportCenterTab(tab) {
@@ -13910,6 +14139,7 @@ def ui_preview_html(
         const active = sourceId === selectedId;
         const ready = source.found && source.readable;
         const statusLabel = ready ? tNext("importCenter.ready", "Ready") : (source.status || source.runtimeState || "-");
+        const sampleCount = (source.sample || []).length;
         return `
           <button type="button" class="import-source-card ${active ? "active" : ""}" data-import-source="${escapeHtml(sourceId)}">
             <div class="import-source-head">
@@ -13919,28 +14149,89 @@ def ui_preview_html(
             <div class="import-source-meta">
               ${escapeHtml(source.sourceKind || source.mediaMigrationMode || "-")}
               &middot;
-              ${escapeHtml(source.sqliteDb || source.dataDir || "-")}
+              ${escapeHtml(source.sourcePath || source.sqliteDb || source.dataDir || "-")}
             </div>
-            <div class="import-counts">${importCountChips(source.sourceCounts || source.counts || {}, 6)}</div>
+            <div class="import-counts">
+              ${importCountChips(source.sourceCounts || source.counts || {}, 6)}
+              ${sampleCount ? `<span class="tag">${escapeHtml(tNext("importCenter.sample", "Sample"))} ${escapeHtml(sampleCount)}</span>` : ""}
+            </div>
           </button>
         `;
       }).join("");
     }
+    function importPreviewSource() {
+      return (importCenter.preview && importCenter.preview.source) || selectedImportSource(importCenter.report || {});
+    }
+    function renderImportPreview() {
+      const previewNode = document.getElementById("importCenterPreview");
+      if (!previewNode) return;
+      const preview = importCenter.preview || {};
+      const source = importPreviewSource();
+      const sample = source.sample || [];
+      const conflicts = preview.conflicts || [];
+      if (!sample.length && !conflicts.length) {
+        previewNode.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noPreview", "Inspect a source to preview sample rows and conflicts."))}</div>`;
+        return;
+      }
+      const conflictMap = new Map(conflicts.map((item) => [Number(item.index || 0), item]));
+      const sampleHtml = sample.slice(0, 8).map((item, index) => {
+        const conflict = conflictMap.get(index + 1);
+        const state = conflict?.state === "existing" ? tNext("importCenter.conflictExisting", "Already in library") : tNext("importCenter.conflictNew", "New");
+        const title = item.title || item.name || tNext("common.untitled", "Untitled");
+        const meta = [item.year, item.format, item.barcode].filter(Boolean).join(" / ");
+        return `
+          <div class="import-preview-card">
+            <div>
+              <strong>${escapeHtml(title)}</strong>
+              <div class="import-source-meta">${escapeHtml(meta || item.sourceFile || "")}</div>
+              ${conflict?.match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml(conflict.match.title || conflict.match.id || "")}</div>` : ""}
+            </div>
+            <span class="tag ${conflict?.state === "existing" ? "" : "good"}">${escapeHtml(state)}</span>
+          </div>
+        `;
+      }).join("");
+      const conflictSummary = conflicts.length
+        ? `<div class="import-conflict-list">
+            <span class="tag">${escapeHtml(tNext("importCenter.conflicts", "Conflicts"))} ${escapeHtml(conflicts.filter((item) => item.state === "existing").length)}</span>
+            <span class="tag good">${escapeHtml(tNext("importCenter.newItems", "New"))} ${escapeHtml(conflicts.filter((item) => item.state !== "existing").length)}</span>
+          </div>`
+        : `<div class="import-conflict-list"><span class="tag good">${escapeHtml(tNext("importCenter.noConflicts", "No conflicts in sample"))}</span></div>`;
+      previewNode.innerHTML = `
+        <div class="import-card-head">
+          <div>
+            <h3>${escapeHtml(tNext("importCenter.preview", "Preview"))}</h3>
+            <p class="import-source-meta">${escapeHtml(source.sourcePath || source.sqliteDb || source.dataDir || "")}</p>
+          </div>
+          <span class="tag ${source.readable ? "good" : ""}">${escapeHtml(source.status || "-")}</span>
+        </div>
+        ${conflictSummary}
+        ${sampleHtml || `<div class="preview-empty">${escapeHtml(tNext("importCenter.noSample", "No sample rows returned by this plugin."))}</div>`}
+      `;
+    }
     function renderImportPlan() {
       const report = importCenter.report || {};
-      const source = selectedImportSource(report);
+      const source = importPreviewSource();
       const plan = document.getElementById("importCenterPlan");
       const sourceCounts = document.getElementById("importCenterSourceCounts");
       const state = document.getElementById("importCenterState");
       const navState = document.getElementById("navImportState");
       const startButton = document.getElementById("importCenterStartButton");
-      const stateText = importStateLabel(report.state || source.status || "unknown");
+      const pathInput = document.getElementById("importSourcePathInput");
+      const canStartSource = !!(source && importSourceId(source) && source.found && source.readable);
+      const sourceId = importSourceId(source);
+      const canStartSelected = sourceId === "discvault_legacy_import" ? !!report.canStart : canStartSource;
+      const stateText = sourceId && sourceId !== "discvault_legacy_import"
+        ? importStateLabel(source.status || "unknown")
+        : importStateLabel(report.state || source.status || "unknown");
       if (state) {
         state.textContent = stateText;
-        state.className = `tag ${report.canStart ? "good" : ""}`.trim();
+        state.className = `tag ${canStartSelected ? "good" : ""}`.trim();
       }
-      if (navState) navState.textContent = report.canStart ? tNext("importCenter.ready", "Ready") : stateText;
-      if (startButton) startButton.disabled = !report.canStart || !importSourceId(source);
+      if (navState) navState.textContent = canStartSelected ? tNext("importCenter.ready", "Ready") : stateText;
+      if (startButton) startButton.disabled = !canStartSelected;
+      if (pathInput && document.activeElement !== pathInput) {
+        pathInput.value = importCenter.sourcePath || source.sourcePath || "";
+      }
       if (sourceCounts) sourceCounts.innerHTML = importCountChips(source.sourceCounts || source.counts || {}, 12);
       if (!plan) return;
       const required = report.requiredActions || [];
@@ -13953,7 +14244,7 @@ def ui_preview_html(
         </div>
         <div class="profile-meta-row">
           <span>${escapeHtml(tNext("importCenter.source", "Source"))}</span>
-          <strong>${escapeHtml(source.sqliteDb || source.dataDir || "-")}</strong>
+          <strong>${escapeHtml(source.sourcePath || source.sqliteDb || source.dataDir || "-")}</strong>
         </div>
         <div class="profile-meta-row">
           <span>${escapeHtml(tNext("importCenter.target", "Target"))}</span>
@@ -13972,6 +14263,7 @@ def ui_preview_html(
           <strong>${escapeHtml(Object.keys(targetCounts).length ? Object.entries(targetCounts).slice(0, 4).map(([key, value]) => `${key}: ${value}`).join(", ") : "-")}</strong>
         </div>
       `;
+      renderImportPreview();
     }
     function renderImportJobs() {
       const list = document.getElementById("importCenterJobs");
@@ -13987,19 +14279,22 @@ def ui_preview_html(
         const result = job.result || {};
         const payload = job.payload || {};
         const summary = result.summary || result.result || {};
-        const counters = (summary && summary.counters) || (result.result && result.result.applied) || (result.result && result.result.stats) || {};
+        const counters = (summary && summary.counters) || result.persistence || (result.result && result.result.applied) || (result.result && result.result.stats) || {};
         const pluginId = payload.pluginId || result.pluginId || "";
         const entrypoint = payload.entrypoint || result.entrypoint || "";
         const movieId = payload.movieId || (result.result && result.result.movieId) || result.movieId || "";
+        const jobTitle = job.jobType === "plugin.execute" && entrypoint === "import_source"
+          ? tNext("importCenter.jobType.importSource", "Plugin import")
+          : tNext("importCenter.jobType.collection", "Collection import");
         const details = {
           payload,
-          result: result.result || result.summary || result.execution || result,
+          result: result.result || result.summary || result.persistence || result.execution || result,
           error: job.error || null
         };
         return `
           <div class="import-job-card">
             <div class="import-job-head">
-              <strong>${escapeHtml(tNext("importCenter.jobType.collection", "Collection import"))}</strong>
+              <strong>${escapeHtml(jobTitle)}</strong>
               <span class="tag ${job.status === "completed" ? "good" : ""}">${escapeHtml(job.status || "-")}</span>
             </div>
             <div class="import-job-meta">
@@ -14404,16 +14699,43 @@ def ui_preview_html(
       }
       setImportCenterMessage(tNext("importCenter.loading", "Loading import status..."));
       try {
-        const [reportPayload, jobsPayload] = await Promise.all([
+        const [reportPayload, migrationJobsPayload, pluginJobsPayload] = await Promise.all([
           authApiJson("/api/next/migration/report"),
-          authApiJson("/api/next/jobs?jobType=migration.import_sqlite&limit=20").catch(() => ({jobs: []}))
+          authApiJson("/api/next/jobs?jobType=migration.import_sqlite&limit=20").catch(() => ({jobs: []})),
+          authApiJson("/api/next/jobs?jobType=plugin.execute&limit=20").catch(() => ({jobs: []}))
         ]);
         importCenter.report = reportPayload.report || {};
-        importCenter.jobs = jobsPayload.jobs || [];
+        importCenter.jobs = [...(migrationJobsPayload.jobs || []), ...(pluginJobsPayload.jobs || [])]
+          .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
         const source = selectedImportSource(importCenter.report);
         if (!importCenter.selectedSourceId) importCenter.selectedSourceId = importSourceId(source);
+        if (!importCenter.sourcePath) importCenter.sourcePath = source.sourcePath || "";
         renderImportCenter();
         setImportCenterMessage(tNext("importCenter.loaded", "Import status loaded."), "good");
+      } catch (error) {
+        setImportCenterMessage(error.message || String(error), "bad");
+      }
+    }
+    async function inspectSelectedImportSource() {
+      if (!hasPermission("collection.import")) return;
+      const source = selectedImportSource(importCenter.report || {});
+      const sourceId = importSourceId(source);
+      if (!sourceId) {
+        setImportCenterMessage(tNext("importCenter.chooseSourceFirst", "Choose an import source first."), "bad");
+        return;
+      }
+      const input = document.getElementById("importSourcePathInput");
+      importCenter.sourcePath = String(input?.value || "").trim();
+      setImportCenterMessage(tNext("importCenter.inspecting", "Inspecting source..."));
+      try {
+        const payload = await authApiJson("/api/next/import/source/inspect", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({importSourceId: sourceId, sourcePath: importCenter.sourcePath})
+        });
+        importCenter.preview = payload.preview || null;
+        renderImportCenter();
+        setImportCenterMessage(tNext("importCenter.inspectReady", "Source preview ready."), "good");
       } catch (error) {
         setImportCenterMessage(error.message || String(error), "bad");
       }
@@ -14428,11 +14750,15 @@ def ui_preview_html(
       }
       setImportCenterMessage(tNext("importCenter.starting", "Starting import job..."));
       try {
-        const payload = await authApiJson("/api/next/migration/start", {
+        const pathInput = document.getElementById("importSourcePathInput");
+        importCenter.sourcePath = String(pathInput?.value || importCenter.sourcePath || "").trim();
+        const endpoint = sourceId === "discvault_legacy_import" ? "/api/next/migration/start" : "/api/next/import/source/start";
+        const payload = await authApiJson(endpoint, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             importSourceId: sourceId,
+            sourcePath: importCenter.sourcePath,
             includeSecurity: true,
             includePersonal: false,
             importMediaReferences: true
@@ -16717,6 +17043,11 @@ def ui_preview_html(
       document.getElementById("profileRevokeRecoveryButton")?.addEventListener("click", () => revokeRecoveryCodes());
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
+      document.getElementById("importSourceInspectButton")?.addEventListener("click", () => inspectSelectedImportSource());
+      document.getElementById("importSourcePathInput")?.addEventListener("input", (event) => {
+        importCenter.sourcePath = String(event.target.value || "").trim();
+        importCenter.preview = null;
+      });
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
       document.getElementById("importScannerStartButton")?.addEventListener("click", () => startImportBarcodeScanner());
       document.getElementById("importScannerStopButton")?.addEventListener("click", () => {
@@ -16731,6 +17062,9 @@ def ui_preview_html(
         const sourceButton = event.target.closest("[data-import-source]");
         if (!sourceButton) return;
         importCenter.selectedSourceId = sourceButton.dataset.importSource || "";
+        const source = selectedImportSource(importCenter.report || {});
+        importCenter.sourcePath = source.sourcePath || "";
+        importCenter.preview = null;
         renderImportCenter();
       });
       document.getElementById("profilePasskeyList")?.addEventListener("click", (event) => {
@@ -29719,6 +30053,91 @@ def register_routes(flask_app: Flask) -> None:
             201,
         )
 
+    @flask_app.post("/api/next/import/source/inspect")
+    def inspect_import_source():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Import source inspect body must be an object", 400)
+        plugin_id = clean_text(body.get("importSourceId") or body.get("import_source_id") or body.get("pluginId"))
+        if not plugin_id:
+            raise NextApiError("importSourceId is required", 400)
+        source_path = clean_text(body.get("sourcePath") or body.get("source_path") or body.get("path"))
+        payload = import_source_payload_for_path(plugin_id, source_path)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.import")
+            result = inspect_import_source_selection(
+                conn,
+                plugin_id=plugin_id,
+                payload=payload,
+                actor=actor,
+            )
+        return response({"status": "ok", "preview": result})
+
+    @flask_app.post("/api/next/import/source/start")
+    def start_import_source():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Import source start body must be an object", 400)
+        plugin_id = clean_text(body.get("importSourceId") or body.get("import_source_id") or body.get("pluginId"))
+        if not plugin_id:
+            raise NextApiError("importSourceId is required", 400)
+        source_path = clean_text(body.get("sourcePath") or body.get("source_path") or body.get("path"))
+        options = {
+            "includeSecurity": False,
+            "includePersonal": parse_bool_value(body.get("includePersonal", body.get("include_personal")), default=True),
+            "ownerUsername": clean_text(body.get("ownerUsername") or body.get("owner_username")),
+            "importMediaReferences": parse_bool_value(
+                body.get("importMediaReferences", body.get("import_media_references")),
+                default=True,
+            ),
+            "sourcePath": source_path,
+        }
+        inspect_payload = import_source_payload_for_path(plugin_id, source_path)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.import")
+            plugin = import_source_plugin_by_id(conn, plugin_id)
+            if not plugin:
+                raise NextApiError(f"Import source plugin is not available: {plugin_id}", 409)
+            selected_source, execution = inspect_import_source_plugin(conn, plugin, inspect_payload, actor)
+            if execution.get("status") != "ok":
+                raise NextApiError(
+                    f"Import source inspection failed: {execution.get('error') or execution.get('state')}",
+                    502,
+                )
+            if not selected_source.get("found") or not selected_source.get("readable"):
+                raise NextApiError(f"Import source is not ready: {plugin_id}", 409)
+            job_type, payload, import_plan = plan_migration_import_job(
+                conn,
+                plugin_id=plugin_id,
+                source=selected_source,
+                options=options,
+                actor=actor,
+            )
+            if job_type != PLUGIN_EXECUTION_JOB_TYPE:
+                raise NextApiError(
+                    "This source is a migration source. Use the migration wizard to start it.",
+                    409,
+                )
+            with conn.transaction():
+                job = create_background_job(conn, job_type=job_type, payload=payload)
+                audit_event(
+                    conn,
+                    event_type="import_source.started",
+                    category="import",
+                    actor=actor,
+                    target_type="background_job",
+                    target_id=job.get("id"),
+                    summary=f"Started import source {plugin.get('name') or plugin_id}",
+                    metadata={
+                        "jobType": job_type,
+                        "pluginId": plugin_id,
+                        "sourceKind": selected_source.get("sourceKind"),
+                        "sourcePath": selected_source.get("sourcePath") or source_path,
+                        "options": options,
+                    },
+                )
+        return response({"status": "ok", "job": job, "importPlan": import_plan}, 201)
+
     @flask_app.get("/api/next/metadata/jobs")
     def metadata_jobs():
         limit = parse_int_arg("limit", 50, minimum=1, maximum=200)
@@ -30020,7 +30439,7 @@ def register_routes(flask_app: Flask) -> None:
             role = actor.get("role")
             if role != "owner" and "admin.view_jobs" not in permissions:
                 allowed_types = []
-                if permissions.intersection({"metadata.view_plugin_health", "digital_sources.view", "digital_sources.sync", "digital_sources.manage"}):
+                if permissions.intersection({"metadata.view_plugin_health", "digital_sources.view", "digital_sources.sync", "digital_sources.manage", "collection.import"}):
                     allowed_types.append(PLUGIN_EXECUTION_JOB_TYPE)
                 if permissions.intersection({"metadata.refresh_one", "metadata.refresh_bulk"}):
                     allowed_types.append(METADATA_REFRESH_JOB_TYPE)
@@ -30249,6 +30668,7 @@ def register_routes(flask_app: Flask) -> None:
         owner_username = clean_text(body.get("ownerUsername") or body.get("owner_username"))
         import_media_references = body.get("importMediaReferences", body.get("import_media_references", True))
         import_media_references = parse_bool_value(import_media_references, default=True)
+        source_path = clean_text(body.get("sourcePath") or body.get("source_path") or body.get("path"))
 
         with connect() as conn:
             readiness = migration_readiness(conn)
@@ -30268,11 +30688,12 @@ def register_routes(flask_app: Flask) -> None:
                 or legacy.get("pluginId")
             )
             selected_source = legacy
-            if import_source_id and import_source_id != legacy.get("pluginId"):
+            if import_source_id and (import_source_id != legacy.get("pluginId") or source_path):
                 plugin = import_source_plugin_by_id(conn, import_source_id)
                 if not plugin:
                     raise NextApiError(f"Import source plugin is not available: {import_source_id}", 409)
-                selected_source, execution = inspect_import_source_plugin(conn, plugin)
+                inspect_payload = import_source_payload_for_path(import_source_id, source_path)
+                selected_source, execution = inspect_import_source_plugin(conn, plugin, inspect_payload, actor)
                 if execution.get("status") != "ok":
                     raise NextApiError(
                         f"Import source inspection failed: {execution.get('error') or execution.get('state')}",
@@ -30285,6 +30706,7 @@ def register_routes(flask_app: Flask) -> None:
                 "includePersonal": include_personal,
                 "ownerUsername": owner_username,
                 "importMediaReferences": import_media_references,
+                "sourcePath": source_path,
             }
             job_type, payload, import_plan = plan_migration_import_job(
                 conn,
@@ -30520,6 +30942,7 @@ def register_routes(flask_app: Flask) -> None:
                     "digital_sources.view",
                     "digital_sources.sync",
                     "digital_sources.manage",
+                    "collection.import",
                 }
                 if not permissions.intersection(plugin_job_permissions):
                     raise NextApiError("Permission required: admin.view_jobs", 403)
