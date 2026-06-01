@@ -30,6 +30,7 @@ try:
     from .next_import import NextImporter
     from .next_import import clean_text
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
+    from .next_movievault_connection import is_movievault_plugin
     from .next_movievault_connection import movievault_plugin_context
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
@@ -42,6 +43,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import NextImporter
     from next_import import clean_text
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
+    from next_movievault_connection import is_movievault_plugin
     from next_movievault_connection import movievault_plugin_context
     from next_plugin_runtime import run_plugin_entrypoint
     from next_metadata import METADATA_REFRESH_JOB_TYPE
@@ -206,7 +208,7 @@ def plugin_record(conn, plugin_id: str) -> dict[str, Any]:
 def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
         return False
-    if str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID:
+    if is_movievault_plugin(str(plugin.get("id") or "")):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -242,7 +244,7 @@ def plugin_execution_context_from_db(
         conn,
         plugin_id,
         context,
-        ensure_token=plugin_id == MOVIEVAULT_PLUGIN_ID and entrypoint != "health_check",
+        ensure_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
         actor_id=(queued_actor or {}).get("id") if queued_actor else None,
     )
 

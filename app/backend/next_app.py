@@ -82,6 +82,7 @@ try:
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import MovieVaultConnectionError
     from .next_movievault_connection import MovieVaultInstanceRevoked
+    from .next_movievault_connection import is_movievault_plugin
     from .next_movievault_connection import movievault_connection_status
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
@@ -132,6 +133,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import MovieVaultConnectionError
     from next_movievault_connection import MovieVaultInstanceRevoked
+    from next_movievault_connection import is_movievault_plugin
     from next_movievault_connection import movievault_connection_status
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
@@ -25197,7 +25199,7 @@ def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
         return False
-    if str(plugin.get("id") or "") == MOVIEVAULT_PLUGIN_ID:
+    if is_movievault_plugin(str(plugin.get("id") or "")):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -32326,7 +32328,7 @@ def register_routes(flask_app: Flask) -> None:
                 plugin,
                 config,
                 actor,
-                ensure_movievault_token=plugin_id == MOVIEVAULT_PLUGIN_ID and entrypoint != "health_check",
+                ensure_movievault_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
             )
 
         execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)

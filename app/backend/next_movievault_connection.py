@@ -27,12 +27,14 @@ except ImportError:  # pragma: no cover - supports running modules directly
 
 
 MOVIEVAULT_PLUGIN_ID = "movievault"
+MOVIEVAULT_NEXT_PLUGIN_ID = "movievault_26"
+MOVIEVAULT_PLUGIN_IDS = frozenset({MOVIEVAULT_PLUGIN_ID, MOVIEVAULT_NEXT_PLUGIN_ID})
 REQUESTED_SCOPES = ("search:read", "contributions:write", "contributions:read")
 BOOTSTRAP_PATH = "/api/v1/internal/discvault/bootstrap"
 HANDSHAKE_PATH = "/api/v1/internal/discvault/handshake"
-DEFAULT_SEARCH_URL = "https://search.discvault.eu"
-DEFAULT_INGEST_URL = "https://movies.discvault.eu"
-PLUGIN_TOKEN_SECRET_KEY = f"plugin_secret:{MOVIEVAULT_PLUGIN_ID}:token"
+DEFAULT_MOVIEVAULT_URL = "https://movies.vaultstack.eu"
+DEFAULT_SEARCH_URL = DEFAULT_MOVIEVAULT_URL
+DEFAULT_INGEST_URL = DEFAULT_MOVIEVAULT_URL
 
 INSTANCE_ID_KEY = "movievault_instance_id"
 INSTANCE_NAME_KEY = "movievault_instance_name"
@@ -41,9 +43,24 @@ INSTANCE_PUBLIC_KEY_KEY = "movievault_instance_public_key"
 INSTANCE_PUBLIC_KEY_ID_KEY = "movievault_instance_public_key_id"
 TOKEN_PREFIX_KEY = "movievault_token_prefix"
 TOKEN_SCOPES_KEY = "movievault_token_scopes"
+LAST_BOOTSTRAP_AT_KEY = "movievault_last_bootstrap_at"
 LAST_HANDSHAKE_AT_KEY = "movievault_last_handshake_at"
 LINK_STATUS_KEY = "movievault_link_status"
 AUTH_METHOD_KEY = "movievault_auth_method"
+CONTRIBUTION_ENABLED_KEY = "movievault_contribution_enabled"
+CONTRIBUTION_URL_KEY = "movievault_contribution_url"
+SHARING_MODE_KEY = "movievault_sharing_mode"
+
+
+def is_movievault_plugin(plugin_id: str | None) -> bool:
+    return str(plugin_id or "") in MOVIEVAULT_PLUGIN_IDS
+
+
+def _plugin_token_secret_key(plugin_id: str | None = None) -> str:
+    plugin = str(plugin_id or MOVIEVAULT_PLUGIN_ID)
+    if plugin not in MOVIEVAULT_PLUGIN_IDS:
+        plugin = MOVIEVAULT_PLUGIN_ID
+    return f"plugin_secret:{plugin}:token"
 
 
 class MovieVaultConnectionError(RuntimeError):
@@ -108,13 +125,13 @@ def _bool_setting(conn, key: str, default: bool) -> bool:
     return _text(value, "true" if default else "false").lower() in {"1", "true", "yes", "on"}
 
 
-def _plugin_config(conn) -> tuple[dict[str, Any], dict[str, Any]]:
+def _plugin_config(conn, plugin_id: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     if not _table_exists(conn, "plugin_settings"):
         return {}, {}
     with conn.cursor() as cur:
         cur.execute(
             "SELECT settings, secrets_ref FROM plugin_settings WHERE plugin_id=%s",
-            (MOVIEVAULT_PLUGIN_ID,),
+            (plugin_id if is_movievault_plugin(plugin_id) else MOVIEVAULT_PLUGIN_ID,),
         )
         row = cur.fetchone()
     if not row:
@@ -141,6 +158,16 @@ def _ingest_url(conn) -> str:
     return _text(value, DEFAULT_INGEST_URL).rstrip("/")
 
 
+def _contribution_url(conn) -> str:
+    value = (
+        _setting_value(conn, CONTRIBUTION_URL_KEY, "")
+        or os.environ.get("MOVIEVAULT_CONTRIBUTION_URL")
+        or os.environ.get("MOVIEVAULT_INGEST_URL")
+        or DEFAULT_MOVIEVAULT_URL
+    )
+    return _text(value, DEFAULT_MOVIEVAULT_URL).rstrip("/")
+
+
 def _handshake_secret(conn) -> str:
     return _text(
         os.environ.get("MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET")
@@ -158,16 +185,17 @@ def _token_from_ref(conn, key: str) -> str:
     return _text(_setting_value(conn, key, "", include_secret=True))
 
 
-def stored_movievault_token(conn) -> str:
-    _settings, secrets_ref = _plugin_config(conn)
+def stored_movievault_token(conn, plugin_id: str | None = None) -> str:
+    _settings, secrets_ref = _plugin_config(conn, plugin_id)
     token_ref = secrets_ref.get("token") or {}
     token_key = token_ref.get("key") if isinstance(token_ref, dict) else token_ref
     token = _token_from_ref(conn, _text(token_key))
     if token:
         return token
-    token = _text(_setting_value(conn, PLUGIN_TOKEN_SECRET_KEY, "", include_secret=True))
-    if token:
-        return token
+    for candidate_plugin_id in (plugin_id, MOVIEVAULT_PLUGIN_ID, MOVIEVAULT_NEXT_PLUGIN_ID):
+        token = _text(_setting_value(conn, _plugin_token_secret_key(candidate_plugin_id), "", include_secret=True))
+        if token:
+            return token
     return _text(
         os.environ.get("MOVIEVAULT_API_TOKEN")
         or os.environ.get("MOVIEVAULT_API_KEY")
@@ -176,10 +204,12 @@ def stored_movievault_token(conn) -> str:
     )
 
 
-def _store_plugin_token(conn, token: str, *, actor_id: Any = None) -> None:
-    settings, secrets_ref = _plugin_config(conn)
-    secrets_ref["token"] = {"key": PLUGIN_TOKEN_SECRET_KEY, "configured": True}
-    _set_setting(conn, PLUGIN_TOKEN_SECRET_KEY, token, is_secret=True, actor_id=actor_id)
+def _store_plugin_token(conn, token: str, *, plugin_id: str | None = None, actor_id: Any = None) -> None:
+    plugin = plugin_id if is_movievault_plugin(plugin_id) else MOVIEVAULT_PLUGIN_ID
+    token_key = _plugin_token_secret_key(plugin)
+    settings, secrets_ref = _plugin_config(conn, plugin)
+    secrets_ref["token"] = {"key": token_key, "configured": True}
+    _set_setting(conn, token_key, token, is_secret=True, actor_id=actor_id)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -191,7 +221,7 @@ def _store_plugin_token(conn, token: str, *, actor_id: Any = None) -> None:
                 updated_at=now(),
                 updated_by=EXCLUDED.updated_by
             """,
-            (MOVIEVAULT_PLUGIN_ID, Jsonb(settings), Jsonb(secrets_ref), actor_id),
+            (plugin, Jsonb(settings), Jsonb(secrets_ref), actor_id),
         )
         if _table_exists(conn, "metadata_plugin_settings"):
             cur.execute(
@@ -204,15 +234,24 @@ def _store_plugin_token(conn, token: str, *, actor_id: Any = None) -> None:
                     updated_at=now(),
                     updated_by=EXCLUDED.updated_by
                 """,
-                (MOVIEVAULT_PLUGIN_ID, Jsonb(settings), Jsonb(secrets_ref), actor_id),
+                (plugin, Jsonb(settings), Jsonb(secrets_ref), actor_id),
             )
 
 
 def _delete_token(conn) -> None:
-    for key in (PLUGIN_TOKEN_SECRET_KEY, "movievault_api_token", "movievault_api_key"):
+    for key in (
+        _plugin_token_secret_key(MOVIEVAULT_PLUGIN_ID),
+        _plugin_token_secret_key(MOVIEVAULT_NEXT_PLUGIN_ID),
+        "movievault_api_token",
+        "movievault_api_key",
+    ):
         _delete_setting(conn, key)
-    _settings, secrets_ref = _plugin_config(conn)
-    if "token" in secrets_ref and _table_exists(conn, "plugin_settings"):
+    if not _table_exists(conn, "plugin_settings"):
+        return
+    for plugin in MOVIEVAULT_PLUGIN_IDS:
+        _settings, secrets_ref = _plugin_config(conn, plugin)
+        if "token" not in secrets_ref:
+            continue
         secrets_ref.pop("token", None)
         with conn.cursor() as cur:
             cur.execute(
@@ -221,7 +260,7 @@ def _delete_token(conn) -> None:
                 SET secrets_ref=%s, updated_at=now()
                 WHERE plugin_id=%s
                 """,
-                (Jsonb(secrets_ref), MOVIEVAULT_PLUGIN_ID),
+                (Jsonb(secrets_ref), plugin),
             )
             if _table_exists(conn, "metadata_plugin_settings"):
                 cur.execute(
@@ -230,7 +269,7 @@ def _delete_token(conn) -> None:
                     SET secrets_ref=%s, updated_at=now()
                     WHERE plugin_id=%s
                     """,
-                    (Jsonb(secrets_ref), MOVIEVAULT_PLUGIN_ID),
+                    (Jsonb(secrets_ref), plugin),
                 )
 
 
@@ -348,9 +387,20 @@ def _response_error_code(response: _HttpJsonResponse) -> str:
     return ""
 
 
-def _store_token_response(conn, data: dict[str, Any], *, actor_id: Any = None) -> dict[str, Any]:
+def _store_token_response(
+    conn,
+    data: dict[str, Any],
+    *,
+    plugin_id: str | None = None,
+    actor_id: Any = None,
+    source: str = "handshake",
+) -> dict[str, Any]:
     client = data.get("client") if isinstance(data, dict) else None
+    if not isinstance(client, dict) and isinstance(data, dict) and data.get("apiToken"):
+        client = data
     instance = data.get("instance") if isinstance(data, dict) else None
+    if not isinstance(instance, dict):
+        instance = data if isinstance(data, dict) else None
     if not isinstance(client, dict) or not client.get("apiToken"):
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise MovieVaultConnectionError("MovieVault response did not include an API token")
@@ -358,14 +408,18 @@ def _store_token_response(conn, data: dict[str, Any], *, actor_id: Any = None) -
     token = _text(client.get("apiToken"))
     token_prefix = _text(client.get("tokenPrefix") or token[:12])
     scopes = [str(scope) for scope in (client.get("scopes") or [])]
-    last_handshake_at = _text((instance or {}).get("lastHandshakeAt") or _timestamp())
-    key_id = _text((instance or {}).get("keyId"))
+    timestamp = _timestamp()
+    last_handshake_at = _text((instance or {}).get("lastHandshakeAt") or timestamp)
+    key_id = _text((instance or {}).get("keyId") or client.get("keyId"))
     if key_id:
         _set_setting(conn, INSTANCE_PUBLIC_KEY_ID_KEY, key_id)
-    _store_plugin_token(conn, token, actor_id=actor_id)
+    _store_plugin_token(conn, token, plugin_id=plugin_id, actor_id=actor_id)
     _set_setting(conn, TOKEN_PREFIX_KEY, token_prefix)
     _set_setting(conn, TOKEN_SCOPES_KEY, scopes)
-    _set_setting(conn, LAST_HANDSHAKE_AT_KEY, last_handshake_at)
+    if source == "bootstrap":
+        _set_setting(conn, LAST_BOOTSTRAP_AT_KEY, timestamp)
+    else:
+        _set_setting(conn, LAST_HANDSHAKE_AT_KEY, last_handshake_at)
     _set_setting(conn, LINK_STATUS_KEY, "active")
     return data
 
@@ -375,7 +429,7 @@ def _mark_revoked(conn) -> None:
     _delete_token(conn)
 
 
-def _bootstrap(conn, *, actor_id: Any = None) -> dict[str, Any]:
+def _bootstrap(conn, *, plugin_id: str | None = None, actor_id: Any = None) -> dict[str, Any]:
     _private_key, public_key, _public_key_id = _instance_key_pair(conn)
     payload = {**_connection_payload(conn), "publicKey": public_key}
     try:
@@ -392,14 +446,14 @@ def _bootstrap(conn, *, actor_id: Any = None) -> dict[str, Any]:
         _mark_revoked(conn)
         raise MovieVaultInstanceRevoked("MovieVault instance is revoked")
     if response.status_code == 409 and code == "instance_already_registered":
-        return _recover(conn, actor_id=actor_id)
+        return _recover(conn, plugin_id=plugin_id, actor_id=actor_id)
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise MovieVaultConnectionError(f"MovieVault bootstrap failed: {code or response.status_code}")
-    return _store_token_response(conn, response.json(), actor_id=actor_id)
+    return _store_token_response(conn, response.json(), plugin_id=plugin_id, actor_id=actor_id, source="bootstrap")
 
 
-def _recover(conn, *, actor_id: Any = None) -> dict[str, Any]:
+def _recover(conn, *, plugin_id: str | None = None, actor_id: Any = None) -> dict[str, Any]:
     from cryptography.hazmat.primitives import serialization
 
     private_key_pem, _public_key, public_key_id = _instance_key_pair(conn)
@@ -433,10 +487,10 @@ def _recover(conn, *, actor_id: Any = None) -> dict[str, Any]:
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise MovieVaultConnectionError(f"MovieVault signed recovery failed: {code or response.status_code}")
-    return _store_token_response(conn, response.json(), actor_id=actor_id)
+    return _store_token_response(conn, response.json(), plugin_id=plugin_id, actor_id=actor_id, source="handshake")
 
 
-def _hmac_handshake(conn, *, actor_id: Any = None) -> dict[str, Any]:
+def _hmac_handshake(conn, *, plugin_id: str | None = None, actor_id: Any = None) -> dict[str, Any]:
     secret = _handshake_secret(conn)
     if not secret:
         raise MovieVaultConnectionError("MovieVault HMAC handshake secret is not configured")
@@ -468,7 +522,7 @@ def _hmac_handshake(conn, *, actor_id: Any = None) -> dict[str, Any]:
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise MovieVaultConnectionError(f"MovieVault HMAC handshake failed: {code or response.status_code}")
-    return _store_token_response(conn, response.json(), actor_id=actor_id)
+    return _store_token_response(conn, response.json(), plugin_id=plugin_id, actor_id=actor_id, source="handshake")
 
 
 def reset_movievault_connection(conn) -> None:
@@ -480,6 +534,7 @@ def reset_movievault_connection(conn) -> None:
         INSTANCE_PUBLIC_KEY_ID_KEY,
         TOKEN_PREFIX_KEY,
         TOKEN_SCOPES_KEY,
+        LAST_BOOTSTRAP_AT_KEY,
         LAST_HANDSHAKE_AT_KEY,
         LINK_STATUS_KEY,
         AUTH_METHOD_KEY,
@@ -488,7 +543,13 @@ def reset_movievault_connection(conn) -> None:
     _delete_token(conn)
 
 
-def refresh_movievault_connection(conn, *, actor_id: Any = None, reset: bool = False) -> dict[str, Any]:
+def refresh_movievault_connection(
+    conn,
+    *,
+    plugin_id: str | None = None,
+    actor_id: Any = None,
+    reset: bool = False,
+) -> dict[str, Any]:
     if not movievault_enabled(conn):
         raise MovieVaultConnectionError("MovieVault integration is disabled")
     if reset:
@@ -496,21 +557,21 @@ def refresh_movievault_connection(conn, *, actor_id: Any = None, reset: bool = F
     _set_setting(conn, LINK_STATUS_KEY, "connecting")
     if _handshake_secret(conn):
         _set_setting(conn, AUTH_METHOD_KEY, "hmac_handshake")
-        return _hmac_handshake(conn, actor_id=actor_id)
+        return _hmac_handshake(conn, plugin_id=plugin_id, actor_id=actor_id)
     _set_setting(conn, AUTH_METHOD_KEY, "bootstrap_signed")
     if _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, "")):
-        return _recover(conn, actor_id=actor_id)
-    return _bootstrap(conn, actor_id=actor_id)
+        return _recover(conn, plugin_id=plugin_id, actor_id=actor_id)
+    return _bootstrap(conn, plugin_id=plugin_id, actor_id=actor_id)
 
 
-def ensure_movievault_token(conn, *, actor_id: Any = None) -> str:
+def ensure_movievault_token(conn, *, plugin_id: str | None = None, actor_id: Any = None) -> str:
     if not movievault_enabled(conn) or _text(_setting_value(conn, LINK_STATUS_KEY, "")) == "revoked":
         return ""
-    token = stored_movievault_token(conn)
+    token = stored_movievault_token(conn, plugin_id)
     if token:
         return token
-    refresh_movievault_connection(conn, actor_id=actor_id)
-    return stored_movievault_token(conn)
+    refresh_movievault_connection(conn, plugin_id=plugin_id, actor_id=actor_id)
+    return stored_movievault_token(conn, plugin_id)
 
 
 def _scopes(conn) -> list[str]:
@@ -524,24 +585,30 @@ def _scopes(conn) -> list[str]:
         return []
 
 
-def movievault_connection_status(conn) -> dict[str, Any]:
-    token = stored_movievault_token(conn)
+def movievault_connection_status(conn, plugin_id: str | None = None) -> dict[str, Any]:
+    token = stored_movievault_token(conn, plugin_id)
     private_key_set = bool(_setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True))
     public_key_id = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, ""))
     public_key = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_KEY, ""))
+    sharing_mode = _text(_setting_value(conn, SHARING_MODE_KEY, "") or os.environ.get("MOVIEVAULT_SHARING_MODE") or "opt_in")
     return {
         "authMethod": _text(_setting_value(conn, AUTH_METHOD_KEY, "")) or ("hmac_handshake" if _handshake_secret(conn) else "bootstrap_signed"),
+        "contributionEnabled": _bool_setting(conn, CONTRIBUTION_ENABLED_KEY, False),
+        "contributionUrl": _contribution_url(conn),
         "enabled": movievault_enabled(conn),
         "ingestUrl": _ingest_url(conn),
         "instanceId": _text(_setting_value(conn, INSTANCE_ID_KEY, "")),
         "instanceName": _text(_setting_value(conn, INSTANCE_NAME_KEY, "")),
         "keyId": public_key_id,
+        "lastBootstrapAt": _text(_setting_value(conn, LAST_BOOTSTRAP_AT_KEY, "")),
         "lastHandshakeAt": _text(_setting_value(conn, LAST_HANDSHAKE_AT_KEY, "")),
         "linkStatus": _text(_setting_value(conn, LINK_STATUS_KEY, "unlinked"), "unlinked"),
         "privateKeySet": private_key_set,
         "requiresReset": bool((public_key or public_key_id) and not private_key_set),
         "scopes": _scopes(conn),
         "searchUrl": _search_url(conn),
+        "sharingMode": sharing_mode,
+        "sourceVersion": _software_version(),
         "tokenPrefix": _text(_setting_value(conn, TOKEN_PREFIX_KEY, "")),
         "tokenSet": bool(token),
     }
@@ -555,22 +622,31 @@ def movievault_plugin_context(
     ensure_token: bool = False,
     actor_id: Any = None,
 ) -> dict[str, Any]:
-    if str(plugin_id or "") != MOVIEVAULT_PLUGIN_ID:
+    plugin = str(plugin_id or "")
+    if not is_movievault_plugin(plugin):
         return context
     safe_context = dict(context or {})
     settings = dict(safe_context.get("settings") or {})
     secrets_payload = dict(safe_context.get("secrets") or {})
-    status = movievault_connection_status(conn)
-    token = stored_movievault_token(conn)
+    status = movievault_connection_status(conn, plugin)
+    token = stored_movievault_token(conn, plugin)
     connection_error = ""
     if ensure_token:
         try:
-            token = ensure_movievault_token(conn, actor_id=actor_id)
+            token = ensure_movievault_token(conn, plugin_id=plugin, actor_id=actor_id)
         except MovieVaultConnectionError as exc:
             connection_error = str(exc)
-        status = movievault_connection_status(conn)
+        status = movievault_connection_status(conn, plugin)
     if token:
         secrets_payload["token"] = token
+
+    def recover_token_once() -> str:
+        refresh_movievault_connection(conn, plugin_id=plugin, actor_id=actor_id)
+        return stored_movievault_token(conn, plugin)
+
+    def mark_revoked() -> None:
+        _mark_revoked(conn)
+
     safe_context.update(
         {
             "settings": settings,
@@ -581,6 +657,8 @@ def movievault_plugin_context(
                 **{key: value for key, value in status.items() if key not in {"ingestUrl"}},
                 **({"error": connection_error} if connection_error else {}),
             },
+            "movievaultMarkRevoked": mark_revoked,
+            "movievaultRecoverToken": recover_token_once,
         }
     )
     return safe_context

@@ -1,7 +1,41 @@
+import hashlib
+import json
 import os
+import time
 from urllib.parse import quote
 
 import requests
+
+
+PROVIDER_ID = "movievault_26"
+PROVIDER_LABEL = "MovieVault 26"
+DEFAULT_MOVIEVAULT_URL = "https://movies.vaultstack.eu"
+PUBLIC_BARCODE_LENGTHS = {8, 12, 13, 14}
+FORBIDDEN_CONTRIBUTION_KEYS = {
+    "apiToken",
+    "authorization",
+    "inviteCode",
+    "jwtSecret",
+    "libraryDetails",
+    "localPath",
+    "mediaGroup",
+    "mediaGroups",
+    "owner_id",
+    "passkeys",
+    "personalRating",
+    "privateNotes",
+    "providerTokens",
+    "purchaseDate",
+    "purchasePrice",
+    "roles",
+    "sessions",
+    "shelf",
+    "userIds",
+    "usernames",
+    "watchHistory",
+    "watchlist",
+}
+_TEMPLATE_CACHE = {}
 
 
 def _settings(context):
@@ -18,7 +52,17 @@ def _base_url(context):
         movievault.get("searchUrl")
         or os.environ.get("MOVIEVAULT_SEARCH_URL")
         or os.environ.get("MOVIEVAULT_BASE_URL")
-        or "https://search.discvault.eu"
+        or DEFAULT_MOVIEVAULT_URL
+    ).strip().rstrip("/")
+
+
+def _contribution_url(context):
+    movievault = (context or {}).get("movievault") or {}
+    return str(
+        movievault.get("contributionUrl")
+        or os.environ.get("MOVIEVAULT_CONTRIBUTION_URL")
+        or os.environ.get("MOVIEVAULT_INGEST_URL")
+        or DEFAULT_MOVIEVAULT_URL
     ).strip().rstrip("/")
 
 
@@ -34,10 +78,79 @@ def _headers(context):
     return headers
 
 
-def _get(context, path, **params):
-    response = requests.get(f"{_base_url(context)}{path}", params=params, headers=_headers(context), timeout=10)
+def _status_code(response):
+    try:
+        return int(getattr(response, "status_code", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _json(response):
+    try:
+        payload = response.json()
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _error_code(response):
+    payload = _json(response)
+    return _text(payload.get("code") or payload.get("error"))
+
+
+def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False):
+    headers = _headers(context)
+    if json_payload is not None:
+        headers["Content-Type"] = "application/json"
+    request_func = getattr(requests, "request", None)
+    if callable(request_func):
+        response = request_func(method, url, params=params, json=json_payload, headers=headers, timeout=10)
+    elif method.upper() == "GET":
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+    else:
+        response = requests.post(url, json=json_payload, headers=headers, timeout=10)
+
+    status_code = _status_code(response)
+    if status_code == 401 and retry_recovery:
+        recover = (context or {}).get("movievaultRecoverToken")
+        if callable(recover):
+            token = _text(recover())
+            if token:
+                (context or {}).setdefault("secrets", {})["token"] = token
+                return _request(
+                    method,
+                    url,
+                    context=context,
+                    params=params,
+                    json_payload=json_payload,
+                    retry_recovery=False,
+                    allow_validation_error=allow_validation_error,
+                )
+    if status_code == 403 and _error_code(response) == "instance_revoked":
+        mark_revoked = (context or {}).get("movievaultMarkRevoked")
+        if callable(mark_revoked):
+            mark_revoked()
+    if status_code == 404 or (allow_validation_error and status_code == 400 and _error_code(response) == "validation_error"):
+        return response
     response.raise_for_status()
-    return response.json()
+    return response
+
+
+def _get(context, path, **params):
+    clean_params = {key: value for key, value in params.items() if value not in (None, "")}
+    return _json(_request("GET", f"{_base_url(context)}{path}", context=context, params=clean_params))
+
+
+def _post_contribution(context, envelope):
+    return _json(
+        _request(
+            "POST",
+            f"{_contribution_url(context)}/api/v1/contributions",
+            context=context,
+            json_payload=envelope,
+            allow_validation_error=True,
+        )
+    )
 
 
 def _items(payload):
@@ -81,6 +194,11 @@ def _parse_year(value):
 def _image_url(value):
     text = _text(value)
     return text if text.startswith(("http://", "https://")) else ""
+
+
+def _is_public_barcode(value):
+    text = _text(value)
+    return text.isdigit() and len(text) in PUBLIC_BARCODE_LENGTHS
 
 
 def _movie_payload(item):
@@ -231,6 +349,39 @@ def _compatible_format(candidate, expected):
     candidate_key = _format_key(candidate)
     expected_key = _format_key(expected)
     return not candidate_key or not expected_key or candidate_key == expected_key
+
+
+def _movievault_context(context):
+    return (context or {}).get("movievault") or {}
+
+
+def _movievault_enabled(context):
+    value = _movievault_context(context).get("enabled", True)
+    if isinstance(value, bool):
+        return value
+    return _text(value, "true").lower() in {"1", "true", "yes", "on"}
+
+
+def _contribution_enabled(context):
+    value = _movievault_context(context).get("contributionEnabled")
+    if value is None:
+        value = _settings(context).get("contributionEnabled") or os.environ.get("MOVIEVAULT_CONTRIBUTION_ENABLED")
+    if isinstance(value, bool):
+        return value
+    return _text(value).lower() in {"1", "true", "yes", "on"}
+
+
+def _sharing_mode(context):
+    return _text(
+        _movievault_context(context).get("sharingMode")
+        or _settings(context).get("sharingMode")
+        or os.environ.get("MOVIEVAULT_SHARING_MODE")
+        or "opt_in"
+    )
+
+
+def _source_version(context):
+    return _text(_movievault_context(context).get("sourceVersion") or _settings(context).get("sourceVersion") or "")
 
 
 def _merge_member_enrichment(member, enrichment, expected_format=""):
@@ -461,9 +612,12 @@ def health_check(context=None):
                 "instanceId": connection.get("instanceId"),
                 "instanceName": connection.get("instanceName"),
                 "keyId": connection.get("keyId"),
+                "lastBootstrapAt": connection.get("lastBootstrapAt"),
                 "lastHandshakeAt": connection.get("lastHandshakeAt"),
                 "linkStatus": connection.get("linkStatus"),
                 "requiresReset": bool(connection.get("requiresReset")),
+                "scopes": connection.get("scopes") or [],
+                "sharingMode": connection.get("sharingMode"),
                 "tokenPrefix": connection.get("tokenPrefix"),
                 "tokenSet": bool(connection.get("tokenSet")),
             },
@@ -474,16 +628,20 @@ def health_check(context=None):
 
 def search_barcode(payload, context=None):
     barcode = str((payload or {}).get("barcode") or "").strip()
-    if not barcode:
-        return {"status": "skipped", "provider": "movievault_26"}
+    if not _movievault_enabled(context):
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "disabled"}
+    if not _is_public_barcode(barcode):
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "not_public_barcode"}
     return _normalize_result(_get(context or {}, f"/api/v1/barcodes/{quote(barcode)}"), source_ref=f"barcode:{barcode}")
 
 
 def search_title(payload, context=None):
     title = str((payload or {}).get("title") or "").strip()
     year = str((payload or {}).get("year") or "").strip()
+    if not _movievault_enabled(context):
+        return {"status": "skipped", "provider": PROVIDER_ID, "items": [], "reason": "disabled"}
     if not title:
-        return {"status": "skipped", "provider": "movievault_26", "items": []}
+        return {"status": "skipped", "provider": PROVIDER_ID, "items": []}
     data = _get(context or {}, "/api/v1/movies", q=title, year=year)
     items = []
     for item in _items(data)[:8]:
@@ -507,12 +665,12 @@ def movie_details(payload, context=None):
     barcode = str((payload or {}).get("barcode") or "").strip()
     title = str((payload or {}).get("title") or "").strip()
     year = str((payload or {}).get("year") or "").strip()
-    if barcode:
+    if _is_public_barcode(barcode):
         result = search_barcode(payload, context)
         if result.get("status") == "hit":
             return result
     if not title:
-        return {"status": "skipped", "provider": "movievault_26"}
+        return {"status": "skipped", "provider": PROVIDER_ID}
     return _normalize_result(_get(context or {}, "/api/v1/movies", q=title, year=year), source_ref=f"title:{title}")
 
 
@@ -520,7 +678,9 @@ def box_set_candidates(payload, context=None):
     title = str((payload or {}).get("title") or "").strip()
     year = str((payload or {}).get("year") or "").strip()
     barcode = str((payload or {}).get("barcode") or "").strip()
-    data = _get(context or {}, "/api/v1/box-sets", q=title, year=year, barcode=barcode)
+    if not _movievault_enabled(context):
+        return {"status": "skipped", "provider": PROVIDER_ID, "boxSetProposal": {}, "reason": "disabled"}
+    data = _get(context or {}, "/api/v1/box-sets", q=title, year=year, barcode=barcode if _is_public_barcode(barcode) else "")
     proposal = _normalize_box_set_proposal(data, context or {})
     if not proposal or len(proposal.get("movies") or []) < 2:
         return {"status": "miss", "provider": "movievault_26", "boxSetProposal": {}}
@@ -533,8 +693,137 @@ def box_set_candidates(payload, context=None):
     }
 
 
+def _safe_contribution_value(value):
+    if isinstance(value, dict):
+        clean = {}
+        for key, item in value.items():
+            key_text = _text(key)
+            if not key_text:
+                continue
+            if key_text in FORBIDDEN_CONTRIBUTION_KEYS or key_text.lower() in {item.lower() for item in FORBIDDEN_CONTRIBUTION_KEYS}:
+                continue
+            safe = _safe_contribution_value(item)
+            if safe not in (None, "", [], {}):
+                clean[key_text] = safe
+        return clean
+    if isinstance(value, list):
+        clean_items = [_safe_contribution_value(item) for item in value]
+        return [item for item in clean_items if item not in (None, "", [], {})]
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith(("/api/next/assets/", "/assets/", "file:", "plugin_secret:")):
+            return ""
+        return text
+    return value
+
+
+def _template_cache_key(context):
+    return f"{_contribution_url(context)}/api/v1/contribution-template"
+
+
+def _contribution_template(context, *, force_refresh=False):
+    key = _template_cache_key(context)
+    now = time.time()
+    cached = _TEMPLATE_CACHE.get(key)
+    if not force_refresh and cached and now - cached.get("fetchedAt", 0) < 86400:
+        return cached.get("template") or {}
+    template = _json(_request("GET", key, context=context))
+    _TEMPLATE_CACHE[key] = {"fetchedAt": now, "template": template}
+    return template
+
+
+def _allowed_fields(template, entity_type):
+    if not isinstance(template, dict):
+        return set()
+    candidates = (
+        template.get("allowedFields"),
+        template.get("fields"),
+        (template.get("entities") or {}).get(entity_type) if isinstance(template.get("entities"), dict) else None,
+        (template.get("entityTypes") or {}).get(entity_type) if isinstance(template.get("entityTypes"), dict) else None,
+    )
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return {_text(item) for item in candidate if _text(item)}
+        if isinstance(candidate, dict):
+            nested = candidate.get("allowedFields") or candidate.get("fields")
+            if isinstance(nested, list):
+                return {_text(item) for item in nested if _text(item)}
+            return {_text(key) for key in candidate.keys() if _text(key)}
+    return set()
+
+
+def _payload_fingerprint(payload):
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _source_reference(payload):
+    reference = payload.get("sourceReference") or payload.get("source_reference") or {}
+    return reference if isinstance(reference, dict) else {}
+
+
+def _contribution_payload(payload, template):
+    entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
+    if entity_type not in {"movie", "release", "box_set", "person"}:
+        return entity_type, {}
+    raw_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+    if not raw_payload:
+        raw_payload = {key: value for key, value in payload.items() if key not in {"entityType", "entity_type", "sourceReference", "source_reference", "force"}}
+    safe_payload = _safe_contribution_value(raw_payload)
+    allowed = _allowed_fields(template, entity_type)
+    if allowed:
+        safe_payload = {key: value for key, value in safe_payload.items() if key in allowed}
+    return entity_type, safe_payload
+
+
+def _validation_error(response_payload):
+    return _text(response_payload.get("code") or response_payload.get("error")) == "validation_error"
+
+
 def receive_metadata(payload, context=None):
+    context = context or {}
+    payload = payload if isinstance(payload, dict) else {}
+    if not _movievault_enabled(context):
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "disabled"}
+    if not _contribution_enabled(context):
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "contribution_disabled"}
+    sharing_mode = _sharing_mode(context)
+    if sharing_mode == "disabled":
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "sharing_disabled"}
+    if not _token(context):
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "missing_token"}
+
+    template = _contribution_template(context)
+    entity_type, contribution_payload = _contribution_payload(payload, template)
+    if not contribution_payload:
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "empty_or_disallowed_payload"}
+
+    fingerprint = _payload_fingerprint(contribution_payload)
+    identity = _text(payload.get("identity") or payload.get("id") or payload.get("sourceRef") or fingerprint[:16])
+    template_version = _text(template.get("version") or template.get("templateVersion") or "unversioned")
+    envelope = {
+        "idempotencyKey": _text(payload.get("idempotencyKey"))
+        or f"{entity_type}:{identity}:{template_version}:{fingerprint}",
+        "sourceClient": "discvault",
+        "sourceVersion": _source_version(context),
+        "sharingMode": sharing_mode,
+        "entityType": entity_type,
+        "sourceReference": _source_reference(payload),
+        "payload": contribution_payload,
+    }
+    response_payload = _post_contribution(context, envelope)
+    if _validation_error(response_payload):
+        template = _contribution_template(context, force_refresh=True)
+        entity_type, contribution_payload = _contribution_payload(payload, template)
+        if not contribution_payload:
+            return {"status": "skipped", "provider": PROVIDER_ID, "reason": "empty_or_disallowed_payload"}
+        envelope["payload"] = contribution_payload
+        response_payload = _post_contribution(context, envelope)
     return {
-        "status": "not_implemented",
-        "message": "MovieVault 26 receiver contribution execution is handled by the dedicated contribution flow.",
+        "status": "submitted",
+        "provider": PROVIDER_ID,
+        "entityType": entity_type,
+        "idempotencyPrefix": envelope["idempotencyKey"][:24],
+        "templateVersion": template_version,
+        "response": response_payload,
     }
