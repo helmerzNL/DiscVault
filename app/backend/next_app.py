@@ -7398,6 +7398,19 @@ def ui_preview_html(
       cursor: default;
       opacity: .62;
     }
+    .art-upload-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .art-upload-row input[type="file"] {
+      max-width: min(100%, 270px);
+      color: var(--muted);
+      font-size: .8rem;
+    }
     .detail-message {
       min-height: 20px;
       margin-top: 10px;
@@ -9302,9 +9315,17 @@ def ui_preview_html(
             </div>
             <div class="detail-subpanel" data-detail-panel-group="movieMedia" id="movieMediaPosters">
               <div class="art-option-grid" id="movieDetailPosterArtwork"></div>
+              <div class="art-upload-row" data-art-upload-row>
+                <input type="file" id="moviePosterUploadInput" accept="image/*">
+                <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="poster" data-input="moviePosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+              </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaBackdrops">
               <div class="art-option-grid backdrops" id="movieDetailBackdropArtwork"></div>
+              <div class="art-upload-row" data-art-upload-row>
+                <input type="file" id="movieBackdropUploadInput" accept="image/*">
+                <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="backdrop" data-input="movieBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+              </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
               <div class="detail-grid" id="movieDetailVideos"></div>
@@ -9466,12 +9487,20 @@ def ui_preview_html(
             <div class="detail-card full">
               <h3 data-next-i18n="movieDetail.posters">Posters</h3>
               <div class="art-option-grid" id="containerDetailPosterArtwork"></div>
+              <div class="art-upload-row" data-art-upload-row>
+                <input type="file" id="containerPosterUploadInput" accept="image/*">
+                <button type="button" class="secondary-button" data-upload-artwork="container" data-kind="poster" data-input="containerPosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+              </div>
             </div>
           </div>
           <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailBackdropsPanel">
             <div class="detail-card full">
               <h3 data-next-i18n="movieDetail.backdrops">Backdrops</h3>
               <div class="art-option-grid backdrops" id="containerDetailBackdropArtwork"></div>
+              <div class="art-upload-row" data-art-upload-row>
+                <input type="file" id="containerBackdropUploadInput" accept="image/*">
+                <button type="button" class="secondary-button" data-upload-artwork="container" data-kind="backdrop" data-input="containerBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+              </div>
             </div>
           </div>
           <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailVideosPanel">
@@ -10486,6 +10515,7 @@ def ui_preview_html(
       groupNavigation: ["groups.view", "groups.create", "groups.invite"],
       containerManagement: ["containers.create", "containers.edit", "containers.delete", "collection.bulk_edit"],
       metadataRefresh: ["metadata.refresh_one", "metadata.refresh_bulk"],
+      artworkManage: ["collection.edit_all", "collection.edit_own"],
       bulkMetadata: ["metadata.refresh_bulk"],
       bulkGroups: ["groups.invite", "groups.create"],
       bulkContainers: ["containers.edit", "collection.bulk_edit"],
@@ -10653,6 +10683,9 @@ def ui_preview_html(
       const canEditMovies = hasPermission("collection.edit_all");
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
       if (!canEditMovies) setMovieEditPanelVisible(false);
+      document.querySelectorAll("[data-art-upload-row], [data-app-primary]").forEach((node) => {
+        node.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.artworkManage));
+      });
       setElementVisible(document.getElementById("movieDeleteButton"), canDeleteMovieItem(activeDetailPayload?.movie || null));
       const canEditContainers = collectorsEnabled && hasPermission("containers.edit");
       setElementVisible(document.getElementById("containerEditToggleButton"), canEditContainers);
@@ -13659,6 +13692,7 @@ def ui_preview_html(
           <div class="${className}">
             <div class="art-option-preview">${preview}</div>
             <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source || (asset.is_primary ? tNext("movieDetail.primary", "Primary") : ""))}</div>
+            <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="container" data-kind="${escapeHtml(kind)}">${escapeHtml(asset.is_primary ? tNext("movieDetail.primary", "Primary") : tNext("movieDetail.setPrimary", "Set primary"))}</button>
           </div>
         `;
       }).join("");
@@ -13771,7 +13805,7 @@ def ui_preview_html(
         return `
           <div class="${className}">
             <div class="art-option-preview">${preview}</div>
-            <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-kind="${escapeHtml(kind)}">${escapeHtml(label)}</button>
+            <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="movie" data-kind="${escapeHtml(kind)}">${escapeHtml(label)}</button>
           </div>
         `;
       }).join("");
@@ -14137,9 +14171,6 @@ def ui_preview_html(
       });
       document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
-      document.querySelectorAll("[data-app-primary]").forEach((button) => {
-        button.addEventListener("click", () => setPrimaryArtwork(button.dataset.appPrimary, button.dataset.kind));
-      });
       document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
@@ -16924,21 +16955,51 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
-    async function setPrimaryArtwork(mediaId, kind) {
-      if (!activeDetailMovieId || !mediaId) return;
-      setMovieDetailMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+    async function setPrimaryArtwork(entity, mediaId, kind) {
+      const isContainer = entity === "container";
+      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
+      if (!targetId || !mediaId) return;
+      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
+      setMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
       try {
-        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/media/primary`, {
+        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/primary`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({mediaId, kind})
         });
-        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
-        renderMovieDetail(payload.detail || {});
+        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
+        if (isContainer) renderContainerDetail(payload.detail || {});
+        else renderMovieDetail(payload.detail || {});
         await loadAppSnapshot();
-        setMovieDetailMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
+        setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
       } catch (error) {
-        setMovieDetailMessage(error.message || String(error), "bad");
+        setMessage(error.message || String(error), "bad");
+      }
+    }
+    async function uploadDetailArtwork(entity, kind, inputId) {
+      const input = document.getElementById(inputId);
+      const isContainer = entity === "container";
+      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
+      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
+      if (!targetId || !input || !input.files || !input.files.length) return;
+      setMessage(tNext("movieDetail.uploadingArtwork", "Uploading artwork..."));
+      try {
+        const data = new FormData();
+        data.append("file", input.files[0]);
+        data.append("kind", kind);
+        data.append("primary", "true");
+        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/upload`, {
+          method: "POST",
+          body: data
+        });
+        input.value = "";
+        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
+        if (isContainer) renderContainerDetail(payload.detail || {});
+        else renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
+      } catch (error) {
+        setMessage(error.message || String(error), "bad");
       }
     }
     function renderLibrary() {
@@ -18405,6 +18466,18 @@ def ui_preview_html(
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
       document.addEventListener("click", (event) => {
+        const primaryArtwork = event.target.closest("[data-app-primary]");
+        if (primaryArtwork) {
+          event.preventDefault();
+          setPrimaryArtwork(primaryArtwork.dataset.artEntity || "movie", primaryArtwork.dataset.appPrimary, primaryArtwork.dataset.kind);
+          return;
+        }
+        const uploadArtwork = event.target.closest("[data-upload-artwork]");
+        if (uploadArtwork) {
+          event.preventDefault();
+          uploadDetailArtwork(uploadArtwork.dataset.uploadArtwork || "movie", uploadArtwork.dataset.kind, uploadArtwork.dataset.input);
+          return;
+        }
         const tab = event.target.closest("[data-detail-tab]");
         if (!tab) return;
         activateDetailTab(tab.dataset.detailTab, tab.dataset.detailPanel);
@@ -26741,7 +26814,31 @@ def set_primary_movie_media_asset(
             """,
             (movie_id, media_id),
         )
-        cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+        media_metadata = media.get("metadata") if isinstance(media, dict) else {}
+        media_metadata = media_metadata if isinstance(media_metadata, dict) else {}
+        media_metadata.update(
+            {
+                "lockedPrimary": True,
+                "userSelectedPrimary": True,
+                "source": media_metadata.get("source") or "manual_selection",
+                "selectedBy": actor_job_payload(actor or {}) if actor else None,
+            }
+        )
+        cur.execute("UPDATE media_assets SET metadata=%s WHERE id=%s", (Jsonb(json_ready(media_metadata)), media_id))
+        cur.execute(
+            "UPDATE movies SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+            (
+                Jsonb(
+                    json_ready(
+                        {
+                            f"{kind}_url": media_asset_public_url(media),
+                            f"{kind}_locked": True,
+                        }
+                    )
+                ),
+                movie_id,
+            ),
+        )
 
     revision = record_sync_change(
         conn,
@@ -27024,6 +27121,8 @@ def create_uploaded_movie_media_asset(
                         "source": "upload",
                         "originalFilename": upload_info.get("originalFilename"),
                         "uploadedBy": actor_job_payload(actor or {}) if actor else None,
+                        "lockedPrimary": bool(primary),
+                        "userSelectedPrimary": bool(primary),
                     }
                 ),
             ),
@@ -27078,7 +27177,17 @@ def create_uploaded_movie_media_asset(
             """,
             (movie_id, media["id"], kind, primary, sort_order),
         )
-        cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+        cur.execute(
+            "UPDATE movies SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+            (
+                Jsonb(
+                    json_ready(
+                        ({f"{kind}_url": media_asset_public_url(media), f"{kind}_locked": True} if primary else {})
+                    )
+                ),
+                movie_id,
+            ),
+        )
 
     media["role"] = kind
     media["is_primary"] = primary
@@ -27097,6 +27206,258 @@ def create_uploaded_movie_media_asset(
         },
     )
     return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
+
+
+def set_primary_container_media_asset(
+    conn,
+    *,
+    container_id: UUID,
+    media_id: UUID,
+    kind: str,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if kind not in MOVIE_ARTWORK_KINDS:
+        raise NextApiError("kind must be poster or backdrop", 400)
+    if not table_exists(conn, "containers") or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM containers WHERE id=%s", (container_id,))
+        if not cur.fetchone():
+            raise NextApiError("Container not found", 404)
+        cur.execute(
+            """
+            SELECT
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata,
+                created_at
+            FROM media_assets
+            WHERE id=%s AND kind=%s
+            """,
+            (media_id, kind),
+        )
+        media = cur.fetchone()
+        if not media:
+            raise NextApiError("Media asset not found", 404)
+        cur.execute(
+            """
+            UPDATE entity_media em
+            SET is_primary=false,
+                sort_order=GREATEST(em.sort_order, 1)
+            FROM media_assets ma
+            WHERE ma.id = em.media_id
+              AND em.entity_type='container'
+              AND em.entity_id=%s
+              AND ma.kind=%s
+              AND em.is_primary=true
+            """,
+            (container_id, kind),
+        )
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type,
+                entity_id,
+                media_id,
+                role,
+                is_primary,
+                sort_order
+            )
+            VALUES ('container', %s, %s, %s, true, 0)
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                is_primary=true,
+                sort_order=0
+            """,
+            (container_id, media_id, kind),
+        )
+        media_metadata = media.get("metadata") if isinstance(media, dict) else {}
+        media_metadata = media_metadata if isinstance(media_metadata, dict) else {}
+        media_metadata.update(
+            {
+                "lockedPrimary": True,
+                "userSelectedPrimary": True,
+                "source": media_metadata.get("source") or "manual_selection",
+                "selectedBy": actor_job_payload(actor or {}) if actor else None,
+            }
+        )
+        cur.execute("UPDATE media_assets SET metadata=%s WHERE id=%s", (Jsonb(json_ready(media_metadata)), media_id))
+        cur.execute(
+            "UPDATE containers SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+            (
+                Jsonb(
+                    json_ready(
+                        {
+                            f"{kind}_url": media_asset_public_url(media),
+                            f"{kind}_locked": True,
+                        }
+                    )
+                ),
+                container_id,
+            ),
+        )
+    media["is_primary"] = True
+    media["sort_order"] = 0
+    media["role"] = kind
+    media["url"] = media_asset_public_url(media)
+    return {"containerId": str(container_id), "kind": kind, "media": media, "revision": 0}
+
+
+def create_uploaded_container_media_asset(
+    conn,
+    *,
+    container_id: UUID,
+    kind: str,
+    upload_info: dict[str, Any],
+    primary: bool,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not table_exists(conn, "containers") or not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
+        raise NextApiError("Media asset tables are not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM containers WHERE id=%s", (container_id,))
+        if not cur.fetchone():
+            raise NextApiError("Container not found", 404)
+        storage_key = clean_text(upload_info.get("storageKey")) or ""
+        if not storage_key:
+            raise NextApiError("Uploaded artwork did not produce a storage key", 500)
+        media_id = media_asset_uuid(storage_key)
+        cur.execute(
+            """
+            INSERT INTO media_assets (
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata
+            )
+            VALUES (%s, %s, 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (kind, variant, sha256) DO UPDATE SET
+                storage_backend=EXCLUDED.storage_backend,
+                storage_key=EXCLUDED.storage_key,
+                provider_id=EXCLUDED.provider_id,
+                content_type=EXCLUDED.content_type,
+                width=EXCLUDED.width,
+                height=EXCLUDED.height,
+                size_bytes=EXCLUDED.size_bytes,
+                metadata=EXCLUDED.metadata
+            RETURNING
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata,
+                created_at
+            """,
+            (
+                media_id,
+                kind,
+                storage_key,
+                upload_info.get("contentType"),
+                upload_info.get("width"),
+                upload_info.get("height"),
+                upload_info.get("sizeBytes"),
+                upload_info.get("sha256"),
+                Jsonb(
+                    {
+                        "source": "upload",
+                        "originalFilename": upload_info.get("originalFilename"),
+                        "uploadedBy": actor_job_payload(actor or {}) if actor else None,
+                        "lockedPrimary": bool(primary),
+                        "userSelectedPrimary": bool(primary),
+                    }
+                ),
+            ),
+        )
+        media = cur.fetchone()
+        if primary:
+            cur.execute(
+                """
+                UPDATE entity_media em
+                SET is_primary=false,
+                    sort_order=GREATEST(em.sort_order, 1)
+                FROM media_assets ma
+                WHERE ma.id = em.media_id
+                  AND em.entity_type='container'
+                  AND em.entity_id=%s
+                  AND ma.kind=%s
+                  AND em.is_primary=true
+                """,
+                (container_id, kind),
+            )
+            sort_order = 0
+        else:
+            cur.execute(
+                """
+                SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='container'
+                  AND em.entity_id=%s
+                  AND ma.kind=%s
+                """,
+                (container_id, kind),
+            )
+            row = cur.fetchone()
+            sort_order = int(row["next_sort"] if row else 1)
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type,
+                entity_id,
+                media_id,
+                role,
+                is_primary,
+                sort_order
+            )
+            VALUES ('container', %s, %s, %s, %s, %s)
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                is_primary=EXCLUDED.is_primary,
+                sort_order=EXCLUDED.sort_order
+            """,
+            (container_id, media["id"], kind, primary, sort_order),
+        )
+        cur.execute(
+            "UPDATE containers SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+            (
+                Jsonb(
+                    json_ready(
+                        ({f"{kind}_url": media_asset_public_url(media), f"{kind}_locked": True} if primary else {})
+                    )
+                ),
+                container_id,
+            ),
+        )
+    media["role"] = kind
+    media["is_primary"] = primary
+    media["sort_order"] = sort_order
+    media["url"] = media_asset_public_url(media)
+    return {"containerId": str(container_id), "kind": kind, "media": media, "revision": 0}
 
 
 def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
@@ -27524,9 +27885,9 @@ def refresh_container_metadata(
     if assets:
         primary_poster = next((asset for asset in assets if asset.get("kind") == "poster"), None)
         primary_backdrop = next((asset for asset in assets if asset.get("kind") == "backdrop"), None)
-        if primary_poster:
+        if primary_poster and not metadata.get("poster_locked"):
             metadata_updates["poster_url"] = primary_poster.get("url")
-        if primary_backdrop:
+        if primary_backdrop and not metadata.get("backdrop_locked"):
             metadata_updates["backdrop_url"] = primary_backdrop.get("url")
 
     proposal = {
@@ -31116,6 +31477,75 @@ def register_routes(flask_app: Flask) -> None:
                 )
         return response({"status": "ok", **result}, 201)
 
+    @flask_app.post("/api/next/containers/<container_id>/media/primary")
+    def container_media_primary(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media selection body must be an object", 400)
+        media_uuid = parse_uuid(body.get("mediaId") or body.get("media_id") or body.get("mediaAssetId"), "mediaId")
+        if not media_uuid:
+            raise NextApiError("mediaId is required", 400)
+        kind = clean_text(body.get("kind") or body.get("role")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            with conn.transaction():
+                result = set_primary_container_media_asset(
+                    conn,
+                    container_id=container_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="container.media_primary_changed",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary="Changed primary container artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
+
+    @flask_app.post("/api/next/containers/<container_id>/media/upload")
+    def container_media_upload(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
+            raise NextApiError("Artwork upload may not exceed 20 MB", 413)
+        upload, inferred_kind = uploaded_artwork_file()
+        kind = clean_text(request.form.get("kind") or request.args.get("kind") or inferred_kind) or ""
+        primary_value = request.form.get("primary")
+        if primary_value is None:
+            primary_value = request.args.get("primary")
+        primary = parse_bool_value(primary_value, default=True)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not container_entity(conn, container_uuid):
+                raise NextApiError("Container not found", 404)
+            upload_info = save_uploaded_artwork_file(upload, kind=kind)
+            with conn.transaction():
+                result = create_uploaded_container_media_asset(
+                    conn,
+                    container_id=container_uuid,
+                    kind=kind,
+                    upload_info=upload_info,
+                    primary=primary,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="container.media_uploaded",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary="Uploaded container artwork",
+                    metadata={"kind": kind, "primary": primary, "result": result},
+                )
+        return response({"status": "ok", **result}, 201)
+
     def metadata_box_set_proposal(metadata_result: dict[str, Any]) -> dict[str, Any]:
         for result in metadata_result.get("results") or []:
             if not isinstance(result, dict):
@@ -31132,6 +31562,30 @@ def register_routes(flask_app: Flask) -> None:
         base = clean_text(parent_barcode) or clean_text(box_set_title) or "box-set"
         clean = re.sub(r"[^A-Za-z0-9]+", "_", base).strip("_").upper()[:48] or "BOXSET"
         return f"IMPORT-{clean}-BOX-{index:02d}"
+
+    def physical_format_key(value: Any) -> str:
+        text = clean_text(value).casefold().replace("-", " ").replace("_", " ").replace("/", " ")
+        text = " ".join(text.split())
+        if not text:
+            return ""
+        if "ultra hd" in text or "uhd" in text or "4k" in text:
+            return "ultra_hd_blu_ray"
+        if "blu ray" in text or "bluray" in text or text == "bd":
+            return "blu_ray"
+        if text in {"dvd", "dvd video"}:
+            return "dvd"
+        if "hd dvd" in text or "hddvd" in text:
+            return "hd_dvd"
+        if "laserdisc" in text or "laser disc" in text:
+            return "laserdisc"
+        if "svcd" in text or "vcd" in text:
+            return "vcd_svcd"
+        return text
+
+    def compatible_box_set_member_format(candidate: Any, expected: Any) -> bool:
+        candidate_key = physical_format_key(candidate)
+        expected_key = physical_format_key(expected)
+        return not candidate_key or not expected_key or candidate_key == expected_key
 
     def box_set_member_identifiers(member: dict[str, Any]) -> dict[str, str]:
         identifiers: dict[str, str] = {}
@@ -31193,10 +31647,17 @@ def register_routes(flask_app: Flask) -> None:
             or metadata_updates.get("format")
             or ""
         )
-        # For box-set members the detected release format is more important
-        # than the parent box-set fallback, because mixed-format sets exist.
-        if discovered_format and (not enriched.get("format") or clean_text(enriched.get("format")) == clean_text(fallback_format)):
+        # Keep imported box-set members on the selected parent edition format.
+        # A DVD box-set must not silently receive 4K members from a broad
+        # metadata hit; those hits can still fill identifiers and artwork.
+        if discovered_format and compatible_box_set_member_format(discovered_format, fallback_format) and (
+            not enriched.get("format") or clean_text(enriched.get("format")) == clean_text(fallback_format)
+        ):
             enriched["format"] = discovered_format
+        if fallback_format and (
+            not enriched.get("format") or not compatible_box_set_member_format(enriched.get("format"), fallback_format)
+        ):
+            enriched["format"] = fallback_format
 
         fill("overview", movie_updates.get("overview"), metadata_updates.get("overview"), metadata_updates.get("plot"))
         fill("plot", metadata_updates.get("plot"), movie_updates.get("overview"))
@@ -31266,12 +31727,12 @@ def register_routes(flask_app: Flask) -> None:
             "tmdbId": clean_text(member.get("tmdbId") or member.get("tmdb_id")),
             "imdbId": clean_text(member.get("imdbId") or member.get("imdb_id")),
             "barcode": clean_text(member.get("barcode")),
-            "format": clean_text(member.get("format")),
+            "format": clean_text(member.get("format") or fallback_format),
             "parentBoxSets": [
                 {
                     "title": clean_text(proposal.get("title") or proposal.get("name")),
                     "barcode": clean_text(proposal.get("barcode") or body.get("barcode")),
-                    "format": clean_text(proposal.get("format") or body.get("format") or fallback_format),
+                    "format": clean_text(body.get("format") or proposal.get("format") or fallback_format),
                 }
             ],
         }
@@ -31400,7 +31861,11 @@ def register_routes(flask_app: Flask) -> None:
         members = [item for item in (proposal.get("movies") or proposal.get("members") or []) if isinstance(item, dict) and clean_text(item.get("title"))]
         if not title or len(members) < 2:
             raise NextApiError("Box-set proposal requires a title and at least two members.", 422)
-        fallback_format = clean_text(proposal.get("format") or body.get("format")) or "4K UHD"
+        fallback_format = clean_text(body.get("format") or proposal.get("format") or proposal.get("mediaType") or proposal.get("media_type"))
+        if fallback_format:
+            for member in members:
+                if not clean_text(member.get("format")) or not compatible_box_set_member_format(member.get("format"), fallback_format):
+                    member["format"] = fallback_format
         barcode = clean_text(proposal.get("barcode") or body.get("barcode"))
         container_uuid = uuid.uuid4()
         container_public_id = f"movievault-box-set-{container_uuid.hex[:12]}"
