@@ -512,6 +512,127 @@ def import_movie_metadata(item: dict[str, Any], plugin_id: str) -> dict[str, Any
     return {key: value for key, value in metadata.items() if value not in (None, "", [], {})}
 
 
+def import_item_container_specs(item: dict[str, Any]) -> list[dict[str, str]]:
+    specs: list[dict[str, str]] = []
+    for container_type, title in (
+        ("collection", item.get("collectionTitle") or item.get("collection") or item.get("collection_title")),
+        ("box_set", item.get("boxSetTitle") or item.get("boxSet") or item.get("box_set") or item.get("box_set_title")),
+        ("vault", item.get("vaultTitle") or item.get("vault") or item.get("vault_title")),
+    ):
+        clean_title = clean_text(title)
+        if clean_title:
+            specs.append({"containerType": container_type, "title": clean_title})
+    for raw in item.get("containers") or []:
+        if not isinstance(raw, dict):
+            continue
+        container_type = clean_text(raw.get("containerType") or raw.get("type") or raw.get("container_type"))
+        if container_type in {"boxset", "box-set"}:
+            container_type = "box_set"
+        if container_type not in {"collection", "box_set", "vault"}:
+            continue
+        title = clean_text(raw.get("title") or raw.get("name"))
+        if title:
+            specs.append({"containerType": container_type, "title": title})
+    seen: set[tuple[str, str]] = set()
+    unique: list[dict[str, str]] = []
+    for spec in specs:
+        key = (spec["containerType"], spec["title"].casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(spec)
+    return unique
+
+
+def import_container_id(plugin_id: str, source_hash: str, container_type: str, title: str) -> UUID:
+    return stable_uuid(f"container-import:{plugin_id}:{source_hash}:{container_type}:{title.casefold()}")
+
+
+def upsert_import_container(
+    conn,
+    *,
+    plugin_id: str,
+    source_hash: str,
+    container_type: str,
+    title: str,
+    source_path: str,
+    source_kind: str,
+) -> tuple[UUID, bool]:
+    container_id = import_container_id(plugin_id, source_hash, container_type, title)
+    public_id = source_public_id(
+        f"import-{container_type}",
+        f"{plugin_id}-{source_hash[:12]}-{title}",
+        fallback=str(container_id),
+    )
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM containers WHERE id=%s", (container_id,))
+        exists = bool(cur.fetchone())
+        cur.execute(
+            """
+            INSERT INTO containers (
+                id, public_id, container_type, title, metadata, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, now(), now())
+            ON CONFLICT (id) DO UPDATE SET
+                title=EXCLUDED.title,
+                metadata=containers.metadata || EXCLUDED.metadata,
+                updated_at=now()
+            """,
+            (
+                container_id,
+                public_id,
+                container_type,
+                title,
+                Jsonb(
+                    json_ready(
+                        {
+                            "import_source": plugin_id,
+                            "source_kind": source_kind,
+                            "source_path": source_path,
+                            "source_hash": source_hash,
+                        }
+                    )
+                ),
+            ),
+        )
+    return container_id, not exists
+
+
+def link_import_movie_to_container(
+    conn,
+    *,
+    container_id: UUID,
+    container_type: str,
+    movie_id: UUID,
+    sort_order: int,
+) -> bool:
+    if container_type == "collection":
+        if not table_exists(conn, "collection_items"):
+            return False
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO collection_items (collection_id, item_type, item_id, sort_order, created_at)
+                VALUES (%s, 'movie', %s, %s, now())
+                ON CONFLICT (collection_id, item_type, item_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
+                """,
+                (container_id, movie_id, sort_order),
+            )
+        return True
+    if not table_exists(conn, "container_movies"):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO container_movies (container_id, movie_id, sort_order, created_at)
+            VALUES (%s, %s, %s, now())
+            ON CONFLICT (container_id, movie_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
+            """,
+            (container_id, movie_id, sort_order),
+        )
+    return True
+
+
 def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUID, bool]:
     title = clean_text(item.get("title"))
     if not title:
@@ -611,45 +732,37 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             return {"skipped": True, "reason": "movies table is not initialized"}
         with conn.transaction():
             container_id = None
+            source_hash = clean_text(result.get("sourceDatabaseHash")) or hashlib.sha256(
+                f"{plugin_id}:{result.get('sourcePath')}".encode("utf-8")
+            ).hexdigest()
+            source_path = clean_text(result.get("sourcePath"))
+            source_kind = clean_text(result.get("sourceKind") or plugin_id)
+            container_cache: dict[tuple[str, str], UUID] = {}
+            container_titles: dict[tuple[str, str], str] = {}
+            container_created: set[UUID] = set()
+            container_links = 0
             if table_exists(conn, "containers") and table_exists(conn, "collection_items"):
-                source_hash = clean_text(result.get("sourceDatabaseHash")) or hashlib.sha256(
-                    f"{plugin_id}:{result.get('sourcePath')}".encode("utf-8")
-                ).hexdigest()
-                container_id = stable_uuid(f"collection-import:{plugin_id}:{source_hash}")
-                title = f"{result.get('sourceKind') or plugin_id} import"
-                public_id = source_public_id("import-collection", f"{plugin_id}-{source_hash[:16]}", fallback=str(container_id))
+                title = f"{source_kind} import"
+                container_id, was_container_created = upsert_import_container(
+                    conn,
+                    plugin_id=plugin_id,
+                    source_hash=source_hash,
+                    container_type="collection",
+                    title=title,
+                    source_path=source_path,
+                    source_kind=source_kind,
+                )
+                if was_container_created:
+                    container_created.add(container_id)
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
-                        INSERT INTO containers (
-                            id, public_id, container_type, title, metadata, created_at, updated_at
-                        )
-                        VALUES (%s, %s, 'collection', %s, %s, now(), now())
-                        ON CONFLICT (id) DO UPDATE SET
-                            title=EXCLUDED.title,
-                            metadata=containers.metadata || EXCLUDED.metadata,
-                            updated_at=now()
-                        """,
-                        (
-                            container_id,
-                            public_id,
-                            title,
-                            Jsonb(
-                                json_ready(
-                                    {
-                                        "import_source": plugin_id,
-                                        "source_kind": result.get("sourceKind"),
-                                        "source_path": result.get("sourcePath"),
-                                        "source_hash": source_hash,
-                                    }
-                                )
-                            ),
-                        ),
+                        "DELETE FROM collection_items WHERE collection_id=%s AND item_type='movie'",
+                        (container_id,),
                     )
-                    cur.execute("DELETE FROM collection_items WHERE collection_id=%s AND item_type='movie'", (container_id,))
 
             imported = 0
             created = 0
+            updated = 0
             linked = 0
             errors = []
             for index, item in enumerate(items[:5000], start=1):
@@ -659,17 +772,41 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                     movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
                     imported += 1
                     created += 1 if was_created else 0
-                    if container_id and table_exists(conn, "collection_items"):
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                """
-                                INSERT INTO collection_items (collection_id, item_type, item_id, sort_order, created_at)
-                                VALUES (%s, 'movie', %s, %s, now())
-                                ON CONFLICT (collection_id, item_type, item_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
-                                """,
-                                (container_id, movie_id, index),
-                            )
+                    updated += 0 if was_created else 1
+                    if container_id and link_import_movie_to_container(
+                        conn,
+                        container_id=container_id,
+                        container_type="collection",
+                        movie_id=movie_id,
+                        sort_order=index,
+                    ):
                         linked += 1
+                    if table_exists(conn, "containers"):
+                        for spec in import_item_container_specs(item):
+                            key = (spec["containerType"], spec["title"].casefold())
+                            spec_container_id = container_cache.get(key)
+                            if not spec_container_id:
+                                container_titles[key] = spec["title"]
+                                spec_container_id, was_container_created = upsert_import_container(
+                                    conn,
+                                    plugin_id=plugin_id,
+                                    source_hash=source_hash,
+                                    container_type=spec["containerType"],
+                                    title=spec["title"],
+                                    source_path=source_path,
+                                    source_kind=source_kind,
+                                )
+                                container_cache[key] = spec_container_id
+                                if was_container_created:
+                                    container_created.add(spec_container_id)
+                            if link_import_movie_to_container(
+                                conn,
+                                container_id=spec_container_id,
+                                container_type=spec["containerType"],
+                                movie_id=movie_id,
+                                sort_order=index,
+                            ):
+                                container_links += 1
                 except Exception as exc:
                     errors.append({"index": index, "title": item.get("title"), "error": str(exc)})
 
@@ -679,8 +816,16 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "items": len(items),
         "imported": imported,
         "created": created,
+        "updated": updated,
         "linkedToCollection": linked,
+        "linkedToContainers": container_links,
+        "containersCreated": len(container_created),
+        "containersTouched": len(container_cache) + (1 if container_id else 0),
         "collectionId": str(container_id) if container_id else None,
+        "containers": [
+            {"containerType": key[0], "title": container_titles.get(key, key[1]), "id": str(value)}
+            for key, value in container_cache.items()
+        ][:50],
         "errors": errors[:20],
     }
 

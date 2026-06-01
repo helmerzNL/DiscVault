@@ -39,6 +39,9 @@ SOURCE = {
         "backdrop": ("Backdrop", "Backdrop URL"),
         "sourceUrl": ("URL", "Detail URL", "Blu-ray.com URL"),
         "tags": ("Tags", "Collection"),
+        "collection": ("Collection", "List", "Folder", "Group"),
+        "boxSet": ("Box Set", "BoxSet", "Boxset", "Set", "Series", "Franchise"),
+        "vault": ("Vault", "Vault Title", "Version Group", "Edition Group"),
     },
     "defaultFormat": "Blu-ray",
 }

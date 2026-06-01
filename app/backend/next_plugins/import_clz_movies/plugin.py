@@ -39,6 +39,9 @@ SOURCE = {
         "backdrop": ("Backdrop", "Backdrop URL"),
         "sourceUrl": ("URL", "Link", "CLZ URL"),
         "tags": ("Tags", "Labels", "Collection Status"),
+        "collection": ("Collection", "List", "Folder", "Group"),
+        "boxSet": ("Box Set", "BoxSet", "Boxset", "Set", "Series", "Franchise"),
+        "vault": ("Vault", "Vault Title", "Version Group", "Edition Group"),
     },
 }
 

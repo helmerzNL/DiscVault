@@ -1232,6 +1232,123 @@ def import_source_conflicts(conn, items: list[dict[str, Any]], *, limit: int = 5
     return conflicts
 
 
+def import_source_item_container_specs(item: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(item, dict):
+        return []
+    specs: list[dict[str, Any]] = []
+    field_specs = (
+        ("collection", item.get("collectionTitle") or item.get("collection") or item.get("collection_title")),
+        ("box_set", item.get("boxSetTitle") or item.get("boxSet") or item.get("box_set") or item.get("box_set_title")),
+        ("vault", item.get("vaultTitle") or item.get("vault") or item.get("vault_title")),
+    )
+    for container_type, title in field_specs:
+        clean_title = clean_text(title)
+        if clean_title:
+            specs.append({"containerType": container_type, "title": clean_title})
+    for raw in item.get("containers") or []:
+        if not isinstance(raw, dict):
+            continue
+        container_type = clean_text(raw.get("containerType") or raw.get("type") or raw.get("container_type"))
+        if container_type in {"boxset", "box-set"}:
+            container_type = "box_set"
+        if container_type not in {"collection", "box_set", "vault"}:
+            continue
+        title = clean_text(raw.get("title") or raw.get("name"))
+        if title:
+            specs.append({"containerType": container_type, "title": title})
+    seen: set[tuple[str, str]] = set()
+    unique: list[dict[str, Any]] = []
+    for spec in specs:
+        key = (spec["containerType"], spec["title"].casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(spec)
+    return unique
+
+
+def import_source_action_preview(
+    conn,
+    *,
+    plugin_id: str,
+    source: dict[str, Any],
+    items: list[dict[str, Any]],
+    limit: int = 200,
+) -> dict[str, Any]:
+    conflicts = import_source_conflicts(conn, items, limit=min(len(items), 5000))
+    conflict_by_index = {item["index"]: item for item in conflicts}
+    actions: list[dict[str, Any]] = []
+    counts = {
+        "total": len(items),
+        "create": 0,
+        "update": 0,
+        "skip": 0,
+        "linkCollection": 0,
+        "linkContainers": 0,
+    }
+    containers: dict[tuple[str, str], dict[str, Any]] = {}
+    source_title = clean_text(source.get("sourceKind") or plugin_id).replace("_", " ")
+    import_collection = {
+        "containerType": "collection",
+        "title": f"{source_title} import",
+        "reason": "source_import_collection",
+        "members": len(items),
+    }
+    for index, item in enumerate(items, start=1):
+        title = clean_text(item.get("title") or item.get("name"))
+        if not title:
+            counts["skip"] += 1
+            action = "skip"
+        else:
+            match = (conflict_by_index.get(index) or {}).get("match")
+            action = "update" if match else "create"
+            counts[action] += 1
+            counts["linkCollection"] += 1
+        specs = import_source_item_container_specs(item)
+        counts["linkContainers"] += len(specs)
+        for spec in specs:
+            key = (spec["containerType"], spec["title"].casefold())
+            entry = containers.setdefault(
+                key,
+                {
+                    "containerType": spec["containerType"],
+                    "title": spec["title"],
+                    "members": [],
+                },
+            )
+            entry["members"].append(
+                {
+                    "index": index,
+                    "title": title,
+                    "year": clean_text(item.get("year")),
+                }
+            )
+        if len(actions) < limit:
+            actions.append(
+                {
+                    "index": index,
+                    "action": action,
+                    "title": title,
+                    "year": clean_text(item.get("year")),
+                    "barcode": clean_text(item.get("barcode")),
+                    "match": (conflict_by_index.get(index) or {}).get("match"),
+                    "containers": specs,
+                }
+            )
+    container_preview = [
+        {**value, "memberCount": len(value["members"]), "members": value["members"][:8]}
+        for value in containers.values()
+    ]
+    container_preview.sort(key=lambda item: (item["containerType"], item["title"].casefold()))
+    return {
+        "counts": counts,
+        "actions": actions,
+        "containers": container_preview,
+        "importCollection": import_collection,
+        "truncated": len(items) > limit,
+    }
+
+
 def inspect_import_source_selection(
     conn,
     *,
@@ -1251,9 +1368,15 @@ def inspect_import_source_selection(
     sample = source.get("sample") or []
     conflicts = import_source_conflicts(conn, sample) if isinstance(sample, list) else []
     plan: dict[str, Any] | None = None
-    if source.get("readable") and "plan_import" in plugin_runtime_entrypoints(plugin):
+    action_preview = None
+    context = None
+    if source.get("readable") and (
+        "plan_import" in plugin_runtime_entrypoints(plugin)
+        or "import_source" in plugin_runtime_entrypoints(plugin)
+    ):
         config = plugin_config_from_db(conn, plugin_id)
         context = plugin_execution_context(conn, plugin, config, actor)
+    if source.get("readable") and "plan_import" in plugin_runtime_entrypoints(plugin) and context:
         plan_execution = run_plugin_entrypoint(plugin_id, "plan_import", payload, context)
         if plan_execution.get("status") == "ok" and isinstance(plan_execution.get("result"), dict):
             plan = plan_execution["result"]
@@ -1263,6 +1386,22 @@ def inspect_import_source_selection(
                 "canStart": False,
                 "error": plan_execution.get("error"),
             }
+    if source.get("readable") and "import_source" in plugin_runtime_entrypoints(plugin) and context:
+        preview_payload = dict(payload)
+        if source.get("sourcePath") and not preview_payload.get("sourcePath"):
+            preview_payload["sourcePath"] = source.get("sourcePath")
+        if source.get("sourceDatabaseHash"):
+            preview_payload["sourceDatabaseHash"] = source.get("sourceDatabaseHash")
+        import_execution = run_plugin_entrypoint(plugin_id, "import_source", preview_payload, context)
+        result = import_execution.get("result") if import_execution.get("status") == "ok" else {}
+        items = result.get("items") if isinstance(result, dict) else []
+        if isinstance(items, list):
+            action_preview = import_source_action_preview(
+                conn,
+                plugin_id=plugin_id,
+                source=source,
+                items=[item for item in items if isinstance(item, dict)],
+            )
     return {
         "source": source,
         "execution": {
@@ -1271,6 +1410,7 @@ def inspect_import_source_selection(
             "error": execution.get("error"),
         },
         "conflicts": conflicts,
+        "actionPreview": action_preview,
         "plan": plan,
     }
 
@@ -14167,30 +14307,68 @@ def ui_preview_html(
       if (!previewNode) return;
       const preview = importCenter.preview || {};
       const source = importPreviewSource();
+      const actionPreview = preview.actionPreview || {};
+      const actionCounts = actionPreview.counts || {};
+      const actionRows = actionPreview.actions || [];
+      const containerRows = actionPreview.containers || [];
       const sample = source.sample || [];
       const conflicts = preview.conflicts || [];
-      if (!sample.length && !conflicts.length) {
+      if (!sample.length && !conflicts.length && !actionRows.length) {
         previewNode.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noPreview", "Inspect a source to preview sample rows and conflicts."))}</div>`;
         return;
       }
+      const actionLabel = (action) => tNext(`importCenter.action.${action}`, action);
       const conflictMap = new Map(conflicts.map((item) => [Number(item.index || 0), item]));
-      const sampleHtml = sample.slice(0, 8).map((item, index) => {
-        const conflict = conflictMap.get(index + 1);
-        const state = conflict?.state === "existing" ? tNext("importCenter.conflictExisting", "Already in library") : tNext("importCenter.conflictNew", "New");
+      const sampleHtml = (actionRows.length ? actionRows : sample.slice(0, 8).map((item, index) => ({
+        index: index + 1,
+        action: (conflictMap.get(index + 1)?.state === "existing") ? "update" : "create",
+        title: item.title || item.name,
+        year: item.year,
+        barcode: item.barcode,
+        match: conflictMap.get(index + 1)?.match,
+        containers: []
+      }))).slice(0, 10).map((item, index) => {
+        const conflict = conflictMap.get(Number(item.index || index + 1));
+        const state = item.action ? actionLabel(item.action) : (conflict?.state === "existing" ? tNext("importCenter.conflictExisting", "Already in library") : tNext("importCenter.conflictNew", "New"));
         const title = item.title || item.name || tNext("common.untitled", "Untitled");
         const meta = [item.year, item.format, item.barcode].filter(Boolean).join(" / ");
+        const containerTags = (item.containers || []).map((container) => `<span class="tag">${escapeHtml(container.containerType || container.type)} ${escapeHtml(container.title || "")}</span>`).join("");
         return `
           <div class="import-preview-card">
             <div>
               <strong>${escapeHtml(title)}</strong>
               <div class="import-source-meta">${escapeHtml(meta || item.sourceFile || "")}</div>
-              ${conflict?.match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml(conflict.match.title || conflict.match.id || "")}</div>` : ""}
+              ${item.match || conflict?.match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml((item.match || conflict.match).title || (item.match || conflict.match).id || "")}</div>` : ""}
+              ${containerTags ? `<div class="import-counts">${containerTags}</div>` : ""}
             </div>
-            <span class="tag ${conflict?.state === "existing" ? "" : "good"}">${escapeHtml(state)}</span>
+            <span class="tag ${item.action === "create" || conflict?.state !== "existing" ? "good" : ""}">${escapeHtml(state)}</span>
           </div>
         `;
       }).join("");
-      const conflictSummary = conflicts.length
+      const actionSummary = Object.keys(actionCounts).length
+        ? `<div class="import-conflict-list">
+            <span class="tag">${escapeHtml(tNext("importCenter.actionTotal", "Total"))} ${escapeHtml(actionCounts.total || 0)}</span>
+            <span class="tag good">${escapeHtml(tNext("importCenter.action.create", "Create"))} ${escapeHtml(actionCounts.create || 0)}</span>
+            <span class="tag">${escapeHtml(tNext("importCenter.action.update", "Update"))} ${escapeHtml(actionCounts.update || 0)}</span>
+            <span class="tag">${escapeHtml(tNext("importCenter.linkCollection", "Link to collection"))} ${escapeHtml(actionCounts.linkCollection || 0)}</span>
+            <span class="tag">${escapeHtml(tNext("importCenter.linkContainers", "Container links"))} ${escapeHtml(actionCounts.linkContainers || 0)}</span>
+          </div>`
+        : "";
+      const containerSummary = containerRows.length
+        ? `<div class="import-source-list">
+            <div class="import-source-meta">${escapeHtml(tNext("importCenter.containerPreview", "Container proposals"))}</div>
+            ${containerRows.slice(0, 8).map((container) => `
+              <div class="import-preview-card">
+                <div>
+                  <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
+                  <div class="import-source-meta">${escapeHtml(container.containerType || "")}</div>
+                </div>
+                <span class="tag">${escapeHtml(container.memberCount || 0)} ${escapeHtml(tNext("importCenter.members", "members"))}</span>
+              </div>
+            `).join("")}
+          </div>`
+        : "";
+      const conflictSummary = !actionSummary && conflicts.length
         ? `<div class="import-conflict-list">
             <span class="tag">${escapeHtml(tNext("importCenter.conflicts", "Conflicts"))} ${escapeHtml(conflicts.filter((item) => item.state === "existing").length)}</span>
             <span class="tag good">${escapeHtml(tNext("importCenter.newItems", "New"))} ${escapeHtml(conflicts.filter((item) => item.state !== "existing").length)}</span>
@@ -14204,8 +14382,9 @@ def ui_preview_html(
           </div>
           <span class="tag ${source.readable ? "good" : ""}">${escapeHtml(source.status || "-")}</span>
         </div>
-        ${conflictSummary}
+        ${actionSummary || conflictSummary}
         ${sampleHtml || `<div class="preview-empty">${escapeHtml(tNext("importCenter.noSample", "No sample rows returned by this plugin."))}</div>`}
+        ${containerSummary}
       `;
     }
     function renderImportPlan() {

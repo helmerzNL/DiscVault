@@ -60,6 +60,30 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["year"], "1985")
         self.assertEqual(result["items"][0]["sourceUrl"], "https://boxd.it/2b8e")
 
+    def test_collection_import_plugins_parse_container_columns(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_file = Path(temp_dir) / "movies.csv"
+            export_file.write_text(
+                "Title,Year,Barcode,Collection,Box Set,Vault\n"
+                "The Fellowship of the Ring,2001,123456789012,Fantasy Shelf,The Lord of the Rings,Middle-earth 4K\n",
+                encoding="utf-8",
+            )
+
+            execution = run_plugin_entrypoint(
+                "import_mymovies_dk",
+                "import_source",
+                {"sourcePath": str(export_file)},
+                {},
+            )
+
+        result = execution["result"]
+        self.assertEqual(execution["status"], "ok")
+        self.assertEqual(result["status"], "completed")
+        item = result["items"][0]
+        self.assertEqual(item["collectionTitle"], "Fantasy Shelf")
+        self.assertEqual(item["boxSetTitle"], "The Lord of the Rings")
+        self.assertEqual(item["vaultTitle"], "Middle-earth 4K")
+
     def test_legacy_import_plugin_inspects_sqlite_source(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             data_dir = Path(temp_dir)

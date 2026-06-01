@@ -39,6 +39,9 @@ SOURCE = {
         "backdrop": ("Backdrop", "Backdrop URL", "Background"),
         "sourceUrl": ("URL", "Web", "Link"),
         "tags": ("Tags", "Categories"),
+        "collection": ("Collection", "List", "Folder", "Group", "Category"),
+        "boxSet": ("Box Set", "BoxSet", "Boxset", "Set", "Series", "Franchise"),
+        "vault": ("Vault", "Vault Title", "Version Group", "Edition Group"),
     },
 }
 
