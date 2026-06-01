@@ -34,11 +34,18 @@ def _username(context: dict[str, Any] | None) -> str:
 
 
 def _client_id(context: dict[str, Any] | None) -> str:
-    return _text(_secrets(context).get("clientId"))
+    secrets = _secrets(context)
+    return _text(secrets.get("clientId") or secrets.get("client_id"))
 
 
 def _access_token(context: dict[str, Any] | None) -> str:
-    return _text(_secrets(context).get("accessToken"))
+    secrets = _secrets(context)
+    return _text(
+        secrets.get("accessToken")
+        or secrets.get("access_token")
+        or secrets.get("bearerToken")
+        or secrets.get("token")
+    )
 
 
 def _configured(context: dict[str, Any] | None) -> bool:
@@ -46,22 +53,33 @@ def _configured(context: dict[str, Any] | None) -> bool:
     return bool(_client_id(context) and (username != "me" or _access_token(context)))
 
 
-def _headers(context: dict[str, Any] | None) -> dict[str, str]:
+def _headers(context: dict[str, Any] | None, *, authorize: bool = True) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
         "trakt-api-version": "2",
         "trakt-api-key": _client_id(context),
     }
     token = _access_token(context)
-    if token:
+    if authorize and token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
-def _get_json(path: str, context: dict[str, Any] | None, params: dict[str, Any] | None = None) -> Any:
+def _get_json(
+    path: str,
+    context: dict[str, Any] | None,
+    params: dict[str, Any] | None = None,
+    *,
+    authorize: bool = True,
+) -> Any:
     import requests
 
-    response = requests.get(f"{BASE_URL}{path}", headers=_headers(context), params=params or {}, timeout=30)
+    response = requests.get(
+        f"{BASE_URL}{path}",
+        headers=_headers(context, authorize=authorize),
+        params=params or {},
+        timeout=30,
+    )
     response.raise_for_status()
     return response.json()
 
@@ -134,9 +152,32 @@ def health_check(context=None):
     if _client_id(context).startswith("test"):
         return {"status": "configured", "message": "Trakt test configuration accepted without a network call."}
     try:
-        path = "/sync/watchlist/movies" if username == "me" else f"/users/{username}/watchlist/movies"
-        _get_json(path, context, {"limit": 1})
-        return {"status": "available", "message": "Trakt is reachable.", "username": username}
+        _get_json("/movies/tron-legacy-2010", context, {"extended": "min"}, authorize=False)
+        token_status = "not_required"
+        if username == "me":
+            try:
+                _get_json("/users/settings", context)
+                token_status = "valid"
+            except Exception as token_exc:
+                token_status = "invalid"
+                status_code = _http_status(token_exc)
+                return {
+                    "status": "available",
+                    "message": (
+                        f"Trakt API is reachable, but the OAuth access token was rejected (HTTP {status_code})."
+                        if status_code
+                        else f"Trakt API is reachable, but the OAuth access token could not be validated: {token_exc}"
+                    ),
+                    "username": username,
+                    "tokenStatus": token_status,
+                    "tokenHttpStatus": status_code,
+                }
+        return {
+            "status": "available",
+            "message": "Trakt API is reachable.",
+            "username": username,
+            "tokenStatus": token_status,
+        }
     except Exception as exc:
         status_code = _http_status(exc)
         if status_code:
@@ -166,12 +207,13 @@ def sync_personal_lists(payload=None, context=None):
 
     watchlist = []
     watched = []
+    private_lists = username == "me"
     if _bool_setting(context, "syncWatchlist", True):
         path = "/sync/watchlist/movies" if username == "me" else f"/users/{username}/watchlist/movies"
-        watchlist = _normalize_many(_get_json(path, context), list_kind="watchlist")
+        watchlist = _normalize_many(_get_json(path, context, authorize=private_lists), list_kind="watchlist")
     if _bool_setting(context, "syncWatched", True):
         path = "/sync/watched/movies" if username == "me" else f"/users/{username}/watched/movies"
-        watched = _normalize_many(_get_json(path, context), list_kind="watched")
+        watched = _normalize_many(_get_json(path, context, authorize=private_lists), list_kind="watched")
 
     return {
         "status": "completed",
