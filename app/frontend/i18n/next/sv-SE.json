@@ -1077,5 +1077,19 @@
   "importCenter.fileChosenSource": "Vald kalla",
   "importCenter.fileNoFile": "Valj en fil forst.",
   "importCenter.fileRecognized": "Igenkand",
-  "importCenter.fileNotRecognized": "Inte igenkand"
+  "importCenter.fileNotRecognized": "Inte igenkand",
+  "appAdmin.featureMovieDelete": "Ta bort filmer",
+  "bulk.deleteTarget": "Ta bort",
+  "bulk.deleteSelected": "Ta bort markerade",
+  "bulk.deleteConfirm": "Ta bort markerade filmer och behållare? Detta kan inte ångras.",
+  "bulk.deleting": "Tar bort markerade objekt...",
+  "bulk.deletedSelected": "objekt borttagna",
+  "movieDetail.deleteMovie": "Ta bort film",
+  "movieDetail.deleteConfirm": "Ta bort {title}? Detta kan inte ångras.",
+  "movieDetail.deleting": "Tar bort film...",
+  "movieDetail.deleted": "Film borttagen.",
+  "containerDetail.deleteContainer": "Ta bort behållare",
+  "containerDetail.deleteConfirm": "Ta bort {title}? Detta tar bort behållaren, inte filmerna i den.",
+  "containerDetail.deleting": "Tar bort behållare...",
+  "containerDetail.deleted": "Behållare borttagen."
 }

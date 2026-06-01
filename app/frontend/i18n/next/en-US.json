@@ -1151,5 +1151,19 @@
   "importCenter.fileChosenSource": "Chosen source",
   "importCenter.fileNoFile": "Choose a file first.",
   "importCenter.fileRecognized": "Recognized",
-  "importCenter.fileNotRecognized": "Not recognized"
+  "importCenter.fileNotRecognized": "Not recognized",
+  "appAdmin.featureMovieDelete": "Delete movies",
+  "bulk.deleteTarget": "Delete",
+  "bulk.deleteSelected": "Delete selected",
+  "bulk.deleteConfirm": "Delete selected movies and containers? This cannot be undone.",
+  "bulk.deleting": "Deleting selected items...",
+  "bulk.deletedSelected": "items deleted",
+  "movieDetail.deleteMovie": "Delete movie",
+  "movieDetail.deleteConfirm": "Delete {title}? This cannot be undone.",
+  "movieDetail.deleting": "Deleting movie...",
+  "movieDetail.deleted": "Movie deleted.",
+  "containerDetail.deleteContainer": "Delete container",
+  "containerDetail.deleteConfirm": "Delete {title}? This removes the container, not the movies inside it.",
+  "containerDetail.deleting": "Deleting container...",
+  "containerDetail.deleted": "Container deleted."
 }

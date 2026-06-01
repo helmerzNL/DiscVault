@@ -1077,5 +1077,19 @@
   "importCenter.fileChosenSource": "Valittu lahde",
   "importCenter.fileNoFile": "Valitse ensin tiedosto.",
   "importCenter.fileRecognized": "Tunnistettu",
-  "importCenter.fileNotRecognized": "Ei tunnistettu"
+  "importCenter.fileNotRecognized": "Ei tunnistettu",
+  "appAdmin.featureMovieDelete": "Poista elokuvia",
+  "bulk.deleteTarget": "Poista",
+  "bulk.deleteSelected": "Poista valitut",
+  "bulk.deleteConfirm": "Poistetaanko valitut elokuvat ja säiliöt? Tätä ei voi perua.",
+  "bulk.deleting": "Poistetaan valittuja kohteita...",
+  "bulk.deletedSelected": "kohdetta poistettu",
+  "movieDetail.deleteMovie": "Poista elokuva",
+  "movieDetail.deleteConfirm": "Poistetaanko {title}? Tätä ei voi perua.",
+  "movieDetail.deleting": "Poistetaan elokuvaa...",
+  "movieDetail.deleted": "Elokuva poistettu.",
+  "containerDetail.deleteContainer": "Poista säiliö",
+  "containerDetail.deleteConfirm": "Poistetaanko {title}? Tämä poistaa säiliön, ei sen sisältämiä elokuvia.",
+  "containerDetail.deleting": "Poistetaan säiliötä...",
+  "containerDetail.deleted": "Säiliö poistettu."
 }

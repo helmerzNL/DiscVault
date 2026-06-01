@@ -1077,5 +1077,19 @@
   "importCenter.fileChosenSource": "Fuente elegida",
   "importCenter.fileNoFile": "Elige primero un archivo.",
   "importCenter.fileRecognized": "Reconocido",
-  "importCenter.fileNotRecognized": "No reconocido"
+  "importCenter.fileNotRecognized": "No reconocido",
+  "appAdmin.featureMovieDelete": "Eliminar películas",
+  "bulk.deleteTarget": "Eliminar",
+  "bulk.deleteSelected": "Eliminar selección",
+  "bulk.deleteConfirm": "¿Eliminar las películas y contenedores seleccionados? Esta acción no se puede deshacer.",
+  "bulk.deleting": "Eliminando elementos seleccionados...",
+  "bulk.deletedSelected": "elementos eliminados",
+  "movieDetail.deleteMovie": "Eliminar película",
+  "movieDetail.deleteConfirm": "¿Eliminar {title}? Esta acción no se puede deshacer.",
+  "movieDetail.deleting": "Eliminando película...",
+  "movieDetail.deleted": "Película eliminada.",
+  "containerDetail.deleteContainer": "Eliminar contenedor",
+  "containerDetail.deleteConfirm": "¿Eliminar {title}? Esto elimina el contenedor, no las películas que contiene.",
+  "containerDetail.deleting": "Eliminando contenedor...",
+  "containerDetail.deleted": "Contenedor eliminado."
 }
