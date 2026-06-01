@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v131";
+const SW_VERSION = "discvault-sw-v132";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -431,13 +431,17 @@ async function handleApi(request, event) {
   const isLegacyAuthRoute = url.pathname.startsWith("/api/auth/");
 
   if (!isGet) {
-    return jsonResponse({
-      status: "error",
-      offline: true,
-      queueable: false,
-      error: "Offline: this action requires a backend connection.",
-      path: url.pathname
-    }, 503);
+    try {
+      return await fetch(request);
+    } catch {
+      return jsonResponse({
+        status: "error",
+        offline: true,
+        queueable: false,
+        error: "Offline: this action requires a backend connection.",
+        path: url.pathname
+      }, 503);
+    }
   }
 
   if (isLegacyAuthRoute && url.pathname !== "/api/auth/status") {
