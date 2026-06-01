@@ -1,7 +1,9 @@
 import os
+import json
 import sys
 import types
 import unittest
+from pathlib import Path
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -19,6 +21,14 @@ from app.backend.next_plugins.movievault import plugin as movievault_plugin
 
 
 class MovieVaultPluginBoxSetTests(unittest.TestCase):
+    def test_manifest_has_no_manual_url_configuration_fields(self):
+        manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        schema = manifest.get("settingsSchema") or {}
+        fields = schema.get("settings") or []
+
+        self.assertEqual(fields, [])
+
     def test_box_set_members_are_normalized_and_identified_by_metadata_bridge(self):
         lookups = []
 

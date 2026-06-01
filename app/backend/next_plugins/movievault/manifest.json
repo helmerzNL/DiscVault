@@ -1,7 +1,7 @@
 {
   "id": "movievault",
   "name": "MovieVault",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["metadata_source", "metadata_receiver"],
@@ -15,24 +15,7 @@
   "requiresSecrets": false,
   "settingsSchemaVersion": 1,
   "settingsSchema": {
-    "settings": [
-      {
-        "name": "baseUrl",
-        "label": "MovieVault search URL",
-        "type": "url",
-        "required": false,
-        "placeholder": "https://search.discvault.eu",
-        "description": "MovieVault metadata API base URL."
-      },
-      {
-        "name": "ingestUrl",
-        "label": "MovieVault ingest URL",
-        "type": "url",
-        "required": false,
-        "placeholder": "https://movies.discvault.eu",
-        "description": "MovieVault connection and contribution API base URL."
-      }
-    ],
+    "settings": [],
     "secrets": []
   },
   "orderIndex": 50,
