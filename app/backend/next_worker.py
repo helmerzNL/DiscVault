@@ -1082,9 +1082,13 @@ def persist_personal_list_sync(
                                         "source": plugin_id,
                                         "title": item.get("title"),
                                         "year": item.get("year"),
+                                        "watchedAt": item.get("watchedAt") or item.get("lastWatchedAt"),
                                         "plays": item.get("plays"),
+                                        "traktId": item.get("traktId") or item.get("trakt_id"),
                                         "tmdbId": item.get("tmdbId") or item.get("tmdb_id"),
                                         "imdbId": item.get("imdbId") or item.get("imdb_id"),
+                                        "sourceUrl": item.get("sourceUrl") or item.get("source_url"),
+                                        "metadata": item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
                                     }
                                 )
                             ),
