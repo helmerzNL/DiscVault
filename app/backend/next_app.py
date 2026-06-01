@@ -58,8 +58,12 @@ try:
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
+    from .next_backup import BackupError as NextBackupError
+    from .next_backup import backup_restore_plan
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
+    from .next_backup import list_backup_archives
+    from .next_backup import stored_backup_path
     from .next_backup import validate_backup_zip
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_effective_enabled
@@ -104,8 +108,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
+    from next_backup import BackupError as NextBackupError
+    from next_backup import backup_restore_plan
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
+    from next_backup import list_backup_archives
+    from next_backup import stored_backup_path
     from next_backup import validate_backup_zip
     from next_auth import next_auth_current_user
     from next_auth import next_auth_effective_enabled
@@ -7738,6 +7746,21 @@ def ui_preview_html(
       display: grid;
       gap: 10px;
     }
+    .profile-checkbox-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .9rem;
+      font-weight: 620;
+      line-height: 1.35;
+      cursor: pointer;
+    }
+    .profile-checkbox-row input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
     .profile-passkey {
       display: grid;
       gap: 10px;
@@ -10250,6 +10273,10 @@ def ui_preview_html(
                 <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.refreshBackup">Refresh backup</button>
                 <button type="button" class="secondary-button" id="appAdminExportBackupButton" data-next-i18n="appAdmin.exportBackup">Export ZIP</button>
               </div>
+              <label class="profile-checkbox-row" for="appAdminBackupIncludePersonalLists">
+                <input id="appAdminBackupIncludePersonalLists" type="checkbox">
+                <span data-next-i18n="appAdmin.includePersonalLists">Include watchlist and watched history</span>
+              </label>
               <div class="login-message" id="appAdminBackupMessage"></div>
             </div>
             <div class="detail-card profile-card">
@@ -10265,6 +10292,10 @@ def ui_preview_html(
                   <button type="button" class="secondary-button danger" id="appAdminRestoreBackupButton" data-next-i18n="appAdmin.restoreBackup">Restore ZIP</button>
                 </div>
               </form>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.recentBackups">Recent backups</h3>
+              <div class="profile-passkey-list" id="appAdminBackupList"></div>
             </div>
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.backupReport">Backup report</h3>
@@ -11287,10 +11318,15 @@ def ui_preview_html(
       return [
         `${formatNumber(values.movies)} ${tNext("collection.movies", "Movies")}`,
         `${formatNumber(values.containers)} ${tNext("appAdmin.backupContainers", "containers")}`,
+        `${formatNumber(values.media_groups)} ${tNext("appAdmin.backupGroups", "groups")}`,
         `${formatNumber(values.mediaAssets || values.media_assets)} ${tNext("appAdmin.backupMediaAssets", "media assets")}`,
         `${formatNumber(values.collection_items)} ${tNext("appAdmin.backupCollectionItems", "collection items")}`,
         `${formatNumber(values.container_movies)} ${tNext("appAdmin.backupContainerMovies", "container movies")}`
       ].join(", ");
+    }
+    function appAdminBackupTableCount(tables, name) {
+      const item = (tables || {})[name] || {};
+      return Number(item.count || 0);
     }
     function renderAppAdminBackupReport(report) {
       const node = document.getElementById("appAdminBackupReport");
@@ -11304,6 +11340,16 @@ def ui_preview_html(
       const tableTags = Object.entries(tables).slice(0, 12).map(([name, item]) => {
         return `<span class="tag">${escapeHtml(name)} ${escapeHtml(formatNumber((item || {}).count))}</span>`;
       }).join("");
+      const restorePlan = report.restorePlan || {};
+      const missingGroups = restorePlan.missing || [];
+      const existingGroups = restorePlan.existing || [];
+      const groupPlan = missingGroups.length || existingGroups.length ? `
+        <div class="login-message ${missingGroups.length ? "info" : "good"}">
+          ${escapeHtml(tNext("appAdmin.backupGroupPlan", "Groups"))}:
+          ${escapeHtml(formatNumber(existingGroups.length))} ${escapeHtml(tNext("appAdmin.backupGroupsMatched", "matched"))},
+          ${escapeHtml(formatNumber(missingGroups.length))} ${escapeHtml(tNext("appAdmin.backupGroupsNeedChoice", "need a restore choice"))}
+        </div>
+      ` : "";
       const errors = (report.errors || []).map((item) => `<div class="login-message bad">${escapeHtml(item)}</div>`).join("");
       const warnings = (report.warnings || []).map((item) => `<div class="login-message">${escapeHtml(item)}</div>`).join("");
       node.innerHTML = `
@@ -11322,6 +11368,7 @@ def ui_preview_html(
             <span class="tag ${media.missing ? "blue" : "good"}">${escapeHtml(formatNumber(media.missing))} ${escapeHtml(tNext("appAdmin.backupMissingMedia", "missing media"))}</span>
           </div>
           <div class="admin-member-cloud">${tableTags || `<span class="tag">${escapeHtml(tNext("appAdmin.noBackupTableCounts", "No table counts"))}</span>`}</div>
+          ${groupPlan}
           ${errors}
           ${warnings}
         </div>
@@ -11336,6 +11383,42 @@ def ui_preview_html(
           : tNext("appAdmin.noBackupStatus", "No backup status loaded.");
       }
       renderAppAdminBackupReport(appAdmin.backupReport);
+      const backupsNode = document.getElementById("appAdminBackupList");
+      if (backupsNode) {
+        const backups = (backup && backup.backups) || [];
+        backupsNode.innerHTML = backups.length ? backups.map((item) => {
+          const tables = item.tables || {};
+          const includePersonal = appAdminBackupTableCount(tables, "watchlist_items") || appAdminBackupTableCount(tables, "watch_history");
+          const groupCount = appAdminBackupTableCount(tables, "media_groups");
+          const movieCount = appAdminBackupTableCount(tables, "movies");
+          const sizeMb = Number(item.sizeBytes || 0) / (1024 * 1024);
+          return `
+            <div class="profile-passkey">
+              <div class="profile-passkey-head">
+                <strong>${escapeHtml(item.description || item.fileName || tNext("appAdmin.backupArchive", "Backup archive"))}</strong>
+                <span class="tag ${item.valid ? "good" : "bad"}">${escapeHtml(item.valid ? tNext("appAdmin.valid", "Valid") : tNext("appAdmin.invalid", "Invalid"))}</span>
+              </div>
+              <div class="profile-passkey-meta">
+                ${escapeHtml(item.fileName || "-")}
+                &middot;
+                ${escapeHtml(shortDateTime(item.createdAt || item.modifiedAt))}
+                &middot;
+                ${escapeHtml(sizeMb.toFixed(1))} MB
+              </div>
+              <div class="app-admin-plugin-meta">
+                <span class="tag">${escapeHtml(formatNumber(movieCount))} ${escapeHtml(tNext("collection.movies", "Movies"))}</span>
+                <span class="tag">${escapeHtml(formatNumber(groupCount))} ${escapeHtml(tNext("appAdmin.backupGroups", "groups"))}</span>
+                ${includePersonal ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.includesPersonalLists", "includes personal lists"))}</span>` : ""}
+              </div>
+              ${item.errors && item.errors.length ? `<div class="login-message bad">${escapeHtml(item.errors[0])}</div>` : ""}
+              <div class="app-admin-plugin-actions">
+                <button type="button" class="secondary-button" data-app-admin-backup-download="${escapeHtml(item.fileName || "")}">${escapeHtml(tNext("appAdmin.downloadBackup", "Download"))}</button>
+                <button type="button" class="secondary-button danger" data-app-admin-backup-restore="${escapeHtml(item.fileName || "")}" ${item.valid ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.restoreBackup", "Restore ZIP"))}</button>
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noStoredBackups", "No stored backups yet."))}</div>`;
+      }
       if (!jobsNode) return;
       const jobs = (backup && backup.latestJobs) || [];
       jobsNode.innerHTML = jobs.length ? jobs.map((job) => `
@@ -12548,9 +12631,77 @@ def ui_preview_html(
       if (!file) throw new Error(tNext("appAdmin.backupSelectZip", "Select a DiscVault backup ZIP first."));
       return file;
     }
-    async function uploadAppAdminBackupZip(url) {
+    function appAdminBackupIncludesPersonalLists() {
+      return !!document.getElementById("appAdminBackupIncludePersonalLists")?.checked;
+    }
+    function appAdminBackupGroupKey(group) {
+      return String((group && (group.publicId || group.backupGroupId || group.name)) || "");
+    }
+    function appAdminBackupResolveGroups(report) {
+      const plan = (report && report.restorePlan) || {};
+      const missing = plan.missing || [];
+      if (!missing.length) return {};
+      const targets = plan.availableTargets || [];
+      const resolution = {create: [], map: {}, skip: [], createMissing: false};
+      const targetLines = targets.map((target, index) => {
+        return `${index + 1}. ${target.name || target.public_id || target.id}`;
+      }).join("\n");
+      for (const group of missing) {
+        const key = appAdminBackupGroupKey(group);
+        const label = group.name || group.publicId || group.backupGroupId || tNext("appAdmin.backupGroup", "Backup group");
+        let promptText = tNext(
+          "appAdmin.backupGroupResolutionPrompt",
+          "The backup contains a group that does not exist here: {group}. Type an existing group number/name to attach these movies, leave empty to create it, or type skip."
+        ).replace("{group}", label);
+        if (targetLines) promptText += `\n\n${targetLines}`;
+        const answer = window.prompt(promptText, "");
+        if (answer === null) throw new Error(tNext("appAdmin.backupRestoreCancelled", "Restore cancelled."));
+        const value = answer.trim();
+        if (!value) {
+          resolution.create.push(key);
+          continue;
+        }
+        if (value.toLowerCase() === "skip") {
+          resolution.skip.push(key);
+          continue;
+        }
+        const number = Number(value);
+        const target = Number.isInteger(number) && targets[number - 1]
+          ? targets[number - 1]
+          : targets.find((item) => {
+              const values = [item.id, item.public_id, item.name].map((entry) => String(entry || "").toLowerCase());
+              return values.includes(value.toLowerCase());
+            });
+        if (target && target.id) {
+          resolution.map[key] = target.id;
+        } else if (window.confirm(tNext("appAdmin.backupUnknownGroupTarget", "No existing group matched that value. Create the missing group instead?"))) {
+          resolution.create.push(key);
+        } else {
+          throw new Error(tNext("appAdmin.backupRestoreCancelled", "Restore cancelled."));
+        }
+      }
+      return resolution;
+    }
+    async function handleAppAdminBackupRestorePayload(payload, retry) {
+      appAdmin.backupReport = payload.report || null;
+      renderAppAdminBackups(appAdmin.backup);
+      if (payload.status === "needs_group_resolution") {
+        const groupResolution = appAdminBackupResolveGroups(payload.report || {});
+        return retry(groupResolution);
+      }
+      if (payload.status && payload.status !== "ok") {
+        throw new Error(payload.error || tNext("appAdmin.backupRestoreFailed", "Backup restore failed."));
+      }
+      await refreshAppAdminBackupStatus();
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueued", "Restore job queued."), "good");
+      return payload;
+    }
+    async function uploadAppAdminBackupZip(url, extraFields = {}) {
       const formData = new FormData();
       formData.append("file", selectedAppAdminBackupFile());
+      Object.entries(extraFields || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) formData.append(key, value);
+      });
       const response = await fetch(url, {
         method: "POST",
         cache: "no-store",
@@ -12574,7 +12725,8 @@ def ui_preview_html(
       if (!hasActualAnyPermission(["admin.backup", "collection.export_functional"])) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupExporting", "Creating backup ZIP..."));
       try {
-        const response = await fetch("/api/next/backup/export", {
+        const query = appAdminBackupIncludesPersonalLists() ? "?includePersonalLists=1" : "";
+        const response = await fetch(`/api/next/backup/export${query}`, {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
@@ -12616,11 +12768,73 @@ def ui_preview_html(
       if (!hasActualPermission("admin.restore_functional")) return;
       if (!confirm(tNext("appAdmin.backupRestoreConfirm", "Restore this ZIP and replace the functional collection data? Auth, passkeys, plugins and secrets are not restored."))) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
+      const restoreUploaded = async (groupResolution = {}) => {
+        const extraFields = {
+          includePersonalLists: appAdminBackupIncludesPersonalLists() ? "1" : "0"
+        };
+        if (Object.keys(groupResolution || {}).length) {
+          extraFields.groupResolution = JSON.stringify(groupResolution);
+        }
+        const payload = await uploadAppAdminBackupZip("/api/next/backup/restore?confirm=restore-functional-collection", extraFields);
+        return handleAppAdminBackupRestorePayload(payload, restoreUploaded);
+      };
       try {
-        const payload = await uploadAppAdminBackupZip("/api/next/backup/restore?confirm=restore-functional-collection");
-        appAdmin.backupReport = payload.report || null;
-        await refreshAppAdminBackupStatus();
-        setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueued", "Restore job queued."), "good");
+        await restoreUploaded();
+      } catch (error) {
+        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
+    }
+    async function downloadStoredAppAdminBackup(fileName) {
+      if (!fileName || !hasActualAnyPermission(["admin.backup", "collection.export_functional", "admin.restore_functional"])) return;
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupDownloading", "Downloading backup ZIP..."));
+      try {
+        const response = await fetch(`/api/next/backup/download/${encodeURIComponent(fileName)}`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: authHeaders()
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || `Backup download HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = appAdminBackupDownloadName(response) || fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupDownloaded", "Backup ZIP downloaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
+    }
+    async function restoreStoredAppAdminBackup(fileName) {
+      if (!fileName || !hasActualPermission("admin.restore_functional")) return;
+      const confirmText = tNext("appAdmin.backupRestoreStoredConfirm", "Restore this stored ZIP and replace the functional collection data? Auth, passkeys, plugins and secrets are not restored.");
+      if (!confirm(confirmText)) return;
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
+      const restoreStored = async (groupResolution = {}) => {
+        const payload = await authApiJson("/api/next/backup/restore-stored", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            fileName,
+            confirm: "restore-functional-collection",
+            includePersonalLists: appAdminBackupIncludesPersonalLists(),
+            groupResolution
+          })
+        }).catch((error) => {
+          if (error && error.payload) return error.payload;
+          throw error;
+        });
+        return handleAppAdminBackupRestorePayload(payload, restoreStored);
+      };
+      try {
+        await restoreStored();
       } catch (error) {
         setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
       }
@@ -14773,7 +14987,7 @@ def ui_preview_html(
       personReturnRoute = returnRoute || null;
       showPersonDetailLoading(personId);
       showPersonDetailPage();
-      if (personReturnRoute?.view === "people") setActiveAppRoute("people");
+      if (personReturnRoute?.view === "people") setActiveAppRoute("library");
       if (pushUrl && appMode) {
         const nextPath = `/people/${encodeURIComponent(personId)}`;
         if (window.location.pathname !== nextPath) {
@@ -16742,6 +16956,7 @@ def ui_preview_html(
       if (route !== "import" && importScanner.running) {
         stopImportBarcodeScanner();
       }
+      document.querySelectorAll(".mobile-tabbar [data-app-route='people']").forEach((node) => node.remove());
       document.querySelectorAll("[data-app-route]").forEach((node) => {
         node.classList.toggle("active", node.dataset.appRoute === route);
       });
@@ -16827,7 +17042,7 @@ def ui_preview_html(
       activeContainerPayload = null;
       activePersonId = "";
       activePersonPayload = null;
-      setActiveAppRoute("people");
+      setActiveAppRoute("library");
       renderPeopleView();
       loadPeopleView();
       if (pushUrl && appMode && window.location.pathname !== "/people") {
@@ -16987,7 +17202,7 @@ def ui_preview_html(
         return {view: "lists"};
       }
       if (/^\\/app\\/people\\/?$|^\\/people\\/?$/.test(window.location.pathname)) {
-        return {view: "people"};
+        return {view: "library"};
       }
       if (/^\\/app\\/notifications\\/?$|^\\/notifications\\/?$/.test(window.location.pathname)) {
         return {view: "notifications"};
@@ -17024,7 +17239,7 @@ def ui_preview_html(
         return;
       }
       if (route === "people") {
-        showPeoplePage();
+        showLibraryPage(true);
         return;
       }
       if (route === "notifications") {
@@ -18614,6 +18829,12 @@ def ui_preview_html(
       document.getElementById("appAdminExportBackupButton")?.addEventListener("click", () => exportAppAdminBackupZip());
       document.getElementById("appAdminValidateBackupButton")?.addEventListener("click", () => validateAppAdminBackupZip());
       document.getElementById("appAdminRestoreBackupButton")?.addEventListener("click", () => restoreAppAdminBackupZip());
+      document.getElementById("appAdminBackupList")?.addEventListener("click", (event) => {
+        const downloadButton = event.target.closest("[data-app-admin-backup-download]");
+        const restoreButton = event.target.closest("[data-app-admin-backup-restore]");
+        if (downloadButton) downloadStoredAppAdminBackup(downloadButton.dataset.appAdminBackupDownload);
+        if (restoreButton) restoreStoredAppAdminBackup(restoreButton.dataset.appAdminBackupRestore);
+      });
       document.getElementById("appAdminRefreshAuditButton")?.addEventListener("click", () => refreshAppAdminAudit());
       document.getElementById("appAdminAuditCategory")?.addEventListener("change", () => refreshAppAdminAudit());
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
@@ -34381,7 +34602,7 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
-                ("collection.export_functional", "collection.import", "admin.restore_functional", "admin.view_jobs"),
+                ("collection.export_functional", "collection.import", "admin.backup", "admin.restore_functional", "admin.view_jobs"),
             )
             counts = {table: count_table(conn, table) for table in TARGET_DATA_TABLES if table != "users"}
             counts["entity_media"] = count_table(conn, "entity_media")
@@ -34413,6 +34634,7 @@ def register_routes(flask_app: Flask) -> None:
                     latest_jobs = [job_row(row) for row in cur.fetchall()]
         data_dir = legacy_data_dir()
         backup_dir = backup_storage_dir(data_dir)
+        backups = list_backup_archives(backup_dir, limit=10)
         return response(
             {
                 "status": "ok",
@@ -34421,6 +34643,7 @@ def register_routes(flask_app: Flask) -> None:
                 "dataDir": str(data_dir),
                 "backupDir": str(backup_dir),
                 "counts": counts,
+                "backups": backups,
                 "latestJobs": latest_jobs,
             }
         )
@@ -34429,18 +34652,29 @@ def register_routes(flask_app: Flask) -> None:
     def backup_export():
         data_dir = legacy_data_dir()
         backup_dir = backup_storage_dir(data_dir)
-        file_name = f"discvault-next-functional-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.zip"
+        include_personal_lists = parse_bool_value(
+            request.args.get("includePersonalLists", request.args.get("include_personal_lists")),
+            default=False,
+        )
+        scope_label = "with-personal-lists" if include_personal_lists else "movies-groups"
+        file_name = f"discvault-next-{scope_label}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.zip"
         output_path = backup_dir / file_name
         with connect() as conn:
-            actor = require_next_permission(conn, "collection.export_functional")
+            actor = require_any_next_permission(conn, ("collection.export_functional", "admin.backup"))
             summary = export_functional_backup(
                 conn,
                 output_path,
                 data_dir=data_dir,
+                include_personal_lists=include_personal_lists,
                 generator={
                     "service": "DiscVault Next",
                     "version": build_version(),
                     "sha": build_sha(),
+                    "description": (
+                        "Movie collection, people, containers, group links, watchlist and watched history"
+                        if include_personal_lists
+                        else "Movie collection, people, containers and group links"
+                    ),
                 },
                 requested_by=actor,
             )
@@ -34452,7 +34686,12 @@ def register_routes(flask_app: Flask) -> None:
                 target_type="backup",
                 target_id=file_name,
                 summary="Exported functional collection backup",
-                metadata={"fileName": file_name, "sha256": summary.get("sha256"), "scope": "functional_collection"},
+                metadata={
+                    "fileName": file_name,
+                    "sha256": summary.get("sha256"),
+                    "scope": "functional_collection",
+                    "includePersonalLists": include_personal_lists,
+                },
             )
         result = send_file(
             output_path,
@@ -34465,6 +34704,26 @@ def register_routes(flask_app: Flask) -> None:
         result.headers["X-DiscVault-Backup-Scope"] = "functional_collection"
         return result
 
+    @flask_app.get("/api/next/backup/download/<path:file_name>")
+    def backup_download(file_name: str):
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        with connect() as conn:
+            require_any_next_permission(conn, ("collection.export_functional", "admin.backup", "admin.restore_functional"))
+        try:
+            path = stored_backup_path(backup_dir, file_name)
+        except NextBackupError as exc:
+            raise NextApiError(str(exc), 400) from exc
+        if not path.exists() or not path.is_file():
+            raise NextApiError("Backup file not found", 404)
+        return send_file(
+            path,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=path.name,
+            conditional=False,
+        )
+
     @flask_app.post("/api/next/backup/validate")
     def backup_validate():
         data_dir = legacy_data_dir()
@@ -34473,6 +34732,9 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_any_next_permission(conn, ("collection.import", "admin.restore_functional"))
         upload_path = uploaded_backup_file_path(backup_dir / "uploads" / "validate")
         report = validate_backup_zip(upload_path)
+        with connect() as conn:
+            plan = backup_restore_plan(conn, upload_path)
+        report["restorePlan"] = plan.get("mediaGroups") or {}
         with connect() as conn:
             audit_event(
                 conn,
@@ -34509,6 +34771,30 @@ def register_routes(flask_app: Flask) -> None:
         report = validate_backup_zip(upload_path)
         if not report.get("valid"):
             return response({"status": "error", "report": report}, 422)
+        include_personal_lists = parse_bool_value(
+            request.form.get("includePersonalLists", request.args.get("includePersonalLists")),
+            default=False,
+        )
+        group_resolution_raw = request.form.get("groupResolution") or request.args.get("groupResolution")
+        group_resolution = {}
+        if group_resolution_raw:
+            try:
+                group_resolution = json_lib.loads(group_resolution_raw)
+            except json_lib.JSONDecodeError as exc:
+                raise NextApiError("groupResolution must be valid JSON", 400) from exc
+        with connect() as conn:
+            plan = backup_restore_plan(conn, upload_path)
+        report["restorePlan"] = plan.get("mediaGroups") or {}
+        missing_groups = (report.get("restorePlan") or {}).get("missing") or []
+        if missing_groups and not group_resolution:
+            return response(
+                {
+                    "status": "needs_group_resolution",
+                    "report": report,
+                    "missingGroups": missing_groups,
+                },
+                409,
+            )
         with connect() as conn:
             with conn.transaction():
                 job = create_background_job(
@@ -34517,6 +34803,9 @@ def register_routes(flask_app: Flask) -> None:
                     payload={
                         "backupZip": str(upload_path),
                         "dataDir": str(data_dir),
+                        "includePersonalLists": include_personal_lists,
+                        "personalListUserId": str(actor.get("id")) if actor.get("id") else None,
+                        "groupResolution": group_resolution,
                         "validatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
                         "requestedBy": {
                             "id": str(actor.get("id")) if actor.get("id") else None,
@@ -34535,6 +34824,77 @@ def register_routes(flask_app: Flask) -> None:
                     target_id=job.get("id"),
                     summary="Queued functional collection restore",
                     metadata={"backupZip": str(upload_path), "validation": report},
+                )
+        return response({"status": "ok", "job": job, "report": report}, 201)
+
+    @flask_app.post("/api/next/backup/restore-stored")
+    def backup_restore_stored():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Restore body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "admin.restore_functional")
+        confirmation = body.get("confirm") or request.args.get("confirm")
+        if confirmation != "restore-functional-collection":
+            raise NextApiError("Restore requires confirm=restore-functional-collection", 400)
+        file_name = clean_text(body.get("fileName") or body.get("file_name"))
+        if not file_name:
+            raise NextApiError("fileName is required", 400)
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        try:
+            backup_path = stored_backup_path(backup_dir, file_name)
+        except NextBackupError as exc:
+            raise NextApiError(str(exc), 400) from exc
+        if not backup_path.exists() or not backup_path.is_file():
+            raise NextApiError("Backup file not found", 404)
+        include_personal_lists = parse_bool_value(body.get("includePersonalLists"), default=False)
+        group_resolution = body.get("groupResolution") if isinstance(body.get("groupResolution"), dict) else {}
+        report = validate_backup_zip(backup_path)
+        if not report.get("valid"):
+            return response({"status": "error", "report": report}, 422)
+        with connect() as conn:
+            plan = backup_restore_plan(conn, backup_path)
+        report["restorePlan"] = plan.get("mediaGroups") or {}
+        missing_groups = (report.get("restorePlan") or {}).get("missing") or []
+        if missing_groups and not group_resolution:
+            return response(
+                {
+                    "status": "needs_group_resolution",
+                    "report": report,
+                    "missingGroups": missing_groups,
+                },
+                409,
+            )
+        with connect() as conn:
+            with conn.transaction():
+                job = create_background_job(
+                    conn,
+                    job_type=BACKUP_RESTORE_JOB_TYPE,
+                    payload={
+                        "backupZip": str(backup_path),
+                        "dataDir": str(data_dir),
+                        "includePersonalLists": include_personal_lists,
+                        "personalListUserId": str(actor.get("id")) if actor.get("id") else None,
+                        "groupResolution": group_resolution,
+                        "validatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                        "requestedBy": {
+                            "id": str(actor.get("id")) if actor.get("id") else None,
+                            "username": actor.get("username"),
+                            "role": actor.get("role"),
+                        },
+                        "validation": report,
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="backup.restore_queued",
+                    category="backup",
+                    actor=actor,
+                    target_type="background_job",
+                    target_id=job.get("id"),
+                    summary="Queued stored functional collection restore",
+                    metadata={"backupZip": str(backup_path), "validation": report},
                 )
         return response({"status": "ok", "job": job, "report": report}, 201)
 

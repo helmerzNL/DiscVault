@@ -21,8 +21,9 @@ def empty_tables():
     return {table: [] for table in BACKUP_TABLES}
 
 
-def write_backup(path, tables, *, media_files=None):
+def write_backup(path, tables, *, media_files=None, omit_tables=None):
     media_files = media_files or {}
+    omitted = set(omit_tables or [])
     manifest = {
         "format": BACKUP_FORMAT,
         "formatVersion": BACKUP_FORMAT_VERSION,
@@ -36,6 +37,8 @@ def write_backup(path, tables, *, media_files=None):
     with zipfile.ZipFile(path, "w") as zf:
         zf.writestr("manifest.json", json.dumps(manifest))
         for name in BACKUP_TABLES:
+            if name in omitted:
+                continue
             zf.writestr(f"data/{name}.json", json.dumps(tables[name]))
         for name, data in media_files.items():
             zf.writestr(name, data)
@@ -202,6 +205,79 @@ class NextBackupValidationTests(unittest.TestCase):
 
         self.assertFalse(report["valid"], report)
         self.assertTrue(any("collection_items" in error for error in report["errors"]))
+
+    def test_validate_accepts_media_group_movie_links(self):
+        movie_id = str(uuid.uuid4())
+        group_id = str(uuid.uuid4())
+        tables = empty_tables()
+        tables["movies"].append(
+            {
+                "id": movie_id,
+                "public_id": "unit-movie-1",
+                "barcode": None,
+                "title": "Unit Movie",
+                "sort_title": "Unit Movie",
+                "original_title": None,
+                "year": None,
+                "release_date": None,
+                "format": None,
+                "edition": None,
+                "edition_type": None,
+                "country": None,
+                "language": None,
+                "runtime_minutes": None,
+                "overview": None,
+                "notes": None,
+                "rating": None,
+                "purchase_date": None,
+                "purchase_price": None,
+                "location": None,
+                "owner_id": None,
+                "metadata": {},
+                "created_at": "2026-05-29T00:00:00Z",
+                "updated_at": "2026-05-29T00:00:00Z",
+            }
+        )
+        tables["media_groups"].append(
+            {
+                "id": group_id,
+                "public_id": "unit-group",
+                "name": "Unit Group",
+                "created_by": None,
+                "hide_digital": False,
+                "metadata": {},
+                "created_at": "2026-05-29T00:00:00Z",
+                "updated_at": "2026-05-29T00:00:00Z",
+            }
+        )
+        tables["media_group_movies"].append(
+            {
+                "group_id": group_id,
+                "movie_id": movie_id,
+                "metadata": {},
+                "created_at": "2026-05-29T00:00:00Z",
+                "updated_at": "2026-05-29T00:00:00Z",
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "backup.zip")
+            write_backup(path, tables)
+            report = validate_backup_zip(path)
+
+        self.assertTrue(report["valid"], report)
+        self.assertEqual(report["tables"]["media_group_movies"]["count"], 1)
+
+    def test_validate_accepts_old_backup_without_optional_tables(self):
+        tables = empty_tables()
+        optional_tables = {"media_groups", "media_group_movies", "watchlist_items", "watch_history"}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "backup.zip")
+            write_backup(path, tables, omit_tables=optional_tables)
+            report = validate_backup_zip(path)
+
+        self.assertTrue(report["valid"], report)
+        for name in optional_tables:
+            self.assertEqual(report["tables"][name]["count"], 0)
 
 
 if __name__ == "__main__":
