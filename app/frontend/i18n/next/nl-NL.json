@@ -1151,5 +1151,19 @@
   "importCenter.fileChosenSource": "Gekozen bron",
   "importCenter.fileNoFile": "Kies eerst een bestand.",
   "importCenter.fileRecognized": "Herkend",
-  "importCenter.fileNotRecognized": "Niet herkend"
+  "importCenter.fileNotRecognized": "Niet herkend",
+  "appAdmin.featureMovieDelete": "Films verwijderen",
+  "bulk.deleteTarget": "Verwijderen",
+  "bulk.deleteSelected": "Selectie verwijderen",
+  "bulk.deleteConfirm": "Geselecteerde films en containers verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "bulk.deleting": "Geselecteerde items verwijderen...",
+  "bulk.deletedSelected": "items verwijderd",
+  "movieDetail.deleteMovie": "Film verwijderen",
+  "movieDetail.deleteConfirm": "{title} verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "movieDetail.deleting": "Film verwijderen...",
+  "movieDetail.deleted": "Film verwijderd.",
+  "containerDetail.deleteContainer": "Container verwijderen",
+  "containerDetail.deleteConfirm": "{title} verwijderen? Dit verwijdert de container, niet de films erin.",
+  "containerDetail.deleting": "Container verwijderen...",
+  "containerDetail.deleted": "Container verwijderd."
 }

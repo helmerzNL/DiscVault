@@ -1077,5 +1077,19 @@
   "importCenter.fileChosenSource": "Valgt kilde",
   "importCenter.fileNoFile": "Velg en fil forst.",
   "importCenter.fileRecognized": "Gjenkjent",
-  "importCenter.fileNotRecognized": "Ikke gjenkjent"
+  "importCenter.fileNotRecognized": "Ikke gjenkjent",
+  "appAdmin.featureMovieDelete": "Slette filmer",
+  "bulk.deleteTarget": "Slett",
+  "bulk.deleteSelected": "Slett valgte",
+  "bulk.deleteConfirm": "Slette valgte filmer og beholdere? Dette kan ikke angres.",
+  "bulk.deleting": "Sletter valgte elementer...",
+  "bulk.deletedSelected": "elementer slettet",
+  "movieDetail.deleteMovie": "Slett film",
+  "movieDetail.deleteConfirm": "Slette {title}? Dette kan ikke angres.",
+  "movieDetail.deleting": "Sletter film...",
+  "movieDetail.deleted": "Film slettet.",
+  "containerDetail.deleteContainer": "Slett beholder",
+  "containerDetail.deleteConfirm": "Slette {title}? Dette fjerner beholderen, ikke filmene i den.",
+  "containerDetail.deleting": "Sletter beholder...",
+  "containerDetail.deleted": "Beholder slettet."
 }

@@ -3685,6 +3685,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                     backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
                     backdrop_asset.storage_key AS backdrop_asset_storage_key,
                     backdrop_asset.source_url AS backdrop_asset_source_url,
+                    m.owner_id,
                     m.created_at,
                     m.updated_at
                 FROM movies m
@@ -3747,6 +3748,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                 ) AS metadata_search,
                 metadata->>'poster_url' AS poster_url,
                 metadata->>'backdrop_url' AS backdrop_url,
+                owner_id,
                 created_at,
                 updated_at
             FROM movies
@@ -8838,6 +8840,12 @@ def ui_preview_html(
             </label>
             <button type="button" class="bulk-action" disabled data-bulk-action="collection" data-next-i18n="bulk.addToCollection">Add to collection</button>
           </div>
+          <div class="bulk-target">
+            <label>
+              <span data-next-i18n="bulk.deleteTarget">Delete</span>
+              <button type="button" class="bulk-action danger" disabled data-bulk-action="delete" data-next-i18n="bulk.deleteSelected">Delete selected</button>
+            </label>
+          </div>
         </div>
       </section>
       <section class="preview-layout">
@@ -9139,6 +9147,7 @@ def ui_preview_html(
                 <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
                 <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
                 <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Refresh history</button>
+                <button type="button" class="action danger hidden" id="movieDeleteButton" data-next-i18n="movieDetail.deleteMovie">Delete movie</button>
               </div>
               <div class="detail-message" id="movieDetailMessage"></div>
             </div>
@@ -9308,6 +9317,7 @@ def ui_preview_html(
                 <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
                 <button type="button" class="action hidden" id="containerMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
                 <button type="button" class="action secondary hidden" id="containerMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
+                <button type="button" class="action danger hidden" id="containerDeleteButton" data-next-i18n="containerDetail.deleteContainer">Delete container</button>
               </div>
               <div class="detail-message" id="containerDetailMessage"></div>
             </div>
@@ -10433,12 +10443,16 @@ def ui_preview_html(
       bulkGroups: ["groups.invite", "groups.create"],
       bulkContainers: ["containers.edit", "collection.bulk_edit"],
       bulkCollections: ["collection.bulk_edit"],
+      movieDelete: ["collection.delete_all", "collection.delete_own"],
+      containerDelete: ["containers.delete"],
+      bulkDelete: ["collection.delete_all", "collection.delete_own", "containers.delete"],
       mediaAdd: ["collection.add", "collection.add_own", "collection.import"]
     };
     const APP_FEATURE_PREVIEW = [
       {key: "collection.view", labelKey: "appAdmin.featureCollectionView", fallback: "View collection", permissions: ["collection.view"]},
       {key: "movie.add", labelKey: "appAdmin.featureMovieAdd", fallback: "Add movies", permissions: ["collection.add", "collection.add_own", "collection.import"]},
       {key: "movie.edit", labelKey: "appAdmin.featureMovieEdit", fallback: "Edit movies", permissions: ["collection.edit_all", "collection.edit_own"]},
+      {key: "movie.delete", labelKey: "appAdmin.featureMovieDelete", fallback: "Delete movies", permissions: ["collection.delete_all", "collection.delete_own"]},
       {key: "metadata.search", labelKey: "appAdmin.featureMetadataSearch", fallback: "Search metadata", permissions: ["metadata.search"]},
       {key: "metadata.refresh_one", labelKey: "appAdmin.featureMetadataRefreshOne", fallback: "Refresh one movie", permissions: ["metadata.refresh_one"]},
       {key: "metadata.refresh_bulk", labelKey: "appAdmin.featureMetadataRefreshBulk", fallback: "Bulk refresh metadata", permissions: ["metadata.refresh_bulk"]},
@@ -10503,6 +10517,17 @@ def ui_preview_html(
     }
     function hasAnyPermission(permissions) {
       return (permissions || []).some((permission) => hasPermission(permission));
+    }
+    function currentUserId() {
+      return currentAuthStatus.user_id || currentAuthStatus.userId || (state.user || {}).id || "";
+    }
+    function canDeleteMovieItem(movie) {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.movieDelete)) return false;
+      if (hasPermission("collection.delete_all")) return true;
+      if (!hasPermission("collection.delete_own")) return false;
+      const ownerId = movie?.owner_id || movie?.ownerId || "";
+      const userId = currentUserId();
+      return !!ownerId && !!userId && String(ownerId) === String(userId);
     }
     function hasActualAnyPermission(permissions) {
       return (permissions || []).some((permission) => hasActualPermission(permission));
@@ -10570,6 +10595,7 @@ def ui_preview_html(
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="boxset"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="vault"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="collection"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="delete"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkDelete));
       document.querySelectorAll("#movieMetadataDryRunButton, #movieMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       });
@@ -10580,9 +10606,11 @@ def ui_preview_html(
       const canEditMovies = hasPermission("collection.edit_all");
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
       if (!canEditMovies) setMovieEditPanelVisible(false);
+      setElementVisible(document.getElementById("movieDeleteButton"), canDeleteMovieItem(activeDetailPayload?.movie || null));
       const canEditContainers = collectorsEnabled && hasPermission("containers.edit");
       setElementVisible(document.getElementById("containerEditToggleButton"), canEditContainers);
       if (!canEditContainers) setContainerEditPanelVisible(false);
+      setElementVisible(document.getElementById("containerDeleteButton"), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete));
       if (!collectorsEnabled && activeContainerId) {
         activeContainerId = "";
         activeContainerPayload = null;
@@ -16737,6 +16765,46 @@ def ui_preview_html(
         setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
+    async function deleteActiveMovie() {
+      if (!activeDetailMovieId || !canDeleteMovieItem(activeDetailPayload?.movie || null)) return;
+      const title = activeDetailPayload?.movie?.title || tNext("common.untitled", "Untitled");
+      const confirmed = window.confirm(
+        tNext("movieDetail.deleteConfirm", "Delete {title}? This cannot be undone.").replace("{title}", title)
+      );
+      if (!confirmed) return;
+      setMovieDetailMessage(tNext("movieDetail.deleting", "Deleting movie..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {method: "DELETE"});
+        activeDetailMovieId = "";
+        activeDetailPayload = null;
+        await loadAppSnapshot();
+        showLibraryPage(true);
+        const summary = document.getElementById("librarySummary");
+        if (summary) summary.textContent = tNext("movieDetail.deleted", "Movie deleted.");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteActiveContainer() {
+      if (!activeContainerId || !collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete)) return;
+      const title = activeContainerPayload?.container?.title || tNext("common.untitled", "Untitled");
+      const confirmed = window.confirm(
+        tNext("containerDetail.deleteConfirm", "Delete {title}? This removes the container, not the movies inside it.").replace("{title}", title)
+      );
+      if (!confirmed) return;
+      setContainerDetailMessage(tNext("containerDetail.deleting", "Deleting container..."));
+      try {
+        await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {method: "DELETE"});
+        activeContainerId = "";
+        activeContainerPayload = null;
+        await loadAppSnapshot();
+        showLibraryPage(true);
+        const summary = document.getElementById("librarySummary");
+        if (summary) summary.textContent = tNext("containerDetail.deleted", "Container deleted.");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
     async function loadActiveMovieJobs() {
       if (!activeDetailMovieId) return;
       setMovieDetailMessage(tNext("movieDetail.loadingJobs", "Loading refresh history..."));
@@ -16894,6 +16962,11 @@ def ui_preview_html(
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         const action = button.dataset.bulkAction || "";
         if (action === "collection") button.disabled = count === 0;
+        else if (action === "delete") {
+          const canDeleteMovieSelection = bulkSelectedDeletableMovieIds().length > 0;
+          const canDeleteContainerSelection = containerCount > 0 && hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete);
+          button.disabled = !(canDeleteMovieSelection || canDeleteContainerSelection);
+        }
         else if (action === "metadata" || action === "group-add" || action === "group-remove" || action === "boxset" || action === "vault") button.disabled = movieCount === 0;
         else button.disabled = count === 0;
       });
@@ -16923,6 +16996,12 @@ def ui_preview_html(
     }
     function bulkSelectedMovieIds() {
       return Array.from(selectedMovieIds);
+    }
+    function movieById(movieId) {
+      return (movies || []).find((movie) => String(movie.id) === String(movieId)) || null;
+    }
+    function bulkSelectedDeletableMovieIds() {
+      return bulkSelectedMovieIds().filter((movieId) => canDeleteMovieItem(movieById(movieId)));
     }
     function bulkSelectedContainerIds(excludeId) {
       return Array.from(selectedContainerIds).filter((id) => String(id) !== String(excludeId || ""));
@@ -17005,6 +17084,31 @@ def ui_preview_html(
           body: JSON.stringify({movieIds, containerIds})
         });
         finishBulkAction(`${payload.changed || 0} ${tNext("bulk.addedToCollection", "items added to collection")}`);
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
+    }
+    async function applyBulkDelete() {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkDelete)) return;
+      const movieIds = bulkSelectedDeletableMovieIds();
+      const containerIds = hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete) ? bulkSelectedContainerIds() : [];
+      const summary = document.getElementById("librarySummary");
+      if (!movieIds.length && !containerIds.length) {
+        if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+        return;
+      }
+      const confirmed = window.confirm(
+        tNext("bulk.deleteConfirm", "Delete selected movies and containers? This cannot be undone.")
+      );
+      if (!confirmed) return;
+      try {
+        if (summary) summary.textContent = tNext("bulk.deleting", "Deleting selected items...");
+        const payload = await authApiJson("/api/next/bulk/delete", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, containerIds, confirm: "delete-selected"})
+        });
+        finishBulkAction(`${payload.requested || (movieIds.length + containerIds.length)} ${tNext("bulk.deletedSelected", "items deleted")}`);
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
       }
@@ -17218,6 +17322,8 @@ def ui_preview_html(
         const id = escapeHtml(container.id || "");
         const typeLabel = containerTypeLabel(container.container_type);
         const meta = [typeLabel, container.year, container.barcode].filter(Boolean).join(" / ");
+        const canRename = hasAnyPermission(["containers.edit", "collection.bulk_edit"]);
+        const canDelete = hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete);
         return `
           <div class="container-manager-row" data-container-manager-id="${id}">
             <div class="container-manager-meta">
@@ -17226,9 +17332,9 @@ def ui_preview_html(
             </div>
             <div class="container-manager-actions">
               <input data-container-manager-title="${id}" value="${escapeHtml(container.title || "")}" maxlength="240" aria-label="${escapeHtml(tNext("containerManage.titleLabel", "Name"))}">
-              <button type="button" class="secondary-button" data-container-manager-rename="${id}">${escapeHtml(tNext("containerManage.rename", "Rename"))}</button>
+              ${canRename ? `<button type="button" class="secondary-button" data-container-manager-rename="${id}">${escapeHtml(tNext("containerManage.rename", "Rename"))}</button>` : ""}
               <button type="button" class="secondary-button" data-container-manager-open="${id}">${escapeHtml(tNext("containerManage.open", "Open"))}</button>
-              <button type="button" class="secondary-button" data-container-manager-delete="${id}">${escapeHtml(tNext("containerManage.delete", "Delete"))}</button>
+              ${canDelete ? `<button type="button" class="secondary-button danger" data-container-manager-delete="${id}">${escapeHtml(tNext("containerManage.delete", "Delete"))}</button>` : ""}
             </div>
           </div>
         `;
@@ -17285,7 +17391,7 @@ def ui_preview_html(
       }
     }
     async function deleteManagedContainer(containerId) {
-      if (!collectorsModeEnabled() || !hasAnyPermission(["containers.delete", "collection.bulk_edit"])) return;
+      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete)) return;
       const container = containers.find((item) => String(item.id) === String(containerId));
       const title = container?.title || tNext("common.untitled", "Untitled");
       const confirmed = window.confirm(tNext("containerManage.deleteConfirm", "Delete this item?").replace("{title}", title));
@@ -18140,6 +18246,10 @@ def ui_preview_html(
             applyBulkCollection();
             return;
           }
+          if (button.dataset.bulkAction === "delete") {
+            applyBulkDelete();
+            return;
+          }
           const message = tNext("bulk.noneSelected", "No movies selected");
           const summary = document.getElementById("librarySummary");
           if (summary) summary.textContent = message;
@@ -18161,6 +18271,7 @@ def ui_preview_html(
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => setMovieEditPanelVisible(true));
       document.getElementById("movieEditCancelButton")?.addEventListener("click", () => setMovieEditPanelVisible(false));
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      document.getElementById("movieDeleteButton")?.addEventListener("click", () => deleteActiveMovie());
       document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
       document.querySelectorAll("[data-watch-date-choice]").forEach((button) => {
         button.addEventListener("click", () => handleWatchedDateChoice(button.dataset.watchDateChoice || "today"));
@@ -18178,6 +18289,7 @@ def ui_preview_html(
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
       document.getElementById("containerMetadataDryRunButton")?.addEventListener("click", () => refreshActiveContainerMetadata(true));
       document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));
+      document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
@@ -23217,6 +23329,73 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
     }
 
 
+def actor_can_delete_movie(actor: dict[str, Any], movie: dict[str, Any]) -> bool:
+    role = str(actor.get("role") or "")
+    permissions = {str(item) for item in actor.get("permissions") or []}
+    if role == "owner" or "*" in permissions or "collection.delete_all" in permissions:
+        return True
+    if "collection.delete_own" not in permissions:
+        return False
+    actor_id = actor.get("id")
+    owner_id = movie.get("owner_id")
+    return bool(actor_id and owner_id and str(actor_id) == str(owner_id))
+
+
+def delete_movie_records(conn, movie_id: UUID) -> tuple[dict[str, Any], dict[str, int]]:
+    existing = movie_entity(conn, movie_id)
+    if not existing:
+        raise NextApiError("Movie not found", 404)
+    deleted: dict[str, int] = {}
+    with conn.cursor() as cur:
+        if table_exists(conn, "entity_media"):
+            cur.execute("DELETE FROM entity_media WHERE entity_type='movie' AND entity_id=%s", (movie_id,))
+            deleted["entity_media"] = max(int(cur.rowcount or 0), 0)
+        if table_exists(conn, "metadata_field_provenance"):
+            cur.execute("DELETE FROM metadata_field_provenance WHERE entity_type='movie' AND entity_id=%s", (movie_id,))
+            deleted["metadata_field_provenance"] = max(int(cur.rowcount or 0), 0)
+        if table_exists(conn, "collection_items"):
+            cur.execute("DELETE FROM collection_items WHERE item_type='movie' AND item_id=%s", (movie_id,))
+            deleted["collection_items"] = max(int(cur.rowcount or 0), 0)
+        if table_exists(conn, "digital_media_items"):
+            cur.execute("UPDATE digital_media_items SET matched_movie_id=NULL, updated_at=now() WHERE matched_movie_id=%s", (movie_id,))
+            deleted["digital_media_items_unmatched"] = max(int(cur.rowcount or 0), 0)
+        if table_exists(conn, "containers"):
+            cur.execute("UPDATE containers SET primary_movie_id=NULL, updated_at=now() WHERE primary_movie_id=%s", (movie_id,))
+            deleted["container_primary_refs"] = max(int(cur.rowcount or 0), 0)
+        cur.execute("DELETE FROM movies WHERE id=%s", (movie_id,))
+        deleted["movies"] = max(int(cur.rowcount or 0), 0)
+    return existing, deleted
+
+
+def delete_container_records(conn, container_id: UUID) -> tuple[dict[str, Any], dict[str, int]]:
+    existing = container_entity(conn, container_id)
+    if not existing:
+        raise NextApiError("Container not found", 404)
+    deleted: dict[str, int] = {}
+    with conn.cursor() as cur:
+        if table_exists(conn, "collection_items"):
+            cur.execute(
+                "DELETE FROM collection_items WHERE collection_id=%s OR item_id=%s",
+                (container_id, container_id),
+            )
+            deleted["collection_items"] = max(int(cur.rowcount or 0), 0)
+        if table_exists(conn, "container_movies"):
+            cur.execute("DELETE FROM container_movies WHERE container_id=%s", (container_id,))
+            deleted["container_movies"] = max(int(cur.rowcount or 0), 0)
+        if table_exists(conn, "container_identifiers"):
+            cur.execute("DELETE FROM container_identifiers WHERE container_id=%s", (container_id,))
+            deleted["container_identifiers"] = max(int(cur.rowcount or 0), 0)
+        if table_exists(conn, "entity_media"):
+            cur.execute("DELETE FROM entity_media WHERE entity_type='container' AND entity_id=%s", (container_id,))
+            deleted["entity_media"] = max(int(cur.rowcount or 0), 0)
+        if table_exists(conn, "metadata_field_provenance"):
+            cur.execute("DELETE FROM metadata_field_provenance WHERE entity_type='container' AND entity_id=%s", (container_id,))
+            deleted["metadata_field_provenance"] = max(int(cur.rowcount or 0), 0)
+        cur.execute("DELETE FROM containers WHERE id=%s", (container_id,))
+        deleted["containers"] = max(int(cur.rowcount or 0), 0)
+    return existing, deleted
+
+
 def ensure_sync_state(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -24535,6 +24714,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 purchase_date,
                 purchase_price,
                 location,
+                owner_id,
                 metadata,
                 created_at,
                 updated_at
@@ -29140,31 +29320,10 @@ def register_routes(flask_app: Flask) -> None:
         container_uuid = parse_uuid(container_id, "containerId")
         if not container_uuid:
             raise NextApiError("containerId is required", 400)
-        deleted: dict[str, int] = {}
         with connect() as conn:
-            actor = require_next_permission(conn, "containers.edit")
-            existing = container_entity(conn, container_uuid)
-            if not existing:
-                raise NextApiError("Container not found", 404)
+            actor = require_next_permission(conn, "containers.delete")
             with conn.transaction():
-                with conn.cursor() as cur:
-                    if table_exists(conn, "collection_items"):
-                        cur.execute(
-                            "DELETE FROM collection_items WHERE collection_id=%s OR item_id=%s",
-                            (container_uuid, container_uuid),
-                        )
-                        deleted["collection_items"] = max(int(cur.rowcount or 0), 0)
-                    if table_exists(conn, "container_movies"):
-                        cur.execute("DELETE FROM container_movies WHERE container_id=%s", (container_uuid,))
-                        deleted["container_movies"] = max(int(cur.rowcount or 0), 0)
-                    if table_exists(conn, "container_identifiers"):
-                        cur.execute("DELETE FROM container_identifiers WHERE container_id=%s", (container_uuid,))
-                        deleted["container_identifiers"] = max(int(cur.rowcount or 0), 0)
-                    if table_exists(conn, "entity_media"):
-                        cur.execute("DELETE FROM entity_media WHERE entity_type='container' AND entity_id=%s", (container_uuid,))
-                        deleted["entity_media"] = max(int(cur.rowcount or 0), 0)
-                    cur.execute("DELETE FROM containers WHERE id=%s", (container_uuid,))
-                    deleted["containers"] = max(int(cur.rowcount or 0), 0)
+                existing, deleted = delete_container_records(conn, container_uuid)
                 audit_event(
                     conn,
                     event_type="container.deleted",
@@ -29341,6 +29500,98 @@ def register_routes(flask_app: Flask) -> None:
                 "changed": changed,
                 "requested": requested,
                 "collectionId": str(collection_uuid),
+            }
+        )
+
+    @flask_app.post("/api/next/bulk/delete")
+    def bulk_delete_collection_items():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Bulk delete body must be an object", 400)
+        movie_ids = parse_uuid_list(body.get("movieIds") or body.get("movie_ids"), "movieIds", maximum=500)
+        container_ids = parse_uuid_list(body.get("containerIds") or body.get("container_ids"), "containerIds", maximum=500)
+        if not movie_ids and not container_ids:
+            raise NextApiError("movieIds or containerIds must be supplied", 400)
+        if body.get("confirm") != "delete-selected":
+            raise NextApiError("Bulk delete requires confirm=delete-selected", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.delete_all", "collection.delete_own", "containers.delete"),
+            )
+            permissions = {str(item) for item in actor.get("permissions") or []}
+            can_delete_containers = actor.get("role") == "owner" or "*" in permissions or "containers.delete" in permissions
+            if container_ids and not can_delete_containers:
+                raise NextApiError("Permission required: containers.delete", 403)
+            if movie_ids:
+                for movie_uuid in movie_ids:
+                    movie = movie_entity(conn, movie_uuid)
+                    if not movie:
+                        raise NextApiError(f"Movie not found: {movie_uuid}", 404)
+                    if not actor_can_delete_movie(actor, movie):
+                        raise NextApiError("Permission required: collection.delete_all", 403)
+            if container_ids:
+                for container_uuid in container_ids:
+                    container = container_entity(conn, container_uuid)
+                    if not container:
+                        raise NextApiError(f"Container not found: {container_uuid}", 404)
+            deleted_movies: list[dict[str, Any]] = []
+            deleted_containers: list[dict[str, Any]] = []
+            deleted_counts: dict[str, int] = {}
+            with conn.transaction():
+                for movie_uuid in movie_ids:
+                    movie, deleted = delete_movie_records(conn, movie_uuid)
+                    deleted_movies.append({"id": str(movie_uuid), "title": movie.get("title"), "deleted": deleted})
+                    for key, value in deleted.items():
+                        deleted_counts[key] = deleted_counts.get(key, 0) + int(value or 0)
+                    revision = next_revision(conn) if table_exists(conn, "sync_state") else 0
+                    if revision and table_exists(conn, "sync_changes"):
+                        sync_change(
+                            conn,
+                            revision=revision,
+                            entity_type="movie",
+                            entity_id=str(movie_uuid),
+                            operation="delete",
+                            payload={
+                                "id": str(movie_uuid),
+                                "title": movie.get("title"),
+                                "clientId": "next-app",
+                                "clientMutationId": f"bulk-delete-movie-{uuid.uuid4()}",
+                                "actor": actor_job_payload(actor),
+                            },
+                        )
+                for container_uuid in container_ids:
+                    container, deleted = delete_container_records(conn, container_uuid)
+                    deleted_containers.append(
+                        {
+                            "id": str(container_uuid),
+                            "title": container.get("title"),
+                            "containerType": container.get("container_type"),
+                            "deleted": deleted,
+                        }
+                    )
+                    for key, value in deleted.items():
+                        deleted_counts[key] = deleted_counts.get(key, 0) + int(value or 0)
+                audit_event(
+                    conn,
+                    event_type="collection.bulk_deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="bulk",
+                    summary="Deleted selected movies and containers",
+                    metadata={
+                        "movieIds": [str(item) for item in movie_ids],
+                        "containerIds": [str(item) for item in container_ids],
+                        "deleted": deleted_counts,
+                    },
+                )
+        return response(
+            {
+                "status": "ok",
+                "deleted": deleted_counts,
+                "movies": deleted_movies,
+                "containers": deleted_containers,
+                "requested": len(movie_ids) + len(container_ids),
             }
         )
 
@@ -30382,6 +30633,50 @@ def register_routes(flask_app: Flask) -> None:
                 metadata={"title": payload["title"], "barcode": payload["barcode"]},
             )
         return response({"status": "ok", "detail": detail})
+
+    @flask_app.delete("/api/next/movies/<movie_id>")
+    def delete_movie(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("collection.delete_all", "collection.delete_own"))
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            if not actor_can_delete_movie(actor, existing):
+                raise NextApiError("Permission required: collection.delete_all", 403)
+            with conn.transaction():
+                existing, deleted = delete_movie_records(conn, movie_uuid)
+                revision = next_revision(conn) if table_exists(conn, "sync_state") else 0
+                if revision and table_exists(conn, "sync_changes"):
+                    sync_change(
+                        conn,
+                        revision=revision,
+                        entity_type="movie",
+                        entity_id=str(movie_uuid),
+                        operation="delete",
+                        payload={
+                            "id": str(movie_uuid),
+                            "title": existing.get("title"),
+                            "clientId": "next-app",
+                            "clientMutationId": f"delete-movie-{uuid.uuid4()}",
+                            "actor": actor_job_payload(actor),
+                        },
+                    )
+                audit_event(
+                    conn,
+                    event_type="movie.deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary=f"Deleted movie {existing.get('title')}",
+                    metadata={"title": existing.get("title"), "barcode": existing.get("barcode"), "deleted": deleted},
+                )
+        return response({"status": "ok", "movieId": str(movie_uuid), "deleted": deleted})
 
     @flask_app.get("/api/next/lists")
     def personal_lists():
