@@ -81,6 +81,16 @@ class NextPluginRuntimeTests(unittest.TestCase):
                 self.assertIn("personal_list_source", plugin.manifest["categories"])
                 self.assertIn("sync_personal_lists", plugin.runtime["entrypoints"])
 
+    def test_upcitemdb_is_tagged_as_bootstrap_metadata_source(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        plugin = plugins["upcitemdb"]
+        self.assertIn("metadata_source", plugin.manifest["categories"])
+        self.assertIn("metadata_bootstrap", plugin.manifest["categories"])
+        self.assertIn("bootstrap_lookup", plugin.manifest["capabilities"])
+        self.assertEqual(plugin.manifest["bootstrap"]["onlyWhen"], "new_movie_barcode_only")
+
     def test_plex_personal_lists_maps_viewed_at_history(self):
         def fake_get(url, params=None, timeout=None):
             if url.endswith("/status/sessions/history/all"):

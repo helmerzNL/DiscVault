@@ -19,6 +19,7 @@ TableExists = Callable[[Any, str], bool]
 DEFAULT_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
 VALID_CATEGORIES = {
     "metadata_source",
+    "metadata_bootstrap",
     "metadata_receiver",
     "digital_media_source",
     "import_source",
