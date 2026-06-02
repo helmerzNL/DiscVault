@@ -36,6 +36,10 @@ sys.modules.setdefault("psycopg.types.json", psycopg_types_json_module)
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
 from app.backend.next_worker import apply_collection_import_review
+from app.backend.next_worker import import_release_date
+from app.backend.next_worker import import_year
+from app.backend.next_plugins._collection_import_base import CollectionImportPlugin
+from app.backend.next_plugins._collection_import_base import parse_release_date
 from app.backend.next_plugins.bluray_com.plugin import _movie_title_from_release_title
 from app.backend.next_plugins.trakt import plugin as trakt_plugin
 
@@ -62,6 +66,51 @@ class FakeHTTPError(Exception):
 
 
 class NextPluginRuntimeTests(unittest.TestCase):
+    def test_collection_import_year_only_release_date_is_not_emitted_as_date(self):
+        plugin = CollectionImportPlugin(
+            {
+                "id": "import_test",
+                "name": "Import Test",
+                "defaultPath": "",
+                "sourceKind": "test_csv",
+                "aliases": {},
+            }
+        )
+        item = plugin.normalize_row(
+            {"Title": "RoboCop", "Release Date": "1987"},
+            Path("movies.csv"),
+            1,
+        )
+
+        self.assertEqual(item["year"], "1987")
+        self.assertNotIn("releaseDate", item)
+
+    def test_collection_import_keeps_full_release_dates(self):
+        plugin = CollectionImportPlugin(
+            {
+                "id": "import_test",
+                "name": "Import Test",
+                "defaultPath": "",
+                "sourceKind": "test_csv",
+                "aliases": {},
+            }
+        )
+        item = plugin.normalize_row(
+            {"Title": "RoboCop", "Release Date": "17-07-1987"},
+            Path("movies.csv"),
+            1,
+        )
+
+        self.assertEqual(item["year"], "1987")
+        self.assertEqual(item["releaseDate"], "1987-07-17")
+
+    def test_import_worker_release_date_normalization_is_defensive(self):
+        self.assertEqual(import_year("Released in 1998"), "1998")
+        self.assertIsNone(import_release_date("1998"))
+        self.assertIsNone(import_release_date("not a date"))
+        self.assertEqual(import_release_date("1998/07/24"), "1998-07-24")
+        self.assertEqual(parse_release_date("24-07-1998"), "1998-07-24")
+
     def test_import_review_applies_selected_metadata_match(self):
         result = {
             "items": [

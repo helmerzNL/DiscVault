@@ -9,11 +9,13 @@ if repo_root not in sys.path:
 
 try:
     from app.backend.next_app import NextApiError
+    from app.backend.next_app import movie_payload_fields
     from app.backend.next_app import movie_update_payload
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
     if exc.name != "flask":
         raise
     NextApiError = None
+    movie_payload_fields = None
     movie_update_payload = None
 
 
@@ -49,6 +51,19 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                 {"title": "Updated", "releaseDate": "31-05-2026"},
                 existing={"title": "Existing"},
             )
+
+    def test_movie_payload_fields_drops_year_only_release_date(self):
+        payload = movie_payload_fields(
+            {
+                "title": "RoboCop",
+                "year": "1987",
+                "releaseDate": "1987",
+                "purchaseDate": "2026-06-02",
+            }
+        )
+
+        self.assertIsNone(payload["release_date"])
+        self.assertEqual(payload["purchase_date"].isoformat(), "2026-06-02")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ import json
 import os
 import re
 import xml.etree.ElementTree as ET
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -121,6 +122,29 @@ def parse_year(value: Any) -> str:
         candidate = raw[idx : idx + 4]
         if candidate.isdigit() and 1800 <= int(candidate) <= 2200:
             return candidate
+    return ""
+
+
+def parse_release_date(value: Any) -> str:
+    raw = text(value)
+    if not raw or re.fullmatch(r"\d{4}", raw):
+        return ""
+    normalized = raw.replace("/", "-").strip()
+    for pattern, order in (
+        (r"^(\d{4})-(\d{1,2})-(\d{1,2})$", "ymd"),
+        (r"^(\d{1,2})-(\d{1,2})-(\d{4})$", "dmy"),
+    ):
+        match = re.match(pattern, normalized)
+        if not match:
+            continue
+        parts = [int(part) for part in match.groups()]
+        year, month, day = parts if order == "ymd" else (parts[2], parts[1], parts[0])
+        try:
+            if not 1800 <= year <= 2200:
+                return ""
+            return date(year, month, day).isoformat()
+        except ValueError:
+            return ""
     return ""
 
 
@@ -302,12 +326,15 @@ class CollectionImportPlugin:
         vault_title = text(mapped_value(row, aliases["vault"], column_mapping.get("vaultTitle")))
         imdb_id = extract_imdb_id(mapped_value(row, aliases["imdbId"], column_mapping.get("imdbId")))
         tmdb_id = extract_tmdb_id(mapped_value(row, aliases["tmdbId"], column_mapping.get("tmdbId")))
+        raw_year = mapped_value(row, aliases["year"], column_mapping.get("year"))
+        raw_release_date = mapped_value(row, aliases["releaseDate"], column_mapping.get("releaseDate"))
+        year = parse_year(raw_year) or parse_year(raw_release_date)
         movie = {
             "externalId": text(mapped_value(row, aliases["externalId"], column_mapping.get("externalId"))) or f"{source_file.name}:{index}",
             "title": title,
             "originalTitle": text(mapped_value(row, aliases["originalTitle"], column_mapping.get("originalTitle"))),
-            "year": parse_year(mapped_value(row, aliases["year"], column_mapping.get("year"))),
-            "releaseDate": text(mapped_value(row, aliases["releaseDate"], column_mapping.get("releaseDate"))),
+            "year": year,
+            "releaseDate": parse_release_date(raw_release_date),
             "barcode": barcode,
             "format": media_format,
             "edition": text(mapped_value(row, aliases["edition"], column_mapping.get("edition"))),
