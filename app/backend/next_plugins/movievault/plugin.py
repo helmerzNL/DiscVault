@@ -150,6 +150,7 @@ def _normalize_member(item, index):
     movie = _movie_payload(source)
     year = _parse_year(_first_value(source, "year", "releaseYear", "release_year", "releaseDate", "release_date") or movie.get("year"))
     sort_order = _text(_first_value(source, "sortOrder", "sort_order", "discNumber", "disc_number")) or index
+    disc_number = _text(_first_value(source, "discNumber", "disc_number", "disc", "diskNumber", "disk_number"))
     poster = _image_url(_first_value(source, "posterUrl", "poster_url", "poster", "coverUrl", "cover_url", "image"))
     backdrop = _image_url(_first_value(source, "backdropUrl", "backdrop_url", "backdrop"))
     member = {
@@ -180,6 +181,8 @@ def _normalize_member(item, index):
         "backdrop_urls": source.get("backdrop_urls") or source.get("backdropUrls") or movie.get("backdropUrls") or [],
         "sortOrder": sort_order,
         "sort_order": sort_order,
+        "discNumber": disc_number,
+        "disc_number": disc_number,
         "source": _text(source.get("source") or "MovieVault"),
         "sourceRef": _text(_first_value(source, "sourceRef", "source_ref", "id", "movieVaultId", "movievault_id")),
     }

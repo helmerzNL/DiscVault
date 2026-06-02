@@ -18333,11 +18333,24 @@ def ui_preview_html(
       }
       const metadata = payload.metadata || payload;
       const results = metadata.results || metadata.sources || metadata.matches || [];
-      const boxSetProposal = (metadata.results || [])
-        .map((item) => item.boxSetProposal || item.raw?.boxSetProposal)
-        .find((item) => item && Array.isArray(item.movies) && item.movies.length >= 2);
+      const boxSetProposals = [];
+      const seenBoxSetProposals = new Set();
+      (metadata.results || []).forEach((result) => {
+        const proposal = result?.boxSetProposal || result?.box_set_proposal || result?.raw?.boxSetProposal || result?.raw?.box_set_proposal;
+        if (!proposal || typeof proposal !== "object") return;
+        const title = proposal.title || proposal.name || "";
+        const provider = proposal.provider || proposal.source || result?.pluginId || result?.provider || "";
+        const key = `${String(provider).toLowerCase()}::${String(title).toLowerCase()}::${String(proposal.barcode || proposal.movievault_id || proposal.detailUrl || "")}`;
+        if (seenBoxSetProposals.has(key)) return;
+        seenBoxSetProposals.add(key);
+        boxSetProposals.push({...proposal, provider: provider || proposal.provider || proposal.source || ""});
+      });
+      const addableBoxSetProposal = boxSetProposals.find((item) => {
+        const members = item?.movies || item?.members || [];
+        return Array.isArray(members) && members.length >= 2;
+      });
       if (addButton) {
-        addButton.textContent = boxSetProposal
+        addButton.textContent = addableBoxSetProposal
           ? tNext("importCenter.addBoxSet", "Add box-set")
           : tNext("importCenter.addMovie", "Add movie");
       }
@@ -18425,27 +18438,55 @@ def ui_preview_html(
         metadataUpdates.poster,
         (metadata.results || []).map((item) => itemImage(item)).find(Boolean)
       );
-      const boxSetCard = boxSetProposal ? `
-        <div class="import-result-card featured">
-          ${artHtml(imageFrom(boxSetProposal.posterUrl, boxSetProposal.poster_url, boxSetProposal.poster, boxSetProposal.backdropUrl, boxSetProposal.backdrop_url), boxSetProposal.title || boxSetProposal.name || "B")}
-          <div class="import-result-body">
-            <div class="import-result-kicker">
-              <span class="tag good">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>
-              <span class="tag">${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}: ${escapeHtml(String(boxSetProposal.movies.length))}</span>
-            </div>
-            <h3 class="import-result-title">${escapeHtml(boxSetProposal.title || boxSetProposal.name || tNext("importCenter.boxSetDetected", "Box-set detected"))}</h3>
-            <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.boxSetPreviewHelp", "DiscVault will add the box-set and link the detected member films."))}</div>
+      const boxSetMemberRows = (proposal) => {
+        const members = proposal?.movies || proposal?.members || [];
+        if (!Array.isArray(members) || !members.length) {
+          return `
             <div class="import-result-member-strip">
-              ${(boxSetProposal.movies || []).slice(0, 10).map((member) => `
-                <div class="import-result-member">
-                  <strong>${escapeHtml(member.title || tNext("common.untitled", "Untitled"))}</strong>
-                  <span>${[member.year, member.format].filter(Boolean).map((part) => escapeHtml(part)).join(" &middot; ") || escapeHtml(tNext("importCenter.member", "Member"))}</span>
-                </div>
-              `).join("")}
+              <div class="import-result-member">
+                <strong>${escapeHtml(tNext("importCenter.noDiskMembers", "No disk members yet"))}</strong>
+                <span>${escapeHtml(tNext("importCenter.noDiskMembersHelp", "Use MovieVault or another metadata source to identify the member films."))}</span>
+              </div>
+            </div>
+          `;
+        }
+        return `
+          <div class="import-result-member-strip">
+            ${members.slice(0, 12).map((member) => `
+              <div class="import-result-member">
+                <strong>${escapeHtml(member.title || tNext("common.untitled", "Untitled"))}</strong>
+                <span>${[
+                  member.discNumber || member.disc_number ? `${tNext("importCenter.disc", "Disc")} ${member.discNumber || member.disc_number}` : "",
+                  member.year,
+                  member.format,
+                  member.memberConfidence || member.member_confidence
+                ].filter(Boolean).map((part) => escapeHtml(part)).join(" &middot; ") || escapeHtml(tNext("importCenter.member", "Member"))}</span>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      };
+      const boxSetCard = boxSetProposals.length ? boxSetProposals.map((proposal) => {
+        const members = proposal.movies || proposal.members || [];
+        const provider = proposal.provider || proposal.source || proposal.member_source || "";
+        const memberCount = Array.isArray(members) ? members.length : 0;
+        return `
+          <div class="import-result-card featured">
+            ${artHtml(imageFrom(proposal.posterUrl, proposal.poster_url, proposal.poster, proposal.backdropUrl, proposal.backdrop_url), proposal.title || proposal.name || "B")}
+            <div class="import-result-body">
+              <div class="import-result-kicker">
+                <span class="tag good">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>
+                ${provider ? `<span class="tag">${escapeHtml(provider)}</span>` : ""}
+                <span class="tag">${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}: ${escapeHtml(String(memberCount || proposal.member_count || 0))}</span>
+              </div>
+              <h3 class="import-result-title">${escapeHtml(proposal.title || proposal.name || tNext("importCenter.boxSetDetected", "Box-set detected"))}</h3>
+              <div class="import-result-subtitle">${escapeHtml(memberCount ? tNext("importCenter.boxSetPreviewHelp", "DiscVault will add the box-set and link the detected member films.") : tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."))}</div>
+              <div class="import-result-subtitle"><strong>${escapeHtml(tNext("importCenter.diskMembers", "Possible disk members"))}</strong></div>
+              ${boxSetMemberRows(proposal)}
             </div>
           </div>
-        </div>
-      ` : "";
+        `;
+      }).join("") : "";
       const proposalCard = (proposedTitle || Object.keys(metadataUpdates).length || Object.keys(technicalUpdates).length) ? `
         <div class="import-result-card featured">
           ${artHtml(proposalImage, proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}

@@ -143,6 +143,25 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "hit")
         self.assertEqual(captured["barcode"], "")
 
+    def test_box_set_members_keep_disc_number_for_preview(self):
+        proposal = movievault_26._normalize_box_set_proposal(
+            {
+                "items": [
+                    {
+                        "title": "Example Trilogy",
+                        "movies": [
+                            {"title": "Example One", "discNumber": 1},
+                            {"title": "Example Two", "disc_number": 2},
+                        ],
+                    }
+                ]
+            },
+            {"format": "Blu-ray"},
+        )
+
+        self.assertEqual(proposal["movies"][0]["discNumber"], "1")
+        self.assertEqual(proposal["movies"][1]["disc_number"], "2")
+
     def test_unauthorized_request_recovers_token_once_and_retries(self):
         seen_auth = []
 
