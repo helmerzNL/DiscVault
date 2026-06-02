@@ -9,6 +9,8 @@ if repo_root not in sys.path:
 
 try:
     from app.backend.next_app import import_source_review_summary
+    from app.backend.next_app import import_source_recommended_match
+    from app.backend.next_app import import_source_match_candidate_score
     from app.backend.next_app import NextApiError
     from app.backend.next_app import movie_payload_fields
     from app.backend.next_app import movie_update_payload
@@ -16,6 +18,8 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     if exc.name != "flask":
         raise
     import_source_review_summary = None
+    import_source_recommended_match = None
+    import_source_match_candidate_score = None
     NextApiError = None
     movie_payload_fields = None
     movie_update_payload = None
@@ -95,6 +99,38 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertEqual(summary["releaseTitleRisks"], 1)
         self.assertEqual(summary["metadataSuggestionRows"], 1)
         self.assertEqual(summary["recommendedAction"], "review")
+
+    def test_import_source_recommended_match_prefers_movie_identity(self):
+        match = import_source_recommended_match(
+            {
+                "title": "A Minecraft Movie 4K Blu-ray (SteelBook) (France)",
+                "year": "2025",
+            },
+            {
+                "items": [
+                    {"provider": "tmdb", "title": "Minecraft: The Story of Mojang", "year": "2012"},
+                    {"provider": "tmdb", "title": "A Minecraft Movie", "year": "2025", "identifiers": {"tmdb": "950387"}},
+                ]
+            },
+        )
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match["title"], "A Minecraft Movie")
+        self.assertGreaterEqual(match["resolution"]["score"], 72)
+        self.assertIn("same_year", match["resolution"]["evidence"])
+
+    def test_import_source_recommended_match_ignores_weak_candidate(self):
+        match = import_source_recommended_match(
+            {"title": "RoboCop", "year": "1987"},
+            {"items": [{"provider": "tmdb", "title": "Saving Private Ryan", "year": "1998"}]},
+        )
+
+        self.assertIsNone(match)
+        score = import_source_match_candidate_score(
+            {"title": "RoboCop", "year": "1987"},
+            {"title": "Saving Private Ryan", "year": "1998"},
+        )
+        self.assertEqual(score["label"], "low")
 
 
 if __name__ == "__main__":

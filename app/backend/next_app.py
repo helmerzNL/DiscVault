@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html as html_lib
 import base64
+from difflib import SequenceMatcher
 import hashlib
 import io
 import json as json_lib
@@ -1621,6 +1622,85 @@ def import_source_metadata_suggestions(
     }
 
 
+def import_source_match_title_key(value: Any) -> str:
+    text = clean_text(value).casefold()
+    text = re.sub(
+        r"\b(4k|uhd|ultra\s*hd|blu[- ]?ray|dvd|hd\s*dvd|laserdisc|steelbook|limited|collector|edition|france|germany|italy|spain|uk|usa)\b",
+        " ",
+        text,
+    )
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def import_source_match_candidate_score(item: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    item_title = import_source_match_title_key(import_source_item_title(item))
+    candidate_title = import_source_match_title_key(
+        candidate.get("title") or candidate.get("name") or candidate.get("originalTitle")
+    )
+    evidence: list[str] = []
+    score = 0
+    if item_title and candidate_title:
+        ratio = SequenceMatcher(None, item_title, candidate_title).ratio()
+        score += int(round(ratio * 58))
+        if item_title == candidate_title:
+            score += 24
+            evidence.append("exact_title")
+        elif item_title in candidate_title or candidate_title in item_title:
+            score += 14
+            evidence.append("contained_title")
+        elif ratio >= 0.82:
+            evidence.append("similar_title")
+    item_year = clean_text(import_source_item_year(item))
+    candidate_year = clean_text(candidate.get("year") or candidate.get("releaseYear") or candidate.get("release_year"))
+    if item_year and candidate_year:
+        if item_year == candidate_year:
+            score += 18
+            evidence.append("same_year")
+        else:
+            try:
+                if abs(int(item_year) - int(candidate_year)) <= 1:
+                    score += 8
+                    evidence.append("near_year")
+            except ValueError:
+                pass
+    identifiers = candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {}
+    item_identifiers = import_source_item_identifiers(item)
+    for key in ("tmdb", "imdb"):
+        if clean_text(item_identifiers.get(key)) and clean_text(identifiers.get(key)) == clean_text(item_identifiers.get(key)):
+            score += 30
+            evidence.append(f"{key}_id")
+    provider = clean_text(candidate.get("provider"))
+    if provider in {"tmdb", "movievault", "bluray_com"}:
+        score += 3
+    score = max(0, min(100, score))
+    if score >= 88:
+        label = "high"
+    elif score >= 72:
+        label = "medium"
+    else:
+        label = "low"
+    return {"score": score, "label": label, "evidence": evidence}
+
+
+def import_source_recommended_match(item: dict[str, Any], suggestions: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(suggestions, dict):
+        return None
+    candidates = [candidate for candidate in suggestions.get("items") or [] if isinstance(candidate, dict)]
+    best: dict[str, Any] | None = None
+    for candidate in candidates:
+        resolution = import_source_match_candidate_score(item, candidate)
+        if not best or int(resolution["score"]) > int(best["resolution"]["score"]):
+            best = {"candidate": candidate, "resolution": resolution}
+    if not best or int(best["resolution"]["score"]) < 72:
+        return None
+    return {
+        **best["candidate"],
+        "recommended": True,
+        "resolution": best["resolution"],
+    }
+
+
 def import_source_box_set_reviews(container_preview: list[dict[str, Any]], review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows_by_index = {int(row["index"]): row for row in review_queue if row.get("index")}
     reviews: list[dict[str, Any]] = []
@@ -1669,7 +1749,7 @@ def import_source_action_preview(
     limit: int = 200,
     actor: dict[str, Any] | None = None,
     include_metadata_suggestions: bool = True,
-    metadata_suggestion_limit: int = 12,
+    metadata_suggestion_limit: int = 200,
 ) -> dict[str, Any]:
     conflicts = import_source_conflicts(conn, items, limit=min(len(items), 5000))
     conflict_by_index = {item["index"]: item for item in conflicts}
@@ -1740,8 +1820,15 @@ def import_source_action_preview(
         ):
             metadata_suggestions = import_source_metadata_suggestions(conn, item=item, actor=actor)
             suggestion_count += 1
+        recommended_match = import_source_recommended_match(item, metadata_suggestions)
         if index <= len(review_queue):
             review_queue[index - 1]["metadataSuggestions"] = metadata_suggestions
+            review_queue[index - 1]["recommendedMatch"] = recommended_match
+            review_queue[index - 1]["matchResolution"] = (recommended_match or {}).get("resolution") or {
+                "score": 0,
+                "label": "none",
+                "evidence": [],
+            }
         if len(actions) < limit:
             actions.append(
                 {
@@ -1754,6 +1841,8 @@ def import_source_action_preview(
                     "provider": import_source_item_provider(item, plugin_id),
                     "confidence": confidence,
                     "metadataSuggestions": metadata_suggestions,
+                    "recommendedMatch": recommended_match,
+                    "matchResolution": (recommended_match or {}).get("resolution"),
                     "match": (conflict_by_index.get(index) or {}).get("match"),
                     "containers": specs,
                 }
@@ -7319,6 +7408,10 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--accent) 42%, transparent);
       background: color-mix(in srgb, var(--accent) 10%, transparent);
     }
+    .import-metadata-suggestion.is-recommended:not(.is-selected) {
+      border-color: color-mix(in srgb, var(--good) 34%, transparent);
+      background: color-mix(in srgb, var(--good) 8%, transparent);
+    }
     .import-metadata-suggestion img {
       width: 34px;
       height: 48px;
@@ -7367,6 +7460,9 @@ def ui_preview_html(
     .import-selected-match {
       color: var(--good);
       background: color-mix(in srgb, var(--good) 12%, transparent);
+    }
+    .import-recommended-match {
+      border: 1px solid color-mix(in srgb, var(--good) 28%, transparent);
     }
     .import-release-warning {
       color: var(--warn);
@@ -10218,6 +10314,9 @@ def ui_preview_html(
                 <p class="import-source-meta" data-next-i18n="importCenter.reviewHelp">Confirm creates, updates, skips and proposed container links before starting the job.</p>
               </div>
               <div class="button-row compact">
+                <button type="button" class="secondary-button" id="importReviewUseRecommendedButton" data-next-i18n="importCenter.reviewUseRecommended">Use recommended matches</button>
+                <button type="button" class="secondary-button" id="importReviewSkipLowButton" data-next-i18n="importCenter.reviewSkipLow">Skip low confidence</button>
+                <button type="button" class="secondary-button" id="importReviewExistingOnlyButton" data-next-i18n="importCenter.reviewExistingOnly">Existing only</button>
                 <button type="button" class="secondary-button" id="importReviewHighConfidenceButton" data-next-i18n="importCenter.reviewHighConfidence">High confidence only</button>
                 <button type="button" class="secondary-button" id="importReviewAllButton" data-next-i18n="importCenter.reviewImportAll">Import all</button>
                 <button type="button" class="secondary-button" id="importReviewSkipUpdatesButton" data-next-i18n="importCenter.reviewSkipUpdates">Skip updates</button>
@@ -16756,6 +16855,14 @@ def ui_preview_html(
     function importSelectedMatch(index) {
       return importCenter.reviewMatches?.[index] || null;
     }
+    function importRecommendedMatch(row) {
+      const match = row?.recommendedMatch;
+      return match && typeof match === "object" ? normalizeImportSuggestion(match) : null;
+    }
+    function importRowNeedsResolverReview(row) {
+      const confidence = row.confidence || {};
+      return confidence.label === "low" || row.matchState === "missing_title" || importReleaseTitleRisk(row);
+    }
     function importManualState(index) {
       if (!importCenter.reviewManual) importCenter.reviewManual = {};
       if (!importCenter.reviewManual[index]) importCenter.reviewManual[index] = {};
@@ -16805,6 +16912,8 @@ def ui_preview_html(
       const sources = data.sources || [];
       const selected = importSelectedMatch(row.index);
       const selectedIdentity = selected ? importSuggestionIdentity(selected) : "";
+      const recommended = importRecommendedMatch(row);
+      const recommendedIdentity = recommended ? importSuggestionIdentity(recommended) : "";
       const sourceText = sources.length
         ? sources.slice(0, 3).map((source) => source.name || source.pluginId || source.sourceLabel).filter(Boolean).join(" / ")
         : "";
@@ -16822,12 +16931,15 @@ def ui_preview_html(
               const ids = item.identifiers || {};
               const idText = Object.entries(ids).map(([key, value]) => `${key}:${value}`).join(" ");
               const isSelected = selectedIdentity && selectedIdentity === importSuggestionIdentity(item);
+              const isRecommended = recommendedIdentity && recommendedIdentity === importSuggestionIdentity(item);
+              const score = isRecommended ? row.recommendedMatch?.resolution?.score : "";
               return `
-                <div class="import-metadata-suggestion ${isSelected ? "is-selected" : ""}">
+                <div class="import-metadata-suggestion ${isSelected ? "is-selected" : ""} ${isRecommended ? "is-recommended" : ""}">
                   ${item.posterUrl ? `<img src="${escapeHtml(item.posterUrl)}" alt="">` : `<span class="poster-mini-placeholder"></span>`}
                   <div>
                     <strong>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</strong>
                     <div class="import-source-meta">${escapeHtml([meta, idText].filter(Boolean).join(" / "))}</div>
+                    ${isRecommended ? `<div class="import-source-meta good">${escapeHtml(tNext("importCenter.recommendedMatch", "Recommended match"))}${score ? ` · ${escapeHtml(score)}%` : ""}</div>` : ""}
                   </div>
                   <button type="button" class="secondary-button compact-button" data-import-use-suggestion="${escapeHtml(row.index)}" data-suggestion-index="${escapeHtml(suggestionIndex)}">
                     ${escapeHtml(isSelected ? tNext("importCenter.selectedMatch", "Selected") : tNext("importCenter.useMatch", "Use match"))}
@@ -16845,11 +16957,25 @@ def ui_preview_html(
     function setImportReviewMode(mode) {
       const rows = importReviewRows();
       const decisions = {};
+      if (mode === "useRecommended") {
+        if (!importCenter.reviewMatches) importCenter.reviewMatches = {};
+        rows.forEach((row) => {
+          const index = Number(row.index || 0);
+          const recommended = importRecommendedMatch(row);
+          if (index && recommended) importCenter.reviewMatches[index] = recommended;
+        });
+      }
       rows.forEach((row) => {
         const index = Number(row.index || 0);
         if (!index) return;
         if (mode === "skipUpdates" && row.action === "update") {
           decisions[index] = "skip";
+        } else if (mode === "skipLow") {
+          decisions[index] = importRowNeedsResolverReview(row)
+            ? "skip"
+            : (row.action === "update" ? "update" : row.action === "skip" ? "skip" : "create");
+        } else if (mode === "existingOnly") {
+          decisions[index] = row.action === "update" || row.matchState === "existing" ? "update" : "skip";
         } else if (mode === "highConfidence") {
           const confidence = row.confidence || {};
           decisions[index] = (confidence.label === "high" && row.matchState !== "missing_title")
@@ -17020,12 +17146,14 @@ def ui_preview_html(
         return acc;
       }, {});
       const needsReview = rows.filter((row) => (row.confidence || {}).label === "low" || row.matchState === "missing_title").length;
+      const recommendedMatches = rows.filter((row) => importRecommendedMatch(row)).length;
       summary.innerHTML = `
         <span class="tag">${escapeHtml(tNext("importCenter.actionTotal", "Total"))} ${escapeHtml(rows.length)}</span>
         <span class="tag good">${escapeHtml(tNext("importCenter.action.create", "Create"))} ${escapeHtml(counts.create || 0)}</span>
         <span class="tag">${escapeHtml(tNext("importCenter.action.update", "Update"))} ${escapeHtml(counts.update || 0)}</span>
         <span class="tag">${escapeHtml(tNext("importCenter.action.skip", "Skip"))} ${escapeHtml(counts.skip || 0)}</span>
         <span class="tag ${needsReview ? "warning" : "good"}">${escapeHtml(tNext("importCenter.needsReview", "Needs review"))} ${escapeHtml(needsReview)}</span>
+        <span class="tag ${recommendedMatches ? "good" : ""}">${escapeHtml(tNext("importCenter.recommendedMatches", "Recommended matches"))} ${escapeHtml(recommendedMatches)}</span>
         <span class="tag">${escapeHtml(tNext("importCenter.containerPreview", "Container proposals"))} ${escapeHtml(containers.length || 0)}</span>
       `;
       const sections = renderImportProviderSummary(providerSummary) + renderImportBoxSetReviews(boxSetReviews);
@@ -17065,6 +17193,7 @@ def ui_preview_html(
               ${containerTags ? `<div class="import-counts">${containerTags}</div>` : ""}
               ${evidence ? `<div class="import-review-evidence">${evidence}</div>` : ""}
               ${releaseRisk ? `<div class="import-release-warning">${escapeHtml(tNext("importCenter.releaseTitleWarning", "This looks like a release title. Choose the actual movie match before import."))}</div>` : ""}
+              ${row.recommendedMatch ? `<div class="import-selected-match import-recommended-match">${escapeHtml(tNext("importCenter.recommendedMatch", "Recommended match"))}: ${escapeHtml(row.recommendedMatch.title || "")} ${escapeHtml(row.recommendedMatch.year || "")}</div>` : ""}
               ${selectedMatch ? `<div class="import-selected-match">${escapeHtml(tNext("importCenter.selectedMatch", "Selected"))}: ${escapeHtml(selectedMatch.title || "")} ${escapeHtml(selectedMatch.year || "")}</div>` : ""}
               <div class="import-review-tools">
                 <button type="button" class="secondary-button compact-button" data-import-review-search="${escapeHtml(row.index)}">
@@ -20871,6 +21000,9 @@ def ui_preview_html(
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
       document.getElementById("importReviewStartButton")?.addEventListener("click", () => startImportCenterImport());
+      document.getElementById("importReviewUseRecommendedButton")?.addEventListener("click", () => setImportReviewMode("useRecommended"));
+      document.getElementById("importReviewSkipLowButton")?.addEventListener("click", () => setImportReviewMode("skipLow"));
+      document.getElementById("importReviewExistingOnlyButton")?.addEventListener("click", () => setImportReviewMode("existingOnly"));
       document.getElementById("importReviewHighConfidenceButton")?.addEventListener("click", () => setImportReviewMode("highConfidence"));
       document.getElementById("importReviewAllButton")?.addEventListener("click", () => setImportReviewMode("all"));
       document.getElementById("importReviewSkipUpdatesButton")?.addEventListener("click", () => setImportReviewMode("skipUpdates"));
