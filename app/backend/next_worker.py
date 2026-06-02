@@ -565,9 +565,15 @@ def source_public_id(prefix: str, value: str, *, fallback: str) -> str:
     return f"{prefix}-{safe or fallback}"
 
 
-def import_movie_existing_id(conn, item: dict[str, Any]) -> UUID | None:
+def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "") -> UUID | None:
     barcode = clean_text(item.get("barcode"))
     with conn.cursor() as cur:
+        public_id = clean_text(public_id)
+        if public_id:
+            cur.execute("SELECT id FROM movies WHERE public_id=%s LIMIT 1", (public_id,))
+            row = cur.fetchone()
+            if row:
+                return row["id"]
         if barcode:
             cur.execute("SELECT id FROM movies WHERE barcode=%s LIMIT 1", (barcode,))
             row = cur.fetchone()
@@ -790,9 +796,10 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
     year = clean_text(item.get("year")) or import_year(raw_release_date)
     release_date = import_release_date(raw_release_date)
     seed = f"{plugin_id}:{external_id or title}:{year}:{clean_text(item.get('barcode'))}"
-    existing_id = import_movie_existing_id(conn, item)
+    proposed_public_id = source_public_id(f"import-{plugin_id}", external_id or seed, fallback=seed)
+    existing_id = import_movie_existing_id(conn, item, public_id=proposed_public_id)
     movie_id = existing_id or stable_uuid(f"movie:{seed}")
-    public_id = source_public_id(f"import-{plugin_id}", external_id or str(movie_id), fallback=str(movie_id))
+    public_id = proposed_public_id if external_id else source_public_id(f"import-{plugin_id}", str(movie_id), fallback=str(movie_id))
     metadata = import_movie_metadata(item, plugin_id)
     with conn.cursor() as cur:
         cur.execute(

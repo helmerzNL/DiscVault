@@ -1262,6 +1262,9 @@
   "importCenter.queueingMetadata": "Metadata-refresh wordt ingepland...",
   "importCenter.metadataQueued": "Metadata-refresh ingepland."
 ,
+  "importCenter.reviewUseRecommended": "Aanbevolen matches gebruiken",
+  "importCenter.reviewSkipLow": "Lage zekerheid overslaan",
+  "importCenter.reviewExistingOnly": "Alleen bestaande bijwerken",
   "importCenter.reviewHighConfidence": "Alleen hoge zekerheid",
   "importCenter.useMatch": "Gebruik match",
   "importCenter.searchAgain": "Opnieuw zoeken",
@@ -1269,6 +1272,8 @@
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualImdb": "IMDb ID",
   "importCenter.manualPoster": "Poster-URL",
+  "importCenter.recommendedMatch": "Aanbevolen match",
+  "importCenter.recommendedMatches": "Aanbevolen matches",
   "importCenter.selectedMatch": "Gekozen match",
   "importCenter.clearMatch": "Match wissen",
   "importCenter.releaseTitleWarning": "Dit lijkt op een release-titel. Kies voor import de echte filmmatch."
