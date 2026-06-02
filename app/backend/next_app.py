@@ -17676,6 +17676,7 @@ def ui_preview_html(
             <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.actionTotal", "Total"))}</span><strong>${escapeHtml(formatNumber(stats.total))}</strong></div>
             <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.action.create", "Create"))}</span><strong>${escapeHtml(formatNumber(stats.created))}</strong></div>
             <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.action.update", "Update"))}</span><strong>${escapeHtml(formatNumber(stats.updated))}</strong></div>
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.metadataRefreshes", "Metadata refreshes"))}</span><strong>${escapeHtml(formatNumber(persistence.metadataRefreshQueued || 0))}</strong></div>
             <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.historyWarnings", "Warnings"))}</span><strong>${escapeHtml(formatNumber(stats.errors + stats.skipped))}</strong></div>
           </div>
           ${importJobRollback(job).status === "completed" ? renderImportJobRollback(job, persistence) : ""}

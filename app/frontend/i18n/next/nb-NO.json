@@ -1195,6 +1195,7 @@
   "importCenter.updated": "Updated",
   "importCenter.importError": "Import error",
   "importCenter.queueingMetadata": "Queueing metadata refresh...",
+  "importCenter.metadataRefreshes": "Metadataoppdateringer",
   "importCenter.metadataQueued": "Metadata refresh queued."
 ,
   "importCenter.reviewUseRecommended": "Use recommended matches",
