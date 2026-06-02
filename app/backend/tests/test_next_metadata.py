@@ -82,6 +82,39 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["technicalUpdates"]["audio_tracks"], ["English Dolby Digital 5.1"])
         self.assertEqual(merged["technicalUpdates"]["subtitles"], ["Dutch"])
 
+    def test_release_source_cannot_replace_canonical_display_title(self):
+        current = {"title": "A Minecraft Movie", "format": "4K UHD", "metadata": {}}
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "movie": {
+                    "title": "A Minecraft Movie 4K Blu-ray (SteelBook) (France)",
+                    "format": "4K UHD",
+                },
+                "release": {
+                    "title": "A Minecraft Movie 4K Blu-ray (SteelBook) (France)",
+                    "format": "4K UHD",
+                },
+                "technicalSpecs": {"format": "4K UHD", "subtitles": ["French"]},
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[result],
+            overwrite_enabled=True,
+            target_format="4K UHD",
+        )
+
+        self.assertNotIn("title", merged["movieUpdates"])
+        self.assertEqual(merged["technicalUpdates"]["subtitles"], ["French"])
+        self.assertTrue(
+            any(item["field"] == "title" and "release source" in item["reason"] for item in merged["skipped"])
+        )
+
     def test_manual_fields_are_protected_without_preferred_overwrite(self):
         current = {
             "title": "Manual Title",
