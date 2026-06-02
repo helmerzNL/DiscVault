@@ -5325,6 +5325,69 @@ def ui_preview_html(
       font-weight: 760;
       padding: 0 12px;
     }
+    .metadata-job-panel {
+      display: none;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 50%),
+        var(--bg-elevated);
+      backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: var(--shadow-soft);
+      padding: 14px;
+    }
+    .metadata-job-panel.visible {
+      display: grid;
+    }
+    .metadata-job-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .metadata-job-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .metadata-job-list {
+      display: grid;
+      gap: 10px;
+    }
+    .metadata-job-card {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 12px;
+    }
+    .metadata-job-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 12px;
+      min-width: 0;
+    }
+    .metadata-job-title {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .metadata-job-title strong {
+      overflow-wrap: anywhere;
+    }
+    .metadata-job-meta {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.4;
+    }
+    .metadata-job-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
     .bulk-action {
       min-height: 38px;
       border: 1px solid var(--line);
@@ -9020,6 +9083,16 @@ def ui_preview_html(
           </div>
         </div>
       </section>
+      <section class="metadata-job-panel" id="libraryMetadataJobPanel" aria-live="polite">
+        <div class="metadata-job-head">
+          <div>
+            <span class="eyebrow" data-next-i18n="metadataJobs.eyebrow">Metadata</span>
+            <h3 data-next-i18n="metadataJobs.title">Refresh status</h3>
+          </div>
+          <button type="button" class="secondary-button" id="libraryMetadataJobsRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+        </div>
+        <div class="metadata-job-list" id="libraryMetadataJobList"></div>
+      </section>
       <section class="preview-layout">
         <div class="preview-panel">
           <div class="panel-head">
@@ -10502,6 +10575,9 @@ def ui_preview_html(
     };
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
+    let libraryMetadataJobs = [];
+    let libraryMetadataJobVisible = false;
+    let libraryMetadataJobPollTimer = null;
     let activePreferenceTab = "appearance";
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -10860,6 +10936,11 @@ def ui_preview_html(
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="vault"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="collection"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="delete"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkDelete));
+      setElementVisible(document.getElementById("libraryMetadataJobPanel"), canViewMetadataJobs());
+      if (!canViewMetadataJobs()) {
+        libraryMetadataJobVisible = false;
+        stopLibraryMetadataJobPolling();
+      }
       document.querySelectorAll("#movieMetadataDryRunButton, #movieMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       });
@@ -11328,6 +11409,169 @@ def ui_preview_html(
           </div>
         `;
       }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noMetadataJobs", "No metadata jobs yet."))}</div>`;
+    }
+    function canViewMetadataJobs() {
+      return hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh) || hasPermission("admin.view_jobs");
+    }
+    function metadataJobMovieId(job) {
+      const payload = job?.payload || {};
+      const result = job?.result || {};
+      return payload.movieId || payload.movie_id || result.movieId || result.movie_id || "";
+    }
+    function metadataJobMovieTitle(job) {
+      const movieId = metadataJobMovieId(job);
+      const movie = movieById(movieId);
+      return movie?.title || movie?.original_title || (movieId ? String(movieId).slice(0, 8) : tNext("appAdmin.metadataJob", "Metadata job"));
+    }
+    function metadataJobCoreResult(job) {
+      const result = job?.result || {};
+      return result.result || result.metadata || result;
+    }
+    function metadataJobChanged(job) {
+      const core = metadataJobCoreResult(job);
+      const applied = core?.applied || {};
+      if (typeof applied.changed === "boolean") return applied.changed;
+      if (typeof core?.changed === "boolean") return core.changed;
+      return null;
+    }
+    function metadataJobExecutionItems(job) {
+      const core = metadataJobCoreResult(job);
+      const preview = core?.preview || core;
+      const executions = preview?.executions || preview?.sources || [];
+      return Array.isArray(executions) ? executions : [];
+    }
+    function metadataJobProviderTags(job, limit = 5) {
+      const names = new Set();
+      metadataJobExecutionItems(job).forEach((item) => {
+        const pluginId = item?.pluginId || item?.plugin_id || item?.providerId || item?.provider_id || "";
+        if (pluginId) names.add(pluginId);
+      });
+      const core = metadataJobCoreResult(job);
+      const provenance = core?.applied?.provenance || core?.preview?.proposal?.provenance || core?.proposal?.provenance || [];
+      if (Array.isArray(provenance)) {
+        provenance.forEach((item) => {
+          const pluginId = item?.pluginId || item?.plugin_id || item?.providerId || item?.provider_id || item?.source || "";
+          if (pluginId) names.add(pluginId);
+        });
+      }
+      const values = Array.from(names).slice(0, limit);
+      return values.map((name) => `<span class="tag">${escapeHtml(name)}</span>`).join("");
+    }
+    function metadataJobReceiverTags(job, limit = 4) {
+      const core = metadataJobCoreResult(job);
+      const receivers = core?.receivers || core?.receiverResults || core?.receiver_results || core?.contributions || [];
+      if (!Array.isArray(receivers)) return "";
+      return receivers.slice(0, limit).map((item) => {
+        const pluginId = item?.pluginId || item?.plugin_id || item?.receiverId || item?.receiver_id || item?.id || "receiver";
+        const status = item?.status || item?.state || "";
+        return `<span class="tag ${status === "ok" || status === "completed" ? "good" : status === "error" ? "bad" : ""}">${escapeHtml(pluginId)}</span>`;
+      }).join("");
+    }
+    function metadataJobStatusLabel(job) {
+      const status = job?.status || "-";
+      if (status === "completed") {
+        const changed = metadataJobChanged(job);
+        if (changed === true) return tNext("metadataJobs.changed", "Updated");
+        if (changed === false) return tNext("metadataJobs.unchanged", "No changes");
+      }
+      if (status === "pending") return tNext("metadataJobs.pending", "Queued");
+      if (status === "running") return tNext("metadataJobs.running", "Running");
+      if (status === "failed") return tNext("metadataJobs.failed", "Failed");
+      return status;
+    }
+    function renderLibraryMetadataJobs() {
+      const panel = document.getElementById("libraryMetadataJobPanel");
+      const list = document.getElementById("libraryMetadataJobList");
+      if (!panel || !list) return;
+      const canView = canViewMetadataJobs();
+      const visible = canView && (libraryMetadataJobVisible || (libraryMetadataJobs || []).length > 0);
+      panel.classList.toggle("visible", visible);
+      panel.classList.toggle("hidden", !canView);
+      if (!canView) {
+        list.innerHTML = "";
+        return;
+      }
+      const jobs = (libraryMetadataJobs || []).slice(0, 8);
+      if (!jobs.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("metadataJobs.none", "No metadata jobs yet."))}</div>`;
+        return;
+      }
+      list.innerHTML = jobs.map((job) => {
+        const statusClass = appAdminJobStatusClass(job.status);
+        const providerTags = metadataJobProviderTags(job);
+        const receiverTags = metadataJobReceiverTags(job);
+        const chips = [
+          providerTags ? `<span class="tag blue">${escapeHtml(tNext("metadataJobs.providers", "Providers"))}</span>${providerTags}` : "",
+          receiverTags ? `<span class="tag">${escapeHtml(tNext("metadataJobs.receivers", "Receivers"))}</span>${receiverTags}` : "",
+          job.error ? `<span class="tag bad">${escapeHtml(tNext("metadataJobs.error", "Error"))}</span>` : ""
+        ].filter(Boolean).join("");
+        const details = {
+          payload: job.payload || {},
+          result: metadataJobCoreResult(job),
+          error: job.error || null
+        };
+        return `
+          <article class="metadata-job-card">
+            <div class="metadata-job-row">
+              <div class="metadata-job-title">
+                <strong>${escapeHtml(metadataJobMovieTitle(job))}</strong>
+                <span class="metadata-job-meta">
+                  ${escapeHtml(job.jobType || "metadata.refresh_movie")}
+                  &middot;
+                  ${escapeHtml(shortDateTime(job.createdAt))}
+                  ${job.finishedAt ? ` &middot; ${escapeHtml(shortDateTime(job.finishedAt))}` : ""}
+                </span>
+              </div>
+              <span class="tag ${statusClass}">${escapeHtml(metadataJobStatusLabel(job))}</span>
+            </div>
+            ${chips ? `<div class="metadata-job-chips">${chips}</div>` : ""}
+            ${job.error ? `<div class="login-message bad">${escapeHtml(job.error)}</div>` : ""}
+            <details>
+              <summary class="metadata-job-meta">${escapeHtml(tNext("appAdmin.jobDetails", "Job details"))}</summary>
+              <pre class="job-json">${escapeHtml(jsonPreview(details))}</pre>
+            </details>
+          </article>
+        `;
+      }).join("");
+    }
+    function metadataJobsHaveActiveItems() {
+      return (libraryMetadataJobs || []).some((job) => ["pending", "running"].includes(job.status));
+    }
+    async function refreshLibraryMetadataJobs(options = {}) {
+      if (!canViewMetadataJobs()) {
+        libraryMetadataJobs = [];
+        libraryMetadataJobVisible = false;
+        renderLibraryMetadataJobs();
+        return;
+      }
+      if (options.visible !== false) libraryMetadataJobVisible = true;
+      try {
+        const payload = await authApiJson("/api/next/metadata/jobs?limit=20");
+        libraryMetadataJobs = payload.jobs || [];
+      } catch (error) {
+        libraryMetadataJobs = [{
+          status: "failed",
+          jobType: "metadata.refresh_movie",
+          createdAt: new Date().toISOString(),
+          error: error.message || String(error),
+          payload: {},
+          result: {}
+        }];
+      }
+      renderLibraryMetadataJobs();
+      if (metadataJobsHaveActiveItems()) startLibraryMetadataJobPolling();
+      else stopLibraryMetadataJobPolling();
+    }
+    function startLibraryMetadataJobPolling() {
+      if (libraryMetadataJobPollTimer || !canViewMetadataJobs()) return;
+      libraryMetadataJobPollTimer = window.setInterval(() => {
+        refreshLibraryMetadataJobs({visible: true});
+      }, 2500);
+    }
+    function stopLibraryMetadataJobPolling() {
+      if (!libraryMetadataJobPollTimer) return;
+      window.clearInterval(libraryMetadataJobPollTimer);
+      libraryMetadataJobPollTimer = null;
     }
     function renderAppAdminDigitalSources() {
       const list = document.getElementById("appAdminDigitalSourcesList");
@@ -17614,6 +17858,7 @@ def ui_preview_html(
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
       if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
       updateBulkBar();
+      renderLibraryMetadataJobs();
     }
     function toggleSelectMode(force) {
       selectionMode = typeof force === "boolean" ? force : !selectionMode;
@@ -17688,6 +17933,13 @@ def ui_preview_html(
           body: JSON.stringify({movieIds, dryRun: false, confirm: "metadata-bulk-refresh"})
         });
         if (summary) summary.textContent = `${payload.queued || movieIds.length} ${tNext("bulk.metadataQueued", "metadata refresh jobs queued")}`;
+        if (canViewMetadataJobs()) {
+          libraryMetadataJobs = payload.jobs || libraryMetadataJobs;
+          libraryMetadataJobVisible = true;
+          renderLibraryMetadataJobs();
+          startLibraryMetadataJobPolling();
+          window.setTimeout(() => refreshLibraryMetadataJobs({visible: true}), 700);
+        }
         selectedMovieIds.clear();
         toggleSelectMode(false);
         console.log("bulk metadata jobs", payload);
@@ -18153,6 +18405,9 @@ def ui_preview_html(
       renderPreferences();
       renderProfile();
       renderLibrary();
+      if (canViewMetadataJobs()) {
+        refreshLibraryMetadataJobs({visible: false});
+      }
       updateListsCounts((state.counts || {}).personalLists || {});
       updateNotificationCounts((state.counts || {}).notifications || {});
       if (!document.getElementById("listsView")?.classList.contains("hidden")) {
@@ -18803,6 +19058,7 @@ def ui_preview_html(
         }
       });
       document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
+      document.getElementById("libraryMetadataJobsRefreshButton")?.addEventListener("click", () => refreshLibraryMetadataJobs({visible: true}));
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
       });
