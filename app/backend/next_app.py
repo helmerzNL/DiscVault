@@ -32901,7 +32901,14 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="container",
                     target_id=container_uuid,
                     summary=f"Created {container_type} {payload['title']}",
-                    metadata={"containerType": container_type, "publicId": public_id, "title": payload["title"]},
+                    metadata={
+                        "containerType": container_type,
+                        "publicId": public_id,
+                        "title": payload["title"],
+                        "barcode": payload["barcode"],
+                        "year": payload["year"],
+                        "badgeLabel": payload["badge_label"],
+                    },
                 )
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail}, 201)
@@ -32952,7 +32959,16 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="container",
                     target_id=container_uuid,
                     summary=f"Updated container {payload['title']}",
-                    metadata={"containerType": existing.get("container_type"), "title": payload["title"]},
+                    metadata={
+                        "containerType": existing.get("container_type"),
+                        "publicId": existing.get("public_id"),
+                        "title": payload["title"],
+                        "previousTitle": existing.get("title"),
+                        "barcode": payload["barcode"],
+                        "previousBarcode": existing.get("barcode"),
+                        "year": payload["year"],
+                        "badgeLabel": payload["badge_label"],
+                    },
                 )
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail})
@@ -33809,7 +33825,16 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="container",
                     target_id=container_uuid,
                     summary=f"Updated container {payload['title']} through the public API",
-                    metadata={"containerType": existing.get("container_type"), "title": payload["title"]},
+                    metadata={
+                        "containerType": existing.get("container_type"),
+                        "publicId": existing.get("public_id"),
+                        "title": payload["title"],
+                        "previousTitle": existing.get("title"),
+                        "barcode": payload["barcode"],
+                        "previousBarcode": existing.get("barcode"),
+                        "year": payload["year"],
+                        "badgeLabel": payload["badge_label"],
+                    },
                 )
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail})
