@@ -93,9 +93,33 @@ def _json(response):
     return payload if isinstance(payload, dict) else {}
 
 
+def _response_error(payload):
+    if not isinstance(payload, dict):
+        return "", ""
+    error = payload.get("error")
+    if isinstance(error, dict):
+        return _text(error.get("code")), _text(error.get("message"))
+    return _text(payload.get("code") or payload.get("error")), _text(payload.get("message"))
+
+
 def _error_code(response):
     payload = _json(response)
-    return _text(payload.get("code") or payload.get("error"))
+    code, _message = _response_error(payload)
+    return code
+
+
+def connection_recovery_action(payload, context=None):
+    payload = payload or {}
+    phase = _text(payload.get("phase")).lower()
+    status_code = int(payload.get("statusCode") or payload.get("status_code") or 0)
+    code, message = _response_error(payload.get("response") or {})
+    lowered = message.lower()
+    if status_code == 400 and phase == "recovery" and code == "validation_error" and "bootstrap is required" in lowered:
+        return {"action": "bootstrap", "reason": "server_requires_bootstrap"}
+    if status_code == 400 and phase == "bootstrap" and code == "validation_error":
+        if "already linked" in lowered or "use signed recovery" in lowered:
+            return {"action": "recover", "reason": "server_requires_signed_recovery"}
+    return {"action": ""}
 
 
 def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False):

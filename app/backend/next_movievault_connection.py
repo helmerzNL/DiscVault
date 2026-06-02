@@ -377,14 +377,52 @@ def _post_json(url: str, raw_body: str, headers: dict[str, str]) -> _HttpJsonRes
         raise MovieVaultConnectionError(str(exc)) from exc
 
 
-def _response_error_code(response: _HttpJsonResponse) -> str:
+def _response_error(response: _HttpJsonResponse) -> tuple[str, str]:
     try:
         data = response.json()
-        if isinstance(data, dict):
-            return _text(data.get("error") or data.get("code"))
     except Exception:
-        pass
-    return ""
+        return "", ""
+    if not isinstance(data, dict):
+        return "", ""
+    error = data.get("error")
+    if isinstance(error, dict):
+        return _text(error.get("code")), _text(error.get("message"))
+    return _text(data.get("code") or data.get("error")), _text(data.get("message"))
+
+
+def _response_error_code(response: _HttpJsonResponse) -> str:
+    code, _message = _response_error(response)
+    return code
+
+
+def _plugin_connection_action(plugin_id: str | None, phase: str, response: _HttpJsonResponse) -> str:
+    plugin = plugin_id if is_movievault_plugin(plugin_id) else MOVIEVAULT_PLUGIN_ID
+    try:
+        try:
+            from .next_plugin_runtime import discovered_plugin, load_runtime_module
+        except ImportError:  # pragma: no cover - supports running modules directly
+            from next_plugin_runtime import discovered_plugin, load_runtime_module
+
+        discovery, _snapshot = discovered_plugin(plugin)
+        if not discovery:
+            return ""
+        module = load_runtime_module(discovery)
+        handler = getattr(module, "connection_recovery_action", None) if module else None
+        if not callable(handler):
+            return ""
+        result = handler(
+            {
+                "phase": phase,
+                "statusCode": response.status_code,
+                "response": response.json(),
+            },
+            {},
+        )
+        if isinstance(result, dict):
+            return _text(result.get("action"))
+        return _text(result)
+    except Exception:
+        return ""
 
 
 def _store_token_response(
@@ -429,7 +467,13 @@ def _mark_revoked(conn) -> None:
     _delete_token(conn)
 
 
-def _bootstrap(conn, *, plugin_id: str | None = None, actor_id: Any = None) -> dict[str, Any]:
+def _bootstrap(
+    conn,
+    *,
+    plugin_id: str | None = None,
+    actor_id: Any = None,
+    allow_recovery_fallback: bool = True,
+) -> dict[str, Any]:
     _private_key, public_key, _public_key_id = _instance_key_pair(conn)
     payload = {**_connection_payload(conn), "publicKey": public_key}
     try:
@@ -442,18 +486,28 @@ def _bootstrap(conn, *, plugin_id: str | None = None, actor_id: Any = None) -> d
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise
     code = _response_error_code(response)
+    action = _plugin_connection_action(plugin_id, "bootstrap", response)
     if response.status_code == 403 and code == "instance_revoked":
         _mark_revoked(conn)
         raise MovieVaultInstanceRevoked("MovieVault instance is revoked")
-    if response.status_code == 409 and code == "instance_already_registered":
-        return _recover(conn, plugin_id=plugin_id, actor_id=actor_id)
+    if allow_recovery_fallback and (
+        (response.status_code == 409 and code == "instance_already_registered")
+        or action == "recover"
+    ):
+        return _recover(conn, plugin_id=plugin_id, actor_id=actor_id, allow_bootstrap_fallback=False)
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise MovieVaultConnectionError(f"MovieVault bootstrap failed: {code or response.status_code}")
     return _store_token_response(conn, response.json(), plugin_id=plugin_id, actor_id=actor_id, source="bootstrap")
 
 
-def _recover(conn, *, plugin_id: str | None = None, actor_id: Any = None) -> dict[str, Any]:
+def _recover(
+    conn,
+    *,
+    plugin_id: str | None = None,
+    actor_id: Any = None,
+    allow_bootstrap_fallback: bool = True,
+) -> dict[str, Any]:
     from cryptography.hazmat.primitives import serialization
 
     private_key_pem, _public_key, public_key_id = _instance_key_pair(conn)
@@ -481,9 +535,14 @@ def _recover(conn, *, plugin_id: str | None = None, actor_id: Any = None) -> dic
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise
     code = _response_error_code(response)
+    action = _plugin_connection_action(plugin_id, "recovery", response)
     if response.status_code == 403 and code == "instance_revoked":
         _mark_revoked(conn)
         raise MovieVaultInstanceRevoked("MovieVault instance is revoked")
+    if allow_bootstrap_fallback and action == "bootstrap":
+        _delete_token(conn)
+        _set_setting(conn, LINK_STATUS_KEY, "connecting")
+        return _bootstrap(conn, plugin_id=plugin_id, actor_id=actor_id, allow_recovery_fallback=False)
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise MovieVaultConnectionError(f"MovieVault signed recovery failed: {code or response.status_code}")

@@ -56,6 +56,37 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertTrue(plan["enabled"]["movievault"])
         self.assertIn("movievault", plan["order"])
 
+    def test_connection_recovery_action_maps_movievault_next_validation_errors(self):
+        bootstrap = movievault_26.connection_recovery_action(
+            {
+                "phase": "recovery",
+                "statusCode": 400,
+                "response": {
+                    "error": {
+                        "code": "validation_error",
+                        "message": "DiscVault instance is not linked; bootstrap is required",
+                    }
+                },
+            },
+            {},
+        )
+        recover = movievault_26.connection_recovery_action(
+            {
+                "phase": "bootstrap",
+                "statusCode": 400,
+                "response": {
+                    "error": {
+                        "code": "validation_error",
+                        "message": "DiscVault instance is already linked; use signed recovery",
+                    }
+                },
+            },
+            {},
+        )
+
+        self.assertEqual(bootstrap["action"], "bootstrap")
+        self.assertEqual(recover["action"], "recover")
+
     def test_default_base_url_uses_movievault_next(self):
         previous = {key: os.environ.get(key) for key in ("MOVIEVAULT_SEARCH_URL", "MOVIEVAULT_BASE_URL")}
         try:
