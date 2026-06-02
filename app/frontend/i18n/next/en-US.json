@@ -1272,8 +1272,7 @@
   "importCenter.importError": "Import error",
   "importCenter.queueingMetadata": "Queueing metadata refresh...",
   "importCenter.metadataRefreshes": "Metadata refreshes",
-  "importCenter.metadataQueued": "Metadata refresh queued."
-,
+  "importCenter.metadataQueued": "Metadata refresh queued.",
   "importCenter.reviewUseRecommended": "Use recommended matches",
   "importCenter.reviewSkipLow": "Skip low confidence",
   "importCenter.reviewExistingOnly": "Existing only",
@@ -1288,5 +1287,7 @@
   "importCenter.recommendedMatches": "Recommended matches",
   "importCenter.selectedMatch": "Selected match",
   "importCenter.clearMatch": "Clear match",
-  "importCenter.releaseTitleWarning": "This looks like a release title. Choose the actual movie match before import."
+  "importCenter.releaseTitleWarning": "This looks like a release title. Choose the actual movie match before import.",
+  "importCenter.providerSelected": "Selected provider",
+  "importCenter.useProvider": "Use this provider"
 }
