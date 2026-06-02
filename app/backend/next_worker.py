@@ -879,6 +879,48 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
     return movie_id, existing_id is None
 
 
+def queue_import_metadata_refresh_jobs(
+    conn,
+    movie_ids: list[str],
+    *,
+    actor: dict[str, Any] | None,
+    plugin_id: str,
+    source_kind: str,
+) -> list[str]:
+    if not movie_ids or not background_jobs_ready(conn):
+        return []
+    requested_by = actor if isinstance(actor, dict) else {}
+    queued_ids: list[str] = []
+    with conn.cursor() as cur:
+        for movie_id in dict.fromkeys(str(value) for value in movie_ids if value):
+            cur.execute(
+                """
+                INSERT INTO background_jobs (job_type, payload)
+                VALUES (%s, %s)
+                RETURNING id
+                """,
+                (
+                    METADATA_REFRESH_JOB_TYPE,
+                    Jsonb(
+                        json_ready(
+                            {
+                                "movieId": movie_id,
+                                "dryRun": False,
+                                "requestedBy": requested_by,
+                                "source": "import",
+                                "importPluginId": plugin_id,
+                                "sourceKind": source_kind,
+                            }
+                        )
+                    ),
+                ),
+            )
+            row = cur.fetchone()
+            if row and row.get("id"):
+                queued_ids.append(str(row["id"]))
+    return queued_ids
+
+
 def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dict[str, Any] | None) -> dict[str, Any]:
     if result.get("status") not in {"completed", "ok"}:
         return {"skipped": True, "reason": result.get("error") or result.get("status") or "import did not complete"}
@@ -889,7 +931,6 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         if not table_exists(conn, "movies"):
             return {"skipped": True, "reason": "movies table is not initialized"}
         with conn.transaction():
-            container_id = None
             source_hash = clean_text(result.get("sourceDatabaseHash")) or hashlib.sha256(
                 f"{plugin_id}:{result.get('sourcePath')}".encode("utf-8")
             ).hexdigest()
@@ -898,34 +939,14 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             container_cache: dict[tuple[str, str], UUID] = {}
             container_titles: dict[tuple[str, str], str] = {}
             container_created: set[UUID] = set()
-            collection_created = False
             container_links = 0
-            if table_exists(conn, "containers") and table_exists(conn, "collection_items"):
-                title = f"{source_kind} import"
-                container_id, was_container_created = upsert_import_container(
-                    conn,
-                    plugin_id=plugin_id,
-                    source_hash=source_hash,
-                    container_type="collection",
-                    title=title,
-                    source_path=source_path,
-                    source_kind=source_kind,
-                )
-                if was_container_created:
-                    container_created.add(container_id)
-                    collection_created = True
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "DELETE FROM collection_items WHERE collection_id=%s AND item_type='movie'",
-                        (container_id,),
-                    )
-
             imported = 0
             created = 0
             updated = 0
             linked = 0
             errors = []
             imported_movies: list[dict[str, Any]] = []
+            imported_movie_ids: list[str] = []
             created_movie_ids: list[str] = []
             for index, item in enumerate(items[:5000], start=1):
                 if not isinstance(item, dict):
@@ -934,18 +955,9 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                     local_container_cache: dict[tuple[str, str], UUID] = {}
                     local_container_titles: dict[tuple[str, str], str] = {}
                     local_container_created: set[UUID] = set()
-                    local_linked = 0
                     local_container_links = 0
                     with conn.transaction():
                         movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
-                        if container_id and link_import_movie_to_container(
-                            conn,
-                            container_id=container_id,
-                            container_type="collection",
-                            movie_id=movie_id,
-                            sort_order=index,
-                        ):
-                            local_linked += 1
                         if table_exists(conn, "containers"):
                             for spec in import_item_container_specs(item):
                                 key = (spec["containerType"], spec["title"].casefold())
@@ -977,7 +989,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                     updated += 0 if was_created else 1
                     if was_created:
                         created_movie_ids.append(str(movie_id))
-                    linked += local_linked
+                    imported_movie_ids.append(str(movie_id))
                     container_links += local_container_links
                     container_cache.update(local_container_cache)
                     container_titles.update(local_container_titles)
@@ -995,6 +1007,13 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                     )
                 except Exception as exc:
                     errors.append({"index": index, "title": item.get("title"), "error": str(exc)})
+            metadata_job_ids = queue_import_metadata_refresh_jobs(
+                conn,
+                imported_movie_ids,
+                actor=actor,
+                plugin_id=plugin_id,
+                source_kind=source_kind,
+            )
 
     return {
         "sourceKind": result.get("sourceKind"),
@@ -1006,9 +1025,11 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "linkedToCollection": linked,
         "linkedToContainers": container_links,
         "containersCreated": len(container_created),
-        "containersTouched": len(container_cache) + (1 if container_id else 0),
-        "collectionId": str(container_id) if container_id else None,
-        "collectionCreated": collection_created,
+        "containersTouched": len(container_cache),
+        "collectionId": None,
+        "collectionCreated": False,
+        "metadataRefreshQueued": len(metadata_job_ids),
+        "metadataJobIds": metadata_job_ids[:200],
         "rollbackMovieIds": created_movie_ids,
         "movies": imported_movies[:200],
         "review": result.get("review") if isinstance(result.get("review"), dict) else {},

@@ -1262,6 +1262,7 @@
   "importCenter.updated": "Bijgewerkt",
   "importCenter.importError": "Importfout",
   "importCenter.queueingMetadata": "Metadata-refresh wordt ingepland...",
+  "importCenter.metadataRefreshes": "Metadata-refreshes",
   "importCenter.metadataQueued": "Metadata-refresh ingepland."
 ,
   "importCenter.reviewUseRecommended": "Aanbevolen matches gebruiken",
