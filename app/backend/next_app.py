@@ -1858,6 +1858,51 @@ def normalize_import_column_mapping(value: Any) -> dict[str, str]:
 def normalize_import_review(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
+    allowed_match_fields = {
+        "provider",
+        "sourceLabel",
+        "title",
+        "year",
+        "posterUrl",
+        "backdropUrl",
+        "overview",
+        "format",
+    }
+    allowed_manual_fields = {"title", "year", "tmdbId", "imdbId", "posterUrl", "backdropUrl", "overview", "format"}
+
+    def normalize_match(raw_value: Any) -> dict[str, Any] | None:
+        if not isinstance(raw_value, dict):
+            return None
+        match = {
+            key: clean_text(raw_value.get(key))
+            for key in allowed_match_fields
+            if clean_text(raw_value.get(key))
+        }
+        identifiers = raw_value.get("identifiers")
+        if isinstance(identifiers, dict):
+            clean_ids = {
+                clean_text(key).lower(): clean_text(item)
+                for key, item in identifiers.items()
+                if clean_text(key) and clean_text(item)
+            }
+            if clean_ids:
+                match["identifiers"] = clean_ids
+        for provider_key in ("tmdbId", "tmdb_id", "imdbId", "imdb_id"):
+            value = clean_text(raw_value.get(provider_key))
+            if value:
+                match[provider_key] = value
+        return match or None
+
+    def normalize_manual(raw_value: Any) -> dict[str, Any] | None:
+        if not isinstance(raw_value, dict):
+            return None
+        manual = {
+            key: clean_text(raw_value.get(key))
+            for key in allowed_manual_fields
+            if clean_text(raw_value.get(key))
+        }
+        return manual or None
+
     decisions: list[dict[str, Any]] = []
     for raw in value.get("decisions") or []:
         if not isinstance(raw, dict):
@@ -1869,13 +1914,18 @@ def normalize_import_review(value: Any) -> dict[str, Any]:
         action = clean_text(raw.get("action"))
         if not index or index < 1 or action not in {"import", "update", "create", "skip"}:
             continue
-        decisions.append(
-            {
-                "index": index,
-                "action": action,
-                "note": clean_text(raw.get("note")),
-            }
-        )
+        decision = {
+            "index": index,
+            "action": action,
+            "note": clean_text(raw.get("note")),
+        }
+        metadata_match = normalize_match(raw.get("metadataMatch"))
+        manual_override = normalize_manual(raw.get("manualOverride"))
+        if metadata_match:
+            decision["metadataMatch"] = metadata_match
+        if manual_override:
+            decision["manualOverride"] = manual_override
+        decisions.append(decision)
     return {"decisions": decisions} if decisions else {}
 
 
@@ -7142,9 +7192,16 @@ def ui_preview_html(
     }
     .import-metadata-suggestion {
       display: grid;
-      grid-template-columns: 34px minmax(0, 1fr);
+      grid-template-columns: 34px minmax(0, 1fr) auto;
       gap: 9px;
       align-items: center;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 4px;
+    }
+    .import-metadata-suggestion.is-selected {
+      border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
     }
     .import-metadata-suggestion img {
       width: 34px;
@@ -7171,6 +7228,65 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .8rem;
       font-weight: 760;
+    }
+    .import-review-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .compact-button {
+      min-height: 32px;
+      padding: 0 10px;
+      font-size: .8rem;
+    }
+    .import-selected-match,
+    .import-release-warning {
+      margin-top: 8px;
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: .82rem;
+      font-weight: 760;
+    }
+    .import-selected-match {
+      color: var(--good);
+      background: color-mix(in srgb, var(--good) 12%, transparent);
+    }
+    .import-release-warning {
+      color: var(--warn);
+      background: color-mix(in srgb, var(--warn) 15%, transparent);
+    }
+    .import-manual-panel {
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      background: color-mix(in srgb, var(--field) 78%, transparent);
+    }
+    .import-manual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .import-manual-grid label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 760;
+    }
+    .import-manual-grid label.wide {
+      grid-column: 1 / -1;
+    }
+    .import-manual-grid input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--field);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
     }
     .import-conflict-list {
       display: flex;
@@ -9366,6 +9482,18 @@ def ui_preview_html(
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      .import-metadata-suggestion {
+        grid-template-columns: 34px minmax(0, 1fr);
+      }
+      .import-metadata-suggestion .compact-button {
+        grid-column: 1 / -1;
+      }
+      .import-review-tools {
+        align-items: stretch;
+      }
+      .import-review-tools .compact-button {
+        width: 100%;
+      }
       .import-barcode-form {
         grid-template-columns: 1fr;
       }
@@ -9969,6 +10097,7 @@ def ui_preview_html(
                 <p class="import-source-meta" data-next-i18n="importCenter.reviewHelp">Confirm creates, updates, skips and proposed container links before starting the job.</p>
               </div>
               <div class="button-row compact">
+                <button type="button" class="secondary-button" id="importReviewHighConfidenceButton" data-next-i18n="importCenter.reviewHighConfidence">High confidence only</button>
                 <button type="button" class="secondary-button" id="importReviewAllButton" data-next-i18n="importCenter.reviewImportAll">Import all</button>
                 <button type="button" class="secondary-button" id="importReviewSkipUpdatesButton" data-next-i18n="importCenter.reviewSkipUpdates">Skip updates</button>
                 <button type="button" class="primary-button" id="importReviewStartButton" data-next-i18n="importCenter.start">Start import</button>
@@ -11188,7 +11317,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, barcodeLookup: null, addResult: null, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, addResult: null, activeTab: "add"};
     let importScanner = {
       running: false,
       native: false,
@@ -16420,10 +16549,141 @@ def ui_preview_html(
       const label = String(data.label || (score >= 74 ? "high" : score >= 48 ? "medium" : "low"));
       return `<span class="tag import-confidence-pill ${escapeHtml(label)}">${escapeHtml(importConfidenceLabel(label))} ${escapeHtml(score)}%</span>`;
     }
-    function renderImportMetadataSuggestions(suggestions) {
+    function importSuggestionIdentity(item) {
+      const identifiers = item?.identifiers || {};
+      return JSON.stringify({
+        provider: item?.provider || "",
+        title: item?.title || "",
+        year: item?.year || "",
+        tmdb: identifiers.tmdb || item?.tmdbId || "",
+        imdb: identifiers.imdb || item?.imdbId || ""
+      });
+    }
+    function normalizeImportSuggestion(item) {
+      if (!item || typeof item !== "object") return null;
+      const identifiers = item.identifiers && typeof item.identifiers === "object" ? item.identifiers : {};
+      return {
+        provider: item.provider || "",
+        sourceLabel: item.sourceLabel || item.provider || "",
+        title: item.title || "",
+        year: item.year || "",
+        format: item.format || "",
+        posterUrl: item.posterUrl || item.poster_url || "",
+        backdropUrl: item.backdropUrl || item.backdrop_url || "",
+        overview: item.overview || item.plot || "",
+        identifiers: {
+          tmdb: identifiers.tmdb || item.tmdbId || item.tmdb_id || "",
+          imdb: identifiers.imdb || item.imdbId || item.imdb_id || ""
+        }
+      };
+    }
+    function importSourceMetadataSuggestionsFromLookup(metadata) {
+      metadata = metadata || {};
+      const suggestions = [];
+      const seen = new Set();
+      const append = (provider, sourceLabel, candidate) => {
+        if (!candidate || typeof candidate !== "object") return;
+        const title = String(candidate.title || candidate.name || candidate.originalTitle || "").trim();
+        if (!title) return;
+        const year = String(candidate.year || candidate.releaseYear || candidate.release_year || "").trim();
+        const identifiers = {
+          tmdb: String(candidate.tmdbId || candidate.tmdb_id || "").trim(),
+          imdb: String(candidate.imdbId || candidate.imdb_id || "").trim()
+        };
+        const idKey = Object.entries(identifiers).filter(([, value]) => value).map(([key, value]) => `${key}:${value}`).join("|");
+        const key = `${title.toLowerCase()}|${year}|${idKey}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        suggestions.push({
+          provider,
+          sourceLabel: sourceLabel || provider,
+          title,
+          year,
+          posterUrl: candidate.posterUrl || candidate.poster_url || candidate.poster || "",
+          backdropUrl: candidate.backdropUrl || candidate.backdrop_url || "",
+          overview: candidate.overview || candidate.plot || "",
+          identifiers
+        });
+      };
+      (metadata.results || []).forEach((result) => {
+        if (!result || typeof result !== "object" || suggestions.length >= 5) return;
+        const provider = result.pluginId || result.provider || "metadata";
+        const sourceLabel = result.sourceLabel || provider;
+        (result.candidates || []).forEach((candidate) => {
+          if (suggestions.length < 5) append(provider, sourceLabel, candidate);
+        });
+        const movieUpdates = result.movieUpdates || {};
+        const mediaUpdates = result.mediaUpdates || {};
+        const poster = mediaUpdates.poster || {};
+        const identifiers = result.identifiers || {};
+        if (movieUpdates.title && suggestions.length < 5) {
+          append(provider, sourceLabel, {
+            title: movieUpdates.title,
+            year: movieUpdates.year,
+            posterUrl: poster.sourceUrl,
+            tmdbId: identifiers.tmdb,
+            imdbId: identifiers.imdb
+          });
+        }
+      });
+      return {
+        status: metadata.status || "ok",
+        items: suggestions.slice(0, 5),
+        sources: metadata.sourceSummary || []
+      };
+    }
+    function importSelectedMatch(index) {
+      return importCenter.reviewMatches?.[index] || null;
+    }
+    function importManualState(index) {
+      if (!importCenter.reviewManual) importCenter.reviewManual = {};
+      if (!importCenter.reviewManual[index]) importCenter.reviewManual[index] = {};
+      return importCenter.reviewManual[index];
+    }
+    function importReleaseTitleRisk(row) {
+      const title = String(row?.title || "");
+      if (!title) return false;
+      const evidence = ((row.confidence || {}).evidence || []).join(" ").toLowerCase();
+      const releaseWords = /(4k|uhd|ultra hd|blu[- ]?ray|dvd|steelbook|limited edition|collector|\bfrance\b|\bgermany\b|\bitaly\b|\bspain\b|\buk\b)/i;
+      return releaseWords.test(title) && !evidence.includes("exact_identity");
+    }
+    function renderImportManualPanel(row) {
+      const state = importManualState(row.index);
+      if (!state.open) return "";
+      return `
+        <div class="import-manual-panel">
+          <div class="import-manual-grid">
+            <label>
+              <span>${escapeHtml(tNext("importCenter.manualTitle", "Title"))}</span>
+              <input data-import-manual-field="title" data-import-manual-index="${escapeHtml(row.index)}" value="${escapeHtml(state.title || row.title || "")}" autocomplete="off">
+            </label>
+            <label>
+              <span>${escapeHtml(tNext("importCenter.manualYear", "Year"))}</span>
+              <input data-import-manual-field="year" data-import-manual-index="${escapeHtml(row.index)}" value="${escapeHtml(state.year || row.year || "")}" autocomplete="off" inputmode="numeric">
+            </label>
+            <label>
+              <span>${escapeHtml(tNext("importCenter.manualTmdb", "TMDb ID"))}</span>
+              <input data-import-manual-field="tmdbId" data-import-manual-index="${escapeHtml(row.index)}" value="${escapeHtml(state.tmdbId || "")}" autocomplete="off">
+            </label>
+            <label>
+              <span>${escapeHtml(tNext("importCenter.manualImdb", "IMDb ID"))}</span>
+              <input data-import-manual-field="imdbId" data-import-manual-index="${escapeHtml(row.index)}" value="${escapeHtml(state.imdbId || "")}" autocomplete="off">
+            </label>
+            <label class="wide">
+              <span>${escapeHtml(tNext("importCenter.manualPoster", "Poster URL"))}</span>
+              <input data-import-manual-field="posterUrl" data-import-manual-index="${escapeHtml(row.index)}" value="${escapeHtml(state.posterUrl || "")}" autocomplete="off">
+            </label>
+          </div>
+        </div>
+      `;
+    }
+    function renderImportMetadataSuggestions(row) {
+      const suggestions = row?.metadataSuggestions || {};
       const data = suggestions || {};
       const items = data.items || [];
       const sources = data.sources || [];
+      const selected = importSelectedMatch(row.index);
+      const selectedIdentity = selected ? importSuggestionIdentity(selected) : "";
       const sourceText = sources.length
         ? sources.slice(0, 3).map((source) => source.name || source.pluginId || source.sourceLabel).filter(Boolean).join(" / ")
         : "";
@@ -16436,17 +16696,21 @@ def ui_preview_html(
           </div>
           ${data.error ? `<div class="import-source-meta">${escapeHtml(data.error)}</div>` : ""}
           ${items.length ? `<div class="import-metadata-suggestion-list">
-            ${items.map((item) => {
+            ${items.map((item, suggestionIndex) => {
               const meta = [item.year, item.sourceLabel || item.provider].filter(Boolean).join(" / ");
               const ids = item.identifiers || {};
               const idText = Object.entries(ids).map(([key, value]) => `${key}:${value}`).join(" ");
+              const isSelected = selectedIdentity && selectedIdentity === importSuggestionIdentity(item);
               return `
-                <div class="import-metadata-suggestion">
+                <div class="import-metadata-suggestion ${isSelected ? "is-selected" : ""}">
                   ${item.posterUrl ? `<img src="${escapeHtml(item.posterUrl)}" alt="">` : `<span class="poster-mini-placeholder"></span>`}
                   <div>
                     <strong>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</strong>
                     <div class="import-source-meta">${escapeHtml([meta, idText].filter(Boolean).join(" / "))}</div>
                   </div>
+                  <button type="button" class="secondary-button compact-button" data-import-use-suggestion="${escapeHtml(row.index)}" data-suggestion-index="${escapeHtml(suggestionIndex)}">
+                    ${escapeHtml(isSelected ? tNext("importCenter.selectedMatch", "Selected") : tNext("importCenter.useMatch", "Use match"))}
+                  </button>
                 </div>
               `;
             }).join("")}
@@ -16465,6 +16729,11 @@ def ui_preview_html(
         if (!index) return;
         if (mode === "skipUpdates" && row.action === "update") {
           decisions[index] = "skip";
+        } else if (mode === "highConfidence") {
+          const confidence = row.confidence || {};
+          decisions[index] = (confidence.label === "high" && row.matchState !== "missing_title")
+            ? (row.action === "update" ? "update" : "create")
+            : "skip";
         } else {
           decisions[index] = row.action === "skip" ? "skip" : row.action === "update" ? "update" : "create";
         }
@@ -16474,13 +16743,64 @@ def ui_preview_html(
     }
     function collectImportReview() {
       const decisions = [];
+      if (!importCenter.reviewManual) importCenter.reviewManual = {};
       document.querySelectorAll("[data-import-review-action]").forEach((select) => {
         const index = Number(select.dataset.importReviewAction || 0);
         const action = select.value || "import";
-        if (index && action) decisions.push({index, action});
+        if (!index || !action) return;
+        const decision = {index, action};
+        const selected = importSelectedMatch(index);
+        const manual = importManualState(index);
+        if (selected) decision.metadataMatch = normalizeImportSuggestion(selected);
+        const manualOverride = {};
+        ["title", "year", "tmdbId", "imdbId", "posterUrl"].forEach((field) => {
+          const value = String(manual[field] || "").trim();
+          if (value) manualOverride[field] = value;
+        });
+        if (Object.keys(manualOverride).length) decision.manualOverride = manualOverride;
+        decisions.push(decision);
       });
       importCenter.reviewDecisions = Object.fromEntries(decisions.map((item) => [item.index, item.action]));
       return {decisions};
+    }
+    function updateImportReviewRow(index, updater) {
+      const actionPreview = ((importCenter.preview || {}).actionPreview || {});
+      const rows = actionPreview.reviewQueue || actionPreview.actions || [];
+      const row = rows.find((item) => Number(item.index || 0) === Number(index));
+      if (row && typeof updater === "function") updater(row);
+    }
+    async function searchImportReviewRow(index) {
+      updateImportReviewRow(index, (row) => {
+        row.metadataSearchLoading = true;
+        row.metadataSearchError = "";
+      });
+      renderImportReview();
+      try {
+        const row = importReviewRows().find((item) => Number(item.index || 0) === Number(index)) || {};
+        const payload = await authApiJson("/api/next/metadata/lookup", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            title: row.title || "",
+            year: row.year || "",
+            barcode: row.barcode || "",
+            format: row.format || "",
+            detectBoxSets: false
+          })
+        });
+        const metadata = payload.metadata || {};
+        const suggestions = importSourceMetadataSuggestionsFromLookup(metadata);
+        updateImportReviewRow(index, (target) => {
+          target.metadataSuggestions = suggestions;
+          target.metadataSearchLoading = false;
+        });
+      } catch (error) {
+        updateImportReviewRow(index, (target) => {
+          target.metadataSearchLoading = false;
+          target.metadataSearchError = error.message || String(error);
+        });
+      }
+      renderImportReview();
     }
     function renderImportProviderSummary(providerSummary) {
       if (!providerSummary.length) return "";
@@ -16603,6 +16923,9 @@ def ui_preview_html(
         const match = row.match ? (row.match.title || row.match.id || "") : "";
         const containerTags = (row.containers || []).map((container) => `<span class="tag">${escapeHtml(container.containerType || container.type)} ${escapeHtml(container.title || "")}</span>`).join("");
         const evidence = ((row.confidence || {}).evidence || []).slice(0, 7).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("");
+        const selectedMatch = importSelectedMatch(row.index);
+        const manual = importManualState(row.index);
+        const releaseRisk = importReleaseTitleRisk(row);
         const actionLabel = row.matchState === "existing"
           ? tNext("importCenter.conflictExisting", "Already in library")
           : row.matchState === "missing_title"
@@ -16620,7 +16943,20 @@ def ui_preview_html(
               ${match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml(match)}</div>` : ""}
               ${containerTags ? `<div class="import-counts">${containerTags}</div>` : ""}
               ${evidence ? `<div class="import-review-evidence">${evidence}</div>` : ""}
-              ${renderImportMetadataSuggestions(row.metadataSuggestions)}
+              ${releaseRisk ? `<div class="import-release-warning">${escapeHtml(tNext("importCenter.releaseTitleWarning", "This looks like a release title. Choose the actual movie match before import."))}</div>` : ""}
+              ${selectedMatch ? `<div class="import-selected-match">${escapeHtml(tNext("importCenter.selectedMatch", "Selected"))}: ${escapeHtml(selectedMatch.title || "")} ${escapeHtml(selectedMatch.year || "")}</div>` : ""}
+              <div class="import-review-tools">
+                <button type="button" class="secondary-button compact-button" data-import-review-search="${escapeHtml(row.index)}">
+                  ${escapeHtml(row.metadataSearchLoading ? tNext("common.loading", "Loading...") : tNext("importCenter.searchAgain", "Search again"))}
+                </button>
+                <button type="button" class="secondary-button compact-button" data-import-review-manual="${escapeHtml(row.index)}">
+                  ${escapeHtml(manual.open ? tNext("common.close", "Close") : tNext("importCenter.manualLink", "Manual link"))}
+                </button>
+                ${selectedMatch ? `<button type="button" class="secondary-button compact-button" data-import-review-clear-match="${escapeHtml(row.index)}">${escapeHtml(tNext("importCenter.clearMatch", "Clear match"))}</button>` : ""}
+              </div>
+              ${row.metadataSearchError ? `<div class="import-source-meta bad">${escapeHtml(row.metadataSearchError)}</div>` : ""}
+              ${renderImportMetadataSuggestions(row)}
+              ${renderImportManualPanel(row)}
             </div>
             <label class="import-review-action">
               <span>${escapeHtml(tNext("importCenter.reviewDecision", "Decision"))}</span>
@@ -17603,6 +17939,8 @@ def ui_preview_html(
         });
         importCenter.preview = payload.preview || null;
         importCenter.reviewDecisions = {};
+        importCenter.reviewMatches = {};
+        importCenter.reviewManual = {};
         renderImportCenter();
         setImportCenterMessage(tNext("importCenter.inspectReady", "Source preview ready."), "good");
       } catch (error) {
@@ -17627,6 +17965,8 @@ def ui_preview_html(
         importCenter.uploadCandidates = payload.candidates || [];
         importCenter.preview = payload.preview || null;
         importCenter.reviewDecisions = {};
+        importCenter.reviewMatches = {};
+        importCenter.reviewManual = {};
         importCenter.columnMapping = {};
         if (payload.selectedSourceId) importCenter.selectedSourceId = payload.selectedSourceId;
         if (importCenter.upload?.sourcePath) importCenter.sourcePath = importCenter.upload.sourcePath;
@@ -20298,6 +20638,7 @@ def ui_preview_html(
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
       document.getElementById("importReviewStartButton")?.addEventListener("click", () => startImportCenterImport());
+      document.getElementById("importReviewHighConfidenceButton")?.addEventListener("click", () => setImportReviewMode("highConfidence"));
       document.getElementById("importReviewAllButton")?.addEventListener("click", () => setImportReviewMode("all"));
       document.getElementById("importReviewSkipUpdatesButton")?.addEventListener("click", () => setImportReviewMode("skipUpdates"));
       document.getElementById("importMappingResetButton")?.addEventListener("click", () => resetImportColumnMapping());
@@ -20321,9 +20662,61 @@ def ui_preview_html(
         importCenter.preview = null;
         renderImportReview();
       });
-      document.getElementById("importCenterReview")?.addEventListener("change", () => {
+      document.getElementById("importCenterReview")?.addEventListener("change", (event) => {
+        const manualInput = event.target.closest("[data-import-manual-field]");
+        if (manualInput) {
+          const index = Number(manualInput.dataset.importManualIndex || 0);
+          const field = manualInput.dataset.importManualField || "";
+          if (index && field) importManualState(index)[field] = manualInput.value || "";
+        }
         collectImportReview();
         renderImportReview();
+      });
+      document.getElementById("importCenterReview")?.addEventListener("input", (event) => {
+        const manualInput = event.target.closest("[data-import-manual-field]");
+        if (!manualInput) return;
+        const index = Number(manualInput.dataset.importManualIndex || 0);
+        const field = manualInput.dataset.importManualField || "";
+        if (index && field) importManualState(index)[field] = manualInput.value || "";
+        collectImportReview();
+      });
+      document.getElementById("importCenterReview")?.addEventListener("click", (event) => {
+        const suggestionButton = event.target.closest("[data-import-use-suggestion]");
+        const searchButton = event.target.closest("[data-import-review-search]");
+        const manualButton = event.target.closest("[data-import-review-manual]");
+        const clearButton = event.target.closest("[data-import-review-clear-match]");
+        if (suggestionButton) {
+          const index = Number(suggestionButton.dataset.importUseSuggestion || 0);
+          const suggestionIndex = Number(suggestionButton.dataset.suggestionIndex || 0);
+          const row = importReviewRows().find((item) => Number(item.index || 0) === index);
+          const suggestion = (row?.metadataSuggestions?.items || [])[suggestionIndex];
+          if (index && suggestion) {
+            if (!importCenter.reviewMatches) importCenter.reviewMatches = {};
+            importCenter.reviewMatches[index] = normalizeImportSuggestion(suggestion);
+            collectImportReview();
+            renderImportReview();
+          }
+        }
+        if (searchButton) {
+          const index = Number(searchButton.dataset.importReviewSearch || 0);
+          if (index) searchImportReviewRow(index);
+        }
+        if (manualButton) {
+          const index = Number(manualButton.dataset.importReviewManual || 0);
+          if (index) {
+            const manual = importManualState(index);
+            manual.open = !manual.open;
+            renderImportReview();
+          }
+        }
+        if (clearButton) {
+          const index = Number(clearButton.dataset.importReviewClearMatch || 0);
+          if (index && importCenter.reviewMatches) {
+            delete importCenter.reviewMatches[index];
+            collectImportReview();
+            renderImportReview();
+          }
+        }
       });
       document.getElementById("importCenterJobs")?.addEventListener("click", (event) => {
         const containerButton = event.target.closest("[data-import-open-container]");
@@ -20368,6 +20761,8 @@ def ui_preview_html(
         importCenter.preview = null;
         importCenter.columnMapping = {};
         importCenter.reviewDecisions = {};
+        importCenter.reviewMatches = {};
+        importCenter.reviewManual = {};
         renderImportCenter();
       });
       document.getElementById("profilePasskeyList")?.addEventListener("click", (event) => {
