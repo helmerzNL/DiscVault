@@ -16444,6 +16444,56 @@ def ui_preview_html(
       const result = job.result || {};
       return result.persistence || result.summary || result.result || {};
     }
+    function importJobRollback(job) {
+      const rollback = (job.result || {}).rollback || {};
+      return rollback && typeof rollback === "object" ? rollback : {};
+    }
+    function isImportSourceJob(job) {
+      const payload = job.payload || {};
+      const result = job.result || {};
+      return job.jobType === "plugin.execute" && (payload.entrypoint || result.entrypoint || "") === "import_source";
+    }
+    function canRollbackImportJob(job, persistence) {
+      if (!hasPermission("collection.import")) return false;
+      if (!isImportSourceJob(job) || job.status !== "completed") return false;
+      if ((importJobRollback(job).status || "") === "completed") return false;
+      const summary = persistence || importJobPersistence(job);
+      const movies = Array.isArray(summary.rollbackMovieIds) ? summary.rollbackMovieIds : (summary.movies || []).filter((movie) => movie.action === "created");
+      const containers = (summary.containers || []).filter((container) => container.created);
+      return movies.length > 0 || containers.length > 0 || !!summary.collectionCreated;
+    }
+    function renderImportJobRollback(job, persistence) {
+      const rollback = importJobRollback(job);
+      if (rollback.status === "completed") {
+        const deleted = rollback.deleted || {};
+        const deletedMovies = (rollback.deletedMovies || []).length || deleted.movies || 0;
+        const deletedContainers = (rollback.deletedContainers || []).length || deleted.containers || 0;
+        const skipped = (rollback.skipped || []).length;
+        return `
+          <div class="import-history-section">
+            <h4>${escapeHtml(tNext("importCenter.rollbackCompleted", "Rollback completed"))}</h4>
+            <div class="import-counts">
+              <span class="tag good">${escapeHtml(tNext("importCenter.rollbackMovies", "Movies"))} ${escapeHtml(formatNumber(deletedMovies))}</span>
+              <span class="tag good">${escapeHtml(tNext("importCenter.rollbackContainers", "Containers"))} ${escapeHtml(formatNumber(deletedContainers))}</span>
+              ${skipped ? `<span class="tag warn">${escapeHtml(tNext("importCenter.rollbackSkipped", "Skipped"))} ${escapeHtml(formatNumber(skipped))}</span>` : ""}
+              ${rollback.rolledBackAt ? `<span class="tag">${escapeHtml(shortDateTime(rollback.rolledBackAt))}</span>` : ""}
+            </div>
+          </div>
+        `;
+      }
+      if (!canRollbackImportJob(job, persistence)) return "";
+      return `
+        <div class="import-history-section">
+          <div class="import-card-head">
+            <div>
+              <h4>${escapeHtml(tNext("importCenter.rollbackTitle", "Undo this import"))}</h4>
+              <div class="import-source-meta">${escapeHtml(tNext("importCenter.rollbackHelp", "Removes movies and empty containers created by this import. Updated existing movies stay in your collection."))}</div>
+            </div>
+            <button type="button" class="danger" data-import-rollback="${escapeHtml(job.id)}">${escapeHtml(tNext("importCenter.rollbackButton", "Undo import"))}</button>
+          </div>
+        </div>
+      `;
+    }
     function importHistoryFilteredJobs() {
       const statusFilter = document.getElementById("importHistoryStatusFilter")?.value || "all";
       const pluginFilter = document.getElementById("importHistoryPluginFilter")?.value || "all";
@@ -16579,6 +16629,7 @@ def ui_preview_html(
             ${renderImportJobContainers(persistence)}
             ${renderImportJobMovies(persistence)}
             ${renderImportJobWarnings(persistence, job)}
+            ${renderImportJobRollback(job, persistence)}
             <details>
               <summary class="import-result-meta">${escapeHtml(tNext("importCenter.jobDetails", "Job details"))}</summary>
               <pre class="job-json">${escapeHtml(jsonPreview(details))}</pre>
@@ -16586,6 +16637,28 @@ def ui_preview_html(
           </div>
         `;
       }).join("");
+    }
+    async function rollbackImportJob(jobId) {
+      if (!jobId || !hasPermission("collection.import")) return;
+      const confirmed = window.confirm(
+        tNext(
+          "importCenter.rollbackConfirm",
+          "Undo this import? Movies created by the import will be removed. Existing movies that were updated will stay."
+        )
+      );
+      if (!confirmed) return;
+      try {
+        setImportCenterMessage(tNext("importCenter.rollbackRunning", "Undoing import..."));
+        await authApiJson(`/api/next/import/jobs/${encodeURIComponent(jobId)}/rollback`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({confirm: "rollback-import"})
+        });
+        setImportCenterMessage(tNext("importCenter.rollbackDone", "Import rolled back."), "good");
+        await loadImportCenter();
+      } catch (error) {
+        setImportCenterMessage(error.message || String(error), "bad");
+      }
     }
     function setImportScannerMessage(message, tone) {
       const node = document.getElementById("importScannerMessage");
@@ -19733,8 +19806,10 @@ def ui_preview_html(
       document.getElementById("importCenterJobs")?.addEventListener("click", (event) => {
         const containerButton = event.target.closest("[data-import-open-container]");
         const movieButton = event.target.closest("[data-open-movie]");
+        const rollbackButton = event.target.closest("[data-import-rollback]");
         if (containerButton) openAppContainerDetail(containerButton.dataset.importOpenContainer);
         if (movieButton) openMovieDetail(movieButton.dataset.openMovie);
+        if (rollbackButton) rollbackImportJob(rollbackButton.dataset.importRollback);
       });
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
       document.getElementById("importScannerStartButton")?.addEventListener("click", () => startImportBarcodeScanner());
@@ -24984,6 +25059,234 @@ def delete_container_records(conn, container_id: UUID) -> tuple[dict[str, Any], 
         cur.execute("DELETE FROM containers WHERE id=%s", (container_id,))
         deleted["containers"] = max(int(cur.rowcount or 0), 0)
     return existing, deleted
+
+
+def import_job_persistence_from_result(result: Any) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return {}
+    persistence = result.get("persistence")
+    if isinstance(persistence, dict):
+        return persistence
+    nested = result.get("result")
+    if isinstance(nested, dict) and isinstance(nested.get("persistence"), dict):
+        return nested["persistence"]
+    return {}
+
+
+def import_job_is_collection_import(job: dict[str, Any]) -> bool:
+    payload = job.get("payload") or {}
+    return (
+        job.get("job_type") == PLUGIN_EXECUTION_JOB_TYPE
+        and clean_text(payload.get("entrypoint")) == "import_source"
+    )
+
+
+def import_rollback_movie_ids(persistence: dict[str, Any]) -> list[UUID]:
+    raw_ids = persistence.get("rollbackMovieIds") or persistence.get("rollback_movie_ids")
+    if not isinstance(raw_ids, list):
+        raw_ids = [
+            movie.get("id")
+            for movie in persistence.get("movies", [])
+            if isinstance(movie, dict) and clean_text(movie.get("action")) == "created"
+        ]
+    movie_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for value in raw_ids:
+        try:
+            movie_id = UUID(str(value))
+        except (TypeError, ValueError):
+            continue
+        if movie_id not in seen:
+            movie_ids.append(movie_id)
+            seen.add(movie_id)
+    return movie_ids
+
+
+def import_rollback_container_candidates(persistence: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    collection_id = clean_text(persistence.get("collectionId") or persistence.get("collection_id"))
+    if collection_id and bool(persistence.get("collectionCreated") or persistence.get("collection_created")):
+        candidates.append(
+            {
+                "id": collection_id,
+                "title": "Import collection",
+                "containerType": "collection",
+                "created": True,
+            }
+        )
+    for container in persistence.get("containers", []):
+        if not isinstance(container, dict) or not bool(container.get("created")):
+            continue
+        candidates.append(container)
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        container_id = clean_text(candidate.get("id"))
+        if not container_id or container_id in seen:
+            continue
+        seen.add(container_id)
+        deduped.append(candidate)
+    return deduped
+
+
+def import_container_has_members(conn, container_id: UUID, container_type: str) -> bool:
+    if container_type == "collection" and table_exists(conn, "collection_items"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM collection_items WHERE collection_id=%s LIMIT 1", (container_id,))
+            return bool(cur.fetchone())
+    if container_type in {"box_set", "vault"} and table_exists(conn, "container_movies"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM container_movies WHERE container_id=%s LIMIT 1", (container_id,))
+            return bool(cur.fetchone())
+    return False
+
+
+def rollback_import_job_records(
+    conn,
+    *,
+    job_id: UUID,
+    actor: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not table_exists(conn, "background_jobs"):
+        raise NextApiError("Background job table is not available", 503)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                job_type,
+                status,
+                requested_by,
+                payload,
+                result,
+                error,
+                created_at,
+                started_at,
+                finished_at
+            FROM background_jobs
+            WHERE id=%s
+            FOR UPDATE
+            """,
+            (job_id,),
+        )
+        row = cur.fetchone()
+    if not row or not import_job_is_collection_import(row):
+        raise NextApiError("Import job not found", 404)
+    if row["status"] != "completed":
+        raise NextApiError("Only completed import jobs can be rolled back", 409)
+    result = row.get("result") or {}
+    if not isinstance(result, dict):
+        result = {}
+    existing_rollback = result.get("rollback") if isinstance(result.get("rollback"), dict) else {}
+    if existing_rollback.get("status") == "completed":
+        return job_row(row), existing_rollback
+    persistence = import_job_persistence_from_result(result)
+    if not persistence:
+        raise NextApiError("Import job does not contain rollback metadata", 409)
+    movie_ids = import_rollback_movie_ids(persistence)
+    container_candidates = import_rollback_container_candidates(persistence)
+    deleted_movies: list[dict[str, Any]] = []
+    deleted_containers: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    deleted_counts: dict[str, int] = {}
+    for movie_id in movie_ids:
+        movie = movie_entity(conn, movie_id)
+        if not movie:
+            skipped.append({"type": "movie", "id": str(movie_id), "reason": "already_missing"})
+            continue
+        movie, deleted = delete_movie_records(conn, movie_id)
+        deleted_movies.append({"id": str(movie_id), "title": movie.get("title"), "deleted": deleted})
+        for key, value in deleted.items():
+            deleted_counts[key] = deleted_counts.get(key, 0) + int(value or 0)
+        revision = next_revision(conn) if table_exists(conn, "sync_state") else 0
+        if revision and table_exists(conn, "sync_changes"):
+            sync_change(
+                conn,
+                revision=revision,
+                entity_type="movie",
+                entity_id=str(movie_id),
+                operation="delete",
+                payload={
+                    "id": str(movie_id),
+                    "title": movie.get("title"),
+                    "clientId": "next-app",
+                    "clientMutationId": f"import-rollback-movie-{uuid.uuid4()}",
+                    "actor": actor_job_payload(actor),
+                },
+            )
+    for candidate in container_candidates:
+        try:
+            container_id = UUID(str(candidate.get("id")))
+        except (TypeError, ValueError):
+            continue
+        container = container_entity(conn, container_id)
+        if not container:
+            skipped.append({"type": "container", "id": str(container_id), "reason": "already_missing"})
+            continue
+        container_type = clean_text(container.get("container_type") or candidate.get("containerType"))
+        if import_container_has_members(conn, container_id, container_type):
+            skipped.append({"type": "container", "id": str(container_id), "title": container.get("title"), "reason": "not_empty"})
+            continue
+        container, deleted = delete_container_records(conn, container_id)
+        deleted_containers.append(
+            {
+                "id": str(container_id),
+                "title": container.get("title"),
+                "containerType": container.get("container_type"),
+                "deleted": deleted,
+            }
+        )
+        for key, value in deleted.items():
+            deleted_counts[key] = deleted_counts.get(key, 0) + int(value or 0)
+    rollback = {
+        "status": "completed",
+        "rolledBackAt": datetime.now().isoformat(),
+        "requestedBy": actor_job_payload(actor),
+        "deletedMovies": deleted_movies,
+        "deletedContainers": deleted_containers,
+        "deleted": deleted_counts,
+        "skipped": skipped,
+        "sourceKind": persistence.get("sourceKind"),
+        "sourcePath": persistence.get("sourcePath"),
+    }
+    result["rollback"] = rollback
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE background_jobs
+            SET result=%s
+            WHERE id=%s
+            RETURNING
+                id,
+                job_type,
+                status,
+                requested_by,
+                payload,
+                result,
+                error,
+                created_at,
+                started_at,
+                finished_at
+            """,
+            (Jsonb(json_ready(result)), job_id),
+        )
+        updated = cur.fetchone()
+    audit_event(
+        conn,
+        event_type="import_source.rollback_completed",
+        category="import",
+        actor=actor,
+        target_type="background_job",
+        target_id=job_id,
+        summary="Rolled back an import source job",
+        metadata={
+            "jobId": str(job_id),
+            "pluginId": clean_text((row.get("payload") or {}).get("pluginId")),
+            "deleted": deleted_counts,
+            "skipped": skipped,
+        },
+    )
+    return job_row(updated), rollback
 
 
 def ensure_sync_state(conn) -> int:
@@ -35448,6 +35751,22 @@ def register_routes(flask_app: Flask) -> None:
             else:
                 raise NextApiError("Permission required: admin.view_jobs", 403)
         return response({"status": "ok", "job": job_row(row)})
+
+    @flask_app.post("/api/next/import/jobs/<job_id>/rollback")
+    def rollback_import_job(job_id: str):
+        job_uuid = parse_uuid(job_id, "jobId")
+        if not job_uuid:
+            raise NextApiError("jobId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Rollback body must be an object", 400)
+        if clean_text(body.get("confirm")) != "rollback-import":
+            raise NextApiError("Import rollback requires confirm=rollback-import", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.import")
+            with conn.transaction():
+                job, rollback = rollback_import_job_records(conn, job_id=job_uuid, actor=actor)
+        return response({"status": "ok", "job": job, "rollback": rollback})
 
     @flask_app.get("/api/next/backup/status")
     def backup_status():

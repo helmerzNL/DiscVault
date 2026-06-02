@@ -1219,5 +1219,15 @@
   "profile.revokeToken": "Token intrekken",
   "profile.tokenCreated": "Toegangstoken aangemaakt.",
   "profile.revokeTokenConfirm": "Dit toegangstoken intrekken?",
-  "profile.tokenRevoked": "Toegangstoken ingetrokken."
+  "profile.tokenRevoked": "Toegangstoken ingetrokken.",
+  "importCenter.rollbackCompleted": "Rollback afgerond",
+  "importCenter.rollbackMovies": "Films",
+  "importCenter.rollbackContainers": "Containers",
+  "importCenter.rollbackSkipped": "Overgeslagen",
+  "importCenter.rollbackTitle": "Deze import terugdraaien",
+  "importCenter.rollbackHelp": "Verwijdert films en lege containers die door deze import zijn aangemaakt. Bestaande films die zijn bijgewerkt blijven in je collectie.",
+  "importCenter.rollbackButton": "Import terugdraaien",
+  "importCenter.rollbackConfirm": "Deze import terugdraaien? Films die door de import zijn aangemaakt worden verwijderd. Bestaande films die zijn bijgewerkt blijven staan.",
+  "importCenter.rollbackRunning": "Import wordt teruggedraaid...",
+  "importCenter.rollbackDone": "Import is teruggedraaid."
 }

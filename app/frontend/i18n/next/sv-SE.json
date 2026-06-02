@@ -1152,5 +1152,15 @@
   "profile.revokeToken": "Aterkalla token",
   "profile.tokenCreated": "Atkomsttoken skapat.",
   "profile.revokeTokenConfirm": "Aterkalla detta atkomsttoken?",
-  "profile.tokenRevoked": "Atkomsttoken aterkallat."
+  "profile.tokenRevoked": "Atkomsttoken aterkallat.",
+  "importCenter.rollbackCompleted": "Rollback completed",
+  "importCenter.rollbackMovies": "Movies",
+  "importCenter.rollbackContainers": "Containers",
+  "importCenter.rollbackSkipped": "Skipped",
+  "importCenter.rollbackTitle": "Undo this import",
+  "importCenter.rollbackHelp": "Removes movies and empty containers created by this import. Updated existing movies stay in your collection.",
+  "importCenter.rollbackButton": "Undo import",
+  "importCenter.rollbackConfirm": "Undo this import? Movies created by the import will be removed. Existing movies that were updated will stay.",
+  "importCenter.rollbackRunning": "Undoing import...",
+  "importCenter.rollbackDone": "Import rolled back."
 }
