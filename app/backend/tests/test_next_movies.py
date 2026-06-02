@@ -8,12 +8,14 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 try:
+    from app.backend.next_app import import_source_review_summary
     from app.backend.next_app import NextApiError
     from app.backend.next_app import movie_payload_fields
     from app.backend.next_app import movie_update_payload
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
     if exc.name != "flask":
         raise
+    import_source_review_summary = None
     NextApiError = None
     movie_payload_fields = None
     movie_update_payload = None
@@ -64,6 +66,35 @@ class NextMovieEditPolicyTests(unittest.TestCase):
 
         self.assertIsNone(payload["release_date"])
         self.assertEqual(payload["purchase_date"].isoformat(), "2026-06-02")
+
+    def test_import_source_review_summary_flags_review_risks(self):
+        summary = import_source_review_summary(
+            [
+                {
+                    "action": "create",
+                    "title": "A Minecraft Movie 4K Blu-ray (SteelBook) (France)",
+                    "confidence": {"label": "low", "evidence": ["title"]},
+                    "metadataSuggestions": {"items": [{"title": "A Minecraft Movie"}]},
+                },
+                {
+                    "action": "update",
+                    "title": "RoboCop",
+                    "matchState": "existing",
+                    "confidence": {"label": "high", "evidence": ["exact_identity"]},
+                },
+            ],
+            actions=[],
+            containers=[{"containerType": "box_set"}, {"containerType": "collection"}],
+            provider_summary=[{"provider": "import_clz_movies"}],
+        )
+
+        self.assertEqual(summary["total"], 2)
+        self.assertEqual(summary["actions"]["create"], 1)
+        self.assertEqual(summary["actions"]["update"], 1)
+        self.assertEqual(summary["confidence"]["low"], 1)
+        self.assertEqual(summary["releaseTitleRisks"], 1)
+        self.assertEqual(summary["metadataSuggestionRows"], 1)
+        self.assertEqual(summary["recommendedAction"], "review")
 
 
 if __name__ == "__main__":
