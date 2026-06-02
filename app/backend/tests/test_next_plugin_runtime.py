@@ -21,9 +21,11 @@ sys.modules.setdefault(
         HTTPError=Exception,
     ),
 )
+sys.modules.setdefault("bs4", types.SimpleNamespace(BeautifulSoup=lambda *_args, **_kwargs: None))
 
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
+from app.backend.next_plugins.bluray_com.plugin import _movie_title_from_release_title
 from app.backend.next_plugins.trakt import plugin as trakt_plugin
 
 
@@ -49,6 +51,13 @@ class FakeHTTPError(Exception):
 
 
 class NextPluginRuntimeTests(unittest.TestCase):
+    def test_bluray_release_title_is_cleaned_for_movie_identity(self):
+        self.assertEqual(
+            _movie_title_from_release_title("A Minecraft Movie 4K Blu-ray (SteelBook) (France)"),
+            "A Minecraft Movie",
+        )
+        self.assertEqual(_movie_title_from_release_title("Back to the Future DVD"), "Back to the Future")
+
     def test_legacy_import_plugin_is_discoverable(self):
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}

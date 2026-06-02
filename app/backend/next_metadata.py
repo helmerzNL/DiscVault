@@ -77,6 +77,12 @@ METADATA_MANUAL_PROTECTED_FIELDS = {
     "videos",
 }
 
+METADATA_DISPLAY_TITLE_FIELDS = {
+    "title",
+    "sort_title",
+    "original_title",
+}
+
 METADATA_TECHNICAL_FIELDS = {
     "hdr",
     "packaging",
@@ -992,6 +998,8 @@ def should_apply_field(
         return False, "incoming value is empty"
     if field in METADATA_LOCAL_ONLY_FIELDS:
         return False, "field is local-only"
+    if release_priority and field in METADATA_DISPLAY_TITLE_FIELDS:
+        return False, "release source cannot update canonical display title"
     format_ok, format_reason = field_format_safe(field, target_format, source_format, source_context=source_context)
     if not format_ok:
         return False, format_reason

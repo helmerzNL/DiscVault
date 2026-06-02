@@ -101,6 +101,23 @@ def _clean_text(value):
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def _movie_title_from_release_title(value):
+    title = _clean_text(value)
+    if not title:
+        return ""
+    title = re.sub(r"\s+\((\d{4})\).*$", "", title).strip()
+    title = re.sub(r"\s+\((?:SteelBook|Steelbook|France|Germany|Italy|Spain|UK|US|USA|Canada|Netherlands|Import)\)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+\((?:SteelBook|Steelbook|France|Germany|Italy|Spain|UK|US|USA|Canada|Netherlands|Import)\)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(
+        r"\s+(?:4K\s*)?(?:Ultra\s*HD\s*)?Blu[- ]?ray(?:\s*3D)?(?:\s*\+\s*Blu[- ]?ray)?\s*$",
+        "",
+        title,
+        flags=re.I,
+    ).strip()
+    title = re.sub(r"\s+(?:DVD|HD DVD|LaserDisc|VCD/SVCD)\s*$", "", title, flags=re.I).strip()
+    return title or _clean_text(value)
+
+
 def _extract_hdr(value):
     text = str(value or "")
     tokens = []
@@ -175,13 +192,15 @@ def _parse_page(url):
         "sourceRef": url,
         "sourceUrl": url,
         "format": release_format,
+        "releaseTitle": title,
         "movie": {
-            "title": re.sub(r"\s+\((\d{4})\).*$", "", title).strip() or title,
+            "title": _movie_title_from_release_title(title),
             "year": year,
             "posterUrl": poster,
             "format": release_format,
         },
         "release": {
+            "title": title,
             "format": release_format,
             "posterUrl": poster,
         },
