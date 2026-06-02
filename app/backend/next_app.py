@@ -7129,6 +7129,46 @@ def ui_preview_html(
       justify-content: flex-end;
       gap: 6px;
     }
+    .import-direct-result {
+      margin-bottom: 12px;
+    }
+    .import-direct-result .import-post-review-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .import-member-editor-item {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+    .import-member-editor-row.with-tools {
+      grid-template-columns: 44px minmax(160px, 1.2fr) minmax(92px, .5fr) minmax(120px, .7fr) minmax(104px, .6fr) auto auto;
+    }
+    .import-member-match-list {
+      display: grid;
+      gap: 6px;
+      margin-left: 52px;
+      padding: 8px;
+      border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+    }
+    .import-member-match-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+    .import-member-match-row strong {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    .import-member-match-row span {
+      display: block;
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 650;
+    }
     .import-post-actions button {
       min-height: 30px;
       border-radius: 11px;
@@ -9053,6 +9093,70 @@ def ui_preview_html(
       margin: 0;
       font-size: .95rem;
     }
+    .app-admin-plugin-dashboard,
+    .app-admin-priority-dashboard {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+      min-width: 0;
+    }
+    .app-admin-priority-dashboard {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .app-admin-plugin-health-card,
+    .app-admin-priority-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 11px;
+      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+      min-width: 0;
+    }
+    .app-admin-plugin-health-card span,
+    .app-admin-priority-card span {
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 760;
+    }
+    .app-admin-plugin-health-card strong,
+    .app-admin-priority-card strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.15rem;
+      overflow-wrap: anywhere;
+    }
+    .app-admin-priority-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .app-admin-priority-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+      border-radius: 14px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--field) 52%, transparent);
+      min-width: 0;
+    }
+    .app-admin-priority-rank {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 15%, var(--field));
+      color: var(--text);
+      font-weight: 820;
+      font-size: .82rem;
+    }
+    .app-admin-priority-row strong {
+      display: block;
+      overflow-wrap: anywhere;
+    }
     .app-admin-plugin-tab-panel {
       display: none;
       min-width: 0;
@@ -9909,6 +10013,21 @@ def ui_preview_html(
       .import-metadata-suggestion .compact-button {
         grid-column: 1 / -1;
       }
+      .import-member-editor-row.with-tools {
+        grid-template-columns: 44px minmax(0, 1fr);
+      }
+      .import-member-editor-row.with-tools label,
+      .import-member-editor-row.with-tools select,
+      .import-member-editor-row.with-tools .secondary-button {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+      .import-member-match-list {
+        margin-left: 0;
+      }
+      .import-member-match-row {
+        grid-template-columns: 1fr;
+      }
       .import-review-tools {
         align-items: stretch;
       }
@@ -9956,6 +10075,11 @@ def ui_preview_html(
       }
       .container-manager-actions {
         min-width: 0;
+      }
+      .app-admin-plugin-dashboard,
+      .app-admin-priority-dashboard,
+      .app-admin-priority-row {
+        grid-template-columns: 1fr;
       }
       .app-admin-plugin-config {
         grid-template-columns: 1fr;
@@ -11464,6 +11588,7 @@ def ui_preview_html(
                   <strong id="appAdminDigitalSourceCount">-</strong>
                 </div>
               </div>
+              <div class="app-admin-plugin-dashboard" id="appAdminPluginDashboard"></div>
               <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin sections" data-next-i18n-aria="appAdmin.plugins">
                 <button type="button" class="active" data-app-admin-plugin-tab="registry" data-next-i18n="appAdmin.plugins">Plugins</button>
                 <button type="button" data-app-admin-plugin-tab="packages" data-next-i18n="appAdmin.pluginPackages">Plugin packages</button>
@@ -11474,6 +11599,7 @@ def ui_preview_html(
             <div class="app-admin-plugin-tab-panel active full" data-app-admin-plugin-panel="registry">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
+                <div id="appAdminMetadataPriorityPanel"></div>
                 <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin types" data-next-i18n-aria="appAdmin.pluginRegistry">
                   <button type="button" class="active" data-app-admin-plugin-type-tab="metadata_source" data-next-i18n="appAdmin.pluginTypeMetadataSources">Metadata sources</button>
                   <button type="button" data-app-admin-plugin-type-tab="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</button>
@@ -12290,6 +12416,78 @@ def ui_preview_html(
         tNext("appAdmin.settingCount", "{count} settings").replace("{count}", String(settingKeys.length))
       ].join(" / ");
     }
+    function appAdminPluginNeedsConfiguration(plugin) {
+      return !!(plugin && plugin.enabled && plugin.requiresSecrets && !plugin.secretsConfigured);
+    }
+    function appAdminPluginHealthState(plugin) {
+      const health = appAdmin.pluginHealth[plugin.id] || {};
+      if (health.state) return health.state;
+      if ((plugin.runtime || {}).loaded) return "loaded";
+      return "unknown";
+    }
+    function renderAppAdminPluginDashboard() {
+      const node = document.getElementById("appAdminPluginDashboard");
+      if (!node) return;
+      const plugins = appAdmin.plugins || [];
+      const jobs = appAdmin.pluginJobs || [];
+      const healthStates = plugins.map(appAdminPluginHealthState);
+      const activeJobs = jobs.filter((job) => ["pending", "running"].includes(String(job.status || ""))).length;
+      const cards = [
+        [tNext("appAdmin.pluginTotal", "Installed"), plugins.length],
+        [tNext("appAdmin.enabledPlugins", "Enabled"), plugins.filter((plugin) => plugin.enabled).length],
+        [tNext("appAdmin.configNeeded", "Configuration needed"), plugins.filter(appAdminPluginNeedsConfiguration).length],
+        [tNext("appAdmin.pluginHealthOk", "Runtime ready"), healthStates.filter((state) => ["ok", "loaded", "ready"].includes(String(state))).length],
+        [tNext("appAdmin.pluginJobsActive", "Active jobs"), activeJobs],
+        [tNext("appAdmin.pluginReceivers", "Receivers"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver")).length],
+        [tNext("appAdmin.pluginSources", "Sources"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source")).length],
+        [tNext("appAdmin.pluginImporters", "Importers"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source")).length]
+      ];
+      node.innerHTML = cards.map(([label, value]) => `
+        <div class="app-admin-plugin-health-card">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(formatNumber(value))}</strong>
+        </div>
+      `).join("");
+    }
+    function renderAppAdminMetadataPriorityPanel() {
+      const node = document.getElementById("appAdminMetadataPriorityPanel");
+      if (!node) return;
+      const sources = (appAdmin.plugins || [])
+        .filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source"))
+        .sort(appAdminPluginSort);
+      if (!sources.length || appAdmin.activePluginTypeTab !== "metadata_source") {
+        node.innerHTML = "";
+        return;
+      }
+      const enabled = sources.filter((plugin) => plugin.enabled).length;
+      const needsConfig = sources.filter(appAdminPluginNeedsConfiguration).length;
+      node.innerHTML = `
+        <section class="app-admin-priority-dashboard">
+          <div class="app-admin-priority-card">
+            <span>${escapeHtml(tNext("appAdmin.metadataPriority", "Metadata priority"))}</span>
+            <strong>${escapeHtml(tNext("appAdmin.metadataPriorityHelpShort", "{count} sources").replace("{count}", String(sources.length)))}</strong>
+          </div>
+          <div class="app-admin-priority-card">
+            <span>${escapeHtml(tNext("appAdmin.readySources", "Ready sources"))}</span>
+            <strong>${escapeHtml(`${enabled - needsConfig}/${sources.length}`)}</strong>
+          </div>
+        </section>
+        <div class="app-admin-priority-list">
+          ${sources.map((plugin, index) => `
+            <div class="app-admin-priority-row">
+              <span class="app-admin-priority-rank">${escapeHtml(String(index + 1))}</span>
+              <span>
+                <strong>${escapeHtml(plugin.name || plugin.id)}</strong>
+                <span class="profile-passkey-meta">${escapeHtml(plugin.id)} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</span>
+              </span>
+              <span class="tag ${plugin.enabled && !appAdminPluginNeedsConfiguration(plugin) ? "good" : ""}">
+                ${escapeHtml(plugin.enabled ? (appAdminPluginNeedsConfiguration(plugin) ? tNext("appAdmin.configurationNeeded", "Configuration needed") : tNext("appAdmin.enabled", "Enabled")) : tNext("appAdmin.disabled", "Disabled"))}
+              </span>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
     function appAdminJobStatusClass(status) {
       if (status === "completed") return "good";
       if (status === "pending" || status === "running") return "blue";
@@ -12977,6 +13175,7 @@ def ui_preview_html(
       if (enabledNode) enabledNode.textContent = `${enabled}/${plugins.length}`;
       if (configNode) configNode.textContent = String(configNeeded);
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
+      renderAppAdminPluginDashboard();
       renderAppAdminPluginJobs();
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
@@ -13025,6 +13224,7 @@ def ui_preview_html(
         }
       };
       setAppAdminPluginTypeTab(appAdmin.activePluginTypeTab, false);
+      renderAppAdminMetadataPriorityPanel();
       const activeSection = sections[appAdmin.activePluginTypeTab] || sections.metadata_source;
       list.innerHTML = renderAppAdminPluginSection(activeSection.title, activeSection.plugins, appAdmin.activePluginTypeTab)
         || `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
@@ -18445,6 +18645,9 @@ def ui_preview_html(
           const clean = {...member};
           delete clean._memberIndex;
           delete clean._memberExtra;
+          delete clean.metadataSearchLoading;
+          delete clean.metadataSearchError;
+          delete clean.metadataSuggestions;
           if (!includeSkipped) clean.sortOrder = index + 1;
           return clean;
         })
@@ -18453,6 +18656,121 @@ def ui_preview_html(
     function selectedBoxSetMembersForImport() {
       return proposalMembersForImport(selectedBoxSetProposal());
     }
+    function updateBoxSetMemberEdit(proposalKey, index, values) {
+      const state = boxSetMemberEditState(proposalKey);
+      if (String(index).startsWith("extra-")) {
+        const extraIndex = Number(String(index).slice(6));
+        state.extras = state.extras || [];
+        state.extras[extraIndex] = {...(state.extras[extraIndex] || {}), ...(values || {})};
+      } else {
+        state.members = state.members || {};
+        state.members[index] = {...(state.members[index] || {}), ...(values || {})};
+      }
+    }
+    function importMemberSuggestionsHtml(proposalKey, index, member) {
+      const loading = !!member.metadataSearchLoading;
+      const error = member.metadataSearchError || "";
+      const suggestions = (member.metadataSuggestions || {}).items || [];
+      if (!loading && !error && !suggestions.length) return "";
+      return `
+        <div class="import-member-match-list">
+          ${loading ? `<div class="profile-passkey-meta">${escapeHtml(tNext("importCenter.searchingMemberMatch", "Searching metadata sources..."))}</div>` : ""}
+          ${error ? `<div class="login-message bad">${escapeHtml(error)}</div>` : ""}
+          ${suggestions.slice(0, 3).map((item, suggestionIndex) => {
+            const title = item.title || item.originalTitle || item.name || tNext("common.untitled", "Untitled");
+            const meta = [item.year, item.providerId || item.pluginId || item.source, item.tmdbId ? `TMDb ${item.tmdbId}` : "", item.imdbId || ""].filter(Boolean).join(" / ");
+            return `
+              <div class="import-member-match-row">
+                <span>
+                  <strong>${escapeHtml(title)}</strong>
+                  <span>${escapeHtml(meta || tNext("importCenter.metadataCandidate", "Metadata candidate"))}</span>
+                </span>
+                <button type="button" class="secondary-button" data-box-member-use-suggestion="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}" data-suggestion-index="${escapeHtml(String(suggestionIndex))}">
+                  ${escapeHtml(tNext("importCenter.useMatch", "Use match"))}
+                </button>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+    async function searchBoxSetMemberMatch(proposalKey, index) {
+      const proposal = barcodeBoxSetProposals().find((item) => item.proposalKey === proposalKey) || selectedBoxSetProposal();
+      const member = proposalMembersForImport(proposal, true).find((item) => String(item._memberIndex) === String(index));
+      if (!member) return;
+      updateBoxSetMemberEdit(proposalKey, index, {metadataSearchLoading: true, metadataSearchError: "", metadataSuggestions: {items: []}});
+      renderBarcodeLookup();
+      try {
+        const payload = await authApiJson("/api/next/metadata/lookup", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          timeoutMs: 30000,
+          body: JSON.stringify({
+            title: member.title || "",
+            year: member.year || "",
+            format: member.format || document.getElementById("importFormatInput")?.value || "",
+            detectBoxSets: false,
+            previewMode: true
+          })
+        });
+        const suggestions = importSourceMetadataSuggestionsFromLookup(payload.metadata || {});
+        updateBoxSetMemberEdit(proposalKey, index, {metadataSearchLoading: false, metadataSuggestions: suggestions});
+      } catch (error) {
+        updateBoxSetMemberEdit(proposalKey, index, {metadataSearchLoading: false, metadataSearchError: error.message || String(error)});
+      }
+      renderBarcodeLookup();
+    }
+    function applyBoxSetMemberSuggestion(proposalKey, index, suggestionIndex) {
+      const proposal = barcodeBoxSetProposals().find((item) => item.proposalKey === proposalKey) || selectedBoxSetProposal();
+      const member = proposalMembersForImport(proposal, true).find((item) => String(item._memberIndex) === String(index));
+      const suggestion = ((member || {}).metadataSuggestions || {}).items?.[Number(suggestionIndex || 0)];
+      if (!suggestion) return;
+      updateBoxSetMemberEdit(proposalKey, index, {
+        title: suggestion.title || suggestion.originalTitle || suggestion.name || member.title || "",
+        year: suggestion.year || member.year || "",
+        posterUrl: suggestion.posterUrl || suggestion.poster_url || member.posterUrl || member.poster_url || "",
+        tmdbId: suggestion.tmdbId || suggestion.tmdb_id || member.tmdbId || member.tmdb_id || "",
+        imdbId: suggestion.imdbId || suggestion.imdb_id || member.imdbId || member.imdb_id || "",
+        metadataSearchLoading: false
+      });
+      renderBarcodeLookup();
+    }
+    function renderImportDirectResult() {
+      const payload = importCenter.addResult || null;
+      if (!payload) return "";
+      const movie = payload.movie || payload.detail?.movie || {};
+      const boxSet = payload.boxSet || {};
+      const container = boxSet.container || boxSet || {};
+      const members = boxSet.members || boxSet.memberMovies || [];
+      const stateLabel = payload.state === "already_exists"
+        ? tNext("importCenter.movieExists", "Movie already exists.")
+        : payload.state === "box_set_created"
+          ? tNext("importCenter.boxSetAdded", "Box-set added.")
+          : tNext("importCenter.movieAdded", "Movie added.");
+      const primaryTitle = container.title || movie.title || movie.original_title || tNext("importCenter.importResult", "Import result");
+      const metadataJobs = payload.metadataRefreshQueued || payload.queuedMetadataRefreshJobs || (payload.metadataJobs || []).length || 0;
+      return `
+        <article class="import-post-review-card import-direct-result">
+          <div class="import-card-head">
+            <div>
+              <span class="eyebrow">${escapeHtml(tNext("importCenter.directResultEyebrow", "Added just now"))}</span>
+              <h3>${escapeHtml(primaryTitle)}</h3>
+              <p class="import-source-meta">${escapeHtml(stateLabel)}</p>
+            </div>
+            <div class="button-row compact">
+              ${container.id ? `<button type="button" class="secondary-button" data-import-open-container="${escapeHtml(container.id)}">${escapeHtml(tNext("importCenter.openCollection", "Open"))}</button>` : ""}
+              ${movie.id ? `<button type="button" class="secondary-button" data-open-movie="${escapeHtml(movie.id)}">${escapeHtml(tNext("common.open", "Open"))}</button>` : ""}
+              ${movie.id && hasPermission("metadata.refresh_one") ? `<button type="button" class="secondary-button" data-import-metadata-refresh="${escapeHtml(movie.id)}">${escapeHtml(tNext("importCenter.refreshMetadata", "Refresh metadata"))}</button>` : ""}
+            </div>
+          </div>
+          <div class="import-post-review-grid">
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.action", "Action"))}</span><strong>${escapeHtml(payload.state || "added")}</strong></div>
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}</span><strong>${escapeHtml(formatNumber(Array.isArray(members) ? members.length : 0))}</strong></div>
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.metadataRefreshes", "Metadata refreshes"))}</span><strong>${escapeHtml(formatNumber(metadataJobs))}</strong></div>
+          </div>
+        </article>
+      `;
+    }
     function renderBarcodeLookup() {
       const list = document.getElementById("importBarcodeResults");
       const addButton = document.getElementById("importMovieAddButton");
@@ -18460,9 +18778,10 @@ def ui_preview_html(
         addButton.disabled = !importCenter.barcodeLookup;
       }
       if (!list) return;
+      const directResultCard = renderImportDirectResult();
       const payload = importCenter.barcodeLookup;
       if (!payload) {
-        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodePreview", "Scan a barcode or search by barcode or title to preview plugin results."))}</div>`;
+        list.innerHTML = directResultCard || `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodePreview", "Scan a barcode or search by barcode or title to preview plugin results."))}</div>`;
         return;
       }
       const metadata = payload.metadata || payload;
@@ -18585,7 +18904,8 @@ def ui_preview_html(
               ${members.slice(0, 30).map((member, displayIndex) => {
                 const index = member._memberIndex ?? displayIndex;
                 return `
-                  <div class="import-member-editor-row">
+                  <div class="import-member-editor-item">
+                  <div class="import-member-editor-row with-tools">
                     ${usableImage(member.posterUrl || member.poster_url || member.poster || member.coverUrl || member.cover_url) ? `<img src="${escapeHtml(usableImage(member.posterUrl || member.poster_url || member.poster || member.coverUrl || member.cover_url))}" alt="">` : `<span class="import-member-editor-poster">${escapeHtml(String(displayIndex + 1))}</span>`}
                     <label>
                       <span>${escapeHtml(tNext("common.title", "Title"))}</span>
@@ -18604,6 +18924,9 @@ def ui_preview_html(
                       <option value="skip" ${member.action === "skip" ? "selected" : ""}>${escapeHtml(tNext("common.skip", "Skip"))}</option>
                     </select>
                     <span class="tag">${escapeHtml(member.memberConfidence || member.member_confidence || proposal.memberConfidence || proposal.member_confidence || tNext("importCenter.candidate", "candidate"))}</span>
+                    <button type="button" class="secondary-button" data-box-member-search="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}">${escapeHtml(tNext("importCenter.searchMatch", "Search match"))}</button>
+                  </div>
+                  ${importMemberSuggestionsHtml(proposalKey, index, member)}
                   </div>
                 `;
               }).join("")}
@@ -18685,13 +19008,13 @@ def ui_preview_html(
       ` : "";
       if (!Array.isArray(results) || !results.length) {
         if (proposalCard || boxSetCard) {
-          list.innerHTML = boxSetCard + proposalCard;
+          list.innerHTML = directResultCard + boxSetCard + proposalCard;
         } else {
-          list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>`;
+          list.innerHTML = directResultCard + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>`;
         }
         return;
       }
-      list.innerHTML = boxSetCard + proposalCard + sourceGrid;
+      list.innerHTML = directResultCard + boxSetCard + proposalCard + sourceGrid;
     }
     function renderImportCenter() {
       renderImportTabs();
@@ -21595,8 +21918,13 @@ def ui_preview_html(
       });
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
-        const proposalButton = event.target.closest("[data-box-set-proposal-key]");
+        const proposalButton = event.target.closest(".import-proposal-select[data-box-set-proposal-key]");
         const addMemberButton = event.target.closest("[data-box-set-member-add]");
+        const memberSearchButton = event.target.closest("[data-box-member-search]");
+        const memberSuggestionButton = event.target.closest("[data-box-member-use-suggestion]");
+        const containerButton = event.target.closest("[data-import-open-container]");
+        const movieButton = event.target.closest("[data-open-movie]");
+        const metadataButton = event.target.closest("[data-import-metadata-refresh]");
         if (proposalButton) {
           importCenter.selectedBoxSetProposalKey = proposalButton.dataset.boxSetProposalKey || "";
           renderBarcodeLookup();
@@ -21608,6 +21936,11 @@ def ui_preview_html(
           state.extras.push({title: "", year: "", format: document.getElementById("importFormatInput")?.value || "", action: "import", memberConfidence: "manual"});
           renderBarcodeLookup();
         }
+        if (memberSearchButton) searchBoxSetMemberMatch(memberSearchButton.dataset.boxMemberSearch || "", memberSearchButton.dataset.boxMemberIndex || "");
+        if (memberSuggestionButton) applyBoxSetMemberSuggestion(memberSuggestionButton.dataset.boxMemberUseSuggestion || "", memberSuggestionButton.dataset.boxMemberIndex || "", memberSuggestionButton.dataset.suggestionIndex || "0");
+        if (containerButton) openAppContainerDetail(containerButton.dataset.importOpenContainer);
+        if (movieButton) openMovieDetail(movieButton.dataset.openMovie);
+        if (metadataButton) queueImportMovieMetadataRefresh(metadataButton.dataset.importMetadataRefresh);
       });
       document.getElementById("importBarcodeResults")?.addEventListener("input", (event) => {
         const field = event.target.closest("[data-box-member-field]");
@@ -21615,15 +21948,7 @@ def ui_preview_html(
         const proposalKey = field.dataset.boxSetProposalKey || "";
         const index = field.dataset.boxMemberIndex || "";
         const name = field.dataset.boxMemberField || "";
-        const state = boxSetMemberEditState(proposalKey);
-        if (index.startsWith("extra-")) {
-          const extraIndex = Number(index.slice(6));
-          state.extras = state.extras || [];
-          state.extras[extraIndex] = {...(state.extras[extraIndex] || {}), [name]: field.value};
-        } else {
-          state.members = state.members || {};
-          state.members[index] = {...(state.members[index] || {}), [name]: field.value};
-        }
+        updateBoxSetMemberEdit(proposalKey, index, {[name]: field.value});
       });
       document.getElementById("importBarcodeResults")?.addEventListener("change", (event) => {
         const field = event.target.closest("[data-box-member-field]");
@@ -21631,15 +21956,7 @@ def ui_preview_html(
         const proposalKey = field.dataset.boxSetProposalKey || "";
         const index = field.dataset.boxMemberIndex || "";
         const name = field.dataset.boxMemberField || "";
-        const state = boxSetMemberEditState(proposalKey);
-        if (index.startsWith("extra-")) {
-          const extraIndex = Number(index.slice(6));
-          state.extras = state.extras || [];
-          state.extras[extraIndex] = {...(state.extras[extraIndex] || {}), [name]: field.value};
-        } else {
-          state.members = state.members || {};
-          state.members[index] = {...(state.members[index] || {}), [name]: field.value};
-        }
+        updateBoxSetMemberEdit(proposalKey, index, {[name]: field.value});
         renderBarcodeLookup();
       });
       document.getElementById("importScannerStartButton")?.addEventListener("click", () => startImportBarcodeScanner());
