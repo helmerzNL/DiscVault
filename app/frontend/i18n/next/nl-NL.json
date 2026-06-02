@@ -1272,8 +1272,7 @@
   "importCenter.importError": "Importfout",
   "importCenter.queueingMetadata": "Metadata-refresh wordt ingepland...",
   "importCenter.metadataRefreshes": "Metadata-refreshes",
-  "importCenter.metadataQueued": "Metadata-refresh ingepland."
-,
+  "importCenter.metadataQueued": "Metadata-refresh ingepland.",
   "importCenter.reviewUseRecommended": "Aanbevolen matches gebruiken",
   "importCenter.reviewSkipLow": "Lage zekerheid overslaan",
   "importCenter.reviewExistingOnly": "Alleen bestaande bijwerken",
@@ -1288,5 +1287,7 @@
   "importCenter.recommendedMatches": "Aanbevolen matches",
   "importCenter.selectedMatch": "Gekozen match",
   "importCenter.clearMatch": "Match wissen",
-  "importCenter.releaseTitleWarning": "Dit lijkt op een release-titel. Kies voor import de echte filmmatch."
+  "importCenter.releaseTitleWarning": "Dit lijkt op een release-titel. Kies voor import de echte filmmatch.",
+  "importCenter.providerSelected": "Gekozen provider",
+  "importCenter.useProvider": "Gebruik deze provider"
 }
