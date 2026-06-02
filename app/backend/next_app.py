@@ -32415,7 +32415,13 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Plugin not found", 404)
             actor = require_plugin_action_permission(conn, plugin, "health_check")
             config = plugin_config_from_db(conn, plugin_id)
-            context = plugin_execution_context(conn, plugin, config, actor)
+            context = plugin_execution_context(
+                conn,
+                plugin,
+                config,
+                actor,
+                ensure_movievault_token=is_movievault_plugin(plugin_id),
+            )
 
         manifest = plugin.get("manifest") or {}
         requires_secrets = bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets"))
