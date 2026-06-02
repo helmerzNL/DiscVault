@@ -7264,6 +7264,55 @@ def ui_preview_html(
       justify-self: start;
       min-height: 34px;
     }
+    .import-member-editor {
+      display: grid;
+      gap: 8px;
+    }
+    .import-member-editor-row {
+      display: grid;
+      grid-template-columns: 42px minmax(180px, 1.6fr) minmax(78px, .5fr) minmax(130px, .8fr) minmax(108px, .7fr) auto;
+      gap: 8px;
+      align-items: end;
+      padding: 8px;
+      border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .import-member-editor-row img,
+    .import-member-editor-poster {
+      width: 42px;
+      height: 62px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: var(--field);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-weight: 800;
+      border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+    }
+    .import-member-editor-row label {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      font-size: .72rem;
+      color: var(--muted);
+    }
+    .import-member-editor-row input,
+    .import-member-editor-row select {
+      min-height: 36px;
+      border-radius: 12px;
+    }
+    @media (max-width: 760px) {
+      .import-member-editor-row {
+        grid-template-columns: 42px minmax(0, 1fr);
+      }
+      .import-member-editor-row label,
+      .import-member-editor-row select,
+      .import-member-editor-row .tag {
+        grid-column: 2;
+      }
+    }
     .import-result-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -11696,7 +11745,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedBoxSetProposalKey: "", addResult: null, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedBoxSetProposalKey: "", boxSetMemberEdits: {}, addResult: null, activeTab: "add"};
     let importScanner = {
       running: false,
       native: false,
@@ -18339,6 +18388,71 @@ def ui_preview_html(
         resetImportScannerUi();
       }
     }
+    function importBoxSetProposalKey(proposal, result = {}) {
+      const title = proposal?.title || proposal?.name || "";
+      const provider = proposal?.provider || proposal?.source || proposal?.member_source || result?.pluginId || result?.provider || "";
+      const discriminator = proposal?.barcode || proposal?.movievault_id || proposal?.movievaultId || proposal?.detailUrl || proposal?.detail_url || proposal?.sourceUrl || proposal?.source_url || "";
+      return `${String(provider).toLowerCase()}::${String(title).toLowerCase()}::${String(discriminator).toLowerCase()}`;
+    }
+    function barcodeBoxSetProposals() {
+      const metadata = (importCenter.barcodeLookup || {}).metadata || importCenter.barcodeLookup || {};
+      const proposals = [];
+      const seen = new Set();
+      (metadata.results || []).forEach((result) => {
+        const proposal = result?.boxSetProposal || result?.box_set_proposal || result?.raw?.boxSetProposal || result?.raw?.box_set_proposal;
+        if (!proposal || typeof proposal !== "object") return;
+        const provider = proposal.provider || proposal.source || result?.pluginId || result?.provider || "";
+        const normalized = {...proposal, provider: provider || proposal.provider || proposal.source || ""};
+        const key = importBoxSetProposalKey(normalized, result);
+        if (seen.has(key)) return;
+        seen.add(key);
+        proposals.push({...normalized, proposalKey: key});
+      });
+      return proposals;
+    }
+    function selectedBoxSetProposal() {
+      const proposals = barcodeBoxSetProposals();
+      return proposals.find((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey) || proposals.find((proposal) => {
+        const members = proposal?.movies || proposal?.members || [];
+        return Array.isArray(members) && members.length >= 2;
+      }) || null;
+    }
+    function boxSetMemberEditState(proposalKey) {
+      importCenter.boxSetMemberEdits = importCenter.boxSetMemberEdits || {};
+      if (!importCenter.boxSetMemberEdits[proposalKey]) {
+        importCenter.boxSetMemberEdits[proposalKey] = {members: {}, extras: []};
+      }
+      return importCenter.boxSetMemberEdits[proposalKey];
+    }
+    function proposalMembersForImport(proposal, includeSkipped = false) {
+      if (!proposal) return [];
+      const proposalKey = proposal.proposalKey || importBoxSetProposalKey(proposal);
+      const state = boxSetMemberEditState(proposalKey);
+      const base = Array.isArray(proposal.movies || proposal.members) ? (proposal.movies || proposal.members) : [];
+      const rows = base.map((member, index) => {
+        const edits = state.members?.[index] || {};
+        return {...member, ...edits, _memberIndex: index, _memberExtra: false};
+      });
+      (state.extras || []).forEach((member, offset) => {
+        rows.push({...member, _memberIndex: `extra-${offset}`, _memberExtra: true});
+      });
+      if (includeSkipped) {
+        return rows;
+      }
+      return rows
+        .filter((member) => member.action !== "skip")
+        .map((member, index) => {
+          const clean = {...member};
+          delete clean._memberIndex;
+          delete clean._memberExtra;
+          if (!includeSkipped) clean.sortOrder = index + 1;
+          return clean;
+        })
+        .filter((member) => String(member.title || "").trim());
+    }
+    function selectedBoxSetMembersForImport() {
+      return proposalMembersForImport(selectedBoxSetProposal());
+    }
     function renderBarcodeLookup() {
       const list = document.getElementById("importBarcodeResults");
       const addButton = document.getElementById("importMovieAddButton");
@@ -18353,23 +18467,7 @@ def ui_preview_html(
       }
       const metadata = payload.metadata || payload;
       const results = metadata.results || metadata.sources || metadata.matches || [];
-      const boxSetProposals = [];
-      const seenBoxSetProposals = new Set();
-      const boxSetProposalKey = (proposal, result) => {
-        const title = proposal?.title || proposal?.name || "";
-        const provider = proposal?.provider || proposal?.source || proposal?.member_source || result?.pluginId || result?.provider || "";
-        const discriminator = proposal?.barcode || proposal?.movievault_id || proposal?.movievaultId || proposal?.detailUrl || proposal?.detail_url || proposal?.sourceUrl || proposal?.source_url || "";
-        return `${String(provider).toLowerCase()}::${String(title).toLowerCase()}::${String(discriminator).toLowerCase()}`;
-      };
-      (metadata.results || []).forEach((result) => {
-        const proposal = result?.boxSetProposal || result?.box_set_proposal || result?.raw?.boxSetProposal || result?.raw?.box_set_proposal;
-        if (!proposal || typeof proposal !== "object") return;
-        const provider = proposal.provider || proposal.source || result?.pluginId || result?.provider || "";
-        const key = boxSetProposalKey({...proposal, provider: provider || proposal.provider || proposal.source || ""}, result);
-        if (seenBoxSetProposals.has(key)) return;
-        seenBoxSetProposals.add(key);
-        boxSetProposals.push({...proposal, provider: provider || proposal.provider || proposal.source || "", proposalKey: key});
-      });
+      const boxSetProposals = barcodeBoxSetProposals();
       const addableBoxSetProposal = boxSetProposals.find((item) => {
         const members = item?.movies || item?.members || [];
         return Array.isArray(members) && members.length >= 2;
@@ -18381,6 +18479,8 @@ def ui_preview_html(
         addButton.textContent = addableBoxSetProposal
           ? tNext("importCenter.addBoxSet", "Add box-set")
           : tNext("importCenter.addMovie", "Add movie");
+        const selectedImportMembers = selectedBoxSetProposal() ? selectedBoxSetMembersForImport() : [];
+        addButton.disabled = !importCenter.barcodeLookup || (addableBoxSetProposal && selectedImportMembers.length < 2);
       }
       const proposal = metadata.proposal || {};
       const movieUpdates = proposal.movieUpdates || {};
@@ -18466,8 +18566,8 @@ def ui_preview_html(
         metadataUpdates.poster,
         (metadata.results || []).map((item) => itemImage(item)).find(Boolean)
       );
-      const boxSetMemberRows = (proposal) => {
-        const members = proposal?.movies || proposal?.members || [];
+      const boxSetMemberRows = (proposal, selected = false) => {
+        const members = selected ? proposalMembersForImport(proposal, true) : (proposal?.movies || proposal?.members || []);
         if (!Array.isArray(members) || !members.length) {
           return `
             <div class="import-result-member-strip">
@@ -18475,6 +18575,39 @@ def ui_preview_html(
                 <strong>${escapeHtml(tNext("importCenter.noDiskMembers", "No disk members yet"))}</strong>
                 <span>${escapeHtml(tNext("importCenter.noDiskMembersHelp", "Use MovieVault or another metadata source to identify the member films."))}</span>
               </div>
+            </div>
+          `;
+        }
+        if (selected) {
+          const proposalKey = proposal.proposalKey || "";
+          return `
+            <div class="import-member-editor">
+              ${members.slice(0, 30).map((member, displayIndex) => {
+                const index = member._memberIndex ?? displayIndex;
+                return `
+                  <div class="import-member-editor-row">
+                    ${usableImage(member.posterUrl || member.poster_url || member.poster || member.coverUrl || member.cover_url) ? `<img src="${escapeHtml(usableImage(member.posterUrl || member.poster_url || member.poster || member.coverUrl || member.cover_url))}" alt="">` : `<span class="import-member-editor-poster">${escapeHtml(String(displayIndex + 1))}</span>`}
+                    <label>
+                      <span>${escapeHtml(tNext("common.title", "Title"))}</span>
+                      <input type="text" value="${escapeHtml(member.title || "")}" data-box-member-field="title" data-box-set-proposal-key="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}">
+                    </label>
+                    <label>
+                      <span>${escapeHtml(tNext("common.year", "Year"))}</span>
+                      <input type="text" value="${escapeHtml(member.year || "")}" data-box-member-field="year" data-box-set-proposal-key="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}">
+                    </label>
+                    <label>
+                      <span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
+                      <input type="text" value="${escapeHtml(member.format || proposal.format || document.getElementById("importFormatInput")?.value || "")}" data-box-member-field="format" data-box-set-proposal-key="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}">
+                    </label>
+                    <select data-box-member-field="action" data-box-set-proposal-key="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}">
+                      <option value="import" ${member.action === "skip" ? "" : "selected"}>${escapeHtml(tNext("importCenter.memberActionImport", "Import/link"))}</option>
+                      <option value="skip" ${member.action === "skip" ? "selected" : ""}>${escapeHtml(tNext("common.skip", "Skip"))}</option>
+                    </select>
+                    <span class="tag">${escapeHtml(member.memberConfidence || member.member_confidence || proposal.memberConfidence || proposal.member_confidence || tNext("importCenter.candidate", "candidate"))}</span>
+                  </div>
+                `;
+              }).join("")}
+              <button type="button" class="glass-button small" data-box-set-member-add="${escapeHtml(proposalKey)}">${escapeHtml(tNext("importCenter.addMember", "Add member"))}</button>
             </div>
           `;
         }
@@ -18519,8 +18652,9 @@ def ui_preview_html(
                   ${escapeHtml(selected ? tNext("importCenter.providerSelected", "Selected provider") : tNext("importCenter.useProvider", "Use this provider"))}
                 </button>
               ` : ""}
+              ${selected ? `<div class="import-result-subtitle">${escapeHtml(tNext("importCenter.memberCorrectionHelp", "Correct titles, years or formats before importing. DiscVault will dedupe by barcode, identifiers and title/year."))}</div>` : ""}
               <div class="import-result-subtitle"><strong>${escapeHtml(tNext("importCenter.diskMembers", "Possible disk members"))}</strong></div>
-              ${boxSetMemberRows(proposal)}
+              ${boxSetMemberRows(proposal, selected)}
             </div>
           </div>
         `;
@@ -18716,6 +18850,7 @@ def ui_preview_html(
         });
         importCenter.barcodeLookup = payload;
         importCenter.selectedBoxSetProposalKey = "";
+        importCenter.boxSetMemberEdits = {};
         renderBarcodeLookup();
         setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
         console.log("movie import preview", payload);
@@ -18737,10 +18872,12 @@ def ui_preview_html(
       const button = document.getElementById("importMovieAddButton");
       if (button) button.disabled = true;
       try {
+        const selectedProposal = selectedBoxSetProposal();
+        const boxSetMembers = selectedProposal ? selectedBoxSetMembersForImport() : [];
         const payload = await authApiJson("/api/next/import/movie", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({barcode, title, year, format, detectBoxSets: true, boxSetProposalKey: importCenter.selectedBoxSetProposalKey || ""})
+          body: JSON.stringify({barcode, title, year, format, detectBoxSets: true, boxSetProposalKey: importCenter.selectedBoxSetProposalKey || "", boxSetMembers})
         });
         importCenter.addResult = payload;
         const movie = payload.movie || (payload.detail && payload.detail.movie) || {};
@@ -21459,8 +21596,50 @@ def ui_preview_html(
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const proposalButton = event.target.closest("[data-box-set-proposal-key]");
-        if (!proposalButton) return;
-        importCenter.selectedBoxSetProposalKey = proposalButton.dataset.boxSetProposalKey || "";
+        const addMemberButton = event.target.closest("[data-box-set-member-add]");
+        if (proposalButton) {
+          importCenter.selectedBoxSetProposalKey = proposalButton.dataset.boxSetProposalKey || "";
+          renderBarcodeLookup();
+        }
+        if (addMemberButton) {
+          const proposalKey = addMemberButton.dataset.boxSetMemberAdd || "";
+          const state = boxSetMemberEditState(proposalKey);
+          state.extras = state.extras || [];
+          state.extras.push({title: "", year: "", format: document.getElementById("importFormatInput")?.value || "", action: "import", memberConfidence: "manual"});
+          renderBarcodeLookup();
+        }
+      });
+      document.getElementById("importBarcodeResults")?.addEventListener("input", (event) => {
+        const field = event.target.closest("[data-box-member-field]");
+        if (!field) return;
+        const proposalKey = field.dataset.boxSetProposalKey || "";
+        const index = field.dataset.boxMemberIndex || "";
+        const name = field.dataset.boxMemberField || "";
+        const state = boxSetMemberEditState(proposalKey);
+        if (index.startsWith("extra-")) {
+          const extraIndex = Number(index.slice(6));
+          state.extras = state.extras || [];
+          state.extras[extraIndex] = {...(state.extras[extraIndex] || {}), [name]: field.value};
+        } else {
+          state.members = state.members || {};
+          state.members[index] = {...(state.members[index] || {}), [name]: field.value};
+        }
+      });
+      document.getElementById("importBarcodeResults")?.addEventListener("change", (event) => {
+        const field = event.target.closest("[data-box-member-field]");
+        if (!field) return;
+        const proposalKey = field.dataset.boxSetProposalKey || "";
+        const index = field.dataset.boxMemberIndex || "";
+        const name = field.dataset.boxMemberField || "";
+        const state = boxSetMemberEditState(proposalKey);
+        if (index.startsWith("extra-")) {
+          const extraIndex = Number(index.slice(6));
+          state.extras = state.extras || [];
+          state.extras[extraIndex] = {...(state.extras[extraIndex] || {}), [name]: field.value};
+        } else {
+          state.members = state.members || {};
+          state.members[index] = {...(state.members[index] || {}), [name]: field.value};
+        }
         renderBarcodeLookup();
       });
       document.getElementById("importScannerStartButton")?.addEventListener("click", () => startImportBarcodeScanner());
@@ -36218,6 +36397,8 @@ def register_routes(flask_app: Flask) -> None:
 
     def existing_movie_for_box_set_member(conn, member: dict[str, Any]) -> UUID | None:
         barcode = clean_text(member.get("barcode"))
+        title = clean_text(member.get("title") or member.get("originalTitle") or member.get("original_title"))
+        year = clean_text(member.get("year"))
         with conn.cursor() as cur:
             if barcode:
                 cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
@@ -36239,7 +36420,43 @@ def register_routes(flask_app: Flask) -> None:
                     row = cur.fetchone()
                     if row:
                         return row["movie_id"]
+            if title and year:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM movies
+                    WHERE lower(COALESCE(sort_title, title, original_title)) = lower(%s)
+                      AND COALESCE(year, '') = %s
+                    LIMIT 1
+                    """,
+                    (title, year),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row["id"]
         return None
+
+    def normalized_box_set_members_from_body(body: dict[str, Any]) -> list[dict[str, Any]]:
+        raw_members = body.get("boxSetMembers") or body.get("box_set_members")
+        if not isinstance(raw_members, list):
+            return []
+        members = []
+        for index, item in enumerate(raw_members[:50], start=1):
+            if not isinstance(item, dict):
+                continue
+            if clean_text(item.get("action")).casefold() == "skip":
+                continue
+            title = clean_text(item.get("title") or item.get("originalTitle") or item.get("original_title"))
+            if not title:
+                continue
+            member = dict(item)
+            member["title"] = title
+            member["year"] = clean_text(member.get("year"))
+            member["format"] = clean_text(member.get("format"))
+            member["sortOrder"] = index
+            member["memberConfidence"] = clean_text(member.get("memberConfidence") or member.get("member_confidence") or "manual")
+            members.append(member)
+        return members
 
     def merge_box_set_member_enrichment(member: dict[str, Any], metadata_result: dict[str, Any], fallback_format: str) -> dict[str, Any]:
         proposal = metadata_result.get("proposal") if isinstance(metadata_result, dict) else {}
@@ -36477,7 +36694,9 @@ def register_routes(flask_app: Flask) -> None:
         if not table_exists(conn, "containers") or not table_exists(conn, "container_movies"):
             raise NextApiError("Container tables are not available", 503)
         title = clean_text(proposal.get("title") or proposal.get("name") or body.get("title"))
-        members = [item for item in (proposal.get("movies") or proposal.get("members") or []) if isinstance(item, dict) and clean_text(item.get("title"))]
+        override_members = normalized_box_set_members_from_body(body)
+        proposal_members = [item for item in (proposal.get("movies") or proposal.get("members") or []) if isinstance(item, dict) and clean_text(item.get("title"))]
+        members = override_members or proposal_members
         if not title or len(members) < 2:
             raise NextApiError("Box-set proposal requires a title and at least two members.", 422)
         fallback_format = clean_text(body.get("format") or proposal.get("format") or proposal.get("mediaType") or proposal.get("media_type"))
@@ -36531,6 +36750,7 @@ def register_routes(flask_app: Flask) -> None:
         imported_movies = []
         applied_members = []
         metadata_refresh_movie_ids: list[str] = []
+        decision_counts = {"created": 0, "linkedExisting": 0, "skipped": 0, "metadataRefreshQueued": 0}
         for index, member in enumerate(members[:50], start=1):
             original_confidence = clean_text(member.get("memberConfidence") or member.get("member_confidence") or member_confidence)
             member = enrich_box_set_member_for_import(
@@ -36551,6 +36771,8 @@ def register_routes(flask_app: Flask) -> None:
             )
             if existing_id:
                 movie_id = existing_id
+                import_action = "linked_existing"
+                decision_counts["linkedExisting"] += 1
             else:
                 mutation_id = f"import-box-set-member-{uuid.uuid4()}"
                 upsert = apply_movie_upsert(
@@ -36565,6 +36787,8 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
                 movie_id = upsert["entityId"]
+                import_action = "created"
+                decision_counts["created"] += 1
             applied = apply_metadata_proposal(conn, movie_id, box_set_member_metadata_proposal(member), actor=actor)
             with conn.cursor() as cur:
                 cur.execute(
@@ -36581,6 +36805,7 @@ def register_routes(flask_app: Flask) -> None:
                 {
                     "movieId": str(movie_id),
                     "title": payload.get("title"),
+                    "action": import_action,
                     "confidence": original_confidence,
                     "source": clean_text(member.get("source") or member_source),
                     "applied": applied,
@@ -36606,6 +36831,7 @@ def register_routes(flask_app: Flask) -> None:
                         },
                     )
                 )
+            decision_counts["metadataRefreshQueued"] = len(queued_jobs)
 
         audit_event(
             conn,
@@ -36622,6 +36848,8 @@ def register_routes(flask_app: Flask) -> None:
                 "memberSource": member_source,
                 "memberConfidence": member_confidence,
                 "proposalKey": proposal.get("_proposalKey"),
+                "decisionCounts": decision_counts,
+                "memberOverridesApplied": bool(override_members),
                 "appliedMembers": applied_members,
                 "queuedMetadataRefreshJobs": [str(job.get("id")) for job in queued_jobs],
             },
@@ -36631,6 +36859,7 @@ def register_routes(flask_app: Flask) -> None:
             "movies": imported_movies,
             "appliedMembers": applied_members,
             "queuedMetadataRefreshJobs": queued_jobs,
+            "decisionCounts": decision_counts,
         }
 
     @flask_app.post("/api/next/metadata/lookup")
@@ -36710,6 +36939,7 @@ def register_routes(flask_app: Flask) -> None:
                             "metadata": metadata_result,
                             "applied": {"boxSet": box_set_import.get("appliedMembers") or []},
                             "queuedMetadataRefreshJobs": box_set_import.get("queuedMetadataRefreshJobs") or [],
+                            "decisionCounts": box_set_import.get("decisionCounts") or {},
                         },
                         201,
                     )

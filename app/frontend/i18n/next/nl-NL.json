@@ -1289,5 +1289,12 @@
   "importCenter.clearMatch": "Match wissen",
   "importCenter.releaseTitleWarning": "Dit lijkt op een release-titel. Kies voor import de echte filmmatch.",
   "importCenter.providerSelected": "Gekozen provider",
-  "importCenter.useProvider": "Gebruik deze provider"
+  "importCenter.useProvider": "Gebruik deze provider",
+  "common.title": "Titel",
+  "common.year": "Jaar",
+  "common.skip": "Overslaan",
+  "importCenter.memberActionImport": "Importeren/koppelen",
+  "importCenter.addMember": "Member toevoegen",
+  "importCenter.memberCorrectionHelp": "Corrigeer titels, jaren of formaten voordat je importeert. DiscVault dedupliceert op barcode, identifiers en titel/jaar.",
+  "importCenter.candidate": "kandidaat"
 }

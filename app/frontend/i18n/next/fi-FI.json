@@ -1222,5 +1222,12 @@
   "importCenter.clearMatch": "Clear match",
   "importCenter.releaseTitleWarning": "This looks like a release title. Choose the actual movie match before import.",
   "importCenter.providerSelected": "Valittu tarjoaja",
-  "importCenter.useProvider": "Kayta tata tarjoajaa"
+  "importCenter.useProvider": "Kayta tata tarjoajaa",
+  "common.title": "Nimi",
+  "common.year": "Vuosi",
+  "common.skip": "Ohita",
+  "importCenter.memberActionImport": "Tuo/linkita",
+  "importCenter.addMember": "Lisaa jasen",
+  "importCenter.memberCorrectionHelp": "Korjaa nimet, vuodet tai formaatit ennen tuontia. DiscVault poistaa duplikaatit viivakoodin, tunnisteiden ja nimi/vuosi-parin perusteella.",
+  "importCenter.candidate": "ehdokas"
 }

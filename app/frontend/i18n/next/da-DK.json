@@ -1222,5 +1222,12 @@
   "importCenter.clearMatch": "Clear match",
   "importCenter.releaseTitleWarning": "This looks like a release title. Choose the actual movie match before import.",
   "importCenter.providerSelected": "Valgt udbyder",
-  "importCenter.useProvider": "Brug denne udbyder"
+  "importCenter.useProvider": "Brug denne udbyder",
+  "common.title": "Titel",
+  "common.year": "Ar",
+  "common.skip": "Spring over",
+  "importCenter.memberActionImport": "Importer/link",
+  "importCenter.addMember": "Tilfoj medlem",
+  "importCenter.memberCorrectionHelp": "Ret titler, ar eller formater for import. DiscVault deduplikerer pa stregkode, ider og titel/ar.",
+  "importCenter.candidate": "kandidat"
 }

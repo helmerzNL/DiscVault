@@ -1289,5 +1289,12 @@
   "importCenter.clearMatch": "Clear match",
   "importCenter.releaseTitleWarning": "This looks like a release title. Choose the actual movie match before import.",
   "importCenter.providerSelected": "Selected provider",
-  "importCenter.useProvider": "Use this provider"
+  "importCenter.useProvider": "Use this provider",
+  "common.title": "Title",
+  "common.year": "Year",
+  "common.skip": "Skip",
+  "importCenter.memberActionImport": "Import/link",
+  "importCenter.addMember": "Add member",
+  "importCenter.memberCorrectionHelp": "Correct titles, years or formats before importing. DiscVault will dedupe by barcode, identifiers and title/year.",
+  "importCenter.candidate": "candidate"
 }

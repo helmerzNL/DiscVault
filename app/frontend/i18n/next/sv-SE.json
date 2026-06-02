@@ -1222,5 +1222,12 @@
   "importCenter.clearMatch": "Clear match",
   "importCenter.releaseTitleWarning": "This looks like a release title. Choose the actual movie match before import.",
   "importCenter.providerSelected": "Vald leverantor",
-  "importCenter.useProvider": "Anvand denna leverantor"
+  "importCenter.useProvider": "Anvand denna leverantor",
+  "common.title": "Titel",
+  "common.year": "Ar",
+  "common.skip": "Hoppa over",
+  "importCenter.memberActionImport": "Importera/lanka",
+  "importCenter.addMember": "Lagg till medlem",
+  "importCenter.memberCorrectionHelp": "Korrigera titlar, ar eller format fore import. DiscVault deduplicerar med streckkod, identifierare och titel/ar.",
+  "importCenter.candidate": "kandidat"
 }
