@@ -5864,6 +5864,9 @@ def ui_preview_html(
     .bulk-bar.visible {
       display: grid;
     }
+    .bulk-selection-actions {
+      justify-content: flex-start;
+    }
     .bulk-targets {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -10010,6 +10013,10 @@ def ui_preview_html(
         </div>
       </section>
       <section class="bulk-bar" id="bulkBar">
+        <div class="button-row compact bulk-selection-actions">
+          <button type="button" class="secondary-button compact-button" data-bulk-select="all" data-next-i18n="bulk.selectAll">Select all</button>
+          <button type="button" class="secondary-button compact-button" data-bulk-select="none" data-next-i18n="bulk.deselectAll">Deselect all</button>
+        </div>
         <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
         <div class="bulk-targets">
           <div class="bulk-target">
@@ -14740,6 +14747,13 @@ def ui_preview_html(
         if (item.kind === "container") movieIdSetForContainer(item.container?.id).forEach((movieId) => ids.add(movieId));
       });
       return ids.size;
+    }
+    function bulkSelectableLibraryItems() {
+      return libraryDisplayItems().filter((item) => {
+        if (item.kind === "movie") return !!item.movie?.id;
+        if (item.kind === "container") return collectorsModeEnabled() && !!item.container?.id;
+        return false;
+      });
     }
     function normalizeViewMode(value) {
       return ["poster", "list", "detail"].includes(value) ? value : "poster";
@@ -19630,6 +19644,29 @@ def ui_preview_html(
       });
       updateBulkBar();
     }
+    function setBulkLibrarySelection(mode) {
+      if (!selectionMode) {
+        selectionMode = true;
+        document.body.classList.add("select-mode");
+        const button = document.getElementById("selectModeButton");
+        if (button) button.textContent = tNext("bulk.done", "Done");
+      }
+      selectedMovieIds.clear();
+      selectedContainerIds.clear();
+      if (mode === "all") {
+        bulkSelectableLibraryItems().forEach((item) => {
+          if (item.kind === "movie" && item.movie?.id) selectedMovieIds.add(String(item.movie.id));
+          if (item.kind === "container" && item.container?.id) selectedContainerIds.add(String(item.container.id));
+        });
+      }
+      document.querySelectorAll("[data-preview-movie]").forEach((node) => {
+        node.classList.toggle("bulk-selected", selectedMovieIds.has(String(node.dataset.previewMovie || "")));
+      });
+      document.querySelectorAll("[data-preview-container]").forEach((node) => {
+        node.classList.toggle("bulk-selected", selectedContainerIds.has(String(node.dataset.previewContainer || "")));
+      });
+      updateBulkBar();
+    }
     function updateBulkBar() {
       const bar = document.getElementById("bulkBar");
       const movieCount = selectedMovieIds.size;
@@ -19643,6 +19680,17 @@ def ui_preview_html(
         if (containerCount) parts.push(`${containerCount} ${tNext("bulk.containersSelected", "containers")}`);
         label.textContent = parts.length ? `${parts.join(", ")} ${tNext("bulk.selected", "selected")}` : tNext("bulk.noneSelected", "No movies selected");
       }
+      const selectableItems = bulkSelectableLibraryItems();
+      const selectableCount = selectableItems.length;
+      const selectedSelectableCount = selectableItems.filter((item) => {
+        if (item.kind === "movie") return selectedMovieIds.has(String(item.movie?.id || ""));
+        if (item.kind === "container") return selectedContainerIds.has(String(item.container?.id || ""));
+        return false;
+      }).length;
+      document.querySelectorAll("[data-bulk-select]").forEach((button) => {
+        if (button.dataset.bulkSelect === "all") button.disabled = selectableCount === 0 || selectedSelectableCount === selectableCount;
+        if (button.dataset.bulkSelect === "none") button.disabled = count === 0;
+      });
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         const action = button.dataset.bulkAction || "";
         if (action === "collection") button.disabled = count === 0;
@@ -21188,6 +21236,9 @@ def ui_preview_html(
           const summary = document.getElementById("librarySummary");
           if (summary) summary.textContent = message;
         });
+      });
+      document.querySelectorAll("[data-bulk-select]").forEach((button) => {
+        button.addEventListener("click", () => setBulkLibrarySelection(button.dataset.bulkSelect || "none"));
       });
       document.getElementById("heroDetailLink")?.addEventListener("click", (event) => {
         const href = event.currentTarget.getAttribute("href") || "";

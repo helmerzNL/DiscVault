@@ -1005,6 +1005,8 @@
   "metadataJobs.providers": "Kallor",
   "metadataJobs.changed": "Uppdaterad",
   "metadataJobs.unchanged": "Inga andringar",
+  "bulk.selectAll": "Välj alla",
+  "bulk.deselectAll": "Avmarkera alla",
   "bulk.select": "Valj",
   "bulk.noneSelected": "Inga filmer valda",
   "bulk.refreshMetadata": "Uppdatera metadata",

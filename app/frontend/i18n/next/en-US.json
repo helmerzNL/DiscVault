@@ -302,6 +302,8 @@
   "metadataJobs.providers": "Providers",
   "metadataJobs.changed": "Updated",
   "metadataJobs.unchanged": "No changes",
+  "bulk.selectAll": "Select all",
+  "bulk.deselectAll": "Deselect all",
   "bulk.select": "Select",
   "bulk.done": "Done",
   "bulk.selected": "selected",

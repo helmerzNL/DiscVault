@@ -1005,6 +1005,8 @@
   "metadataJobs.providers": "Kilder",
   "metadataJobs.changed": "Oppdatert",
   "metadataJobs.unchanged": "Ingen endringer",
+  "bulk.selectAll": "Velg alle",
+  "bulk.deselectAll": "Fjern alle valg",
   "bulk.select": "Velg",
   "bulk.noneSelected": "Ingen filmer valgt",
   "bulk.refreshMetadata": "Oppdater metadata",
