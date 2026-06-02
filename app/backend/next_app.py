@@ -17685,7 +17685,7 @@ def ui_preview_html(
         const payload = await authApiJson("/api/next/metadata/jobs", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({movieIds, dryRun: true})
+          body: JSON.stringify({movieIds, dryRun: false, confirm: "metadata-bulk-refresh"})
         });
         if (summary) summary.textContent = `${payload.queued || movieIds.length} ${tNext("bulk.metadataQueued", "metadata refresh jobs queued")}`;
         selectedMovieIds.clear();
