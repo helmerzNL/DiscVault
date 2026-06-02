@@ -627,12 +627,16 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
     if query.get("previewMode"):
         if external_barcode:
             add("search_barcode", {**base_payload, "barcode": external_barcode})
+            if query.get("detectBoxSets"):
+                add("box_set_candidates", base_payload)
             return plan
         if title:
             if "search_title" in capabilities:
                 add("search_title", base_payload)
             else:
                 add("movie_details", base_payload)
+            if query.get("detectBoxSets"):
+                add("box_set_candidates", base_payload)
             return plan
     if external_barcode:
         add("search_barcode", {**base_payload, "barcode": external_barcode})

@@ -1,11 +1,21 @@
 import os
 import sys
+import types
 import unittest
+from unittest import mock
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
+
+sys.modules.setdefault(
+    "requests",
+    types.SimpleNamespace(
+        get=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests")),
+        post=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests")),
+    ),
+)
 
 from app.backend.next_metadata import canonicalize_plugin_result
 from app.backend.next_metadata import external_metadata_barcode
@@ -17,9 +27,123 @@ from app.backend.next_metadata import plugin_execution_plan
 from app.backend.next_metadata import query_from_payload
 from app.backend.next_metadata import receiver_contribution_payload
 from app.backend.next_metadata import summarize_metadata_execution
+from app.backend.next_plugins.bluray_com import plugin as bluray_com_plugin
+
+try:
+    from bs4 import BeautifulSoup
+except Exception:  # pragma: no cover
+    BeautifulSoup = None
 
 
 class NextMetadataPolicyTests(unittest.TestCase):
+    def test_bluray_box_set_explicit_member_links_are_exposed_as_confirmed_candidates(self):
+        if BeautifulSoup is None:
+            self.skipTest("BeautifulSoup is not available")
+        soup = BeautifulSoup(
+            """
+            <html><body>
+              <div id="movie_info">
+                <p>This Blu-ray bundle includes the following titles:</p>
+                <a class="hoverlink" data-globalparentid="999" data-productid="123" href="/movies/RoboCop-Blu-ray/123/">
+                  <img src="/covers/robocop.jpg" alt="RoboCop Blu-ray (1987)" />
+                  RoboCop Blu-ray
+                </a>
+                <a class="hoverlink" data-globalparentid="999" data-productid="456" href="/movies/Saving-Private-Ryan-Blu-ray/456/">
+                  <img src="/covers/saving-private-ryan.jpg" alt="Saving Private Ryan Blu-ray (1998)" />
+                  Saving Private Ryan Blu-ray
+                </a>
+              </div>
+            </body></html>
+            """,
+            "html.parser",
+        )
+
+        members = bluray_com_plugin._extract_explicit_box_set_members(
+            soup,
+            current_url="https://www.blu-ray.com/movies/Example-Box-Set-Blu-ray/999/",
+            parent_title="Example Box Set Blu-ray",
+            release_format="Blu-ray",
+        )
+
+        self.assertEqual([member["title"] for member in members], ["RoboCop", "Saving Private Ryan"])
+        self.assertEqual([member["format"] for member in members], ["Blu-ray", "Blu-ray"])
+        self.assertEqual([member["year"] for member in members], ["1987", "1998"])
+        self.assertEqual(members[0]["posterUrl"], "https://www.blu-ray.com/covers/robocop.jpg")
+        self.assertEqual(members[0]["memberConfidence"], "needs_member_confirmation")
+
+    def test_bluray_box_set_related_links_are_not_treated_as_members(self):
+        if BeautifulSoup is None:
+            self.skipTest("BeautifulSoup is not available")
+        soup = BeautifulSoup(
+            """
+            <html><body>
+              <div id="movie_info">
+                <p>Jurassic Park Trilogie Blu-ray collection.</p>
+                <div id="related">
+                  <a class="hoverlink" data-globalparentid="999" data-productid="123" href="/movies/Jurassic-Park-Blu-ray/123/">
+                    <img src="/covers/jurassic-park.jpg" alt="Jurassic Park Blu-ray (1993)" />
+                    Jurassic Park
+                  </a>
+                </div>
+              </div>
+            </body></html>
+            """,
+            "html.parser",
+        )
+
+        members = bluray_com_plugin._extract_explicit_box_set_members(
+            soup,
+            current_url="https://www.blu-ray.com/movies/Jurassic-Park-Trilogie-Blu-ray/999/",
+            parent_title="Jurassic Park Trilogie Blu-ray",
+            release_format="Blu-ray",
+        )
+
+        self.assertEqual(members, [])
+
+    def test_bluray_box_set_candidates_ignore_regular_release_pages(self):
+        with mock.patch.object(
+            bluray_com_plugin,
+            "technical_specs",
+            return_value={
+                "status": "hit",
+                "provider": "bluray_com",
+                "isBoxSetCandidate": False,
+                "movie": {"title": "RoboCop", "format": "Blu-ray"},
+            },
+        ):
+            result = bluray_com_plugin.box_set_candidates({"title": "RoboCop", "format": "Blu-ray"})
+
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(result["boxSetProposal"], {})
+
+    def test_bluray_box_set_candidates_confirm_explicit_members(self):
+        members = [
+            {"title": "RoboCop", "source": "Blu-ray.com", "sortOrder": 1},
+            {"title": "RoboCop 2", "source": "Blu-ray.com", "sortOrder": 2},
+        ]
+        with mock.patch.object(
+            bluray_com_plugin,
+            "technical_specs",
+            return_value={
+                "status": "hit",
+                "provider": "bluray_com",
+                "sourceUrl": "https://www.blu-ray.com/movies/RoboCop-Trilogy-Blu-ray/999/",
+                "isBoxSetCandidate": True,
+                "boxSetMembers": members,
+                "movie": {"title": "RoboCop Trilogy", "format": "Blu-ray"},
+            },
+        ):
+            result = bluray_com_plugin.box_set_candidates({"title": "RoboCop Trilogy", "format": "Blu-ray"})
+
+        proposal = result["boxSetProposal"]
+        self.assertEqual(result["status"], "hit")
+        self.assertFalse(proposal["detectedWithoutMembers"])
+        self.assertEqual(proposal["memberConfidence"], "needs_member_confirmation")
+        self.assertEqual(proposal["memberSource"], "Blu-ray.com release page")
+        self.assertEqual(proposal["members"], members)
+        self.assertEqual(proposal["movies"], members)
+        self.assertEqual(proposal["memberCount"], 2)
+
     def test_release_specs_do_not_upgrade_across_formats(self):
         current = {
             "title": "Example",
@@ -233,7 +357,16 @@ class NextMetadataPolicyTests(unittest.TestCase):
             query,
         )
 
-        self.assertEqual([item["entrypoint"] for item in plan], ["search_barcode"])
+        self.assertEqual([item["entrypoint"] for item in plan], ["search_barcode", "box_set_candidates"])
+
+    def test_preview_title_lookup_can_request_box_set_candidates(self):
+        query = query_from_payload({"title": "Back to the Future Trilogy", "detectBoxSets": True, "previewMode": True})
+        plan = plugin_execution_plan(
+            {"capabilities": ["search_title", "movie_details", "box_set_candidates"]},
+            query,
+        )
+
+        self.assertEqual([item["entrypoint"] for item in plan], ["search_title", "box_set_candidates"])
 
     def test_bootstrap_metadata_source_only_runs_for_barcode_only_preview(self):
         plugin = {

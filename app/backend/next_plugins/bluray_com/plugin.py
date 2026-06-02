@@ -2,7 +2,11 @@ import re
 from urllib.parse import quote_plus
 
 import requests
-from bs4 import BeautifulSoup
+
+try:
+    from bs4 import BeautifulSoup
+except Exception:  # pragma: no cover - dependency is present in the container image.
+    BeautifulSoup = None
 
 
 def _normalize_format(value):
@@ -84,7 +88,7 @@ def _release_urls(query, preferred_format="", limit=8):
                     headers=_headers(),
                     timeout=8,
                 )
-                if response.status_code == 200:
+                if response.status_code == 200 and BeautifulSoup is not None:
                     soup = BeautifulSoup(response.text, "html.parser")
                     for link in soup.select('a[href*="/movies/"], a[href*="/dvd/"]'):
                         add_url(link.get("href") or "")
@@ -109,13 +113,171 @@ def _movie_title_from_release_title(value):
     title = re.sub(r"\s+\((?:SteelBook|Steelbook|France|Germany|Italy|Spain|UK|US|USA|Canada|Netherlands|Import)\)\s*$", "", title, flags=re.I).strip()
     title = re.sub(r"\s+\((?:SteelBook|Steelbook|France|Germany|Italy|Spain|UK|US|USA|Canada|Netherlands|Import)\)\s*$", "", title, flags=re.I).strip()
     title = re.sub(
-        r"\s+(?:4K\s*)?(?:Ultra\s*HD\s*)?Blu[- ]?ray(?:\s*3D)?(?:\s*\+\s*Blu[- ]?ray)?\s*$",
+        r"\s+(?:4K\s*)?(?:Ultra\s*HD\s*)?Blu[- ]?ray(?:\s*3D)?(?:\s*\+\s*Blu[- ]?ray)?\s*(?:Review)?\s*$",
         "",
         title,
         flags=re.I,
     ).strip()
-    title = re.sub(r"\s+(?:DVD|HD DVD|LaserDisc|VCD/SVCD)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+(?:DVD|HD DVD|LaserDisc|VCD/SVCD|Digital|Review)\s*$", "", title, flags=re.I).strip()
     return title or _clean_text(value)
+
+
+def _member_title_from_url(value):
+    match = re.search(r"/(?:movies|dvd)/([^/]+)/\d+", str(value or ""), flags=re.I)
+    if not match:
+        return ""
+    return _movie_title_from_release_title(re.sub(r"[-_]+", " ", match.group(1)).strip())
+
+
+def _is_box_set_candidate(title, page_text):
+    text = f"{title or ''} {page_text or ''}"[:5000].casefold()
+    markers = (
+        "box set",
+        "boxset",
+        "collection",
+        "trilogy",
+        "quadrilogy",
+        "anthology",
+        "complete",
+        "movie set",
+        "film set",
+        "bundle",
+    )
+    if any(marker in text for marker in markers):
+        return True
+    return bool(re.search(r"\b\d+\s*(?:movie|film|disc|dvd)s?\b", text, flags=re.I))
+
+
+def _has_explicit_member_text(soup):
+    movie_info = soup.select_one("#movie_info")
+    if not movie_info:
+        return False
+    text = _clean_text(movie_info.get_text(" ", strip=True)).casefold()
+    explicit_markers = (
+        "this blu-ray bundle includes the following titles",
+        "the blu-ray bundle includes the following titles",
+        "this bundle includes the following titles",
+        "bundle includes the following titles",
+        "includes the following titles",
+    )
+    return any(marker in text for marker in explicit_markers)
+
+
+def _link_is_in_related_block(link):
+    related_markers = ("similar", "customers who bought", "related", "votesimilar", "automatic_")
+    node = link
+    while node is not None:
+        node_id = str(node.get("id") or "").casefold() if hasattr(node, "get") else ""
+        node_class = " ".join(str(item) for item in (node.get("class") or [])).casefold() if hasattr(node, "get") else ""
+        if any(marker in node_id or marker in node_class for marker in related_markers):
+            return True
+        node = getattr(node, "parent", None)
+    return False
+
+
+def _extract_explicit_box_set_members(soup, *, current_url="", parent_title="", release_format=""):
+    members = []
+    seen = set()
+    parent_key = _movie_title_from_release_title(parent_title).casefold()
+    current_url = _abs_url(current_url)
+
+    movie_info = soup.select_one("#movie_info")
+    if not movie_info or not _has_explicit_member_text(soup):
+        return []
+
+    def add_member(link, index):
+        href = _abs_url(link.get("href") or "")
+        if not re.search(r"/movies/", href, flags=re.I):
+            return
+        if "hoverlink" not in (link.get("class") or []):
+            return
+        if not link.get("data-globalparentid") or not link.get("data-productid"):
+            return
+        image = link.find("img")
+        if image is None:
+            return
+        poster = _abs_url(image.get("src") or image.get("data-src") or image.get("data-original") or "")
+        title = _movie_title_from_release_title(
+            link.get("title")
+            or image.get("alt")
+            or link.get_text(" ", strip=True)
+            or _member_title_from_url(href)
+        )
+        href = _abs_url(href)
+        if not title:
+            return
+        if _link_is_in_related_block(link):
+            return
+        key = (title.casefold(), href)
+        if key in seen:
+            return
+        if href and href == current_url:
+            return
+        if parent_key and title.casefold() == parent_key:
+            return
+        seen.add(key)
+        match = re.search(r"/(?:movies|dvd)/[^/]+/(\d+)", href, flags=re.I)
+        label = _clean_text(link.get_text(" ", strip=True))
+        disc_match = re.search(r"\bdisc\s*(\d+)\b", label or "", flags=re.I)
+        members.append(
+            {
+                "title": title,
+                "year": (re.search(r"\((\d{4})\)", link.get("title") or image.get("alt") or label or "") or ["", ""])[1],
+                "posterUrl": poster,
+                "format": release_format,
+                "source": "Blu-ray.com",
+                "sourceUrl": href,
+                "sourceRef": match.group(1) if match else href,
+                "sortOrder": index,
+                "sort_order": index,
+                "discNumber": disc_match.group(1) if disc_match else "",
+                "disc_number": disc_match.group(1) if disc_match else "",
+                "memberConfidence": "needs_member_confirmation",
+            }
+        )
+
+    for index, link in enumerate(
+        movie_info.select('a.hoverlink[data-globalparentid][data-productid][href*="/movies/"]'),
+        start=1,
+    ):
+        add_member(link, len(members) + 1)
+        if len(members) >= 30:
+            break
+
+    return [member for member in members if member.get("title")][:30]
+
+
+def _candidate_members_from_search(title, preferred_format="", current_url=""):
+    clean_title = _movie_title_from_release_title(title)
+    if not clean_title:
+        return []
+    members = []
+    seen = set()
+    for url in _release_urls(clean_title, preferred_format, limit=12):
+        url = _abs_url(url)
+        if current_url and url == _abs_url(current_url):
+            continue
+        member_title = _member_title_from_url(url)
+        if not member_title:
+            continue
+        key = member_title.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        match = re.search(r"/(?:movies|dvd)/[^/]+/(\d+)", url, flags=re.I)
+        members.append(
+            {
+                "title": member_title,
+                "format": _normalize_format(url) or _normalize_format(preferred_format),
+                "source": "Blu-ray.com candidate search",
+                "sourceUrl": url,
+                "sourceRef": match.group(1) if match else url,
+                "sortOrder": len(members) + 1,
+                "sort_order": len(members) + 1,
+                "memberConfidence": "candidate",
+            }
+        )
+    return members[:30]
 
 
 def _extract_hdr(value):
@@ -153,6 +315,8 @@ def _format_from_url_title_text(url, title, text):
 
 
 def _parse_page(url):
+    if BeautifulSoup is None:
+        raise RuntimeError("BeautifulSoup is required for Blu-ray.com page parsing.")
     response = requests.get(url, headers=_headers(), timeout=10)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
@@ -181,6 +345,13 @@ def _parse_page(url):
                 video = value
     page_text = soup.get_text(" ", strip=True)
     release_format = _format_from_url_title_text(url, title, page_text)
+    is_box_set_candidate = _is_box_set_candidate(title, page_text[:5000])
+    box_set_members = _extract_explicit_box_set_members(
+        soup,
+        current_url=url,
+        parent_title=title,
+        release_format=release_format,
+    ) if is_box_set_candidate else []
     year = ""
     match = re.search(r"\((\d{4})\)", title)
     if match:
@@ -210,6 +381,8 @@ def _parse_page(url):
             "audioTracks": _split_tracks(audio),
             "subtitles": _split_tracks(subs),
         },
+        "isBoxSetCandidate": is_box_set_candidate,
+        "boxSetMembers": box_set_members,
     }
 
 
@@ -219,6 +392,8 @@ def _first_page(query, preferred_format=""):
 
 
 def health_check(context=None):
+    if BeautifulSoup is None:
+        return {"status": "unavailable", "message": "BeautifulSoup is required for Blu-ray.com parsing."}
     return {"status": "available", "message": "Blu-ray.com quicksearch runtime is available."}
 
 
@@ -289,6 +464,31 @@ def box_set_candidates(payload, context=None):
         return result
     raw = result.get("movie") or {}
     title = raw.get("title") or str((payload or {}).get("title") or "").strip()
+    if not result.get("isBoxSetCandidate"):
+        return {"status": "miss", "provider": "bluray_com", "boxSetProposal": {}}
+    members = result.get("boxSetMembers") or []
+    if len(members) < 2:
+        members = _candidate_members_from_search(title, result.get("format") or (payload or {}).get("format"), result.get("sourceUrl"))
+        if len(members) < 2:
+            return {"status": "miss", "provider": "bluray_com", "boxSetProposal": {}}
+        return {
+            "status": "hit",
+            "provider": "bluray_com",
+            "boxSetProposal": {
+                "title": title,
+                "source": "Blu-ray.com",
+                "detailUrl": result.get("sourceUrl"),
+                "detectedWithoutMembers": True,
+                "memberConfidence": "candidate",
+                "memberSource": "metadata_candidates",
+                "member_source": "metadata_candidates",
+                "detectedMemberHintCount": len(members),
+                "members": members,
+                "movies": members,
+                "memberCount": len(members),
+                "member_count": len(members),
+            },
+        }
     return {
         "status": "hit",
         "provider": "bluray_com",
@@ -296,8 +496,13 @@ def box_set_candidates(payload, context=None):
             "title": title,
             "source": "Blu-ray.com",
             "detailUrl": result.get("sourceUrl"),
-            "detectedWithoutMembers": True,
-            "memberConfidence": "candidate",
-            "movies": [],
+            "detectedWithoutMembers": False,
+            "memberConfidence": "needs_member_confirmation",
+            "memberSource": "Blu-ray.com release page",
+            "member_source": "Blu-ray.com release page",
+            "movies": members,
+            "members": members,
+            "memberCount": len(members),
+            "member_count": len(members),
         },
     }
