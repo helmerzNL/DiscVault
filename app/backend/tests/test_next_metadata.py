@@ -354,7 +354,17 @@ class NextMetadataPolicyTests(unittest.TestCase):
                     {"pluginId": "tmdb", "field": "rating"},
                     {"pluginId": "bluray_com", "field": "hdr"},
                 ],
-            }
+            },
+            "results": [
+                {
+                    "pluginId": "tmdb",
+                    "sourceLabel": "TMDb",
+                    "movieUpdates": {
+                        "title": "Aladdin TMDb",
+                        "original_title": "Aladdin Original TMDb",
+                    },
+                }
+            ],
         }
 
         payload = receiver_contribution_payload(
@@ -372,6 +382,19 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(payload["payload"]["hdr"], "HDR10")
         self.assertEqual(payload["payload"]["tmdbId"], "420817")
         self.assertEqual(payload["metadata"]["sourceProviders"], ["bluray_com", "tmdb"])
+        self.assertEqual(payload["metadata"]["tmdbTitle"], "Aladdin TMDb")
+        self.assertEqual(payload["metadata"]["tmdbOriginalTitle"], "Aladdin Original TMDb")
+        self.assertEqual(
+            payload["metadata"]["providerTitleHints"],
+            [
+                {
+                    "pluginId": "tmdb",
+                    "sourceLabel": "TMDb",
+                    "title": "Aladdin TMDb",
+                    "originalTitle": "Aladdin Original TMDb",
+                }
+            ],
+        )
         self.assertNotIn("watchHistory", str(payload))
         self.assertNotIn("privateNotes", str(payload))
 
