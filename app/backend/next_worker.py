@@ -806,6 +806,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             container_cache: dict[tuple[str, str], UUID] = {}
             container_titles: dict[tuple[str, str], str] = {}
             container_created: set[UUID] = set()
+            collection_created = False
             container_links = 0
             if table_exists(conn, "containers") and table_exists(conn, "collection_items"):
                 title = f"{source_kind} import"
@@ -820,6 +821,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                 )
                 if was_container_created:
                     container_created.add(container_id)
+                    collection_created = True
                 with conn.cursor() as cur:
                     cur.execute(
                         "DELETE FROM collection_items WHERE collection_id=%s AND item_type='movie'",
@@ -832,6 +834,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             linked = 0
             errors = []
             imported_movies: list[dict[str, Any]] = []
+            created_movie_ids: list[str] = []
             for index, item in enumerate(items[:5000], start=1):
                 if not isinstance(item, dict):
                     continue
@@ -880,6 +883,8 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                     imported += 1
                     created += 1 if was_created else 0
                     updated += 0 if was_created else 1
+                    if was_created:
+                        created_movie_ids.append(str(movie_id))
                     linked += local_linked
                     container_links += local_container_links
                     container_cache.update(local_container_cache)
@@ -911,11 +916,18 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "containersCreated": len(container_created),
         "containersTouched": len(container_cache) + (1 if container_id else 0),
         "collectionId": str(container_id) if container_id else None,
+        "collectionCreated": collection_created,
+        "rollbackMovieIds": created_movie_ids,
         "movies": imported_movies[:200],
         "review": result.get("review") if isinstance(result.get("review"), dict) else {},
         "warnings": result.get("warnings") if isinstance(result.get("warnings"), list) else [],
         "containers": [
-            {"containerType": key[0], "title": container_titles.get(key, key[1]), "id": str(value)}
+            {
+                "containerType": key[0],
+                "title": container_titles.get(key, key[1]),
+                "id": str(value),
+                "created": value in container_created,
+            }
             for key, value in container_cache.items()
         ][:50],
         "errors": errors[:20],
