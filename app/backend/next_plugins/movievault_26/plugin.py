@@ -776,6 +776,143 @@ def _allowed_fields(template, entity_type):
     return set()
 
 
+def _metadata_context(payload):
+    metadata = payload.get("metadata") or payload.get("meta") or {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _title_hint_from_metadata(payload):
+    metadata = _metadata_context(payload)
+    hints = []
+    direct_title = _text(
+        metadata.get("tmdbTitle")
+        or metadata.get("tmdb_title")
+        or payload.get("tmdbTitle")
+        or payload.get("tmdb_title")
+    )
+    direct_original = _text(
+        metadata.get("tmdbOriginalTitle")
+        or metadata.get("tmdb_original_title")
+        or payload.get("tmdbOriginalTitle")
+        or payload.get("tmdb_original_title")
+    )
+    if direct_title or direct_original:
+        hints.append(
+            {
+                "pluginId": "tmdb",
+                "sourceLabel": "TMDb",
+                "title": direct_title,
+                "originalTitle": direct_original,
+            }
+        )
+
+    raw_hints = (
+        metadata.get("providerTitleHints")
+        or metadata.get("provider_title_hints")
+        or payload.get("providerTitleHints")
+        or payload.get("provider_title_hints")
+        or []
+    )
+    if isinstance(raw_hints, dict):
+        raw_hints = [
+            {"pluginId": provider, **hint} if isinstance(hint, dict) else {"pluginId": provider, "title": hint}
+            for provider, hint in raw_hints.items()
+        ]
+    if isinstance(raw_hints, list):
+        for item in raw_hints:
+            if not isinstance(item, dict):
+                continue
+            plugin_id = _text(item.get("pluginId") or item.get("providerId") or item.get("provider"))
+            title = _text(item.get("title") or item.get("providerTitle") or item.get("sourceTitle"))
+            original_title = _text(item.get("originalTitle") or item.get("original_title"))
+            if plugin_id or title or original_title:
+                hints.append(
+                    {
+                        "pluginId": plugin_id,
+                        "sourceLabel": _text(item.get("sourceLabel") or item.get("providerLabel") or plugin_id),
+                        "title": title,
+                        "originalTitle": original_title,
+                    }
+                )
+
+    for hint in hints:
+        if _text(hint.get("pluginId")).lower() == "tmdb":
+            return {
+                "pluginId": "tmdb",
+                "sourceLabel": _text(hint.get("sourceLabel")) or "TMDb",
+                "title": _text(hint.get("title")),
+                "originalTitle": _text(hint.get("originalTitle")),
+            }
+    return {}
+
+
+def _add_if_allowed(target, allowed, key, value):
+    safe = _safe_contribution_value(value)
+    if safe in (None, "", [], {}):
+        return
+    if allowed and key not in allowed:
+        return
+    target.setdefault(key, safe)
+
+
+def _with_provider_title_hints(entity_type, safe_payload, payload, allowed):
+    if entity_type not in {"movie", "release", "box_set"}:
+        return safe_payload
+    hint = _title_hint_from_metadata(payload)
+    title = _text(hint.get("title"))
+    original_title = _text(hint.get("originalTitle"))
+    if not title and not original_title:
+        return safe_payload
+
+    enriched = dict(safe_payload)
+    for key in (
+        "tmdbTitle",
+        "tmdb_title",
+        "tmdbMovieTitle",
+        "tmdb_movie_title",
+        "sourceTitle",
+        "source_title",
+        "providerTitle",
+        "provider_title",
+        "metadataProviderTitle",
+        "metadata_provider_title",
+        "movieTitleFromTmdb",
+        "movie_title_from_tmdb",
+    ):
+        _add_if_allowed(enriched, allowed, key, title)
+    for key in (
+        "tmdbOriginalTitle",
+        "tmdb_original_title",
+        "tmdbMovieOriginalTitle",
+        "tmdb_movie_original_title",
+        "sourceOriginalTitle",
+        "source_original_title",
+        "providerOriginalTitle",
+        "provider_original_title",
+    ):
+        _add_if_allowed(enriched, allowed, key, original_title)
+
+    structured_hint = {
+        "provider": "tmdb",
+        "pluginId": "tmdb",
+        "sourceLabel": hint.get("sourceLabel") or "TMDb",
+    }
+    if title:
+        structured_hint["title"] = title
+    if original_title:
+        structured_hint["originalTitle"] = original_title
+    for key in ("providerTitleHints", "provider_title_hints", "sourceTitleHints", "source_title_hints"):
+        _add_if_allowed(enriched, allowed, key, [structured_hint])
+    provider_titles = {"tmdb": {}}
+    if title:
+        provider_titles["tmdb"]["title"] = title
+    if original_title:
+        provider_titles["tmdb"]["originalTitle"] = original_title
+    for key in ("providerTitles", "provider_titles", "sourceTitles", "source_titles"):
+        _add_if_allowed(enriched, allowed, key, provider_titles)
+    return enriched
+
+
 def _payload_fingerprint(payload):
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -797,6 +934,7 @@ def _contribution_payload(payload, template):
     allowed = _allowed_fields(template, entity_type)
     if allowed:
         safe_payload = {key: value for key, value in safe_payload.items() if key in allowed}
+    safe_payload = _with_provider_title_hints(entity_type, safe_payload, payload, allowed)
     return entity_type, safe_payload
 
 

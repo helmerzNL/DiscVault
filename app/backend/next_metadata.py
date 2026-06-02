@@ -1261,6 +1261,49 @@ def metadata_fetch_audit_payload(
     }
 
 
+def metadata_provider_title_hints(results: list[dict[str, Any]]) -> list[dict[str, str]]:
+    hints: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        plugin_id = clean_text(result.get("pluginId")) or ""
+        movie_updates = result.get("movieUpdates") if isinstance(result.get("movieUpdates"), dict) else {}
+        metadata_updates = result.get("metadataUpdates") if isinstance(result.get("metadataUpdates"), dict) else {}
+        raw = result.get("raw") if isinstance(result.get("raw"), dict) else {}
+        raw_movie = raw.get("movie") or raw.get("details") or {}
+        if not isinstance(raw_movie, dict):
+            raw_movie = {}
+        title = (
+            clean_text(movie_updates.get("title"))
+            or clean_text(metadata_updates.get("title"))
+            or clean_text(raw_movie.get("title") or raw_movie.get("name"))
+            or clean_text(raw.get("title") or raw.get("name"))
+        )
+        original_title = (
+            clean_text(movie_updates.get("original_title") or movie_updates.get("originalTitle"))
+            or clean_text(metadata_updates.get("original_title") or metadata_updates.get("originalTitle"))
+            or clean_text(raw_movie.get("originalTitle") or raw_movie.get("original_title"))
+            or clean_text(raw.get("originalTitle") or raw.get("original_title"))
+        )
+        if not plugin_id or not (title or original_title):
+            continue
+        key = (plugin_id, title or "", original_title or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        hint = {
+            "pluginId": plugin_id,
+            "sourceLabel": clean_text(result.get("sourceLabel")) or plugin_id,
+        }
+        if title:
+            hint["title"] = title
+        if original_title:
+            hint["originalTitle"] = original_title
+        hints.append(hint)
+    return hints
+
+
 def receiver_contribution_payload(
     *,
     movie_id: UUID | str,
@@ -1301,6 +1344,27 @@ def receiver_contribution_payload(
             if item.get("pluginId")
         }
     )
+    provider_title_hints = metadata_provider_title_hints(preview.get("results") or [])
+    tmdb_title_hint = next(
+        (
+            item
+            for item in provider_title_hints
+            if str(item.get("pluginId") or "").lower() == "tmdb"
+        ),
+        {},
+    )
+    metadata_context = {
+        "movieId": str(movie_id),
+        "sourceProviders": source_providers,
+        "acceptedFields": proposal.get("provenance") or [],
+        "applied": applied_fields,
+    }
+    if provider_title_hints:
+        metadata_context["providerTitleHints"] = provider_title_hints
+    if tmdb_title_hint.get("title"):
+        metadata_context["tmdbTitle"] = tmdb_title_hint["title"]
+    if tmdb_title_hint.get("originalTitle"):
+        metadata_context["tmdbOriginalTitle"] = tmdb_title_hint["originalTitle"]
     return {
         "entityType": "movie",
         "identity": str(movie.get("public_id") or movie_id),
@@ -1312,12 +1376,7 @@ def receiver_contribution_payload(
             "barcode": movie.get("barcode"),
         },
         "payload": metadata_payload,
-        "metadata": {
-            "movieId": str(movie_id),
-            "sourceProviders": source_providers,
-            "acceptedFields": proposal.get("provenance") or [],
-            "applied": applied_fields,
-        },
+        "metadata": metadata_context,
     }
 
 

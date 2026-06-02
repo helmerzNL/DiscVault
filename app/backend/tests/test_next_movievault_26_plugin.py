@@ -194,6 +194,114 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(posted[0]["payload"], {"title": "Alien", "overview": "A public synopsis."})
         self.assertNotIn("mv_live_test", str(posted[0]))
 
+    def test_receive_metadata_adds_tmdb_title_hint_when_template_allows_it(self):
+        posted = []
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(
+                    200,
+                    {
+                        "version": "tpl-2",
+                        "allowedFields": ["title", "overview", "tmdbTitle", "providerTitleHints"],
+                    },
+                )
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posted.append(kwargs.get("json"))
+                return FakeResponse(200, {"id": "contrib_2"})
+            return FakeResponse(404, {})
+
+        original_requests = movievault_26.requests
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            result = movievault_26.receive_metadata(
+                {
+                    "entityType": "movie",
+                    "identity": "tt6139732",
+                    "payload": {
+                        "title": "Local DiscVault Title",
+                        "overview": "A public synopsis.",
+                    },
+                    "metadata": {
+                        "tmdbTitle": "TMDb Canonical Title",
+                        "tmdbOriginalTitle": "TMDb Original Title",
+                        "providerTitleHints": [
+                            {
+                                "pluginId": "tmdb",
+                                "sourceLabel": "TMDb",
+                                "title": "TMDb Canonical Title",
+                                "originalTitle": "TMDb Original Title",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "secrets": {"token": "mv_live_test"},
+                    "movievault": {"contributionEnabled": True},
+                },
+            )
+        finally:
+            movievault_26.requests = original_requests
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertEqual(posted[0]["payload"]["title"], "Local DiscVault Title")
+        self.assertEqual(posted[0]["payload"]["tmdbTitle"], "TMDb Canonical Title")
+        self.assertEqual(
+            posted[0]["payload"]["providerTitleHints"],
+            [
+                {
+                    "provider": "tmdb",
+                    "pluginId": "tmdb",
+                    "sourceLabel": "TMDb",
+                    "title": "TMDb Canonical Title",
+                    "originalTitle": "TMDb Original Title",
+                }
+            ],
+        )
+
+    def test_receive_metadata_keeps_tmdb_title_hint_out_when_template_disallows_it(self):
+        posted = []
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-3", "allowedFields": ["title", "overview"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posted.append(kwargs.get("json"))
+                return FakeResponse(200, {"id": "contrib_3"})
+            return FakeResponse(404, {})
+
+        original_requests = movievault_26.requests
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            result = movievault_26.receive_metadata(
+                {
+                    "entityType": "movie",
+                    "identity": "tt6139732",
+                    "payload": {
+                        "title": "Local DiscVault Title",
+                        "overview": "A public synopsis.",
+                    },
+                    "metadata": {"tmdbTitle": "TMDb Canonical Title"},
+                },
+                {
+                    "secrets": {"token": "mv_live_test"},
+                    "movievault": {"contributionEnabled": True},
+                },
+            )
+        finally:
+            movievault_26.requests = original_requests
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertEqual(posted[0]["payload"], {"title": "Local DiscVault Title", "overview": "A public synopsis."})
+
 
 if __name__ == "__main__":
     unittest.main()
