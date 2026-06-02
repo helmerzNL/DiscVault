@@ -56,6 +56,7 @@ try:
     from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
     from .next_metadata import push_metadata_to_receivers
+    from .next_metadata import push_receiver_payload_to_receivers
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -108,6 +109,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
     from next_metadata import push_metadata_to_receivers
+    from next_metadata import push_receiver_payload_to_receivers
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -25929,6 +25931,68 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
     }
 
 
+def container_receiver_payload(existing: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any] | None:
+    container_type = clean_text(existing.get("container_type"))
+    if container_type != "box_set":
+        return None
+
+    def comparable(value: Any) -> str:
+        return clean_text(value)
+
+    field_map = {
+        "title": "title",
+        "barcode": "barcode",
+        "year": "year",
+        "description": "description",
+        "badge_label": "badgeLabel",
+    }
+    contribution: dict[str, Any] = {}
+    changed_fields: list[str] = []
+    for source_field, target_field in field_map.items():
+        old_value = comparable(existing.get(source_field))
+        new_value = comparable(payload.get(source_field))
+        if old_value == new_value:
+            continue
+        if not new_value:
+            continue
+        contribution[target_field] = new_value
+        changed_fields.append(target_field)
+    if not contribution:
+        return None
+
+    metadata = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
+    source_reference = {
+        "type": "discvault_box_set",
+        "key": str(existing.get("id")),
+        "publicId": existing.get("public_id"),
+        "barcode": payload.get("barcode"),
+        "containerType": container_type,
+    }
+    movievault_id = clean_text(metadata.get("movievault_id") or metadata.get("movieVaultId") or metadata.get("sourceRef"))
+    if movievault_id:
+        source_reference["movievaultId"] = movievault_id
+    return {
+        "entityType": "box_set",
+        "identity": str(existing.get("public_id") or existing.get("id")),
+        "sourceRef": str(existing.get("public_id") or existing.get("id")),
+        "sourceReference": source_reference,
+        "payload": contribution,
+        "metadata": {
+            "containerId": str(existing.get("id")),
+            "containerType": container_type,
+            "changedFields": changed_fields,
+            "sourceProviders": ["discvault_local_edit"],
+            "acceptedFields": [
+                {
+                    "pluginId": "discvault_local_edit",
+                    "sourceLabel": "DiscVault local edit",
+                    "fields": changed_fields,
+                }
+            ],
+        },
+    }
+
+
 def actor_can_delete_movie(actor: dict[str, Any], movie: dict[str, Any]) -> bool:
     role = str(actor.get("role") or "")
     permissions = {str(item) for item in actor.get("permissions") or []}
@@ -32927,6 +32991,8 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Container not found", 404)
             payload = container_payload(body, existing=existing)
+            receiver_payload = container_receiver_payload(existing, payload)
+            receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -32970,8 +33036,29 @@ def register_routes(flask_app: Flask) -> None:
                         "badgeLabel": payload["badge_label"],
                     },
                 )
+                if receiver_payload:
+                    try:
+                        receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
+                    except Exception as exc:
+                        receiver_summary = {"status": "error", "error": str(exc)}
+                    audit_event(
+                        conn,
+                        event_type="metadata.receiver_pushed",
+                        category="metadata",
+                        actor=actor,
+                        target_type="container",
+                        target_id=container_uuid,
+                        summary=f"Pushed box-set edit to receiver plugins for {payload['title']}",
+                        metadata={
+                            "containerType": existing.get("container_type"),
+                            "title": payload["title"],
+                            "barcode": payload["barcode"],
+                            "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
+                            "receiverSummary": receiver_summary,
+                        },
+                    )
             detail = container_detail_entity(conn, container_uuid)
-        return response({"status": "ok", "detail": detail})
+        return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.delete("/api/next/containers/<container_id>")
     def delete_container(container_id: str):
@@ -33766,7 +33853,14 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="container",
                     target_id=container_uuid,
                     summary=f"Created {container_type} {payload['title']} through the public API",
-                    metadata={"containerType": container_type, "publicId": public_id, "title": payload["title"]},
+                    metadata={
+                        "containerType": container_type,
+                        "publicId": public_id,
+                        "title": payload["title"],
+                        "barcode": payload["barcode"],
+                        "year": payload["year"],
+                        "badgeLabel": payload["badge_label"],
+                    },
                 )
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail}, 201)
@@ -33793,6 +33887,8 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Container not found", 404)
             payload = container_payload(body, existing=existing)
+            receiver_payload = container_receiver_payload(existing, payload)
+            receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -33836,8 +33932,29 @@ def register_routes(flask_app: Flask) -> None:
                         "badgeLabel": payload["badge_label"],
                     },
                 )
+                if receiver_payload:
+                    try:
+                        receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
+                    except Exception as exc:
+                        receiver_summary = {"status": "error", "error": str(exc)}
+                    audit_event(
+                        conn,
+                        event_type="metadata.receiver_pushed",
+                        category="metadata",
+                        actor=actor,
+                        target_type="container",
+                        target_id=container_uuid,
+                        summary=f"Pushed API box-set edit to receiver plugins for {payload['title']}",
+                        metadata={
+                            "containerType": existing.get("container_type"),
+                            "title": payload["title"],
+                            "barcode": payload["barcode"],
+                            "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
+                            "receiverSummary": receiver_summary,
+                        },
+                    )
             detail = container_detail_entity(conn, container_uuid)
-        return response({"status": "ok", "detail": detail})
+        return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.delete("/api/next/api/v1/containers/<container_id>")
     def public_api_delete_container(container_id: str):

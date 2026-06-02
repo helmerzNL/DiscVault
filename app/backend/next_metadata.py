@@ -1455,17 +1455,26 @@ def push_metadata_to_receivers(
     applied: dict[str, Any],
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    receivers = [
-        plugin
-        for plugin in metadata_receiver_plugins(conn)
-        if "receive_metadata" in set(plugin.get("capabilities") or (plugin.get("manifest") or {}).get("capabilities") or [])
-    ]
     payload = receiver_contribution_payload(
         movie_id=movie_id,
         movie=movie,
         preview=preview,
         applied=applied,
     )
+    return push_receiver_payload_to_receivers(conn, payload=payload, actor=actor)
+
+
+def push_receiver_payload_to_receivers(
+    conn,
+    *,
+    payload: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    receivers = [
+        plugin
+        for plugin in metadata_receiver_plugins(conn)
+        if "receive_metadata" in set(plugin.get("capabilities") or (plugin.get("manifest") or {}).get("capabilities") or [])
+    ]
     executions: list[dict[str, Any]] = []
     for plugin in receivers:
         config = plugin_config_from_db(conn, plugin["id"])
