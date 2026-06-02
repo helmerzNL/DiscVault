@@ -7144,6 +7144,127 @@ def ui_preview_html(
       margin-top: 6px;
       overflow-wrap: anywhere;
     }
+    .import-result-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 22px;
+      padding: 14px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--bg-solid) 88%, transparent), color-mix(in srgb, var(--field) 62%, transparent));
+      box-shadow: 0 18px 42px color-mix(in srgb, var(--shadow) 24%, transparent);
+    }
+    .import-result-card.featured {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 16px;
+      align-items: stretch;
+      padding: 16px;
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+    }
+    .import-result-art {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      border-radius: 18px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--accent) 25%, transparent), transparent 38%),
+        linear-gradient(145deg, color-mix(in srgb, var(--field) 82%, transparent), color-mix(in srgb, var(--bg-solid) 74%, transparent));
+      border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+      box-shadow: 0 14px 34px color-mix(in srgb, var(--shadow) 35%, transparent);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-weight: 860;
+      letter-spacing: 0;
+    }
+    .import-result-art img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .import-result-art.backdrop {
+      aspect-ratio: 16 / 9;
+    }
+    .import-result-art-fallback {
+      font-size: 1.8rem;
+      line-height: 1;
+    }
+    .import-result-body {
+      min-width: 0;
+      display: grid;
+      align-content: center;
+      gap: 10px;
+    }
+    .import-result-kicker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .import-result-title {
+      margin: 0;
+      font-size: clamp(1.25rem, 1vw + 1rem, 1.8rem);
+      line-height: 1.08;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+    .import-result-subtitle {
+      color: var(--muted);
+      font-size: .94rem;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .import-result-member-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 0 6px;
+      scrollbar-width: thin;
+    }
+    .import-result-member {
+      min-width: 170px;
+      max-width: 220px;
+      border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+      border-radius: 16px;
+      padding: 9px 10px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .import-result-member strong {
+      display: block;
+      font-size: .88rem;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .import-result-member span {
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+      margin-top: 4px;
+    }
+    .import-result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .import-result-card.compact {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      box-shadow: none;
+    }
+    .import-result-card.compact .import-result-art {
+      border-radius: 12px;
+      box-shadow: none;
+    }
+    .import-result-card.compact .import-result-title {
+      font-size: .98rem;
+      line-height: 1.2;
+    }
     .import-job-tabs {
       margin: 10px 0;
     }
@@ -9519,6 +9640,17 @@ def ui_preview_html(
         font-size: 10px;
         font-weight: 700;
         line-height: 1.1;
+      }
+      .import-result-card.featured {
+        grid-template-columns: 82px minmax(0, 1fr);
+        gap: 12px;
+        padding: 12px;
+      }
+      .import-result-title {
+        font-size: 1.12rem;
+      }
+      .import-result-member {
+        min-width: 150px;
       }
       .topbar { grid-template-columns: 1fr; }
       .top-actions { justify-content: stretch; }
@@ -18216,29 +18348,126 @@ def ui_preview_html(
       const proposedTitle = movieUpdates.title || movieUpdates.original_title || document.getElementById("importTitleInput")?.value || "";
       const proposedYear = movieUpdates.year || document.getElementById("importYearInput")?.value || "";
       const proposedFormat = movieUpdates.format || document.getElementById("importFormatInput")?.value || "";
-      const boxSetCard = boxSetProposal ? `
-        <div class="import-result-card">
-          <div class="import-job-head">
-            <strong>${escapeHtml(boxSetProposal.title || boxSetProposal.name || tNext("importCenter.boxSetDetected", "Box-set detected"))}</strong>
-            <span class="tag good">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>
+      const imageFrom = (...values) => values.flat().map((value) => usableImage(value)).find(Boolean) || "";
+      const itemImage = (item, kind = "poster") => {
+        const raw = item?.raw || {};
+        const itemMetadata = item?.metadata || {};
+        const itemProposal = item?.proposal || {};
+        const updates = itemProposal.movieUpdates || {};
+        if (kind === "backdrop") {
+          return imageFrom(
+            item?.backdropUrl,
+            item?.backdrop_url,
+            item?.backdrop,
+            itemMetadata.backdropUrl,
+            itemMetadata.backdrop_url,
+            itemMetadata.backdrop,
+            updates.backdropUrl,
+            updates.backdrop_url,
+            raw.backdropUrl,
+            raw.backdrop_url,
+            raw.backdrop
+          );
+        }
+        return imageFrom(
+          item?.posterUrl,
+          item?.poster_url,
+          item?.poster,
+          item?.coverUrl,
+          item?.cover_url,
+          itemMetadata.posterUrl,
+          itemMetadata.poster_url,
+          itemMetadata.poster,
+          updates.posterUrl,
+          updates.poster_url,
+          raw.posterUrl,
+          raw.poster_url,
+          raw.poster,
+          raw.coverUrl,
+          raw.cover_url
+        );
+      };
+      const artHtml = (url, label, extraClass = "") => `
+        <div class="import-result-art ${extraClass}">
+          ${url ? `<img src="${escapeHtml(url)}" alt="">` : `<span class="import-result-art-fallback">${escapeHtml(String(label || "?").trim().slice(0, 1).toUpperCase() || "?")}</span>`}
+        </div>
+      `;
+      const itemTitle = (item) => item?.title || item?.originalTitle || item?.name || item?.providerId || item?.pluginId || tNext("importCenter.result", "Result");
+      const itemProvider = (item) => item?.providerId || item?.pluginId || item?.source || item?.name || "";
+      const resultMetaParts = (item) => [
+        item?.year || item?.releaseYear || item?.movieYear || "",
+        item?.format || item?.mediaFormat || item?.releaseFormat || "",
+        item?.barcode || item?.externalBarcode || ""
+      ].filter(Boolean);
+      const compactResultCard = (item) => {
+        const title = itemTitle(item);
+        const provider = itemProvider(item);
+        const meta = resultMetaParts(item);
+        return `
+          <div class="import-result-card compact">
+            ${artHtml(itemImage(item), title)}
+            <div class="import-result-body">
+              <div class="import-result-kicker">
+                ${provider ? `<span class="tag">${escapeHtml(provider)}</span>` : ""}
+                ${item.state ? `<span class="tag ${item.state === "applied" ? "good" : ""}">${escapeHtml(item.state)}</span>` : ""}
+              </div>
+              <h4 class="import-result-title">${escapeHtml(title)}</h4>
+              ${meta.length ? `<div class="import-result-subtitle">${meta.map((part) => escapeHtml(part)).join(" &middot; ")}</div>` : ""}
+            </div>
           </div>
-          <div class="import-result-meta">${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}: ${escapeHtml(String(boxSetProposal.movies.length))}</div>
-          <div class="import-counts">
-            ${(boxSetProposal.movies || []).slice(0, 8).map((member) => `<span class="tag">${escapeHtml(member.title || "")}${member.year ? ` (${escapeHtml(member.year)})` : ""}${member.format ? ` · ${escapeHtml(member.format)}` : ""}</span>`).join("")}
+        `;
+      };
+      const proposalImage = imageFrom(
+        movieUpdates.posterUrl,
+        movieUpdates.poster_url,
+        metadataUpdates.posterUrl,
+        metadataUpdates.poster_url,
+        metadataUpdates.poster,
+        (metadata.results || []).map((item) => itemImage(item)).find(Boolean)
+      );
+      const boxSetCard = boxSetProposal ? `
+        <div class="import-result-card featured">
+          ${artHtml(imageFrom(boxSetProposal.posterUrl, boxSetProposal.poster_url, boxSetProposal.poster, boxSetProposal.backdropUrl, boxSetProposal.backdrop_url), boxSetProposal.title || boxSetProposal.name || "B")}
+          <div class="import-result-body">
+            <div class="import-result-kicker">
+              <span class="tag good">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>
+              <span class="tag">${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}: ${escapeHtml(String(boxSetProposal.movies.length))}</span>
+            </div>
+            <h3 class="import-result-title">${escapeHtml(boxSetProposal.title || boxSetProposal.name || tNext("importCenter.boxSetDetected", "Box-set detected"))}</h3>
+            <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.boxSetPreviewHelp", "DiscVault will add the box-set and link the detected member films."))}</div>
+            <div class="import-result-member-strip">
+              ${(boxSetProposal.movies || []).slice(0, 10).map((member) => `
+                <div class="import-result-member">
+                  <strong>${escapeHtml(member.title || tNext("common.untitled", "Untitled"))}</strong>
+                  <span>${[member.year, member.format].filter(Boolean).map((part) => escapeHtml(part)).join(" &middot; ") || escapeHtml(tNext("importCenter.member", "Member"))}</span>
+                </div>
+              `).join("")}
+            </div>
           </div>
         </div>
       ` : "";
       const proposalCard = (proposedTitle || Object.keys(metadataUpdates).length || Object.keys(technicalUpdates).length) ? `
-        <div class="import-result-card">
-          <div class="import-job-head">
-            <strong>${escapeHtml(proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}</strong>
-            <span class="tag good">${escapeHtml(tNext("importCenter.previewReady", "Preview ready."))}</span>
+        <div class="import-result-card featured">
+          ${artHtml(proposalImage, proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}
+          <div class="import-result-body">
+            <div class="import-result-kicker">
+              <span class="tag good">${escapeHtml(tNext("importCenter.previewReady", "Preview ready."))}</span>
+              <span class="tag">${escapeHtml(tNext("importCenter.sourcesUsed", "Sources"))}: ${escapeHtml(String((metadata.summary || []).filter((item) => item.state === "applied").length || (metadata.executions || []).length || 0))}</span>
+            </div>
+            <h3 class="import-result-title">${escapeHtml(proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}</h3>
+            <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.previewReadyHelp", "Review the detected movie details before adding it to your library."))}</div>
+            <div class="import-counts">
+              ${proposedYear ? `<span class="tag">${escapeHtml(tNext("importCenter.previewYear", "Year"))} ${escapeHtml(proposedYear)}</span>` : ""}
+              ${proposedFormat ? `<span class="tag">${escapeHtml(tNext("importCenter.previewFormat", "Format"))} ${escapeHtml(proposedFormat)}</span>` : ""}
+              ${metadataUpdates.director ? `<span class="tag">${escapeHtml(metadataUpdates.director)}</span>` : ""}
+              ${metadataUpdates.rating ? `<span class="tag">${escapeHtml(metadataUpdates.rating)}</span>` : ""}
+            </div>
           </div>
-          <div class="import-counts">
-            ${proposedYear ? `<span class="tag">${escapeHtml(tNext("importCenter.previewYear", "Year"))} ${escapeHtml(proposedYear)}</span>` : ""}
-            ${proposedFormat ? `<span class="tag">${escapeHtml(tNext("importCenter.previewFormat", "Format"))} ${escapeHtml(proposedFormat)}</span>` : ""}
-            <span class="tag">${escapeHtml(tNext("importCenter.plugin", "Plugin"))} ${escapeHtml((metadata.summary || []).filter((item) => item.state === "applied").length || (metadata.executions || []).length || 0)}</span>
-          </div>
+        </div>
+      ` : "";
+      const sourceGrid = Array.isArray(results) && results.length ? `
+        <div class="import-result-grid">
+          ${results.slice(0, 8).map(compactResultCard).join("")}
         </div>
       ` : "";
       if (!Array.isArray(results) || !results.length) {
@@ -18249,16 +18478,7 @@ def ui_preview_html(
         }
         return;
       }
-      list.innerHTML = boxSetCard + proposalCard + results.slice(0, 8).map((item) => {
-        const title = item.title || item.originalTitle || item.name || item.providerId || item.pluginId || tNext("importCenter.result", "Result");
-        const provider = item.providerId || item.pluginId || item.source || item.name || "";
-        return `
-          <div class="import-result-card">
-            <strong>${escapeHtml(title)}</strong>
-            <div class="import-result-meta">${escapeHtml(provider)} ${item.year ? `&middot; ${escapeHtml(item.year)}` : ""}</div>
-          </div>
-        `;
-      }).join("");
+      list.innerHTML = boxSetCard + proposalCard + sourceGrid;
     }
     function renderImportCenter() {
       renderImportTabs();
