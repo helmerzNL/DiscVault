@@ -1301,6 +1301,175 @@ def import_source_item_container_specs(item: dict[str, Any]) -> list[dict[str, A
     return unique
 
 
+def import_source_item_title(item: dict[str, Any]) -> str:
+    return clean_text(item.get("title") or item.get("name") or item.get("originalTitle") or item.get("original_title"))
+
+
+def import_source_item_year(item: dict[str, Any]) -> str:
+    return clean_text(item.get("year") or item.get("releaseYear") or item.get("release_year"))
+
+
+def import_source_item_format(item: dict[str, Any]) -> str:
+    return clean_text(item.get("format") or item.get("mediaFormat") or item.get("media_format") or item.get("type"))
+
+
+def import_source_item_provider(item: dict[str, Any], plugin_id: str) -> str:
+    return clean_text(
+        item.get("sourceProvider")
+        or item.get("source_provider")
+        or item.get("provider")
+        or item.get("pluginId")
+        or plugin_id
+    ) or plugin_id
+
+
+def import_source_item_confidence(item: dict[str, Any]) -> dict[str, Any]:
+    score = 0
+    evidence: list[str] = []
+    if import_source_item_title(item):
+        score += 22
+        evidence.append("title")
+    if import_source_item_year(item):
+        score += 12
+        evidence.append("year")
+    if clean_text(item.get("barcode")):
+        score += 24
+        evidence.append("barcode")
+    identifiers = import_source_item_identifiers(item)
+    if identifiers:
+        score += 22
+        evidence.extend(sorted(identifiers.keys()))
+    if import_source_item_format(item):
+        score += 8
+        evidence.append("format")
+    if clean_text(item.get("sourceUrl") or item.get("source_url")):
+        score += 6
+        evidence.append("source")
+    if clean_text(item.get("posterUrl") or item.get("poster_url") or item.get("poster")):
+        score += 4
+        evidence.append("poster")
+    if clean_text(item.get("backdropUrl") or item.get("backdrop_url") or item.get("backdrop")):
+        score += 2
+        evidence.append("backdrop")
+    score = max(0, min(score, 100))
+    label = "high" if score >= 74 else "medium" if score >= 48 else "low"
+    return {"score": score, "label": label, "evidence": evidence}
+
+
+def import_source_review_queue(
+    *,
+    plugin_id: str,
+    items: list[dict[str, Any]],
+    conflict_by_index: dict[int, dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    queue: list[dict[str, Any]] = []
+    for index, item in enumerate(items, start=1):
+        title = import_source_item_title(item)
+        match = (conflict_by_index.get(index) or {}).get("match")
+        action = "skip" if not title else "update" if match else "create"
+        confidence = import_source_item_confidence(item)
+        match_state = "missing_title" if not title else "existing" if match else "new"
+        if len(queue) < limit:
+            queue.append(
+                {
+                    "index": index,
+                    "reviewId": hashlib.sha256(
+                        f"{plugin_id}:{index}:{title}:{clean_text(item.get('barcode'))}".encode("utf-8")
+                    ).hexdigest()[:16],
+                    "action": action,
+                    "matchState": match_state,
+                    "title": title,
+                    "year": import_source_item_year(item),
+                    "barcode": clean_text(item.get("barcode")),
+                    "format": import_source_item_format(item),
+                    "provider": import_source_item_provider(item, plugin_id),
+                    "sourceFile": clean_text(item.get("sourceFile") or item.get("source_file")),
+                    "sourceUrl": clean_text(item.get("sourceUrl") or item.get("source_url")),
+                    "identifiers": import_source_item_identifiers(item),
+                    "confidence": confidence,
+                    "match": match,
+                    "containers": import_source_item_container_specs(item),
+                    "personal": item.get("personal") if isinstance(item.get("personal"), dict) else {},
+                }
+            )
+    return queue
+
+
+def import_source_provider_summary(review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    providers: dict[str, dict[str, Any]] = {}
+    for row in review_queue:
+        provider_id = clean_text(row.get("provider")) or "unknown"
+        entry = providers.setdefault(
+            provider_id,
+            {
+                "provider": provider_id,
+                "total": 0,
+                "create": 0,
+                "update": 0,
+                "skip": 0,
+                "highConfidence": 0,
+                "mediumConfidence": 0,
+                "lowConfidence": 0,
+                "confidenceTotal": 0,
+            },
+        )
+        action = clean_text(row.get("action")) or "create"
+        label = clean_text((row.get("confidence") or {}).get("label")) or "low"
+        score = int((row.get("confidence") or {}).get("score") or 0)
+        entry["total"] += 1
+        entry[action] = int(entry.get(action) or 0) + 1
+        entry[f"{label}Confidence"] = int(entry.get(f"{label}Confidence") or 0) + 1
+        entry["confidenceTotal"] += score
+    result = []
+    for entry in providers.values():
+        total = int(entry.get("total") or 0)
+        entry["averageConfidence"] = round((int(entry.get("confidenceTotal") or 0) / total), 1) if total else 0
+        entry.pop("confidenceTotal", None)
+        result.append(entry)
+    result.sort(key=lambda item: (-int(item.get("total") or 0), str(item.get("provider") or "")))
+    return result
+
+
+def import_source_box_set_reviews(container_preview: list[dict[str, Any]], review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows_by_index = {int(row["index"]): row for row in review_queue if row.get("index")}
+    reviews: list[dict[str, Any]] = []
+    for container in container_preview:
+        container_type = clean_text(container.get("containerType") or container.get("type"))
+        if container_type != "box_set":
+            continue
+        members = []
+        for raw_member in container.get("members") or []:
+            try:
+                index = int(raw_member.get("index"))
+            except (TypeError, ValueError, AttributeError):
+                index = 0
+            row = rows_by_index.get(index, {})
+            members.append(
+                {
+                    "index": index,
+                    "title": row.get("title") or (raw_member.get("title") if isinstance(raw_member, dict) else ""),
+                    "year": row.get("year") or (raw_member.get("year") if isinstance(raw_member, dict) else ""),
+                    "format": row.get("format") or (raw_member.get("format") if isinstance(raw_member, dict) else ""),
+                    "barcode": row.get("barcode") or (raw_member.get("barcode") if isinstance(raw_member, dict) else ""),
+                    "provider": row.get("provider"),
+                    "confidence": row.get("confidence") or {},
+                    "matchState": row.get("matchState"),
+                    "action": row.get("action"),
+                }
+            )
+        reviews.append(
+            {
+                "containerType": container_type,
+                "title": container.get("title"),
+                "memberCount": container.get("memberCount") or len(members),
+                "members": members,
+            }
+        )
+    reviews.sort(key=lambda item: str(item.get("title") or "").casefold())
+    return reviews
+
+
 def import_source_action_preview(
     conn,
     *,
@@ -1311,6 +1480,12 @@ def import_source_action_preview(
 ) -> dict[str, Any]:
     conflicts = import_source_conflicts(conn, items, limit=min(len(items), 5000))
     conflict_by_index = {item["index"]: item for item in conflicts}
+    review_queue = import_source_review_queue(
+        plugin_id=plugin_id,
+        items=items,
+        conflict_by_index=conflict_by_index,
+        limit=limit,
+    )
     actions: list[dict[str, Any]] = []
     counts = {
         "total": len(items),
@@ -1329,7 +1504,7 @@ def import_source_action_preview(
         "members": len(items),
     }
     for index, item in enumerate(items, start=1):
-        title = clean_text(item.get("title") or item.get("name"))
+        title = import_source_item_title(item)
         if not title:
             counts["skip"] += 1
             action = "skip"
@@ -1354,7 +1529,11 @@ def import_source_action_preview(
                 {
                     "index": index,
                     "title": title,
-                    "year": clean_text(item.get("year")),
+                    "year": import_source_item_year(item),
+                    "format": import_source_item_format(item),
+                    "barcode": clean_text(item.get("barcode")),
+                    "provider": import_source_item_provider(item, plugin_id),
+                    "confidence": import_source_item_confidence(item),
                 }
             )
         if len(actions) < limit:
@@ -1363,8 +1542,11 @@ def import_source_action_preview(
                     "index": index,
                     "action": action,
                     "title": title,
-                    "year": clean_text(item.get("year")),
+                    "year": import_source_item_year(item),
                     "barcode": clean_text(item.get("barcode")),
+                    "format": import_source_item_format(item),
+                    "provider": import_source_item_provider(item, plugin_id),
+                    "confidence": import_source_item_confidence(item),
                     "match": (conflict_by_index.get(index) or {}).get("match"),
                     "containers": specs,
                 }
@@ -1374,9 +1556,14 @@ def import_source_action_preview(
         for value in containers.values()
     ]
     container_preview.sort(key=lambda item: (item["containerType"], item["title"].casefold()))
+    provider_summary = import_source_provider_summary(review_queue)
+    box_set_reviews = import_source_box_set_reviews(container_preview, review_queue)
     return {
         "counts": counts,
         "actions": actions,
+        "reviewQueue": review_queue,
+        "providerSummary": provider_summary,
+        "boxSetReviews": box_set_reviews,
         "containers": container_preview,
         "importCollection": import_collection,
         "truncated": len(items) > limit,
@@ -6569,9 +6756,90 @@ def ui_preview_html(
       gap: 8px;
       margin-bottom: 12px;
     }
+    .import-review-sections {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .import-provider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+    }
+    .import-provider-card,
+    .import-boxset-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      padding: 12px;
+      min-width: 0;
+    }
+    .import-provider-card strong,
+    .import-boxset-card strong {
+      overflow-wrap: anywhere;
+    }
+    .import-provider-score {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 760;
+    }
+    .import-confidence-bar {
+      height: 7px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--line) 70%, transparent);
+      margin-top: 8px;
+    }
+    .import-confidence-bar span {
+      display: block;
+      height: 100%;
+      width: var(--confidence, 0%);
+      border-radius: inherit;
+      background: var(--accent);
+    }
+    .import-confidence-pill.high {
+      background: color-mix(in srgb, var(--good) 18%, transparent);
+      color: var(--good);
+    }
+    .import-confidence-pill.medium {
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--accent);
+    }
+    .import-confidence-pill.low {
+      background: color-mix(in srgb, var(--warn) 20%, transparent);
+      color: var(--warn);
+    }
+    .import-boxset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .import-boxset-members {
+      display: grid;
+      gap: 7px;
+      margin-top: 10px;
+    }
+    .import-boxset-member {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--field) 80%, transparent);
+    }
+    .import-boxset-member strong {
+      font-size: .88rem;
+    }
     .import-review-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(150px, .26fr);
+      grid-template-columns: minmax(0, 1fr) minmax(170px, .28fr);
       gap: 12px;
       align-items: center;
       border: 1px solid var(--line);
@@ -6589,6 +6857,12 @@ def ui_preview_html(
       align-items: center;
       font-weight: 800;
       overflow-wrap: anywhere;
+    }
+    .import-review-evidence {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
     }
     .import-review-action {
       display: grid;
@@ -8494,6 +8768,15 @@ def ui_preview_html(
       }
       .sidebar-footer { display: none; }
       .preview-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 860px) {
+      .import-boxset-member,
+      .import-review-row {
+        grid-template-columns: 1fr;
+      }
+      .import-review-action {
+        max-width: 100%;
+      }
     }
     @media (max-width: 760px) {
       body {
@@ -15812,7 +16095,20 @@ def ui_preview_html(
     function importReviewRows() {
       const preview = importCenter.preview || {};
       const actionPreview = preview.actionPreview || {};
-      return actionPreview.actions || [];
+      return actionPreview.reviewQueue || actionPreview.actions || [];
+    }
+    function importConfidenceLabel(value) {
+      const label = String(value || "low");
+      return tNext(`importCenter.confidence.${label}`, label);
+    }
+    function importConfidencePill(confidence) {
+      const data = confidence || {};
+      const score = Number(data.score || 0);
+      const label = String(data.label || (score >= 74 ? "high" : score >= 48 ? "medium" : "low"));
+      return `<span class="tag import-confidence-pill ${escapeHtml(label)}">${escapeHtml(importConfidenceLabel(label))} ${escapeHtml(score)}%</span>`;
+    }
+    function importDecisionValue(row, decisions) {
+      return decisions[row.index] || row.action || "create";
     }
     function setImportReviewMode(mode) {
       const rows = importReviewRows();
@@ -15823,7 +16119,7 @@ def ui_preview_html(
         if (mode === "skipUpdates" && row.action === "update") {
           decisions[index] = "skip";
         } else {
-          decisions[index] = row.action === "update" ? "update" : "create";
+          decisions[index] = row.action === "skip" ? "skip" : row.action === "update" ? "update" : "create";
         }
       });
       importCenter.reviewDecisions = decisions;
@@ -15839,13 +16135,90 @@ def ui_preview_html(
       importCenter.reviewDecisions = Object.fromEntries(decisions.map((item) => [item.index, item.action]));
       return {decisions};
     }
+    function renderImportProviderSummary(providerSummary) {
+      if (!providerSummary.length) return "";
+      return `
+        <section class="import-review-sections">
+          <div class="import-card-head">
+            <div>
+              <h3>${escapeHtml(tNext("importCenter.providerConfidence", "Provider confidence"))}</h3>
+              <p class="import-source-meta">${escapeHtml(tNext("importCenter.providerConfidenceHelp", "DiscVault uses plugin evidence to flag rows that need attention before commit."))}</p>
+            </div>
+          </div>
+          <div class="import-provider-grid">
+            ${providerSummary.map((provider) => {
+              const score = Math.max(0, Math.min(100, Number(provider.averageConfidence || 0)));
+              return `
+                <div class="import-provider-card">
+                  <div class="import-card-head">
+                    <strong>${escapeHtml(provider.provider || tNext("importCenter.source", "Source"))}</strong>
+                    <span class="tag">${escapeHtml(provider.total || 0)}</span>
+                  </div>
+                  <div class="import-provider-score">
+                    <span>${escapeHtml(tNext("importCenter.averageConfidence", "Average confidence"))}</span>
+                    <strong>${escapeHtml(score)}%</strong>
+                  </div>
+                  <div class="import-confidence-bar" style="--confidence:${escapeHtml(score)}%"><span></span></div>
+                  <div class="import-counts">
+                    <span class="tag good">${escapeHtml(tNext("importCenter.action.create", "Create"))} ${escapeHtml(provider.create || 0)}</span>
+                    <span class="tag">${escapeHtml(tNext("importCenter.action.update", "Update"))} ${escapeHtml(provider.update || 0)}</span>
+                    <span class="tag">${escapeHtml(tNext("importCenter.confidence.high", "High"))} ${escapeHtml(provider.highConfidence || 0)}</span>
+                    <span class="tag">${escapeHtml(tNext("importCenter.confidence.low", "Low"))} ${escapeHtml(provider.lowConfidence || 0)}</span>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </section>
+      `;
+    }
+    function renderImportBoxSetReviews(boxSetReviews) {
+      if (!boxSetReviews.length) return "";
+      return `
+        <section class="import-review-sections">
+          <div class="import-card-head">
+            <div>
+              <h3>${escapeHtml(tNext("importCenter.boxSetReview", "Box-set member review"))}</h3>
+              <p class="import-source-meta">${escapeHtml(tNext("importCenter.boxSetReviewHelp", "Check that every proposed box-set member uses the right title, year and format before import."))}</p>
+            </div>
+          </div>
+          <div class="import-boxset-grid">
+            ${boxSetReviews.map((boxSet) => `
+              <div class="import-boxset-card">
+                <div class="import-card-head">
+                  <strong>${escapeHtml(boxSet.title || tNext("common.untitled", "Untitled"))}</strong>
+                  <span class="tag">${escapeHtml(boxSet.memberCount || 0)} ${escapeHtml(tNext("importCenter.members", "members"))}</span>
+                </div>
+                <div class="import-boxset-members">
+                  ${(boxSet.members || []).slice(0, 10).map((member) => {
+                    const meta = [member.year, member.format, member.provider].filter(Boolean).join(" / ");
+                    return `
+                      <div class="import-boxset-member">
+                        <div>
+                          <strong>${escapeHtml(member.title || tNext("common.untitled", "Untitled"))}</strong>
+                          <div class="import-source-meta">${escapeHtml(meta)}</div>
+                        </div>
+                        ${importConfidencePill(member.confidence || {})}
+                      </div>
+                    `;
+                  }).join("")}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
     function renderImportReview() {
       const list = document.getElementById("importCenterReview");
       const summary = document.getElementById("importCenterReviewSummary");
       const startButton = document.getElementById("importReviewStartButton");
       if (!list || !summary) return;
       const rows = importReviewRows();
-      const containers = ((importCenter.preview || {}).actionPreview || {}).containers || [];
+      const actionPreview = ((importCenter.preview || {}).actionPreview || {});
+      const containers = actionPreview.containers || [];
+      const providerSummary = actionPreview.providerSummary || [];
+      const boxSetReviews = actionPreview.boxSetReviews || [];
       if (!rows.length) {
         summary.innerHTML = "";
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.reviewEmpty", "Inspect a source before reviewing the import."))}</div>`;
@@ -15854,33 +16227,52 @@ def ui_preview_html(
       }
       const decisions = importCenter.reviewDecisions || {};
       const counts = rows.reduce((acc, row) => {
-        const action = decisions[row.index] || row.action || "import";
+        const action = importDecisionValue(row, decisions);
         acc[action] = (acc[action] || 0) + 1;
         return acc;
       }, {});
+      const needsReview = rows.filter((row) => (row.confidence || {}).label === "low" || row.matchState === "missing_title").length;
       summary.innerHTML = `
         <span class="tag">${escapeHtml(tNext("importCenter.actionTotal", "Total"))} ${escapeHtml(rows.length)}</span>
         <span class="tag good">${escapeHtml(tNext("importCenter.action.create", "Create"))} ${escapeHtml(counts.create || 0)}</span>
         <span class="tag">${escapeHtml(tNext("importCenter.action.update", "Update"))} ${escapeHtml(counts.update || 0)}</span>
         <span class="tag">${escapeHtml(tNext("importCenter.action.skip", "Skip"))} ${escapeHtml(counts.skip || 0)}</span>
+        <span class="tag ${needsReview ? "warning" : "good"}">${escapeHtml(tNext("importCenter.needsReview", "Needs review"))} ${escapeHtml(needsReview)}</span>
         <span class="tag">${escapeHtml(tNext("importCenter.containerPreview", "Container proposals"))} ${escapeHtml(containers.length || 0)}</span>
       `;
-      list.innerHTML = rows.map((row) => {
-        const action = decisions[row.index] || row.action || "import";
+      const sections = renderImportProviderSummary(providerSummary) + renderImportBoxSetReviews(boxSetReviews);
+      const queue = `
+        <div class="import-card-head">
+          <div>
+            <h3>${escapeHtml(tNext("importCenter.reviewQueue", "Import review queue"))}</h3>
+            <p class="import-source-meta">${escapeHtml(tNext("importCenter.reviewQueueHelp", "Choose create, update or skip for each detected import item."))}</p>
+          </div>
+        </div>
+      `;
+      list.innerHTML = sections + queue + rows.map((row) => {
+        const action = importDecisionValue(row, decisions);
         const title = row.title || tNext("common.untitled", "Untitled");
-        const meta = [row.year, row.format, row.barcode].filter(Boolean).join(" / ");
+        const meta = [row.year, row.format, row.barcode, row.provider].filter(Boolean).join(" / ");
         const match = row.match ? (row.match.title || row.match.id || "") : "";
         const containerTags = (row.containers || []).map((container) => `<span class="tag">${escapeHtml(container.containerType || container.type)} ${escapeHtml(container.title || "")}</span>`).join("");
+        const evidence = ((row.confidence || {}).evidence || []).slice(0, 7).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("");
+        const actionLabel = row.matchState === "existing"
+          ? tNext("importCenter.conflictExisting", "Already in library")
+          : row.matchState === "missing_title"
+            ? tNext("importCenter.missingTitle", "Missing title")
+            : tNext(`importCenter.action.${row.action}`, row.action || "create");
         return `
           <div class="import-review-row ${action === "skip" ? "is-skip" : ""}">
             <div>
               <div class="import-review-title">
                 <span>${escapeHtml(title)}</span>
-                <span class="tag ${row.action === "create" ? "good" : ""}">${escapeHtml(tNext(`importCenter.action.${row.action}`, row.action || "import"))}</span>
+                <span class="tag ${row.action === "create" ? "good" : ""}">${escapeHtml(actionLabel)}</span>
+                ${importConfidencePill(row.confidence || {})}
               </div>
               <div class="import-source-meta">${escapeHtml(meta || row.sourceFile || "")}</div>
               ${match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml(match)}</div>` : ""}
               ${containerTags ? `<div class="import-counts">${containerTags}</div>` : ""}
+              ${evidence ? `<div class="import-review-evidence">${evidence}</div>` : ""}
             </div>
             <label class="import-review-action">
               <span>${escapeHtml(tNext("importCenter.reviewDecision", "Decision"))}</span>
