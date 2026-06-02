@@ -55,6 +55,7 @@ try:
     from .next_metadata import lookup_metadata_sources
     from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
+    from .next_metadata import push_metadata_to_receivers
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -106,6 +107,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import lookup_metadata_sources
     from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
+    from next_metadata import push_metadata_to_receivers
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -27670,6 +27672,59 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
     }
 
 
+def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    public_fields = (
+        "title",
+        "original_title",
+        "year",
+        "barcode",
+        "release_date",
+        "format",
+        "edition",
+        "country",
+        "language",
+        "overview",
+    )
+
+    def comparable(value: Any) -> Any:
+        if isinstance(value, date):
+            return value.isoformat()
+        return clean_text(value)
+
+    movie_updates: dict[str, Any] = {}
+    metadata_updates: dict[str, Any] = {}
+    for field in public_fields:
+        old_value = comparable(existing.get(field))
+        new_value = comparable(payload.get(field))
+        if old_value == new_value:
+            continue
+        if not new_value:
+            continue
+        movie_updates[field] = new_value
+        if field == "original_title":
+            metadata_updates["originalTitle"] = new_value
+        elif field == "release_date":
+            metadata_updates["releaseDate"] = new_value
+        else:
+            metadata_updates[field] = new_value
+    if not movie_updates and not metadata_updates:
+        return {}
+    return {
+        "movieUpdates": movie_updates,
+        "metadataUpdates": metadata_updates,
+        "technicalUpdates": {},
+        "mediaUpdates": {},
+        "identifiers": {},
+        "provenance": [
+            {
+                "pluginId": "discvault_local_edit",
+                "sourceLabel": "DiscVault local edit",
+                "fields": sorted(set(movie_updates) | set(metadata_updates)),
+            }
+        ],
+    }
+
+
 def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     with conn.cursor() as cur:
         cur.execute(
@@ -33559,6 +33614,8 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Movie not found", 404)
             payload = movie_update_payload(body, existing=existing)
+            receiver_proposal = movie_edit_receiver_proposal(existing, payload)
+            receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -34688,6 +34745,33 @@ def register_routes(flask_app: Flask) -> None:
                             },
                         )
             detail = movie_detail_entity(conn, movie_uuid)
+            if receiver_proposal:
+                try:
+                    receiver_summary = push_metadata_to_receivers(
+                        conn,
+                        movie_id=movie_uuid,
+                        movie=entity or movie_entity(conn, movie_uuid) or {},
+                        preview={
+                            "movie": entity or {},
+                            "proposal": receiver_proposal,
+                            "results": [],
+                        },
+                        applied={
+                            "changed": True,
+                            "revision": revision,
+                            "applied": {
+                                "movieUpdates": receiver_proposal.get("movieUpdates") or {},
+                                "metadataUpdates": receiver_proposal.get("metadataUpdates") or {},
+                                "technicalUpdates": {},
+                                "mediaUpdates": {},
+                                "identifiers": {},
+                                "provenance": len(receiver_proposal.get("provenance") or []),
+                            },
+                        },
+                        actor=actor,
+                    )
+                except Exception as exc:
+                    receiver_summary = {"status": "error", "error": str(exc)}
             audit_event(
                 conn,
                 event_type="movie.updated",
@@ -34698,7 +34782,24 @@ def register_routes(flask_app: Flask) -> None:
                 summary=f"Updated movie {payload['title']}",
                 metadata={"title": payload["title"], "barcode": payload["barcode"]},
             )
-        return response({"status": "ok", "detail": detail})
+            if receiver_proposal:
+                audit_event(
+                    conn,
+                    event_type="metadata.receiver_pushed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary=f"Pushed local movie edit to receiver plugins for {payload['title']}",
+                    metadata={
+                        "movieId": str(movie_uuid),
+                        "title": payload["title"],
+                        "barcode": payload["barcode"],
+                        "changedFields": sorted((receiver_proposal.get("metadataUpdates") or {}).keys()),
+                        "receiverSummary": receiver_summary,
+                    },
+                )
+        return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.delete("/api/next/movies/<movie_id>")
     def delete_movie(movie_id: str):
