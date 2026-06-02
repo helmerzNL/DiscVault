@@ -1005,6 +1005,8 @@
   "metadataJobs.providers": "Lahteet",
   "metadataJobs.changed": "Paivitetty",
   "metadataJobs.unchanged": "Ei muutoksia",
+  "bulk.selectAll": "Valitse kaikki",
+  "bulk.deselectAll": "Poista kaikki valinnat",
   "bulk.select": "Valitse",
   "bulk.noneSelected": "Ei valittuja elokuvia",
   "bulk.refreshMetadata": "Paivita metatiedot",

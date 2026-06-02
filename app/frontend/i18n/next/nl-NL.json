@@ -302,6 +302,8 @@
   "metadataJobs.providers": "Bronnen",
   "metadataJobs.changed": "Bijgewerkt",
   "metadataJobs.unchanged": "Geen wijzigingen",
+  "bulk.selectAll": "Alles selecteren",
+  "bulk.deselectAll": "Deselecteer alles",
   "bulk.select": "Selecteer",
   "bulk.done": "Klaar",
   "bulk.selected": "geselecteerd",

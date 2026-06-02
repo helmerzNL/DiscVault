@@ -1005,6 +1005,8 @@
   "metadataJobs.providers": "Fontes",
   "metadataJobs.changed": "Atualizado",
   "metadataJobs.unchanged": "Sem alteracoes",
+  "bulk.selectAll": "Selecionar tudo",
+  "bulk.deselectAll": "Desmarcar tudo",
   "bulk.select": "Selecionar",
   "bulk.noneSelected": "Nenhum filme selecionado",
   "bulk.refreshMetadata": "Atualizar metadados",
