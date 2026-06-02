@@ -9,10 +9,12 @@ if repo_root not in sys.path:
 
 from app.backend.next_metadata import canonicalize_plugin_result
 from app.backend.next_metadata import external_metadata_barcode
+from app.backend.next_metadata import metadata_fetch_audit_payload
 from app.backend.next_metadata import merge_metadata_results
 from app.backend.next_metadata import normalize_media_format
 from app.backend.next_metadata import plugin_execution_plan
 from app.backend.next_metadata import query_from_payload
+from app.backend.next_metadata import receiver_contribution_payload
 from app.backend.next_metadata import summarize_metadata_execution
 
 
@@ -277,6 +279,101 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(summary[0]["state"], "needs_configuration")
         self.assertEqual(summary[1]["state"], "applied")
         self.assertEqual(summary[1]["formatBlockedFields"], 1)
+
+    def test_metadata_fetch_audit_payload_keeps_provider_field_details(self):
+        movie = {"title": "Aladdin", "barcode": "8717418557683", "format": "4K UHD"}
+        preview = {
+            "sourceOrder": ["movievault_26", "tmdb"],
+            "executions": [
+                {
+                    "pluginId": "movievault_26",
+                    "entrypoint": "search_barcode",
+                    "status": "ok",
+                    "resultStatus": "hit",
+                    "candidateCount": 1,
+                    "elapsedMs": 50,
+                }
+            ],
+            "results": [
+                {
+                    "pluginId": "movievault_26",
+                    "sourceLabel": "MovieVault 26",
+                    "entrypoint": "search_barcode",
+                    "status": "hit",
+                    "movieUpdates": {"rating": "7.1"},
+                    "metadataUpdates": {"poster_url": "https://example/poster.jpg"},
+                    "technicalUpdates": {"hdr": "HDR10"},
+                    "mediaUpdates": {"poster": {"sourceUrl": "https://example/poster.jpg"}},
+                    "identifiers": {"tmdb": "420817"},
+                    "candidates": [{}],
+                }
+            ],
+            "proposal": {
+                "provenance": [{"pluginId": "movievault_26", "field": "rating", "target": "movie"}],
+                "skipped": [{"pluginId": "tmdb", "field": "title", "reason": "existing value retained"}],
+            },
+            "proposalStats": {"acceptedFields": 1, "skippedFields": 1},
+        }
+
+        payload = metadata_fetch_audit_payload(
+            movie_id="2b9e",
+            movie=movie,
+            dry_run=False,
+            preview=preview,
+            applied={"changed": True, "revision": 12, "applied": {"movieUpdates": {"rating": "7.1"}}},
+        )
+
+        self.assertEqual(payload["sourceOrder"], ["movievault_26", "tmdb"])
+        self.assertEqual(payload["providerResults"][0]["pluginId"], "movievault_26")
+        self.assertEqual(payload["providerResults"][0]["movieFields"], ["rating"])
+        self.assertEqual(payload["providerResults"][0]["metadataFields"], ["poster_url"])
+        self.assertEqual(payload["providerResults"][0]["technicalFields"], ["hdr"])
+        self.assertEqual(payload["providerResults"][0]["mediaKinds"], ["poster"])
+        self.assertEqual(payload["providerResults"][0]["identifierProviders"], ["tmdb"])
+        self.assertNotIn("Authorization", str(payload))
+        self.assertNotIn("apiToken", str(payload))
+
+    def test_receiver_contribution_payload_uses_public_applied_metadata(self):
+        movie = {
+            "id": "2b9e",
+            "public_id": "legacy-movie-95",
+            "title": "Aladdin",
+            "original_title": "Aladdin",
+            "year": "2019",
+            "barcode": "8717418557683",
+            "format": "4K UHD",
+        }
+        preview = {
+            "proposal": {
+                "movieUpdates": {"rating": "7.1"},
+                "metadataUpdates": {"genre": "Adventure"},
+                "technicalUpdates": {"hdr": "HDR10"},
+                "mediaUpdates": {"poster": {"sourceUrl": "https://example/poster.jpg"}},
+                "identifiers": {"tmdb": "420817", "imdb": "tt6139732"},
+                "provenance": [
+                    {"pluginId": "tmdb", "field": "rating"},
+                    {"pluginId": "bluray_com", "field": "hdr"},
+                ],
+            }
+        }
+
+        payload = receiver_contribution_payload(
+            movie_id="2b9e",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {"movieUpdates": {"rating": "7.1"}}},
+        )
+
+        self.assertEqual(payload["entityType"], "movie")
+        self.assertEqual(payload["identity"], "legacy-movie-95")
+        self.assertEqual(payload["sourceReference"]["barcode"], "8717418557683")
+        self.assertEqual(payload["payload"]["title"], "Aladdin")
+        self.assertEqual(payload["payload"]["rating"], "7.1")
+        self.assertEqual(payload["payload"]["hdr"], "HDR10")
+        self.assertEqual(payload["payload"]["tmdbId"], "420817")
+        self.assertEqual(payload["metadata"]["sourceProviders"], ["bluray_com", "tmdb"])
+        self.assertNotIn("watchHistory", str(payload))
+        self.assertNotIn("privateNotes", str(payload))
 
 
 if __name__ == "__main__":

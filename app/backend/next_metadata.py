@@ -335,6 +335,39 @@ def metadata_source_plugins(conn) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def metadata_receiver_plugins(conn) -> list[dict[str, Any]]:
+    if not table_exists(conn, "plugins"):
+        return []
+    sync_metadata_registry(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                name,
+                version,
+                enabled,
+                installed,
+                categories,
+                capabilities,
+                order_index,
+                manifest,
+                settings_schema,
+                premium_feature_key,
+                source_path,
+                runtime_module,
+                updated_at
+            FROM plugins
+            WHERE installed = true
+              AND enabled = true
+              AND categories ? 'metadata_receiver'
+            ORDER BY order_index, lower(name)
+            """
+        )
+        rows = cur.fetchall()
+    return [dict(row) for row in rows]
+
+
 def plugin_execution_context(
     conn,
     plugin: dict[str, Any],
@@ -1121,6 +1154,243 @@ def summarize_metadata_execution(
     return summary
 
 
+def audit_actor_values(actor: dict[str, Any] | None) -> dict[str, Any]:
+    actor = actor or {}
+    return {
+        "id": str(actor.get("id")) if actor.get("id") else None,
+        "username": actor.get("username"),
+        "role": actor.get("role"),
+    }
+
+
+def insert_metadata_audit_event(
+    conn,
+    *,
+    event_type: str,
+    actor: dict[str, Any] | None,
+    movie_id: UUID | str,
+    summary: str,
+    metadata: dict[str, Any],
+) -> None:
+    if not table_exists(conn, "audit_events"):
+        return
+    actor_values = audit_actor_values(actor)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO audit_events (
+                event_type,
+                category,
+                actor_user_id,
+                actor_username,
+                actor_role,
+                target_type,
+                target_id,
+                summary,
+                metadata
+            )
+            VALUES (%s, 'metadata', %s, %s, %s, 'movie', %s, %s, %s)
+            """,
+            (
+                event_type,
+                actor_values.get("id"),
+                actor_values.get("username"),
+                actor_values.get("role"),
+                str(movie_id),
+                summary,
+                Jsonb(json_ready(metadata)),
+            ),
+        )
+
+
+def metadata_result_summary(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "pluginId": result.get("pluginId"),
+        "sourceLabel": result.get("sourceLabel") or result.get("pluginId"),
+        "entrypoint": result.get("entrypoint"),
+        "status": result.get("status"),
+        "sourceRef": result.get("sourceRef") or "",
+        "movieFields": sorted((result.get("movieUpdates") or {}).keys()),
+        "metadataFields": sorted((result.get("metadataUpdates") or {}).keys()),
+        "technicalFields": sorted((result.get("technicalUpdates") or {}).keys()),
+        "mediaKinds": sorted((result.get("mediaUpdates") or {}).keys()),
+        "identifierProviders": sorted((result.get("identifiers") or {}).keys()),
+        "candidateCount": len(result.get("candidates") or []),
+        "hasBoxSetProposal": bool(result.get("boxSetProposal")),
+    }
+
+
+def metadata_fetch_audit_payload(
+    *,
+    movie_id: UUID | str,
+    movie: dict[str, Any],
+    dry_run: bool,
+    preview: dict[str, Any],
+    applied: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    proposal = preview.get("proposal") or {}
+    applied = applied or {}
+    return {
+        "movieId": str(movie_id),
+        "title": movie.get("title"),
+        "barcode": movie.get("barcode"),
+        "format": movie.get("format"),
+        "dryRun": dry_run,
+        "changed": bool(applied.get("changed")) if applied else False,
+        "revision": applied.get("revision") if applied else 0,
+        "sourceOrder": preview.get("sourceOrder") or [],
+        "sourceSummary": preview.get("sourceSummary") or [],
+        "executions": [
+            {
+                "pluginId": item.get("pluginId"),
+                "entrypoint": item.get("entrypoint"),
+                "status": item.get("status"),
+                "state": item.get("state"),
+                "resultStatus": item.get("resultStatus"),
+                "candidateCount": item.get("candidateCount"),
+                "elapsedMs": item.get("elapsedMs"),
+                "error": item.get("error"),
+            }
+            for item in (preview.get("executions") or [])
+        ],
+        "providerResults": [metadata_result_summary(item) for item in (preview.get("results") or [])],
+        "acceptedFields": proposal.get("provenance") or [],
+        "skippedFields": proposal.get("skipped") or [],
+        "proposalStats": preview.get("proposalStats") or {},
+        "applied": applied.get("applied") if applied else {},
+    }
+
+
+def receiver_contribution_payload(
+    *,
+    movie_id: UUID | str,
+    movie: dict[str, Any],
+    preview: dict[str, Any],
+    applied: dict[str, Any],
+) -> dict[str, Any]:
+    proposal = preview.get("proposal") or {}
+    applied_fields = applied.get("applied") or {}
+    metadata_payload: dict[str, Any] = {}
+    metadata_payload.update(proposal.get("metadataUpdates") or {})
+    metadata_payload.update(proposal.get("movieUpdates") or {})
+    metadata_payload.update(proposal.get("technicalUpdates") or {})
+    media_updates = proposal.get("mediaUpdates") or {}
+    if isinstance(media_updates.get("poster"), dict):
+        metadata_payload.setdefault("posterUrl", media_updates["poster"].get("sourceUrl"))
+    if isinstance(media_updates.get("backdrop"), dict):
+        metadata_payload.setdefault("backdropUrl", media_updates["backdrop"].get("sourceUrl"))
+    identifiers = proposal.get("identifiers") or {}
+    if identifiers.get("tmdb"):
+        metadata_payload["tmdbId"] = identifiers.get("tmdb")
+    if identifiers.get("imdb"):
+        metadata_payload["imdbId"] = identifiers.get("imdb")
+    metadata_payload.setdefault("title", movie.get("title"))
+    metadata_payload.setdefault("originalTitle", movie.get("original_title"))
+    metadata_payload.setdefault("year", movie.get("year"))
+    metadata_payload.setdefault("barcode", movie.get("barcode"))
+    metadata_payload.setdefault("format", movie.get("format"))
+    metadata_payload = {
+        key: value
+        for key, value in metadata_payload.items()
+        if value not in (None, "", [], {})
+    }
+    source_providers = sorted(
+        {
+            str(item.get("pluginId"))
+            for item in (proposal.get("provenance") or [])
+            if item.get("pluginId")
+        }
+    )
+    return {
+        "entityType": "movie",
+        "identity": str(movie.get("public_id") or movie_id),
+        "sourceRef": str(movie.get("public_id") or movie_id),
+        "sourceReference": {
+            "type": "discvault_movie",
+            "key": str(movie_id),
+            "publicId": movie.get("public_id"),
+            "barcode": movie.get("barcode"),
+        },
+        "payload": metadata_payload,
+        "metadata": {
+            "movieId": str(movie_id),
+            "sourceProviders": source_providers,
+            "acceptedFields": proposal.get("provenance") or [],
+            "applied": applied_fields,
+        },
+    }
+
+
+def receiver_result_summary(plugin: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:
+    result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+    return {
+        "pluginId": plugin.get("id"),
+        "name": plugin.get("name") or plugin.get("id"),
+        "version": plugin.get("version"),
+        "status": execution.get("status"),
+        "state": execution.get("state"),
+        "elapsedMs": execution.get("elapsedMs"),
+        "error": execution.get("error"),
+        "resultStatus": result.get("status"),
+        "entityType": result.get("entityType"),
+        "provider": result.get("provider") or plugin.get("id"),
+        "reason": result.get("reason"),
+        "idempotencyPrefix": result.get("idempotencyPrefix"),
+        "templateVersion": result.get("templateVersion"),
+    }
+
+
+def push_metadata_to_receivers(
+    conn,
+    *,
+    movie_id: UUID | str,
+    movie: dict[str, Any],
+    preview: dict[str, Any],
+    applied: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    receivers = [
+        plugin
+        for plugin in metadata_receiver_plugins(conn)
+        if "receive_metadata" in set(plugin.get("capabilities") or (plugin.get("manifest") or {}).get("capabilities") or [])
+    ]
+    payload = receiver_contribution_payload(
+        movie_id=movie_id,
+        movie=movie,
+        preview=preview,
+        applied=applied,
+    )
+    executions: list[dict[str, Any]] = []
+    for plugin in receivers:
+        config = plugin_config_from_db(conn, plugin["id"])
+        context = plugin_execution_context(conn, plugin, config, actor)
+        if plugin_requires_config(plugin, config, "receive_metadata"):
+            executions.append(
+                receiver_result_summary(
+                    plugin,
+                    {
+                        "status": "skipped",
+                        "state": "needs_configuration",
+                        "result": {"status": "skipped", "reason": "needs_configuration"},
+                    },
+                )
+            )
+            continue
+        execution = run_plugin_entrypoint(plugin["id"], "receive_metadata", payload, context)
+        executions.append(receiver_result_summary(plugin, execution))
+    return {
+        "receiverCount": len(receivers),
+        "receivers": executions,
+        "payloadSummary": {
+            "entityType": payload.get("entityType"),
+            "identity": payload.get("identity"),
+            "fieldCount": len(payload.get("payload") or {}),
+            "fields": sorted((payload.get("payload") or {}).keys()),
+            "sourceProviders": ((payload.get("metadata") or {}).get("sourceProviders") or []),
+        },
+    }
+
+
 def run_metadata_source_pipeline(
     conn,
     *,
@@ -1755,6 +2025,66 @@ def refresh_movie_metadata(
 ) -> dict[str, Any]:
     preview = preview_movie_metadata(conn, movie_id, actor)
     if dry_run:
+        insert_metadata_audit_event(
+            conn,
+            event_type="metadata.refresh_fetched",
+            actor=actor,
+            movie_id=movie_id,
+            summary=f"Fetched metadata refresh preview for {preview['movie'].get('title') or movie_id}",
+            metadata=metadata_fetch_audit_payload(
+                movie_id=movie_id,
+                movie=preview["movie"],
+                dry_run=True,
+                preview=preview,
+                applied={"changed": False, "revision": 0, "applied": {}},
+            ),
+        )
         return {"dryRun": True, "preview": preview, "applied": {"changed": False}}
     applied = apply_metadata_proposal(conn, movie_id, preview["proposal"], actor=actor)
-    return {"dryRun": False, "preview": preview, "applied": applied}
+    insert_metadata_audit_event(
+        conn,
+        event_type="metadata.refresh_fetched",
+        actor=actor,
+        movie_id=movie_id,
+        summary=f"Fetched and merged metadata for {preview['movie'].get('title') or movie_id}",
+        metadata=metadata_fetch_audit_payload(
+            movie_id=movie_id,
+            movie=preview["movie"],
+            dry_run=False,
+            preview=preview,
+            applied=applied,
+        ),
+    )
+    receiver_summary: dict[str, Any]
+    if applied.get("changed"):
+        receiver_summary = push_metadata_to_receivers(
+            conn,
+            movie_id=movie_id,
+            movie=preview["movie"],
+            preview=preview,
+            applied=applied,
+            actor=actor,
+        )
+    else:
+        receiver_summary = {
+            "receiverCount": 0,
+            "receivers": [],
+            "skipped": True,
+            "reason": "metadata_refresh_did_not_change_public_fields",
+        }
+    insert_metadata_audit_event(
+        conn,
+        event_type="metadata.receiver_pushed",
+        actor=actor,
+        movie_id=movie_id,
+        summary=f"Pushed refreshed metadata to receiver plugins for {preview['movie'].get('title') or movie_id}",
+        metadata={
+            "movieId": str(movie_id),
+            "title": preview["movie"].get("title"),
+            "barcode": preview["movie"].get("barcode"),
+            "format": preview["movie"].get("format"),
+            "changed": bool(applied.get("changed")),
+            **receiver_summary,
+        },
+    )
+    return {"dryRun": False, "preview": preview, "applied": applied, "receivers": receiver_summary}
