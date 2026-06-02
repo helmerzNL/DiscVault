@@ -38,6 +38,8 @@ LEGACY_METADATA_SOURCE_ALIASES = {
     "omdb": "omdb",
     "movievault": "movievault",
     "movie_vault": "movievault",
+    "movievault_26": "movievault",
+    "movievault26": "movievault",
     "bluray_com": "bluray_com",
     "bluray.com": "bluray_com",
     "blu-ray.com": "bluray_com",

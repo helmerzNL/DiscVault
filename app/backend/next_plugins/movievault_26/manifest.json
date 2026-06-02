@@ -13,11 +13,13 @@
     "receive_metadata"
   ],
   "requiresSecrets": false,
+  "replacesPlugins": ["movievault"],
   "settingsSchemaVersion": 1,
   "settingsSchema": {
     "settings": [],
     "secrets": []
   },
+  "defaultEnabled": true,
   "orderIndex": 51,
   "premiumFeatureKey": "metadata.source.movievault.use",
   "entitlements": {
