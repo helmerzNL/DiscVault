@@ -27099,7 +27099,7 @@ def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> t
         return ("digital_sources.view", "digital_sources.connect", "digital_sources.manage")
     if entrypoint in {"inspect_source", "plan_import", "import_source"}:
         return ("collection.import", "admin.restore_functional")
-    if entrypoint == "receive_metadata":
+    if entrypoint in {"receive_metadata", "describe_payload", "activity_summary"}:
         return ("metadata.manage_receivers", "metadata.manage_plugins")
     if entrypoint == "health_check":
         permissions = ["metadata.view_plugin_health", "metadata.manage_plugins"]
@@ -27334,7 +27334,7 @@ def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
 
 
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
-    if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
+    if entrypoint in {"health_check", "discover_library", "playback_deeplink", "describe_payload", "activity_summary"}:
         return False
     if is_movievault_plugin(str(plugin.get("id") or "")):
         return False

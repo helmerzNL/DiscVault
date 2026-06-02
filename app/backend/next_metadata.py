@@ -1427,9 +1427,15 @@ def receiver_contribution_payload(
     }
 
 
-def receiver_result_summary(plugin: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:
+def receiver_result_summary(
+    plugin: dict[str, Any],
+    execution: dict[str, Any],
+    *,
+    details: dict[str, Any] | None = None,
+    activity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-    return {
+    summary = {
         "pluginId": plugin.get("id"),
         "name": plugin.get("name") or plugin.get("id"),
         "version": plugin.get("version"),
@@ -1443,6 +1449,38 @@ def receiver_result_summary(plugin: dict[str, Any], execution: dict[str, Any]) -
         "reason": result.get("reason"),
         "idempotencyPrefix": result.get("idempotencyPrefix"),
         "templateVersion": result.get("templateVersion"),
+    }
+    if details:
+        summary["details"] = details
+    if activity:
+        summary["activity"] = activity
+    return summary
+
+
+def plugin_receiver_runtime_entrypoints(plugin: dict[str, Any]) -> set[str]:
+    manifest = plugin.get("manifest") or {}
+    runtime = manifest.get("runtime") if isinstance(manifest, dict) else {}
+    if not isinstance(runtime, dict):
+        runtime = {}
+    return {str(item) for item in (runtime.get("entrypoints") or []) if str(item)}
+
+
+def plugin_receiver_optional_detail(
+    plugin: dict[str, Any],
+    entrypoint: str,
+    payload: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    if entrypoint not in plugin_receiver_runtime_entrypoints(plugin):
+        return {}
+    execution = run_plugin_entrypoint(plugin["id"], entrypoint, payload, context)
+    result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+    if execution.get("status") == "ok" and result:
+        return result
+    return {
+        "status": execution.get("status") or "error",
+        "state": execution.get("state") or "unavailable",
+        "error": execution.get("error"),
     }
 
 
@@ -1479,6 +1517,7 @@ def push_receiver_payload_to_receivers(
     for plugin in receivers:
         config = plugin_config_from_db(conn, plugin["id"])
         context = plugin_execution_context(conn, plugin, config, actor)
+        details = plugin_receiver_optional_detail(plugin, "describe_payload", payload, context)
         if plugin_requires_config(plugin, config, "receive_metadata"):
             executions.append(
                 receiver_result_summary(
@@ -1488,11 +1527,18 @@ def push_receiver_payload_to_receivers(
                         "state": "needs_configuration",
                         "result": {"status": "skipped", "reason": "needs_configuration"},
                     },
+                    details=details,
                 )
             )
             continue
         execution = run_plugin_entrypoint(plugin["id"], "receive_metadata", payload, context)
-        executions.append(receiver_result_summary(plugin, execution))
+        activity = plugin_receiver_optional_detail(
+            plugin,
+            "activity_summary",
+            {"payload": payload, "execution": execution.get("result") or {}, "runtime": execution},
+            context,
+        )
+        executions.append(receiver_result_summary(plugin, execution, details=details, activity=activity))
     return {
         "receiverCount": len(receivers),
         "receivers": executions,

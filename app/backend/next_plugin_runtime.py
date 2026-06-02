@@ -45,6 +45,8 @@ PLUGIN_ENTRYPOINTS = (
     "videos_for_movie",
     "technical_specs",
     "receive_metadata",
+    "describe_payload",
+    "activity_summary",
     "discover_library",
     "sync_library",
     "sync_personal_lists",
