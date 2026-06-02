@@ -27649,13 +27649,15 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     ):
         if payload.get(source):
             metadata[target] = payload[source]
+    release_date = storage_optional_date(payload.get("releaseDate") or payload.get("release_date"))
+    purchase_date = storage_optional_date(payload.get("purchaseDate") or payload.get("purchase_date"))
     return {
         "barcode": payload.get("barcode"),
         "title": payload.get("title"),
         "sort_title": payload.get("sortTitle") or payload.get("sort_title"),
         "original_title": payload.get("originalTitle") or payload.get("original_title"),
         "year": payload.get("year"),
-        "release_date": payload.get("releaseDate") or payload.get("release_date"),
+        "release_date": release_date,
         "format": payload.get("format"),
         "edition": payload.get("edition"),
         "edition_type": payload.get("editionType") or payload.get("edition_type"),
@@ -27665,7 +27667,7 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "overview": payload.get("overview"),
         "notes": payload.get("notes"),
         "rating": payload.get("rating"),
-        "purchase_date": payload.get("purchaseDate") or payload.get("purchase_date"),
+        "purchase_date": purchase_date,
         "purchase_price": payload.get("purchasePrice") or payload.get("purchase_price"),
         "location": payload.get("location"),
         "metadata": metadata,
@@ -27696,6 +27698,16 @@ def parse_optional_date(value: Any, field_name: str) -> date | None:
         return date.fromisoformat(text)
     except ValueError as exc:
         raise NextApiError(f"{field_name} must use YYYY-MM-DD", 400) from exc
+
+
+def storage_optional_date(value: Any) -> date | None:
+    text = clean_text(value)
+    if not text or re.fullmatch(r"\d{4}", text):
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> dict[str, Any]:

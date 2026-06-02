@@ -749,12 +749,47 @@ def link_import_movie_to_container(
     return True
 
 
+def import_year(value: Any) -> str:
+    raw = clean_text(value)
+    for idx in range(0, max(len(raw) - 3, 0)):
+        candidate = raw[idx : idx + 4]
+        if candidate.isdigit() and 1800 <= int(candidate) <= 2200:
+            return candidate
+    return ""
+
+
+def import_release_date(value: Any) -> str | None:
+    raw = clean_text(value)
+    if not raw or re.fullmatch(r"\d{4}", raw):
+        return None
+    normalized = raw.replace("/", "-").strip()
+    for pattern, order in (
+        (r"^(\d{4})-(\d{1,2})-(\d{1,2})$", "ymd"),
+        (r"^(\d{1,2})-(\d{1,2})-(\d{4})$", "dmy"),
+    ):
+        match = re.match(pattern, normalized)
+        if not match:
+            continue
+        parts = [int(part) for part in match.groups()]
+        year, month, day = parts if order == "ymd" else (parts[2], parts[1], parts[0])
+        try:
+            if not 1800 <= year <= 2200:
+                return None
+            return date(year, month, day).isoformat()
+        except ValueError:
+            return None
+    return None
+
+
 def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUID, bool]:
     title = clean_text(item.get("title"))
     if not title:
         raise RuntimeError("Import item is missing title")
     external_id = clean_text(item.get("externalId") or item.get("external_id"))
-    seed = f"{plugin_id}:{external_id or title}:{clean_text(item.get('year'))}:{clean_text(item.get('barcode'))}"
+    raw_release_date = item.get("releaseDate") or item.get("release_date")
+    year = clean_text(item.get("year")) or import_year(raw_release_date)
+    release_date = import_release_date(raw_release_date)
+    seed = f"{plugin_id}:{external_id or title}:{year}:{clean_text(item.get('barcode'))}"
     existing_id = import_movie_existing_id(conn, item)
     movie_id = existing_id or stable_uuid(f"movie:{seed}")
     public_id = source_public_id(f"import-{plugin_id}", external_id or str(movie_id), fallback=str(movie_id))
@@ -807,8 +842,8 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 title,
                 clean_text(item.get("sortTitle") or item.get("sort_title") or title),
                 clean_text(item.get("originalTitle") or item.get("original_title")) or None,
-                clean_text(item.get("year")) or None,
-                clean_text(item.get("releaseDate") or item.get("release_date")) or None,
+                year or None,
+                release_date,
                 clean_text(item.get("format")) or None,
                 clean_text(item.get("edition")) or None,
                 clean_text(item.get("country")) or None,
