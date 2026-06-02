@@ -1444,6 +1444,76 @@ def import_source_provider_summary(review_queue: list[dict[str, Any]]) -> list[d
     return result
 
 
+def import_source_title_release_risk(title: Any, confidence: dict[str, Any] | None = None) -> bool:
+    text = clean_text(title)
+    if not text:
+        return False
+    evidence = set((confidence or {}).get("evidence") or [])
+    if "exact_identity" in evidence:
+        return False
+    return bool(
+        re.search(
+            r"\b(4k|uhd|ultra\s*hd|blu[- ]?ray|dvd|steelbook|limited edition|collector|france|germany|italy|spain|uk)\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def import_source_review_summary(
+    review_queue: list[dict[str, Any]],
+    *,
+    actions: list[dict[str, Any]],
+    containers: list[dict[str, Any]],
+    provider_summary: list[dict[str, Any]],
+) -> dict[str, Any]:
+    rows = review_queue or actions
+    confidence = {"high": 0, "medium": 0, "low": 0}
+    actions_count = {"create": 0, "update": 0, "skip": 0}
+    missing_title = 0
+    release_title_risks = 0
+    metadata_suggestions = 0
+    existing = 0
+    new = 0
+    for row in rows:
+        action = clean_text(row.get("action")) or "create"
+        if action in actions_count:
+            actions_count[action] += 1
+        label = clean_text((row.get("confidence") or {}).get("label")) or "low"
+        if label in confidence:
+            confidence[label] += 1
+        if row.get("matchState") == "missing_title" or not clean_text(row.get("title")):
+            missing_title += 1
+        if row.get("matchState") == "existing" or row.get("match"):
+            existing += 1
+        else:
+            new += 1
+        if import_source_title_release_risk(row.get("title"), row.get("confidence") if isinstance(row.get("confidence"), dict) else {}):
+            release_title_risks += 1
+        suggestions = row.get("metadataSuggestions")
+        if isinstance(suggestions, dict) and (suggestions.get("items") or suggestions.get("error")):
+            metadata_suggestions += 1
+    needs_review = missing_title + confidence["low"] + release_title_risks
+    recommended_action = "review" if needs_review or metadata_suggestions else "ready"
+    if not rows:
+        recommended_action = "inspect"
+    return {
+        "total": len(rows),
+        "actions": actions_count,
+        "confidence": confidence,
+        "needsReview": needs_review,
+        "missingTitle": missing_title,
+        "releaseTitleRisks": release_title_risks,
+        "metadataSuggestionRows": metadata_suggestions,
+        "existingMatches": existing,
+        "newItems": new,
+        "containers": len(containers),
+        "boxSets": sum(1 for container in containers if container.get("containerType") == "box_set"),
+        "providers": len(provider_summary),
+        "recommendedAction": recommended_action,
+    }
+
+
 def import_source_item_needs_metadata_suggestion(item: dict[str, Any], confidence: dict[str, Any]) -> bool:
     if not import_source_item_title(item):
         return False
@@ -1695,11 +1765,18 @@ def import_source_action_preview(
     container_preview.sort(key=lambda item: (item["containerType"], item["title"].casefold()))
     provider_summary = import_source_provider_summary(review_queue)
     box_set_reviews = import_source_box_set_reviews(container_preview, review_queue)
+    review_summary = import_source_review_summary(
+        review_queue,
+        actions=actions,
+        containers=container_preview,
+        provider_summary=provider_summary,
+    )
     return {
         "counts": counts,
         "actions": actions,
         "reviewQueue": review_queue,
         "providerSummary": provider_summary,
+        "reviewSummary": review_summary,
         "boxSetReviews": box_set_reviews,
         "containers": container_preview,
         "importCollection": import_collection,
@@ -7035,6 +7112,41 @@ def ui_preview_html(
       border-radius: 18px;
       background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
     }
+    .import-preview-summary {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .import-preview-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .import-preview-summary-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      min-width: 0;
+    }
+    .import-preview-summary-card span {
+      display: block;
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 780;
+      margin-bottom: 5px;
+    }
+    .import-preview-summary-card strong {
+      display: block;
+      font-size: 1.28rem;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+    .import-preview-risk-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
     .import-mapping-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -8978,6 +9090,11 @@ def ui_preview_html(
     .tag.bad {
       color: var(--red);
       border-color: color-mix(in srgb, var(--red) 34%, var(--line));
+    }
+    .tag.warning {
+      color: var(--warn);
+      border-color: color-mix(in srgb, var(--warn) 38%, var(--line));
+      background: color-mix(in srgb, var(--warn) 10%, transparent);
     }
     .inline-delete {
       width: 18px;
@@ -16976,6 +17093,116 @@ def ui_preview_html(
       }).join("");
       if (startButton) startButton.disabled = false;
     }
+    function importPreviewReviewSummary(actionPreview) {
+      actionPreview = actionPreview || {};
+      if (actionPreview.reviewSummary && typeof actionPreview.reviewSummary === "object") return actionPreview.reviewSummary;
+      const rows = actionPreview.reviewQueue || actionPreview.actions || [];
+      const summary = {
+        total: rows.length,
+        actions: {create: 0, update: 0, skip: 0},
+        confidence: {high: 0, medium: 0, low: 0},
+        needsReview: 0,
+        missingTitle: 0,
+        releaseTitleRisks: 0,
+        metadataSuggestionRows: 0,
+        existingMatches: 0,
+        newItems: 0,
+        containers: (actionPreview.containers || []).length,
+        boxSets: (actionPreview.containers || []).filter((container) => container.containerType === "box_set").length,
+        providers: (actionPreview.providerSummary || []).length,
+        recommendedAction: rows.length ? "ready" : "inspect"
+      };
+      rows.forEach((row) => {
+        const action = row.action || "create";
+        if (summary.actions[action] !== undefined) summary.actions[action] += 1;
+        const label = (row.confidence || {}).label || "low";
+        if (summary.confidence[label] !== undefined) summary.confidence[label] += 1;
+        if (row.matchState === "missing_title" || !row.title) summary.missingTitle += 1;
+        if (row.matchState === "existing" || row.match) summary.existingMatches += 1;
+        else summary.newItems += 1;
+        if (importReleaseTitleRisk(row)) summary.releaseTitleRisks += 1;
+        if (row.metadataSuggestions && ((row.metadataSuggestions.items || []).length || row.metadataSuggestions.error)) summary.metadataSuggestionRows += 1;
+      });
+      summary.needsReview = summary.missingTitle + summary.confidence.low + summary.releaseTitleRisks;
+      summary.recommendedAction = summary.needsReview || summary.metadataSuggestionRows ? "review" : summary.recommendedAction;
+      return summary;
+    }
+    function importMappingPreviewSummary() {
+      const mapping = importMappingSource();
+      const columns = mapping.availableColumns || [];
+      const effective = effectiveImportColumnMapping();
+      const required = ["title"];
+      const important = ["year", "barcode", "format", "collectionTitle", "boxSetTitle", "vaultTitle"];
+      const mappedRequired = required.filter((field) => effective[field]);
+      const mappedImportant = important.filter((field) => effective[field]);
+      const missingRequired = required.filter((field) => !effective[field]);
+      return {
+        columns: columns.length,
+        mappedRequired: mappedRequired.length,
+        mappedImportant: mappedImportant.length,
+        missingRequired,
+        mappedFields: Object.keys(effective).filter((field) => effective[field]).length,
+      };
+    }
+    function importRecommendedActionText(action) {
+      const key = String(action || "inspect");
+      if (key === "ready") return tNext("importCenter.recommended.ready", "Ready to import");
+      if (key === "review") return tNext("importCenter.recommended.review", "Review first");
+      return tNext("importCenter.recommended.inspect", "Inspect source");
+    }
+    function renderImportPreviewSummary(source, actionPreview) {
+      const summary = importPreviewReviewSummary(actionPreview);
+      const mapping = importMappingPreviewSummary();
+      const hasMappingColumns = mapping.columns > 0;
+      const risks = [];
+      if (hasMappingColumns && mapping.missingRequired.length) {
+        risks.push(tNext("importCenter.risk.mapTitle", "Map the title column"));
+      }
+      if (summary.missingTitle) risks.push(`${tNext("importCenter.risk.missingTitle", "Missing titles")}: ${summary.missingTitle}`);
+      if (summary.releaseTitleRisks) risks.push(`${tNext("importCenter.risk.releaseTitle", "Release-like titles")}: ${summary.releaseTitleRisks}`);
+      if ((summary.confidence || {}).low) risks.push(`${tNext("importCenter.risk.lowConfidence", "Low confidence")}: ${summary.confidence.low}`);
+      if (!risks.length) risks.push(tNext("importCenter.risk.none", "No blocking risks detected"));
+      const confidence = summary.confidence || {};
+      return `
+        <section class="import-preview-summary">
+          <div class="import-card-head">
+            <div>
+              <h3>${escapeHtml(tNext("importCenter.previewSummaryTitle", "Import preview"))}</h3>
+              <p class="import-source-meta">${escapeHtml(tNext("importCenter.previewSummaryHelp", "Check source recognition, mapping and match confidence before writing to the library."))}</p>
+            </div>
+            <span class="tag ${summary.recommendedAction === "ready" && !mapping.missingRequired.length ? "good" : "warning"}">${escapeHtml(importRecommendedActionText(hasMappingColumns && mapping.missingRequired.length ? "review" : summary.recommendedAction))}</span>
+          </div>
+          <div class="import-preview-summary-grid">
+            <div class="import-preview-summary-card">
+              <span>${escapeHtml(tNext("importCenter.actionTotal", "Total"))}</span>
+              <strong>${escapeHtml(formatNumber(summary.total || ((source.sample || []).length || 0)))}</strong>
+              <div class="import-source-meta">${escapeHtml((source.pluginName || source.pluginId || "-"))}</div>
+            </div>
+            <div class="import-preview-summary-card">
+              <span>${escapeHtml(tNext("importCenter.mappingHealth", "Mapping"))}</span>
+              <strong>${escapeHtml(mapping.mappedFields)} / ${escapeHtml(mapping.columns || "-")}</strong>
+              <div class="import-source-meta">${escapeHtml(tNext("importCenter.mappedFields", "mapped fields"))}</div>
+            </div>
+            <div class="import-preview-summary-card">
+              <span>${escapeHtml(tNext("importCenter.confidenceBreakdown", "Confidence"))}</span>
+              <strong>${escapeHtml(confidence.high || 0)} / ${escapeHtml(confidence.medium || 0)} / ${escapeHtml(confidence.low || 0)}</strong>
+              <div class="import-source-meta">${escapeHtml(tNext("importCenter.confidence.high", "High"))} / ${escapeHtml(tNext("importCenter.confidence.medium", "Medium"))} / ${escapeHtml(tNext("importCenter.confidence.low", "Low"))}</div>
+            </div>
+            <div class="import-preview-summary-card">
+              <span>${escapeHtml(tNext("importCenter.containerPreview", "Container proposals"))}</span>
+              <strong>${escapeHtml(summary.containers || 0)}</strong>
+              <div class="import-source-meta">${escapeHtml(tNext("importCenter.boxSetReview", "Box-set member review"))}: ${escapeHtml(summary.boxSets || 0)}</div>
+            </div>
+          </div>
+          <div class="import-preview-risk-list">
+            ${risks.map((risk, index) => `<span class="tag ${index === 0 && !mapping.missingRequired.length && !summary.needsReview ? "good" : "warning"}">${escapeHtml(risk)}</span>`).join("")}
+            ${summary.metadataSuggestionRows ? `<span class="tag">${escapeHtml(tNext("importCenter.metadataSuggestionRows", "Metadata suggestions"))} ${escapeHtml(summary.metadataSuggestionRows)}</span>` : ""}
+            ${summary.existingMatches ? `<span class="tag">${escapeHtml(tNext("importCenter.conflictExisting", "Already in library"))} ${escapeHtml(summary.existingMatches)}</span>` : ""}
+            ${summary.newItems ? `<span class="tag good">${escapeHtml(tNext("importCenter.newItems", "New"))} ${escapeHtml(summary.newItems)}</span>` : ""}
+          </div>
+        </section>
+      `;
+    }
     function renderImportPreview() {
       const previewNode = document.getElementById("importCenterPreview");
       if (!previewNode) return;
@@ -16987,8 +17214,9 @@ def ui_preview_html(
       const containerRows = actionPreview.containers || [];
       const sample = source.sample || [];
       const conflicts = preview.conflicts || [];
+      const summaryHtml = renderImportPreviewSummary(source, actionPreview);
       if (!sample.length && !conflicts.length && !actionRows.length) {
-        previewNode.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.noPreview", "Inspect a source to preview sample rows and conflicts."))}</div>`;
+        previewNode.innerHTML = `${summaryHtml}<div class="preview-empty">${escapeHtml(tNext("importCenter.noPreview", "Inspect a source to preview sample rows and conflicts."))}</div>`;
         return;
       }
       const actionLabel = (action) => tNext(`importCenter.action.${action}`, action);
@@ -17049,6 +17277,7 @@ def ui_preview_html(
           </div>`
         : `<div class="import-conflict-list"><span class="tag good">${escapeHtml(tNext("importCenter.noConflicts", "No conflicts in sample"))}</span></div>`;
       previewNode.innerHTML = `
+        ${summaryHtml}
         <div class="import-card-head">
           <div>
             <h3>${escapeHtml(tNext("importCenter.preview", "Preview"))}</h3>
