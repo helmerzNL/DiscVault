@@ -353,6 +353,114 @@ def run_plugin_entrypoint(
     return result
 
 
+def replacement_plugin_ids(manifest: dict[str, Any]) -> list[str]:
+    raw = (
+        manifest.get("replacesPlugins")
+        or manifest.get("replacesPluginIds")
+        or manifest.get("replaces")
+        or []
+    )
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+    plugin_id = str(manifest.get("id") or "")
+    values: list[str] = []
+    for item in raw:
+        value = str(item or "").strip()
+        if value and value != plugin_id and value not in values:
+            values.append(value)
+    return values
+
+
+def reconcile_plugin_replacements(
+    conn,
+    *,
+    plugins: list[PluginDiscovery],
+    has_plugins_table: bool,
+    has_metadata_plugins_table: bool,
+) -> None:
+    if not has_metadata_plugins_table:
+        return
+    replacements: dict[str, list[str]] = {}
+    for plugin in plugins:
+        replaced = replacement_plugin_ids(plugin.manifest)
+        if replaced:
+            replacements[plugin.plugin_id] = replaced
+    if not replacements:
+        return
+
+    for replacement_id, replaced_ids in replacements.items():
+        ids = [replacement_id, *replaced_ids]
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, enabled, order_index
+                    FROM metadata_plugins
+                    WHERE id = ANY(%s)
+                    """,
+                    (ids,),
+                )
+                rows = {str(row["id"]): row for row in cur.fetchall()}
+                replacement_row = rows.get(replacement_id)
+                if not replacement_row:
+                    continue
+                active_legacy_rows = [
+                    row
+                    for plugin_id, row in rows.items()
+                    if plugin_id != replacement_id and bool(row.get("enabled"))
+                ]
+                if not active_legacy_rows:
+                    continue
+                legacy_row = min(
+                    active_legacy_rows,
+                    key=lambda row: int(row.get("order_index") or 9999),
+                )
+                order_index = int(legacy_row.get("order_index") or replacement_row.get("order_index") or 100)
+                cur.execute(
+                    """
+                    UPDATE metadata_plugins
+                    SET enabled=true,
+                        order_index=%s,
+                        updated_at=now()
+                    WHERE id=%s
+                    """,
+                    (order_index, replacement_id),
+                )
+                cur.execute(
+                    """
+                    UPDATE metadata_plugins
+                    SET enabled=false,
+                        updated_at=now()
+                    WHERE id = ANY(%s)
+                    """,
+                    (replaced_ids,),
+                )
+                if has_plugins_table:
+                    cur.execute(
+                        """
+                        UPDATE plugins
+                        SET enabled=true,
+                            order_index=%s,
+                            updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (order_index, replacement_id),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE plugins
+                        SET enabled=false,
+                            updated_at=now()
+                        WHERE id = ANY(%s)
+                        """,
+                        (replaced_ids,),
+                    )
+        except Exception:
+            continue
+
+
 def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -> dict[str, Any]:
     discovery = discover_plugins()
     plugins: list[PluginDiscovery] = discovery["plugins"]
@@ -476,6 +584,13 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                         WHERE p.id=mp.id
                         """
                     )
+        with conn.transaction():
+            reconcile_plugin_replacements(
+                conn,
+                plugins=plugins,
+                has_plugins_table=has_plugins_table,
+                has_metadata_plugins_table=has_metadata_plugins_table,
+            )
 
     return {
         "paths": discovery["paths"],

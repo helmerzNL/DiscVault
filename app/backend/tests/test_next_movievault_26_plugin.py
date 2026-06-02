@@ -18,6 +18,8 @@ sys.modules.setdefault(
 )
 
 from app.backend.next_plugins.movievault_26 import plugin as movievault_26
+from app.backend.next_import import legacy_metadata_plugin_plan
+from app.backend.next_plugin_runtime import replacement_plugin_ids
 
 
 class FakeResponse:
@@ -34,6 +36,26 @@ class FakeResponse:
 
 
 class MovieVault26PluginContractTests(unittest.TestCase):
+    def test_movievault_26_manifest_declares_plugin_replacement(self):
+        manifest = {
+            "id": "movievault_26",
+            "replacesPlugins": ["movievault"],
+        }
+
+        self.assertEqual(replacement_plugin_ids(manifest), ["movievault"])
+
+    def test_legacy_movievault_settings_keep_logical_provider_id(self):
+        plan = legacy_metadata_plugin_plan(
+            {
+                "movievault_enabled": True,
+                "tmdb_enabled": True,
+                "metadata_source_order": "upcitemdb,movievault,tmdb",
+            }
+        )
+
+        self.assertTrue(plan["enabled"]["movievault"])
+        self.assertIn("movievault", plan["order"])
+
     def test_default_base_url_uses_movievault_next(self):
         previous = {key: os.environ.get(key) for key in ("MOVIEVAULT_SEARCH_URL", "MOVIEVAULT_BASE_URL")}
         try:
