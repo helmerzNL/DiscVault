@@ -335,6 +335,45 @@ def metadata_source_plugins(conn) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def plugin_categories(plugin: dict[str, Any]) -> set[str]:
+    manifest = plugin.get("manifest") if isinstance(plugin.get("manifest"), dict) else {}
+    values = plugin.get("categories") or manifest.get("categories") or []
+    return {str(item) for item in values if str(item)}
+
+
+def plugin_capabilities(plugin: dict[str, Any]) -> set[str]:
+    manifest = plugin.get("manifest") if isinstance(plugin.get("manifest"), dict) else {}
+    values = plugin.get("capabilities") or manifest.get("capabilities") or []
+    return {str(item) for item in values if str(item)}
+
+
+def plugin_is_bootstrap_metadata_source(plugin: dict[str, Any]) -> bool:
+    manifest = plugin.get("manifest") if isinstance(plugin.get("manifest"), dict) else {}
+    bootstrap = manifest.get("bootstrap") if isinstance(manifest.get("bootstrap"), dict) else {}
+    return (
+        "metadata_bootstrap" in plugin_categories(plugin)
+        or "bootstrap_lookup" in plugin_capabilities(plugin)
+        or bool(bootstrap.get("metadataSource"))
+    )
+
+
+def metadata_bootstrap_lookup_allowed(query: dict[str, Any]) -> bool:
+    return bool(
+        query.get("previewMode")
+        and query.get("externalBarcode")
+        and not clean_text(query.get("title"))
+        and not clean_text(query.get("fallbackTitle"))
+        and not clean_text(query.get("tmdbId"))
+        and not clean_text(query.get("imdbId"))
+    )
+
+
+def metadata_source_plugin_allowed(plugin: dict[str, Any], query: dict[str, Any]) -> bool:
+    if not plugin_is_bootstrap_metadata_source(plugin):
+        return True
+    return metadata_bootstrap_lookup_allowed(query)
+
+
 def metadata_receiver_plugins(conn) -> list[dict[str, Any]]:
     if not table_exists(conn, "plugins"):
         return []
@@ -1461,7 +1500,12 @@ def run_metadata_source_pipeline(
     enable_metadata_lookup_bridge: bool = True,
 ) -> dict[str, Any]:
     excluded = {str(item) for item in (exclude_plugin_ids or set()) if str(item)}
-    plugins = [plugin for plugin in metadata_source_plugins(conn) if str(plugin.get("id") or "") not in excluded]
+    plugins = [
+        plugin
+        for plugin in metadata_source_plugins(conn)
+        if str(plugin.get("id") or "") not in excluded
+        and metadata_source_plugin_allowed(plugin, query)
+    ]
     overwrite_enabled = preferred_provider_overwrite(conn)
     executions: list[dict[str, Any]] = []
     normalized_results: list[dict[str, Any]] = []

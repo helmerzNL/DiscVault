@@ -10,6 +10,7 @@ if repo_root not in sys.path:
 from app.backend.next_metadata import canonicalize_plugin_result
 from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import metadata_fetch_audit_payload
+from app.backend.next_metadata import metadata_source_plugin_allowed
 from app.backend.next_metadata import merge_metadata_results
 from app.backend.next_metadata import normalize_media_format
 from app.backend.next_metadata import plugin_execution_plan
@@ -200,6 +201,48 @@ class NextMetadataPolicyTests(unittest.TestCase):
         )
 
         self.assertEqual([item["entrypoint"] for item in plan], ["search_barcode"])
+
+    def test_bootstrap_metadata_source_only_runs_for_barcode_only_preview(self):
+        plugin = {
+            "id": "upcitemdb",
+            "categories": ["metadata_source", "metadata_bootstrap"],
+            "capabilities": ["search_barcode", "title_hint", "bootstrap_lookup"],
+            "manifest": {"bootstrap": {"metadataSource": True}},
+        }
+
+        self.assertTrue(
+            metadata_source_plugin_allowed(
+                plugin,
+                query_from_payload({"barcode": "5051892000000", "previewMode": True}),
+            )
+        )
+        self.assertFalse(
+            metadata_source_plugin_allowed(
+                plugin,
+                query_from_payload({"barcode": "5051892000000"}),
+            )
+        )
+        self.assertFalse(
+            metadata_source_plugin_allowed(
+                plugin,
+                query_from_payload({"barcode": "5051892000000", "title": "Alien", "previewMode": True}),
+            )
+        )
+        self.assertFalse(
+            metadata_source_plugin_allowed(
+                plugin,
+                query_from_payload({"barcode": "5051892000000", "tmdbId": "348", "previewMode": True}),
+            )
+        )
+
+    def test_regular_metadata_source_is_allowed_outside_bootstrap_context(self):
+        plugin = {
+            "id": "tmdb",
+            "categories": ["metadata_source"],
+            "capabilities": ["search_title", "lookup_external_id", "movie_details"],
+        }
+
+        self.assertTrue(metadata_source_plugin_allowed(plugin, query_from_payload({"title": "Alien"})))
 
     def test_media_format_normalization(self):
         self.assertEqual(normalize_media_format("Ultra HD Blu-ray"), "4K UHD")
