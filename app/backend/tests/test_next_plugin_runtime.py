@@ -22,9 +22,20 @@ sys.modules.setdefault(
     ),
 )
 sys.modules.setdefault("bs4", types.SimpleNamespace(BeautifulSoup=lambda *_args, **_kwargs: None))
+psycopg_module = types.ModuleType("psycopg")
+psycopg_rows_module = types.ModuleType("psycopg.rows")
+psycopg_rows_module.dict_row = object()
+psycopg_types_module = types.ModuleType("psycopg.types")
+psycopg_types_json_module = types.ModuleType("psycopg.types.json")
+psycopg_types_json_module.Jsonb = lambda value: value
+sys.modules.setdefault("psycopg", psycopg_module)
+sys.modules.setdefault("psycopg.rows", psycopg_rows_module)
+sys.modules.setdefault("psycopg.types", psycopg_types_module)
+sys.modules.setdefault("psycopg.types.json", psycopg_types_json_module)
 
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
+from app.backend.next_worker import apply_collection_import_review
 from app.backend.next_plugins.bluray_com.plugin import _movie_title_from_release_title
 from app.backend.next_plugins.trakt import plugin as trakt_plugin
 
@@ -51,6 +62,44 @@ class FakeHTTPError(Exception):
 
 
 class NextPluginRuntimeTests(unittest.TestCase):
+    def test_import_review_applies_selected_metadata_match(self):
+        result = {
+            "items": [
+                {"title": "A Minecraft Movie 4K Blu-ray (SteelBook) (France)", "year": "2025"},
+                {"title": "Skip Me", "year": "2024"},
+            ],
+            "counts": {"movies": 2},
+        }
+        reviewed = apply_collection_import_review(
+            result,
+            {
+                "decisions": [
+                    {
+                        "index": 1,
+                        "action": "create",
+                        "metadataMatch": {
+                            "provider": "tmdb",
+                            "sourceLabel": "TMDb",
+                            "title": "A Minecraft Movie",
+                            "year": "2025",
+                            "posterUrl": "https://image.example/poster.jpg",
+                            "identifiers": {"tmdb": "950387"},
+                        },
+                        "manualOverride": {"year": "2025", "imdbId": "tt3566834"},
+                    },
+                    {"index": 2, "action": "skip"},
+                ]
+            },
+        )
+
+        self.assertEqual(len(reviewed["items"]), 1)
+        self.assertEqual(reviewed["items"][0]["title"], "A Minecraft Movie")
+        self.assertEqual(reviewed["items"][0]["tmdbId"], "950387")
+        self.assertEqual(reviewed["items"][0]["imdbId"], "tt3566834")
+        self.assertEqual(reviewed["items"][0]["posterUrl"], "https://image.example/poster.jpg")
+        self.assertEqual(reviewed["counts"]["reviewSkipped"], 1)
+        self.assertEqual(reviewed["counts"]["reviewMatched"], 1)
+
     def test_bluray_release_title_is_cleaned_for_movie_identity(self):
         self.assertEqual(
             _movie_title_from_release_title("A Minecraft Movie 4K Blu-ray (SteelBook) (France)"),

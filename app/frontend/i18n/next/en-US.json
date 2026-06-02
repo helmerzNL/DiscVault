@@ -1247,4 +1247,15 @@
   "importCenter.importError": "Import error",
   "importCenter.queueingMetadata": "Queueing metadata refresh...",
   "importCenter.metadataQueued": "Metadata refresh queued."
+,
+  "importCenter.reviewHighConfidence": "High confidence only",
+  "importCenter.useMatch": "Use match",
+  "importCenter.searchAgain": "Search again",
+  "importCenter.manualLink": "Manual link",
+  "importCenter.manualTmdb": "TMDb ID",
+  "importCenter.manualImdb": "IMDb ID",
+  "importCenter.manualPoster": "Poster URL",
+  "importCenter.selectedMatch": "Selected match",
+  "importCenter.clearMatch": "Clear match",
+  "importCenter.releaseTitleWarning": "This looks like a release title. Choose the actual movie match before import."
 }

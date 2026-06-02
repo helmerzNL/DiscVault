@@ -1247,4 +1247,15 @@
   "importCenter.importError": "Importfout",
   "importCenter.queueingMetadata": "Metadata-refresh wordt ingepland...",
   "importCenter.metadataQueued": "Metadata-refresh ingepland."
+,
+  "importCenter.reviewHighConfidence": "Alleen hoge zekerheid",
+  "importCenter.useMatch": "Gebruik match",
+  "importCenter.searchAgain": "Opnieuw zoeken",
+  "importCenter.manualLink": "Handmatig koppelen",
+  "importCenter.manualTmdb": "TMDb ID",
+  "importCenter.manualImdb": "IMDb ID",
+  "importCenter.manualPoster": "Poster-URL",
+  "importCenter.selectedMatch": "Gekozen match",
+  "importCenter.clearMatch": "Match wissen",
+  "importCenter.releaseTitleWarning": "Dit lijkt op een release-titel. Kies voor import de echte filmmatch."
 }

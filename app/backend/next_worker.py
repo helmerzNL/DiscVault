@@ -460,7 +460,7 @@ def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any
     decisions = review.get("decisions")
     if not isinstance(items, list) or not isinstance(decisions, list):
         return result
-    decision_by_index: dict[int, str] = {}
+    decision_by_index: dict[int, dict[str, Any]] = {}
     for raw in decisions:
         if not isinstance(raw, dict):
             continue
@@ -470,13 +470,58 @@ def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any
             continue
         action = clean_text(raw.get("action"))
         if index >= 1 and action in {"import", "update", "create", "skip"}:
-            decision_by_index[index] = action
+            decision_by_index[index] = raw
     if not decision_by_index:
         return result
+
+    def apply_review_values(item: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+        reviewed = dict(item)
+
+        def apply_value(target: str, value: Any, *, only_blank: bool = False) -> None:
+            text = clean_text(value)
+            if not text:
+                return
+            if only_blank and clean_text(reviewed.get(target)):
+                return
+            reviewed[target] = text
+
+        def apply_match(match: dict[str, Any], *, only_blank: bool) -> None:
+            apply_value("title", match.get("title"), only_blank=only_blank)
+            apply_value("year", match.get("year"), only_blank=only_blank)
+            apply_value("format", match.get("format"), only_blank=only_blank)
+            apply_value("overview", match.get("overview"), only_blank=only_blank)
+            apply_value("posterUrl", match.get("posterUrl"), only_blank=only_blank)
+            apply_value("backdropUrl", match.get("backdropUrl"), only_blank=only_blank)
+            identifiers = match.get("identifiers") if isinstance(match.get("identifiers"), dict) else {}
+            tmdb_id = match.get("tmdbId") or match.get("tmdb_id") or identifiers.get("tmdb")
+            imdb_id = match.get("imdbId") or match.get("imdb_id") or identifiers.get("imdb")
+            apply_value("tmdbId", tmdb_id, only_blank=only_blank)
+            apply_value("imdbId", imdb_id, only_blank=only_blank)
+
+        metadata_match = decision.get("metadataMatch")
+        manual_override = decision.get("manualOverride")
+        if isinstance(metadata_match, dict):
+            apply_match(metadata_match, only_blank=False)
+            reviewed["importReviewMatch"] = {
+                key: value
+                for key, value in metadata_match.items()
+                if value not in (None, "", [], {})
+            }
+        if isinstance(manual_override, dict):
+            apply_match(manual_override, only_blank=False)
+            reviewed["importReviewManualOverride"] = {
+                key: value
+                for key, value in manual_override.items()
+                if value not in (None, "", [], {})
+            }
+        return reviewed
+
     kept: list[Any] = []
     skipped: list[dict[str, Any]] = []
+    reviewed = 0
     for index, item in enumerate(items, start=1):
-        action = decision_by_index.get(index, "import")
+        decision = decision_by_index.get(index, {"action": "import"})
+        action = clean_text(decision.get("action")) or "import"
         if action == "skip":
             skipped.append(
                 {
@@ -487,17 +532,22 @@ def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any
             )
             continue
         if isinstance(item, dict):
+            item = apply_review_values(item, decision)
             item = {**item, "importReviewAction": action}
+            if decision.get("metadataMatch") or decision.get("manualOverride"):
+                reviewed += 1
         kept.append(item)
     counts = dict(result.get("counts") or {})
     counts["movies"] = len(kept)
     counts["reviewSkipped"] = len(skipped)
+    counts["reviewMatched"] = reviewed
     return {
         **result,
         "items": kept,
         "counts": counts,
         "review": {
             "decisions": len(decision_by_index),
+            "matched": reviewed,
             "skipped": skipped[:100],
         },
     }
