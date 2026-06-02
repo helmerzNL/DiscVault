@@ -275,6 +275,7 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_container_format_badges": True,
     "show_container_member_badges": True,
     "show_digital_badge_on_tiles": True,
+    "show_metadata_jobs": True,
     "rating_country": "NL",
     "default_media_group_id": "",
 }
@@ -292,6 +293,7 @@ APP_BOOLEAN_PREFERENCES = {
     "show_container_format_badges",
     "show_container_member_badges",
     "show_digital_badge_on_tiles",
+    "show_metadata_jobs",
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
@@ -5100,6 +5102,32 @@ def ui_preview_html(
       padding: 0 12px;
       cursor: pointer;
     }
+    .metadata-job-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .metadata-job-toggle.active {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+    }
+    .metadata-job-toggle.has-active .metadata-job-badge {
+      background: var(--accent);
+      color: #fff;
+    }
+    .metadata-job-badge {
+      display: inline-flex;
+      min-width: 20px;
+      height: 20px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--muted) 18%, transparent);
+      color: var(--muted-strong);
+      font-size: .72rem;
+      font-weight: 850;
+      padding: 0 6px;
+    }
     .hero.hidden {
       display: none;
     }
@@ -9032,6 +9060,10 @@ def ui_preview_html(
         <div class="filter-row">
           <select id="groupFilter" aria-label="Group filter" data-next-i18n-aria="groups.filterLabel"></select>
           <button type="button" class="icon-button" id="selectModeButton" data-next-i18n="bulk.select">Select</button>
+          <button type="button" class="icon-button metadata-job-toggle hidden" id="libraryMetadataJobsToggleButton">
+            <span data-next-i18n="metadataJobs.toggle">Metadata jobs</span>
+            <span class="metadata-job-badge" id="libraryMetadataJobBadge">0</span>
+          </button>
         </div>
         <div class="filter-row">
           <span class="bulk-count" id="librarySummary">""" + h(counts.get("movies", 0)) + """ movies</span>
@@ -10937,6 +10969,7 @@ def ui_preview_html(
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="collection"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="delete"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkDelete));
       setElementVisible(document.getElementById("libraryMetadataJobPanel"), canViewMetadataJobs());
+      setElementVisible(document.getElementById("libraryMetadataJobsToggleButton"), canViewMetadataJobs() && (libraryMetadataJobs || []).length > 0);
       if (!canViewMetadataJobs()) {
         libraryMetadataJobVisible = false;
         stopLibraryMetadataJobPolling();
@@ -11411,7 +11444,7 @@ def ui_preview_html(
       }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noMetadataJobs", "No metadata jobs yet."))}</div>`;
     }
     function canViewMetadataJobs() {
-      return hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh) || hasPermission("admin.view_jobs");
+      return preferences.show_metadata_jobs !== false && (hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh) || hasPermission("admin.view_jobs"));
     }
     function metadataJobMovieId(job) {
       const payload = job?.payload || {};
@@ -11482,16 +11515,26 @@ def ui_preview_html(
     function renderLibraryMetadataJobs() {
       const panel = document.getElementById("libraryMetadataJobPanel");
       const list = document.getElementById("libraryMetadataJobList");
+      const toggle = document.getElementById("libraryMetadataJobsToggleButton");
+      const badge = document.getElementById("libraryMetadataJobBadge");
       if (!panel || !list) return;
       const canView = canViewMetadataJobs();
-      const visible = canView && (libraryMetadataJobVisible || (libraryMetadataJobs || []).length > 0);
+      const jobs = (libraryMetadataJobs || []).slice(0, 8);
+      const activeCount = jobs.filter((job) => ["pending", "running"].includes(job.status)).length;
+      const visible = canView && libraryMetadataJobVisible;
       panel.classList.toggle("visible", visible);
       panel.classList.toggle("hidden", !canView);
+      if (toggle) {
+        toggle.classList.toggle("hidden", !canView || jobs.length === 0);
+        toggle.classList.toggle("active", visible);
+        toggle.classList.toggle("has-active", activeCount > 0);
+        toggle.setAttribute("aria-expanded", visible ? "true" : "false");
+      }
+      if (badge) badge.textContent = String(activeCount || jobs.length);
       if (!canView) {
         list.innerHTML = "";
         return;
       }
-      const jobs = (libraryMetadataJobs || []).slice(0, 8);
       if (!jobs.length) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("metadataJobs.none", "No metadata jobs yet."))}</div>`;
         return;
@@ -11544,7 +11587,7 @@ def ui_preview_html(
         renderLibraryMetadataJobs();
         return;
       }
-      if (options.visible !== false) libraryMetadataJobVisible = true;
+      if (options.open === true) libraryMetadataJobVisible = true;
       try {
         const payload = await authApiJson("/api/next/metadata/jobs?limit=20");
         libraryMetadataJobs = payload.jobs || [];
@@ -11565,13 +11608,19 @@ def ui_preview_html(
     function startLibraryMetadataJobPolling() {
       if (libraryMetadataJobPollTimer || !canViewMetadataJobs()) return;
       libraryMetadataJobPollTimer = window.setInterval(() => {
-        refreshLibraryMetadataJobs({visible: true});
+        refreshLibraryMetadataJobs();
       }, 2500);
     }
     function stopLibraryMetadataJobPolling() {
       if (!libraryMetadataJobPollTimer) return;
       window.clearInterval(libraryMetadataJobPollTimer);
       libraryMetadataJobPollTimer = null;
+    }
+    function toggleLibraryMetadataJobs() {
+      if (!canViewMetadataJobs()) return;
+      libraryMetadataJobVisible = !libraryMetadataJobVisible;
+      renderLibraryMetadataJobs();
+      if (libraryMetadataJobVisible) refreshLibraryMetadataJobs({open: true});
     }
     function renderAppAdminDigitalSources() {
       const list = document.getElementById("appAdminDigitalSourcesList");
@@ -17935,10 +17984,9 @@ def ui_preview_html(
         if (summary) summary.textContent = `${payload.queued || movieIds.length} ${tNext("bulk.metadataQueued", "metadata refresh jobs queued")}`;
         if (canViewMetadataJobs()) {
           libraryMetadataJobs = payload.jobs || libraryMetadataJobs;
-          libraryMetadataJobVisible = true;
           renderLibraryMetadataJobs();
           startLibraryMetadataJobPolling();
-          window.setTimeout(() => refreshLibraryMetadataJobs({visible: true}), 700);
+          window.setTimeout(() => refreshLibraryMetadataJobs(), 700);
         }
         selectedMovieIds.clear();
         toggleSelectMode(false);
@@ -18079,7 +18127,8 @@ def ui_preview_html(
       ["collectors_mode", "preferences.collectorsMode", "preferences.collectorsModeHelp"],
       ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"],
       ["show_container_format_badges", "preferences.showContainerFormatBadges", "preferences.showContainerFormatBadgesHelp", "collectors_mode"],
-      ["show_container_member_badges", "preferences.showContainerMemberBadges", "preferences.showContainerMemberBadgesHelp", "collectors_mode"]
+      ["show_container_member_badges", "preferences.showContainerMemberBadges", "preferences.showContainerMemberBadgesHelp", "collectors_mode"],
+      ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
     ];
     const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
     function ratingCountryPickerHtml(disabled = false) {
@@ -18406,7 +18455,7 @@ def ui_preview_html(
       renderProfile();
       renderLibrary();
       if (canViewMetadataJobs()) {
-        refreshLibraryMetadataJobs({visible: false});
+        refreshLibraryMetadataJobs();
       }
       updateListsCounts((state.counts || {}).personalLists || {});
       updateNotificationCounts((state.counts || {}).notifications || {});
@@ -19058,7 +19107,8 @@ def ui_preview_html(
         }
       });
       document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
-      document.getElementById("libraryMetadataJobsRefreshButton")?.addEventListener("click", () => refreshLibraryMetadataJobs({visible: true}));
+      document.getElementById("libraryMetadataJobsToggleButton")?.addEventListener("click", () => toggleLibraryMetadataJobs());
+      document.getElementById("libraryMetadataJobsRefreshButton")?.addEventListener("click", () => refreshLibraryMetadataJobs({open: true}));
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
       });
