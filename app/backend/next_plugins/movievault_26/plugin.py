@@ -923,6 +923,136 @@ def _source_reference(payload):
     return reference if isinstance(reference, dict) else {}
 
 
+def _public_reference(reference):
+    if not isinstance(reference, dict):
+        return {}
+    allowed = {
+        "type",
+        "key",
+        "publicId",
+        "public_id",
+        "barcode",
+        "containerType",
+        "container_type",
+        "movievaultId",
+        "movievault_id",
+        "tmdbId",
+        "tmdb_id",
+        "imdbId",
+        "imdb_id",
+    }
+    clean = {}
+    for key, value in reference.items():
+        key_text = _text(key)
+        if key_text in allowed and value not in (None, "", [], {}):
+            clean[key_text] = _safe_contribution_value(value)
+    return clean
+
+
+def _connection_details(context):
+    connection = _movievault_context(context)
+    return {
+        "name": PROVIDER_LABEL,
+        "baseUrl": _base_url(context),
+        "contributionUrl": _contribution_url(context),
+        "authMethod": connection.get("authMethod"),
+        "instanceId": connection.get("instanceId"),
+        "instanceName": connection.get("instanceName"),
+        "keyId": connection.get("keyId"),
+        "linkStatus": connection.get("linkStatus"),
+        "sharingMode": _sharing_mode(context),
+        "tokenPrefix": connection.get("tokenPrefix"),
+        "tokenSet": bool(connection.get("tokenSet") or _token(context)),
+    }
+
+
+def _payload_identity(payload, contribution_payload):
+    reference = _source_reference(payload)
+    identity = _text(payload.get("identity") or payload.get("id") or payload.get("sourceRef"))
+    if identity:
+        return identity
+    for key in ("barcode", "key", "publicId", "public_id", "movievaultId", "movievault_id"):
+        value = _text(reference.get(key))
+        if value:
+            return value
+    if contribution_payload:
+        return _payload_fingerprint(contribution_payload)[:16]
+    return ""
+
+
+def describe_payload(payload, context=None):
+    context = context or {}
+    payload = payload if isinstance(payload, dict) else {}
+    entity_type, contribution_payload = _contribution_payload(payload, {})
+    metadata = _metadata_context(payload)
+    fields = sorted(contribution_payload.keys())
+    reference = _public_reference(_source_reference(payload))
+    warnings = []
+    if not contribution_payload:
+        warnings.append("empty_or_disallowed_payload")
+    if not reference:
+        warnings.append("missing_source_reference")
+    if not _movievault_enabled(context):
+        warnings.append("movievault_disabled")
+    if not _contribution_enabled(context):
+        warnings.append("contribution_disabled")
+    if not _token(context) and not _movievault_context(context).get("tokenSet"):
+        warnings.append("missing_connection_token")
+    changed_fields = metadata.get("changedFields") or metadata.get("changed_fields") or fields
+    source_providers = metadata.get("sourceProviders") or metadata.get("source_providers") or []
+    identity = _payload_identity(payload, contribution_payload)
+    return {
+        "status": "ok",
+        "provider": PROVIDER_ID,
+        "providerLabel": PROVIDER_LABEL,
+        "entityType": entity_type,
+        "identity": identity,
+        "fieldCount": len(fields),
+        "fields": fields,
+        "changedFields": changed_fields if isinstance(changed_fields, list) else fields,
+        "sourceProviders": source_providers if isinstance(source_providers, list) else [],
+        "sourceReference": reference,
+        "destination": _connection_details(context),
+        "summary": f"{PROVIDER_LABEL} contribution prepared for {entity_type} with {len(fields)} field(s).",
+        "warnings": warnings,
+    }
+
+
+def activity_summary(payload, context=None):
+    payload = payload if isinstance(payload, dict) else {}
+    contribution = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
+    execution = payload.get("execution") if isinstance(payload.get("execution"), dict) else {}
+    entity_type, contribution_payload = _contribution_payload(contribution, {})
+    response_payload = execution.get("response") if isinstance(execution.get("response"), dict) else {}
+    remote_id = _text(
+        response_payload.get("id")
+        or response_payload.get("contributionId")
+        or response_payload.get("contribution_id")
+        or response_payload.get("operationId")
+        or response_payload.get("operation_id")
+    )
+    state = _text(execution.get("status") or payload.get("status") or "unknown")
+    reason = _text(execution.get("reason") or payload.get("reason"))
+    fields = sorted(contribution_payload.keys())
+    result = {
+        "status": "ok",
+        "provider": PROVIDER_ID,
+        "providerLabel": PROVIDER_LABEL,
+        "state": state,
+        "entityType": entity_type,
+        "identity": _payload_identity(contribution, contribution_payload),
+        "fieldCount": len(fields),
+        "fields": fields,
+        "idempotencyPrefix": execution.get("idempotencyPrefix"),
+        "templateVersion": execution.get("templateVersion"),
+        "remoteId": remote_id,
+        "summary": f"{PROVIDER_LABEL} contribution {state} for {entity_type}.",
+    }
+    if reason:
+        result["reason"] = reason
+    return result
+
+
 def _contribution_payload(payload, template):
     entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
     if entity_type not in {"movie", "release", "box_set", "person"}:

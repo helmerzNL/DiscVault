@@ -2,6 +2,8 @@ import os
 import sys
 import types
 import unittest
+import json
+from pathlib import Path
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -19,6 +21,7 @@ sys.modules.setdefault(
 
 from app.backend.next_plugins.movievault_26 import plugin as movievault_26
 from app.backend.next_import import legacy_metadata_plugin_plan
+from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import replacement_plugin_ids
 
 
@@ -43,6 +46,21 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         }
 
         self.assertEqual(replacement_plugin_ids(manifest), ["movievault"])
+
+    def test_movievault_26_manifest_declares_receiver_observability(self):
+        manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["version"], "1.3.0")
+        self.assertIn("describe_payload", manifest["capabilities"])
+        self.assertIn("activity_summary", manifest["capabilities"])
+
+    def test_movievault_26_runtime_exposes_receiver_observability_hooks(self):
+        discovery = discover_plugins()
+        plugin = next(item for item in discovery["plugins"] if item.plugin_id == "movievault_26")
+
+        self.assertIn("describe_payload", plugin.runtime["entrypoints"])
+        self.assertIn("activity_summary", plugin.runtime["entrypoints"])
 
     def test_legacy_movievault_settings_keep_logical_provider_id(self):
         plan = legacy_metadata_plugin_plan(
@@ -301,6 +319,75 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "submitted")
         self.assertEqual(posted[0]["payload"], {"title": "Local DiscVault Title", "overview": "A public synopsis."})
+
+    def test_describe_payload_summarizes_box_set_contribution(self):
+        result = movievault_26.describe_payload(
+            {
+                "entityType": "box_set",
+                "identity": "legacy-box-set-3",
+                "sourceReference": {
+                    "type": "container",
+                    "key": "container-1",
+                    "publicId": "legacy-box-set-3",
+                    "barcode": "5051890315526",
+                    "containerType": "box_set",
+                },
+                "payload": {
+                    "title": "Jurassic Park Trilogie",
+                    "barcode": "5051890315526",
+                    "owner_id": "must-not-leak",
+                },
+                "metadata": {
+                    "changedFields": ["barcode"],
+                    "sourceProviders": ["discvault"],
+                },
+            },
+            {
+                "secrets": {"token": "mv_live_secret"},
+                "movievault": {
+                    "contributionEnabled": True,
+                    "enabled": True,
+                    "linkStatus": "active",
+                    "sharingMode": "opt_in",
+                    "tokenSet": True,
+                },
+            },
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["entityType"], "box_set")
+        self.assertEqual(result["identity"], "legacy-box-set-3")
+        self.assertEqual(result["sourceReference"]["barcode"], "5051890315526")
+        self.assertEqual(result["fields"], ["barcode", "title"])
+        self.assertEqual(result["changedFields"], ["barcode"])
+        self.assertNotIn("owner_id", result["fields"])
+        self.assertNotIn("mv_live_secret", str(result))
+
+    def test_activity_summary_summarizes_submission_without_secret_values(self):
+        result = movievault_26.activity_summary(
+            {
+                "payload": {
+                    "entityType": "movie",
+                    "identity": "tt6139732",
+                    "payload": {"title": "Aladdin", "overview": "A public synopsis."},
+                },
+                "execution": {
+                    "status": "submitted",
+                    "entityType": "movie",
+                    "idempotencyPrefix": "movie:tt6139732:tpl-1",
+                    "templateVersion": "tpl-1",
+                    "response": {"id": "contrib_123", "token": "must-not-leak"},
+                },
+            },
+            {"secrets": {"token": "mv_live_secret"}},
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["state"], "submitted")
+        self.assertEqual(result["remoteId"], "contrib_123")
+        self.assertEqual(result["fields"], ["overview", "title"])
+        self.assertNotIn("mv_live_secret", str(result))
+        self.assertNotIn("must-not-leak", str(result))
 
 
 if __name__ == "__main__":
