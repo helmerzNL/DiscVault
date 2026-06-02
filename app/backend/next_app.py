@@ -1109,6 +1109,7 @@ def normalize_import_source_result(
         "mediaMigrationMode": clean_text(
             result.get("mediaMigrationMode") or result.get("media_migration_mode")
         ) or "reference_existing_files",
+        "recognition": result.get("recognition") if isinstance(result.get("recognition"), dict) else {},
         "options": {
             "includeSecurity": parse_bool_value(
                 options.get("includeSecurity", options.get("include_security")),
@@ -1141,6 +1142,7 @@ def import_source_summary(source: dict[str, Any], execution: dict[str, Any]) -> 
         "dataDir": source.get("dataDir"),
         "sqliteDb": source.get("sqliteDb"),
         "mediaMigrationMode": source.get("mediaMigrationMode"),
+        "recognition": source.get("recognition") or {},
         "runtimeStatus": execution.get("status"),
         "runtimeState": execution.get("state"),
         "found": bool(source.get("found")),
@@ -1326,16 +1328,19 @@ def import_source_item_provider(item: dict[str, Any], plugin_id: str) -> str:
 def import_source_item_confidence(item: dict[str, Any]) -> dict[str, Any]:
     score = 0
     evidence: list[str] = []
-    if import_source_item_title(item):
+    title = import_source_item_title(item)
+    year = import_source_item_year(item)
+    barcode = clean_text(item.get("barcode"))
+    identifiers = import_source_item_identifiers(item)
+    if title:
         score += 22
         evidence.append("title")
-    if import_source_item_year(item):
+    if year:
         score += 12
         evidence.append("year")
-    if clean_text(item.get("barcode")):
+    if barcode:
         score += 24
         evidence.append("barcode")
-    identifiers = import_source_item_identifiers(item)
     if identifiers:
         score += 22
         evidence.extend(sorted(identifiers.keys()))
@@ -1351,6 +1356,10 @@ def import_source_item_confidence(item: dict[str, Any]) -> dict[str, Any]:
     if clean_text(item.get("backdropUrl") or item.get("backdrop_url") or item.get("backdrop")):
         score += 2
         evidence.append("backdrop")
+    if title and year and (barcode or identifiers):
+        score = 100
+        if "exact_identity" not in evidence:
+            evidence.append("exact_identity")
     score = max(0, min(score, 100))
     label = "high" if score >= 74 else "medium" if score >= 48 else "low"
     return {"score": score, "label": label, "evidence": evidence}
@@ -1431,6 +1440,113 @@ def import_source_provider_summary(review_queue: list[dict[str, Any]]) -> list[d
     return result
 
 
+def import_source_item_needs_metadata_suggestion(item: dict[str, Any], confidence: dict[str, Any]) -> bool:
+    if not import_source_item_title(item):
+        return False
+    if "exact_identity" in set(confidence.get("evidence") or []):
+        return False
+    score = int(confidence.get("score") or 0)
+    return score < 74 or (not clean_text(item.get("barcode")) and not import_source_item_identifiers(item))
+
+
+def import_source_metadata_suggestions(
+    conn,
+    *,
+    item: dict[str, Any],
+    actor: dict[str, Any],
+    limit: int = 3,
+) -> dict[str, Any] | None:
+    title = import_source_item_title(item)
+    if not title:
+        return None
+    query: dict[str, Any] = {
+        "title": title,
+        "year": import_source_item_year(item),
+        "format": import_source_item_format(item),
+        "previewMode": True,
+    }
+    barcode = clean_text(item.get("barcode"))
+    identifiers = import_source_item_identifiers(item)
+    if barcode:
+        query["barcode"] = barcode
+    if identifiers.get("imdb"):
+        query["imdbId"] = identifiers["imdb"]
+    if identifiers.get("tmdb"):
+        query["tmdbId"] = identifiers["tmdb"]
+    try:
+        metadata = lookup_metadata_sources(conn, query, actor)
+    except Exception as exc:
+        return {"query": query, "status": "error", "error": str(exc), "items": [], "sources": []}
+
+    suggestions: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    def append_suggestion(provider: str, source_label: str, candidate: dict[str, Any]) -> None:
+        candidate_title = clean_text(candidate.get("title") or candidate.get("name") or candidate.get("originalTitle"))
+        candidate_year = clean_text(candidate.get("year") or candidate.get("releaseYear") or candidate.get("release_year"))
+        candidate_identifiers = {
+            key: value
+            for key, value in {
+                "tmdb": clean_text(candidate.get("tmdbId") or candidate.get("tmdb_id")),
+                "imdb": clean_text(candidate.get("imdbId") or candidate.get("imdb_id")),
+            }.items()
+            if value
+        }
+        if not candidate_title:
+            return
+        identifier_key = "|".join(f"{key}:{value}" for key, value in sorted(candidate_identifiers.items()))
+        key = (candidate_title.casefold(), candidate_year, identifier_key)
+        if key in seen:
+            return
+        seen.add(key)
+        suggestions.append(
+            {
+                "provider": provider,
+                "sourceLabel": source_label or provider,
+                "title": candidate_title,
+                "year": candidate_year,
+                "posterUrl": clean_text(candidate.get("posterUrl") or candidate.get("poster_url") or candidate.get("poster")),
+                "overview": clean_text(candidate.get("overview") or candidate.get("plot"))[:500],
+                "identifiers": candidate_identifiers,
+            }
+        )
+
+    for result_item in metadata.get("results") or []:
+        if not isinstance(result_item, dict):
+            continue
+        provider = clean_text(result_item.get("pluginId")) or clean_text(result_item.get("provider")) or "metadata"
+        source_label = clean_text(result_item.get("sourceLabel")) or provider
+        for candidate in result_item.get("candidates") or []:
+            if isinstance(candidate, dict):
+                append_suggestion(provider, source_label, candidate)
+            if len(suggestions) >= limit:
+                break
+        if len(suggestions) >= limit:
+            break
+        movie_updates = result_item.get("movieUpdates") or {}
+        if isinstance(movie_updates, dict) and clean_text(movie_updates.get("title")):
+            media_updates = result_item.get("mediaUpdates") if isinstance(result_item.get("mediaUpdates"), dict) else {}
+            poster = media_updates.get("poster") if isinstance(media_updates.get("poster"), dict) else {}
+            result_identifiers = result_item.get("identifiers") if isinstance(result_item.get("identifiers"), dict) else {}
+            append_suggestion(
+                provider,
+                source_label,
+                {
+                    "title": movie_updates.get("title"),
+                    "year": movie_updates.get("year"),
+                    "posterUrl": poster.get("sourceUrl"),
+                    "tmdbId": result_identifiers.get("tmdb"),
+                    "imdbId": result_identifiers.get("imdb"),
+                },
+            )
+    return {
+        "query": query,
+        "status": "ok",
+        "items": suggestions[:limit],
+        "sources": metadata.get("sourceSummary") or [],
+    }
+
+
 def import_source_box_set_reviews(container_preview: list[dict[str, Any]], review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows_by_index = {int(row["index"]): row for row in review_queue if row.get("index")}
     reviews: list[dict[str, Any]] = []
@@ -1477,6 +1593,9 @@ def import_source_action_preview(
     source: dict[str, Any],
     items: list[dict[str, Any]],
     limit: int = 200,
+    actor: dict[str, Any] | None = None,
+    include_metadata_suggestions: bool = True,
+    metadata_suggestion_limit: int = 12,
 ) -> dict[str, Any]:
     conflicts = import_source_conflicts(conn, items, limit=min(len(items), 5000))
     conflict_by_index = {item["index"]: item for item in conflicts}
@@ -1496,6 +1615,7 @@ def import_source_action_preview(
         "linkContainers": 0,
     }
     containers: dict[tuple[str, str], dict[str, Any]] = {}
+    suggestion_count = 0
     source_title = clean_text(source.get("sourceKind") or plugin_id).replace("_", " ")
     import_collection = {
         "containerType": "collection",
@@ -1536,6 +1656,18 @@ def import_source_action_preview(
                     "confidence": import_source_item_confidence(item),
                 }
             )
+        confidence = import_source_item_confidence(item)
+        metadata_suggestions = None
+        if (
+            include_metadata_suggestions
+            and actor
+            and suggestion_count < metadata_suggestion_limit
+            and import_source_item_needs_metadata_suggestion(item, confidence)
+        ):
+            metadata_suggestions = import_source_metadata_suggestions(conn, item=item, actor=actor)
+            suggestion_count += 1
+        if index <= len(review_queue):
+            review_queue[index - 1]["metadataSuggestions"] = metadata_suggestions
         if len(actions) < limit:
             actions.append(
                 {
@@ -1546,7 +1678,8 @@ def import_source_action_preview(
                     "barcode": clean_text(item.get("barcode")),
                     "format": import_source_item_format(item),
                     "provider": import_source_item_provider(item, plugin_id),
-                    "confidence": import_source_item_confidence(item),
+                    "confidence": confidence,
+                    "metadataSuggestions": metadata_suggestions,
                     "match": (conflict_by_index.get(index) or {}).get("match"),
                     "containers": specs,
                 }
@@ -1576,6 +1709,7 @@ def inspect_import_source_selection(
     plugin_id: str,
     payload: dict[str, Any],
     actor: dict[str, Any],
+    include_metadata_suggestions: bool = True,
 ) -> dict[str, Any]:
     plugin = import_source_plugin_by_id(conn, plugin_id)
     if not plugin:
@@ -1622,6 +1756,8 @@ def inspect_import_source_selection(
                 plugin_id=plugin_id,
                 source=source,
                 items=[item for item in items if isinstance(item, dict)],
+                actor=actor,
+                include_metadata_suggestions=include_metadata_suggestions,
             )
     return {
         "source": source,
@@ -1835,21 +1971,29 @@ def import_upload_candidates(
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     candidates: list[dict[str, Any]] = []
     best_preview: dict[str, Any] | None = None
+    best_plugin_id = ""
+    best_payload: dict[str, Any] | None = None
+    def safe_int(value: Any) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
     def score(preview: dict[str, Any]) -> int:
+        source = preview.get("source") or {}
+        recognition = source.get("recognition") if isinstance(source.get("recognition"), dict) else {}
+        recognition_score = safe_int(recognition.get("score"))
         counts = ((preview.get("actionPreview") or {}).get("counts") or {})
         if counts.get("total") is not None:
-            try:
-                return int(counts.get("total") or 0)
-            except (TypeError, ValueError):
-                return 0
-        source_counts = (preview.get("source") or {}).get("sourceCounts") or {}
+            return recognition_score * 10000 + safe_int(counts.get("total"))
+        source_counts = source.get("sourceCounts") or {}
         total = 0
         for value in source_counts.values():
             try:
                 total += int(value or 0)
             except (TypeError, ValueError):
                 continue
-        return total
+        return recognition_score * 10000 + total
 
     for plugin in plugins:
         plugin_id = str(plugin.get("id") or "")
@@ -1867,12 +2011,17 @@ def import_upload_candidates(
                 plugin_id=plugin_id,
                 payload=payload,
                 actor=actor,
+                include_metadata_suggestions=False,
             )
             if best_preview is None:
                 best_preview = preview
+                best_plugin_id = plugin_id
+                best_payload = payload
                 continue
             if score(preview) > score(best_preview):
                 best_preview = preview
+                best_plugin_id = plugin_id
+                best_payload = payload
         except NextApiError as exc:
             candidates.append(
                 {
@@ -1903,6 +2052,24 @@ def import_upload_candidates(
                     "warnings": [str(exc)],
                 }
             )
+    if best_plugin_id and best_payload:
+        try:
+            best_preview = inspect_import_source_selection(
+                conn,
+                plugin_id=best_plugin_id,
+                payload=best_payload,
+                actor=actor,
+                include_metadata_suggestions=True,
+            )
+        except Exception:
+            pass
+    candidates.sort(
+        key=lambda item: (
+            safe_int(((item.get("recognition") or {}).get("score") or 0) if isinstance(item.get("recognition"), dict) else 0),
+            safe_int(((item.get("sourceCounts") or {}).get("movies") or 0) if isinstance(item.get("sourceCounts"), dict) else 0),
+        ),
+        reverse=True,
+    )
     return candidates, best_preview
 
 
@@ -6658,6 +6825,93 @@ def ui_preview_html(
       padding: 0 10px;
       font-size: .8rem;
     }
+    .import-post-review {
+      display: grid;
+      gap: 12px;
+      margin: 14px 0;
+    }
+    .import-post-review:empty {
+      display: none;
+    }
+    .import-post-review-card {
+      border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+      border-radius: 20px;
+      padding: 14px;
+      background: color-mix(in srgb, var(--accent) 8%, var(--bg-solid));
+      box-shadow: 0 18px 40px color-mix(in srgb, var(--shadow) 34%, transparent);
+      min-width: 0;
+    }
+    .import-post-review-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .import-post-stat {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      min-width: 0;
+    }
+    .import-post-stat span {
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 760;
+    }
+    .import-post-stat strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.25rem;
+    }
+    .import-post-sections {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .import-post-section {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      min-width: 0;
+    }
+    .import-post-section h4 {
+      margin: 0 0 8px;
+      font-size: .88rem;
+    }
+    .import-post-list {
+      display: grid;
+      gap: 7px;
+    }
+    .import-post-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+      border-radius: 14px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--field) 58%, transparent);
+      min-width: 0;
+    }
+    .import-post-row strong {
+      overflow-wrap: anywhere;
+    }
+    .import-post-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    .import-post-actions button {
+      min-height: 30px;
+      border-radius: 11px;
+      padding: 0 9px;
+      font-size: .78rem;
+    }
     .import-source-meta,
     .import-job-meta,
     .import-result-meta {
@@ -6863,6 +7117,53 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 8px;
+    }
+    .import-metadata-suggestions {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--field) 82%, transparent);
+    }
+    .import-metadata-suggestion-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 780;
+    }
+    .import-metadata-suggestion-list {
+      display: grid;
+      gap: 7px;
+    }
+    .import-metadata-suggestion {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 9px;
+      align-items: center;
+    }
+    .import-metadata-suggestion img {
+      width: 34px;
+      height: 48px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--line);
+    }
+    .poster-mini-placeholder {
+      width: 34px;
+      height: 48px;
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--line) 80%, transparent);
+      display: block;
+    }
+    .import-metadata-suggestion strong {
+      display: block;
+      font-size: .88rem;
+      overflow-wrap: anywhere;
     }
     .import-review-action {
       display: grid;
@@ -9020,14 +9321,25 @@ def ui_preview_html(
       }
       .import-card-head,
       .import-review-row,
-      .import-history-row {
+      .import-history-row,
+      .import-post-row {
         display: grid;
+        grid-template-columns: 1fr;
+      }
+      .import-post-review-grid,
+      .import-post-sections {
         grid-template-columns: 1fr;
       }
       .import-history-actions {
         justify-content: stretch;
       }
+      .import-post-actions {
+        justify-content: stretch;
+      }
       .import-history-actions button {
+        width: 100%;
+      }
+      .import-post-actions button {
         width: 100%;
       }
       .import-mapping-grid {
@@ -9687,6 +9999,7 @@ def ui_preview_html(
                 <span class="tag" id="importCenterJobCount">-</span>
               </div>
             </div>
+            <div class="import-post-review" id="importCenterLatestJob"></div>
             <div class="import-job-list" id="importCenterJobs"></div>
           </div>
         </section>
@@ -16107,6 +16420,40 @@ def ui_preview_html(
       const label = String(data.label || (score >= 74 ? "high" : score >= 48 ? "medium" : "low"));
       return `<span class="tag import-confidence-pill ${escapeHtml(label)}">${escapeHtml(importConfidenceLabel(label))} ${escapeHtml(score)}%</span>`;
     }
+    function renderImportMetadataSuggestions(suggestions) {
+      const data = suggestions || {};
+      const items = data.items || [];
+      const sources = data.sources || [];
+      const sourceText = sources.length
+        ? sources.slice(0, 3).map((source) => source.name || source.pluginId || source.sourceLabel).filter(Boolean).join(" / ")
+        : "";
+      if (!items.length && !sourceText && !data.error) return "";
+      return `
+        <div class="import-metadata-suggestions">
+          <div class="import-metadata-suggestion-head">
+            <span>${escapeHtml(tNext("importCenter.metadataSuggestions", "Metadata suggestions"))}</span>
+            ${sourceText ? `<span>${escapeHtml(sourceText)}</span>` : ""}
+          </div>
+          ${data.error ? `<div class="import-source-meta">${escapeHtml(data.error)}</div>` : ""}
+          ${items.length ? `<div class="import-metadata-suggestion-list">
+            ${items.map((item) => {
+              const meta = [item.year, item.sourceLabel || item.provider].filter(Boolean).join(" / ");
+              const ids = item.identifiers || {};
+              const idText = Object.entries(ids).map(([key, value]) => `${key}:${value}`).join(" ");
+              return `
+                <div class="import-metadata-suggestion">
+                  ${item.posterUrl ? `<img src="${escapeHtml(item.posterUrl)}" alt="">` : `<span class="poster-mini-placeholder"></span>`}
+                  <div>
+                    <strong>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</strong>
+                    <div class="import-source-meta">${escapeHtml([meta, idText].filter(Boolean).join(" / "))}</div>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>` : ""}
+        </div>
+      `;
+    }
     function importDecisionValue(row, decisions) {
       return decisions[row.index] || row.action || "create";
     }
@@ -16273,6 +16620,7 @@ def ui_preview_html(
               ${match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml(match)}</div>` : ""}
               ${containerTags ? `<div class="import-counts">${containerTags}</div>` : ""}
               ${evidence ? `<div class="import-review-evidence">${evidence}</div>` : ""}
+              ${renderImportMetadataSuggestions(row.metadataSuggestions)}
             </div>
             <label class="import-review-action">
               <span>${escapeHtml(tNext("importCenter.reviewDecision", "Decision"))}</span>
@@ -16494,6 +16842,140 @@ def ui_preview_html(
         </div>
       `;
     }
+    function latestImportResultJob() {
+      return (importCenter.jobs || []).find((job) => {
+        const persistence = importJobPersistence(job);
+        return isImportSourceJob(job) && job.status === "completed" && persistence && Object.keys(persistence).length;
+      }) || null;
+    }
+    function importPostReviewStats(persistence) {
+      const movies = Array.isArray(persistence.movies) ? persistence.movies : [];
+      const errors = Array.isArray(persistence.errors) ? persistence.errors : [];
+      const imported = Number(persistence.imported || movies.length || 0);
+      const total = Number(persistence.items || imported + errors.length || 0);
+      const created = Number(persistence.created || movies.filter((movie) => movie.action === "created").length || 0);
+      const updated = Number(persistence.updated || movies.filter((movie) => movie.action === "updated").length || 0);
+      const skipped = Math.max(0, total - imported - errors.length);
+      return {total, imported, created, updated, skipped, errors: errors.length};
+    }
+    function importJobMovieIdsForMetadata(job) {
+      const persistence = importJobPersistence(job);
+      return (persistence.movies || [])
+        .filter((movie) => movie && movie.id && ["created", "updated"].includes(movie.action || ""))
+        .map((movie) => String(movie.id))
+        .filter((id, index, values) => values.indexOf(id) === index)
+        .slice(0, 50);
+    }
+    function renderImportPostMovieRow(movie, actionLabel) {
+      const meta = [movie.year, movie.format, movie.barcode, actionLabel || movie.action].filter(Boolean).join(" / ");
+      return `
+        <div class="import-post-row">
+          <div>
+            <strong>${escapeHtml(movie.title || movie.id || "-")}</strong>
+            <div class="import-source-meta">${escapeHtml(meta)}</div>
+          </div>
+          <div class="import-post-actions">
+            ${movie.id ? `<button type="button" class="secondary-button" data-open-movie="${escapeHtml(movie.id)}">${escapeHtml(tNext("common.open", "Open"))}</button>` : ""}
+            ${movie.id && hasPermission("metadata.refresh_one") ? `<button type="button" class="secondary-button" data-import-metadata-refresh="${escapeHtml(movie.id)}">${escapeHtml(tNext("importCenter.refreshMetadata", "Refresh metadata"))}</button>` : ""}
+          </div>
+        </div>
+      `;
+    }
+    function renderImportPostContainerRow(container) {
+      const meta = [container.containerType || "collection", container.created ? tNext("importCenter.created", "Created") : tNext("importCenter.updated", "Updated")].filter(Boolean).join(" / ");
+      return `
+        <div class="import-post-row">
+          <div>
+            <strong>${escapeHtml(container.title || container.id || "-")}</strong>
+            <div class="import-source-meta">${escapeHtml(meta)}</div>
+          </div>
+          <div class="import-post-actions">
+            ${container.id ? `<button type="button" class="secondary-button" data-import-open-container="${escapeHtml(container.id)}">${escapeHtml(tNext("importCenter.openCollection", "Open"))}</button>` : ""}
+          </div>
+        </div>
+      `;
+    }
+    function renderImportPostErrorRow(error) {
+      const meta = [error.index ? `#${error.index}` : "", error.title || ""].filter(Boolean).join(" / ");
+      return `
+        <div class="import-post-row">
+          <div>
+            <strong>${escapeHtml(error.error || error.reason || tNext("importCenter.importError", "Import error"))}</strong>
+            <div class="import-source-meta">${escapeHtml(meta)}</div>
+          </div>
+        </div>
+      `;
+    }
+    function renderImportPostSection(title, rows, emptyText, renderer) {
+      return `
+        <section class="import-post-section">
+          <h4>${escapeHtml(title)}</h4>
+          <div class="import-post-list">
+            ${rows.length ? rows.slice(0, 8).map(renderer).join("") : `<div class="preview-empty">${escapeHtml(emptyText)}</div>`}
+          </div>
+        </section>
+      `;
+    }
+    function renderLatestImportReview() {
+      const node = document.getElementById("importCenterLatestJob");
+      if (!node) return;
+      const job = latestImportResultJob();
+      if (!job) {
+        node.innerHTML = "";
+        return;
+      }
+      const persistence = importJobPersistence(job);
+      const pluginId = importJobPluginId(job);
+      const stats = importPostReviewStats(persistence);
+      const movies = Array.isArray(persistence.movies) ? persistence.movies : [];
+      const createdMovies = movies.filter((movie) => movie.action === "created");
+      const updatedMovies = movies.filter((movie) => movie.action === "updated");
+      const errors = Array.isArray(persistence.errors) ? persistence.errors : [];
+      const containers = [
+        ...(persistence.collectionId ? [{
+          id: persistence.collectionId,
+          title: tNext("importCenter.importCollection", "Import collection"),
+          containerType: "collection",
+          created: !!persistence.collectionCreated
+        }] : []),
+        ...((persistence.containers || []).filter(Boolean))
+      ];
+      const metadataIds = importJobMovieIdsForMetadata(job);
+      const canRefreshBulkMetadata = metadataIds.length === 1
+        ? hasPermission("metadata.refresh_one")
+        : metadataIds.length > 1 && hasPermission("metadata.refresh_bulk");
+      node.innerHTML = `
+        <article class="import-post-review-card">
+          <div class="import-card-head">
+            <div>
+              <span class="eyebrow">${escapeHtml(tNext("importCenter.postReviewEyebrow", "Latest import"))}</span>
+              <h3>${escapeHtml(tNext("importCenter.postReviewTitle", "Import result"))}</h3>
+              <p class="import-source-meta">
+                ${escapeHtml(pluginId || tNext("importCenter.source", "Source"))}
+                ${job.finishedAt || job.finished_at ? `&middot; ${escapeHtml(shortDateTime(job.finishedAt || job.finished_at))}` : ""}
+              </p>
+            </div>
+            <div class="button-row compact">
+              ${canRefreshBulkMetadata ? `<button type="button" class="secondary-button" data-import-metadata-refresh-job="${escapeHtml(job.id)}">${escapeHtml(tNext("importCenter.refreshImportedMetadata", "Refresh imported metadata"))}</button>` : ""}
+              ${canRollbackImportJob(job, persistence) ? `<button type="button" class="danger" data-import-rollback="${escapeHtml(job.id)}">${escapeHtml(tNext("importCenter.rollbackButton", "Undo import"))}</button>` : ""}
+            </div>
+          </div>
+          <div class="import-post-review-grid">
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.actionTotal", "Total"))}</span><strong>${escapeHtml(formatNumber(stats.total))}</strong></div>
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.action.create", "Create"))}</span><strong>${escapeHtml(formatNumber(stats.created))}</strong></div>
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.action.update", "Update"))}</span><strong>${escapeHtml(formatNumber(stats.updated))}</strong></div>
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.historyWarnings", "Warnings"))}</span><strong>${escapeHtml(formatNumber(stats.errors + stats.skipped))}</strong></div>
+          </div>
+          ${importJobRollback(job).status === "completed" ? renderImportJobRollback(job, persistence) : ""}
+          <div class="import-post-sections">
+            ${renderImportPostSection(tNext("importCenter.createdMovies", "Created movies"), createdMovies, tNext("importCenter.noCreatedMovies", "No movies were created."), (movie) => renderImportPostMovieRow(movie, tNext("importCenter.created", "Created")))}
+            ${renderImportPostSection(tNext("importCenter.updatedMovies", "Updated movies"), updatedMovies, tNext("importCenter.noUpdatedMovies", "No existing movies were updated."), (movie) => renderImportPostMovieRow(movie, tNext("importCenter.updated", "Updated")))}
+            ${renderImportPostSection(tNext("importCenter.historyContainers", "Containers"), containers, tNext("importCenter.noLinkedContainers", "No containers were linked."), renderImportPostContainerRow)}
+            ${renderImportPostSection(tNext("importCenter.importErrors", "Import errors"), errors, tNext("importCenter.noImportErrors", "No import errors."), renderImportPostErrorRow)}
+          </div>
+        </article>
+      `;
+    }
     function importHistoryFilteredJobs() {
       const statusFilter = document.getElementById("importHistoryStatusFilter")?.value || "all";
       const pluginFilter = document.getElementById("importHistoryPluginFilter")?.value || "all";
@@ -16579,6 +17061,7 @@ def ui_preview_html(
       `;
     }
     function renderImportJobs() {
+      renderLatestImportReview();
       const list = document.getElementById("importCenterJobs");
       const count = document.getElementById("importCenterJobCount");
       const active = document.activeElement;
@@ -16656,6 +17139,44 @@ def ui_preview_html(
         });
         setImportCenterMessage(tNext("importCenter.rollbackDone", "Import rolled back."), "good");
         await loadImportCenter();
+      } catch (error) {
+        setImportCenterMessage(error.message || String(error), "bad");
+      }
+    }
+    async function queueImportMovieMetadataRefresh(movieId) {
+      if (!movieId || !hasPermission("metadata.refresh_one")) return;
+      try {
+        setImportCenterMessage(tNext("importCenter.queueingMetadata", "Queueing metadata refresh..."));
+        await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/jobs`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({dryRun: false})
+        });
+        setImportCenterMessage(tNext("importCenter.metadataQueued", "Metadata refresh queued."), "good");
+      } catch (error) {
+        setImportCenterMessage(error.message || String(error), "bad");
+      }
+    }
+    async function queueImportJobMetadataRefresh(jobId) {
+      const job = (importCenter.jobs || []).find((item) => String(item.id) === String(jobId));
+      const movieIds = importJobMovieIdsForMetadata(job || {});
+      if (!movieIds.length) return;
+      if (movieIds.length === 1) {
+        await queueImportMovieMetadataRefresh(movieIds[0]);
+        return;
+      }
+      if (!hasPermission("metadata.refresh_bulk")) return;
+      try {
+        setImportCenterMessage(tNext("importCenter.queueingMetadata", "Queueing metadata refresh..."));
+        const payload = await authApiJson("/api/next/metadata/jobs", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, dryRun: false, confirm: "metadata-bulk-refresh"})
+        });
+        setImportCenterMessage(
+          `${formatNumber(payload.queued || movieIds.length)} ${tNext("importCenter.metadataQueued", "Metadata refresh queued.")}`,
+          "good"
+        );
       } catch (error) {
         setImportCenterMessage(error.message || String(error), "bad");
       }
@@ -17151,6 +17672,7 @@ def ui_preview_html(
         console.log("import job", payload);
         setImportCenterMessage(tNext("importCenter.queued", "Import job queued."), "good");
         await loadImportCenter();
+        setImportCenterTab("jobs");
       } catch (error) {
         setImportCenterMessage(error.message || String(error), "bad");
       }
@@ -19807,9 +20329,25 @@ def ui_preview_html(
         const containerButton = event.target.closest("[data-import-open-container]");
         const movieButton = event.target.closest("[data-open-movie]");
         const rollbackButton = event.target.closest("[data-import-rollback]");
+        const metadataButton = event.target.closest("[data-import-metadata-refresh]");
+        const metadataJobButton = event.target.closest("[data-import-metadata-refresh-job]");
         if (containerButton) openAppContainerDetail(containerButton.dataset.importOpenContainer);
         if (movieButton) openMovieDetail(movieButton.dataset.openMovie);
         if (rollbackButton) rollbackImportJob(rollbackButton.dataset.importRollback);
+        if (metadataButton) queueImportMovieMetadataRefresh(metadataButton.dataset.importMetadataRefresh);
+        if (metadataJobButton) queueImportJobMetadataRefresh(metadataJobButton.dataset.importMetadataRefreshJob);
+      });
+      document.getElementById("importCenterLatestJob")?.addEventListener("click", (event) => {
+        const containerButton = event.target.closest("[data-import-open-container]");
+        const movieButton = event.target.closest("[data-open-movie]");
+        const rollbackButton = event.target.closest("[data-import-rollback]");
+        const metadataButton = event.target.closest("[data-import-metadata-refresh]");
+        const metadataJobButton = event.target.closest("[data-import-metadata-refresh-job]");
+        if (containerButton) openAppContainerDetail(containerButton.dataset.importOpenContainer);
+        if (movieButton) openMovieDetail(movieButton.dataset.openMovie);
+        if (rollbackButton) rollbackImportJob(rollbackButton.dataset.importRollback);
+        if (metadataButton) queueImportMovieMetadataRefresh(metadataButton.dataset.importMetadataRefresh);
+        if (metadataJobButton) queueImportJobMetadataRefresh(metadataJobButton.dataset.importMetadataRefreshJob);
       });
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
       document.getElementById("importScannerStartButton")?.addEventListener("click", () => startImportBarcodeScanner());

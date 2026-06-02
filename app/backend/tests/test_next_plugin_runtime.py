@@ -316,6 +316,56 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(item["year"], "2021")
         self.assertEqual(item["collectionTitle"], "Sci-Fi Favorites")
 
+    def test_clz_import_plugin_strongly_recognizes_flat_csv(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_file = Path(temp_dir) / "clz_movies.csv"
+            export_file.write_text(
+                "CLZ ID,Title,Year,Barcode,IMDb URL,Format,Collection Status\n"
+                "42,Back to the Future,1985,5050582805967,https://www.imdb.com/title/tt0088763/,Blu-ray,Owned\n",
+                encoding="utf-8",
+            )
+
+            execution = run_plugin_entrypoint(
+                "import_clz_movies",
+                "inspect_source",
+                {"sourcePath": str(export_file)},
+                {},
+            )
+
+        result = execution["result"]
+        self.assertEqual(execution["status"], "ok")
+        self.assertEqual(result["recognition"]["label"], "strong")
+        self.assertGreaterEqual(result["recognition"]["score"], 70)
+        self.assertEqual(result["sample"][0]["imdbId"], "tt0088763")
+
+    def test_collection_import_plugin_parses_common_dutch_flat_csv_headers(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_file = Path(temp_dir) / "platte-csv.csv"
+            export_file.write_text(
+                "Titel,Jaar,Streepjescode,IMDb URL,Formaat,Regisseur,Acteurs\n"
+                "Dune,2021,8712609644750,https://www.imdb.com/title/tt1160419/,Ultra HD Blu-ray,Denis Villeneuve,Timothee Chalamet\n",
+                encoding="utf-8",
+            )
+
+            execution = run_plugin_entrypoint(
+                "import_mymovies_dk",
+                "import_source",
+                {"sourcePath": str(export_file)},
+                {},
+            )
+
+        result = execution["result"]
+        self.assertEqual(execution["status"], "ok")
+        self.assertEqual(result["status"], "completed")
+        item = result["items"][0]
+        self.assertEqual(item["title"], "Dune")
+        self.assertEqual(item["year"], "2021")
+        self.assertEqual(item["barcode"], "8712609644750")
+        self.assertEqual(item["imdbId"], "tt1160419")
+        self.assertEqual(item["format"], "Ultra HD Blu-ray")
+        self.assertEqual(item["director"], "Denis Villeneuve")
+        self.assertIn("Timothee", item["actor"])
+
     def test_legacy_import_plugin_inspects_sqlite_source(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             data_dir = Path(temp_dir)

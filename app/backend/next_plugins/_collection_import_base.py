@@ -6,12 +6,73 @@ import csv
 import hashlib
 import json
 import os
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
 
 SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".json", ".xml"}
+
+COMMON_ALIASES: dict[str, tuple[str, ...]] = {
+    "externalId": ("ID", "Id", "Movie ID", "MovieId", "Film ID", "Collection Number", "Nummer", "Nr", "No"),
+    "title": ("Title", "Titel", "Name", "Naam", "Movie", "Movie Title", "Film", "Filmnaam", "Film Titel"),
+    "originalTitle": ("Original Title", "Originele titel", "OriginalTitle", "Original Name", "Originele Naam"),
+    "year": ("Year", "Jaar", "Release Year", "Movie Year", "Film Year", "Productiejaar", "Releasejaar", "Year Released"),
+    "releaseDate": ("Release Date", "Releasedatum", "Date", "Datum", "ReleaseDate", "Release Datum"),
+    "barcode": ("Barcode", "UPC", "EAN", "UPC/EAN", "EAN/UPC", "Streepjescode", "UPC EAN", "EAN UPC"),
+    "format": ("Format", "Formaat", "Media Type", "Medium", "Type", "Media", "Drager", "Disc Type"),
+    "edition": ("Edition", "Editie", "Release", "Version", "Versie", "Uitgave"),
+    "country": ("Country", "Land", "Country Code", "Landcode", "Regio"),
+    "language": ("Language", "Taal", "Languages", "Talen", "Audio Language", "Audio Taal"),
+    "overview": ("Plot", "Description", "Beschrijving", "Overview", "Synopsis", "Omschrijving", "Samenvatting"),
+    "runtime": ("Runtime", "Running Time", "Length", "Speelduur", "Duur", "Minutes", "Minuten"),
+    "rating": ("Rating", "Beoordeling", "My Rating", "IMDb Rating", "IMDB Rating"),
+    "director": ("Director", "Directors", "Regisseur", "Regisseurs", "Director(s)"),
+    "actor": ("Cast", "Actors", "Acteurs", "Stars", "Starring", "Cast Members"),
+    "genre": ("Genre", "Genres"),
+    "imdbId": ("IMDb ID", "IMDB ID", "IMDb", "IMDB", "IMDb Number", "IMDB Number", "IMDb URL", "IMDB URL", "imdb_id"),
+    "tmdbId": ("TMDb ID", "TMDB ID", "TMDb", "TMDB", "TMDb URL", "TMDB URL", "tmdb_id"),
+    "poster": ("Poster", "Poster URL", "Cover", "Cover URL", "Afbeelding", "Hoes", "Cover Image"),
+    "backdrop": ("Backdrop", "Backdrop URL", "Background", "Achtergrond"),
+    "sourceUrl": ("URL", "Link", "Source URL", "Bron URL"),
+    "tags": ("Tags", "Labels", "Status"),
+    "collection": ("Collection", "Collectie", "List", "Lijst", "Folder", "Map", "Group", "Groep"),
+    "boxSet": ("Box Set", "BoxSet", "Boxset", "Set", "Series", "Serie", "Franchise"),
+    "vault": ("Vault", "Vault Title", "Version Group", "Edition Group"),
+    "watchedAt": ("Watched Date", "Bekeken op", "Date Watched", "Viewed At"),
+    "watchlisted": ("Watchlist", "Watchlisted", "In Watchlist", "Kijklijst"),
+}
+
+IMPORT_FIELDS = (
+    "externalId",
+    "title",
+    "originalTitle",
+    "year",
+    "releaseDate",
+    "barcode",
+    "format",
+    "edition",
+    "country",
+    "language",
+    "overview",
+    "runtime",
+    "rating",
+    "director",
+    "actor",
+    "genre",
+    "imdbId",
+    "tmdbId",
+    "poster",
+    "backdrop",
+    "sourceUrl",
+    "collection",
+    "boxSet",
+    "vault",
+    "watchedAt",
+    "watchlisted",
+    "tags",
+)
 
 
 def text(value: Any) -> str:
@@ -34,6 +95,15 @@ def first_value(row: dict[str, Any], aliases: tuple[str, ...]) -> Any:
         if folded_value not in (None, "", [], {}):
             return folded_value
     return ""
+
+
+def merge_aliases(field: str, aliases: tuple[str, ...] | list[str] | None) -> tuple[str, ...]:
+    values: list[str] = []
+    for alias in tuple(aliases or ()) + COMMON_ALIASES.get(field, ()):
+        value = text(alias)
+        if value and value not in values:
+            values.append(value)
+    return tuple(values)
 
 
 def mapped_value(row: dict[str, Any], aliases: tuple[str, ...], column_name: Any = "") -> Any:
@@ -85,6 +155,26 @@ def bool_value(value: Any, default: bool = False) -> bool:
     return default
 
 
+def extract_imdb_id(value: Any) -> str:
+    raw = text(value)
+    if not raw:
+        return ""
+    match = re.search(r"tt\d{6,10}", raw, flags=re.IGNORECASE)
+    if match:
+        return match.group(0).lower()
+    return raw if re.fullmatch(r"tt\d{6,10}", raw, flags=re.IGNORECASE) else ""
+
+
+def extract_tmdb_id(value: Any) -> str:
+    raw = text(value)
+    if not raw:
+        return ""
+    if raw.isdigit():
+        return raw
+    match = re.search(r"(?:themoviedb\.org/movie/|tmdb[:#/ ]+)(\d+)", raw, flags=re.IGNORECASE)
+    return match.group(1) if match else ""
+
+
 class CollectionImportPlugin:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
@@ -94,6 +184,7 @@ class CollectionImportPlugin:
         self.source_kind = config["sourceKind"]
         self.aliases = config["aliases"]
         self.default_format = config.get("defaultFormat", "")
+        self.recognition = config.get("recognition") if isinstance(config.get("recognition"), dict) else {}
 
     def settings(self, context: dict[str, Any] | None) -> dict[str, Any]:
         return (context or {}).get("settings") or {}
@@ -116,6 +207,9 @@ class CollectionImportPlugin:
         if not isinstance(raw, dict):
             return {}
         return {str(key): text(value) for key, value in raw.items() if text(value)}
+
+    def field_aliases(self, field: str) -> tuple[str, ...]:
+        return merge_aliases(field, self.aliases.get(field, ()))
 
     def files(self, source_path: Path) -> list[Path]:
         if source_path.is_file() and source_path.suffix.lower() in SUPPORTED_EXTENSIONS:
@@ -193,38 +287,40 @@ class CollectionImportPlugin:
         index: int,
         column_mapping: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        aliases = self.aliases
         column_mapping = column_mapping or {}
+        aliases = {field: self.field_aliases(field) for field in IMPORT_FIELDS}
         title = text(mapped_value(row, aliases["title"], column_mapping.get("title")))
         if not title:
             return {}
-        barcode = text(mapped_value(row, aliases.get("barcode", ()), column_mapping.get("barcode")))
-        media_format = text(mapped_value(row, aliases.get("format", ()), column_mapping.get("format"))) or self.default_format
-        poster = text(mapped_value(row, aliases.get("poster", ()), column_mapping.get("poster")))
-        backdrop = text(mapped_value(row, aliases.get("backdrop", ()), column_mapping.get("backdrop")))
-        source_url = text(mapped_value(row, aliases.get("sourceUrl", ()), column_mapping.get("sourceUrl")))
-        collection_title = text(mapped_value(row, aliases.get("collection", ()), column_mapping.get("collectionTitle")))
-        box_set_title = text(mapped_value(row, aliases.get("boxSet", ()), column_mapping.get("boxSetTitle")))
-        vault_title = text(mapped_value(row, aliases.get("vault", ()), column_mapping.get("vaultTitle")))
+        barcode = text(mapped_value(row, aliases["barcode"], column_mapping.get("barcode")))
+        media_format = text(mapped_value(row, aliases["format"], column_mapping.get("format"))) or self.default_format
+        poster = text(mapped_value(row, aliases["poster"], column_mapping.get("poster")))
+        backdrop = text(mapped_value(row, aliases["backdrop"], column_mapping.get("backdrop")))
+        source_url = text(mapped_value(row, aliases["sourceUrl"], column_mapping.get("sourceUrl")))
+        collection_title = text(mapped_value(row, aliases["collection"], column_mapping.get("collectionTitle")))
+        box_set_title = text(mapped_value(row, aliases["boxSet"], column_mapping.get("boxSetTitle")))
+        vault_title = text(mapped_value(row, aliases["vault"], column_mapping.get("vaultTitle")))
+        imdb_id = extract_imdb_id(mapped_value(row, aliases["imdbId"], column_mapping.get("imdbId")))
+        tmdb_id = extract_tmdb_id(mapped_value(row, aliases["tmdbId"], column_mapping.get("tmdbId")))
         movie = {
-            "externalId": text(mapped_value(row, aliases.get("externalId", ()), column_mapping.get("externalId"))) or f"{source_file.name}:{index}",
+            "externalId": text(mapped_value(row, aliases["externalId"], column_mapping.get("externalId"))) or f"{source_file.name}:{index}",
             "title": title,
-            "originalTitle": text(mapped_value(row, aliases.get("originalTitle", ()), column_mapping.get("originalTitle"))),
-            "year": parse_year(mapped_value(row, aliases.get("year", ()), column_mapping.get("year"))),
-            "releaseDate": text(mapped_value(row, aliases.get("releaseDate", ()), column_mapping.get("releaseDate"))),
+            "originalTitle": text(mapped_value(row, aliases["originalTitle"], column_mapping.get("originalTitle"))),
+            "year": parse_year(mapped_value(row, aliases["year"], column_mapping.get("year"))),
+            "releaseDate": text(mapped_value(row, aliases["releaseDate"], column_mapping.get("releaseDate"))),
             "barcode": barcode,
             "format": media_format,
-            "edition": text(mapped_value(row, aliases.get("edition", ()), column_mapping.get("edition"))),
-            "country": text(mapped_value(row, aliases.get("country", ()), column_mapping.get("country"))),
-            "language": text(mapped_value(row, aliases.get("language", ()), column_mapping.get("language"))),
-            "overview": text(mapped_value(row, aliases.get("overview", ()), column_mapping.get("overview"))),
-            "runtimeMinutes": parse_runtime(mapped_value(row, aliases.get("runtime", ()), column_mapping.get("runtime"))),
-            "rating": text(mapped_value(row, aliases.get("rating", ()), column_mapping.get("rating"))),
-            "director": text(mapped_value(row, aliases.get("director", ()), column_mapping.get("director"))),
-            "actor": text(mapped_value(row, aliases.get("actor", ()), column_mapping.get("actor"))),
-            "genre": text(mapped_value(row, aliases.get("genre", ()), column_mapping.get("genre"))),
-            "imdbId": text(mapped_value(row, aliases.get("imdbId", ()), column_mapping.get("imdbId"))),
-            "tmdbId": text(mapped_value(row, aliases.get("tmdbId", ()), column_mapping.get("tmdbId"))),
+            "edition": text(mapped_value(row, aliases["edition"], column_mapping.get("edition"))),
+            "country": text(mapped_value(row, aliases["country"], column_mapping.get("country"))),
+            "language": text(mapped_value(row, aliases["language"], column_mapping.get("language"))),
+            "overview": text(mapped_value(row, aliases["overview"], column_mapping.get("overview"))),
+            "runtimeMinutes": parse_runtime(mapped_value(row, aliases["runtime"], column_mapping.get("runtime"))),
+            "rating": text(mapped_value(row, aliases["rating"], column_mapping.get("rating"))),
+            "director": text(mapped_value(row, aliases["director"], column_mapping.get("director"))),
+            "actor": text(mapped_value(row, aliases["actor"], column_mapping.get("actor"))),
+            "genre": text(mapped_value(row, aliases["genre"], column_mapping.get("genre"))),
+            "imdbId": imdb_id,
+            "tmdbId": tmdb_id,
             "posterUrl": poster if is_url(poster) else "",
             "backdropUrl": backdrop if is_url(backdrop) else "",
             "sourceUrl": source_url if is_url(source_url) else "",
@@ -234,9 +330,9 @@ class CollectionImportPlugin:
             "boxSetTitle": box_set_title,
             "vaultTitle": vault_title,
         }
-        watched_at = text(mapped_value(row, aliases.get("watchedAt", ()), column_mapping.get("watchedAt")))
-        watchlisted = bool_value(mapped_value(row, aliases.get("watchlisted", ()), column_mapping.get("watchlisted")), default=False)
-        tags = text(mapped_value(row, aliases.get("tags", ()), column_mapping.get("tags")))
+        watched_at = text(mapped_value(row, aliases["watchedAt"], column_mapping.get("watchedAt")))
+        watchlisted = bool_value(mapped_value(row, aliases["watchlisted"], column_mapping.get("watchlisted")), default=False)
+        tags = text(mapped_value(row, aliases["tags"], column_mapping.get("tags")))
         if watched_at or watchlisted or tags:
             movie["personal"] = {
                 "watchedAt": watched_at,
@@ -286,39 +382,76 @@ class CollectionImportPlugin:
         row = {column: column for column in columns}
         detected: dict[str, str] = {}
         field_aliases = {
-            "externalId": self.aliases.get("externalId", ()),
-            "title": self.aliases.get("title", ()),
-            "originalTitle": self.aliases.get("originalTitle", ()),
-            "year": self.aliases.get("year", ()),
-            "releaseDate": self.aliases.get("releaseDate", ()),
-            "barcode": self.aliases.get("barcode", ()),
-            "format": self.aliases.get("format", ()),
-            "edition": self.aliases.get("edition", ()),
-            "country": self.aliases.get("country", ()),
-            "language": self.aliases.get("language", ()),
-            "overview": self.aliases.get("overview", ()),
-            "runtime": self.aliases.get("runtime", ()),
-            "rating": self.aliases.get("rating", ()),
-            "director": self.aliases.get("director", ()),
-            "actor": self.aliases.get("actor", ()),
-            "genre": self.aliases.get("genre", ()),
-            "imdbId": self.aliases.get("imdbId", ()),
-            "tmdbId": self.aliases.get("tmdbId", ()),
-            "poster": self.aliases.get("poster", ()),
-            "backdrop": self.aliases.get("backdrop", ()),
-            "sourceUrl": self.aliases.get("sourceUrl", ()),
-            "collectionTitle": self.aliases.get("collection", ()),
-            "boxSetTitle": self.aliases.get("boxSet", ()),
-            "vaultTitle": self.aliases.get("vault", ()),
-            "watchedAt": self.aliases.get("watchedAt", ()),
-            "watchlisted": self.aliases.get("watchlisted", ()),
-            "tags": self.aliases.get("tags", ()),
+            "externalId": self.field_aliases("externalId"),
+            "title": self.field_aliases("title"),
+            "originalTitle": self.field_aliases("originalTitle"),
+            "year": self.field_aliases("year"),
+            "releaseDate": self.field_aliases("releaseDate"),
+            "barcode": self.field_aliases("barcode"),
+            "format": self.field_aliases("format"),
+            "edition": self.field_aliases("edition"),
+            "country": self.field_aliases("country"),
+            "language": self.field_aliases("language"),
+            "overview": self.field_aliases("overview"),
+            "runtime": self.field_aliases("runtime"),
+            "rating": self.field_aliases("rating"),
+            "director": self.field_aliases("director"),
+            "actor": self.field_aliases("actor"),
+            "genre": self.field_aliases("genre"),
+            "imdbId": self.field_aliases("imdbId"),
+            "tmdbId": self.field_aliases("tmdbId"),
+            "poster": self.field_aliases("poster"),
+            "backdrop": self.field_aliases("backdrop"),
+            "sourceUrl": self.field_aliases("sourceUrl"),
+            "collectionTitle": self.field_aliases("collection"),
+            "boxSetTitle": self.field_aliases("boxSet"),
+            "vaultTitle": self.field_aliases("vault"),
+            "watchedAt": self.field_aliases("watchedAt"),
+            "watchlisted": self.field_aliases("watchlisted"),
+            "tags": self.field_aliases("tags"),
         }
         for field, aliases in field_aliases.items():
             value = text(first_value(row, aliases))
             if value:
                 detected[field] = value
         return detected
+
+    def recognition_profile(
+        self,
+        *,
+        source_path: Path,
+        files: list[Path],
+        columns: list[str],
+        items: list[dict[str, Any]],
+        detected_mapping: dict[str, str],
+    ) -> dict[str, Any]:
+        evidence: list[str] = []
+        score = 0
+        filenames = " ".join([source_path.name, *(path.name for path in files)]).casefold()
+        for hint in self.recognition.get("fileNameHints") or ():
+            if text(hint).casefold() and text(hint).casefold() in filenames:
+                score += 18
+                evidence.append(f"filename:{hint}")
+                break
+        folded_columns = {column.casefold(): column for column in columns}
+        for hint in self.recognition.get("columnHints") or ():
+            hint_text = text(hint).casefold()
+            if hint_text and hint_text in folded_columns:
+                score += 12
+                evidence.append(f"column:{folded_columns[hint_text]}")
+        for field in self.recognition.get("requiredMappedFields") or ():
+            if text(field) in detected_mapping:
+                score += 10
+                evidence.append(f"field:{field}")
+        if items:
+            score += 18
+            evidence.append("readable_items")
+        if len(items) >= 5:
+            score += 8
+            evidence.append("multiple_items")
+        score = max(0, min(score, 100))
+        label = "strong" if score >= 70 else "possible" if score >= 35 else "generic"
+        return {"score": score, "label": label, "evidence": evidence[:10]}
 
     def inspect_source(self, payload: dict[str, Any] | None = None, context: dict[str, Any] | None = None) -> dict[str, Any]:
         source_path = self.source_path(payload, context)
@@ -328,6 +461,13 @@ class CollectionImportPlugin:
         readable = bool(items)
         detected_mapping = self.detected_column_mapping(columns)
         effective_mapping = {**detected_mapping, **column_mapping}
+        recognition = self.recognition_profile(
+            source_path=source_path,
+            files=files,
+            columns=columns,
+            items=items,
+            detected_mapping=detected_mapping,
+        )
         return {
             "status": "ok" if readable else "not_found" if not found else "empty",
             "sourceKind": self.source_kind,
@@ -380,6 +520,7 @@ class CollectionImportPlugin:
                     "tags",
                 ],
             },
+            "recognition": recognition,
             "warnings": warnings,
         }
 
