@@ -33606,6 +33606,30 @@ def actor_job_payload(actor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def queue_movie_metadata_refresh_job(
+    conn,
+    movie_id: UUID | str,
+    *,
+    actor: dict[str, Any] | None = None,
+    reason: str,
+    source: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if not table_exists(conn, "background_jobs"):
+        return None
+    payload: dict[str, Any] = {
+        "movieId": str(movie_id),
+        "dryRun": False,
+        "requestedBy": actor_job_payload(actor or {}),
+        "reason": reason,
+    }
+    if source:
+        payload["source"] = source
+    if extra:
+        payload.update(extra)
+    return create_background_job(conn, job_type=METADATA_REFRESH_JOB_TYPE, payload=payload)
+
+
 def queue_receiver_payload_to_receivers(
     conn,
     *,
@@ -38203,26 +38227,24 @@ def register_routes(flask_app: Flask) -> None:
                     "applied": applied,
                 }
             )
-            confidence_key = original_confidence.casefold()
-            if confidence_key in {"candidate", "needs_member_confirmation", "needs confirmation", "low"} or not box_set_member_identifiers(member):
-                metadata_refresh_movie_ids.append(str(movie_id))
+            metadata_refresh_movie_ids.append(str(movie_id))
 
         queued_jobs = []
         if metadata_refresh_movie_ids:
             for movie_id in dict.fromkeys(metadata_refresh_movie_ids):
-                queued_jobs.append(
-                    create_background_job(
-                        conn,
-                        job_type=METADATA_REFRESH_JOB_TYPE,
-                        payload={
-                            "movieId": movie_id,
-                            "dryRun": False,
-                            "requestedBy": actor_job_payload(actor),
-                            "reason": "box_set_member_confirmation",
-                            "source": provider_label,
-                        },
-                    )
+                job = queue_movie_metadata_refresh_job(
+                    conn,
+                    movie_id,
+                    actor=actor,
+                    reason="box_set_member_full_refresh",
+                    source=provider_label,
+                    extra={
+                        "boxSetTitle": title,
+                        "boxSetBarcode": barcode,
+                    },
                 )
+                if job:
+                    queued_jobs.append(job)
             decision_counts["metadataRefreshQueued"] = len(queued_jobs)
 
         audit_event(
@@ -38610,6 +38632,17 @@ def register_routes(flask_app: Flask) -> None:
                 movie_id = upsert["entityId"]
                 applied = apply_metadata_proposal(conn, movie_id, proposal, actor=actor)
                 detail = movie_detail_entity(conn, movie_id)
+                metadata_refresh_job = queue_movie_metadata_refresh_job(
+                    conn,
+                    movie_id,
+                    actor=actor,
+                    reason="import_center_full_refresh",
+                    source="import_center",
+                    extra={
+                        "barcode": barcode,
+                        "title": import_title,
+                    },
+                )
                 audit_event(
                     conn,
                     event_type="movie.imported",
@@ -38623,6 +38656,8 @@ def register_routes(flask_app: Flask) -> None:
                         "title": import_title,
                         "sources": metadata_result.get("sources") or [],
                         "applied": applied,
+                        "metadataRefreshQueued": bool(metadata_refresh_job),
+                        "metadataJobId": str(metadata_refresh_job.get("id")) if metadata_refresh_job else None,
                     },
                 )
 
@@ -38634,6 +38669,8 @@ def register_routes(flask_app: Flask) -> None:
                 "detail": detail,
                 "metadata": metadata_result,
                 "applied": applied,
+                "metadataRefreshQueued": bool(metadata_refresh_job),
+                "metadataJob": metadata_refresh_job,
             },
             201,
         )

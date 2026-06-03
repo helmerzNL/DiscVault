@@ -235,7 +235,8 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertIn("metadata_source", plugin.manifest["categories"])
         self.assertIn("metadata_bootstrap", plugin.manifest["categories"])
         self.assertIn("bootstrap_lookup", plugin.manifest["capabilities"])
-        self.assertEqual(plugin.manifest["bootstrap"]["onlyWhen"], "new_movie_barcode_only")
+        self.assertEqual(plugin.manifest["bootstrap"]["onlyWhen"], "public_barcode_lookup")
+        self.assertEqual(plugin.manifest["bootstrap"]["role"], "barcode_title_hint")
 
     def test_plex_personal_lists_maps_viewed_at_history(self):
         def fake_get(url, params=None, timeout=None):

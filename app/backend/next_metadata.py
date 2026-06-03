@@ -364,14 +364,10 @@ def plugin_is_bootstrap_metadata_source(plugin: dict[str, Any]) -> bool:
 
 
 def metadata_bootstrap_lookup_allowed(query: dict[str, Any]) -> bool:
-    return bool(
-        query.get("previewMode")
-        and query.get("externalBarcode")
-        and not clean_text(query.get("title"))
-        and not clean_text(query.get("fallbackTitle"))
-        and not clean_text(query.get("tmdbId"))
-        and not clean_text(query.get("imdbId"))
-    )
+    # Bootstrap metadata sources are barcode hint providers, not deep metadata
+    # enrichers. They may run whenever DiscVault has a public barcode, but the
+    # normal source stack still decides which fields are accepted.
+    return bool(query.get("externalBarcode"))
 
 
 def metadata_source_plugin_allowed(plugin: dict[str, Any], query: dict[str, Any]) -> bool:
@@ -1191,6 +1187,8 @@ def summarize_metadata_execution(
                 "pluginId": plugin_id,
                 "name": plugin.get("name") or plugin_id,
                 "orderIndex": plugin.get("order_index"),
+                "categories": sorted(plugin_categories(plugin)),
+                "barcodeHintSource": plugin_is_bootstrap_metadata_source(plugin),
                 "state": state,
                 "reason": reason,
                 "entrypoints": [item.get("entrypoint") for item in plugin_executions],
