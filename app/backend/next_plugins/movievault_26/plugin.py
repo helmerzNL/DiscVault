@@ -362,6 +362,71 @@ def _box_set_numeric_id(item):
     return text if text.isdigit() else ""
 
 
+def _box_set_entity(payload):
+    if not isinstance(payload, dict):
+        return {}
+    direct_keys = (
+        "boxSetProposal",
+        "box_set_proposal",
+        "boxSet",
+        "box_set",
+        "boxSetCandidate",
+        "box_set_candidate",
+    )
+    wrapper_keys = (
+        "data",
+        "result",
+        "item",
+        "candidate",
+        "container",
+        "bundle",
+        "set",
+        "release",
+    )
+    member_keys = (
+        "members",
+        "memberMovies",
+        "member_movies",
+        "memberReleases",
+        "member_releases",
+        "movies",
+        "titles",
+        "includedTitles",
+        "included_titles",
+        "boxSetMovies",
+        "box_set_movies",
+        "boxSetMembers",
+        "box_set_members",
+        "bundleMembers",
+        "bundle_members",
+        "moviesInSet",
+        "movies_in_set",
+        "children",
+        "parts",
+        "discs",
+        "discItems",
+        "disc_items",
+        "contents",
+        "releases",
+    )
+    for key in direct_keys:
+        value = payload.get(key)
+        if isinstance(value, dict):
+            return _box_set_entity(value) or value
+    if _box_set_signal(payload):
+        return payload
+    has_parent_title = bool(_first_value(payload, "title", "name", "boxSetTitle", "box_set_title"))
+    if has_parent_title and any(isinstance(payload.get(key), list) for key in member_keys):
+        return payload
+    for key in wrapper_keys:
+        value = payload.get(key)
+        if isinstance(value, dict):
+            found = _box_set_entity(value)
+            if found:
+                return found
+    return {}
+
+
 def _with_box_set_detail(context, item):
     if not isinstance(item, dict) or not _box_set_signal(item):
         return item
@@ -616,7 +681,9 @@ def _identify_member_with_other_plugins(member, context):
 
 
 def _normalize_box_set_proposal(payload, context=None):
-    item = _first(payload)
+    item = _box_set_entity(payload) if isinstance(payload, dict) else {}
+    if not item:
+        item = _first(payload)
     if not item:
         return {}
     raw_members = _member_list(item)
@@ -770,8 +837,41 @@ def _candidate_payload(item, movie, *, source_ref=""):
 
 def _normalization_sources(payload):
     sources = []
+
+    def add_source(value):
+        if isinstance(value, dict):
+            sources.append(value)
+
+    add_source(payload)
     if isinstance(payload, dict):
-        sources.append(payload)
+        for key in (
+            "data",
+            "result",
+            "item",
+            "movie",
+            "details",
+            "release",
+            "boxSetProposal",
+            "box_set_proposal",
+            "boxSet",
+            "box_set",
+            "boxSetCandidate",
+            "box_set_candidate",
+            "container",
+            "bundle",
+            "set",
+        ):
+            add_source(payload.get(key))
+        if _box_set_entity(payload):
+            unique = []
+            seen = set()
+            for item in sources:
+                marker = id(item)
+                if marker in seen:
+                    continue
+                seen.add(marker)
+                unique.append(item)
+            return unique
     for item in _items(payload):
         if isinstance(item, dict):
             sources.append(item)
@@ -926,7 +1026,14 @@ def search_barcode(payload, context=None):
     if not _is_public_barcode(barcode):
         return {"status": "skipped", "provider": PROVIDER_ID, "reason": "not_public_barcode"}
     data = _get(context or {}, f"/api/v1/barcodes/{quote(barcode)}")
-    if _box_set_signal(data) and len(_member_list(data)) < 2:
+    box_set_entity = _box_set_entity(data)
+    if box_set_entity and len(_member_list(box_set_entity)) < 2:
+        detailed = _with_box_set_detail(context or {}, box_set_entity)
+        if isinstance(data, dict) and data.get("data") is box_set_entity:
+            data = {**data, "data": detailed}
+        else:
+            data = detailed
+    elif _box_set_signal(data) and len(_member_list(data)) < 2:
         data = _with_box_set_detail(context or {}, data)
     return _normalize_result(data, source_ref=f"barcode:{barcode}")
 
