@@ -186,6 +186,12 @@ def _items(payload):
         value = payload.get(key)
         if isinstance(value, list):
             return value
+    for key in ("data", "result", "movie", "release", "details"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            nested = _items(value)
+            if nested:
+                return nested
     return [payload]
 
 
@@ -592,6 +598,45 @@ def _technical_payload(item):
     }
 
 
+def _candidate_payload(item, movie, *, source_ref=""):
+    if not isinstance(item, dict):
+        item = {}
+    movie = movie if isinstance(movie, dict) else {}
+    title = _text(movie.get("title") or item.get("title") or item.get("name"))
+    if not title:
+        return {}
+    poster = _image_url(
+        _first_value(item, "posterUrl", "poster_url", "poster", "coverUrl", "cover_url", "image")
+        or movie.get("posterUrl")
+    )
+    backdrop = _image_url(
+        _first_value(item, "backdropUrl", "backdrop_url", "backdrop")
+        or movie.get("backdropUrl")
+    )
+    candidate = {
+        "provider": PROVIDER_ID,
+        "providerId": PROVIDER_ID,
+        "providerLabel": PROVIDER_LABEL,
+        "source": PROVIDER_LABEL,
+        "sourceRef": source_ref or _text(_first_value(item, "id", "movieVaultId", "movievaultId", "movievault_id")),
+        "id": _text(_first_value(item, "id", "movieVaultId", "movievaultId", "movievault_id")),
+        "movieVaultId": _text(_first_value(item, "movieVaultId", "movievaultId", "movievault_id", "id")),
+        "title": title,
+        "originalTitle": _text(movie.get("originalTitle") or item.get("originalTitle") or item.get("original_title")),
+        "year": _text(movie.get("year") or item.get("year") or item.get("releaseYear") or item.get("release_year"))[:4],
+        "format": _text(movie.get("format") or item.get("format") or item.get("mediaType") or item.get("media_type")),
+        "barcode": _text(_first_value(item, "barcode", "ean", "upc")),
+        "posterUrl": poster,
+        "poster_url": poster,
+        "backdropUrl": backdrop,
+        "backdrop_url": backdrop,
+        "tmdbId": _text(_first_value(item, "tmdbId", "tmdb_id")),
+        "imdbId": _text(_first_value(item, "imdbId", "imdb_id")),
+        "movie": movie,
+    }
+    return {key: value for key, value in candidate.items() if value not in (None, "", [], {})}
+
+
 def _normalize_result(payload, *, source_ref=""):
     item = _first(payload)
     if not item:
@@ -599,6 +644,14 @@ def _normalize_result(payload, *, source_ref=""):
     movie = _movie_payload(item)
     if not movie.get("title"):
         return {"status": "miss", "provider": "movievault_26"}
+    candidate = _candidate_payload(item, movie, source_ref=source_ref)
+    box_set_proposal = (
+        _normalize_box_set_proposal(payload, None)
+        or _normalize_box_set_proposal(item, None)
+        or item.get("boxSetProposal")
+        or item.get("box_set_proposal")
+        or item.get("box_set")
+    )
     return {
         "status": "hit",
         "provider": "movievault_26",
@@ -608,10 +661,9 @@ def _normalize_result(payload, *, source_ref=""):
         "technicalSpecs": _technical_payload(item),
         "tmdbId": _text(item.get("tmdbId") or item.get("tmdb_id")),
         "imdbId": _text(item.get("imdbId") or item.get("imdb_id")),
-        "boxSetProposal": _normalize_box_set_proposal(item, None)
-        or item.get("boxSetProposal")
-        or item.get("box_set_proposal")
-        or item.get("box_set"),
+        "items": [candidate] if candidate else [],
+        "candidates": [candidate] if candidate else [],
+        "boxSetProposal": box_set_proposal,
     }
 
 

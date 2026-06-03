@@ -51,7 +51,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.3.0")
+        self.assertEqual(manifest["version"], "1.3.1")
         self.assertIn("describe_payload", manifest["capabilities"])
         self.assertIn("activity_summary", manifest["capabilities"])
 
@@ -126,6 +126,35 @@ class MovieVault26PluginContractTests(unittest.TestCase):
             self.assertEqual(movievault_26.search_barcode({"barcode": "032429316110-BOX-01"}, {})["status"], "skipped")
         finally:
             movievault_26._get = original_get
+
+    def test_barcode_lookup_exposes_movievault_hit_as_import_candidate(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                self.assertEqual(path, "/api/v1/barcodes/8712626068546")
+                return {
+                    "status": "ok",
+                    "data": {
+                        "id": "mv_movie_1",
+                        "title": "Bohemian Rhapsody",
+                        "year": "2018",
+                        "format": "4K UHD",
+                        "posterUrl": "https://img.example/bohemian.jpg",
+                        "tmdbId": 424694,
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode({"barcode": "8712626068546"}, {"movievault": {"enabled": True}})
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["movie"]["title"], "Bohemian Rhapsody")
+        self.assertEqual(result["items"][0]["title"], "Bohemian Rhapsody")
+        self.assertEqual(result["items"][0]["providerId"], "movievault_26")
+        self.assertEqual(result["items"][0]["posterUrl"], "https://img.example/bohemian.jpg")
+        self.assertEqual(result["candidates"][0]["tmdbId"], "424694")
 
     def test_box_set_candidates_omits_invalid_barcode_parameter(self):
         captured = {}
