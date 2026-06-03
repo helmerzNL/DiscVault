@@ -7210,9 +7210,13 @@ def ui_preview_html(
       display: grid;
       grid-template-columns: 112px minmax(0, 1fr);
       gap: 16px;
-      align-items: stretch;
+      align-items: start;
       padding: 16px;
       border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+    }
+    .import-result-card.featured .import-result-art {
+      align-self: start;
+      max-width: 112px;
     }
     .import-result-card.featured.selected {
       border: 1px solid color-mix(in srgb, var(--accent) 70%, var(--line));
@@ -9900,6 +9904,9 @@ def ui_preview_html(
         grid-template-columns: 82px minmax(0, 1fr);
         gap: 12px;
         padding: 12px;
+      }
+      .import-result-card.featured .import-result-art {
+        max-width: 82px;
       }
       .import-result-title {
         font-size: 1.12rem;
@@ -19740,6 +19747,8 @@ def ui_preview_html(
         setImportCenterMessage(tNext("common.noPermission", "You do not have permission for this action."), "bad");
         return;
       }
+      const button = document.getElementById("importMovieAddButton");
+      const requestedMode = button?.dataset?.importMode || "";
       const barcode = normalizeImportBarcode(document.getElementById("importBarcodeInput")?.value || "");
       const title = String(document.getElementById("importTitleInput")?.value || "").trim();
       const year = String(document.getElementById("importYearInput")?.value || "").trim();
@@ -19749,10 +19758,16 @@ def ui_preview_html(
         return;
       }
       setImportCenterMessage(tNext("importCenter.addingMovie", "Adding movie..."));
-      const button = document.getElementById("importMovieAddButton");
       if (button) button.disabled = true;
       try {
         const selectedProposal = selectedBoxSetProposal();
+        if (requestedMode === "box-set" && !selectedProposal) {
+          setImportCenterMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
+          return;
+        }
+        if (selectedProposal && !importCenter.selectedBoxSetProposalKey) {
+          importCenter.selectedBoxSetProposalKey = selectedProposal.proposalKey || importBoxSetProposalKey(selectedProposal);
+        }
         const boxSetMembers = selectedProposal ? selectedBoxSetMembersForImport() : [];
         if (selectedProposal && boxSetMembers.length < 2) {
           setImportCenterMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
@@ -22577,6 +22592,7 @@ def ui_preview_html(
       });
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
+        const addLookupButton = event.target.closest("[data-import-add-lookup]");
         const proposalButton = event.target.closest(".import-proposal-select[data-box-set-proposal-key]");
         const addMemberButton = event.target.closest("[data-box-set-member-add]");
         const memberSearchButton = event.target.closest("[data-box-member-search]");
@@ -22584,6 +22600,12 @@ def ui_preview_html(
         const containerButton = event.target.closest("[data-import-open-container]");
         const movieButton = event.target.closest("[data-open-movie]");
         const metadataButton = event.target.closest("[data-import-metadata-refresh]");
+        if (addLookupButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          addLookupMovie();
+          return;
+        }
         if (proposalButton) {
           event.preventDefault();
           importCenter.selectedBoxSetProposalKey = proposalButton.dataset.boxSetProposalKey || "";
