@@ -19030,9 +19030,19 @@ def ui_preview_html(
     function selectedBoxSetProposal() {
       const proposals = barcodeBoxSetProposals();
       return proposals.find((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey) || proposals.find((proposal) => {
-        const members = proposal?.movies || proposal?.members || [];
+        const members = boxSetProposalMembers(proposal);
         return Array.isArray(members) && members.length >= 2;
       }) || null;
+    }
+    function boxSetProposalMembers(proposal) {
+      if (!proposal || typeof proposal !== "object") return [];
+      for (const key of ["movies", "members", "boxSetMovies", "box_set_movies", "items", "releases"]) {
+        const value = proposal[key];
+        if (Array.isArray(value) && value.some((member) => String(member?.title || member?.name || "").trim())) {
+          return value;
+        }
+      }
+      return [];
     }
     function boxSetMemberEditState(proposalKey) {
       importCenter.boxSetMemberEdits = importCenter.boxSetMemberEdits || {};
@@ -19045,7 +19055,7 @@ def ui_preview_html(
       if (!proposal) return [];
       const proposalKey = proposal.proposalKey || importBoxSetProposalKey(proposal);
       const state = boxSetMemberEditState(proposalKey);
-      const base = Array.isArray(proposal.movies || proposal.members) ? (proposal.movies || proposal.members) : [];
+      const base = boxSetProposalMembers(proposal);
       const rows = base.map((member, index) => {
         const edits = state.members?.[index] || {};
         return {...member, ...edits, _memberIndex: index, _memberExtra: false};
@@ -19205,7 +19215,7 @@ def ui_preview_html(
       const results = metadata.results || metadata.sources || metadata.matches || [];
       const boxSetProposals = barcodeBoxSetProposals();
       const addableBoxSetProposal = boxSetProposals.find((item) => {
-        const members = item?.movies || item?.members || [];
+        const members = boxSetProposalMembers(item);
         return Array.isArray(members) && members.length >= 2;
       });
       if (addableBoxSetProposal && !boxSetProposals.some((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey)) {
@@ -19374,7 +19384,7 @@ def ui_preview_html(
         `;
       };
       const boxSetCard = boxSetProposals.length ? boxSetProposals.map((proposal) => {
-        const members = proposal.movies || proposal.members || [];
+        const members = boxSetProposalMembers(proposal);
         const provider = proposal.provider || proposal.source || proposal.member_source || "";
         const memberCount = Array.isArray(members) ? members.length : 0;
         const proposalKey = proposal.proposalKey || "";
@@ -19605,7 +19615,10 @@ def ui_preview_html(
       }
     }
     async function addLookupMovie() {
-      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) {
+        setImportCenterMessage(tNext("common.noPermission", "You do not have permission for this action."), "bad");
+        return;
+      }
       const barcode = normalizeImportBarcode(document.getElementById("importBarcodeInput")?.value || "");
       const title = String(document.getElementById("importTitleInput")?.value || "").trim();
       const year = String(document.getElementById("importYearInput")?.value || "").trim();
@@ -37187,6 +37200,22 @@ def register_routes(flask_app: Flask) -> None:
         ).casefold()
         return f"{provider}::{title}::{discriminator}"
 
+    def box_set_proposal_members(proposal: dict[str, Any]) -> list[dict[str, Any]]:
+        if not isinstance(proposal, dict):
+            return []
+        for key in ("movies", "members", "boxSetMovies", "box_set_movies", "items", "releases"):
+            value = proposal.get(key)
+            if not isinstance(value, list):
+                continue
+            members = [
+                item
+                for item in value
+                if isinstance(item, dict) and clean_text(item.get("title") or item.get("name"))
+            ]
+            if members:
+                return members
+        return []
+
     def metadata_box_set_proposals(metadata_result: dict[str, Any]) -> list[dict[str, Any]]:
         proposals: list[dict[str, Any]] = []
         seen: set[str] = set()
@@ -37202,9 +37231,11 @@ def register_routes(flask_app: Flask) -> None:
             )
             if not isinstance(proposal, dict):
                 continue
-            members = proposal.get("movies") or proposal.get("members") or []
-            if len([item for item in members if isinstance(item, dict) and clean_text(item.get("title"))]) >= 2:
+            members = box_set_proposal_members(proposal)
+            if len(members) >= 2:
                 normalized = dict(proposal)
+                normalized["members"] = members
+                normalized["movies"] = members
                 normalized.setdefault("provider", clean_text(result.get("pluginId") or result.get("provider") or proposal.get("source")))
                 key = metadata_box_set_proposal_key(normalized, result)
                 if key in seen:
@@ -37562,7 +37593,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Container tables are not available", 503)
         title = clean_text(proposal.get("title") or proposal.get("name") or body.get("title"))
         override_members = normalized_box_set_members_from_body(body)
-        proposal_members = [item for item in (proposal.get("movies") or proposal.get("members") or []) if isinstance(item, dict) and clean_text(item.get("title"))]
+        proposal_members = box_set_proposal_members(proposal)
         members = override_members or proposal_members
         if not title or len(members) < 2:
             raise NextApiError("Box-set proposal requires a title and at least two members.", 422)
@@ -37803,17 +37834,15 @@ def register_routes(flask_app: Flask) -> None:
                             candidate["_proposalKey"] = selected_box_set_key
                         else:
                             candidate["_proposalKey"] = metadata_box_set_proposal_key(candidate)
-                        candidate_members = [
-                            item
-                            for item in (candidate.get("movies") or candidate.get("members") or [])
-                            if isinstance(item, dict) and clean_text(item.get("title"))
-                        ]
+                        candidate_members = box_set_proposal_members(candidate)
                         body_members = normalized_box_set_members_from_body(body)
                         if body_members:
                             candidate["members"] = body_members
                             candidate["movies"] = body_members
                             candidate_members = body_members
                         if clean_text(candidate.get("title")) and len(candidate_members) >= 2:
+                            candidate["members"] = candidate_members
+                            candidate["movies"] = candidate_members
                             box_set_proposal = candidate
                 if box_set_proposal:
                     box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
