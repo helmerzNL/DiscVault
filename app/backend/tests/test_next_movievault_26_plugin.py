@@ -51,7 +51,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.3.2")
+        self.assertEqual(manifest["version"], "1.3.3")
         self.assertIn("describe_payload", manifest["capabilities"])
         self.assertIn("activity_summary", manifest["capabilities"])
 
@@ -174,6 +174,37 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         )
 
         self.assertEqual(proposal, {})
+
+    def test_barcode_lookup_exposes_box_set_payload_without_movie_wrapper(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                self.assertEqual(path, "/api/v1/barcodes/5051892237710")
+                return {
+                    "status": "ok",
+                    "data": {
+                        "entityType": "box_set",
+                        "id": "mv_box_1",
+                        "title": "Harry Potter Complete Collection",
+                        "barcode": "5051892237710",
+                        "format": "4K UHD",
+                        "posterUrl": "https://img.example/hp-box.jpg",
+                        "members": [
+                            {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
+                            {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
+                        ],
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode({"barcode": "5051892237710"}, {"movievault": {"enabled": True}})
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["boxSetProposal"]["title"], "Harry Potter Complete Collection")
+        self.assertEqual(result["boxSetProposal"]["member_count"], 2)
+        self.assertEqual(result["boxSetProposal"]["members"][0]["title"], "Harry Potter and the Philosopher's Stone")
 
     def test_box_set_candidates_omits_invalid_barcode_parameter(self):
         captured = {}

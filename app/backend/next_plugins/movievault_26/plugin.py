@@ -533,16 +533,17 @@ def _normalize_box_set_proposal(payload, context=None):
     if not item:
         return {}
     raw_members = _member_list(item)
-    if not raw_members:
-        nested = (
-            item.get("boxSetProposal")
-            or item.get("box_set_proposal")
-            or item.get("boxSet")
-            or item.get("box_set")
-        )
-        if isinstance(nested, dict):
+    nested = (
+        item.get("boxSetProposal")
+        or item.get("box_set_proposal")
+        or item.get("boxSet")
+        or item.get("box_set")
+    )
+    if isinstance(nested, dict) and (not raw_members or not _first_value(item, "title", "name", "boxSetTitle", "box_set_title")):
+        nested_members = _member_list(nested)
+        if nested_members or _box_set_signal(nested):
             item = nested
-            raw_members = _member_list(item)
+            raw_members = nested_members
     if not raw_members and not _box_set_signal(item):
         return {}
 
@@ -670,9 +671,6 @@ def _normalize_result(payload, *, source_ref=""):
     if not item:
         return {"status": "miss", "provider": "movievault_26"}
     movie = _movie_payload(item)
-    if not movie.get("title"):
-        return {"status": "miss", "provider": "movievault_26"}
-    candidate = _candidate_payload(item, movie, source_ref=source_ref)
     box_set_proposal = (
         _normalize_box_set_proposal(payload, None)
         or _normalize_box_set_proposal(item, None)
@@ -680,6 +678,9 @@ def _normalize_result(payload, *, source_ref=""):
         or item.get("box_set_proposal")
         or item.get("box_set")
     )
+    if not movie.get("title") and not box_set_proposal:
+        return {"status": "miss", "provider": "movievault_26"}
+    candidate = _candidate_payload(item, movie, source_ref=source_ref)
     result = {
         "status": "hit",
         "provider": "movievault_26",
