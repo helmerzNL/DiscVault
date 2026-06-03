@@ -19427,6 +19427,47 @@ def ui_preview_html(
           </div>
         `;
       };
+      const normalizedBoxSetTitle = (value) => String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .replace(/\\b(4k|uhd|ultra|hd|blu|ray|dvd|box|set|collection|complete|movie|film|trilogy|saga)\\b/g, " ")
+        .replace(/\\s+/g, " ")
+        .trim();
+      const boxSetCandidateTitle = (candidate) => String(
+        candidate?.title
+        || candidate?.name
+        || candidate?.releaseTitle
+        || candidate?.boxSetTitle
+        || candidate?.box_set_title
+        || candidate?.movie?.title
+        || candidate?.details?.title
+        || candidate?.release?.title
+        || ""
+      ).trim();
+      const boxSetArtworkFromAllResults = (proposal) => {
+        const proposalTitle = normalizedBoxSetTitle(proposal?.title || proposal?.name || "");
+        const inputTitle = normalizedBoxSetTitle(document.getElementById("importTitleInput")?.value || "");
+        const targets = [proposalTitle, inputTitle].filter(Boolean);
+        if (!targets.length) return "";
+        for (const result of metadata.results || []) {
+          for (const candidate of resultCandidates(result)) {
+            const candidateTitle = normalizedBoxSetTitle(boxSetCandidateTitle(candidate));
+            if (!candidateTitle) continue;
+            const matches = targets.some((target) => candidateTitle.includes(target) || target.includes(candidateTitle));
+            if (!matches) continue;
+            const image = imageFrom(
+              candidate.posterUrl,
+              candidate.poster_url,
+              candidate.poster,
+              candidate.coverUrl,
+              candidate.cover_url,
+              candidate.image
+            ) || itemImage(result);
+            if (image) return image;
+          }
+        }
+        return "";
+      };
       const boxSetCard = boxSetProposals.length ? boxSetProposals.map((proposal) => {
         const members = boxSetProposalMembers(proposal);
         const provider = proposal.provider || proposal.source || proposal.member_source || "";
@@ -19445,6 +19486,7 @@ def ui_preview_html(
           proposal.cover_url,
           proposal.backdropUrl,
           proposal.backdrop_url,
+          boxSetArtworkFromAllResults(proposal),
           firstMemberWithImage?.posterUrl,
           firstMemberWithImage?.poster_url,
           firstMemberWithImage?.poster,
@@ -37319,6 +37361,139 @@ def register_routes(flask_app: Flask) -> None:
                     return proposal
         return proposals[0] if proposals else {}
 
+    def metadata_box_set_artwork_value(*values: Any) -> str:
+        for value in values:
+            if isinstance(value, list):
+                image = metadata_box_set_artwork_value(*value)
+                if image:
+                    return image
+                continue
+            if isinstance(value, dict):
+                media_updates = value.get("mediaUpdates") if isinstance(value.get("mediaUpdates"), dict) else {}
+                poster_update = media_updates.get("poster") if isinstance(media_updates.get("poster"), dict) else {}
+                plugin_media_source_url = value.get("sourceUrl") if clean_text(value.get("kind")) == "poster" else ""
+                image = metadata_box_set_artwork_value(
+                    value.get("posterUrl"),
+                    value.get("poster_url"),
+                    value.get("poster"),
+                    value.get("coverUrl"),
+                    value.get("cover_url"),
+                    value.get("image"),
+                    poster_update.get("sourceUrl"),
+                    poster_update.get("source_url"),
+                    plugin_media_source_url,
+                )
+                if image:
+                    return image
+                continue
+            image = server_usable_image(value)
+            if image:
+                return image
+        return ""
+
+    def metadata_box_set_artwork_sources(result: dict[str, Any]) -> list[dict[str, Any]]:
+        raw = result.get("raw") if isinstance(result.get("raw"), dict) else {}
+        sources = [
+            result,
+            result.get("movie"),
+            result.get("details"),
+            result.get("release"),
+            result.get("boxSetProposal"),
+            result.get("box_set_proposal"),
+            raw,
+            raw.get("movie"),
+            raw.get("details"),
+            raw.get("release"),
+            raw.get("boxSetProposal"),
+            raw.get("box_set_proposal"),
+        ]
+        for key in ("candidates", "items", "matches"):
+            value = result.get(key)
+            if isinstance(value, list):
+                sources.extend(value)
+            raw_value = raw.get(key)
+            if isinstance(raw_value, list):
+                sources.extend(raw_value)
+        return [item for item in sources if isinstance(item, dict)]
+
+    def metadata_box_set_artwork_matches(source: dict[str, Any], proposal_title: str, input_title: str) -> bool:
+        source_title = clean_text(
+            source.get("title")
+            or source.get("name")
+            or source.get("releaseTitle")
+            or source.get("boxSetTitle")
+            or source.get("box_set_title")
+        ).casefold()
+        if not source_title:
+            return False
+        proposal_title = proposal_title.casefold()
+        input_title = input_title.casefold()
+        candidates = [item for item in (proposal_title, input_title) if item]
+        return any(item in source_title or source_title in item for item in candidates)
+
+    def enrich_box_set_proposal_artwork(
+        proposal: dict[str, Any],
+        metadata_result: dict[str, Any],
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not isinstance(proposal, dict):
+            return proposal
+        enriched = dict(proposal)
+        existing_poster = metadata_box_set_artwork_value(
+            enriched.get("posterUrl"),
+            enriched.get("poster_url"),
+            enriched.get("poster"),
+            enriched.get("coverUrl"),
+            enriched.get("cover_url"),
+        )
+        existing_backdrop = metadata_box_set_artwork_value(
+            enriched.get("backdropUrl"),
+            enriched.get("backdrop_url"),
+            enriched.get("backdrop"),
+        )
+        if existing_poster and existing_backdrop:
+            return enriched
+        proposal_title = clean_text(enriched.get("title") or enriched.get("name"))
+        input_title = clean_text(body.get("title") or body.get("query"))
+        fallback_poster = ""
+        fallback_backdrop = ""
+        providers: list[str] = []
+        for result in metadata_result.get("results") or []:
+            if not isinstance(result, dict):
+                continue
+            for source in metadata_box_set_artwork_sources(result):
+                if not metadata_box_set_artwork_matches(source, proposal_title, input_title):
+                    continue
+                if not fallback_poster:
+                    fallback_poster = metadata_box_set_artwork_value(source)
+                    if fallback_poster:
+                        providers.append(clean_text(result.get("pluginId") or result.get("provider") or source.get("provider") or source.get("source")))
+                if not fallback_backdrop:
+                    fallback_backdrop = metadata_box_set_artwork_value(
+                        source.get("backdropUrl"),
+                        source.get("backdrop_url"),
+                        source.get("backdrop"),
+                    )
+                if (existing_poster or fallback_poster) and (existing_backdrop or fallback_backdrop):
+                    break
+            if (existing_poster or fallback_poster) and (existing_backdrop or fallback_backdrop):
+                break
+        if not existing_poster and fallback_poster:
+            enriched["posterUrl"] = fallback_poster
+            enriched["poster_url"] = fallback_poster
+            enriched["poster"] = fallback_poster
+        if not existing_backdrop and fallback_backdrop:
+            enriched["backdropUrl"] = fallback_backdrop
+            enriched["backdrop_url"] = fallback_backdrop
+            enriched["backdrop"] = fallback_backdrop
+        if providers:
+            fallbacks = enriched.get("metadata_plugin_fallbacks") if isinstance(enriched.get("metadata_plugin_fallbacks"), list) else []
+            enriched["metadata_plugin_fallbacks"] = [
+                *fallbacks,
+                {"kind": "box_set_artwork", "providers": [item for item in providers if item]},
+            ]
+        return enriched
+
     def synthetic_box_set_member_barcode(box_set_title: str, parent_barcode: str, index: int) -> str:
         base = clean_text(parent_barcode) or clean_text(box_set_title) or "box-set"
         clean = re.sub(r"[^A-Za-z0-9]+", "_", base).strip("_").upper()[:48] or "BOXSET"
@@ -38023,6 +38198,7 @@ def register_routes(flask_app: Flask) -> None:
                             candidate["movies"] = candidate_members
                             box_set_proposal = candidate
                 if box_set_proposal:
+                    box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
                     box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
                     first_movie = (box_set_import.get("movies") or [{}])[0]
                     return response(
