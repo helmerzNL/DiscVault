@@ -10645,7 +10645,7 @@ def ui_preview_html(
                     <input id="importFormatInput" autocomplete="off" maxlength="80" data-next-i18n-placeholder="importCenter.formatPlaceholder" placeholder="4K UHD">
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Preview</button>
-                  <button type="button" class="primary-button" id="importMovieAddButton" disabled data-next-i18n="importCenter.addMovie">Add movie</button>
+                  <button type="button" class="primary-button" id="importMovieAddButton" data-import-add-lookup="1" disabled data-next-i18n="importCenter.addMovie">Add movie</button>
                 </form>
               </div>
             </div>
@@ -22527,7 +22527,9 @@ def ui_preview_html(
       document.querySelectorAll("[data-import-tab]").forEach((button) => {
         button.addEventListener("click", () => setImportCenterTab(button.dataset.importTab || "add"));
       });
-      document.getElementById("importMovieAddButton")?.addEventListener("click", (event) => {
+      document.getElementById("importView")?.addEventListener("click", (event) => {
+        const addLookupButton = event.target.closest("[data-import-add-lookup]");
+        if (!addLookupButton) return;
         event.preventDefault();
         addLookupMovie();
       });
