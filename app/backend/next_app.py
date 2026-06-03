@@ -54,6 +54,7 @@ try:
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
+    from .next_metadata import metadata_result_summary
     from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
     from .next_metadata import push_metadata_to_receivers
@@ -107,6 +108,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
+    from next_metadata import metadata_result_summary
     from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
     from next_metadata import push_metadata_to_receivers
@@ -19432,9 +19434,28 @@ def ui_preview_html(
         const proposalKey = proposal.proposalKey || "";
         const selected = proposalKey && proposalKey === importCenter.selectedBoxSetProposalKey;
         const selectable = memberCount >= 2;
+        const firstMemberWithImage = members.find((member) => usableImage(member?.posterUrl || member?.poster_url || member?.poster || member?.coverUrl || member?.cover_url || member?.backdropUrl || member?.backdrop_url));
+        const firstMemberWithTitle = members.find((member) => String(member?.title || member?.name || "").trim());
+        const displayTitle = proposal.title || proposal.name || document.getElementById("importTitleInput")?.value || firstMemberWithTitle?.title || firstMemberWithTitle?.name || tNext("importCenter.boxSetDetected", "Box-set detected");
+        const displayImage = imageFrom(
+          proposal.posterUrl,
+          proposal.poster_url,
+          proposal.poster,
+          proposal.coverUrl,
+          proposal.cover_url,
+          proposal.backdropUrl,
+          proposal.backdrop_url,
+          firstMemberWithImage?.posterUrl,
+          firstMemberWithImage?.poster_url,
+          firstMemberWithImage?.poster,
+          firstMemberWithImage?.coverUrl,
+          firstMemberWithImage?.cover_url,
+          firstMemberWithImage?.backdropUrl,
+          firstMemberWithImage?.backdrop_url
+        );
         return `
           <div class="import-result-card featured ${selected ? "selected" : ""}">
-            ${artHtml(imageFrom(proposal.posterUrl, proposal.poster_url, proposal.poster, proposal.backdropUrl, proposal.backdrop_url), proposal.title || proposal.name || "B")}
+            ${artHtml(displayImage, displayTitle)}
             <div class="import-result-body">
               <div class="import-result-kicker">
                 <span class="tag good">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>
@@ -19442,7 +19463,7 @@ def ui_preview_html(
                 <span class="tag">${escapeHtml(tNext("importCenter.members", "members"))}: ${escapeHtml(String(memberCount || proposal.member_count || 0))}</span>
                 ${proposal.memberConfidence || proposal.member_confidence ? `<span class="tag">${escapeHtml(proposal.memberConfidence || proposal.member_confidence)}</span>` : ""}
               </div>
-              <h3 class="import-result-title">${escapeHtml(proposal.title || proposal.name || tNext("importCenter.boxSetDetected", "Box-set detected"))}</h3>
+              <h3 class="import-result-title">${escapeHtml(displayTitle)}</h3>
               <div class="import-result-subtitle">${escapeHtml(memberCount ? tNext("importCenter.boxSetPreviewHelp", "DiscVault will add the box-set and link the detected member films.") : tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."))}</div>
               ${selectable ? `
                 <button type="button" class="glass-button small import-proposal-select" data-box-set-proposal-key="${escapeHtml(proposalKey)}" aria-pressed="${selected ? "true" : "false"}">
@@ -37860,6 +37881,53 @@ def register_routes(flask_app: Flask) -> None:
             }
         return {}
 
+    def metadata_lookup_audit_payload(body: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+        query = result.get("query") if isinstance(result.get("query"), dict) else {}
+        proposal = result.get("proposal") if isinstance(result.get("proposal"), dict) else {}
+        executions = result.get("executions") if isinstance(result.get("executions"), list) else []
+        results = result.get("results") if isinstance(result.get("results"), list) else []
+        box_set_proposals = metadata_box_set_proposals(result)
+        return {
+            "query": {
+                "title": query.get("title") or clean_text(body.get("title") or body.get("query")),
+                "year": query.get("year") or clean_text(body.get("year")),
+                "barcode": query.get("externalBarcode") or query.get("barcode") or clean_text(body.get("barcode")),
+                "format": query.get("format") or clean_text(body.get("format") or body.get("mediaFormat")),
+                "detectBoxSets": bool(query.get("detectBoxSets") or body.get("detectBoxSets") or body.get("detect_box_sets")),
+                "previewMode": bool(query.get("previewMode") or body.get("previewMode") or body.get("preview_mode")),
+            },
+            "sourceOrder": result.get("sourceOrder") or [],
+            "sourceSummary": result.get("sourceSummary") or [],
+            "executions": [
+                {
+                    "pluginId": item.get("pluginId"),
+                    "entrypoint": item.get("entrypoint"),
+                    "status": item.get("status"),
+                    "state": item.get("state"),
+                    "resultStatus": item.get("resultStatus"),
+                    "candidateCount": item.get("candidateCount"),
+                    "elapsedMs": item.get("elapsedMs"),
+                    "error": item.get("error"),
+                }
+                for item in executions
+                if isinstance(item, dict)
+            ],
+            "providerResults": [metadata_result_summary(item) for item in results if isinstance(item, dict)],
+            "proposalStats": result.get("proposalStats") or {},
+            "acceptedFields": proposal.get("provenance") or [],
+            "skippedFields": proposal.get("skipped") or [],
+            "boxSetProposals": [
+                {
+                    "provider": item.get("provider") or item.get("source"),
+                    "title": item.get("title") or item.get("name"),
+                    "memberCount": len(box_set_proposal_members(item)),
+                    "memberConfidence": item.get("memberConfidence") or item.get("member_confidence"),
+                    "source": item.get("memberSource") or item.get("member_source") or item.get("source"),
+                }
+                for item in box_set_proposals
+            ],
+        }
+
     @flask_app.post("/api/next/metadata/lookup")
     def metadata_lookup():
         body = request.get_json(silent=True) or {}
@@ -37873,6 +37941,16 @@ def register_routes(flask_app: Flask) -> None:
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             result = lookup_metadata_sources(conn, body, actor)
+            audit_event(
+                conn,
+                event_type="metadata.lookup",
+                category="metadata",
+                actor=actor,
+                target_type="metadata_lookup",
+                target_id=None,
+                summary="Metadata lookup executed",
+                metadata=metadata_lookup_audit_payload(body, result),
+            )
         return response({"status": "ok", "metadata": result})
 
     @flask_app.post("/api/next/import/movie")
