@@ -19527,6 +19527,11 @@ def ui_preview_html(
         return Array.isArray(members) && members.length >= 2;
       }) || null;
     }
+    function boxSetProposalByKey(proposalKey) {
+      const key = String(proposalKey || "");
+      if (!key) return null;
+      return barcodeBoxSetProposals().find((proposal) => proposal.proposalKey === key) || null;
+    }
     function boxSetProposalMembers(proposal) {
       if (!proposal || typeof proposal !== "object") return [];
       for (const key of ["movies", "members", "boxSetMovies", "box_set_movies", "items", "releases"]) {
@@ -20034,7 +20039,11 @@ def ui_preview_html(
         </div>
       ` : "";
       const selectedMovieCandidate = selectedLookupMovieCandidate();
-      const selectedBoxSetForAction = importCenter.selectedBoxSetProposalKey ? selectedBoxSetProposal() : null;
+      const selectedBoxSetForAction = boxSetProposalByKey(importCenter.selectedBoxSetProposalKey);
+      const selectedBoxSetActionKey = selectedBoxSetForAction?.proposalKey || "";
+      const secondaryBoxSetActionKey = !selectedMovieCandidate && addableBoxSetProposal && !selectedBoxSetForAction
+        ? (addableBoxSetProposal.proposalKey || importBoxSetProposalKey(addableBoxSetProposal))
+        : "";
       const sourceGrid = movieResultCards.length ? `
         <div class="import-result-grid">
           ${movieResultCards.slice(0, 8).map(compactResultCard).join("")}
@@ -20054,8 +20063,8 @@ def ui_preview_html(
         : tNext("importCenter.addMovie", "Add movie");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
-          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}">${escapeHtml(primaryImportLabel)}</button>` : ""}
-          ${addableBoxSetProposal && !selectedBoxSetForAction ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
+          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
+          ${secondaryBoxSetActionKey ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" data-box-set-proposal-key="${escapeHtml(secondaryBoxSetActionKey)}" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
         </div>
       `;
       if (!Array.isArray(results) || !results.length) {
@@ -20247,6 +20256,12 @@ def ui_preview_html(
         ? trigger
         : (button?.dataset?.importMode || fallbackButton?.dataset?.importMode || "movie");
       let wantsBoxSet = requestedMode === "box-set" || requestedMode === "box_set" || requestedMode === "boxset";
+      const buttonBoxSetProposalKey = String(button?.dataset?.boxSetProposalKey || "");
+      if (buttonBoxSetProposalKey) {
+        importCenter.selectedBoxSetProposalKey = buttonBoxSetProposalKey;
+        importCenter.selectedMovieCandidateKey = "";
+        wantsBoxSet = true;
+      }
       if (!wantsBoxSet && importCenter.selectedBoxSetProposalKey && !importCenter.selectedMovieCandidateKey) {
         wantsBoxSet = true;
       }
@@ -20265,7 +20280,9 @@ def ui_preview_html(
       );
       if (button) button.disabled = true;
       try {
-        const selectedProposal = wantsBoxSet ? selectedBoxSetProposal() : null;
+        const selectedProposal = wantsBoxSet
+          ? (boxSetProposalByKey(importCenter.selectedBoxSetProposalKey) || selectedBoxSetProposal())
+          : null;
         const selectedMovieCandidate = wantsBoxSet ? null : selectedLookupMovieCandidate();
         if (wantsBoxSet && !selectedProposal) {
           setImportCenterMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
