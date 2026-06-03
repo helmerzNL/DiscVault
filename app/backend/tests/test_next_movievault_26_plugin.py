@@ -51,7 +51,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.3.1")
+        self.assertEqual(manifest["version"], "1.3.2")
         self.assertIn("describe_payload", manifest["capabilities"])
         self.assertIn("activity_summary", manifest["capabilities"])
 
@@ -155,6 +155,25 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["providerId"], "movievault_26")
         self.assertEqual(result["items"][0]["posterUrl"], "https://img.example/bohemian.jpg")
         self.assertEqual(result["candidates"][0]["tmdbId"], "424694")
+        self.assertNotIn("boxSetProposal", result)
+
+    def test_regular_movie_payload_does_not_become_box_set_proposal(self):
+        proposal = movievault_26._normalize_box_set_proposal(
+            {
+                "status": "ok",
+                "data": {
+                    "id": "mv_movie_1",
+                    "title": "Bohemian Rhapsody",
+                    "year": "2018",
+                    "format": "4K UHD",
+                    "posterUrl": "https://img.example/bohemian.jpg",
+                    "tmdbId": 424694,
+                },
+            },
+            {},
+        )
+
+        self.assertEqual(proposal, {})
 
     def test_box_set_candidates_omits_invalid_barcode_parameter(self):
         captured = {}

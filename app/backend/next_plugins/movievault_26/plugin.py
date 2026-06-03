@@ -277,6 +277,31 @@ def _member_list(payload):
     return []
 
 
+def _box_set_signal(item):
+    if not isinstance(item, dict):
+        return False
+    for key in ("boxSetProposal", "box_set_proposal", "boxSet", "box_set"):
+        if isinstance(item.get(key), dict):
+            return True
+    if item.get("isBoxSet") is True or item.get("is_box_set") is True:
+        return True
+    type_text = _text(
+        _first_value(
+            item,
+            "entityType",
+            "entity_type",
+            "containerType",
+            "container_type",
+            "releaseType",
+            "release_type",
+            "kind",
+            "type",
+        )
+    ).casefold()
+    type_key = type_text.replace("-", "_").replace(" ", "_")
+    return type_key in {"box_set", "boxset"} or "box_set" in type_key or "boxset" in type_key
+
+
 def _member_source(item):
     if not isinstance(item, dict):
         return {}
@@ -507,7 +532,8 @@ def _normalize_box_set_proposal(payload, context=None):
     item = _first(payload)
     if not item:
         return {}
-    if not _member_list(item):
+    raw_members = _member_list(item)
+    if not raw_members:
         nested = (
             item.get("boxSetProposal")
             or item.get("box_set_proposal")
@@ -516,10 +542,12 @@ def _normalize_box_set_proposal(payload, context=None):
         )
         if isinstance(nested, dict):
             item = nested
+            raw_members = _member_list(item)
+    if not raw_members and not _box_set_signal(item):
+        return {}
 
     title = _text(_first_value(item, "title", "name", "boxSetTitle", "box_set_title"))
     selected_format = _selected_format(context, item)
-    raw_members = _member_list(item)
     members = []
     lookup_summaries = []
     seen = set()
@@ -652,7 +680,7 @@ def _normalize_result(payload, *, source_ref=""):
         or item.get("box_set_proposal")
         or item.get("box_set")
     )
-    return {
+    result = {
         "status": "hit",
         "provider": "movievault_26",
         "sourceLabel": "MovieVault 26",
@@ -663,8 +691,10 @@ def _normalize_result(payload, *, source_ref=""):
         "imdbId": _text(item.get("imdbId") or item.get("imdb_id")),
         "items": [candidate] if candidate else [],
         "candidates": [candidate] if candidate else [],
-        "boxSetProposal": box_set_proposal,
     }
+    if isinstance(box_set_proposal, dict) and box_set_proposal:
+        result["boxSetProposal"] = box_set_proposal
+    return result
 
 
 def health_check(context=None):

@@ -19049,6 +19049,9 @@ def ui_preview_html(
       (metadata.results || []).forEach((result) => {
         const proposal = result?.boxSetProposal || result?.box_set_proposal || result?.raw?.boxSetProposal || result?.raw?.box_set_proposal;
         if (!proposal || typeof proposal !== "object") return;
+        const members = boxSetProposalMembers(proposal);
+        const explicitlyDetectedWithoutMembers = proposal.detectedWithoutMembers === true || proposal.detected_without_members === true;
+        if (members.length < 2 && !explicitlyDetectedWithoutMembers) return;
         const provider = proposal.provider || proposal.source || result?.pluginId || result?.provider || "";
         const normalized = {...proposal, provider: provider || proposal.provider || proposal.source || ""};
         const key = importBoxSetProposalKey(normalized, result);
