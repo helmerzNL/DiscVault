@@ -19307,6 +19307,22 @@ def ui_preview_html(
     function lookupResultCandidates(item) {
       const raw = item?.raw && typeof item.raw === "object" ? item.raw : {};
       const asArray = (value) => Array.isArray(value) ? value : [];
+      const explicitCandidates = [
+        ...asArray(item?.candidates),
+        ...asArray(raw.candidates),
+        ...asArray(raw.items)
+      ].filter((candidate) => candidate && typeof candidate === "object");
+      const resultLooksLikeBoxSet = Boolean(
+        item?.boxSetProposal
+        || item?.box_set_proposal
+        || raw.boxSetProposal
+        || raw.box_set_proposal
+        || raw.isBoxSetCandidate
+        || raw.is_box_set_candidate
+        || lookupCandidateLooksLikeBoxSet(item)
+        || lookupCandidateLooksLikeBoxSet(raw)
+      );
+      if (resultLooksLikeBoxSet && !explicitCandidates.length) return [];
       return [
         item,
         item?.movie,
@@ -19316,9 +19332,7 @@ def ui_preview_html(
         raw.movie,
         raw.details,
         raw.release,
-        ...asArray(item?.candidates),
-        ...asArray(raw.candidates),
-        ...asArray(raw.items)
+        ...explicitCandidates
       ].filter((candidate) => candidate && typeof candidate === "object");
     }
     function lookupValue(item, keys) {
@@ -19334,6 +19348,7 @@ def ui_preview_html(
       if (!candidate || typeof candidate !== "object") return false;
       const entityType = String(candidate.entityType || candidate.entity_type || candidate.containerType || candidate.container_type || candidate.kind || candidate.type || "").toLowerCase().replace(/[-\\s]+/g, "_");
       if (entityType.includes("box_set") || entityType.includes("boxset")) return true;
+      if (candidate.isBoxSetCandidate === true || candidate.is_box_set_candidate === true) return true;
       return ["members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"].some((key) => {
         const value = candidate[key];
         return Array.isArray(value) && value.filter((member) => String(member?.title || member?.name || "").trim()).length >= 2;
@@ -19757,6 +19772,7 @@ def ui_preview_html(
         if (!candidate || typeof candidate !== "object") return false;
         const entityType = String(candidate.entityType || candidate.entity_type || candidate.containerType || candidate.container_type || candidate.kind || candidate.type || "").toLowerCase().replace(/[-\\s]+/g, "_");
         if (entityType.includes("box_set") || entityType.includes("boxset")) return true;
+        if (candidate.isBoxSetCandidate === true || candidate.is_box_set_candidate === true) return true;
         return ["members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"].some((key) => {
           const value = candidate[key];
           return Array.isArray(value) && value.filter((member) => String(member?.title || member?.name || "").trim()).length >= 2;
