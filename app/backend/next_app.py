@@ -19784,6 +19784,7 @@ def ui_preview_html(
         const payload = await authApiJson("/api/next/import/movie", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
+          timeoutMs: 45000,
           body: JSON.stringify({
             barcode,
             title,
@@ -38215,29 +38216,31 @@ def register_routes(flask_app: Flask) -> None:
                     )
 
             with conn.transaction():
-                metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
                 selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
-                box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
+                metadata_result: dict[str, Any] = {}
+                box_set_proposal: dict[str, Any] = {}
+                provided_proposal = body.get("boxSetProposal") or body.get("box_set_proposal")
+                if isinstance(provided_proposal, dict):
+                    candidate = dict(provided_proposal)
+                    candidate.setdefault("provider", clean_text(candidate.get("provider") or candidate.get("source") or body.get("boxSetProvider")))
+                    candidate.setdefault("title", clean_text(candidate.get("title") or candidate.get("name") or title))
+                    if selected_box_set_key:
+                        candidate["_proposalKey"] = selected_box_set_key
+                    else:
+                        candidate["_proposalKey"] = metadata_box_set_proposal_key(candidate)
+                    candidate_members = box_set_proposal_members(candidate)
+                    body_members = normalized_box_set_members_from_body(body)
+                    if body_members:
+                        candidate["members"] = body_members
+                        candidate["movies"] = body_members
+                        candidate_members = body_members
+                    if clean_text(candidate.get("title")) and len(candidate_members) >= 2:
+                        candidate["members"] = candidate_members
+                        candidate["movies"] = candidate_members
+                        box_set_proposal = candidate
                 if not box_set_proposal:
-                    provided_proposal = body.get("boxSetProposal") or body.get("box_set_proposal")
-                    if isinstance(provided_proposal, dict):
-                        candidate = dict(provided_proposal)
-                        candidate.setdefault("provider", clean_text(candidate.get("provider") or candidate.get("source") or body.get("boxSetProvider")))
-                        candidate.setdefault("title", clean_text(candidate.get("title") or candidate.get("name") or title))
-                        if selected_box_set_key:
-                            candidate["_proposalKey"] = selected_box_set_key
-                        else:
-                            candidate["_proposalKey"] = metadata_box_set_proposal_key(candidate)
-                        candidate_members = box_set_proposal_members(candidate)
-                        body_members = normalized_box_set_members_from_body(body)
-                        if body_members:
-                            candidate["members"] = body_members
-                            candidate["movies"] = body_members
-                            candidate_members = body_members
-                        if clean_text(candidate.get("title")) and len(candidate_members) >= 2:
-                            candidate["members"] = candidate_members
-                            candidate["movies"] = candidate_members
-                            box_set_proposal = candidate
+                    metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
+                    box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
                 if box_set_proposal:
                     box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
                     box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
@@ -38257,6 +38260,8 @@ def register_routes(flask_app: Flask) -> None:
                         },
                         201,
                     )
+                if not metadata_result:
+                    metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
                 proposal = metadata_result.get("proposal") or {}
                 movie_updates = proposal.get("movieUpdates") or {}
                 metadata_updates = proposal.get("metadataUpdates") or {}
