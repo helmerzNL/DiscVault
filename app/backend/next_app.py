@@ -9161,7 +9161,11 @@ def ui_preview_html(
     .offline-status-list,
     .person-metadata-status,
     .container-edit-summary,
-    .bulk-result-panel {
+    .bulk-result-panel,
+    .metadata-compare-panel,
+    .artwork-manager-status,
+    .plugin-operation-panel,
+    .rbac-feature-summary {
       display: grid;
       gap: 8px;
       margin-top: 10px;
@@ -9170,7 +9174,11 @@ def ui_preview_html(
     .offline-status-row,
     .person-metadata-status-row,
     .container-edit-summary-row,
-    .bulk-result-card {
+    .bulk-result-card,
+    .metadata-compare-row,
+    .artwork-manager-row,
+    .plugin-operation-row,
+    .rbac-feature-row {
       border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
       border-radius: 14px;
       padding: 9px 10px;
@@ -9186,12 +9194,24 @@ def ui_preview_html(
     .offline-status-row span,
     .person-metadata-status-row span,
     .container-edit-summary-row span,
-    .bulk-result-card span {
+    .bulk-result-card span,
+    .metadata-compare-row span,
+    .artwork-manager-row span,
+    .plugin-operation-row span,
+    .rbac-feature-row span {
       display: block;
       color: var(--muted);
       font-size: .78rem;
       font-weight: 650;
       line-height: 1.35;
+    }
+    .plugin-operation-grid,
+    .metadata-compare-grid,
+    .artwork-manager-grid,
+    .rbac-feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 8px;
     }
     .app-admin-plugin-tab-panel {
       display: none;
@@ -10692,6 +10712,7 @@ def ui_preview_html(
                 <button type="button" class="primary-button" id="importReviewStartButton" data-next-i18n="importCenter.start">Start import</button>
               </div>
             </div>
+            <div class="plugin-operation-panel" id="importReviewWorkbench"></div>
             <div class="import-review-summary" id="importCenterReviewSummary"></div>
             <div class="import-review-list" id="importCenterReview"></div>
           </div>
@@ -10843,6 +10864,13 @@ def ui_preview_html(
             <h3 data-next-i18n="movieDetail.technical">Technical</h3>
             <div class="detail-fields" id="movieDetailTechnical"></div>
           </div>
+          <div class="detail-card full">
+            <div class="detail-card-head">
+              <h3 data-next-i18n="movieDetail.metadataCompare">Metadata compare</h3>
+              <span class="tag blue" data-next-i18n="metadataJobs.providers">Providers</span>
+            </div>
+            <div class="metadata-compare-panel" id="movieMetadataComparePanel"></div>
+          </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugLocalizationsCard">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
@@ -10868,6 +10896,7 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel" data-detail-panel-group="movieMedia" id="movieMediaPosters">
+              <div class="artwork-manager-status" id="movieArtworkManagerStatus"></div>
               <div class="art-option-grid" id="movieDetailPosterArtwork"></div>
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="moviePosterUploadInput" accept="image/*">
@@ -11605,6 +11634,7 @@ def ui_preview_html(
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.permissionMatrix">Permission matrix</h3>
               <p data-next-i18n="appAdmin.permissionMatrixHelp">Compare which app features each role can use.</p>
+              <div class="rbac-feature-summary" id="appAdminRbacFeatureSummary"></div>
               <div id="appAdminPermissionMatrix"></div>
             </div>
           </section>
@@ -11640,6 +11670,7 @@ def ui_preview_html(
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
                 <div id="appAdminMetadataPriorityPanel"></div>
+                <div class="plugin-operation-panel" id="appAdminPluginExecutionDashboard"></div>
                 <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin types" data-next-i18n-aria="appAdmin.pluginRegistry">
                   <button type="button" class="active" data-app-admin-plugin-type-tab="metadata_source" data-next-i18n="appAdmin.pluginTypeMetadataSources">Metadata sources</button>
                   <button type="button" data-app-admin-plugin-type-tab="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</button>
@@ -11661,6 +11692,7 @@ def ui_preview_html(
                   <button type="button" class="secondary-button" id="appAdminImportPluginButton" data-next-i18n="appAdmin.importPlugin">Import plugin</button>
                 </div>
                 <p class="profile-passkey-meta" data-next-i18n="appAdmin.pluginImportHelp">Imported ZIP files must contain manifest.json, plugin.py, a version and a compatible DiscVault plugin API declaration.</p>
+                <div class="plugin-operation-panel" id="appAdminPluginPackageValidator"></div>
               </div>
             </div>
             <div class="app-admin-plugin-tab-panel full" data-app-admin-plugin-panel="jobs">
@@ -11669,6 +11701,8 @@ def ui_preview_html(
                 <div class="profile-action-row">
                   <button type="button" class="secondary-button" id="appAdminRefreshPluginJobsButton" data-next-i18n="appAdmin.refreshPluginJobs">Refresh plugin jobs</button>
                 </div>
+                <div class="plugin-operation-panel" id="appAdminPersonalListSyncDashboard"></div>
+                <div class="plugin-operation-panel" id="appAdminContributionCenter"></div>
                 <div class="app-admin-contribution-list" id="appAdminContributionQueue"></div>
                 <div class="profile-passkey-list" id="appAdminPluginJobsList"></div>
               </div>
@@ -12492,6 +12526,36 @@ def ui_preview_html(
         </div>
       `).join("");
     }
+    function renderAppAdminPluginExecutionDashboard() {
+      const node = document.getElementById("appAdminPluginExecutionDashboard");
+      if (!node) return;
+      const jobs = appAdmin.pluginJobs || [];
+      const plugins = appAdmin.plugins || [];
+      const visible = appAdmin.activePluginTab === "registry";
+      if (!visible) {
+        node.innerHTML = "";
+        return;
+      }
+      const activeJobs = jobs.filter((job) => ["pending", "running"].includes(String(job.status || "")));
+      const failedJobs = jobs.filter((job) => String(job.status || "") === "failed");
+      const executablePlugins = plugins.filter((plugin) => appAdminCanExecutePlugin(plugin, "health_check") || (plugin.capabilities || []).some((capability) => ["discover_library", "sync_library", "sync_personal_lists", "inspect_source"].includes(capability)));
+      node.innerHTML = `
+        <section class="plugin-operation-grid">
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.pluginHealthDashboard", "Plugin health dashboard"))}</strong>
+            <span>${escapeHtml(tNext("appAdmin.pluginHealthDashboardHelp", "{count} executable plugins").replace("{count}", String(executablePlugins.length)))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.activePluginJobs", "Active plugin jobs"))}</strong>
+            <span>${escapeHtml(formatNumber(activeJobs.length))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.failedPluginJobs", "Failed plugin jobs"))}</strong>
+            <span>${escapeHtml(formatNumber(failedJobs.length))}</span>
+          </div>
+        </section>
+      `;
+    }
     function renderAppAdminMetadataPriorityPanel() {
       const node = document.getElementById("appAdminMetadataPriorityPanel");
       if (!node) return;
@@ -12529,6 +12593,92 @@ def ui_preview_html(
             </div>
           `).join("")}
         </div>
+      `;
+    }
+    function renderAppAdminPluginPackageValidator() {
+      const node = document.getElementById("appAdminPluginPackageValidator");
+      if (!node) return;
+      const plugins = appAdmin.plugins || [];
+      const exportable = plugins.filter(appAdminCanExportPlugin).length;
+      const importable = hasActualPermission("plugins.import") || hasActualPermission("metadata.manage_plugins");
+      node.innerHTML = `
+        <section class="plugin-operation-grid">
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.packageValidator", "Package validator"))}</strong>
+            <span>${escapeHtml(tNext("appAdmin.packageValidatorHelp", "ZIP packages are checked for manifest, plugin.py, version and API compatibility before install."))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.exportablePlugins", "Exportable plugins"))}</strong>
+            <span>${escapeHtml(formatNumber(exportable))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.importPermission", "Import permission"))}</strong>
+            <span>${escapeHtml(importable ? tNext("appAdmin.allowed", "Allowed") : tNext("appAdmin.featureBlocked", "Blocked"))}</span>
+          </div>
+        </section>
+      `;
+    }
+    function renderAppAdminPersonalListSyncDashboard() {
+      const node = document.getElementById("appAdminPersonalListSyncDashboard");
+      if (!node) return;
+      const plugins = (appAdmin.plugins || []).filter((plugin) => appAdminPluginHasCategory(plugin, "personal_list_source"));
+      const jobs = (appAdmin.pluginJobs || []).filter((job) => {
+        const payload = job.payload || {};
+        const result = job.result || {};
+        return (payload.entrypoint || result.entrypoint || "") === "sync_personal_lists";
+      });
+      if (!plugins.length && !jobs.length) {
+        node.innerHTML = "";
+        return;
+      }
+      node.innerHTML = `
+        <section class="plugin-operation-grid">
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.personalListSyncDashboard", "Personal list sync"))}</strong>
+            <span>${escapeHtml(tNext("appAdmin.personalListSyncHelp", "Trakt, Plex and Jellyfin can feed watchlist and watched history while DiscVault deduplicates watch moments."))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.personalListSources", "List sources"))}</strong>
+            <span>${escapeHtml(plugins.map((plugin) => plugin.name || plugin.id).join(", ") || "-")}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.latestListSyncJobs", "Latest sync jobs"))}</strong>
+            <span>${escapeHtml(formatNumber(jobs.length))}</span>
+          </div>
+        </section>
+      `;
+    }
+    function renderAppAdminContributionCenter() {
+      const node = document.getElementById("appAdminContributionCenter");
+      if (!node) return;
+      if (!hasActualPermission("admin.view_audit")) {
+        node.innerHTML = "";
+        return;
+      }
+      const events = appAdmin.contributionEvents || [];
+      const receivers = new Set(events.map((event) => {
+        const meta = event.metadata || {};
+        return meta.receiverId || meta.receiver_id || meta.pluginId || meta.plugin_id || meta.provider || "";
+      }).filter(Boolean));
+      const errors = events.filter((event) => {
+        const meta = event.metadata || {};
+        return String(meta.status || meta.state || "").toLowerCase() === "error";
+      }).length;
+      node.innerHTML = `
+        <section class="plugin-operation-grid">
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.contributionCenter", "Contribution center"))}</strong>
+            <span>${escapeHtml(tNext("appAdmin.contributionCenterHelp", "Shows metadata sent to receiver plugins such as MovieVault."))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.receivers", "Receivers"))}</strong>
+            <span>${escapeHtml(formatNumber(receivers.size))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("metadataJobs.error", "Error"))}</strong>
+            <span>${escapeHtml(formatNumber(errors))}</span>
+          </div>
+        </section>
       `;
     }
     function appAdminJobStatusClass(status) {
@@ -13246,6 +13396,10 @@ def ui_preview_html(
       if (configNode) configNode.textContent = String(configNeeded);
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
       renderAppAdminPluginDashboard();
+      renderAppAdminPluginExecutionDashboard();
+      renderAppAdminPluginPackageValidator();
+      renderAppAdminPersonalListSyncDashboard();
+      renderAppAdminContributionCenter();
       renderAppAdminPluginJobs();
       renderAppAdminContributionQueue();
       renderAppAdminMetadataJobs();
@@ -13438,11 +13592,37 @@ def ui_preview_html(
     }
     function renderAppAdminPermissionMatrix(roles) {
       const node = document.getElementById("appAdminPermissionMatrix");
+      const summaryNode = document.getElementById("appAdminRbacFeatureSummary");
       if (!node) return;
       const roleList = roles || [];
       if (!roleList.length) {
         node.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noRoles", "No roles found."))}</div>`;
+        if (summaryNode) summaryNode.innerHTML = "";
         return;
+      }
+      if (summaryNode) {
+        const features = visibleAppFeaturePreview();
+        const allowedFeatureCounts = roleList.map((role) => features.filter((feature) => appAdminRoleAllowsFeature(role, feature.permissions)).length);
+        summaryNode.innerHTML = `
+          <section class="rbac-feature-grid">
+            <div class="rbac-feature-row">
+              <strong>${escapeHtml(tNext("appAdmin.advancedPermissionMatrix", "Advanced permission matrix"))}</strong>
+              <span>${escapeHtml(tNext("appAdmin.advancedPermissionMatrixHelp", "Roles are compared by feature group; hidden features stay invisible for roles without permission."))}</span>
+            </div>
+            <div class="rbac-feature-row">
+              <strong>${escapeHtml(tNext("appAdmin.features", "Features"))}</strong>
+              <span>${escapeHtml(formatNumber(features.length))}</span>
+            </div>
+            <div class="rbac-feature-row">
+              <strong>${escapeHtml(tNext("appAdmin.roles", "Roles"))}</strong>
+              <span>${escapeHtml(formatNumber(roleList.length))}</span>
+            </div>
+            <div class="rbac-feature-row">
+              <strong>${escapeHtml(tNext("appAdmin.mostCapableRole", "Most capable role"))}</strong>
+              <span>${escapeHtml(appAdminRoleDisplayName(roleList[allowedFeatureCounts.indexOf(Math.max(...allowedFeatureCounts))] || roleList[0]))}</span>
+            </div>
+          </section>
+        `;
       }
       const headers = roleList.map((role) => `
         <th scope="col">
@@ -16015,6 +16195,61 @@ def ui_preview_html(
         `;
       }).join("");
     }
+    function renderMovieArtworkManagerStatus(detail) {
+      const node = document.getElementById("movieArtworkManagerStatus");
+      if (!node) return;
+      const assets = detail.mediaAssets || [];
+      const posters = assets.filter((asset) => asset.kind === "poster");
+      const backdrops = assets.filter((asset) => asset.kind === "backdrop");
+      const primaryPoster = posters.find((asset) => asset.is_primary);
+      const primaryBackdrop = backdrops.find((asset) => asset.is_primary);
+      const metadata = (detail.movie || {}).metadata || {};
+      const locked = metadata.primary_artwork_locked || metadata.artwork_locked || metadata.poster_locked || metadata.backdrop_locked;
+      node.innerHTML = `
+        <section class="artwork-manager-grid">
+          <div class="artwork-manager-row">
+            <strong>${escapeHtml(tNext("movieDetail.artworkManager", "Artwork manager"))}</strong>
+            <span>${escapeHtml(locked ? tNext("movieDetail.artworkLocked", "Primary artwork is protected from metadata overwrites") : tNext("movieDetail.artworkUnlocked", "Metadata providers may suggest new artwork options"))}</span>
+          </div>
+          <div class="artwork-manager-row">
+            <strong>${escapeHtml(tNext("movieDetail.posters", "Posters"))}</strong>
+            <span>${escapeHtml(formatNumber(posters.length))}${primaryPoster ? ` &middot; ${escapeHtml(tNext("movieDetail.primary", "Primary"))}` : ""}</span>
+          </div>
+          <div class="artwork-manager-row">
+            <strong>${escapeHtml(tNext("movieDetail.backdrops", "Backdrops"))}</strong>
+            <span>${escapeHtml(formatNumber(backdrops.length))}${primaryBackdrop ? ` &middot; ${escapeHtml(tNext("movieDetail.primary", "Primary"))}` : ""}</span>
+          </div>
+        </section>
+      `;
+    }
+    function renderMovieMetadataCompare(detail) {
+      const node = document.getElementById("movieMetadataComparePanel");
+      if (!node) return;
+      const movie = detail.movie || {};
+      const metadata = movie.metadata || {};
+      const identifiers = detail.identifiers || [];
+      const technical = detail.technicalSpecs || {};
+      const rows = [
+        [tNext("movieDetail.title", "Title"), movie.title || metadata.title, metadata.title_source || metadata.source || "collection"],
+        [tNext("movieDetail.originalTitle", "Original title"), movie.original_title || metadata.original_title || metadata.originalTitle, metadata.original_title_source || metadata.source || "collection"],
+        [tNext("movieDetail.fieldOverview", "Overview"), movie.overview || metadata.overview, metadata.overview_source || metadata.source || "collection"],
+        [tNext("movieDetail.rating", "Rating"), movie.rating || metadata.rating, metadata.rating_source || metadata.source || "collection"],
+        [tNext("movieDetail.technical", "Technical"), [technical.hdr, (technical.audio_tracks || []).slice(0, 2).join(", "), (technical.subtitles || []).slice(0, 2).join(", ")].filter(Boolean).join(" / "), technical.provider || metadata.technical_source || "metadata"]
+      ].filter(([, value]) => value);
+      const idText = identifiers.map((item) => `${item.provider_id || item.providerId}:${item.identifier}`).join(" / ");
+      if (idText) rows.push([tNext("movieDetail.identifiers", "Identifiers"), idText, "providers"]);
+      node.innerHTML = rows.length ? `
+        <section class="metadata-compare-grid">
+          ${rows.map(([label, value, source]) => `
+            <div class="metadata-compare-row">
+              <strong>${escapeHtml(label)}</strong>
+              <span>${escapeHtml(valueText(value)).slice(0, 260)}</span>
+              <span>${escapeHtml(tNext("metadataJobs.providers", "Providers"))}: ${escapeHtml(source || "-")}</span>
+            </div>
+          `).join("")}
+        </section>
+      ` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+    }
     function movieVideoItems(movie, metadata) {
       const videos = [];
       const seen = new Set();
@@ -16337,6 +16572,7 @@ def ui_preview_html(
         [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
         [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}]
       ]);
+      renderMovieMetadataCompare(detail);
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
@@ -16376,6 +16612,7 @@ def ui_preview_html(
       });
       document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      renderMovieArtworkManagerStatus(detail);
       document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
@@ -16399,6 +16636,7 @@ def ui_preview_html(
       document.getElementById("movieDetailTags").innerHTML = "";
       document.getElementById("movieDetailRelease").innerHTML = "";
       document.getElementById("movieDetailTechnical").innerHTML = "";
+      document.getElementById("movieMetadataComparePanel").innerHTML = "";
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
@@ -16407,6 +16645,7 @@ def ui_preview_html(
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
       document.getElementById("movieDetailBackdropArtwork").innerHTML = "";
+      document.getElementById("movieArtworkManagerStatus").innerHTML = "";
       document.getElementById("movieDetailVideos").innerHTML = "";
       document.getElementById("movieDetailCast").innerHTML = "";
       document.getElementById("movieDetailCrew").innerHTML = "";
@@ -16684,12 +16923,17 @@ def ui_preview_html(
       const container = detail.container || {};
       const summary = detail.aggregateSummary || {};
       const canEdit = collectorsModeEnabled() && hasPermission("containers.edit");
+      const ownPosters = (detail.mediaAssets || []).filter((asset) => asset.kind === "poster").length;
+      const ownBackdrops = (detail.mediaAssets || []).filter((asset) => asset.kind === "backdrop").length;
+      const aggregatePosters = (detail.aggregateMediaAssets || []).filter((asset) => asset.kind === "poster").length;
+      const aggregateBackdrops = (detail.aggregateMediaAssets || []).filter((asset) => asset.kind === "backdrop").length;
       const rows = [
         [tNext("containerDetail.editState", "Edit state"), canEdit ? tNext("containerDetail.editAvailable", "Edit tools available") : tNext("containerDetail.editUnavailable", "Read-only for your role")],
         [tNext("containerDetail.memberMovies", "Movies"), `${formatNumber((detail.memberMovies || []).length)} ${tNext("collection.movies", "Movies").toLowerCase()}`],
         [tNext("containerDetail.collectionItems", "Collection items"), `${formatNumber((detail.collectionItems || []).length)} ${tNext("containerDetail.items", "items")}`],
         [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork || `${formatNumber(summary.posterCount || 0)} ${tNext("movieDetail.posters", "Posters").toLowerCase()}`],
-        [tNext("containerDetail.aggregateVideos", "Videos"), formatNumber(summary.videoCount || 0)]
+        [tNext("containerDetail.aggregateVideos", "Videos"), formatNumber(summary.videoCount || 0)],
+        [tNext("containerDetail.artworkSources", "Artwork sources"), `${tNext("containerDetail.ownArtwork", "Own")}: ${ownPosters + ownBackdrops} / ${tNext("containerDetail.fromMembers", "From members")}: ${aggregatePosters + aggregateBackdrops}`]
       ];
       node.innerHTML = rows.map(([label, value]) => `
         <div class="container-edit-summary-row">
@@ -17668,6 +17912,43 @@ def ui_preview_html(
         </section>
       `;
     }
+    function renderImportReviewWorkbench(rows, actionPreview, decisions) {
+      const node = document.getElementById("importReviewWorkbench");
+      if (!node) return;
+      if (!rows.length) {
+        node.innerHTML = "";
+        return;
+      }
+      const low = rows.filter((row) => (row.confidence || {}).label === "low").length;
+      const missingTitle = rows.filter((row) => row.matchState === "missing_title").length;
+      const releaseRisks = rows.filter(importReleaseTitleRisk).length;
+      const suggestions = rows.filter((row) => ((row.metadataSuggestions || {}).items || []).length || importRecommendedMatch(row)).length;
+      const selectedMatches = Object.keys(importCenter.reviewMatches || {}).length;
+      const boxSets = (actionPreview.boxSetReviews || []).length || (actionPreview.containers || []).filter((container) => container.containerType === "box_set").length;
+      const creates = rows.filter((row) => importDecisionValue(row, decisions) === "create").length;
+      const updates = rows.filter((row) => importDecisionValue(row, decisions) === "update").length;
+      const skips = rows.filter((row) => importDecisionValue(row, decisions) === "skip").length;
+      node.innerHTML = `
+        <section class="plugin-operation-grid">
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("importCenter.reviewWorkbench", "Review workbench"))}</strong>
+            <span>${escapeHtml(tNext("importCenter.reviewWorkbenchHelp", "Accept, adjust or skip matches before the import writes anything to your library."))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("importCenter.decisions", "Decisions"))}</strong>
+            <span>${escapeHtml(tNext("importCenter.action.create", "Create"))}: ${escapeHtml(creates)} &middot; ${escapeHtml(tNext("importCenter.action.update", "Update"))}: ${escapeHtml(updates)} &middot; ${escapeHtml(tNext("importCenter.action.skip", "Skip"))}: ${escapeHtml(skips)}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("importCenter.attention", "Attention"))}</strong>
+            <span>${escapeHtml(tNext("importCenter.confidence.low", "Low"))}: ${escapeHtml(low)} &middot; ${escapeHtml(tNext("importCenter.missingTitle", "Missing title"))}: ${escapeHtml(missingTitle)} &middot; ${escapeHtml(tNext("importCenter.releaseTitleRisks", "Release title risks"))}: ${escapeHtml(releaseRisks)}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("importCenter.matching", "Matching"))}</strong>
+            <span>${escapeHtml(tNext("importCenter.metadataSuggestions", "Metadata suggestions"))}: ${escapeHtml(suggestions)} &middot; ${escapeHtml(tNext("importCenter.selectedMatch", "Selected"))}: ${escapeHtml(selectedMatches)} &middot; ${escapeHtml(tNext("importCenter.boxSetReview", "Box-set member review"))}: ${escapeHtml(boxSets)}</span>
+          </div>
+        </section>
+      `;
+    }
     function renderImportReview() {
       const list = document.getElementById("importCenterReview");
       const summary = document.getElementById("importCenterReviewSummary");
@@ -17685,6 +17966,7 @@ def ui_preview_html(
         return;
       }
       const decisions = importCenter.reviewDecisions || {};
+      renderImportReviewWorkbench(rows, actionPreview, decisions);
       const counts = rows.reduce((acc, row) => {
         const action = importDecisionValue(row, decisions);
         acc[action] = (acc[action] || 0) + 1;
