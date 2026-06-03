@@ -7304,6 +7304,11 @@ def ui_preview_html(
       justify-self: start;
       min-height: 34px;
     }
+    .import-proposal-select[aria-pressed="true"] {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 14%, transparent), inset 0 1px 0 rgba(255,255,255,.16);
+    }
     .import-member-editor {
       display: grid;
       gap: 8px;
@@ -19177,7 +19182,7 @@ def ui_preview_html(
           </div>
           <div class="import-post-review-grid">
             <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.action", "Action"))}</span><strong>${escapeHtml(payload.state || "added")}</strong></div>
-            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}</span><strong>${escapeHtml(formatNumber(Array.isArray(members) ? members.length : 0))}</strong></div>
+            <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.members", "members"))}</span><strong>${escapeHtml(formatNumber(Array.isArray(members) ? members.length : 0))}</strong></div>
             <div class="import-post-stat"><span>${escapeHtml(tNext("importCenter.metadataRefreshes", "Metadata refreshes"))}</span><strong>${escapeHtml(formatNumber(metadataJobs))}</strong></div>
           </div>
         </article>
@@ -19206,12 +19211,17 @@ def ui_preview_html(
       if (addableBoxSetProposal && !boxSetProposals.some((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey)) {
         importCenter.selectedBoxSetProposalKey = addableBoxSetProposal.proposalKey || "";
       }
+      const selectedProposalForAdd = selectedBoxSetProposal();
+      const selectedImportMembersForAdd = selectedProposalForAdd ? selectedBoxSetMembersForImport() : [];
       if (addButton) {
         addButton.textContent = addableBoxSetProposal
           ? tNext("importCenter.addBoxSet", "Add box-set")
           : tNext("importCenter.addMovie", "Add movie");
-        const selectedImportMembers = selectedBoxSetProposal() ? selectedBoxSetMembersForImport() : [];
-        addButton.disabled = !importCenter.barcodeLookup || (addableBoxSetProposal && selectedImportMembers.length < 2);
+        addButton.dataset.importMode = addableBoxSetProposal ? "box-set" : "movie";
+        addButton.disabled = !importCenter.barcodeLookup || (addableBoxSetProposal && selectedImportMembersForAdd.length < 2);
+        addButton.title = addableBoxSetProposal && selectedImportMembersForAdd.length < 2
+          ? tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source.")
+          : "";
       }
       const proposal = metadata.proposal || {};
       const movieUpdates = proposal.movieUpdates || {};
@@ -19377,7 +19387,7 @@ def ui_preview_html(
               <div class="import-result-kicker">
                 <span class="tag good">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>
                 ${provider ? `<span class="tag">${escapeHtml(provider)}</span>` : ""}
-                <span class="tag">${escapeHtml(tNext("importCenter.boxSetMembers", "Members"))}: ${escapeHtml(String(memberCount || proposal.member_count || 0))}</span>
+                <span class="tag">${escapeHtml(tNext("importCenter.members", "members"))}: ${escapeHtml(String(memberCount || proposal.member_count || 0))}</span>
                 ${proposal.memberConfidence || proposal.member_confidence ? `<span class="tag">${escapeHtml(proposal.memberConfidence || proposal.member_confidence)}</span>` : ""}
               </div>
               <h3 class="import-result-title">${escapeHtml(proposal.title || proposal.name || tNext("importCenter.boxSetDetected", "Box-set detected"))}</h3>
@@ -19387,6 +19397,7 @@ def ui_preview_html(
                   ${escapeHtml(selected ? tNext("importCenter.providerSelected", "Selected provider") : tNext("importCenter.useProvider", "Use this provider"))}
                 </button>
               ` : ""}
+              ${selected ? `<div class="login-message good">${escapeHtml(tNext("importCenter.providerSelected", "Selected provider"))}: ${escapeHtml(provider || "")} / ${escapeHtml(tNext("importCenter.members", "members"))}: ${escapeHtml(String(proposalMembersForImport(proposal).length))}</div>` : ""}
               ${selected ? `<div class="import-result-subtitle">${escapeHtml(tNext("importCenter.memberCorrectionHelp", "Correct titles, years or formats before importing. DiscVault will dedupe by barcode, identifiers and title/year."))}</div>` : ""}
               <div class="import-result-subtitle"><strong>${escapeHtml(tNext("importCenter.diskMembers", "Possible disk members"))}</strong></div>
               ${boxSetMemberRows(proposal, selected)}
@@ -19609,10 +19620,31 @@ def ui_preview_html(
       try {
         const selectedProposal = selectedBoxSetProposal();
         const boxSetMembers = selectedProposal ? selectedBoxSetMembersForImport() : [];
+        if (selectedProposal && boxSetMembers.length < 2) {
+          setImportCenterMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
+          return;
+        }
+        const selectedProposalPayload = selectedProposal
+          ? {
+              ...selectedProposal,
+              members: boxSetMembers,
+              movies: boxSetMembers,
+              _proposalKey: importCenter.selectedBoxSetProposalKey || selectedProposal.proposalKey || selectedProposal._proposalKey || ""
+            }
+          : null;
         const payload = await authApiJson("/api/next/import/movie", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({barcode, title, year, format, detectBoxSets: true, boxSetProposalKey: importCenter.selectedBoxSetProposalKey || "", boxSetMembers})
+          body: JSON.stringify({
+            barcode,
+            title,
+            year,
+            format,
+            detectBoxSets: true,
+            boxSetProposalKey: importCenter.selectedBoxSetProposalKey || selectedProposal?.proposalKey || selectedProposal?._proposalKey || "",
+            boxSetProposal: selectedProposalPayload,
+            boxSetMembers
+          })
         });
         importCenter.addResult = payload;
         const movie = payload.movie || (payload.detail && payload.detail.movie) || {};
@@ -22419,20 +22451,42 @@ def ui_preview_html(
         const movieButton = event.target.closest("[data-open-movie]");
         const metadataButton = event.target.closest("[data-import-metadata-refresh]");
         if (proposalButton) {
+          event.preventDefault();
           importCenter.selectedBoxSetProposalKey = proposalButton.dataset.boxSetProposalKey || "";
+          const selectedProposal = selectedBoxSetProposal();
+          const provider = selectedProposal?.provider || selectedProposal?.source || selectedProposal?.member_source || "";
+          const memberCount = selectedProposal ? selectedBoxSetMembersForImport().length : 0;
+          setImportCenterMessage(`${tNext("importCenter.providerSelected", "Selected provider")}: ${provider} / ${tNext("importCenter.members", "members")}: ${memberCount}`, "good");
           renderBarcodeLookup();
+          return;
         }
         if (addMemberButton) {
+          event.preventDefault();
           const proposalKey = addMemberButton.dataset.boxSetMemberAdd || "";
           const state = boxSetMemberEditState(proposalKey);
           state.extras = state.extras || [];
           state.extras.push({title: "", year: "", format: document.getElementById("importFormatInput")?.value || "", action: "import", memberConfidence: "manual"});
           renderBarcodeLookup();
+          return;
         }
-        if (memberSearchButton) searchBoxSetMemberMatch(memberSearchButton.dataset.boxMemberSearch || "", memberSearchButton.dataset.boxMemberIndex || "");
-        if (memberSuggestionButton) applyBoxSetMemberSuggestion(memberSuggestionButton.dataset.boxMemberUseSuggestion || "", memberSuggestionButton.dataset.boxMemberIndex || "", memberSuggestionButton.dataset.suggestionIndex || "0");
-        if (containerButton) openAppContainerDetail(containerButton.dataset.importOpenContainer);
-        if (movieButton) openMovieDetail(movieButton.dataset.openMovie);
+        if (memberSearchButton) {
+          event.preventDefault();
+          searchBoxSetMemberMatch(memberSearchButton.dataset.boxMemberSearch || "", memberSearchButton.dataset.boxMemberIndex || "");
+          return;
+        }
+        if (memberSuggestionButton) {
+          event.preventDefault();
+          applyBoxSetMemberSuggestion(memberSuggestionButton.dataset.boxMemberUseSuggestion || "", memberSuggestionButton.dataset.boxMemberIndex || "", memberSuggestionButton.dataset.suggestionIndex || "0");
+          return;
+        }
+        if (containerButton) {
+          openAppContainerDetail(containerButton.dataset.importOpenContainer);
+          return;
+        }
+        if (movieButton) {
+          openMovieDetail(movieButton.dataset.openMovie);
+          return;
+        }
         if (metadataButton) queueImportMovieMetadataRefresh(metadataButton.dataset.importMetadataRefresh);
       });
       document.getElementById("importBarcodeResults")?.addEventListener("input", (event) => {
@@ -22460,7 +22514,10 @@ def ui_preview_html(
       document.querySelectorAll("[data-import-tab]").forEach((button) => {
         button.addEventListener("click", () => setImportCenterTab(button.dataset.importTab || "add"));
       });
-      document.getElementById("importMovieAddButton")?.addEventListener("click", () => addLookupMovie());
+      document.getElementById("importMovieAddButton")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        addLookupMovie();
+      });
       document.getElementById("importCenterSources")?.addEventListener("click", (event) => {
         const sourceButton = event.target.closest("[data-import-source]");
         if (!sourceButton) return;
@@ -37734,7 +37791,30 @@ def register_routes(flask_app: Flask) -> None:
 
             with conn.transaction():
                 metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
-                box_set_proposal = metadata_box_set_proposal(metadata_result, clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key")))
+                selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
+                box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
+                if not box_set_proposal:
+                    provided_proposal = body.get("boxSetProposal") or body.get("box_set_proposal")
+                    if isinstance(provided_proposal, dict):
+                        candidate = dict(provided_proposal)
+                        candidate.setdefault("provider", clean_text(candidate.get("provider") or candidate.get("source") or body.get("boxSetProvider")))
+                        candidate.setdefault("title", clean_text(candidate.get("title") or candidate.get("name") or title))
+                        if selected_box_set_key:
+                            candidate["_proposalKey"] = selected_box_set_key
+                        else:
+                            candidate["_proposalKey"] = metadata_box_set_proposal_key(candidate)
+                        candidate_members = [
+                            item
+                            for item in (candidate.get("movies") or candidate.get("members") or [])
+                            if isinstance(item, dict) and clean_text(item.get("title"))
+                        ]
+                        body_members = normalized_box_set_members_from_body(body)
+                        if body_members:
+                            candidate["members"] = body_members
+                            candidate["movies"] = body_members
+                            candidate_members = body_members
+                        if clean_text(candidate.get("title")) and len(candidate_members) >= 2:
+                            box_set_proposal = candidate
                 if box_set_proposal:
                     box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
                     first_movie = (box_set_import.get("movies") or [{}])[0]
