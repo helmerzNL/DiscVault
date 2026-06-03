@@ -51,7 +51,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.3.3")
+        self.assertEqual(manifest["version"], "1.3.4")
         self.assertIn("describe_payload", manifest["capabilities"])
         self.assertIn("activity_summary", manifest["capabilities"])
 
@@ -205,6 +205,41 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["boxSetProposal"]["title"], "Harry Potter Complete Collection")
         self.assertEqual(result["boxSetProposal"]["member_count"], 2)
         self.assertEqual(result["boxSetProposal"]["members"][0]["title"], "Harry Potter and the Philosopher's Stone")
+
+    def test_barcode_lookup_can_return_movie_candidates_and_box_set_proposals(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                self.assertEqual(path, "/api/v1/barcodes/8712626068546")
+                return {
+                    "status": "ok",
+                    "movie": {
+                        "id": "mv_movie_1",
+                        "title": "Bohemian Rhapsody",
+                        "year": "2018",
+                        "format": "4K UHD",
+                    },
+                    "boxSetProposal": {
+                        "entityType": "box_set",
+                        "id": "mv_box_1",
+                        "title": "Queen Music Films",
+                        "members": [
+                            {"title": "Bohemian Rhapsody", "year": 2018},
+                            {"title": "Queen: Rock Montreal", "year": 2007},
+                        ],
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode({"barcode": "8712626068546"}, {"movievault": {"enabled": True}})
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["items"][0]["title"], "Bohemian Rhapsody")
+        self.assertEqual(result["boxSetProposal"]["title"], "Queen Music Films")
+        self.assertEqual(result["boxSetProposal"]["member_count"], 2)
+        self.assertEqual(len(result["boxSetProposals"]), 1)
 
     def test_box_set_candidates_omits_invalid_barcode_parameter(self):
         captured = {}

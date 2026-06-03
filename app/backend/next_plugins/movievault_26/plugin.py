@@ -666,35 +666,112 @@ def _candidate_payload(item, movie, *, source_ref=""):
     return {key: value for key, value in candidate.items() if value not in (None, "", [], {})}
 
 
-def _normalize_result(payload, *, source_ref=""):
-    item = _first(payload)
-    if not item:
-        return {"status": "miss", "provider": "movievault_26"}
-    movie = _movie_payload(item)
-    box_set_proposal = (
-        _normalize_box_set_proposal(payload, None)
-        or _normalize_box_set_proposal(item, None)
-        or item.get("boxSetProposal")
-        or item.get("box_set_proposal")
-        or item.get("box_set")
+def _normalization_sources(payload):
+    sources = []
+    if isinstance(payload, dict):
+        sources.append(payload)
+    for item in _items(payload):
+        if isinstance(item, dict):
+            sources.append(item)
+    unique = []
+    seen = set()
+    for item in sources:
+        marker = id(item)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        unique.append(item)
+    return unique
+
+
+def _candidate_key(candidate):
+    return "::".join(
+        [
+            _text(candidate.get("id") or candidate.get("movieVaultId") or candidate.get("sourceRef")).casefold(),
+            _text(candidate.get("title")).casefold(),
+            _text(candidate.get("year")),
+            _text(candidate.get("barcode")),
+        ]
     )
-    if not movie.get("title") and not box_set_proposal:
+
+
+def _box_set_proposal_key(proposal):
+    members = _member_list(proposal)
+    return "::".join(
+        [
+            _text(proposal.get("movievault_id") or proposal.get("movieVaultId") or proposal.get("id") or proposal.get("sourceRef")).casefold(),
+            _text(proposal.get("title") or proposal.get("name")).casefold(),
+            _text(proposal.get("barcode")),
+            str(len(members)),
+        ]
+    )
+
+
+def _normalize_result(payload, *, source_ref=""):
+    sources = _normalization_sources(payload)
+    if not sources:
         return {"status": "miss", "provider": "movievault_26"}
-    candidate = _candidate_payload(item, movie, source_ref=source_ref)
+
+    candidates = []
+    seen_candidates = set()
+    proposals = []
+    seen_proposals = set()
+    first_movie = {}
+    first_item = {}
+
+    for item in sources:
+        direct_box_set = (
+            item.get("boxSetProposal")
+            or item.get("box_set_proposal")
+            or item.get("box_set")
+        )
+        box_set_proposal = (
+            _normalize_box_set_proposal(item, None)
+            or _normalize_box_set_proposal(direct_box_set, None)
+            or (direct_box_set if isinstance(direct_box_set, dict) else {})
+        )
+        if isinstance(box_set_proposal, dict) and box_set_proposal:
+            key = _box_set_proposal_key(box_set_proposal)
+            if key not in seen_proposals:
+                seen_proposals.add(key)
+                proposals.append(box_set_proposal)
+
+        if _box_set_signal(item):
+            continue
+        movie = _movie_payload(item)
+        if not movie.get("title"):
+            continue
+        candidate = _candidate_payload(item, movie, source_ref=source_ref)
+        if not candidate:
+            continue
+        key = _candidate_key(candidate)
+        if key in seen_candidates:
+            continue
+        seen_candidates.add(key)
+        candidates.append(candidate)
+        if not first_movie:
+            first_movie = movie
+            first_item = item
+
+    if not candidates and not proposals:
+        return {"status": "miss", "provider": "movievault_26"}
+
+    source_item = first_item or (sources[0] if sources else {})
     result = {
         "status": "hit",
         "provider": "movievault_26",
         "sourceLabel": "MovieVault 26",
-        "sourceRef": source_ref or _text(item.get("id") or item.get("movieVaultId") or item.get("movievault_id")),
-        "movie": movie,
-        "technicalSpecs": _technical_payload(item),
-        "tmdbId": _text(item.get("tmdbId") or item.get("tmdb_id")),
-        "imdbId": _text(item.get("imdbId") or item.get("imdb_id")),
-        "items": [candidate] if candidate else [],
-        "candidates": [candidate] if candidate else [],
+        "sourceRef": source_ref or _text(source_item.get("id") or source_item.get("movieVaultId") or source_item.get("movievault_id")),
+        "movie": first_movie,
+        "technicalSpecs": _technical_payload(source_item),
+        "tmdbId": _text(source_item.get("tmdbId") or source_item.get("tmdb_id")),
+        "imdbId": _text(source_item.get("imdbId") or source_item.get("imdb_id")),
+        "items": candidates,
+        "candidates": candidates,
     }
-    if isinstance(box_set_proposal, dict) and box_set_proposal:
-        result["boxSetProposal"] = box_set_proposal
+    if proposals:
+        result["boxSetProposal"] = proposals[0]
+        result["boxSetProposals"] = proposals
     return result
 
 
