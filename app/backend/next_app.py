@@ -19197,7 +19197,7 @@ def ui_preview_html(
       const container = boxSet.container || boxSet || {};
       const members = boxSet.members || boxSet.memberMovies || [];
       const stateLabel = payload.state === "already_exists"
-        ? tNext("importCenter.movieExists", "Movie already exists.")
+        ? (container.id ? tNext("importCenter.boxSetExists", "Box-set already exists.") : tNext("importCenter.movieExists", "Movie already exists."))
         : payload.state === "box_set_created"
           ? tNext("importCenter.boxSetAdded", "Box-set added.")
           : tNext("importCenter.movieAdded", "Movie added.");
@@ -19798,21 +19798,25 @@ def ui_preview_html(
         });
         importCenter.addResult = payload;
         const movie = payload.movie || (payload.detail && payload.detail.movie) || {};
+        const importedContainerId = payload.boxSet?.container?.id || payload.boxSet?.id || "";
         const messageKey = payload.state === "already_exists"
-          ? "importCenter.movieExists"
+          ? (importedContainerId ? "importCenter.boxSetExists" : "importCenter.movieExists")
           : payload.state === "box_set_created"
             ? "importCenter.boxSetAdded"
-            : "importCenter.movieAdded";
+          : "importCenter.movieAdded";
         const messageFallback = payload.state === "already_exists"
-          ? "Movie already exists."
+          ? (payload.boxSet ? "Box-set already exists." : "Movie already exists.")
           : payload.state === "box_set_created"
             ? "Box-set added."
             : "Movie added.";
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
-        await loadAppSnapshot();
-        const importedContainerId = payload.boxSet?.container?.id || payload.boxSet?.id || "";
+        renderBarcodeLookup();
         if (importedContainerId) openAppContainerDetail(importedContainerId);
         else if (movie.id) openAppMovieDetail(movie.id);
+        loadAppSnapshot().catch((error) => {
+          console.warn("Snapshot refresh after import failed", error);
+          setImportCenterMessage(`${tNext(messageKey, messageFallback)} ${error.message || String(error)}`, "bad");
+        });
       } catch (error) {
         setImportCenterMessage(error.message || String(error), "bad");
       } finally {
@@ -38179,6 +38183,8 @@ def register_routes(flask_app: Flask) -> None:
         title = clean_text(body.get("title") or body.get("query")) or ""
         if not barcode and not title:
             raise NextApiError("barcode or title is required", 400)
+        provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
+        has_provided_box_set = isinstance(provided_box_set_body, dict)
 
         with connect() as conn:
             actor = require_any_next_permission(
@@ -38191,6 +38197,34 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Plugin registry table is not available", 503)
 
             if barcode:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set'",
+                        (barcode,),
+                    )
+                    existing_box_set = cur.fetchone()
+                if existing_box_set:
+                    detail = container_detail_entity(conn, existing_box_set["id"])
+                    audit_event(
+                        conn,
+                        event_type="box_set.import_skipped",
+                        category="import",
+                        actor=actor,
+                        target_type="container",
+                        target_id=existing_box_set["id"],
+                        summary="Import skipped because the box-set already exists",
+                        metadata={"barcode": barcode, "title": title},
+                    )
+                    return response(
+                        {
+                            "status": "ok",
+                            "state": "already_exists",
+                            "boxSet": detail,
+                            "movies": detail.get("memberMovies") if detail else [],
+                        }
+                    )
+
+            if barcode and not has_provided_box_set:
                 with conn.cursor() as cur:
                     cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
                     existing = cur.fetchone()
@@ -38219,7 +38253,7 @@ def register_routes(flask_app: Flask) -> None:
                 selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
                 metadata_result: dict[str, Any] = {}
                 box_set_proposal: dict[str, Any] = {}
-                provided_proposal = body.get("boxSetProposal") or body.get("box_set_proposal")
+                provided_proposal = provided_box_set_body
                 if isinstance(provided_proposal, dict):
                     candidate = dict(provided_proposal)
                     candidate.setdefault("provider", clean_text(candidate.get("provider") or candidate.get("source") or body.get("boxSetProvider")))
