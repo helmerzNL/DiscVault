@@ -56,6 +56,14 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
 STOP = False
 
 
+class JobFailure(RuntimeError):
+    """Raise when a job produced a useful failure summary."""
+
+    def __init__(self, message: str, result: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.result = result or {}
+
+
 def database_url() -> str:
     value = os.environ.get("DATABASE_URL", "").strip()
     if not value:
@@ -442,7 +450,7 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
         )
         execution = {**execution, "result": reviewed_result}
         persist_summary = persist_collection_import(plugin_id, reviewed_result, queued_actor)
-    return {
+    job_result = {
         "workerId": worker_id,
         "handled": True,
         "jobType": "plugin.execute",
@@ -451,6 +459,12 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
         "execution": execution,
         "persistence": persist_summary,
     }
+    if persist_summary.get("failed"):
+        raise JobFailure(
+            clean_text(persist_summary.get("error")) or "Plugin execution persistence failed",
+            job_result,
+        )
+    return job_result
 
 
 def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
@@ -927,6 +941,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
     items = result.get("items") or []
     if not isinstance(items, list):
         return {"skipped": True, "reason": "import_source result did not contain items"}
+    total_items = len(items)
     with connect() as conn:
         if not table_exists(conn, "movies"):
             return {"skipped": True, "reason": "movies table is not initialized"}
@@ -1015,10 +1030,12 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                 source_kind=source_kind,
             )
 
-    return {
+    review = result.get("review") if isinstance(result.get("review"), dict) else {}
+    warnings = result.get("warnings") if isinstance(result.get("warnings"), list) else []
+    summary = {
         "sourceKind": result.get("sourceKind"),
         "sourcePath": result.get("sourcePath"),
-        "items": len(items),
+        "items": total_items,
         "imported": imported,
         "created": created,
         "updated": updated,
@@ -1032,8 +1049,8 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "metadataJobIds": metadata_job_ids[:200],
         "rollbackMovieIds": created_movie_ids,
         "movies": imported_movies[:200],
-        "review": result.get("review") if isinstance(result.get("review"), dict) else {},
-        "warnings": result.get("warnings") if isinstance(result.get("warnings"), list) else [],
+        "review": review,
+        "warnings": warnings,
         "containers": [
             {
                 "containerType": key[0],
@@ -1045,6 +1062,24 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         ][:50],
         "errors": errors[:20],
     }
+    if total_items and imported == 0 and errors:
+        first_error = errors[0]
+        summary["failed"] = True
+        summary["error"] = (
+            f"Import source returned {total_items} item(s), but none could be written. "
+            f"First error at row {first_error.get('index')}: {first_error.get('error')}"
+        )
+    elif total_items and imported == 0:
+        skipped = review.get("skipped") if isinstance(review.get("skipped"), list) else []
+        summary["warnings"] = [
+            *warnings,
+            {
+                "code": "import_no_items_written",
+                "message": "Import source returned items, but no rows were written. Check review decisions and skipped rows.",
+                "reviewSkipped": len(skipped),
+            },
+        ]
+    return summary
 
 
 def match_digital_movie(conn, *, tmdb_id: str = "", imdb_id: str = "", title: str = "", year: str = ""):
@@ -1552,7 +1587,8 @@ def run_once(worker_id: str, *, quiet_idle: bool = False) -> int:
             )
             return 0
         except Exception as exc:
-            fail_job(conn, job["id"], str(exc), {"workerId": worker_id})
+            failure_result = getattr(exc, "result", None)
+            fail_job(conn, job["id"], str(exc), failure_result if isinstance(failure_result, dict) else {"workerId": worker_id})
             print(json.dumps({"status": "failed", "jobId": str(job["id"]), "error": str(exc)}))
             return 1
 

@@ -35,6 +35,7 @@ sys.modules.setdefault("psycopg.types.json", psycopg_types_json_module)
 
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
+from app.backend import next_worker
 from app.backend.next_worker import apply_collection_import_review
 from app.backend.next_worker import import_release_date
 from app.backend.next_worker import import_year
@@ -66,6 +67,44 @@ class FakeHTTPError(Exception):
 
 
 class NextPluginRuntimeTests(unittest.TestCase):
+    def test_plugin_import_job_fails_when_persistence_writes_no_rows(self):
+        class FakeConnection:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        with (
+            patch.object(next_worker, "connect", return_value=FakeConnection()),
+            patch.object(next_worker, "plugin_execution_context_from_db", return_value={}),
+            patch.object(
+                next_worker,
+                "run_plugin_entrypoint",
+                return_value={"status": "ok", "result": {"status": "completed", "items": [{"title": "RoboCop"}]}},
+            ),
+            patch.object(
+                next_worker,
+                "persist_collection_import",
+                return_value={
+                    "failed": True,
+                    "error": "Import source returned 1 item(s), but none could be written.",
+                    "items": 1,
+                    "imported": 0,
+                    "errors": [{"index": 1, "title": "RoboCop", "error": "database error"}],
+                },
+            ),
+        ):
+            with self.assertRaises(next_worker.JobFailure) as raised:
+                next_worker.process_plugin_execute(
+                    {"pluginId": "import_clz_movies", "entrypoint": "import_source", "payload": {}},
+                    "worker-1",
+                )
+
+        self.assertEqual(str(raised.exception), "Import source returned 1 item(s), but none could be written.")
+        self.assertTrue(raised.exception.result["persistence"]["failed"])
+        self.assertEqual(raised.exception.result["persistence"]["imported"], 0)
+
     def test_collection_import_year_only_release_date_is_not_emitted_as_date(self):
         plugin = CollectionImportPlugin(
             {
