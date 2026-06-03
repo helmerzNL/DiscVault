@@ -3817,8 +3817,13 @@ function _addBoxSetMemberPosterSrc(movie) {
   return posterSrc(movie) || '';
 }
 
+function _addBoxSetProposalMovies(proposal) {
+  const raw = proposal && (proposal.movies || proposal.members || proposal.box_set_movies || proposal.boxSetMovies) || [];
+  return Array.isArray(raw) ? raw.filter(m => m && m.title).slice(0, 50) : [];
+}
+
 function displayAddBoxSetProposal(proposal, barcode = '') {
-  const movies = (proposal && proposal.movies ? proposal.movies : []).filter(m => m && m.title).slice(0, 50);
+  const movies = _addBoxSetProposalMovies(proposal);
   if (!movies.length) {
     hideAddBoxSetProposal();
     return false;
@@ -3915,12 +3920,12 @@ async function lookupAddBoxSetProposal(movie, barcode = '') {
 }
 
 async function _saveAddBoxSetProposalMovies(indices) {
-  if (!currentAddBoxSetProposal) return;
+  if (!currentAddBoxSetProposal) throw new Error(t('js.noInfoFound'));
   const movies = indices
     .filter(idx => !currentAddBoxSetProposal.saved_indices.includes(idx))
     .map(idx => currentAddBoxSetProposal.movies[idx])
     .filter(Boolean);
-  if (!movies.length) return null;
+  if (!movies.length) throw new Error(t('bulk.noSelection') || 'No movies selected');
   const payload = {
     ...currentAddBoxSetProposal,
     movies,
@@ -3931,8 +3936,11 @@ async function _saveAddBoxSetProposalMovies(indices) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  const d = await r.json();
+  const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || t('js.saveFailed'));
+  if (!d.box_set || !Array.isArray(d.movies)) {
+    throw new Error(d.error || t('js.saveFailed'));
+  }
   currentAddBoxSetProposal.box_set_id = d.box_set.id;
   indices.forEach(idx => {
     if (!currentAddBoxSetProposal.saved_indices.includes(idx)) {
@@ -3974,13 +3982,15 @@ async function saveAddBoxSetProposalMovie(index) {
   }
 }
 
-async function saveAddBoxSetProposal() {
+async function saveAddBoxSetProposal(event) {
+  if (event && event.preventDefault) event.preventDefault();
   if (!currentAddBoxSetProposal) return;
   const btn = document.getElementById('btnSaveAddBoxSetProposal');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> ' + t('scan.boxSetProposalSaving');
   }
+  showStatus('addStatus', t('scan.boxSetProposalSaving'), 'info');
   try {
     const indices = currentAddBoxSetProposal.selected_indices.slice();
     const d = await _saveAddBoxSetProposalMovies(indices);
@@ -4455,7 +4465,15 @@ function initDetailSwipe() {
   });
 }
 
+function initManualAddBoxSetActions() {
+  const button = document.getElementById('btnSaveAddBoxSetProposal');
+  if (!button || button.dataset.boundAddBoxSet === '1') return;
+  button.dataset.boundAddBoxSet = '1';
+  button.addEventListener('click', saveAddBoxSetProposal);
+}
+
 document.addEventListener('DOMContentLoaded', initDetailSwipe);
+document.addEventListener('DOMContentLoaded', initManualAddBoxSetActions);
 
 // ── Edition helpers ───────────────────────────────────────────────────────────
 
