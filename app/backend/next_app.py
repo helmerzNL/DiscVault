@@ -19468,6 +19468,7 @@ def ui_preview_html(
       return candidates;
     }
     function selectedLookupMovieCandidate() {
+      if (importCenter.selectedBoxSetProposalKey) return null;
       const candidates = lookupMovieCandidates();
       if (!candidates.length) return null;
       const selected = candidates.find((candidate) => candidate.candidateKey === importCenter.selectedMovieCandidateKey) || candidates[0];
@@ -19496,7 +19497,13 @@ def ui_preview_html(
           ...(Array.isArray(result?.boxSetProposals) ? result.boxSetProposals : []),
           ...(Array.isArray(result?.box_set_proposals) ? result.box_set_proposals : []),
           ...(Array.isArray(raw.boxSetProposals) ? raw.boxSetProposals : []),
-          ...(Array.isArray(raw.box_set_proposals) ? raw.box_set_proposals : [])
+          ...(Array.isArray(raw.box_set_proposals) ? raw.box_set_proposals : []),
+          ...(Array.isArray(result?.candidates) ? result.candidates : []),
+          ...(Array.isArray(result?.items) ? result.items : []),
+          ...(Array.isArray(result?.matches) ? result.matches : []),
+          ...(Array.isArray(raw.candidates) ? raw.candidates : []),
+          ...(Array.isArray(raw.items) ? raw.items : []),
+          ...(Array.isArray(raw.matches) ? raw.matches : [])
         ];
         proposalCandidates.forEach((proposal) => {
           if (!proposal || typeof proposal !== "object") return;
@@ -19696,11 +19703,13 @@ def ui_preview_html(
       const metadata = payload.metadata || payload;
       const results = metadata.results || metadata.sources || metadata.matches || [];
       const boxSetProposals = barcodeBoxSetProposals();
+      const movieResultCards = lookupMovieCandidates();
       const addableBoxSetProposal = boxSetProposals.find((item) => {
         const members = boxSetProposalMembers(item);
         return Array.isArray(members) && members.length >= 2;
       });
-      if (addableBoxSetProposal && !boxSetProposals.some((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey)) {
+      const hasSelectedMovieCandidate = movieResultCards.some((candidate) => candidate.candidateKey === importCenter.selectedMovieCandidateKey);
+      if (addableBoxSetProposal && !hasSelectedMovieCandidate && !movieResultCards.length && !boxSetProposals.some((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey)) {
         importCenter.selectedBoxSetProposalKey = addableBoxSetProposal.proposalKey || "";
       }
       const selectedProposalForAdd = selectedBoxSetProposal();
@@ -20024,8 +20033,8 @@ def ui_preview_html(
           </div>
         </div>
       ` : "";
-      const movieResultCards = lookupMovieCandidates();
       const selectedMovieCandidate = selectedLookupMovieCandidate();
+      const selectedBoxSetForAction = importCenter.selectedBoxSetProposalKey ? selectedBoxSetProposal() : null;
       const sourceGrid = movieResultCards.length ? `
         <div class="import-result-grid">
           ${movieResultCards.slice(0, 8).map(compactResultCard).join("")}
@@ -20033,15 +20042,20 @@ def ui_preview_html(
       ` : "";
       const hasMovieCandidate = Boolean(
         selectedMovieCandidate
+        || selectedBoxSetForAction
         || proposedTitle
         || movieResultCards.length
         || document.getElementById("importTitleInput")?.value
         || document.getElementById("importBarcodeInput")?.value
       );
+      const primaryImportMode = selectedBoxSetForAction ? "box-set" : "movie";
+      const primaryImportLabel = selectedBoxSetForAction
+        ? tNext("importCenter.addBoxSet", "Add box-set")
+        : tNext("importCenter.addMovie", "Add movie");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
-          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="movie">${escapeHtml(tNext("importCenter.addMovie", "Add movie"))}</button>` : ""}
-          ${addableBoxSetProposal ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
+          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}">${escapeHtml(primaryImportLabel)}</button>` : ""}
+          ${addableBoxSetProposal && !selectedBoxSetForAction ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
         </div>
       `;
       if (!Array.isArray(results) || !results.length) {
@@ -20232,7 +20246,10 @@ def ui_preview_html(
       const requestedMode = typeof trigger === "string"
         ? trigger
         : (button?.dataset?.importMode || fallbackButton?.dataset?.importMode || "movie");
-      const wantsBoxSet = requestedMode === "box-set" || requestedMode === "box_set" || requestedMode === "boxset";
+      let wantsBoxSet = requestedMode === "box-set" || requestedMode === "box_set" || requestedMode === "boxset";
+      if (!wantsBoxSet && importCenter.selectedBoxSetProposalKey && !importCenter.selectedMovieCandidateKey) {
+        wantsBoxSet = true;
+      }
       const barcode = normalizeImportBarcode(document.getElementById("importBarcodeInput")?.value || "");
       const title = String(document.getElementById("importTitleInput")?.value || "").trim();
       const year = String(document.getElementById("importYearInput")?.value || "").trim();
@@ -20241,7 +20258,11 @@ def ui_preview_html(
         setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
         return;
       }
-      setImportCenterMessage(tNext("importCenter.addingMovie", "Adding movie..."));
+      setImportCenterMessage(
+        wantsBoxSet
+          ? `${tNext("importCenter.addBoxSet", "Add box-set")}...`
+          : tNext("importCenter.addingMovie", "Adding movie...")
+      );
       if (button) button.disabled = true;
       try {
         const selectedProposal = wantsBoxSet ? selectedBoxSetProposal() : null;
@@ -23106,6 +23127,7 @@ def ui_preview_html(
         if (movieCandidateButton) {
           event.preventDefault();
           importCenter.selectedMovieCandidateKey = movieCandidateButton.dataset.movieCandidateKey || "";
+          importCenter.selectedBoxSetProposalKey = "";
           const selected = selectedLookupMovieCandidate();
           const provider = selected?.sourceLabel || selected?.provider || "";
           const title = selected?.title || "";
@@ -23116,6 +23138,7 @@ def ui_preview_html(
         if (proposalButton) {
           event.preventDefault();
           importCenter.selectedBoxSetProposalKey = proposalButton.dataset.boxSetProposalKey || "";
+          importCenter.selectedMovieCandidateKey = "";
           const selectedProposal = selectedBoxSetProposal();
           const provider = selectedProposal?.provider || selectedProposal?.source || selectedProposal?.member_source || "";
           const memberCount = selectedProposal ? selectedBoxSetMembersForImport().length : 0;
@@ -38090,14 +38113,32 @@ def register_routes(flask_app: Flask) -> None:
                 or raw.get("boxSetProposal")
                 or raw.get("box_set_proposal")
             )
-            if not isinstance(proposal, dict):
-                continue
-            members = box_set_proposal_members(proposal)
-            if len(members) >= 2:
-                normalized = dict(proposal)
+            proposal_candidates = []
+            if isinstance(proposal, dict):
+                proposal_candidates.append(proposal)
+            for key in ("boxSetProposals", "box_set_proposals", "candidates", "items", "matches"):
+                value = result.get(key)
+                if isinstance(value, list):
+                    proposal_candidates.extend(item for item in value if isinstance(item, dict))
+                raw_value = raw.get(key)
+                if isinstance(raw_value, list):
+                    proposal_candidates.extend(item for item in raw_value if isinstance(item, dict))
+            for proposal_candidate in proposal_candidates:
+                members = box_set_proposal_members(proposal_candidate)
+                if len(members) < 2:
+                    continue
+                normalized = dict(proposal_candidate)
                 normalized["members"] = members
                 normalized["movies"] = members
-                normalized.setdefault("provider", clean_text(result.get("pluginId") or result.get("provider") or proposal.get("source")))
+                normalized.setdefault(
+                    "provider",
+                    clean_text(
+                        result.get("pluginId")
+                        or result.get("provider")
+                        or proposal_candidate.get("provider")
+                        or proposal_candidate.get("source")
+                    ),
+                )
                 key = metadata_box_set_proposal_key(normalized, result)
                 if key in seen:
                     continue
@@ -38972,6 +39013,13 @@ def register_routes(flask_app: Flask) -> None:
         wants_movie_import = import_mode == "movie"
         wants_box_set_import = import_mode in {"box-set", "boxset"}
         provided_box_set_body = None if wants_movie_import else (body.get("boxSetProposal") or body.get("box_set_proposal"))
+        selected_candidate_body = body.get("selectedBoxSetCandidate") or body.get("selected_box_set_candidate")
+        if not isinstance(selected_candidate_body, dict):
+            selected_candidate_body = body.get("selectedMovieCandidate") or body.get("selected_movie_candidate")
+        if isinstance(selected_candidate_body, dict) and len(box_set_proposal_members(selected_candidate_body)) >= 2:
+            provided_box_set_body = provided_box_set_body or selected_candidate_body
+            wants_box_set_import = True
+            wants_movie_import = False
         has_provided_box_set = isinstance(provided_box_set_body, dict)
         if not wants_movie_import and not wants_box_set_import:
             wants_box_set_import = has_provided_box_set or bool(body.get("detectBoxSets") or body.get("detect_box_sets"))
