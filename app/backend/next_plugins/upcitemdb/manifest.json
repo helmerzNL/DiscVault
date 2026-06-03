@@ -1,7 +1,7 @@
 {
   "id": "upcitemdb",
   "name": "UPCItemDB",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["metadata_source", "metadata_bootstrap"],
@@ -12,7 +12,8 @@
   ],
   "bootstrap": {
     "metadataSource": true,
-    "onlyWhen": "new_movie_barcode_only"
+    "onlyWhen": "public_barcode_lookup",
+    "role": "barcode_title_hint"
   },
   "requiresSecrets": false,
   "settingsSchemaVersion": 1,
