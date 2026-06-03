@@ -19346,10 +19346,26 @@ def ui_preview_html(
     }
     function lookupCandidateLooksLikeBoxSet(candidate) {
       if (!candidate || typeof candidate !== "object") return false;
-      const entityType = String(candidate.entityType || candidate.entity_type || candidate.containerType || candidate.container_type || candidate.kind || candidate.type || "").toLowerCase().replace(/[-\\s]+/g, "_");
+      const entityType = String(
+        candidate.entityType
+        || candidate.entity_type
+        || candidate.containerType
+        || candidate.container_type
+        || candidate.kind
+        || candidate.type
+        || candidate.releaseType
+        || candidate.release_type
+        || candidate.category
+        || candidate.objectType
+        || candidate.object_type
+        || ""
+      ).toLowerCase().replace(/[-\\s]+/g, "_");
       if (entityType.includes("box_set") || entityType.includes("boxset")) return true;
-      if (candidate.isBoxSetCandidate === true || candidate.is_box_set_candidate === true) return true;
-      return ["members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"].some((key) => {
+      if (entityType.includes("box") && (entityType.includes("set") || entityType.includes("collection"))) return true;
+      if (candidate.isBoxSetCandidate === true || candidate.is_box_set_candidate === true || candidate.isBoxSet === true || candidate.is_box_set === true) return true;
+      if (["boxSetProposal", "box_set_proposal", "boxSet", "box_set", "boxSetCandidate", "box_set_candidate"].some((key) => candidate[key] && typeof candidate[key] === "object")) return true;
+      const hasExplicitBoxSetShape = entityType.includes("box") || candidate.isBoxSetCandidate === true || candidate.is_box_set_candidate === true || candidate.isBoxSet === true || candidate.is_box_set === true;
+      return hasExplicitBoxSetShape && ["members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"].some((key) => {
         const value = candidate[key];
         return Array.isArray(value) && value.filter((member) => String(member?.title || member?.name || "").trim()).length >= 2;
       });
@@ -19390,7 +19406,7 @@ def ui_preview_html(
       return values.map((value) => usableImage(value)).find(Boolean) || "";
     }
     function normalizeLookupMovieCandidate(result, resultIndex, candidate, candidateIndex) {
-      if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate)) return null;
+      if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result))) return null;
       const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
       const metadataUpdates = result?.metadataUpdates && typeof result.metadataUpdates === "object" ? result.metadataUpdates : {};
       const technicalUpdates = result?.technicalUpdates && typeof result.technicalUpdates === "object" ? result.technicalUpdates : {};
@@ -19729,7 +19745,7 @@ def ui_preview_html(
         return Array.isArray(members) && members.length >= 2;
       });
       const hasSelectedMovieCandidate = movieResultCards.some((candidate) => candidate.candidateKey === importCenter.selectedMovieCandidateKey);
-      if (addableBoxSetProposal && !hasSelectedMovieCandidate && !movieResultCards.length && !boxSetProposals.some((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey)) {
+      if (addableBoxSetProposal && !hasSelectedMovieCandidate && !boxSetProposals.some((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey)) {
         importCenter.selectedBoxSetProposalKey = addableBoxSetProposal.proposalKey || "";
       }
       const selectedProposalForAdd = selectedBoxSetProposal();
@@ -38131,6 +38147,65 @@ def register_routes(flask_app: Flask) -> None:
                 return members
         return []
 
+    def metadata_value_looks_like_box_set(value: Any) -> bool:
+        if not isinstance(value, dict):
+            return False
+        entity_type = (
+            clean_text(
+                value.get("entityType")
+                or value.get("entity_type")
+                or value.get("containerType")
+                or value.get("container_type")
+                or value.get("kind")
+                or value.get("type")
+                or value.get("releaseType")
+                or value.get("release_type")
+                or value.get("category")
+                or value.get("objectType")
+                or value.get("object_type")
+            )
+            or ""
+        ).casefold()
+        entity_key = re.sub(r"[-\s]+", "_", entity_type)
+        explicit_box_set = (
+            "box_set" in entity_key
+            or "boxset" in entity_key
+            or ("box" in entity_key and ("set" in entity_key or "collection" in entity_key))
+            or value.get("isBoxSetCandidate") is True
+            or value.get("is_box_set_candidate") is True
+            or value.get("isBoxSet") is True
+            or value.get("is_box_set") is True
+        )
+        for key in ("boxSetProposal", "box_set_proposal", "boxSet", "box_set", "boxSetCandidate", "box_set_candidate"):
+            proposal = value.get(key)
+            if isinstance(proposal, dict):
+                return True
+        if explicit_box_set and len(box_set_proposal_members(value)) >= 2:
+            return True
+        return explicit_box_set
+
+    def metadata_result_looks_like_box_set(result: Any) -> bool:
+        if not isinstance(result, dict):
+            return False
+        if metadata_value_looks_like_box_set(result):
+            return True
+        raw = result.get("raw") if isinstance(result.get("raw"), dict) else {}
+        if metadata_value_looks_like_box_set(raw):
+            return True
+        for key in ("movie", "details", "release", "boxSetProposal", "box_set_proposal"):
+            if metadata_value_looks_like_box_set(result.get(key)):
+                return True
+            if metadata_value_looks_like_box_set(raw.get(key)):
+                return True
+        for key in ("boxSetProposals", "box_set_proposals"):
+            for item in (result.get(key) if isinstance(result.get(key), list) else []):
+                if isinstance(item, dict) and (metadata_value_looks_like_box_set(item) or len(box_set_proposal_members(item)) >= 2):
+                    return True
+            for item in (raw.get(key) if isinstance(raw.get(key), list) else []):
+                if isinstance(item, dict) and (metadata_value_looks_like_box_set(item) or len(box_set_proposal_members(item)) >= 2):
+                    return True
+        return False
+
     def metadata_box_set_proposals(metadata_result: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(metadata_result, dict):
             return []
@@ -38914,6 +38989,8 @@ def register_routes(flask_app: Flask) -> None:
         for result in metadata_result.get("results") or []:
             if not isinstance(result, dict):
                 continue
+            if metadata_result_looks_like_box_set(result):
+                continue
             movie_updates = result.get("movieUpdates") if isinstance(result.get("movieUpdates"), dict) else {}
             metadata_updates = result.get("metadataUpdates") if isinstance(result.get("metadataUpdates"), dict) else {}
             media_updates = result.get("mediaUpdates") if isinstance(result.get("mediaUpdates"), dict) else {}
@@ -39045,18 +39122,44 @@ def register_routes(flask_app: Flask) -> None:
         import_mode = (clean_text(body.get("importMode") or body.get("import_mode")) or "").casefold().replace("_", "-")
         wants_movie_import = import_mode == "movie"
         wants_box_set_import = import_mode in {"box-set", "boxset"}
-        provided_box_set_body = None if wants_movie_import else (body.get("boxSetProposal") or body.get("box_set_proposal"))
+        provided_metadata_result = metadata_result_from_import_body(body)
+        selected_box_set_key_from_body = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
+        provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
+        if not isinstance(provided_box_set_body, dict):
+            provided_box_set_body = None
         selected_candidate_body = body.get("selectedBoxSetCandidate") or body.get("selected_box_set_candidate")
         if not isinstance(selected_candidate_body, dict):
             selected_candidate_body = body.get("selectedMovieCandidate") or body.get("selected_movie_candidate")
-        if isinstance(selected_candidate_body, dict) and len(box_set_proposal_members(selected_candidate_body)) >= 2:
+        selected_candidate_is_box_set = (
+            isinstance(selected_candidate_body, dict)
+            and (
+                metadata_value_looks_like_box_set(selected_candidate_body)
+                or len(box_set_proposal_members(selected_candidate_body)) >= 2
+            )
+        )
+        preview_box_set_proposal = metadata_box_set_proposal(provided_metadata_result, selected_box_set_key_from_body)
+        explicit_movie_candidate_selected = (
+            wants_movie_import
+            and isinstance(selected_candidate_body, dict)
+            and not selected_candidate_is_box_set
+            and bool(
+                clean_text(selected_candidate_body.get("candidateKey") or selected_candidate_body.get("title") or selected_candidate_body.get("name"))
+                or clean_text(body.get("selectedMovieCandidateKey") or body.get("selected_movie_candidate_key"))
+            )
+        )
+        if selected_candidate_is_box_set:
             provided_box_set_body = provided_box_set_body or selected_candidate_body
             wants_box_set_import = True
             wants_movie_import = False
+        elif preview_box_set_proposal and not explicit_movie_candidate_selected:
+            provided_box_set_body = provided_box_set_body or preview_box_set_proposal
+            wants_box_set_import = True
+            wants_movie_import = False
+        elif wants_movie_import:
+            provided_box_set_body = None
         has_provided_box_set = isinstance(provided_box_set_body, dict)
         if not wants_movie_import and not wants_box_set_import:
             wants_box_set_import = has_provided_box_set or bool(body.get("detectBoxSets") or body.get("detect_box_sets"))
-        provided_metadata_result = metadata_result_from_import_body(body)
 
         with connect() as conn:
             actor = require_any_next_permission(
