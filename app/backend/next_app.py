@@ -9157,6 +9157,42 @@ def ui_preview_html(
       display: block;
       overflow-wrap: anywhere;
     }
+    .app-admin-contribution-list,
+    .offline-status-list,
+    .person-metadata-status,
+    .container-edit-summary,
+    .bulk-result-panel {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .app-admin-contribution-row,
+    .offline-status-row,
+    .person-metadata-status-row,
+    .container-edit-summary-row,
+    .bulk-result-card {
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 9px 10px;
+      background: color-mix(in srgb, var(--field) 54%, transparent);
+      min-width: 0;
+    }
+    .app-admin-contribution-row strong,
+    .bulk-result-card strong {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    .app-admin-contribution-row span,
+    .offline-status-row span,
+    .person-metadata-status-row span,
+    .container-edit-summary-row span,
+    .bulk-result-card span {
+      display: block;
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 650;
+      line-height: 1.35;
+    }
     .app-admin-plugin-tab-panel {
       display: none;
       min-width: 0;
@@ -10306,6 +10342,7 @@ def ui_preview_html(
             <button type="button" data-item-filter="containers" data-next-i18n="collection.containers">Containers</button>
           </div>
         </div>
+        <div class="bulk-result-panel" id="bulkResultPanel"></div>
       </section>
       <section class="hero" id="previewHero">
         """ + featured_backdrop_html + """
@@ -10909,6 +10946,7 @@ def ui_preview_html(
                 <div class="detail-fields" id="containerDetailMetadata"></div>
               </div>
             </div>
+            <div class="container-edit-summary" id="containerEditSummary"></div>
             <div class="detail-card full hidden" id="containerEditPanel">
               <div class="detail-card-head">
                 <h3 data-next-i18n="containerDetail.editDetails">Edit details</h3>
@@ -11076,6 +11114,7 @@ def ui_preview_html(
                 </div>
               </div>
             </div>
+            <div class="person-metadata-status" id="personMetadataStatus"></div>
             <div class="detail-subpanel person-credit-section" data-detail-panel-group="personCreditScope" id="personScopeCollection">
               <div class="detail-submenu" role="tablist" aria-label="Collection credits" data-next-i18n-aria="personDetail.localCollection">
                 <button type="button" class="active" data-detail-tab="personCollectionCredits" data-detail-panel="personCreditsActing" data-next-i18n="personDetail.acting">Acting</button>
@@ -11363,6 +11402,7 @@ def ui_preview_html(
                     <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
                   </div>
                 </div>
+                <div class="offline-status-list" id="profileOfflineStatus"></div>
               </section>
             </div>
           </div>
@@ -11629,6 +11669,7 @@ def ui_preview_html(
                 <div class="profile-action-row">
                   <button type="button" class="secondary-button" id="appAdminRefreshPluginJobsButton" data-next-i18n="appAdmin.refreshPluginJobs">Refresh plugin jobs</button>
                 </div>
+                <div class="app-admin-contribution-list" id="appAdminContributionQueue"></div>
                 <div class="profile-passkey-list" id="appAdminPluginJobsList"></div>
               </div>
             </div>
@@ -11841,6 +11882,7 @@ def ui_preview_html(
       auditEvents: [],
       backup: null,
       backupReport: null,
+      contributionEvents: [],
       credentials: [],
       digitalSources: [],
       groups: [],
@@ -11872,6 +11914,7 @@ def ui_preview_html(
     }
     registerAppServiceWorker();
     let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedBoxSetProposalKey: "", boxSetMemberEdits: {}, addResult: null, activeTab: "add"};
+    let bulkLastResult = null;
     let importScanner = {
       running: false,
       native: false,
@@ -12760,6 +12803,33 @@ def ui_preview_html(
         `;
       }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPluginJobs", "No plugin jobs yet."))}</div>`;
     }
+    function renderAppAdminContributionQueue() {
+      const node = document.getElementById("appAdminContributionQueue");
+      if (!node) return;
+      const events = appAdmin.contributionEvents || [];
+      if (!hasActualPermission("admin.view_audit")) {
+        node.innerHTML = "";
+        return;
+      }
+      node.innerHTML = `
+        <div class="app-admin-plugin-section-head">
+          <h4>${escapeHtml(tNext("appAdmin.contributionQueue", "Metadata contribution history"))}</h4>
+          <span class="profile-passkey-meta">${escapeHtml(formatNumber(events.length))}</span>
+        </div>
+        ${events.length ? events.slice(0, 8).map((event) => {
+          const meta = event.metadata || {};
+          const receiver = meta.receiverId || meta.receiver_id || meta.pluginId || meta.plugin_id || meta.provider || "receiver";
+          const title = meta.title || meta.movieTitle || meta.containerTitle || event.summary || receiver;
+          const status = meta.status || meta.state || "pushed";
+          return `
+            <div class="app-admin-contribution-row">
+              <strong>${escapeHtml(title)}</strong>
+              <span>${escapeHtml(receiver)} &middot; ${escapeHtml(status)} &middot; ${escapeHtml(shortDateTime(event.createdAt))}</span>
+            </div>
+          `;
+        }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noContributions", "No metadata contributions yet."))}</div>`}
+      `;
+    }
     function renderAppAdminMetadataJobs() {
       const node = document.getElementById("appAdminMetadataJobsList");
       if (!node) return;
@@ -13177,6 +13247,7 @@ def ui_preview_html(
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
       renderAppAdminPluginDashboard();
       renderAppAdminPluginJobs();
+      renderAppAdminContributionQueue();
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
       setAppAdminPluginTab(appAdmin.activePluginTab);
@@ -13710,7 +13781,8 @@ def ui_preview_html(
         const canLoadMetadata = canUseAdminTab("metadata");
         const canLoadAudit = canUseAdminTab("audit");
         const auditQuery = appAdmin.auditCategory ? `?limit=100&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=100";
-        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, auditPayload] = await Promise.all([
+        const canLoadContributionEvents = canLoadPlugins && hasActualPermission("admin.view_audit");
+        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, auditPayload, contributionPayload] = await Promise.all([
           canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/users").catch(() => ({users: [], roles: []})) : Promise.resolve({users: [], roles: []}),
           canLoadAccess ? authApiJson("/api/next/auth/credentials").catch(() => ({credentials: []})) : Promise.resolve({credentials: []}),
           canLoadAccess ? authApiJson("/api/next/auth/invite").catch(() => ({invites: []})) : Promise.resolve({invites: []}),
@@ -13721,7 +13793,8 @@ def ui_preview_html(
           canLoadBackup ? authApiJson("/api/next/backup/status").catch((error) => ({status: "error", error: error.message || String(error)})) : Promise.resolve(null),
           canLoadPlugins ? authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
           canLoadMetadata ? authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
-          canLoadAudit ? authApiJson(`/api/next/audit/events${auditQuery}`).catch(() => ({events: []})) : Promise.resolve({events: []})
+          canLoadAudit ? authApiJson(`/api/next/audit/events${auditQuery}`).catch(() => ({events: []})) : Promise.resolve({events: []}),
+          canLoadContributionEvents ? authApiJson("/api/next/audit/events?limit=50&category=metadata").catch(() => ({events: []})) : Promise.resolve({events: []})
         ]);
         appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
@@ -13736,6 +13809,7 @@ def ui_preview_html(
         appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
         appAdmin.metadataJobs = metadataJobsPayload.jobs || [];
         appAdmin.auditEvents = auditPayload.events || [];
+        appAdmin.contributionEvents = (contributionPayload.events || []).filter((event) => event.eventType === "metadata.receiver_pushed");
         const configPayloads = canLoadPlugins ? await Promise.all(appAdmin.plugins.map((plugin) =>
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
@@ -14265,8 +14339,15 @@ def ui_preview_html(
     async function refreshAppAdminPluginJobs() {
       if (!canUseAdminTab("plugins")) return;
       try {
-        const payload = await authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10");
+        const [payload, contributionPayload] = await Promise.all([
+          authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10"),
+          hasActualPermission("admin.view_audit")
+            ? authApiJson("/api/next/audit/events?limit=50&category=metadata").catch(() => ({events: []}))
+            : Promise.resolve({events: []})
+        ]);
         appAdmin.pluginJobs = payload.jobs || [];
+        appAdmin.contributionEvents = (contributionPayload.events || [])
+          .filter((event) => event.eventType === "metadata.receiver_pushed");
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginJobsLoaded", "Plugin jobs loaded."), "good");
       } catch (error) {
@@ -16516,6 +16597,7 @@ def ui_preview_html(
         [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
         [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
       ]);
+      renderContainerEditSummary(detail);
       fillContainerEditForm(detail);
       renderContainerAddForms(detail);
       const memberMovies = detail.memberMovies || [];
@@ -16581,6 +16663,8 @@ def ui_preview_html(
       document.getElementById("containerDetailTags").innerHTML = "";
       document.getElementById("containerDetailStats").innerHTML = "";
       document.getElementById("containerDetailOverviewFields").innerHTML = "";
+      const editSummary = document.getElementById("containerEditSummary");
+      if (editSummary) editSummary.innerHTML = "";
       document.getElementById("containerDetailMovies").innerHTML = "";
       document.getElementById("containerDetailItems").innerHTML = "";
       document.getElementById("containerDetailIdentifiers").innerHTML = "";
@@ -16593,6 +16677,27 @@ def ui_preview_html(
       document.getElementById("containerDetailBackdrop").src = "";
       activateDetailTab("containerDetail", "containerDetailOverviewPanel");
       setContainerDetailMessage("");
+    }
+    function renderContainerEditSummary(detail) {
+      const node = document.getElementById("containerEditSummary");
+      if (!node) return;
+      const container = detail.container || {};
+      const summary = detail.aggregateSummary || {};
+      const canEdit = collectorsModeEnabled() && hasPermission("containers.edit");
+      const rows = [
+        [tNext("containerDetail.editState", "Edit state"), canEdit ? tNext("containerDetail.editAvailable", "Edit tools available") : tNext("containerDetail.editUnavailable", "Read-only for your role")],
+        [tNext("containerDetail.memberMovies", "Movies"), `${formatNumber((detail.memberMovies || []).length)} ${tNext("collection.movies", "Movies").toLowerCase()}`],
+        [tNext("containerDetail.collectionItems", "Collection items"), `${formatNumber((detail.collectionItems || []).length)} ${tNext("containerDetail.items", "items")}`],
+        [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork || `${formatNumber(summary.posterCount || 0)} ${tNext("movieDetail.posters", "Posters").toLowerCase()}`],
+        [tNext("containerDetail.aggregateVideos", "Videos"), formatNumber(summary.videoCount || 0)]
+      ];
+      node.innerHTML = rows.map(([label, value]) => `
+        <div class="container-edit-summary-row">
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(value)}</span>
+        </div>
+      `).join("");
+      node.classList.toggle("hidden", !container.id);
     }
     async function openAppContainerDetail(containerId, pushUrl = true) {
       if (!containerId) return;
@@ -16683,6 +16788,7 @@ def ui_preview_html(
       document.getElementById("personFilmographyScopeTab")?.classList.toggle("hidden", !extendedPeople);
       document.getElementById("personMetadataRefreshButton")?.classList.toggle("hidden", !canRefreshMetadata);
       document.getElementById("personFilmographyRefreshButton")?.classList.toggle("hidden", !canRefreshFilmography);
+      renderPersonMetadataStatus(detail, {canRefreshMetadata, canRefreshFilmography});
       activateDetailTab("personCreditScope", "personScopeCollection");
       activateDetailTab("personCollectionCredits", "personCreditsActing");
       document.getElementById("personDetailActing").innerHTML = acting.map(personCreditCardHtml).join("") || `<div class="preview-empty">${escapeHtml(tNext("personDetail.noActing", "No acting credits in this collection yet."))}</div>`;
@@ -16706,7 +16812,31 @@ def ui_preview_html(
       document.getElementById("personDetailFilmography").innerHTML = "";
       document.getElementById("personMetadataRefreshButton")?.classList.add("hidden");
       document.getElementById("personFilmographyRefreshButton")?.classList.add("hidden");
+      const status = document.getElementById("personMetadataStatus");
+      if (status) status.innerHTML = "";
       setPersonDetailMessage("");
+    }
+    function renderPersonMetadataStatus(detail, options = {}) {
+      const node = document.getElementById("personMetadataStatus");
+      if (!node) return;
+      const person = detail.person || {};
+      const metadata = person.metadata || {};
+      const identifiers = detail.identifiers || [];
+      const tmdb = identifiers.find((item) => item.provider_id === "tmdb") || {};
+      node.innerHTML = `
+        <div class="person-metadata-status-row">
+          <strong>${escapeHtml(tNext("personDetail.metadataStatus", "Metadata status"))}</strong>
+          <span>${escapeHtml(options.canRefreshMetadata ? tNext("personDetail.refreshReady", "TMDb refresh available") : tNext("personDetail.refreshUnavailable", "No enabled person metadata source available"))}</span>
+        </div>
+        <div class="person-metadata-status-row">
+          <strong>${escapeHtml(tNext("personDetail.source", "Source"))}</strong>
+          <span>${escapeHtml([metadata.person_metadata_source, tmdb.identifier ? `tmdb:${tmdb.identifier}` : "", metadata.person_metadata_source_ref].filter(Boolean).join(" / ") || tNext("personDetail.noSource", "No source linked"))}</span>
+        </div>
+        <div class="person-metadata-status-row">
+          <strong>${escapeHtml(tNext("personDetail.filmography", "Filmography"))}</strong>
+          <span>${escapeHtml(options.canRefreshFilmography ? tNext("personDetail.filmographyReady", "External filmography can be refreshed") : tNext("personDetail.filmographyUnavailable", "Enable extended people pages and link TMDb first"))}</span>
+        </div>
+      `;
     }
     async function refreshActivePersonMetadata(dryRun = false) {
       if (!activePersonId) return;
@@ -20433,7 +20563,7 @@ def ui_preview_html(
       const movieCount = selectedMovieIds.size;
       const containerCount = selectedContainerIds.size;
       const count = movieCount + containerCount;
-      if (bar) bar.classList.toggle("visible", selectionMode || count > 0);
+      if (bar) bar.classList.toggle("visible", selectionMode || count > 0 || !!bulkLastResult);
       const label = document.getElementById("bulkCount");
       if (label) {
         const parts = [];
@@ -20463,6 +20593,22 @@ def ui_preview_html(
         else if (action === "metadata" || action === "group-add" || action === "group-remove" || action === "boxset" || action === "vault") button.disabled = movieCount === 0;
         else button.disabled = count === 0;
       });
+      renderBulkResultPanel();
+    }
+    function renderBulkResultPanel() {
+      const node = document.getElementById("bulkResultPanel");
+      if (!node) return;
+      if (!bulkLastResult) {
+        node.innerHTML = "";
+        return;
+      }
+      node.innerHTML = `
+        <div class="bulk-result-card">
+          <strong>${escapeHtml(bulkLastResult.title || tNext("bulk.lastAction", "Last bulk action"))}</strong>
+          <span>${escapeHtml(bulkLastResult.message || "")}</span>
+          ${bulkLastResult.meta ? `<span>${escapeHtml(bulkLastResult.meta)}</span>` : ""}
+        </div>
+      `;
     }
     async function queueBulkMetadataRefresh() {
       if (!hasPermission("metadata.refresh_bulk")) return;
@@ -20479,7 +20625,13 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({movieIds, dryRun: false, confirm: "metadata-bulk-refresh"})
         });
-        if (summary) summary.textContent = `${payload.queued || movieIds.length} ${tNext("bulk.metadataQueued", "metadata refresh jobs queued")}`;
+        const message = `${payload.queued || movieIds.length} ${tNext("bulk.metadataQueued", "metadata refresh jobs queued")}`;
+        bulkLastResult = {
+          title: tNext("bulk.refreshMetadata", "Refresh metadata"),
+          message,
+          meta: tNext("metadataJobs.providers", "Providers")
+        };
+        if (summary) summary.textContent = message;
         if (canViewMetadataJobs()) {
           libraryMetadataJobs = payload.jobs || libraryMetadataJobs;
           renderLibraryMetadataJobs();
@@ -20488,6 +20640,7 @@ def ui_preview_html(
         }
         selectedMovieIds.clear();
         toggleSelectMode(false);
+        renderBulkResultPanel();
         console.log("bulk metadata jobs", payload);
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
@@ -20510,8 +20663,13 @@ def ui_preview_html(
       if (!target) throw new Error(tNext(emptyKey, "Choose a target first."));
       return target;
     }
-    function finishBulkAction(message) {
+    function finishBulkAction(message, details = {}) {
       const summary = document.getElementById("librarySummary");
+      bulkLastResult = {
+        title: details.title || tNext("bulk.lastAction", "Last bulk action"),
+        message,
+        meta: details.meta || ""
+      };
       selectedMovieIds.clear();
       selectedContainerIds.clear();
       toggleSelectMode(false);
@@ -20539,7 +20697,9 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({movieIds, operation})
         });
-        finishBulkAction(`${payload.changed || 0} ${tNext(operation === "remove" ? "bulk.removedFromGroup" : "bulk.addedToGroup", operation === "remove" ? "movies removed from group" : "movies added to group")}`);
+        finishBulkAction(`${payload.changed || 0} ${tNext(operation === "remove" ? "bulk.removedFromGroup" : "bulk.addedToGroup", operation === "remove" ? "movies removed from group" : "movies added to group")}`, {
+          title: operation === "remove" ? tNext("bulk.removeFromGroup", "Remove from group") : tNext("bulk.addToGroup", "Add to group")
+        });
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
       }
@@ -20560,7 +20720,9 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({movieIds, targetType})
         });
-        finishBulkAction(`${payload.changed || 0} ${tNext(targetType === "vault" ? "bulk.addedToVault" : "bulk.addedToBoxSet", targetType === "vault" ? "movies added to Vault" : "movies added to box-set")}`);
+        finishBulkAction(`${payload.changed || 0} ${tNext(targetType === "vault" ? "bulk.addedToVault" : "bulk.addedToBoxSet", targetType === "vault" ? "movies added to Vault" : "movies added to box-set")}`, {
+          title: targetType === "vault" ? tNext("bulk.addToVault", "Add to Vault") : tNext("bulk.addToBoxSet", "Add to box-set")
+        });
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
       }
@@ -20582,7 +20744,9 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({movieIds, containerIds})
         });
-        finishBulkAction(`${payload.changed || 0} ${tNext("bulk.addedToCollection", "items added to collection")}`);
+        finishBulkAction(`${payload.changed || 0} ${tNext("bulk.addedToCollection", "items added to collection")}`, {
+          title: tNext("bulk.addToCollection", "Add to collection")
+        });
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
       }
@@ -20607,7 +20771,9 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({movieIds, containerIds, confirm: "delete-selected"})
         });
-        finishBulkAction(`${payload.requested || (movieIds.length + containerIds.length)} ${tNext("bulk.deletedSelected", "items deleted")}`);
+        finishBulkAction(`${payload.requested || (movieIds.length + containerIds.length)} ${tNext("bulk.deletedSelected", "items deleted")}`, {
+          title: tNext("bulk.deleteSelected", "Delete selected")
+        });
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
       }
@@ -21011,7 +21177,52 @@ def ui_preview_html(
       renderProfileRecovery();
       renderProfileApiAccess();
       renderContainerManager();
+      renderProfileOfflineStatus();
       applyAppPermissionVisibility();
+    }
+    function renderProfileOfflineStatus() {
+      const node = document.getElementById("profileOfflineStatus");
+      if (!node) return;
+      const supported = "serviceWorker" in navigator;
+      const online = navigator.onLine !== false;
+      const offlineQueue = (() => {
+        try {
+          const raw = window.localStorage.getItem("dv_next_offline_queue") || window.localStorage.getItem("discvault_offline_queue") || "[]";
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed.length : 0;
+        } catch (_) {
+          return 0;
+        }
+      })();
+      const renderRows = (cacheCount = null) => {
+        const cacheText = cacheCount == null
+          ? tNext("profile.offlineCacheUnknown", "Cache status unknown")
+          : tNext("profile.offlineCaches", "{count} caches").replace("{count}", String(cacheCount));
+        node.innerHTML = `
+          <div class="offline-status-row">
+            <strong>${escapeHtml(tNext("profile.offlineStatus", "Offline readiness"))}</strong>
+            <span>${escapeHtml(online ? tNext("profile.online", "Online") : tNext("profile.offline", "Offline"))}</span>
+          </div>
+          <div class="offline-status-row">
+            <strong>${escapeHtml(tNext("profile.serviceWorker", "Service worker"))}</strong>
+            <span>${escapeHtml(supported ? tNext("profile.serviceWorkerAvailable", "Available") : tNext("profile.serviceWorkerUnavailable", "Unavailable"))}</span>
+          </div>
+          <div class="offline-status-row">
+            <strong>${escapeHtml(tNext("profile.offlineCache", "Offline cache"))}</strong>
+            <span>${escapeHtml(cacheText)}</span>
+          </div>
+          <div class="offline-status-row">
+            <strong>${escapeHtml(tNext("profile.offlineQueue", "Offline queue"))}</strong>
+            <span>${escapeHtml(tNext("profile.offlineQueueCount", "{count} pending changes").replace("{count}", String(offlineQueue)))}</span>
+          </div>
+        `;
+      };
+      renderRows();
+      if ("caches" in window) {
+        caches.keys()
+          .then((keys) => renderRows(keys.length))
+          .catch(() => renderRows(null));
+      }
     }
     function shortDateTime(value) {
       const text = String(value || "");
