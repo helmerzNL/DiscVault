@@ -959,6 +959,8 @@ def _public_reference(reference):
         "barcode",
         "containerType",
         "container_type",
+        "remoteRef",
+        "remote_ref",
         "movievaultId",
         "movievault_id",
         "tmdbId",
@@ -971,6 +973,9 @@ def _public_reference(reference):
         key_text = _text(key)
         if key_text in allowed and value not in (None, "", [], {}):
             clean[key_text] = _safe_contribution_value(value)
+    remote_ref = _text(clean.get("remoteRef") or clean.get("remote_ref"))
+    if remote_ref and not clean.get("movievaultId"):
+        clean["movievaultId"] = remote_ref
     return clean
 
 
@@ -996,7 +1001,7 @@ def _payload_identity(payload, contribution_payload):
     identity = _text(payload.get("identity") or payload.get("id") or payload.get("sourceRef"))
     if identity:
         return identity
-    for key in ("barcode", "key", "publicId", "public_id", "movievaultId", "movievault_id"):
+    for key in ("barcode", "key", "publicId", "public_id", "remoteRef", "remote_ref", "movievaultId", "movievault_id"):
         value = _text(reference.get(key))
         if value:
             return value

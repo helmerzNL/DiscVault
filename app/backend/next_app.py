@@ -27958,6 +27958,17 @@ def container_receiver_payload(
             continue
         contribution[target_field] = new_value
         changed_fields.append(target_field)
+    if force_members:
+        for source_field, target_field in field_map.items():
+            if target_field in contribution:
+                continue
+            value = payload.get(source_field) if payload.get(source_field) is not None else existing.get(source_field)
+            value = clean_text(value)
+            if not value:
+                continue
+            contribution[target_field] = value
+            if target_field not in changed_fields:
+                changed_fields.append(target_field)
     members = container_receiver_member_payload(conn, existing.get("id"))
     if members and (contribution or force_members):
         contribution["members"] = members
@@ -27981,9 +27992,16 @@ def container_receiver_payload(
         "barcode": external_metadata_barcode(barcode) or clean_text(barcode),
         "containerType": container_type,
     }
-    movievault_id = clean_text(metadata.get("movievault_id") or metadata.get("movieVaultId") or metadata.get("sourceRef"))
-    if movievault_id:
-        source_reference["movievaultId"] = movievault_id
+    remote_ref = clean_text(
+        metadata.get("remoteRef")
+        or metadata.get("remote_ref")
+        or metadata.get("sourceRef")
+        or metadata.get("source_ref")
+        or metadata.get("movievault_id")
+        or metadata.get("movieVaultId")
+    )
+    if remote_ref:
+        source_reference["remoteRef"] = remote_ref
     return {
         "entityType": "box_set",
         "identity": str(existing.get("public_id") or existing.get("id")),
@@ -38870,6 +38888,23 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Container table is not available", 503)
             with conn.transaction():
                 result = refresh_container_metadata(conn, container_uuid, dry_run=dry_run, actor=actor)
+                receiver_summary: dict[str, Any] = {"skipped": True, "reason": "dry_run" if dry_run else "no_receiver_payload"}
+                detail = container_detail_entity(conn, container_uuid)
+                container_entity_payload = detail.get("container") if isinstance(detail, dict) and isinstance(detail.get("container"), dict) else {}
+                if not dry_run and container_entity_payload:
+                    receiver_payload = container_receiver_payload(
+                        conn,
+                        container_entity_payload,
+                        container_entity_payload,
+                        force_members=True,
+                        source_label="DiscVault container metadata refresh",
+                        source_provider="discvault_container_metadata_refresh",
+                    )
+                    if receiver_payload:
+                        try:
+                            receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
+                        except Exception as exc:
+                            receiver_summary = {"status": "error", "error": str(exc)}
                 audit_event(
                     conn,
                     event_type="container.metadata_refresh_applied" if not dry_run else "container.metadata_refresh_previewed",
@@ -38878,10 +38913,25 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="container",
                     target_id=container_uuid,
                     summary="Refreshed container metadata" if not dry_run else "Previewed container metadata refresh",
-                    metadata={"dryRun": dry_run, "result": result},
+                    metadata={"dryRun": dry_run, "result": result, "receiverSummary": receiver_summary},
                 )
-                detail = container_detail_entity(conn, container_uuid)
-        return response({"status": "ok", "metadata": result, "detail": detail})
+                if not dry_run and receiver_summary.get("skipped") is not True:
+                    audit_event(
+                        conn,
+                        event_type="metadata.receiver_pushed",
+                        category="metadata",
+                        actor=actor,
+                        target_type="container",
+                        target_id=container_uuid,
+                        summary=f"Pushed refreshed container metadata to receiver plugins for {container_entity_payload.get('title')}",
+                        metadata={
+                            "containerType": container_entity_payload.get("container_type"),
+                            "title": container_entity_payload.get("title"),
+                            "barcode": container_entity_payload.get("barcode"),
+                            "receiverSummary": receiver_summary,
+                        },
+                    )
+        return response({"status": "ok", "metadata": result, "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.get("/api/next/containers/<container_id>/view")
     @flask_app.get("/api/next/app/containers/<container_id>")
