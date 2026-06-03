@@ -6996,6 +6996,17 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--accent) 13%, var(--bg-solid));
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
     }
+    .import-result-action-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding-top: 4px;
+      min-width: 0;
+    }
+    .import-result-action-footer .primary-button {
+      min-height: 42px;
+      min-width: min(100%, 190px);
+    }
     .import-card-head,
     .import-source-head,
     .import-job-head {
@@ -7861,6 +7872,14 @@ def ui_preview_html(
     }
     .import-barcode-form button {
       min-height: 40px;
+    }
+    @media (max-width: 720px) {
+      .import-result-action-footer {
+        justify-content: stretch;
+      }
+      .import-result-action-footer .primary-button {
+        width: 100%;
+      }
     }
     .movie-edit-grid {
       display: grid;
@@ -10646,8 +10665,7 @@ def ui_preview_html(
                     <span data-next-i18n="importCenter.manualFormat">Formaat</span>
                     <input id="importFormatInput" autocomplete="off" maxlength="80" data-next-i18n-placeholder="importCenter.formatPlaceholder" placeholder="4K UHD">
                   </label>
-                  <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Preview</button>
-                  <button type="button" class="primary-button" id="importMovieAddButton" data-import-add-lookup="1" disabled data-next-i18n="importCenter.addMovie">Add movie</button>
+                  <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
                 </form>
               </div>
             </div>
@@ -19202,10 +19220,6 @@ def ui_preview_html(
     }
     function renderBarcodeLookup() {
       const list = document.getElementById("importBarcodeResults");
-      const addButton = document.getElementById("importMovieAddButton");
-      if (addButton) {
-        addButton.disabled = !importCenter.barcodeLookup;
-      }
       if (!list) return;
       const directResultCard = renderImportDirectResult();
       const payload = importCenter.barcodeLookup;
@@ -19225,16 +19239,13 @@ def ui_preview_html(
       }
       const selectedProposalForAdd = selectedBoxSetProposal();
       const selectedImportMembersForAdd = selectedProposalForAdd ? selectedBoxSetMembersForImport() : [];
-      if (addButton) {
-        addButton.textContent = addableBoxSetProposal
-          ? tNext("importCenter.addBoxSet", "Add box-set")
-          : tNext("importCenter.addMovie", "Add movie");
-        addButton.dataset.importMode = addableBoxSetProposal ? "box-set" : "movie";
-        addButton.disabled = !importCenter.barcodeLookup;
-        addButton.title = addableBoxSetProposal && selectedImportMembersForAdd.length < 2
-          ? tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source.")
-          : "";
-      }
+      const lookupActionMode = addableBoxSetProposal ? "box-set" : "movie";
+      const lookupActionLabel = addableBoxSetProposal
+        ? tNext("importCenter.addBoxSet", "Add box-set")
+        : tNext("importCenter.addMovie", "Add movie");
+      const lookupActionTitle = addableBoxSetProposal && selectedImportMembersForAdd.length < 2
+        ? tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source.")
+        : "";
       const imageFrom = (...values) => values.flat().map((value) => usableImage(value)).find(Boolean) || "";
       const mediaUpdateSourceUrl = (mediaUpdates, kind) => {
         const update = mediaUpdates && typeof mediaUpdates === "object" ? mediaUpdates[kind] : null;
@@ -19544,15 +19555,20 @@ def ui_preview_html(
           ${results.slice(0, 8).map(compactResultCard).join("")}
         </div>
       ` : "";
+      const lookupActionFooter = `
+        <div class="import-result-action-footer">
+          <button type="button" class="primary-button" id="importMovieAddButton" data-import-add-lookup="1" data-import-mode="${escapeHtml(lookupActionMode)}" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(lookupActionLabel)}</button>
+        </div>
+      `;
       if (!Array.isArray(results) || !results.length) {
         if (proposalCard || boxSetCard) {
-          list.innerHTML = directResultCard + boxSetCard + proposalCard;
+          list.innerHTML = directResultCard + boxSetCard + proposalCard + lookupActionFooter;
         } else {
-          list.innerHTML = directResultCard + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>`;
+          list.innerHTML = directResultCard + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>` + lookupActionFooter;
         }
         return;
       }
-      list.innerHTML = directResultCard + boxSetCard + proposalCard + sourceGrid;
+      list.innerHTML = directResultCard + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
     }
     function renderImportCenter() {
       renderImportTabs();
