@@ -19230,7 +19230,7 @@ def ui_preview_html(
           ? tNext("importCenter.addBoxSet", "Add box-set")
           : tNext("importCenter.addMovie", "Add movie");
         addButton.dataset.importMode = addableBoxSetProposal ? "box-set" : "movie";
-        addButton.disabled = !importCenter.barcodeLookup || (addableBoxSetProposal && selectedImportMembersForAdd.length < 2);
+        addButton.disabled = !importCenter.barcodeLookup;
         addButton.title = addableBoxSetProposal && selectedImportMembersForAdd.length < 2
           ? tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source.")
           : "";
