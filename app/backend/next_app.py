@@ -19600,8 +19600,8 @@ def ui_preview_html(
       );
       const lookupActionFooter = `
         <div class="import-result-action-footer">
-          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="movie" onclick="event.preventDefault(); event.stopPropagation(); addLookupMovie(this); return false;">${escapeHtml(tNext("importCenter.addMovie", "Add movie"))}</button>` : ""}
-          ${addableBoxSetProposal ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" title="${escapeHtml(lookupActionTitle)}" onclick="event.preventDefault(); event.stopPropagation(); addLookupMovie(this); return false;">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
+          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="movie">${escapeHtml(tNext("importCenter.addMovie", "Add movie"))}</button>` : ""}
+          ${addableBoxSetProposal ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
         </div>
       `;
       if (!Array.isArray(results) || !results.length) {
