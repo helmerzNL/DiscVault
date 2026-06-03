@@ -60,6 +60,7 @@ try:
     from .next_metadata import push_metadata_to_receivers
     from .next_metadata import push_receiver_payload_to_receivers
     from .next_metadata import external_metadata_barcode
+    from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -115,6 +116,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import push_metadata_to_receivers
     from next_metadata import push_receiver_payload_to_receivers
     from next_metadata import external_metadata_barcode
+    from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -19795,7 +19797,8 @@ def ui_preview_html(
             detectBoxSets: true,
             boxSetProposalKey: importCenter.selectedBoxSetProposalKey || selectedProposal?.proposalKey || selectedProposal?._proposalKey || "",
             boxSetProposal: selectedProposalPayload,
-            boxSetMembers
+            boxSetMembers,
+            metadataPreview: importCenter.barcodeLookup || null
           })
         });
         importCenter.addResult = payload;
@@ -33603,6 +33606,57 @@ def actor_job_payload(actor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def queue_receiver_payload_to_receivers(
+    conn,
+    *,
+    payload: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+    reason: str = "receiver_payload",
+) -> dict[str, Any]:
+    receivers = [
+        plugin
+        for plugin in metadata_receiver_plugins(conn)
+        if "receive_metadata" in set(plugin.get("capabilities") or (plugin.get("manifest") or {}).get("capabilities") or [])
+    ]
+    jobs: list[dict[str, Any]] = []
+    if not receivers:
+        return {
+            "receiverCount": 0,
+            "queuedJobs": [],
+            "payloadSummary": {
+                "entityType": payload.get("entityType"),
+                "identity": payload.get("identity"),
+                "fieldCount": len(payload.get("payload") or {}),
+                "fields": sorted((payload.get("payload") or {}).keys()),
+            },
+        }
+    for plugin in receivers:
+        jobs.append(
+            create_background_job(
+                conn,
+                job_type=PLUGIN_EXECUTION_JOB_TYPE,
+                payload={
+                    "pluginId": plugin["id"],
+                    "entrypoint": "receive_metadata",
+                    "payload": payload,
+                    "requestedBy": actor_job_payload(actor or {}),
+                    "reason": reason,
+                },
+            )
+        )
+    return {
+        "receiverCount": len(receivers),
+        "queuedJobs": jobs,
+        "payloadSummary": {
+            "entityType": payload.get("entityType"),
+            "identity": payload.get("identity"),
+            "fieldCount": len(payload.get("payload") or {}),
+            "fields": sorted((payload.get("payload") or {}).keys()),
+            "sourceProviders": ((payload.get("metadata") or {}).get("sourceProviders") or []),
+        },
+    }
+
+
 def audit_event(
     conn,
     *,
@@ -37998,8 +38052,6 @@ def register_routes(flask_app: Flask) -> None:
         )
         member_source = clean_text(proposal.get("memberSource") or proposal.get("member_source") or provider_label)
         member_confidence = clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence"))
-        container_uuid = uuid.uuid4()
-        container_public_id = f"import-box-set-{container_uuid.hex[:12]}"
         container_metadata = {
             "source": provider_label,
             "import_source": "plugin_box_set",
@@ -38013,29 +38065,84 @@ def register_routes(flask_app: Flask) -> None:
             "backdrop_url": proposal.get("backdrop_url") or proposal.get("backdrop"),
             "backdrop_urls": proposal.get("backdrop_urls") or proposal.get("backdropUrls") or [],
         }
+        existing_container = None
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO containers (
-                    id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+            if barcode:
+                cur.execute(
+                    "SELECT id FROM containers WHERE container_type='box_set' AND barcode=%s LIMIT 1",
+                    (barcode,),
                 )
-                VALUES (%s, %s, 'box_set', %s, %s, NULL, %s, %s, %s, now(), now())
-                """,
-                (
-                    container_uuid,
-                    container_public_id,
-                    title,
-                    barcode or None,
-                    clean_text(proposal.get("year") or proposal.get("year_range")),
-                    clean_text(proposal.get("description")),
-                    Jsonb(json_ready(container_metadata)),
-                ),
-            )
+                existing_container = cur.fetchone()
+            if not existing_container:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM containers
+                    WHERE container_type='box_set'
+                      AND lower(title)=lower(%s)
+                    LIMIT 1
+                    """,
+                    (title,),
+                )
+                existing_container = cur.fetchone()
+        container_created = False
+        if existing_container:
+            container_uuid = existing_container["id"]
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE containers
+                    SET title=COALESCE(NULLIF(title, ''), %s),
+                        barcode=COALESCE(NULLIF(barcode, ''), %s),
+                        year=COALESCE(NULLIF(year, ''), %s),
+                        description=COALESCE(NULLIF(description, ''), %s),
+                        metadata=COALESCE(metadata, '{}'::jsonb) || %s,
+                        updated_at=now()
+                    WHERE id=%s
+                    """,
+                    (
+                        title,
+                        barcode or None,
+                        clean_text(proposal.get("year") or proposal.get("year_range")) or None,
+                        clean_text(proposal.get("description")) or None,
+                        Jsonb(json_ready(container_metadata)),
+                        container_uuid,
+                    ),
+                )
+        else:
+            container_uuid = uuid.uuid4()
+            container_public_id = f"import-box-set-{container_uuid.hex[:12]}"
+            container_created = True
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO containers (
+                        id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                    )
+                    VALUES (%s, %s, 'box_set', %s, %s, NULL, %s, %s, %s, now(), now())
+                    """,
+                    (
+                        container_uuid,
+                        container_public_id,
+                        title,
+                        barcode or None,
+                        clean_text(proposal.get("year") or proposal.get("year_range")),
+                        clean_text(proposal.get("description")),
+                        Jsonb(json_ready(container_metadata)),
+                    ),
+                )
 
         imported_movies = []
         applied_members = []
         metadata_refresh_movie_ids: list[str] = []
-        decision_counts = {"created": 0, "linkedExisting": 0, "skipped": 0, "metadataRefreshQueued": 0}
+        decision_counts = {
+            "created": 0,
+            "linkedExisting": 0,
+            "skipped": 0,
+            "metadataRefreshQueued": 0,
+            "containerCreated": 1 if container_created else 0,
+            "containerEnriched": 0 if container_created else 1,
+        }
         for index, member in enumerate(members[:50], start=1):
             original_confidence = clean_text(member.get("memberConfidence") or member.get("member_confidence") or member_confidence)
             member = enrich_box_set_member_for_import(
@@ -38125,10 +38232,11 @@ def register_routes(flask_app: Flask) -> None:
             actor=actor,
             target_type="container",
             target_id=container_uuid,
-            summary=f"Imported box-set {title}",
+            summary=f"{'Imported' if container_created else 'Enriched'} box-set {title}",
             metadata={
                 "barcode": barcode,
                 "members": len(imported_movies),
+                "containerCreated": container_created,
                 "source": provider_label,
                 "memberSource": member_source,
                 "memberConfidence": member_confidence,
@@ -38146,6 +38254,7 @@ def register_routes(flask_app: Flask) -> None:
             "queuedMetadataRefreshJobs": queued_jobs,
             "decisionCounts": decision_counts,
             "containerId": str(container_uuid),
+            "containerCreated": container_created,
         }
 
     def metadata_import_candidate(metadata_result: dict[str, Any]) -> dict[str, Any]:
@@ -38202,6 +38311,22 @@ def register_routes(flask_app: Flask) -> None:
                 "overview": clean_text(movie_updates.get("overview") or metadata_updates.get("overview") or metadata_updates.get("plot"))
                 or first_value(result, "overview", "plot", "description"),
             }
+        return {}
+
+    def metadata_result_from_import_body(body: dict[str, Any]) -> dict[str, Any]:
+        raw = (
+            body.get("metadataPreview")
+            or body.get("metadata_preview")
+            or body.get("metadataResult")
+            or body.get("metadata_result")
+        )
+        if not isinstance(raw, dict):
+            return {}
+        candidate = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else raw
+        if not isinstance(candidate, dict):
+            return {}
+        if any(key in candidate for key in ("proposal", "results", "sources", "executions", "summary", "boxSetProposals")):
+            return candidate
         return {}
 
     def metadata_lookup_audit_payload(body: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
@@ -38287,6 +38412,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("barcode or title is required", 400)
         provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
         has_provided_box_set = isinstance(provided_box_set_body, dict)
+        provided_metadata_result = metadata_result_from_import_body(body)
 
         with connect() as conn:
             actor = require_any_next_permission(
@@ -38298,7 +38424,7 @@ def register_routes(flask_app: Flask) -> None:
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
 
-            if barcode:
+            if barcode and not has_provided_box_set:
                 with conn.cursor() as cur:
                     cur.execute(
                         "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set'",
@@ -38353,7 +38479,7 @@ def register_routes(flask_app: Flask) -> None:
 
             with conn.transaction():
                 selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
-                metadata_result: dict[str, Any] = {}
+                metadata_result: dict[str, Any] = dict(provided_metadata_result)
                 box_set_proposal: dict[str, Any] = {}
                 provided_proposal = provided_box_set_body
                 if isinstance(provided_proposal, dict):
@@ -38374,8 +38500,9 @@ def register_routes(flask_app: Flask) -> None:
                         candidate["members"] = candidate_members
                         candidate["movies"] = candidate_members
                         box_set_proposal = candidate
-                if not box_set_proposal:
+                if not box_set_proposal and not metadata_result:
                     metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
+                if not box_set_proposal:
                     box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
                 if box_set_proposal:
                     box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
@@ -38393,18 +38520,20 @@ def register_routes(flask_app: Flask) -> None:
                             source_provider="discvault_box_set_import",
                         )
                         if receiver_payload:
-                            try:
-                                box_set_receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
-                            except Exception as exc:
-                                box_set_receiver_summary = {"status": "error", "error": str(exc)}
+                            box_set_receiver_summary = queue_receiver_payload_to_receivers(
+                                conn,
+                                payload=receiver_payload,
+                                actor=actor,
+                                reason="box_set_import",
+                            )
                             audit_event(
                                 conn,
-                                event_type="metadata.receiver_pushed",
+                                event_type="metadata.receiver_queued",
                                 category="metadata",
                                 actor=actor,
                                 target_type="container",
                                 target_id=parse_uuid(imported_container.get("id"), "containerId"),
-                                summary=f"Pushed imported box-set to receiver plugins for {imported_container.get('title')}",
+                                summary=f"Queued imported box-set receiver payload for {imported_container.get('title')}",
                                 metadata={
                                     "containerType": imported_container.get("container_type"),
                                     "title": imported_container.get("title"),
@@ -38415,10 +38544,11 @@ def register_routes(flask_app: Flask) -> None:
                                 },
                             )
                     first_movie = (box_set_import.get("movies") or [{}])[0]
+                    box_set_state = "box_set_created" if box_set_import.get("containerCreated") else "already_exists"
                     return response(
                         {
                             "status": "ok",
-                            "state": "box_set_created",
+                            "state": box_set_state,
                             "movie": first_movie,
                             "detail": movie_detail_entity(conn, first_movie.get("id")) if first_movie.get("id") else None,
                             "boxSet": box_set_import.get("container"),
@@ -38901,10 +39031,12 @@ def register_routes(flask_app: Flask) -> None:
                         source_provider="discvault_container_metadata_refresh",
                     )
                     if receiver_payload:
-                        try:
-                            receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
-                        except Exception as exc:
-                            receiver_summary = {"status": "error", "error": str(exc)}
+                        receiver_summary = queue_receiver_payload_to_receivers(
+                            conn,
+                            payload=receiver_payload,
+                            actor=actor,
+                            reason="container_metadata_refresh",
+                        )
                 audit_event(
                     conn,
                     event_type="container.metadata_refresh_applied" if not dry_run else "container.metadata_refresh_previewed",
@@ -38918,12 +39050,12 @@ def register_routes(flask_app: Flask) -> None:
                 if not dry_run and receiver_summary.get("skipped") is not True:
                     audit_event(
                         conn,
-                        event_type="metadata.receiver_pushed",
+                        event_type="metadata.receiver_queued",
                         category="metadata",
                         actor=actor,
                         target_type="container",
                         target_id=container_uuid,
-                        summary=f"Pushed refreshed container metadata to receiver plugins for {container_entity_payload.get('title')}",
+                        summary=f"Queued refreshed container receiver payload for {container_entity_payload.get('title')}",
                         metadata={
                             "containerType": container_entity_payload.get("container_type"),
                             "title": container_entity_payload.get("title"),

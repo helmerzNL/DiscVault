@@ -339,6 +339,63 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "submitted")
         self.assertEqual(posted[0]["payload"], {"title": "Local DiscVault Title", "overview": "A public synopsis."})
 
+    def test_receive_metadata_preserves_box_set_member_aliases_allowed_by_template(self):
+        posted = []
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(
+                    200,
+                    {
+                        "version": "tpl-box",
+                        "entityTypes": {
+                            "box_set": {
+                                "fields": ["title", "barcode", "members", "boxSetMovies", "memberCount"]
+                            }
+                        },
+                    },
+                )
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posted.append(kwargs.get("json"))
+                return FakeResponse(200, {"id": "contrib_box_1"})
+            return FakeResponse(404, {})
+
+        original_requests = movievault_26.requests
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            result = movievault_26.receive_metadata(
+                {
+                    "entityType": "box_set",
+                    "identity": "box-set-1",
+                    "sourceReference": {"type": "discvault_box_set", "remoteRef": "mv_box_1"},
+                    "payload": {
+                        "title": "Harry Potter Complete Collection",
+                        "barcode": "5051892222222",
+                        "members": [
+                            {"title": "Harry Potter and the Philosopher's Stone", "year": "2001", "sortOrder": 1},
+                            {"title": "Harry Potter and the Chamber of Secrets", "year": "2002", "sortOrder": 2},
+                        ],
+                    },
+                },
+                {
+                    "secrets": {"token": "mv_live_test"},
+                    "movievault": {"contributionEnabled": True},
+                },
+            )
+        finally:
+            movievault_26.requests = original_requests
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+        self.assertEqual(result["status"], "submitted")
+        payload = posted[0]["payload"]
+        self.assertEqual(payload["memberCount"], 2)
+        self.assertEqual(payload["members"], payload["boxSetMovies"])
+        self.assertEqual(payload["members"][0]["title"], "Harry Potter and the Philosopher's Stone")
+        self.assertNotIn("mv_live_test", str(posted[0]))
+
     def test_describe_payload_summarizes_box_set_contribution(self):
         result = movievault_26.describe_payload(
             {
