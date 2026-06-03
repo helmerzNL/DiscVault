@@ -779,6 +779,28 @@ def _allowed_fields(template, entity_type):
     return set()
 
 
+def _with_box_set_member_aliases(entity_type, payload, allowed):
+    if entity_type != "box_set" or not isinstance(payload, dict):
+        return payload
+    members = None
+    for key in ("members", "movies", "boxSetMovies", "box_set_movies"):
+        value = payload.get(key)
+        if isinstance(value, list) and value:
+            members = value
+            break
+    if not members:
+        return payload
+    expanded = dict(payload)
+    for key in ("members", "movies", "boxSetMovies", "box_set_movies"):
+        if not allowed or key in allowed:
+            expanded[key] = members
+    count = len(members)
+    for key in ("memberCount", "member_count"):
+        if not allowed or key in allowed:
+            expanded[key] = count
+    return expanded
+
+
 def _metadata_context(payload):
     metadata = payload.get("metadata") or payload.get("meta") or {}
     return metadata if isinstance(metadata, dict) else {}
@@ -1065,6 +1087,7 @@ def _contribution_payload(payload, template):
         raw_payload = {key: value for key, value in payload.items() if key not in {"entityType", "entity_type", "sourceReference", "source_reference", "force"}}
     safe_payload = _safe_contribution_value(raw_payload)
     allowed = _allowed_fields(template, entity_type)
+    safe_payload = _with_box_set_member_aliases(entity_type, safe_payload, allowed)
     if allowed:
         safe_payload = {key: value for key, value in safe_payload.items() if key in allowed}
     safe_payload = _with_provider_title_hints(entity_type, safe_payload, payload, allowed)
