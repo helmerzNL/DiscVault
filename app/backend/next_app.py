@@ -1228,6 +1228,217 @@ def import_source_item_identifiers(item: dict[str, Any]) -> dict[str, str]:
     return identifiers
 
 
+def selected_import_movie_candidate_from_body(body: dict[str, Any]) -> dict[str, Any]:
+    raw = body.get("selectedMovieCandidate") or body.get("selected_movie_candidate") or {}
+    if not isinstance(raw, dict):
+        return {}
+    candidate = raw.get("candidate") if isinstance(raw.get("candidate"), dict) else raw
+    movie_updates = candidate.get("movieUpdates") if isinstance(candidate.get("movieUpdates"), dict) else {}
+    metadata_updates = candidate.get("metadataUpdates") if isinstance(candidate.get("metadataUpdates"), dict) else {}
+    media_updates = candidate.get("mediaUpdates") if isinstance(candidate.get("mediaUpdates"), dict) else {}
+    poster_update = media_updates.get("poster") if isinstance(media_updates.get("poster"), dict) else {}
+    backdrop_update = media_updates.get("backdrop") if isinstance(media_updates.get("backdrop"), dict) else {}
+
+    def first_value(*values: Any) -> str:
+        for value in values:
+            text = clean_text(value)
+            if text:
+                return text
+        return ""
+
+    identifiers = import_source_item_identifiers(candidate)
+    provider = first_value(
+        candidate.get("provider"),
+        candidate.get("pluginId"),
+        candidate.get("providerId"),
+        candidate.get("source"),
+    )
+    source_label = first_value(candidate.get("sourceLabel"), candidate.get("providerLabel"), provider)
+    title = first_value(
+        candidate.get("title"),
+        candidate.get("originalTitle"),
+        candidate.get("original_title"),
+        candidate.get("name"),
+        movie_updates.get("title"),
+        movie_updates.get("original_title"),
+    )
+    if not title:
+        return {}
+    return {
+        "provider": provider or "selected_import_candidate",
+        "sourceLabel": source_label or provider or "Selected import candidate",
+        "sourceRef": first_value(
+            candidate.get("sourceRef"),
+            candidate.get("sourceUrl"),
+            candidate.get("source_url"),
+            candidate.get("detailUrl"),
+            candidate.get("detail_url"),
+        ),
+        "title": title,
+        "year": first_value(
+            candidate.get("year"),
+            candidate.get("releaseYear"),
+            candidate.get("release_year"),
+            movie_updates.get("year"),
+        ),
+        "format": first_value(
+            candidate.get("format"),
+            candidate.get("mediaFormat"),
+            candidate.get("media_format"),
+            candidate.get("releaseFormat"),
+            candidate.get("release_format"),
+            movie_updates.get("format"),
+        ),
+        "barcode": first_value(
+            candidate.get("barcode"),
+            candidate.get("externalBarcode"),
+            candidate.get("external_barcode"),
+            candidate.get("ean"),
+            candidate.get("upc"),
+        ),
+        "poster_url": first_value(
+            candidate.get("posterUrl"),
+            candidate.get("poster_url"),
+            candidate.get("poster"),
+            candidate.get("coverUrl"),
+            candidate.get("cover_url"),
+            metadata_updates.get("poster_url"),
+            metadata_updates.get("posterUrl"),
+            metadata_updates.get("poster"),
+            poster_update.get("sourceUrl"),
+            poster_update.get("source_url"),
+        ),
+        "backdrop_url": first_value(
+            candidate.get("backdropUrl"),
+            candidate.get("backdrop_url"),
+            candidate.get("backdrop"),
+            metadata_updates.get("backdrop_url"),
+            metadata_updates.get("backdropUrl"),
+            backdrop_update.get("sourceUrl"),
+            backdrop_update.get("source_url"),
+        ),
+        "overview": first_value(
+            candidate.get("overview"),
+            candidate.get("plot"),
+            candidate.get("description"),
+            movie_updates.get("overview"),
+            metadata_updates.get("overview"),
+        ),
+        "identifiers": identifiers,
+    }
+
+
+def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(candidate, dict) or not clean_text(candidate.get("title")):
+        return {}
+    provider = clean_text(candidate.get("provider")) or "selected_import_candidate"
+    source_label = clean_text(candidate.get("sourceLabel")) or provider
+    source_ref = clean_text(candidate.get("sourceRef"))
+    movie_updates: dict[str, Any] = {"title": clean_text(candidate.get("title"))}
+    if clean_text(candidate.get("year")):
+        movie_updates["year"] = clean_text(candidate.get("year"))
+    if clean_text(candidate.get("format")):
+        movie_updates["format"] = clean_text(candidate.get("format"))
+    if clean_text(candidate.get("overview")):
+        movie_updates["overview"] = clean_text(candidate.get("overview"))
+
+    metadata_updates: dict[str, Any] = {}
+    media_updates: dict[str, dict[str, Any]] = {}
+    poster_url = clean_text(candidate.get("poster_url"))
+    if poster_url:
+        metadata_updates["poster_url"] = poster_url
+        media_updates["poster"] = {
+            "kind": "poster",
+            "field": "poster_url",
+            "sourceUrl": poster_url,
+            "options": [poster_url],
+            "providerId": provider,
+            "sourceLabel": source_label,
+            "sourceRef": source_ref,
+        }
+    backdrop_url = clean_text(candidate.get("backdrop_url"))
+    if backdrop_url:
+        metadata_updates["backdrop_url"] = backdrop_url
+        media_updates["backdrop"] = {
+            "kind": "backdrop",
+            "field": "backdrop_url",
+            "sourceUrl": backdrop_url,
+            "options": [backdrop_url],
+            "providerId": provider,
+            "sourceLabel": source_label,
+            "sourceRef": source_ref,
+        }
+
+    provenance = []
+    for field in movie_updates:
+        provenance.append(
+            {
+                "field": field,
+                "target": "movie",
+                "pluginId": provider,
+                "entrypoint": "selected_import_candidate",
+                "reason": "selected import match",
+                "sourceLabel": source_label,
+                "sourceRef": source_ref,
+            }
+        )
+    for field in metadata_updates:
+        provenance.append(
+            {
+                "field": field,
+                "target": "metadata",
+                "pluginId": provider,
+                "entrypoint": "selected_import_candidate",
+                "reason": "selected import match",
+                "sourceLabel": source_label,
+                "sourceRef": source_ref,
+            }
+        )
+    for field in media_updates:
+        provenance.append(
+            {
+                "field": field,
+                "target": "media",
+                "pluginId": provider,
+                "entrypoint": "selected_import_candidate",
+                "reason": "selected provider image",
+                "sourceLabel": source_label,
+                "sourceRef": source_ref,
+            }
+        )
+
+    return {
+        "movieUpdates": movie_updates,
+        "metadataUpdates": metadata_updates,
+        "technicalUpdates": {},
+        "mediaUpdates": media_updates,
+        "identifiers": candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {},
+        "provenance": provenance,
+        "skipped": [],
+    }
+
+
+def merge_selected_import_movie_candidate(
+    proposal: dict[str, Any],
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    selected = selected_import_movie_candidate_proposal(candidate)
+    if not selected:
+        return proposal if isinstance(proposal, dict) else {}
+    merged = dict(proposal) if isinstance(proposal, dict) else {}
+    for key in ("movieUpdates", "metadataUpdates", "technicalUpdates", "mediaUpdates", "identifiers"):
+        existing = merged.get(key) if isinstance(merged.get(key), dict) else {}
+        incoming = selected.get(key) if isinstance(selected.get(key), dict) else {}
+        merged[key] = {**existing, **incoming}
+    merged["provenance"] = [
+        *(merged.get("provenance") if isinstance(merged.get("provenance"), list) else []),
+        *(selected.get("provenance") if isinstance(selected.get("provenance"), list) else []),
+    ]
+    if "skipped" not in merged:
+        merged["skipped"] = []
+    return merged
+
+
 def import_source_conflicts(conn, items: list[dict[str, Any]], *, limit: int = 50) -> list[dict[str, Any]]:
     if not table_exists(conn, "movies"):
         return []
@@ -7421,6 +7632,23 @@ def ui_preview_html(
       padding: 10px;
       box-shadow: none;
     }
+    button.import-result-card.compact {
+      cursor: pointer;
+      font: inherit;
+    }
+    .import-result-card.compact.selectable {
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease, transform .18s ease;
+    }
+    .import-result-card.compact.selectable:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+      background: color-mix(in srgb, var(--accent) 8%, var(--bg-solid));
+    }
+    .import-result-card.compact.selected {
+      border-color: color-mix(in srgb, var(--accent) 68%, var(--line));
+      background: color-mix(in srgb, var(--accent) 14%, var(--bg-solid));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
     .import-result-card.compact .import-result-art {
       border-radius: 12px;
       box-shadow: none;
@@ -7428,6 +7656,13 @@ def ui_preview_html(
     .import-result-card.compact .import-result-title {
       font-size: .98rem;
       line-height: 1.2;
+    }
+    .import-result-select-label {
+      display: inline-flex;
+      margin-top: 7px;
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 820;
     }
     .import-job-tabs {
       margin: 10px 0;
@@ -12012,7 +12247,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedBoxSetProposalKey: "", boxSetMemberEdits: {}, addResult: null, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", boxSetMemberEdits: {}, addResult: null, activeTab: "add"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -19065,6 +19300,182 @@ def ui_preview_html(
         resetImportScannerUi();
       }
     }
+    function importLookupMetadata() {
+      const payload = importCenter.barcodeLookup || {};
+      return payload.metadata || payload || {};
+    }
+    function lookupResultCandidates(item) {
+      const raw = item?.raw && typeof item.raw === "object" ? item.raw : {};
+      const asArray = (value) => Array.isArray(value) ? value : [];
+      return [
+        item,
+        item?.movie,
+        item?.details,
+        item?.release,
+        raw,
+        raw.movie,
+        raw.details,
+        raw.release,
+        ...asArray(item?.candidates),
+        ...asArray(raw.candidates),
+        ...asArray(raw.items)
+      ].filter((candidate) => candidate && typeof candidate === "object");
+    }
+    function lookupValue(item, keys) {
+      for (const candidate of lookupResultCandidates(item)) {
+        for (const key of keys) {
+          const value = candidate?.[key];
+          if (value !== undefined && value !== null && String(value).trim()) return value;
+        }
+      }
+      return "";
+    }
+    function lookupCandidateLooksLikeBoxSet(candidate) {
+      if (!candidate || typeof candidate !== "object") return false;
+      const entityType = String(candidate.entityType || candidate.entity_type || candidate.containerType || candidate.container_type || candidate.kind || candidate.type || "").toLowerCase().replace(/[-\\s]+/g, "_");
+      if (entityType.includes("box_set") || entityType.includes("boxset")) return true;
+      return ["members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"].some((key) => {
+        const value = candidate[key];
+        return Array.isArray(value) && value.filter((member) => String(member?.title || member?.name || "").trim()).length >= 2;
+      });
+    }
+    function lookupCandidateImage(result, candidate, kind = "poster") {
+      const mediaUpdates = result?.mediaUpdates && typeof result.mediaUpdates === "object" ? result.mediaUpdates : {};
+      const mediaUpdate = mediaUpdates[kind] && typeof mediaUpdates[kind] === "object" ? mediaUpdates[kind] : {};
+      const metadataUpdates = result?.metadataUpdates && typeof result.metadataUpdates === "object" ? result.metadataUpdates : {};
+      const images = candidate?.images && typeof candidate.images === "object" ? candidate.images : {};
+      const values = kind === "backdrop"
+        ? [
+            candidate?.backdropUrl,
+            candidate?.backdrop_url,
+            candidate?.backdrop,
+            images.backdropUrl,
+            images.backdrop_url,
+            mediaUpdate.sourceUrl,
+            mediaUpdate.source_url,
+            metadataUpdates.backdropUrl,
+            metadataUpdates.backdrop_url
+          ]
+        : [
+            candidate?.posterUrl,
+            candidate?.poster_url,
+            candidate?.poster,
+            candidate?.coverUrl,
+            candidate?.cover_url,
+            images.posterUrl,
+            images.poster_url,
+            images.coverUrl,
+            images.cover_url,
+            mediaUpdate.sourceUrl,
+            mediaUpdate.source_url,
+            metadataUpdates.posterUrl,
+            metadataUpdates.poster_url,
+            metadataUpdates.poster
+          ];
+      return values.map((value) => usableImage(value)).find(Boolean) || "";
+    }
+    function normalizeLookupMovieCandidate(result, resultIndex, candidate, candidateIndex) {
+      if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate)) return null;
+      const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
+      const metadataUpdates = result?.metadataUpdates && typeof result.metadataUpdates === "object" ? result.metadataUpdates : {};
+      const technicalUpdates = result?.technicalUpdates && typeof result.technicalUpdates === "object" ? result.technicalUpdates : {};
+      const mediaUpdates = result?.mediaUpdates && typeof result.mediaUpdates === "object" ? result.mediaUpdates : {};
+      const rawIdentifiers = candidate.identifiers && typeof candidate.identifiers === "object"
+        ? candidate.identifiers
+        : (result?.identifiers && typeof result.identifiers === "object" ? result.identifiers : {});
+      const title = String(
+        candidate.title
+        || candidate.originalTitle
+        || candidate.original_title
+        || candidate.name
+        || candidate.movieTitle
+        || candidate.movie_title
+        || movieUpdates.title
+        || movieUpdates.original_title
+        || ""
+      ).trim();
+      if (!title) return null;
+      const provider = String(candidate.provider || candidate.pluginId || candidate.providerId || result?.pluginId || result?.provider || result?.providerId || "").trim();
+      const sourceLabel = String(candidate.sourceLabel || candidate.providerLabel || result?.sourceLabel || result?.providerLabel || provider || "").trim();
+      const sourceRef = String(candidate.sourceRef || candidate.sourceUrl || candidate.source_url || candidate.detailUrl || candidate.detail_url || result?.sourceRef || result?.sourceUrl || result?.source_url || "").trim();
+      const year = String(candidate.year || candidate.releaseYear || candidate.release_year || candidate.movieYear || candidate.movie_year || movieUpdates.year || "").trim();
+      const format = String(candidate.format || candidate.mediaFormat || candidate.media_format || candidate.releaseFormat || candidate.release_format || movieUpdates.format || technicalUpdates.format || result?.sourceFormat || "").trim();
+      const identifiers = {
+        tmdb: String(rawIdentifiers.tmdb || rawIdentifiers.tmdbId || rawIdentifiers.tmdb_id || candidate.tmdbId || candidate.tmdb_id || "").trim(),
+        imdb: String(rawIdentifiers.imdb || rawIdentifiers.imdbId || rawIdentifiers.imdb_id || candidate.imdbId || candidate.imdb_id || "").trim()
+      };
+      const posterUrl = lookupCandidateImage(result, candidate, "poster");
+      const backdropUrl = lookupCandidateImage(result, candidate, "backdrop");
+      const barcode = String(candidate.barcode || candidate.externalBarcode || candidate.external_barcode || candidate.ean || candidate.upc || document.getElementById("importBarcodeInput")?.value || "").trim();
+      const keyParts = [
+        provider,
+        title.toLowerCase(),
+        year,
+        format.toLowerCase(),
+        identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "",
+        identifiers.imdb ? `imdb:${identifiers.imdb}` : "",
+        sourceRef,
+        posterUrl,
+        resultIndex,
+        candidateIndex
+      ];
+      return {
+        candidateKey: keyParts.join("|"),
+        provider,
+        pluginId: provider,
+        sourceLabel,
+        sourceRef,
+        title,
+        year,
+        format,
+        barcode,
+        posterUrl,
+        backdropUrl,
+        overview: String(candidate.overview || candidate.plot || candidate.description || movieUpdates.overview || metadataUpdates.overview || "").trim(),
+        identifiers,
+        movieUpdates,
+        metadataUpdates,
+        technicalUpdates,
+        mediaUpdates,
+        entrypoint: result?.entrypoint || ""
+      };
+    }
+    function lookupMovieCandidates() {
+      const metadata = importLookupMetadata();
+      const results = metadata.results || metadata.sources || metadata.matches || [];
+      if (!Array.isArray(results)) return [];
+      const candidates = [];
+      const seen = new Set();
+      results.forEach((result, resultIndex) => {
+        lookupResultCandidates(result).forEach((candidate, candidateIndex) => {
+          const normalized = normalizeLookupMovieCandidate(result, resultIndex, candidate, candidateIndex);
+          if (!normalized) return;
+          const identity = [
+            normalized.provider,
+            normalized.title.toLowerCase(),
+            normalized.year,
+            normalized.format.toLowerCase(),
+            normalized.identifiers.tmdb,
+            normalized.identifiers.imdb,
+            normalized.sourceRef,
+            normalized.posterUrl
+          ].join("|");
+          if (seen.has(identity)) return;
+          seen.add(identity);
+          candidates.push(normalized);
+        });
+      });
+      return candidates;
+    }
+    function selectedLookupMovieCandidate() {
+      const candidates = lookupMovieCandidates();
+      if (!candidates.length) return null;
+      const selected = candidates.find((candidate) => candidate.candidateKey === importCenter.selectedMovieCandidateKey) || candidates[0];
+      if (!importCenter.selectedMovieCandidateKey && selected?.candidateKey) {
+        importCenter.selectedMovieCandidateKey = selected.candidateKey;
+      }
+      return selected;
+    }
     function importBoxSetProposalKey(proposal, result = {}) {
       const title = proposal?.title || proposal?.name || "";
       const provider = proposal?.provider || proposal?.source || proposal?.member_source || result?.pluginId || result?.provider || "";
@@ -19408,18 +19819,21 @@ def ui_preview_html(
         const title = itemTitle(item);
         const provider = itemProvider(item);
         const meta = resultMetaParts(item);
+        const selected = item?.candidateKey && item.candidateKey === importCenter.selectedMovieCandidateKey;
         return `
-          <div class="import-result-card compact">
+          <button type="button" class="import-result-card compact selectable ${selected ? "selected" : ""}" data-movie-candidate-key="${escapeHtml(item?.candidateKey || "")}" aria-pressed="${selected ? "true" : "false"}">
             ${artHtml(itemImage(item), title)}
             <div class="import-result-body">
               <div class="import-result-kicker">
                 ${provider ? `<span class="tag">${escapeHtml(provider)}</span>` : ""}
                 ${item.state ? `<span class="tag ${item.state === "applied" ? "good" : ""}">${escapeHtml(item.state)}</span>` : ""}
+                ${selected ? `<span class="tag good">${escapeHtml(tNext("importCenter.selectedMatch", "Selected match"))}</span>` : ""}
               </div>
               <h4 class="import-result-title">${escapeHtml(title)}</h4>
               ${meta.length ? `<div class="import-result-subtitle">${meta.map((part) => escapeHtml(part)).join(" &middot; ")}</div>` : ""}
+              <span class="import-result-select-label">${escapeHtml(selected ? tNext("importCenter.selectedMatch", "Selected match") : tNext("importCenter.useMatch", "Use match"))}</span>
             </div>
-          </div>
+          </button>
         `;
       };
       const proposalImage = imageFrom(
@@ -19610,19 +20024,16 @@ def ui_preview_html(
           </div>
         </div>
       ` : "";
-      const movieResultCards = Array.isArray(results)
-        ? results.filter((result) => resultCandidates(result).some((candidate) => {
-            const title = String(candidate?.title || candidate?.originalTitle || candidate?.original_title || candidate?.name || candidate?.movie?.title || "").trim();
-            return title && !candidateLooksLikeBoxSet(candidate);
-          }))
-        : [];
+      const movieResultCards = lookupMovieCandidates();
+      const selectedMovieCandidate = selectedLookupMovieCandidate();
       const sourceGrid = movieResultCards.length ? `
         <div class="import-result-grid">
           ${movieResultCards.slice(0, 8).map(compactResultCard).join("")}
         </div>
       ` : "";
       const hasMovieCandidate = Boolean(
-        proposedTitle
+        selectedMovieCandidate
+        || proposedTitle
         || movieResultCards.length
         || document.getElementById("importTitleInput")?.value
         || document.getElementById("importBarcodeInput")?.value
@@ -19799,6 +20210,7 @@ def ui_preview_html(
           body: JSON.stringify({barcode, title, year, format, detectBoxSets: true, previewMode: true})
         });
         importCenter.barcodeLookup = payload;
+        importCenter.selectedMovieCandidateKey = "";
         importCenter.selectedBoxSetProposalKey = "";
         importCenter.boxSetMemberEdits = {};
         renderBarcodeLookup();
@@ -19833,6 +20245,7 @@ def ui_preview_html(
       if (button) button.disabled = true;
       try {
         const selectedProposal = wantsBoxSet ? selectedBoxSetProposal() : null;
+        const selectedMovieCandidate = wantsBoxSet ? null : selectedLookupMovieCandidate();
         if (wantsBoxSet && !selectedProposal) {
           setImportCenterMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
           return;
@@ -19864,6 +20277,8 @@ def ui_preview_html(
             format,
             importMode: wantsBoxSet ? "box-set" : "movie",
             detectBoxSets: wantsBoxSet,
+            selectedMovieCandidateKey: wantsBoxSet ? "" : (importCenter.selectedMovieCandidateKey || selectedMovieCandidate?.candidateKey || ""),
+            selectedMovieCandidate: wantsBoxSet ? null : selectedMovieCandidate,
             boxSetProposalKey: wantsBoxSet ? (importCenter.selectedBoxSetProposalKey || selectedProposal?.proposalKey || selectedProposal?._proposalKey || "") : "",
             boxSetProposal: wantsBoxSet ? selectedProposalPayload : null,
             boxSetMembers: wantsBoxSet ? boxSetMembers : [],
@@ -22674,6 +23089,7 @@ def ui_preview_html(
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
+        const movieCandidateButton = event.target.closest("[data-movie-candidate-key]");
         const proposalButton = event.target.closest(".import-proposal-select[data-box-set-proposal-key]");
         const addMemberButton = event.target.closest("[data-box-set-member-add]");
         const memberSearchButton = event.target.closest("[data-box-member-search]");
@@ -22685,6 +23101,16 @@ def ui_preview_html(
           event.preventDefault();
           event.stopPropagation();
           addLookupMovie(addLookupButton);
+          return;
+        }
+        if (movieCandidateButton) {
+          event.preventDefault();
+          importCenter.selectedMovieCandidateKey = movieCandidateButton.dataset.movieCandidateKey || "";
+          const selected = selectedLookupMovieCandidate();
+          const provider = selected?.sourceLabel || selected?.provider || "";
+          const title = selected?.title || "";
+          setImportCenterMessage(`${tNext("importCenter.selectedMatch", "Selected match")}: ${title}${provider ? ` / ${provider}` : ""}`, "good");
+          renderBarcodeLookup();
           return;
         }
         if (proposalButton) {
@@ -38703,9 +39129,14 @@ def register_routes(flask_app: Flask) -> None:
                 if not metadata_result:
                     metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": False}, actor)
                 proposal = metadata_result.get("proposal") if isinstance(metadata_result.get("proposal"), dict) else {}
+                selected_movie_candidate = selected_import_movie_candidate_from_body(body)
+                if selected_movie_candidate:
+                    proposal = merge_selected_import_movie_candidate(proposal, selected_movie_candidate)
                 movie_updates = proposal.get("movieUpdates") if isinstance(proposal.get("movieUpdates"), dict) else {}
                 metadata_updates = proposal.get("metadataUpdates") if isinstance(proposal.get("metadataUpdates"), dict) else {}
                 fallback_candidate = metadata_import_candidate(metadata_result)
+                if selected_movie_candidate:
+                    fallback_candidate = {**fallback_candidate, **selected_movie_candidate}
                 import_title = clean_text(
                     movie_updates.get("title")
                     or movie_updates.get("original_title")
@@ -38717,6 +39148,8 @@ def register_routes(flask_app: Flask) -> None:
 
                 payload = dict(movie_updates)
                 payload["title"] = import_title
+                if selected_movie_candidate.get("barcode") and not barcode:
+                    barcode = clean_text(selected_movie_candidate.get("barcode"))
                 if barcode:
                     payload["barcode"] = barcode
                 if fallback_candidate.get("year") and not payload.get("year"):
@@ -38772,6 +39205,7 @@ def register_routes(flask_app: Flask) -> None:
                         "barcode": barcode,
                         "title": import_title,
                         "sources": metadata_result.get("sources") or [],
+                        "selectedCandidate": selected_movie_candidate,
                         "applied": applied,
                         "metadataRefreshQueued": bool(metadata_refresh_job),
                         "metadataJobId": str(metadata_refresh_job.get("id")) if metadata_refresh_job else None,
