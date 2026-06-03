@@ -19564,7 +19564,7 @@ def ui_preview_html(
       ` : "";
       const lookupActionFooter = `
         <div class="import-result-action-footer">
-          <button type="button" class="primary-button" id="importMovieAddButton" data-import-add-lookup="1" data-import-mode="${escapeHtml(lookupActionMode)}" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(lookupActionLabel)}</button>
+          <button type="button" class="primary-button" id="importMovieAddButton" data-import-add-lookup="1" data-import-mode="${escapeHtml(lookupActionMode)}" title="${escapeHtml(lookupActionTitle)}" onclick="event.preventDefault(); event.stopPropagation(); addLookupMovie(); return false;">${escapeHtml(lookupActionLabel)}</button>
         </div>
       `;
       if (!Array.isArray(results) || !results.length) {
@@ -22670,10 +22670,13 @@ def ui_preview_html(
       document.querySelectorAll("[data-import-tab]").forEach((button) => {
         button.addEventListener("click", () => setImportCenterTab(button.dataset.importTab || "add"));
       });
-      document.getElementById("importView")?.addEventListener("click", (event) => {
+      document.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
         if (!addLookupButton) return;
+        const importView = document.getElementById("importView");
+        if (!importView || !importView.contains(addLookupButton)) return;
         event.preventDefault();
+        event.stopPropagation();
         addLookupMovie();
       });
       document.getElementById("importCenterSources")?.addEventListener("click", (event) => {
