@@ -15,6 +15,9 @@ try:
     from app.backend.next_app import NextApiError
     from app.backend.next_app import movie_payload_fields
     from app.backend.next_app import movie_update_payload
+    from app.backend.next_app import merge_selected_import_movie_candidate
+    from app.backend.next_app import selected_import_movie_candidate_from_body
+    from app.backend.next_app import selected_import_movie_candidate_proposal
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
     if exc.name != "flask":
         raise
@@ -25,6 +28,9 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     NextApiError = None
     movie_payload_fields = None
     movie_update_payload = None
+    merge_selected_import_movie_candidate = None
+    selected_import_movie_candidate_from_body = None
+    selected_import_movie_candidate_proposal = None
 
 
 @unittest.skipIf(movie_update_payload is None, "Flask is not installed in this test environment")
@@ -137,6 +143,69 @@ class NextMovieEditPolicyTests(unittest.TestCase):
     def test_import_source_match_title_key_tolerates_empty_values(self):
         self.assertEqual(import_source_match_title_key(None), "")
         self.assertEqual(import_source_match_title_key("Harry Potter 4K Blu-ray SteelBook"), "harry potter")
+
+    def test_selected_import_movie_candidate_from_body_normalizes_plugin_fields(self):
+        candidate = selected_import_movie_candidate_from_body(
+            {
+                "selectedMovieCandidate": {
+                    "provider": "movievault_26",
+                    "sourceLabel": "MovieVault",
+                    "sourceRef": "mv:release:123",
+                    "title": "Bohemian Rhapsody",
+                    "year": "2018",
+                    "format": "4K UHD",
+                    "posterUrl": "https://image.example/poster.jpg",
+                    "identifiers": {"tmdb": "424694"},
+                }
+            }
+        )
+
+        self.assertEqual(candidate["provider"], "movievault_26")
+        self.assertEqual(candidate["title"], "Bohemian Rhapsody")
+        self.assertEqual(candidate["format"], "4K UHD")
+        self.assertEqual(candidate["poster_url"], "https://image.example/poster.jpg")
+        self.assertEqual(candidate["identifiers"]["tmdb"], "424694")
+
+    def test_selected_import_movie_candidate_proposal_marks_media_and_identifiers(self):
+        proposal = selected_import_movie_candidate_proposal(
+            {
+                "provider": "tmdb",
+                "sourceLabel": "TMDb",
+                "sourceRef": "tmdb:123",
+                "title": "RoboCop",
+                "year": "1987",
+                "poster_url": "https://image.example/robocop.jpg",
+                "identifiers": {"tmdb": "5548", "imdb": "tt0093870"},
+            }
+        )
+
+        self.assertEqual(proposal["movieUpdates"]["title"], "RoboCop")
+        self.assertEqual(proposal["movieUpdates"]["year"], "1987")
+        self.assertEqual(proposal["metadataUpdates"]["poster_url"], "https://image.example/robocop.jpg")
+        self.assertEqual(proposal["mediaUpdates"]["poster"]["providerId"], "tmdb")
+        self.assertEqual(proposal["identifiers"]["imdb"], "tt0093870")
+        self.assertGreaterEqual(len(proposal["provenance"]), 3)
+
+    def test_merge_selected_import_movie_candidate_overrides_selected_identity_only(self):
+        merged = merge_selected_import_movie_candidate(
+            {
+                "movieUpdates": {"title": "Release title", "runtime_minutes": 110},
+                "technicalUpdates": {"hdr": "HDR10"},
+                "identifiers": {"imdb": "tt-existing"},
+            },
+            {
+                "provider": "tmdb",
+                "title": "A Minecraft Movie",
+                "year": "2025",
+                "identifiers": {"tmdb": "950387"},
+            },
+        )
+
+        self.assertEqual(merged["movieUpdates"]["title"], "A Minecraft Movie")
+        self.assertEqual(merged["movieUpdates"]["runtime_minutes"], 110)
+        self.assertEqual(merged["technicalUpdates"]["hdr"], "HDR10")
+        self.assertEqual(merged["identifiers"]["imdb"], "tt-existing")
+        self.assertEqual(merged["identifiers"]["tmdb"], "950387")
 
 
 if __name__ == "__main__":
