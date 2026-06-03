@@ -59,6 +59,7 @@ try:
     from .next_metadata import preview_movie_metadata
     from .next_metadata import push_metadata_to_receivers
     from .next_metadata import push_receiver_payload_to_receivers
+    from .next_metadata import external_metadata_barcode
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -113,6 +114,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import preview_movie_metadata
     from next_metadata import push_metadata_to_receivers
     from next_metadata import push_receiver_payload_to_receivers
+    from next_metadata import external_metadata_barcode
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -19820,6 +19822,7 @@ def ui_preview_html(
       } catch (error) {
         setImportCenterMessage(error.message || String(error), "bad");
       } finally {
+        if (button) button.disabled = false;
         renderBarcodeLookup();
       }
     }
@@ -27862,7 +27865,74 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
     }
 
 
-def container_receiver_payload(existing: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any] | None:
+def container_receiver_member_payload(conn, container_id: UUID | str | None) -> list[dict[str, Any]]:
+    if not container_id or not table_exists(conn, "container_movies") or not table_exists(conn, "movies"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                cm.sort_order,
+                m.id,
+                m.public_id,
+                m.title,
+                m.original_title,
+                m.year,
+                m.barcode,
+                m.format,
+                m.poster_url,
+                m.metadata
+            FROM container_movies cm
+            JOIN movies m ON m.id = cm.movie_id
+            WHERE cm.container_id=%s
+            ORDER BY COALESCE(cm.sort_order, 999999), COALESCE(m.sort_title, m.title, m.original_title)
+            LIMIT 100
+            """,
+            (container_id,),
+        )
+        rows = cur.fetchall()
+    members: list[dict[str, Any]] = []
+    for index, row in enumerate(rows, start=1):
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        item: dict[str, Any] = {
+            "title": row.get("title") or row.get("original_title"),
+            "originalTitle": row.get("original_title"),
+            "year": row.get("year"),
+            "format": row.get("format"),
+            "sortOrder": row.get("sort_order") or index,
+            "publicId": row.get("public_id"),
+        }
+        barcode = external_metadata_barcode(row.get("barcode"))
+        if barcode:
+            item["barcode"] = barcode
+        poster_url = clean_text(row.get("poster_url") or metadata.get("poster_url") or metadata.get("posterUrl") or metadata.get("poster"))
+        if poster_url:
+            item["posterUrl"] = poster_url
+        for identifier in movie_identifier_entities(conn, row["id"]):
+            provider_id = clean_text(identifier.get("provider_id")).casefold()
+            identifier_type = clean_text(identifier.get("identifier_type")).casefold()
+            value = clean_text(identifier.get("identifier"))
+            if not value or identifier_type != "movie_id":
+                continue
+            if provider_id == "tmdb":
+                item["tmdbId"] = value
+            elif provider_id == "imdb":
+                item["imdbId"] = value
+        item = {key: value for key, value in item.items() if value not in (None, "", [], {})}
+        if item.get("title"):
+            members.append(item)
+    return members
+
+
+def container_receiver_payload(
+    conn,
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    force_members: bool = False,
+    source_label: str = "DiscVault local edit",
+    source_provider: str = "discvault_local_edit",
+) -> dict[str, Any] | None:
     container_type = clean_text(existing.get("container_type"))
     if container_type != "box_set":
         return None
@@ -27888,15 +27958,27 @@ def container_receiver_payload(existing: dict[str, Any], payload: dict[str, Any]
             continue
         contribution[target_field] = new_value
         changed_fields.append(target_field)
+    members = container_receiver_member_payload(conn, existing.get("id"))
+    if members and (contribution or force_members):
+        contribution["members"] = members
+        contribution["movies"] = members
+        contribution["boxSetMovies"] = members
+        contribution["box_set_movies"] = members
+        contribution["memberCount"] = len(members)
+        contribution["member_count"] = len(members)
+        for field in ("members", "movies", "boxSetMovies", "box_set_movies", "memberCount", "member_count"):
+            if field not in changed_fields:
+                changed_fields.append(field)
     if not contribution:
         return None
 
     metadata = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
+    barcode = payload.get("barcode") if payload.get("barcode") is not None else existing.get("barcode")
     source_reference = {
         "type": "discvault_box_set",
         "key": str(existing.get("id")),
         "publicId": existing.get("public_id"),
-        "barcode": payload.get("barcode"),
+        "barcode": external_metadata_barcode(barcode) or clean_text(barcode),
         "containerType": container_type,
     }
     movievault_id = clean_text(metadata.get("movievault_id") or metadata.get("movieVaultId") or metadata.get("sourceRef"))
@@ -27911,12 +27993,13 @@ def container_receiver_payload(existing: dict[str, Any], payload: dict[str, Any]
         "metadata": {
             "containerId": str(existing.get("id")),
             "containerType": container_type,
+            "memberCount": len(members),
             "changedFields": changed_fields,
-            "sourceProviders": ["discvault_local_edit"],
+            "sourceProviders": [source_provider],
             "acceptedFields": [
                 {
-                    "pluginId": "discvault_local_edit",
-                    "sourceLabel": "DiscVault local edit",
+                    "pluginId": source_provider,
+                    "sourceLabel": source_label,
                     "fields": changed_fields,
                 }
             ],
@@ -34934,7 +35017,7 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Container not found", 404)
             payload = container_payload(body, existing=existing)
-            receiver_payload = container_receiver_payload(existing, payload)
+            receiver_payload = container_receiver_payload(conn, existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
             with conn.transaction():
                 with conn.cursor() as cur:
@@ -35830,7 +35913,7 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Container not found", 404)
             payload = container_payload(body, existing=existing)
-            receiver_payload = container_receiver_payload(existing, payload)
+            receiver_payload = container_receiver_payload(conn, existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
             with conn.transaction():
                 with conn.cursor() as cur:
@@ -38044,6 +38127,7 @@ def register_routes(flask_app: Flask) -> None:
             "appliedMembers": applied_members,
             "queuedMetadataRefreshJobs": queued_jobs,
             "decisionCounts": decision_counts,
+            "containerId": str(container_uuid),
         }
 
     def metadata_import_candidate(metadata_result: dict[str, Any]) -> dict[str, Any]:
@@ -38278,6 +38362,40 @@ def register_routes(flask_app: Flask) -> None:
                 if box_set_proposal:
                     box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
                     box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
+                    box_set_receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_payload"}
+                    box_set_detail = box_set_import.get("container") if isinstance(box_set_import.get("container"), dict) else {}
+                    imported_container = box_set_detail.get("container") if isinstance(box_set_detail.get("container"), dict) else {}
+                    if imported_container:
+                        receiver_payload = container_receiver_payload(
+                            conn,
+                            imported_container,
+                            imported_container,
+                            force_members=True,
+                            source_label="DiscVault box-set import",
+                            source_provider="discvault_box_set_import",
+                        )
+                        if receiver_payload:
+                            try:
+                                box_set_receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
+                            except Exception as exc:
+                                box_set_receiver_summary = {"status": "error", "error": str(exc)}
+                            audit_event(
+                                conn,
+                                event_type="metadata.receiver_pushed",
+                                category="metadata",
+                                actor=actor,
+                                target_type="container",
+                                target_id=parse_uuid(imported_container.get("id"), "containerId"),
+                                summary=f"Pushed imported box-set to receiver plugins for {imported_container.get('title')}",
+                                metadata={
+                                    "containerType": imported_container.get("container_type"),
+                                    "title": imported_container.get("title"),
+                                    "barcode": imported_container.get("barcode"),
+                                    "memberCount": len(receiver_payload.get("payload", {}).get("members") or []),
+                                    "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
+                                    "receiverSummary": box_set_receiver_summary,
+                                },
+                            )
                     first_movie = (box_set_import.get("movies") or [{}])[0]
                     return response(
                         {
@@ -38291,6 +38409,7 @@ def register_routes(flask_app: Flask) -> None:
                             "applied": {"boxSet": box_set_import.get("appliedMembers") or []},
                             "queuedMetadataRefreshJobs": box_set_import.get("queuedMetadataRefreshJobs") or [],
                             "decisionCounts": box_set_import.get("decisionCounts") or {},
+                            "receiverSummary": box_set_receiver_summary,
                         },
                         201,
                     )
