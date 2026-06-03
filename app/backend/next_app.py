@@ -1658,7 +1658,7 @@ def import_source_metadata_suggestions(
 
 
 def import_source_match_title_key(value: Any) -> str:
-    text = clean_text(value).casefold()
+    text = (clean_text(value) or "").casefold()
     text = re.sub(
         r"\b(4k|uhd|ultra\s*hd|blu[- ]?ray|dvd|hd\s*dvd|laserdisc|steelbook|limited|collector|edition|france|germany|italy|spain|uk|usa)\b",
         " ",
@@ -27982,8 +27982,8 @@ def container_receiver_member_payload(conn, container_id: UUID | str | None) -> 
         if poster_url:
             item["posterUrl"] = poster_url
         for identifier in movie_identifier_entities(conn, row["id"]):
-            provider_id = clean_text(identifier.get("provider_id")).casefold()
-            identifier_type = clean_text(identifier.get("identifier_type")).casefold()
+            provider_id = (clean_text(identifier.get("provider_id")) or "").casefold()
+            identifier_type = (clean_text(identifier.get("identifier_type")) or "").casefold()
             value = clean_text(identifier.get("identifier"))
             if not value or identifier_type != "movie_id":
                 continue
@@ -37613,16 +37613,16 @@ def register_routes(flask_app: Flask) -> None:
 
     def metadata_box_set_proposal_key(proposal: dict[str, Any], result: dict[str, Any] | None = None) -> str:
         result = result or {}
-        provider = clean_text(
+        provider = (clean_text(
             proposal.get("provider")
             or proposal.get("source")
             or proposal.get("member_source")
             or result.get("pluginId")
             or result.get("provider")
             or result.get("plugin_id")
-        ).casefold()
-        title = clean_text(proposal.get("title") or proposal.get("name")).casefold()
-        discriminator = clean_text(
+        ) or "").casefold()
+        title = (clean_text(proposal.get("title") or proposal.get("name")) or "").casefold()
+        discriminator = (clean_text(
             proposal.get("barcode")
             or proposal.get("movievault_id")
             or proposal.get("movievaultId")
@@ -37630,7 +37630,7 @@ def register_routes(flask_app: Flask) -> None:
             or proposal.get("detail_url")
             or proposal.get("sourceUrl")
             or proposal.get("source_url")
-        ).casefold()
+        ) or "").casefold()
         return f"{provider}::{title}::{discriminator}"
 
     def box_set_proposal_members(proposal: dict[str, Any]) -> list[dict[str, Any]]:
@@ -37650,6 +37650,8 @@ def register_routes(flask_app: Flask) -> None:
         return []
 
     def metadata_box_set_proposals(metadata_result: dict[str, Any]) -> list[dict[str, Any]]:
+        if not isinstance(metadata_result, dict):
+            return []
         proposals: list[dict[str, Any]] = []
         seen: set[str] = set()
         for result in metadata_result.get("results") or []:
@@ -37680,10 +37682,10 @@ def register_routes(flask_app: Flask) -> None:
 
     def metadata_box_set_proposal(metadata_result: dict[str, Any], selected_key: str = "") -> dict[str, Any]:
         proposals = metadata_box_set_proposals(metadata_result)
-        selected_key = clean_text(selected_key).casefold()
+        selected_key = (clean_text(selected_key) or "").casefold()
         if selected_key:
             for proposal in proposals:
-                if clean_text(proposal.get("_proposalKey")).casefold() == selected_key:
+                if (clean_text(proposal.get("_proposalKey")) or "").casefold() == selected_key:
                     return proposal
         return proposals[0] if proposals else {}
 
@@ -37743,17 +37745,17 @@ def register_routes(flask_app: Flask) -> None:
         return [item for item in sources if isinstance(item, dict)]
 
     def metadata_box_set_artwork_matches(source: dict[str, Any], proposal_title: str, input_title: str) -> bool:
-        source_title = clean_text(
+        source_title = (clean_text(
             source.get("title")
             or source.get("name")
             or source.get("releaseTitle")
             or source.get("boxSetTitle")
             or source.get("box_set_title")
-        ).casefold()
+        ) or "").casefold()
         if not source_title:
             return False
-        proposal_title = proposal_title.casefold()
-        input_title = input_title.casefold()
+        proposal_title = (proposal_title or "").casefold()
+        input_title = (input_title or "").casefold()
         candidates = [item for item in (proposal_title, input_title) if item]
         return any(item in source_title or source_title in item for item in candidates)
 
@@ -37826,7 +37828,7 @@ def register_routes(flask_app: Flask) -> None:
         return f"IMPORT-{clean}-BOX-{index:02d}"
 
     def physical_format_key(value: Any) -> str:
-        text = clean_text(value).casefold().replace("-", " ").replace("_", " ").replace("/", " ")
+        text = (clean_text(value) or "").casefold().replace("-", " ").replace("_", " ").replace("/", " ")
         text = " ".join(text.split())
         if not text:
             return ""
@@ -37908,7 +37910,7 @@ def register_routes(flask_app: Flask) -> None:
         for index, item in enumerate(raw_members[:50], start=1):
             if not isinstance(item, dict):
                 continue
-            if clean_text(item.get("action")).casefold() == "skip":
+            if (clean_text(item.get("action")) or "").casefold() == "skip":
                 continue
             title = clean_text(item.get("title") or item.get("originalTitle") or item.get("original_title"))
             if not title:
@@ -38448,8 +38450,15 @@ def register_routes(flask_app: Flask) -> None:
         candidate = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else raw
         if not isinstance(candidate, dict):
             return {}
+        normalized = dict(candidate)
+        for key in ("proposal", "query", "summary", "proposalStats"):
+            if key in normalized and not isinstance(normalized.get(key), dict):
+                normalized.pop(key, None)
+        for key in ("results", "sources", "executions", "sourceOrder", "sourceSummary", "boxSetProposals", "box_set_proposals"):
+            if key in normalized and not isinstance(normalized.get(key), list):
+                normalized.pop(key, None)
         if any(key in candidate for key in ("proposal", "results", "sources", "executions", "summary", "boxSetProposals")):
-            return candidate
+            return normalized
         return {}
 
     def metadata_lookup_audit_payload(body: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
@@ -38533,7 +38542,7 @@ def register_routes(flask_app: Flask) -> None:
         title = clean_text(body.get("title") or body.get("query")) or ""
         if not barcode and not title:
             raise NextApiError("barcode or title is required", 400)
-        import_mode = clean_text(body.get("importMode") or body.get("import_mode")).casefold().replace("_", "-")
+        import_mode = (clean_text(body.get("importMode") or body.get("import_mode")) or "").casefold().replace("_", "-")
         wants_movie_import = import_mode == "movie"
         wants_box_set_import = import_mode in {"box-set", "boxset"}
         provided_box_set_body = None if wants_movie_import else (body.get("boxSetProposal") or body.get("box_set_proposal"))
@@ -38632,6 +38641,8 @@ def register_routes(flask_app: Flask) -> None:
                     metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
                 if wants_box_set_import and not box_set_proposal:
                     box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
+                if wants_box_set_import and not box_set_proposal:
+                    raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
                 if wants_box_set_import and box_set_proposal:
                     box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
                     box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
@@ -38691,9 +38702,9 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 if not metadata_result:
                     metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": False}, actor)
-                proposal = metadata_result.get("proposal") or {}
-                movie_updates = proposal.get("movieUpdates") or {}
-                metadata_updates = proposal.get("metadataUpdates") or {}
+                proposal = metadata_result.get("proposal") if isinstance(metadata_result.get("proposal"), dict) else {}
+                movie_updates = proposal.get("movieUpdates") if isinstance(proposal.get("movieUpdates"), dict) else {}
+                metadata_updates = proposal.get("metadataUpdates") if isinstance(proposal.get("metadataUpdates"), dict) else {}
                 fallback_candidate = metadata_import_candidate(metadata_result)
                 import_title = clean_text(
                     movie_updates.get("title")
