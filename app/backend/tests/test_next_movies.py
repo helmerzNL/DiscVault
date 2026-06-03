@@ -11,6 +11,7 @@ try:
     from app.backend.next_app import import_source_review_summary
     from app.backend.next_app import import_source_recommended_match
     from app.backend.next_app import import_source_match_candidate_score
+    from app.backend.next_app import import_source_match_title_key
     from app.backend.next_app import NextApiError
     from app.backend.next_app import movie_payload_fields
     from app.backend.next_app import movie_update_payload
@@ -20,6 +21,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     import_source_review_summary = None
     import_source_recommended_match = None
     import_source_match_candidate_score = None
+    import_source_match_title_key = None
     NextApiError = None
     movie_payload_fields = None
     movie_update_payload = None
@@ -131,6 +133,10 @@ class NextMovieEditPolicyTests(unittest.TestCase):
             {"title": "Saving Private Ryan", "year": "1998"},
         )
         self.assertEqual(score["label"], "low")
+
+    def test_import_source_match_title_key_tolerates_empty_values(self):
+        self.assertEqual(import_source_match_title_key(None), "")
+        self.assertEqual(import_source_match_title_key("Harry Potter 4K Blu-ray SteelBook"), "harry potter")
 
 
 if __name__ == "__main__":
