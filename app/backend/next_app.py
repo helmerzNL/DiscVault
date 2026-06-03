@@ -169,6 +169,35 @@ MCP_TOOL_NAMES = (
     "get_watch_history",
     "get_groups",
 )
+API_TOKEN_GRANTABLE_PERMISSION_KEYS = (
+    "api.read",
+    "api.write",
+    "api.tokens.manage",
+    "mcp.use",
+    "collection.view",
+    "collection.add",
+    "collection.add_own",
+    "collection.import",
+    "collection.edit_all",
+    "collection.bulk_edit",
+    "containers.view",
+    "containers.create",
+    "containers.edit",
+    "groups.view",
+    "metadata.search",
+    "metadata.refresh_one",
+    "metadata.refresh_bulk",
+    "admin.view_jobs",
+)
+API_TOKEN_DEFAULT_PERMISSION_KEYS = (
+    "api.read",
+    "mcp.use",
+    "mcp.tool.search_collection",
+    "mcp.tool.get_collection_stats",
+    "mcp.tool.get_movie_details",
+    "mcp.tool.lookup_barcode",
+    "metadata.search",
+)
 TARGET_DATA_TABLES = (
     "movies",
     "people",
@@ -21842,6 +21871,7 @@ def ui_preview_html(
       if (form) form.classList.toggle("hidden", !access.manageable);
       if (permissionList) {
         const permissions = access.allowedPermissions || [];
+        const defaultPermissions = new Set(access.defaultPermissions || ["api.read", "mcp.use", "mcp.tool.search_collection"]);
         permissionList.innerHTML = permissions.length ? `
           <div class="profile-passkey">
             <div class="profile-passkey-head">
@@ -21851,7 +21881,7 @@ def ui_preview_html(
             <div class="app-admin-permission-grid">
               ${permissions.map((permission) => `
                 <label>
-                  <input type="checkbox" data-profile-api-permission="${escapeHtml(permission)}" ${["api.read", "mcp.use", "mcp.tool.search_collection"].includes(permission) ? "checked" : ""}>
+                  <input type="checkbox" data-profile-api-permission="${escapeHtml(permission)}" ${defaultPermissions.has(permission) ? "checked" : ""}>
                   <span>${escapeHtml(permission)}</span>
                 </label>
               `).join("")}
@@ -28937,6 +28967,13 @@ def api_access_token_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def api_token_permission_is_grantable(permission_key: str) -> bool:
+    return (
+        permission_key in API_TOKEN_GRANTABLE_PERMISSION_KEYS
+        or permission_key.startswith("mcp.tool.")
+    )
+
+
 def profile_api_access_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
     permissions = set(actor.get("permissions") or [])
     if actor.get("role") == "owner":
@@ -28964,7 +29001,11 @@ def profile_api_access_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         "tokens": tokens,
         "allowedPermissions": sorted(
             key for key in permissions
-            if key.startswith("api.") or key == "mcp.use" or key.startswith("mcp.tool.")
+            if api_token_permission_is_grantable(key)
+        ),
+        "defaultPermissions": sorted(
+            key for key in API_TOKEN_DEFAULT_PERMISSION_KEYS
+            if key in permissions
         ),
         "mcpTools": [
             {"name": tool, "permission": f"mcp.tool.{tool}"}
@@ -28989,7 +29030,7 @@ def normalize_api_token_permissions(conn, actor: dict[str, Any], raw_values: Any
             continue
         if key not in known:
             raise NextApiError(f"Unknown permission: {key}", 400)
-        if not (key.startswith("api.") or key == "mcp.use" or key.startswith("mcp.tool.")):
+        if not api_token_permission_is_grantable(key):
             raise NextApiError(f"Permission is not valid for API tokens: {key}", 400)
         if key not in actor_permissions:
             raise NextApiError(f"You cannot grant API token permission: {key}", 403)
@@ -28998,7 +29039,7 @@ def normalize_api_token_permissions(conn, actor: dict[str, Any], raw_values: Any
     if not normalized:
         defaults = [
             key
-            for key in ("api.read", "mcp.use", "mcp.tool.search_collection", "mcp.tool.get_collection_stats", "mcp.tool.get_movie_details")
+            for key in API_TOKEN_DEFAULT_PERMISSION_KEYS
             if key in actor_permissions
         ]
         normalized = defaults
@@ -29009,9 +29050,29 @@ def normalize_api_token_permissions(conn, actor: dict[str, Any], raw_values: Any
 
 def api_token_scopes_for_permissions(permission_keys: list[str]) -> list[str]:
     scopes: list[str] = []
-    if "api.read" in permission_keys:
+    read_permissions = {
+        "api.read",
+        "collection.view",
+        "containers.view",
+        "groups.view",
+        "metadata.search",
+    }
+    write_permissions = {
+        "api.write",
+        "collection.add",
+        "collection.add_own",
+        "collection.import",
+        "collection.edit_all",
+        "collection.bulk_edit",
+        "containers.create",
+        "containers.edit",
+        "metadata.refresh_one",
+        "metadata.refresh_bulk",
+    }
+    permission_set = set(permission_keys)
+    if permission_set.intersection(read_permissions):
         scopes.append("read")
-    if "api.write" in permission_keys:
+    if permission_set.intersection(write_permissions):
         scopes.append("write")
     if "mcp.use" in permission_keys or any(key.startswith("mcp.tool.") for key in permission_keys):
         scopes.append("mcp")
