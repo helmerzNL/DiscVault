@@ -182,11 +182,11 @@ def _items(payload):
         return payload
     if not isinstance(payload, dict):
         return []
-    for key in ("items", "results", "movies", "data"):
+    for key in ("items", "results", "matches", "candidates", "boxSets", "box_sets", "sets", "containers", "movies", "data"):
         value = payload.get(key)
         if isinstance(value, list):
             return value
-    for key in ("data", "result", "movie", "release", "details"):
+    for key in ("data", "result", "item", "candidate", "movie", "release", "boxSet", "box_set", "boxSetCandidate", "box_set_candidate", "details"):
         value = payload.get(key)
         if isinstance(value, dict):
             nested = _items(value)
@@ -265,11 +265,60 @@ def _member_list(payload):
         return payload
     if not isinstance(payload, dict):
         return []
-    for key in ("members", "movies", "items", "titles", "boxSetMovies", "box_set_movies", "releases"):
+    for key in (
+        "members",
+        "memberMovies",
+        "member_movies",
+        "memberReleases",
+        "member_releases",
+        "movies",
+        "items",
+        "titles",
+        "includedTitles",
+        "included_titles",
+        "boxSetMovies",
+        "box_set_movies",
+        "boxSetMembers",
+        "box_set_members",
+        "bundleMembers",
+        "bundle_members",
+        "moviesInSet",
+        "movies_in_set",
+        "children",
+        "parts",
+        "discs",
+        "discItems",
+        "disc_items",
+        "contents",
+        "releases",
+    ):
         value = payload.get(key)
         if isinstance(value, list):
             return value
-    for key in ("boxSetProposal", "box_set_proposal", "boxSet", "box_set", "proposal", "data"):
+        if isinstance(value, dict):
+            found = _member_list(value)
+            if found:
+                return found
+            nested_items = _items(value)
+            if nested_items and nested_items != [value]:
+                return nested_items
+    for key in (
+        "boxSetProposal",
+        "box_set_proposal",
+        "boxSet",
+        "box_set",
+        "boxSetCandidate",
+        "box_set_candidate",
+        "proposal",
+        "candidate",
+        "container",
+        "bundle",
+        "set",
+        "release",
+        "data",
+        "result",
+        "item",
+    ):
         nested = payload.get(key)
         found = _member_list(nested)
         if found:
@@ -280,7 +329,7 @@ def _member_list(payload):
 def _box_set_signal(item):
     if not isinstance(item, dict):
         return False
-    for key in ("boxSetProposal", "box_set_proposal", "boxSet", "box_set"):
+    for key in ("boxSetProposal", "box_set_proposal", "boxSet", "box_set", "boxSetCandidate", "box_set_candidate"):
         if isinstance(item.get(key), dict):
             return True
     if item.get("isBoxSet") is True or item.get("is_box_set") is True:
@@ -292,14 +341,52 @@ def _box_set_signal(item):
             "entity_type",
             "containerType",
             "container_type",
+            "entityKind",
+            "entity_kind",
             "releaseType",
             "release_type",
+            "category",
             "kind",
             "type",
         )
     ).casefold()
     type_key = type_text.replace("-", "_").replace(" ", "_")
     return type_key in {"box_set", "boxset"} or "box_set" in type_key or "boxset" in type_key
+
+
+def _box_set_numeric_id(item):
+    if not isinstance(item, dict):
+        return ""
+    value = _first_value(item, "id", "boxSetId", "box_set_id")
+    text = _text(value)
+    return text if text.isdigit() else ""
+
+
+def _with_box_set_detail(context, item):
+    if not isinstance(item, dict) or not _box_set_signal(item):
+        return item
+    if len(_member_list(item)) >= 2:
+        return item
+    box_set_id = _box_set_numeric_id(item)
+    if not box_set_id:
+        return item
+    merged = dict(item)
+    try:
+        detail = _get(context or {}, f"/api/v1/box-sets/{quote(box_set_id)}")
+        if isinstance(detail, dict):
+            merged = {**merged, **detail}
+    except Exception as exc:
+        merged["memberLookupError"] = str(exc)
+    if len(_member_list(merged)) >= 2:
+        return merged
+    try:
+        member_response = _get(context or {}, f"/api/v1/box-sets/{quote(box_set_id)}/members")
+        members = _items(member_response)
+        if members:
+            merged["members"] = members
+    except Exception as exc:
+        merged["memberLookupError"] = str(exc)
+    return merged
 
 
 def _member_source(item):
@@ -538,6 +625,12 @@ def _normalize_box_set_proposal(payload, context=None):
         or item.get("box_set_proposal")
         or item.get("boxSet")
         or item.get("box_set")
+        or item.get("boxSetCandidate")
+        or item.get("box_set_candidate")
+        or item.get("container")
+        or item.get("bundle")
+        or item.get("set")
+        or item.get("candidate")
     )
     if isinstance(nested, dict) and (not raw_members or not _first_value(item, "title", "name", "boxSetTitle", "box_set_title")):
         nested_members = _member_list(nested)
@@ -603,12 +696,21 @@ def _normalize_box_set_proposal(payload, context=None):
         "movies": members,
         "members": members,
         "member_count": len(members),
+        "memberCount": len(members),
         "member_source": "MovieVault 26",
+        "memberSource": "MovieVault 26",
         "member_confidence": "identified" if members and all(not _member_needs_identification(m) for m in members) else "candidate",
+        "memberConfidence": "identified" if members and all(not _member_needs_identification(m) for m in members) else "candidate",
         "metadata_plugin_fallbacks": lookup_summaries,
     }
+    if not members:
+        proposal["detectedWithoutMembers"] = True
+        proposal["detected_without_members"] = True
+        proposal["member_confidence"] = "needs_member_confirmation"
+        proposal["memberConfidence"] = "needs_member_confirmation"
     if lookup_summaries:
         proposal["member_source"] = "MovieVault 26 + metadata plugins"
+        proposal["memberSource"] = "MovieVault 26 + metadata plugins"
     return {key: value for key, value in proposal.items() if value not in (None, "", [], {})}
 
 
@@ -724,6 +826,10 @@ def _normalize_result(payload, *, source_ref=""):
             item.get("boxSetProposal")
             or item.get("box_set_proposal")
             or item.get("box_set")
+            or item.get("boxSet")
+            or item.get("boxSetCandidate")
+            or item.get("box_set_candidate")
+            or item.get("container")
         )
         box_set_proposal = (
             _normalize_box_set_proposal(item, None)
@@ -819,7 +925,10 @@ def search_barcode(payload, context=None):
         return {"status": "skipped", "provider": PROVIDER_ID, "reason": "disabled"}
     if not _is_public_barcode(barcode):
         return {"status": "skipped", "provider": PROVIDER_ID, "reason": "not_public_barcode"}
-    return _normalize_result(_get(context or {}, f"/api/v1/barcodes/{quote(barcode)}"), source_ref=f"barcode:{barcode}")
+    data = _get(context or {}, f"/api/v1/barcodes/{quote(barcode)}")
+    if _box_set_signal(data) and len(_member_list(data)) < 2:
+        data = _with_box_set_detail(context or {}, data)
+    return _normalize_result(data, source_ref=f"barcode:{barcode}")
 
 
 def search_title(payload, context=None):
@@ -862,21 +971,40 @@ def movie_details(payload, context=None):
 
 
 def box_set_candidates(payload, context=None):
+    payload = payload or {}
     title = str((payload or {}).get("title") or "").strip()
     year = str((payload or {}).get("year") or "").strip()
     barcode = str((payload or {}).get("barcode") or "").strip()
     if not _movievault_enabled(context):
         return {"status": "skipped", "provider": PROVIDER_ID, "boxSetProposal": {}, "reason": "disabled"}
+    proposal_context = {**(context or {}), "format": payload.get("format") or payload.get("mediaType") or payload.get("media_type") or ""}
     data = _get(context or {}, "/api/v1/box-sets", q=title, year=year, barcode=barcode if _is_public_barcode(barcode) else "")
-    proposal = _normalize_box_set_proposal(data, context or {})
-    if not proposal or len(proposal.get("movies") or []) < 2:
+    sources = [item for item in _items(data) if isinstance(item, dict)]
+    if isinstance(data, dict):
+        sources.insert(0, data)
+    proposals = []
+    seen = set()
+    for source in sources:
+        candidate = _with_box_set_detail(context or {}, source)
+        proposal = _normalize_box_set_proposal(candidate, proposal_context)
+        if not proposal:
+            continue
+        key = _box_set_proposal_key(proposal)
+        if key in seen:
+            continue
+        seen.add(key)
+        proposals.append(proposal)
+    addable = [proposal for proposal in proposals if len(proposal.get("movies") or proposal.get("members") or []) >= 2]
+    if not addable and not proposals:
         return {"status": "miss", "provider": "movievault_26", "boxSetProposal": {}}
+    selected = addable[0] if addable else proposals[0]
     return {
         "status": "hit",
         "provider": "movievault_26",
         "sourceLabel": "MovieVault 26",
-        "sourceRef": proposal.get("movievault_id") or proposal.get("barcode") or title,
-        "boxSetProposal": proposal,
+        "sourceRef": selected.get("movievault_id") or selected.get("barcode") or title,
+        "boxSetProposal": selected,
+        "boxSetProposals": proposals,
     }
 
 
