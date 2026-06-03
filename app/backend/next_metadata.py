@@ -950,6 +950,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "identifiers": identifiers,
         "candidates": result.get("items") or result.get("candidates") or [],
         "boxSetProposal": result.get("boxSetProposal") or result.get("box_set_proposal"),
+        "boxSetProposals": result.get("boxSetProposals") or result.get("box_set_proposals") or [],
         "raw": result,
     }
 

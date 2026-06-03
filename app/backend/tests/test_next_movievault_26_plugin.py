@@ -51,7 +51,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.3.4")
+        self.assertEqual(manifest["version"], "1.3.5")
         self.assertIn("describe_payload", manifest["capabilities"])
         self.assertIn("activity_summary", manifest["capabilities"])
 
@@ -256,6 +256,92 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "hit")
         self.assertEqual(captured["barcode"], "")
+
+    def test_box_set_candidates_fetches_detail_members_for_movievault_list_hits(self):
+        calls = []
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                calls.append((path, params))
+                if path == "/api/v1/box-sets":
+                    self.assertEqual(params["barcode"], "5051892237710")
+                    return {
+                        "items": [
+                            {
+                                "id": 42,
+                                "movieVaultId": "mv_box_set_42",
+                                "type": "box_set",
+                                "title": "Harry Potter Complete Collection",
+                                "barcode": "5051892237710",
+                                "posterUrl": "https://img.example/hp-box.jpg",
+                            }
+                        ]
+                    }
+                if path == "/api/v1/box-sets/42":
+                    return {
+                        "id": 42,
+                        "type": "box_set",
+                        "title": "Harry Potter Complete Collection",
+                        "members": [
+                            {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
+                            {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
+                        ],
+                    }
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.box_set_candidates(
+                {"barcode": "5051892237710", "title": "Harry Potter", "format": "4K UHD"},
+                {"movievault": {"enabled": True}},
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["boxSetProposal"]["title"], "Harry Potter Complete Collection")
+        self.assertEqual(result["boxSetProposal"]["member_count"], 2)
+        self.assertEqual(result["boxSetProposal"]["members"][0]["format"], "4K UHD")
+        self.assertEqual([path for path, _params in calls], ["/api/v1/box-sets", "/api/v1/box-sets/42"])
+
+    def test_barcode_lookup_fetches_members_when_movievault_found_box_set_is_sparse(self):
+        calls = []
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                calls.append(path)
+                if path == "/api/v1/barcodes/5051892237710":
+                    return {
+                        "status": "found",
+                        "type": "box_set",
+                        "id": 42,
+                        "title": "Harry Potter Complete Collection",
+                        "barcode": "5051892237710",
+                    }
+                if path == "/api/v1/box-sets/42":
+                    return {
+                        "status": "found",
+                        "type": "box_set",
+                        "id": 42,
+                        "title": "Harry Potter Complete Collection",
+                    }
+                if path == "/api/v1/box-sets/42/members":
+                    return {
+                        "items": [
+                            {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
+                            {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
+                        ]
+                    }
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode({"barcode": "5051892237710"}, {"movievault": {"enabled": True}})
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["boxSetProposal"]["member_count"], 2)
+        self.assertEqual(result["boxSetProposal"]["members"][1]["title"], "Harry Potter and the Chamber of Secrets")
+        self.assertEqual(calls, ["/api/v1/barcodes/5051892237710", "/api/v1/box-sets/42", "/api/v1/box-sets/42/members"])
 
     def test_box_set_members_keep_disc_number_for_preview(self):
         proposal = movievault_26._normalize_box_set_proposal(
