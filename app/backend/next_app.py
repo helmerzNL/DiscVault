@@ -19233,19 +19233,46 @@ def ui_preview_html(
           ? tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source.")
           : "";
       }
-      const proposal = metadata.proposal || {};
-      const movieUpdates = proposal.movieUpdates || {};
-      const metadataUpdates = proposal.metadataUpdates || {};
-      const technicalUpdates = proposal.technicalUpdates || {};
-      const proposedTitle = movieUpdates.title || movieUpdates.original_title || document.getElementById("importTitleInput")?.value || "";
-      const proposedYear = movieUpdates.year || document.getElementById("importYearInput")?.value || "";
-      const proposedFormat = movieUpdates.format || document.getElementById("importFormatInput")?.value || "";
       const imageFrom = (...values) => values.flat().map((value) => usableImage(value)).find(Boolean) || "";
+      const mediaUpdateSourceUrl = (mediaUpdates, kind) => {
+        const update = mediaUpdates && typeof mediaUpdates === "object" ? mediaUpdates[kind] : null;
+        return update && typeof update === "object" ? update.sourceUrl || update.source_url || "" : "";
+      };
+      const resultCandidates = (item) => {
+        const raw = item?.raw || {};
+        const asArray = (value) => Array.isArray(value) ? value : [];
+        return [
+          item,
+          item?.movie,
+          item?.details,
+          item?.release,
+          raw,
+          raw.movie,
+          raw.details,
+          raw.release,
+          ...asArray(item?.candidates),
+          ...asArray(raw.candidates),
+          ...asArray(raw.items)
+        ].filter((candidate) => candidate && typeof candidate === "object");
+      };
+      const resultValue = (item, keys) => {
+        for (const candidate of resultCandidates(item)) {
+          for (const key of keys) {
+            const value = candidate[key];
+            if (value !== undefined && value !== null && String(value).trim()) return value;
+          }
+        }
+        return "";
+      };
+      const resultTitle = (item) => resultValue(item, ["title", "originalTitle", "original_title", "name", "movieTitle", "movie_title"]);
+      const resultYear = (item) => resultValue(item, ["year", "releaseYear", "release_year", "movieYear", "movie_year"]);
+      const resultFormat = (item) => resultValue(item, ["format", "mediaFormat", "media_format", "releaseFormat", "release_format"]);
       const itemImage = (item, kind = "poster") => {
         const raw = item?.raw || {};
         const itemMetadata = item?.metadata || {};
         const itemProposal = item?.proposal || {};
         const updates = itemProposal.movieUpdates || {};
+        const mediaUpdates = item?.mediaUpdates || {};
         if (kind === "backdrop") {
           return imageFrom(
             item?.backdropUrl,
@@ -19256,9 +19283,11 @@ def ui_preview_html(
             itemMetadata.backdrop,
             updates.backdropUrl,
             updates.backdrop_url,
+            mediaUpdateSourceUrl(mediaUpdates, "backdrop"),
             raw.backdropUrl,
             raw.backdrop_url,
-            raw.backdrop
+            raw.backdrop,
+            resultCandidates(item).map((candidate) => candidate.backdropUrl || candidate.backdrop_url || candidate.backdrop)
           );
         }
         return imageFrom(
@@ -19272,24 +19301,35 @@ def ui_preview_html(
           itemMetadata.poster,
           updates.posterUrl,
           updates.poster_url,
+          mediaUpdateSourceUrl(mediaUpdates, "poster"),
           raw.posterUrl,
           raw.poster_url,
           raw.poster,
           raw.coverUrl,
-          raw.cover_url
+          raw.cover_url,
+          resultCandidates(item).map((candidate) => candidate.posterUrl || candidate.poster_url || candidate.poster || candidate.coverUrl || candidate.cover_url)
         );
       };
+      const proposal = metadata.proposal || {};
+      const movieUpdates = proposal.movieUpdates || {};
+      const metadataUpdates = proposal.metadataUpdates || {};
+      const technicalUpdates = proposal.technicalUpdates || {};
+      const firstResultWithTitle = (metadata.results || []).find((item) => resultTitle(item));
+      const firstResultWithImage = (metadata.results || []).find((item) => itemImage(item));
+      const proposedTitle = movieUpdates.title || movieUpdates.original_title || resultTitle(firstResultWithTitle) || document.getElementById("importTitleInput")?.value || "";
+      const proposedYear = movieUpdates.year || resultYear(firstResultWithTitle) || document.getElementById("importYearInput")?.value || "";
+      const proposedFormat = movieUpdates.format || resultFormat(firstResultWithTitle) || document.getElementById("importFormatInput")?.value || "";
       const artHtml = (url, label, extraClass = "") => `
         <div class="import-result-art ${extraClass}">
           ${url ? `<img src="${escapeHtml(url)}" alt="">` : `<span class="import-result-art-fallback">${escapeHtml(String(label || "?").trim().slice(0, 1).toUpperCase() || "?")}</span>`}
         </div>
       `;
-      const itemTitle = (item) => item?.title || item?.originalTitle || item?.name || item?.providerId || item?.pluginId || tNext("importCenter.result", "Result");
+      const itemTitle = (item) => resultTitle(item) || item?.providerId || item?.pluginId || tNext("importCenter.result", "Result");
       const itemProvider = (item) => item?.providerId || item?.pluginId || item?.source || item?.name || "";
       const resultMetaParts = (item) => [
-        item?.year || item?.releaseYear || item?.movieYear || "",
-        item?.format || item?.mediaFormat || item?.releaseFormat || "",
-        item?.barcode || item?.externalBarcode || ""
+        resultYear(item),
+        resultFormat(item),
+        resultValue(item, ["barcode", "externalBarcode", "external_barcode", "ean", "upc"])
       ].filter(Boolean);
       const compactResultCard = (item) => {
         const title = itemTitle(item);
@@ -19315,6 +19355,8 @@ def ui_preview_html(
         metadataUpdates.posterUrl,
         metadataUpdates.poster_url,
         metadataUpdates.poster,
+        mediaUpdateSourceUrl(proposal.mediaUpdates || {}, "poster"),
+        itemImage(firstResultWithImage),
         (metadata.results || []).map((item) => itemImage(item)).find(Boolean)
       );
       const boxSetMemberRows = (proposal, selected = false) => {
@@ -37762,6 +37804,62 @@ def register_routes(flask_app: Flask) -> None:
             "decisionCounts": decision_counts,
         }
 
+    def metadata_import_candidate(metadata_result: dict[str, Any]) -> dict[str, Any]:
+        def as_list(value: Any) -> list[Any]:
+            return value if isinstance(value, list) else []
+
+        def candidate_values(result: dict[str, Any]) -> list[dict[str, Any]]:
+            raw = result.get("raw") if isinstance(result.get("raw"), dict) else {}
+            values = [
+                result,
+                result.get("movie"),
+                result.get("details"),
+                result.get("release"),
+                raw,
+                raw.get("movie"),
+                raw.get("details"),
+                raw.get("release"),
+            ]
+            values.extend(as_list(result.get("candidates")))
+            values.extend(as_list(raw.get("candidates")))
+            values.extend(as_list(raw.get("items")))
+            return [item for item in values if isinstance(item, dict)]
+
+        def first_value(result: dict[str, Any], *keys: str) -> str:
+            for source in candidate_values(result):
+                for key in keys:
+                    value = clean_text(source.get(key))
+                    if value:
+                        return value
+            return ""
+
+        for result in metadata_result.get("results") or []:
+            if not isinstance(result, dict):
+                continue
+            movie_updates = result.get("movieUpdates") if isinstance(result.get("movieUpdates"), dict) else {}
+            metadata_updates = result.get("metadataUpdates") if isinstance(result.get("metadataUpdates"), dict) else {}
+            media_updates = result.get("mediaUpdates") if isinstance(result.get("mediaUpdates"), dict) else {}
+            poster_update = media_updates.get("poster") if isinstance(media_updates.get("poster"), dict) else {}
+            title = (
+                clean_text(movie_updates.get("title") or movie_updates.get("original_title"))
+                or first_value(result, "title", "originalTitle", "original_title", "name", "movieTitle", "movie_title")
+            )
+            if not title:
+                continue
+            return {
+                "title": title,
+                "year": clean_text(movie_updates.get("year")) or first_value(result, "year", "releaseYear", "release_year", "movieYear", "movie_year"),
+                "format": clean_text(movie_updates.get("format")) or first_value(result, "format", "mediaFormat", "media_format", "releaseFormat", "release_format"),
+                "poster_url": (
+                    clean_text(metadata_updates.get("poster_url") or metadata_updates.get("posterUrl") or metadata_updates.get("poster"))
+                    or clean_text(poster_update.get("sourceUrl") or poster_update.get("source_url"))
+                    or first_value(result, "posterUrl", "poster_url", "poster", "coverUrl", "cover_url")
+                ),
+                "overview": clean_text(movie_updates.get("overview") or metadata_updates.get("overview") or metadata_updates.get("plot"))
+                or first_value(result, "overview", "plot", "description"),
+            }
+        return {}
+
     @flask_app.post("/api/next/metadata/lookup")
     def metadata_lookup():
         body = request.get_json(silent=True) or {}
@@ -37867,9 +37965,11 @@ def register_routes(flask_app: Flask) -> None:
                 proposal = metadata_result.get("proposal") or {}
                 movie_updates = proposal.get("movieUpdates") or {}
                 metadata_updates = proposal.get("metadataUpdates") or {}
+                fallback_candidate = metadata_import_candidate(metadata_result)
                 import_title = clean_text(
                     movie_updates.get("title")
                     or movie_updates.get("original_title")
+                    or fallback_candidate.get("title")
                     or title
                 )
                 if not import_title:
@@ -37879,6 +37979,14 @@ def register_routes(flask_app: Flask) -> None:
                 payload["title"] = import_title
                 if barcode:
                     payload["barcode"] = barcode
+                if fallback_candidate.get("year") and not payload.get("year"):
+                    payload["year"] = fallback_candidate["year"]
+                if fallback_candidate.get("format") and not payload.get("format"):
+                    payload["format"] = fallback_candidate["format"]
+                if fallback_candidate.get("overview") and not payload.get("overview"):
+                    payload["overview"] = fallback_candidate["overview"]
+                if fallback_candidate.get("poster_url") and not metadata_updates.get("poster_url"):
+                    metadata_updates = {**metadata_updates, "poster_url": fallback_candidate["poster_url"]}
                 if metadata_updates:
                     payload["metadata"] = metadata_updates
                 if body.get("format") and not payload.get("format"):
