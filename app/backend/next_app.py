@@ -1228,6 +1228,73 @@ def import_source_item_identifiers(item: dict[str, Any]) -> dict[str, str]:
     return identifiers
 
 
+def box_set_proposal_member_list(proposal: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(proposal, dict):
+        return []
+    for key in ("members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"):
+        value = proposal.get(key)
+        if not isinstance(value, list):
+            continue
+        members = [
+            item
+            for item in value
+            if isinstance(item, dict) and clean_text(item.get("title") or item.get("name"))
+        ]
+        if members:
+            return members
+    return []
+
+
+def box_set_proposal_provider_text(proposal: dict[str, Any]) -> str:
+    if not isinstance(proposal, dict):
+        return ""
+    return " ".join(
+        clean_text(value) or ""
+        for value in (
+            proposal.get("provider"),
+            proposal.get("pluginId"),
+            proposal.get("plugin_id"),
+            proposal.get("source"),
+            proposal.get("memberSource"),
+            proposal.get("member_source"),
+        )
+    ).casefold()
+
+
+def box_set_proposal_is_candidate_only(proposal: dict[str, Any]) -> bool:
+    if not isinstance(proposal, dict):
+        return True
+    confidence = (
+        clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")) or ""
+    ).casefold()
+    source = (clean_text(proposal.get("memberSource") or proposal.get("member_source")) or "").casefold()
+    return (
+        proposal.get("detectedWithoutMembers") is True
+        or proposal.get("detected_without_members") is True
+        or confidence == "candidate"
+        or source == "metadata_candidates"
+    )
+
+
+def box_set_proposal_sort_key(proposal: dict[str, Any]) -> tuple[int, int, int, int]:
+    provider = box_set_proposal_provider_text(proposal)
+    member_count = len(box_set_proposal_member_list(proposal))
+    if "movievault" in provider:
+        provider_rank = 0
+    elif "tmdb" in provider:
+        provider_rank = 1
+    elif "bluray" in provider or "blu-ray" in provider:
+        provider_rank = 2
+    else:
+        provider_rank = 3
+    candidate_rank = 1 if box_set_proposal_is_candidate_only(proposal) else 0
+    without_members_rank = 1 if (
+        proposal.get("detectedWithoutMembers") is True
+        or proposal.get("detected_without_members") is True
+    ) else 0
+    return (provider_rank, candidate_rank, without_members_rank, -member_count)
+
+
 def selected_import_movie_candidate_from_body(body: dict[str, Any]) -> dict[str, Any]:
     raw = body.get("selectedMovieCandidate") or body.get("selected_movie_candidate") or {}
     if not isinstance(raw, dict):
@@ -19569,6 +19636,48 @@ def ui_preview_html(
       const discriminator = proposal?.barcode || proposal?.movievault_id || proposal?.movievaultId || proposal?.detailUrl || proposal?.detail_url || proposal?.sourceUrl || proposal?.source_url || "";
       return `${String(provider).toLowerCase()}::${String(title).toLowerCase()}::${String(discriminator).toLowerCase()}`;
     }
+    function boxSetProposalProviderText(proposal) {
+      return [
+        proposal?.provider,
+        proposal?.pluginId,
+        proposal?.plugin_id,
+        proposal?.source,
+        proposal?.memberSource,
+        proposal?.member_source
+      ].map((value) => String(value || "").toLowerCase()).join(" ");
+    }
+    function boxSetProposalIsCandidateOnly(proposal) {
+      const confidence = String(proposal?.memberConfidence || proposal?.member_confidence || "").toLowerCase();
+      const memberSource = String(proposal?.memberSource || proposal?.member_source || "").toLowerCase();
+      return proposal?.detectedWithoutMembers === true
+        || proposal?.detected_without_members === true
+        || confidence === "candidate"
+        || memberSource === "metadata_candidates";
+    }
+    function boxSetProposalRank(proposal) {
+      const provider = boxSetProposalProviderText(proposal);
+      const memberCount = boxSetProposalMembers(proposal).length;
+      const providerRank = provider.includes("movievault")
+        ? 0
+        : provider.includes("tmdb")
+          ? 1
+          : provider.includes("bluray") || provider.includes("blu-ray")
+            ? 2
+            : 3;
+      const candidateRank = boxSetProposalIsCandidateOnly(proposal) ? 1 : 0;
+      const withoutMembersRank = proposal?.detectedWithoutMembers === true || proposal?.detected_without_members === true ? 1 : 0;
+      return [providerRank, candidateRank, withoutMembersRank, -memberCount];
+    }
+    function sortBoxSetProposals(proposals) {
+      return (proposals || []).map((proposal, index) => ({proposal, index, rank: boxSetProposalRank(proposal)}))
+        .sort((left, right) => {
+          for (let index = 0; index < left.rank.length; index += 1) {
+            if (left.rank[index] !== right.rank[index]) return left.rank[index] - right.rank[index];
+          }
+          return left.index - right.index;
+        })
+        .map((item) => item.proposal);
+    }
     function barcodeBoxSetProposals() {
       const metadata = (importCenter.barcodeLookup || {}).metadata || importCenter.barcodeLookup || {};
       const proposals = [];
@@ -19610,7 +19719,7 @@ def ui_preview_html(
           proposals.push({...normalized, proposalKey: key});
         });
       });
-      return proposals;
+      return sortBoxSetProposals(proposals);
     }
     function selectedBoxSetProposal() {
       const proposals = barcodeBoxSetProposals();
@@ -19645,7 +19754,7 @@ def ui_preview_html(
     }
     function boxSetProposalMembers(proposal) {
       if (!proposal || typeof proposal !== "object") return [];
-      for (const key of ["movies", "members", "boxSetMovies", "box_set_movies", "items", "releases"]) {
+      for (const key of ["members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"]) {
         const value = proposal[key];
         if (Array.isArray(value) && value.some((member) => String(member?.title || member?.name || "").trim())) {
           return value;
@@ -38341,20 +38450,7 @@ def register_routes(flask_app: Flask) -> None:
         return f"{provider}::{title}::{discriminator}"
 
     def box_set_proposal_members(proposal: dict[str, Any]) -> list[dict[str, Any]]:
-        if not isinstance(proposal, dict):
-            return []
-        for key in ("movies", "members", "boxSetMovies", "box_set_movies", "items", "releases"):
-            value = proposal.get(key)
-            if not isinstance(value, list):
-                continue
-            members = [
-                item
-                for item in value
-                if isinstance(item, dict) and clean_text(item.get("title") or item.get("name"))
-            ]
-            if members:
-                return members
-        return []
+        return box_set_proposal_member_list(proposal)
 
     def metadata_value_looks_like_box_set(value: Any) -> bool:
         if not isinstance(value, dict):
@@ -38469,7 +38565,7 @@ def register_routes(flask_app: Flask) -> None:
                 seen.add(key)
                 normalized["_proposalKey"] = key
                 proposals.append(normalized)
-        return proposals
+        return sorted(proposals, key=box_set_proposal_sort_key)
 
     def metadata_box_set_proposal(metadata_result: dict[str, Any], selected_key: str = "") -> dict[str, Any]:
         proposals = metadata_box_set_proposals(metadata_result)
