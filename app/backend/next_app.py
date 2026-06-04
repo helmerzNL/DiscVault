@@ -6203,84 +6203,94 @@ def ui_preview_html(
     .bulk-bar {
       display: none;
       align-items: stretch;
-      gap: 14px;
+      gap: 10px;
       border: 1px solid var(--line);
-      border-radius: var(--radius);
+      border-radius: 16px;
       background:
         linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 48%),
         var(--bg-elevated);
       backdrop-filter: blur(24px) saturate(160%);
       box-shadow: var(--shadow-soft);
-      padding: 14px;
+      padding: 10px;
     }
     .bulk-bar.visible {
       display: grid;
+      grid-template-columns: auto minmax(160px, 1fr);
     }
     .bulk-selection-actions {
       justify-content: flex-start;
+      align-self: center;
+      gap: 6px;
+    }
+    .bulk-selection-actions .compact-button {
+      min-height: 28px;
+      border-radius: 999px;
+      padding: 0 9px;
+      font-size: .74rem;
     }
     .bulk-targets {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 12px;
+      grid-column: 1 / -1;
+      grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+      gap: 8px;
       width: 100%;
     }
     .bulk-target {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 10px;
+      gap: 6px;
       align-content: start;
       min-width: 0;
-      min-height: 112px;
+      min-height: 0;
       border: 1px solid var(--line);
-      border-radius: 16px;
+      border-radius: 12px;
       background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
-      padding: 12px;
+      padding: 8px;
     }
     .bulk-target.wide {
       grid-column: span 2;
     }
     .bulk-target label {
       display: grid;
-      gap: 5px;
+      gap: 4px;
       color: var(--muted);
-      font-size: .72rem;
+      font-size: .68rem;
       font-weight: 720;
       min-width: 0;
     }
     .bulk-target label > span {
       color: var(--muted-strong);
-      font-size: .72rem;
+      font-size: .66rem;
       font-weight: 850;
-      letter-spacing: .04em;
+      letter-spacing: .035em;
       text-transform: uppercase;
     }
     .bulk-target select {
-      min-height: 38px;
+      min-height: 32px;
       width: 100%;
       min-width: 0;
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: 9px;
       background: var(--bg-solid);
       color: var(--text);
-      padding: 0 12px;
+      padding: 0 9px;
       font: inherit;
-      font-size: .84rem;
+      font-size: .78rem;
       font-weight: 620;
     }
     .bulk-count {
       justify-self: start;
       display: inline-flex;
-      min-height: 32px;
+      min-height: 28px;
       align-items: center;
       border: 1px solid var(--line);
       border-radius: 999px;
       background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
       color: var(--muted-strong);
-      font-size: .9rem;
+      font-size: .78rem;
       font-weight: 760;
-      padding: 0 12px;
+      padding: 0 10px;
     }
     .metadata-job-panel {
       display: none;
@@ -6346,18 +6356,18 @@ def ui_preview_html(
       gap: 6px;
     }
     .bulk-action {
-      min-height: 38px;
+      min-height: 32px;
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: 9px;
       background: var(--bg-solid);
       color: var(--text);
-      padding: 0 12px;
+      padding: 0 9px;
       cursor: pointer;
-      font-size: .86rem;
+      font-size: .76rem;
       font-weight: 780;
     }
     .bulk-target .bulk-action + .bulk-action {
-      margin-top: -4px;
+      margin-top: -2px;
     }
     .bulk-action:disabled {
       cursor: not-allowed;
@@ -10230,7 +10240,20 @@ def ui_preview_html(
         align-items: stretch;
       }
       .bulk-bar {
-        flex-direction: column;
+        gap: 8px;
+        padding: 9px;
+      }
+      .bulk-bar.visible {
+        grid-template-columns: 1fr;
+      }
+      .bulk-selection-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+      }
+      .bulk-selection-actions .compact-button {
+        width: 100%;
+        min-height: 30px;
       }
       .bulk-targets,
       .bulk-target,
@@ -10240,6 +10263,17 @@ def ui_preview_html(
       }
       .bulk-target.wide {
         grid-column: auto;
+      }
+      .bulk-targets {
+        gap: 7px;
+      }
+      .bulk-target {
+        padding: 8px;
+      }
+      .bulk-count {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
       }
       .login-primary,
       .secondary-button,
