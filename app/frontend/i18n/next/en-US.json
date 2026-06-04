@@ -1298,6 +1298,10 @@
   "common.skip": "Skip",
   "importCenter.memberActionImport": "Import/link",
   "importCenter.addMember": "Add member",
+  "importCenter.removeMember": "Remove member",
+  "importCenter.restoreMember": "Restore",
+  "importCenter.memberRemoved": "Removed",
+  "importCenter.memberRemovedHelp": "This member will not be imported or sent in the MovieVault contribution.",
   "importCenter.memberCorrectionHelp": "Correct titles, years or formats before importing. DiscVault will dedupe by barcode, identifiers and title/year.",
   "importCenter.candidate": "candidate"
 }

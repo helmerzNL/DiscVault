@@ -7431,7 +7431,14 @@ def ui_preview_html(
       min-width: 0;
     }
     .import-member-editor-row.with-tools {
-      grid-template-columns: 44px minmax(160px, 1.2fr) minmax(92px, .5fr) minmax(120px, .7fr) minmax(104px, .6fr) auto auto;
+      grid-template-columns: 44px minmax(160px, 1.2fr) minmax(92px, .5fr) minmax(120px, .7fr) minmax(104px, .6fr) auto auto auto;
+    }
+    .import-member-editor-item.is-removed {
+      opacity: .58;
+    }
+    .import-member-editor-item.is-removed .import-member-editor-row {
+      background: color-mix(in srgb, var(--danger) 9%, transparent);
+      border-color: color-mix(in srgb, var(--danger) 28%, var(--line));
     }
     .import-member-match-list {
       display: grid;
@@ -19669,7 +19676,7 @@ def ui_preview_html(
         return rows;
       }
       return rows
-        .filter((member) => member.action !== "skip")
+        .filter((member) => member.action !== "skip" && member.action !== "remove")
         .map((member, index) => {
           const clean = {...member};
           delete clean._memberIndex;
@@ -19985,8 +19992,9 @@ def ui_preview_html(
             <div class="import-member-editor">
               ${members.slice(0, 30).map((member, displayIndex) => {
                 const index = member._memberIndex ?? displayIndex;
+                const removed = member.action === "skip" || member.action === "remove";
                 return `
-                  <div class="import-member-editor-item">
+                  <div class="import-member-editor-item ${removed ? "is-removed" : ""}">
                   <div class="import-member-editor-row with-tools">
                     ${usableImage(member.posterUrl || member.poster_url || member.poster || member.coverUrl || member.cover_url) ? `<img src="${escapeHtml(usableImage(member.posterUrl || member.poster_url || member.poster || member.coverUrl || member.cover_url))}" alt="">` : `<span class="import-member-editor-poster">${escapeHtml(String(displayIndex + 1))}</span>`}
                     <label>
@@ -20001,14 +20009,14 @@ def ui_preview_html(
                       <span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
                       <input type="text" value="${escapeHtml(member.format || proposal.format || document.getElementById("importFormatInput")?.value || "")}" data-box-member-field="format" data-box-set-proposal-key="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}">
                     </label>
-                    <select data-box-member-field="action" data-box-set-proposal-key="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}">
-                      <option value="import" ${member.action === "skip" ? "" : "selected"}>${escapeHtml(tNext("importCenter.memberActionImport", "Import/link"))}</option>
-                      <option value="skip" ${member.action === "skip" ? "selected" : ""}>${escapeHtml(tNext("common.skip", "Skip"))}</option>
-                    </select>
+                    <span class="tag ${removed ? "warn" : "good"}">${escapeHtml(removed ? tNext("importCenter.memberRemoved", "Removed") : tNext("importCenter.memberActionImport", "Import/link"))}</span>
                     <span class="tag">${escapeHtml(member.memberConfidence || member.member_confidence || proposal.memberConfidence || proposal.member_confidence || tNext("importCenter.candidate", "candidate"))}</span>
-                    <button type="button" class="secondary-button" data-box-member-search="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}">${escapeHtml(tNext("importCenter.searchMatch", "Search match"))}</button>
+                    <button type="button" class="secondary-button" data-box-member-search="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}" ${removed ? "disabled" : ""}>${escapeHtml(tNext("importCenter.searchMatch", "Search match"))}</button>
+                    <button type="button" class="secondary-button" data-box-member-remove="${escapeHtml(proposalKey)}" data-box-member-index="${escapeHtml(String(index))}" data-box-member-removed="${removed ? "1" : "0"}">
+                      ${escapeHtml(removed ? tNext("importCenter.restoreMember", "Restore") : tNext("importCenter.removeMember", "Remove member"))}
+                    </button>
                   </div>
-                  ${importMemberSuggestionsHtml(proposalKey, index, member)}
+                  ${removed ? `<div class="profile-passkey-meta">${escapeHtml(tNext("importCenter.memberRemovedHelp", "This member will not be imported or sent in the MovieVault contribution."))}</div>` : importMemberSuggestionsHtml(proposalKey, index, member)}
                   </div>
                 `;
               }).join("")}
@@ -23269,6 +23277,7 @@ def ui_preview_html(
         const proposalButton = event.target.closest(".import-proposal-select[data-box-set-proposal-key]");
         const addMemberButton = event.target.closest("[data-box-set-member-add]");
         const memberSearchButton = event.target.closest("[data-box-member-search]");
+        const memberRemoveButton = event.target.closest("[data-box-member-remove]");
         const memberSuggestionButton = event.target.closest("[data-box-member-use-suggestion]");
         const containerButton = event.target.closest("[data-import-open-container]");
         const movieButton = event.target.closest("[data-open-movie]");
@@ -23313,6 +23322,18 @@ def ui_preview_html(
         if (memberSearchButton) {
           event.preventDefault();
           searchBoxSetMemberMatch(memberSearchButton.dataset.boxMemberSearch || "", memberSearchButton.dataset.boxMemberIndex || "");
+          return;
+        }
+        if (memberRemoveButton) {
+          event.preventDefault();
+          const proposalKey = memberRemoveButton.dataset.boxMemberRemove || "";
+          const index = memberRemoveButton.dataset.boxMemberIndex || "";
+          const removed = memberRemoveButton.dataset.boxMemberRemoved === "1";
+          updateBoxSetMemberEdit(proposalKey, index, {action: removed ? "import" : "remove"});
+          const proposal = boxSetProposalByKey(proposalKey) || selectedBoxSetProposal();
+          const memberCount = proposal ? proposalMembersForImport(proposal).length : 0;
+          setImportCenterMessage(`${tNext("importCenter.members", "members")}: ${memberCount}`, memberCount >= 2 ? "good" : "bad");
+          renderBarcodeLookup();
           return;
         }
         if (memberSuggestionButton) {
@@ -28686,6 +28707,7 @@ def container_receiver_payload(
     *,
     force_members: bool = False,
     member_overrides: list[dict[str, Any]] | None = None,
+    replace_members: bool = False,
     source_label: str = "DiscVault local edit",
     source_provider: str = "discvault_local_edit",
 ) -> dict[str, Any] | None:
@@ -28725,7 +28747,8 @@ def container_receiver_payload(
             contribution[target_field] = value
             if target_field not in changed_fields:
                 changed_fields.append(target_field)
-    members = merge_receiver_members(container_receiver_member_payload(conn, existing.get("id")), member_overrides)
+    base_members = [] if replace_members else container_receiver_member_payload(conn, existing.get("id"))
+    members = merge_receiver_members(base_members, member_overrides)
     if members and (contribution or force_members):
         contribution["members"] = members
         contribution["movies"] = members
@@ -28768,6 +28791,7 @@ def container_receiver_payload(
             "containerId": str(existing.get("id")),
             "containerType": container_type,
             "memberCount": len(members),
+            "memberSelectionMode": "replace" if replace_members else "merge",
             "changedFields": changed_fields,
             "sourceProviders": [source_provider],
             "acceptedFields": [
@@ -39054,10 +39078,15 @@ def register_routes(flask_app: Flask) -> None:
             "created": 0,
             "linkedExisting": 0,
             "skipped": 0,
+            "memberLinksReplaced": 0,
             "metadataRefreshQueued": 0,
             "containerCreated": 1 if container_created else 0,
             "containerEnriched": 0 if container_created else 1,
         }
+        if override_members:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM container_movies WHERE container_id=%s", (container_uuid,))
+                decision_counts["memberLinksReplaced"] = max(int(cur.rowcount or 0), 0)
         for index, member in enumerate(members[:50], start=1):
             original_confidence = clean_text(member.get("memberConfidence") or member.get("member_confidence") or member_confidence)
             member = enrich_box_set_member_for_import(
@@ -39192,6 +39221,7 @@ def register_routes(flask_app: Flask) -> None:
             "decisionCounts": decision_counts,
             "containerId": str(container_uuid),
             "containerCreated": container_created,
+            "memberSelectionReplaced": bool(override_members),
         }
 
     def metadata_import_candidate(metadata_result: dict[str, Any]) -> dict[str, Any]:
@@ -39503,6 +39533,7 @@ def register_routes(flask_app: Flask) -> None:
                             imported_container,
                             force_members=True,
                             member_overrides=box_set_import.get("receiverMembers") or [],
+                            replace_members=bool(box_set_import.get("memberSelectionReplaced")),
                             source_label="DiscVault box-set import",
                             source_provider="discvault_box_set_import",
                         )

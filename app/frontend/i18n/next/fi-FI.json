@@ -1231,6 +1231,10 @@
   "common.skip": "Ohita",
   "importCenter.memberActionImport": "Tuo/linkita",
   "importCenter.addMember": "Lisaa jasen",
+  "importCenter.removeMember": "Poista jasen",
+  "importCenter.restoreMember": "Palauta",
+  "importCenter.memberRemoved": "Poistettu",
+  "importCenter.memberRemovedHelp": "Tata jasenta ei tuoda eika laheteta MovieVault-kontribuutiossa.",
   "importCenter.memberCorrectionHelp": "Korjaa nimet, vuodet tai formaatit ennen tuontia. DiscVault poistaa duplikaatit viivakoodin, tunnisteiden ja nimi/vuosi-parin perusteella.",
   "importCenter.candidate": "ehdokas"
 }

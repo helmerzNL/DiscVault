@@ -1231,6 +1231,10 @@
   "common.skip": "Salta",
   "importCenter.memberActionImport": "Importa/collega",
   "importCenter.addMember": "Aggiungi membro",
+  "importCenter.removeMember": "Rimuovi membro",
+  "importCenter.restoreMember": "Ripristina",
+  "importCenter.memberRemoved": "Rimosso",
+  "importCenter.memberRemovedHelp": "Questo membro non verra importato ne inviato nel contributo MovieVault.",
   "importCenter.memberCorrectionHelp": "Correggi titoli, anni o formati prima dell importazione. DiscVault deduplica per barcode, identificatori e titolo/anno.",
   "importCenter.candidate": "candidato"
 }

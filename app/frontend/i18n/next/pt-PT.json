@@ -1231,6 +1231,10 @@
   "common.skip": "Ignorar",
   "importCenter.memberActionImport": "Importar/associar",
   "importCenter.addMember": "Adicionar membro",
+  "importCenter.removeMember": "Remover membro",
+  "importCenter.restoreMember": "Restaurar",
+  "importCenter.memberRemoved": "Removido",
+  "importCenter.memberRemovedHelp": "Este membro nao sera importado nem enviado na contribuicao para o MovieVault.",
   "importCenter.memberCorrectionHelp": "Corrige titulos, anos ou formatos antes de importar. O DiscVault deduplica por codigo de barras, identificadores e titulo/ano.",
   "importCenter.candidate": "candidato"
 }
