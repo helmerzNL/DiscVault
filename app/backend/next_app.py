@@ -1295,6 +1295,45 @@ def box_set_proposal_sort_key(proposal: dict[str, Any]) -> tuple[int, int, int, 
     return (provider_rank, candidate_rank, without_members_rank, -member_count)
 
 
+def box_set_proposal_audit_summary(proposal: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(proposal, dict):
+        return {}
+    members = box_set_proposal_member_list(proposal)
+    return {
+        "proposalKey": clean_text(proposal.get("_proposalKey") or proposal.get("proposalKey")),
+        "provider": clean_text(
+            proposal.get("provider")
+            or proposal.get("pluginId")
+            or proposal.get("plugin_id")
+            or proposal.get("source")
+        ),
+        "title": clean_text(proposal.get("title") or proposal.get("name")),
+        "barcode": clean_text(proposal.get("barcode")),
+        "format": clean_text(proposal.get("format")),
+        "memberSource": clean_text(proposal.get("memberSource") or proposal.get("member_source") or proposal.get("source")),
+        "memberConfidence": clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")),
+        "memberCount": len(members),
+        "candidateOnly": box_set_proposal_is_candidate_only(proposal),
+        "detectedWithoutMembers": bool(
+            proposal.get("detectedWithoutMembers") is True
+            or proposal.get("detected_without_members") is True
+        ),
+        "rank": list(box_set_proposal_sort_key(proposal)),
+        "members": [
+            {
+                "title": clean_text(member.get("title") or member.get("name")),
+                "year": clean_text(member.get("year") or member.get("releaseYear") or member.get("release_year")),
+                "format": clean_text(member.get("format")),
+                "source": clean_text(member.get("source") or member.get("provider")),
+                "tmdbId": clean_text(member.get("tmdbId") or member.get("tmdb_id")),
+                "imdbId": clean_text(member.get("imdbId") or member.get("imdb_id")),
+            }
+            for member in members[:12]
+            if isinstance(member, dict)
+        ],
+    }
+
+
 def selected_import_movie_candidate_from_body(body: dict[str, Any]) -> dict[str, Any]:
     raw = body.get("selectedMovieCandidate") or body.get("selected_movie_candidate") or {}
     if not isinstance(raw, dict):
@@ -20084,7 +20123,7 @@ def ui_preview_html(
         (metadata.results || []).map((item) => itemImage(item)).find(Boolean)
       );
       const boxSetMemberRows = (proposal, selected = false) => {
-        const members = selected ? proposalMembersForImport(proposal, true) : (proposal?.movies || proposal?.members || []);
+        const members = selected ? proposalMembersForImport(proposal, true) : boxSetProposalMembers(proposal);
         if (!Array.isArray(members) || !members.length) {
           return `
             <div class="import-result-member-strip">
@@ -20197,6 +20236,7 @@ def ui_preview_html(
         const memberCount = Array.isArray(members) ? members.length : 0;
         const proposalKey = proposal.proposalKey || "";
         const selected = proposalKey && proposalKey === importCenter.selectedBoxSetProposalKey;
+        const candidateOnly = boxSetProposalIsCandidateOnly(proposal);
         const selectable = memberCount >= 2;
         const firstMemberWithImage = members.find((member) => usableImage(member?.posterUrl || member?.poster_url || member?.poster || member?.coverUrl || member?.cover_url || member?.backdropUrl || member?.backdrop_url));
         const firstMemberWithTitle = members.find((member) => String(member?.title || member?.name || "").trim());
@@ -20226,6 +20266,7 @@ def ui_preview_html(
                 <span class="tag good">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>
                 ${provider ? `<span class="tag">${escapeHtml(provider)}</span>` : ""}
                 <span class="tag">${escapeHtml(tNext("importCenter.members", "members"))}: ${escapeHtml(String(memberCount || proposal.member_count || 0))}</span>
+                ${candidateOnly ? `<span class="tag warn">${escapeHtml(tNext("importCenter.candidate", "candidate"))}</span>` : ""}
                 ${proposal.memberConfidence || proposal.member_confidence ? `<span class="tag">${escapeHtml(proposal.memberConfidence || proposal.member_confidence)}</span>` : ""}
               </div>
               <h3 class="import-result-title">${escapeHtml(displayTitle)}</h3>
@@ -20237,8 +20278,10 @@ def ui_preview_html(
               ` : ""}
               ${selected ? `<div class="login-message good">${escapeHtml(tNext("importCenter.providerSelected", "Selected provider"))}: ${escapeHtml(provider || "")} / ${escapeHtml(tNext("importCenter.members", "members"))}: ${escapeHtml(String(proposalMembersForImport(proposal).length))}</div>` : ""}
               ${selected ? `<div class="import-result-subtitle">${escapeHtml(tNext("importCenter.memberCorrectionHelp", "Correct titles, years or formats before importing. DiscVault will dedupe by barcode, identifiers and title/year."))}</div>` : ""}
-              <div class="import-result-subtitle"><strong>${escapeHtml(tNext("importCenter.diskMembers", "Possible disk members"))}</strong></div>
-              ${boxSetMemberRows(proposal, selected)}
+              ${selected ? `
+                <div class="import-result-subtitle"><strong>${escapeHtml(tNext("importCenter.diskMembers", "Possible disk members"))}</strong></div>
+                ${boxSetMemberRows(proposal, selected)}
+              ` : ""}
             </div>
           </div>
         `;
@@ -39436,16 +39479,8 @@ def register_routes(flask_app: Flask) -> None:
             "proposalStats": result.get("proposalStats") or {},
             "acceptedFields": proposal.get("provenance") or [],
             "skippedFields": proposal.get("skipped") or [],
-            "boxSetProposals": [
-                {
-                    "provider": item.get("provider") or item.get("source"),
-                    "title": item.get("title") or item.get("name"),
-                    "memberCount": len(box_set_proposal_members(item)),
-                    "memberConfidence": item.get("memberConfidence") or item.get("member_confidence"),
-                    "source": item.get("memberSource") or item.get("member_source") or item.get("source"),
-                }
-                for item in box_set_proposals
-            ],
+            "selectedBoxSetProposal": box_set_proposal_audit_summary(box_set_proposals[0]) if box_set_proposals else {},
+            "boxSetProposals": [box_set_proposal_audit_summary(item) for item in box_set_proposals],
         }
 
     @flask_app.post("/api/next/metadata/lookup")
