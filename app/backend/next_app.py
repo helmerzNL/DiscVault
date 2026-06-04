@@ -13415,15 +13415,23 @@ def ui_preview_html(
           <h4>${escapeHtml(tNext("appAdmin.contributionQueue", "Metadata contribution history"))}</h4>
           <span class="profile-passkey-meta">${escapeHtml(formatNumber(events.length))}</span>
         </div>
-        ${events.length ? events.slice(0, 8).map((event) => {
+        ${events.length ? events.map((event, index) => {
           const meta = event.metadata || {};
           const receiver = meta.receiverId || meta.receiver_id || meta.pluginId || meta.plugin_id || meta.provider || "receiver";
           const title = meta.title || meta.movieTitle || meta.containerTitle || event.summary || receiver;
           const status = meta.status || meta.state || "pushed";
+          const details = auditEventExportPayload(event);
           return `
             <div class="app-admin-contribution-row">
               <strong>${escapeHtml(title)}</strong>
               <span>${escapeHtml(receiver)} &middot; ${escapeHtml(status)} &middot; ${escapeHtml(shortDateTime(event.createdAt))}</span>
+              <details>
+                <summary class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.auditDetails", "Audit details"))}</summary>
+                <div class="button-row compact">
+                  <button type="button" class="secondary-button" data-app-admin-contribution-copy="${escapeHtml(String(index))}">${escapeHtml(tNext("appAdmin.copyAuditJson", "Copy JSON"))}</button>
+                </div>
+                <pre class="job-json audit-json">${escapeHtml(jsonFull(details))}</pre>
+              </details>
             </div>
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noContributions", "No metadata contributions yet."))}</div>`}
@@ -13805,11 +13813,7 @@ def ui_preview_html(
       list.innerHTML = events.length ? events.map((event, index) => {
         const actor = event.actorUsername || event.actorRole || tNext("appAdmin.systemActor", "System");
         const target = [event.targetType, event.targetId].filter(Boolean).join(": ");
-        const details = {
-          metadata: event.metadata || {},
-          requestIp: event.requestIp || null,
-          userAgent: event.userAgent || null
-        };
+        const details = auditEventExportPayload(event);
         return `
           <div class="profile-passkey">
             <div class="profile-passkey-head">
@@ -13835,15 +13839,30 @@ def ui_preview_html(
         `;
       }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noAuditEvents", "No audit events yet."))}</div>`;
     }
-    async function copyAppAdminAuditDetails(index) {
-      const event = (appAdmin.auditEvents || [])[Number(index)];
-      if (!event) return;
-      const details = {
+    function auditEventExportPayload(event) {
+      if (!event || typeof event !== "object") return {};
+      return {
+        id: event.id || null,
+        eventType: event.eventType || event.event_type || null,
+        category: event.category || null,
+        summary: event.summary || null,
+        createdAt: event.createdAt || event.created_at || null,
+        actor: {
+          userId: event.actorUserId || event.actor_user_id || null,
+          username: event.actorUsername || event.actor_username || null,
+          role: event.actorRole || event.actor_role || null
+        },
+        target: {
+          type: event.targetType || event.target_type || null,
+          id: event.targetId || event.target_id || null
+        },
         metadata: event.metadata || {},
-        requestIp: event.requestIp || null,
-        userAgent: event.userAgent || null
+        requestIp: event.requestIp || event.request_ip || null,
+        userAgent: event.userAgent || event.user_agent || null
       };
-      const text = jsonFull(details);
+    }
+    async function copyAppAdminAuditPayload(event) {
+      const text = jsonFull(auditEventExportPayload(event));
       if (!text) return;
       try {
         await navigator.clipboard.writeText(text);
@@ -13851,6 +13870,12 @@ def ui_preview_html(
       } catch (error) {
         setAppAdminMessage("appAdminAuditMessage", error.message || String(error), "bad");
       }
+    }
+    async function copyAppAdminAuditDetails(index) {
+      return copyAppAdminAuditPayload((appAdmin.auditEvents || [])[Number(index)]);
+    }
+    async function copyAppAdminContributionDetails(index) {
+      return copyAppAdminAuditPayload((appAdmin.contributionEvents || [])[Number(index)]);
     }
     function renderAppAdminPlugins() {
       const list = document.getElementById("appAdminPluginsList");
@@ -14429,7 +14454,7 @@ def ui_preview_html(
         const canLoadBackup = canUseAdminTab("backup");
         const canLoadMetadata = canUseAdminTab("metadata");
         const canLoadAudit = canUseAdminTab("audit");
-        const auditQuery = appAdmin.auditCategory ? `?limit=100&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=100";
+        const auditQuery = appAdmin.auditCategory ? `?limit=250&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=250";
         const canLoadContributionEvents = canLoadPlugins && hasActualPermission("admin.view_audit");
         const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, auditPayload, contributionPayload] = await Promise.all([
           canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/users").catch(() => ({users: [], roles: []})) : Promise.resolve({users: [], roles: []}),
@@ -14443,7 +14468,7 @@ def ui_preview_html(
           canLoadPlugins ? authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
           canLoadMetadata ? authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
           canLoadAudit ? authApiJson(`/api/next/audit/events${auditQuery}`).catch(() => ({events: []})) : Promise.resolve({events: []}),
-          canLoadContributionEvents ? authApiJson("/api/next/audit/events?limit=50&category=metadata").catch(() => ({events: []})) : Promise.resolve({events: []})
+          canLoadContributionEvents ? authApiJson("/api/next/audit/events?limit=250&category=metadata").catch(() => ({events: []})) : Promise.resolve({events: []})
         ]);
         appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
@@ -14991,7 +15016,7 @@ def ui_preview_html(
         const [payload, contributionPayload] = await Promise.all([
           authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10"),
           hasActualPermission("admin.view_audit")
-            ? authApiJson("/api/next/audit/events?limit=50&category=metadata").catch(() => ({events: []}))
+            ? authApiJson("/api/next/audit/events?limit=250&category=metadata").catch(() => ({events: []}))
             : Promise.resolve({events: []})
         ]);
         appAdmin.pluginJobs = payload.jobs || [];
@@ -15043,7 +15068,7 @@ def ui_preview_html(
       if (!canUseAdminTab("audit")) return;
       const categorySelect = document.getElementById("appAdminAuditCategory");
       appAdmin.auditCategory = String(categorySelect?.value || "");
-      const query = appAdmin.auditCategory ? `?limit=100&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=100";
+      const query = appAdmin.auditCategory ? `?limit=250&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=250";
       setAppAdminMessage("appAdminAuditMessage", tNext("appAdmin.loadingAudit", "Loading audit log..."));
       try {
         const payload = await authApiJson(`/api/next/audit/events${query}`);
@@ -23303,6 +23328,10 @@ def ui_preview_html(
       document.getElementById("appAdminAuditList")?.addEventListener("click", (event) => {
         const copyButton = event.target.closest("[data-app-admin-audit-copy]");
         if (copyButton) copyAppAdminAuditDetails(copyButton.dataset.appAdminAuditCopy);
+      });
+      document.getElementById("appAdminContributionQueue")?.addEventListener("click", (event) => {
+        const copyButton = event.target.closest("[data-app-admin-contribution-copy]");
+        if (copyButton) copyAppAdminContributionDetails(copyButton.dataset.appAdminContributionCopy);
       });
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
