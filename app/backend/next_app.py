@@ -1228,6 +1228,41 @@ def import_source_item_identifiers(item: dict[str, Any]) -> dict[str, str]:
     return identifiers
 
 
+def box_set_member_dedupe_keys(member: dict[str, Any]) -> set[tuple[str, str]]:
+    if not isinstance(member, dict):
+        return set()
+    keys: set[tuple[str, str]] = set()
+    tmdb_id = clean_text(member.get("tmdbId") or member.get("tmdb_id"))
+    imdb_id = clean_text(member.get("imdbId") or member.get("imdb_id"))
+    if tmdb_id:
+        keys.add(("tmdb", tmdb_id.casefold()))
+    if imdb_id:
+        keys.add(("imdb", imdb_id.casefold()))
+    title = clean_text(member.get("title") or member.get("name") or member.get("originalTitle") or member.get("original_title"))
+    if title:
+        normalized_title = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
+        year = clean_text(member.get("year") or member.get("releaseYear") or member.get("release_year"))
+        year = year[:4] if year and re.match(r"^\d{4}", year) else ""
+        if normalized_title and year:
+            keys.add(("title_year", f"{normalized_title}:{year}"))
+        elif normalized_title:
+            keys.add(("title", normalized_title))
+    return keys
+
+
+def dedupe_box_set_members(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for member in members:
+        keys = box_set_member_dedupe_keys(member)
+        if keys and seen.intersection(keys):
+            continue
+        if keys:
+            seen.update(keys)
+        deduped.append(member)
+    return deduped
+
+
 def box_set_proposal_member_list(proposal: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(proposal, dict):
         return []
@@ -1241,7 +1276,7 @@ def box_set_proposal_member_list(proposal: dict[str, Any]) -> list[dict[str, Any
             if isinstance(item, dict) and clean_text(item.get("title") or item.get("name"))
         ]
         if members:
-            return members
+            return dedupe_box_set_members(members)
     return []
 
 
@@ -19886,10 +19921,39 @@ def ui_preview_html(
       for (const key of ["members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"]) {
         const value = proposal[key];
         if (Array.isArray(value) && value.some((member) => String(member?.title || member?.name || "").trim())) {
-          return value;
+          return dedupeBoxSetMembers(value);
         }
       }
       return [];
+    }
+    function boxSetMemberDedupeKeys(member) {
+      if (!member || typeof member !== "object") return [];
+      const keys = [];
+      const tmdbId = String(member.tmdbId || member.tmdb_id || "").trim().toLowerCase();
+      const imdbId = String(member.imdbId || member.imdb_id || "").trim().toLowerCase();
+      if (tmdbId) keys.push(`tmdb:${tmdbId}`);
+      if (imdbId) keys.push(`imdb:${imdbId}`);
+      const title = String(member.title || member.name || member.originalTitle || member.original_title || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+      const yearValue = String(member.year || member.releaseYear || member.release_year || "").trim();
+      const year = /^\\d{4}/.test(yearValue) ? yearValue.slice(0, 4) : "";
+      if (title && year) keys.push(`title_year:${title}:${year}`);
+      else if (title) keys.push(`title:${title}`);
+      return keys;
+    }
+    function dedupeBoxSetMembers(members) {
+      const seen = new Set();
+      const deduped = [];
+      (members || []).forEach((member) => {
+        const keys = boxSetMemberDedupeKeys(member);
+        if (keys.length && keys.some((key) => seen.has(key))) return;
+        keys.forEach((key) => seen.add(key));
+        deduped.push(member);
+      });
+      return deduped;
     }
     function boxSetMemberEditState(proposalKey) {
       importCenter.boxSetMemberEdits = importCenter.boxSetMemberEdits || {};
