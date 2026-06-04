@@ -1231,6 +1231,10 @@
   "common.skip": "Spring over",
   "importCenter.memberActionImport": "Importer/link",
   "importCenter.addMember": "Tilfoj medlem",
+  "importCenter.removeMember": "Fjern medlem",
+  "importCenter.restoreMember": "Gendan",
+  "importCenter.memberRemoved": "Fjernet",
+  "importCenter.memberRemovedHelp": "Dette medlem importeres ikke og sendes ikke i MovieVault-bidraget.",
   "importCenter.memberCorrectionHelp": "Ret titler, ar eller formater for import. DiscVault deduplikerer pa stregkode, ider og titel/ar.",
   "importCenter.candidate": "kandidat"
 }

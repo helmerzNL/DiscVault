@@ -1231,6 +1231,10 @@
   "common.skip": "Hoppa over",
   "importCenter.memberActionImport": "Importera/lanka",
   "importCenter.addMember": "Lagg till medlem",
+  "importCenter.removeMember": "Ta bort medlem",
+  "importCenter.restoreMember": "Aterstall",
+  "importCenter.memberRemoved": "Borttagen",
+  "importCenter.memberRemovedHelp": "Denna medlem importeras inte och skickas inte i MovieVault-bidraget.",
   "importCenter.memberCorrectionHelp": "Korrigera titlar, ar eller format fore import. DiscVault deduplicerar med streckkod, identifierare och titel/ar.",
   "importCenter.candidate": "kandidat"
 }

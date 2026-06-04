@@ -1298,6 +1298,10 @@
   "common.skip": "Overslaan",
   "importCenter.memberActionImport": "Importeren/koppelen",
   "importCenter.addMember": "Member toevoegen",
+  "importCenter.removeMember": "Lid verwijderen",
+  "importCenter.restoreMember": "Herstellen",
+  "importCenter.memberRemoved": "Verwijderd",
+  "importCenter.memberRemovedHelp": "Dit lid wordt niet geimporteerd en niet meegestuurd in de MovieVault-bijdrage.",
   "importCenter.memberCorrectionHelp": "Corrigeer titels, jaren of formaten voordat je importeert. DiscVault dedupliceert op barcode, identifiers en titel/jaar.",
   "importCenter.candidate": "kandidaat"
 }

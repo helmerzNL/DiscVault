@@ -1231,6 +1231,10 @@
   "common.skip": "Hopp over",
   "importCenter.memberActionImport": "Importer/koble",
   "importCenter.addMember": "Legg til medlem",
+  "importCenter.removeMember": "Fjern medlem",
+  "importCenter.restoreMember": "Gjenopprett",
+  "importCenter.memberRemoved": "Fjernet",
+  "importCenter.memberRemovedHelp": "Dette medlemmet importeres ikke og sendes ikke i MovieVault-bidraget.",
   "importCenter.memberCorrectionHelp": "Korriger titler, ar eller formater for import. DiscVault dedupliserer pa strekkode, identifikatorer og tittel/ar.",
   "importCenter.candidate": "kandidat"
 }
