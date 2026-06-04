@@ -11278,7 +11278,7 @@ def ui_preview_html(
         <div class="movie-detail-action-strip">
           <div class="movie-detail-actions">
             <button type="button" class="action secondary hidden" id="movieEditToggleButton" data-next-i18n="common.edit">Edit</button>
-            <button type="button" class="action" id="movieMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
+            <button type="button" class="action secondary hidden" id="movieEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
             <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
             <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Refresh history</button>
             <button type="button" class="action danger hidden" id="movieDeleteButton" data-next-i18n="movieDetail.deleteMovie">Delete movie</button>
@@ -11289,7 +11289,6 @@ def ui_preview_html(
           <div class="detail-card full hidden" id="movieEditPanel">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
-              <button type="button" class="secondary-button" id="movieEditCancelButton" data-next-i18n="common.close">Close</button>
             </div>
             <form class="profile-form" id="movieEditForm">
               <div class="movie-edit-grid">
@@ -11345,9 +11344,6 @@ def ui_preview_html(
                   <span data-next-i18n="movieDetail.fieldNotes">Notes</span>
                   <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
                 </label>
-              </div>
-              <div class="profile-form-actions">
-                <button type="submit" class="primary-button" data-next-i18n="movieDetail.saveDetails">Save details</button>
               </div>
             </form>
           </div>
@@ -11467,7 +11463,7 @@ def ui_preview_html(
         <div class="movie-detail-action-strip">
           <div class="movie-detail-actions">
             <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
-            <button type="button" class="action hidden" id="containerMetadataDryRunButton" data-next-i18n="movieDetail.previewMetadata">Preview changes</button>
+            <button type="button" class="action secondary hidden" id="containerEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
             <button type="button" class="action secondary hidden" id="containerMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
             <button type="button" class="action danger hidden" id="containerDeleteButton" data-next-i18n="containerDetail.deleteContainer">Delete container</button>
           </div>
@@ -11497,7 +11493,6 @@ def ui_preview_html(
             <div class="detail-card full hidden" id="containerEditPanel">
               <div class="detail-card-head">
                 <h3 data-next-i18n="containerDetail.editDetails">Edit details</h3>
-                <button type="button" class="secondary-button" id="containerEditCancelButton" data-next-i18n="common.close">Close</button>
               </div>
               <form class="profile-form" id="containerEditForm">
                 <label for="containerEditTitle">
@@ -11528,10 +11523,6 @@ def ui_preview_html(
                   <span data-next-i18n="containerDetail.fieldDescription">Description</span>
                   <textarea id="containerEditDescription" name="description" maxlength="2000"></textarea>
                 </label>
-                <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" data-next-i18n="containerDetail.saveDetails">Save details</button>
-                  <span class="login-message" id="containerEditMessage"></span>
-                </div>
               </form>
             </div>
             <div class="detail-card full hidden" id="containerAddContentPanel">
@@ -16888,9 +16879,32 @@ def ui_preview_html(
     }
     function setMovieEditPanelVisible(show) {
       const panel = document.getElementById("movieEditPanel");
+      const editButton = document.getElementById("movieEditToggleButton");
+      const cancelButton = document.getElementById("movieEditCancelTopButton");
       if (!panel) return;
       panel.classList.toggle("hidden", !show);
+      if (editButton) {
+        editButton.dataset.nextI18n = show ? "common.save" : "common.edit";
+        editButton.textContent = show ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
+        editButton.classList.toggle("secondary", !show);
+      }
+      if (cancelButton) cancelButton.classList.toggle("hidden", !show);
       if (show) document.getElementById("movieEditTitle")?.focus();
+    }
+    function handleMovieEditAction() {
+      const panel = document.getElementById("movieEditPanel");
+      if (!panel || panel.classList.contains("hidden")) {
+        setMovieEditPanelVisible(true);
+        return;
+      }
+      const form = document.getElementById("movieEditForm");
+      if (form?.requestSubmit) form.requestSubmit();
+      else form?.dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}));
+    }
+    function cancelMovieEdit() {
+      if (activeDetailPayload) fillMovieEditForm(activeDetailPayload);
+      setMovieEditPanelVisible(false);
+      setMovieDetailMessage("");
     }
     const MOVIE_FORMAT_OPTIONS = [
       {value: "Blu-ray", collectorOnly: false},
@@ -17265,12 +17279,39 @@ def ui_preview_html(
       const panel = document.getElementById("containerEditPanel");
       const addPanel = document.getElementById("containerAddContentPanel");
       const page = document.getElementById("containerDetailPage");
+      const editButton = document.getElementById("containerEditToggleButton");
+      const cancelButton = document.getElementById("containerEditCancelTopButton");
       const canEditContainers = collectorsModeEnabled() && hasPermission("containers.edit");
       if (!panel) return;
-      panel.classList.toggle("hidden", !(show && canEditContainers));
-      if (addPanel) addPanel.classList.toggle("hidden", !(show && canEditContainers));
-      if (page) page.classList.toggle("container-editing", !!(show && canEditContainers));
-      if (show && canEditContainers) document.getElementById("containerEditTitle")?.focus();
+      const editing = !!(show && canEditContainers);
+      panel.classList.toggle("hidden", !editing);
+      if (addPanel) addPanel.classList.toggle("hidden", !editing);
+      if (page) page.classList.toggle("container-editing", editing);
+      if (editButton) {
+        editButton.dataset.nextI18n = editing ? "common.save" : "common.edit";
+        editButton.textContent = editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
+        editButton.classList.toggle("secondary", !editing);
+      }
+      if (cancelButton) cancelButton.classList.toggle("hidden", !editing);
+      if (editing) document.getElementById("containerEditTitle")?.focus();
+    }
+    function handleContainerEditAction() {
+      const panel = document.getElementById("containerEditPanel");
+      if (!panel || panel.classList.contains("hidden")) {
+        setContainerEditPanelVisible(true);
+        return;
+      }
+      const form = document.getElementById("containerEditForm");
+      if (form?.requestSubmit) form.requestSubmit();
+      else form?.dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}));
+    }
+    function cancelContainerEdit() {
+      if (activeContainerPayload) {
+        fillContainerEditForm(activeContainerPayload);
+        renderContainerAddForms(activeContainerPayload);
+      }
+      setContainerEditPanelVisible(false);
+      setContainerDetailMessage("");
     }
     function formTextValue(id) {
       return (document.getElementById(id)?.value || "").trim();
@@ -23797,8 +23838,8 @@ def ui_preview_html(
       document.getElementById("createContainerForm")?.addEventListener("submit", (event) => createContainer(event));
       document.getElementById("movieDetailBackButton")?.addEventListener("click", () => closeAppMovieDetail());
       document.getElementById("containerDetailBackButton")?.addEventListener("click", () => closeAppContainerDetail());
-      document.getElementById("movieEditToggleButton")?.addEventListener("click", () => setMovieEditPanelVisible(true));
-      document.getElementById("movieEditCancelButton")?.addEventListener("click", () => setMovieEditPanelVisible(false));
+      document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
+      document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
       document.getElementById("movieDeleteButton")?.addEventListener("click", () => deleteActiveMovie());
       document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
@@ -23813,8 +23854,8 @@ def ui_preview_html(
         const deleteButton = event.target.closest("[data-delete-watch-history]");
         if (deleteButton) deleteActiveMovieWatchedEntry(deleteButton.dataset.deleteWatchHistory);
       });
-      document.getElementById("containerEditToggleButton")?.addEventListener("click", () => setContainerEditPanelVisible(true));
-      document.getElementById("containerEditCancelButton")?.addEventListener("click", () => setContainerEditPanelVisible(false));
+      document.getElementById("containerEditToggleButton")?.addEventListener("click", () => handleContainerEditAction());
+      document.getElementById("containerEditCancelTopButton")?.addEventListener("click", () => cancelContainerEdit());
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
       document.getElementById("containerMetadataDryRunButton")?.addEventListener("click", () => refreshActiveContainerMetadata(true));
       document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));

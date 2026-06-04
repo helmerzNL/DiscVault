@@ -67,6 +67,8 @@
   "common.untitled": "Senza titolo",
   "common.close": "Chiudi",
   "common.edit": "Modifica",
+  "common.save": "Salva",
+  "common.cancel": "Annulla",
   "language.label": "Lingua",
   "uiPreview.navLists": "Liste",
   "migration.containers": "Contenitori",

@@ -67,6 +67,8 @@
   "common.untitled": "Uten tittel",
   "common.close": "Lukk",
   "common.edit": "Rediger",
+  "common.save": "Lagre",
+  "common.cancel": "Avbryt",
   "language.label": "Språk",
   "uiPreview.navLists": "Lister",
   "migration.containers": "Containere",
