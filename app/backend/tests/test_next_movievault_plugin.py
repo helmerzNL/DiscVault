@@ -18,6 +18,7 @@ sys.modules.setdefault(
 )
 
 from app.backend.next_plugins.movievault import plugin as movievault_plugin
+from app.backend.next_plugins.movievault_26 import plugin as movievault26_plugin
 
 
 class MovieVaultPluginBoxSetTests(unittest.TestCase):
@@ -134,6 +135,29 @@ class MovieVaultPluginBoxSetTests(unittest.TestCase):
         self.assertEqual(proposal["member_confidence"], "candidate")
         self.assertEqual([movie["title"] for movie in proposal["movies"]], ["First Feature", "Second Feature"])
         self.assertEqual([movie["format"] for movie in proposal["movies"]], ["Blu-ray", "Blu-ray"])
+
+    def test_movievault26_box_set_members_are_deduped_across_release_and_movie_rows(self):
+        proposal = movievault26_plugin._normalize_box_set_proposal(
+            {
+                "title": "Back to the Future Trilogy 4K",
+                "format": "4K UHD",
+                "members": [
+                    {"title": "Back to the Future", "year": "1985", "tmdbId": "105"},
+                    {"title": "Back to the Future Part II", "year": "1989", "tmdbId": "165"},
+                    {"title": "Back to the Future Part III", "year": "1990", "tmdbId": "196"},
+                    {"title": "Back to the Future", "year": "1985"},
+                    {"title": "Back to the Future Part II", "year": "1989"},
+                    {"title": "Back to the Future Part III", "year": "1990"},
+                ],
+            },
+            {"format": "4K UHD"},
+        )
+
+        self.assertEqual(proposal["member_count"], 3)
+        self.assertEqual(
+            [movie["title"] for movie in proposal["movies"]],
+            ["Back to the Future", "Back to the Future Part II", "Back to the Future Part III"],
+        )
 
     def test_box_set_candidates_returns_miss_when_movievault_has_no_members(self):
         original_get = movievault_plugin._get

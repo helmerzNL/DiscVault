@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import time
 from urllib.parse import quote
 
@@ -537,6 +538,26 @@ def _member_needs_identification(member):
     return not (member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id"))
 
 
+def _member_identity_keys(member):
+    keys = set()
+    if not isinstance(member, dict):
+        return keys
+    tmdb_id = _text(member.get("tmdbId") or member.get("tmdb_id")).casefold()
+    imdb_id = _text(member.get("imdbId") or member.get("imdb_id")).casefold()
+    if tmdb_id:
+        keys.add(("tmdb", tmdb_id))
+    if imdb_id:
+        keys.add(("imdb", imdb_id))
+    title = _text(member.get("title") or member.get("name") or member.get("originalTitle") or member.get("original_title"))
+    normalized_title = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
+    year = _parse_year(member.get("year") or member.get("releaseYear") or member.get("release_year"))
+    if normalized_title and year:
+        keys.add(("title_year", f"{normalized_title}:{year}"))
+    elif normalized_title:
+        keys.add(("title", normalized_title))
+    return keys
+
+
 def _format_key(value):
     text = _text(value).casefold().replace("-", " ").replace("_", " ").replace("/", " ")
     text = " ".join(text.split())
@@ -749,14 +770,11 @@ def _normalize_box_set_proposal(payload, context=None):
                         "proposalStats": enrichment.get("proposalStats") or {},
                     }
                 )
-        key = (
-            _text(member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id")),
-            _text(member.get("title")).casefold(),
-            _text(member.get("year")),
-        )
-        if key in seen:
+        keys = _member_identity_keys(member)
+        if keys and seen.intersection(keys):
             continue
-        seen.add(key)
+        if keys:
+            seen.update(keys)
         members.append(member)
 
     if not title and members:
