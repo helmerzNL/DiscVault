@@ -6503,6 +6503,16 @@ def ui_preview_html(
       border: 1px dashed var(--line-strong);
       color: var(--muted);
     }
+    .preview-empty.good {
+      border-color: color-mix(in srgb, var(--success) 46%, var(--line-strong));
+      color: var(--success);
+      background: color-mix(in srgb, var(--success) 8%, transparent);
+    }
+    .preview-empty.bad {
+      border-color: color-mix(in srgb, var(--danger) 46%, var(--line-strong));
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 8%, transparent);
+    }
     .library-view {
       display: grid;
       gap: 18px;
@@ -12270,7 +12280,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupActionMessage: "", lookupActionTone: "", activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", activeTab: "add"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -17671,6 +17681,11 @@ def ui_preview_html(
         node.classList.toggle("hidden", !importCenter.lookupActionMessage);
       }
     }
+    function setImportLookupPreviewMessage(message, tone = "") {
+      importCenter.lookupPreviewMessage = message || "";
+      importCenter.lookupPreviewTone = tone || "";
+      renderBarcodeLookup();
+    }
     function setImportFileMessage(message, tone) {
       const node = document.getElementById("importFileMessage");
       if (!node) return;
@@ -19785,7 +19800,9 @@ def ui_preview_html(
       const directResultCard = renderImportDirectResult();
       const payload = importCenter.barcodeLookup;
       if (!payload) {
-        list.innerHTML = directResultCard || `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodePreview", "Scan a barcode or search by barcode or title to preview plugin results."))}</div>`;
+        const previewMessage = importCenter.lookupPreviewMessage || tNext("importCenter.noBarcodePreview", "Scan a barcode or search by barcode or title to preview plugin results.");
+        const previewTone = importCenter.lookupPreviewMessage ? importCenter.lookupPreviewTone || "" : "";
+        list.innerHTML = `${directResultCard}<div class="preview-empty ${escapeHtml(previewTone)}">${escapeHtml(previewMessage)}</div>`;
         return;
       }
       const metadata = payload.metadata || payload;
@@ -20307,9 +20324,18 @@ def ui_preview_html(
       const format = String(document.getElementById("importFormatInput")?.value || "").trim();
       if (!barcode && !title) {
         setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
+        setImportLookupPreviewMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
         return;
       }
       setImportCenterMessage(tNext("importCenter.previewingLookup", "Searching metadata..."));
+      importCenter.barcodeLookup = null;
+      importCenter.addResult = null;
+      importCenter.selectedMovieCandidateKey = "";
+      importCenter.selectedBoxSetProposalKey = "";
+      importCenter.selectedBoxSetProposalSnapshot = null;
+      importCenter.boxSetMemberEdits = {};
+      setImportLookupActionMessage("", "");
+      setImportLookupPreviewMessage(tNext("importCenter.previewingLookup", "Searching metadata..."));
       try {
         const payload = await authApiJson("/api/next/metadata/lookup", {
           method: "POST",
@@ -20322,11 +20348,15 @@ def ui_preview_html(
         importCenter.selectedBoxSetProposalKey = "";
         importCenter.selectedBoxSetProposalSnapshot = null;
         importCenter.boxSetMemberEdits = {};
+        importCenter.lookupPreviewMessage = "";
+        importCenter.lookupPreviewTone = "";
         setImportLookupActionMessage("", "");
         renderBarcodeLookup();
         setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
         console.log("movie import preview", payload);
       } catch (error) {
+        importCenter.barcodeLookup = null;
+        setImportLookupPreviewMessage(error.message || String(error), "bad");
         setImportCenterMessage(error.message || String(error), "bad");
       }
     }
