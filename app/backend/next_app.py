@@ -9732,6 +9732,9 @@ def ui_preview_html(
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
+    .audit-json {
+      max-height: 560px;
+    }
     .app-admin-plugin-config {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -13799,7 +13802,7 @@ def ui_preview_html(
       }
       if (!list) return;
       const events = appAdmin.auditEvents || [];
-      list.innerHTML = events.length ? events.map((event) => {
+      list.innerHTML = events.length ? events.map((event, index) => {
         const actor = event.actorUsername || event.actorRole || tNext("appAdmin.systemActor", "System");
         const target = [event.targetType, event.targetId].filter(Boolean).join(": ");
         const details = {
@@ -13823,11 +13826,31 @@ def ui_preview_html(
             </div>
             <details>
               <summary class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.auditDetails", "Audit details"))}</summary>
-              <pre class="job-json">${escapeHtml(jsonPreview(details))}</pre>
+              <div class="button-row compact">
+                <button type="button" class="secondary-button" data-app-admin-audit-copy="${escapeHtml(String(index))}">${escapeHtml(tNext("appAdmin.copyAuditJson", "Copy JSON"))}</button>
+              </div>
+              <pre class="job-json audit-json">${escapeHtml(jsonFull(details))}</pre>
             </details>
           </div>
         `;
       }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noAuditEvents", "No audit events yet."))}</div>`;
+    }
+    async function copyAppAdminAuditDetails(index) {
+      const event = (appAdmin.auditEvents || [])[Number(index)];
+      if (!event) return;
+      const details = {
+        metadata: event.metadata || {},
+        requestIp: event.requestIp || null,
+        userAgent: event.userAgent || null
+      };
+      const text = jsonFull(details);
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        setAppAdminMessage("appAdminAuditMessage", tNext("appAdmin.auditJsonCopied", "Audit JSON copied."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminAuditMessage", error.message || String(error), "bad");
+      }
     }
     function renderAppAdminPlugins() {
       const list = document.getElementById("appAdminPluginsList");
@@ -17846,6 +17869,14 @@ def ui_preview_html(
       } catch {
         const text = String(value);
         return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+      }
+    }
+    function jsonFull(value) {
+      if (value === null || value === undefined || value === "") return "";
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch {
+        return String(value);
       }
     }
     function renderImportSources() {
@@ -23269,6 +23300,10 @@ def ui_preview_html(
       });
       document.getElementById("appAdminRefreshAuditButton")?.addEventListener("click", () => refreshAppAdminAudit());
       document.getElementById("appAdminAuditCategory")?.addEventListener("change", () => refreshAppAdminAudit());
+      document.getElementById("appAdminAuditList")?.addEventListener("click", (event) => {
+        const copyButton = event.target.closest("[data-app-admin-audit-copy]");
+        if (copyButton) copyAppAdminAuditDetails(copyButton.dataset.appAdminAuditCopy);
+      });
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
         const healthButton = event.target.closest("[data-app-admin-plugin-health]");

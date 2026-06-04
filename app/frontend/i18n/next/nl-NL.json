@@ -1045,6 +1045,8 @@
   "appAdmin.auditEvent": "Auditgebeurtenis",
   "appAdmin.auditActor": "Uitvoerder",
   "appAdmin.auditDetails": "Auditdetails",
+  "appAdmin.copyAuditJson": "JSON kopieren",
+  "appAdmin.auditJsonCopied": "Audit-JSON gekopieerd.",
   "appAdmin.noAuditEvents": "Nog geen auditgebeurtenissen.",
   "appAdmin.featureAudit": "Auditlog bekijken",
   "appAdmin.movievaultConnection": "MovieVault-koppeling",

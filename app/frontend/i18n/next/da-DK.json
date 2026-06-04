@@ -867,6 +867,8 @@
   "appAdmin.auditEvent": "Audithaendelse",
   "appAdmin.auditActor": "Aktoer",
   "appAdmin.auditDetails": "Auditdetaljer",
+  "appAdmin.copyAuditJson": "Kopier JSON",
+  "appAdmin.auditJsonCopied": "Audit-JSON kopieret.",
   "appAdmin.noAuditEvents": "Ingen audithaendelser endnu.",
   "appAdmin.featureAudit": "Se auditlog",
   "appAdmin.movievaultConnection": "MovieVault-forbindelse",
