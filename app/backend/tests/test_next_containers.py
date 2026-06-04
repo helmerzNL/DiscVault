@@ -12,6 +12,8 @@ try:
     from app.backend.next_app import container_payload
     from app.backend.next_app import container_detail_image
     from app.backend.next_app import legacy_media_public_url
+    from app.backend.next_app import merge_receiver_members
+    from app.backend.next_app import receiver_member_payload_from_raw
     from app.backend.next_app import normalize_container_type
     from app.backend.next_app import with_preview_media_urls
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
@@ -21,6 +23,8 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     container_payload = None
     container_detail_image = None
     legacy_media_public_url = None
+    merge_receiver_members = None
+    receiver_member_payload_from_raw = None
     normalize_container_type = None
     with_preview_media_urls = None
 
@@ -125,6 +129,28 @@ class NextContainerPolicyTests(unittest.TestCase):
                     os.environ.pop("DISCVAULT_LEGACY_DATA_DIR", None)
                 else:
                     os.environ["DISCVAULT_LEGACY_DATA_DIR"] = old_data_dir
+
+    def test_receiver_members_merge_preview_overrides(self):
+        base = [
+            {"title": "Movie One", "year": "2001", "sortOrder": 1},
+            {"title": "Movie Two", "year": "2002", "sortOrder": 2},
+        ]
+        manual = receiver_member_payload_from_raw(
+            {
+                "title": "Manual Preview Member",
+                "year": "2003",
+                "format": "Ultra HD Blu-ray",
+                "posterUrl": "https://image.example/manual.jpg",
+                "tmdbId": "12345",
+            },
+            sort_order=3,
+        )
+
+        merged = merge_receiver_members(base, [manual])
+
+        self.assertEqual([item["title"] for item in merged], ["Movie One", "Movie Two", "Manual Preview Member"])
+        self.assertEqual(merged[2]["tmdbId"], "12345")
+        self.assertEqual(merged[2]["posterUrl"], "https://image.example/manual.jpg")
 
 
 if __name__ == "__main__":
