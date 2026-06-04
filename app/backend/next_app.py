@@ -28565,12 +28565,91 @@ def container_receiver_member_payload(conn, container_id: UUID | str | None) -> 
     return members
 
 
+def receiver_member_payload_from_raw(raw: dict[str, Any], *, sort_order: int) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    title = clean_text(raw.get("title") or raw.get("name") or raw.get("originalTitle") or raw.get("original_title"))
+    if not title:
+        return {}
+    item: dict[str, Any] = {
+        "title": title,
+        "originalTitle": clean_text(raw.get("originalTitle") or raw.get("original_title")),
+        "year": clean_text(raw.get("year") or raw.get("releaseYear") or raw.get("release_year")),
+        "format": clean_text(raw.get("format") or raw.get("mediaFormat") or raw.get("media_format")),
+        "sortOrder": raw.get("sortOrder") or raw.get("sort_order") or sort_order,
+        "publicId": clean_text(raw.get("publicId") or raw.get("public_id")),
+    }
+    barcode = external_metadata_barcode(raw.get("barcode") or raw.get("externalBarcode") or raw.get("external_barcode"))
+    if barcode:
+        item["barcode"] = barcode
+    poster_url = clean_text(raw.get("posterUrl") or raw.get("poster_url") or raw.get("poster") or raw.get("coverUrl") or raw.get("cover_url"))
+    if poster_url:
+        item["posterUrl"] = poster_url
+    source_url = clean_text(raw.get("sourceUrl") or raw.get("source_url") or raw.get("detailUrl") or raw.get("detail_url"))
+    if source_url:
+        item["sourceUrl"] = source_url
+    source_ref = clean_text(raw.get("sourceRef") or raw.get("source_ref"))
+    if source_ref:
+        item["sourceRef"] = source_ref
+    identifiers = import_source_item_identifiers(raw)
+    tmdb_id = clean_text(raw.get("tmdbId") or raw.get("tmdb_id") or identifiers.get("tmdb"))
+    imdb_id = clean_text(raw.get("imdbId") or raw.get("imdb_id") or identifiers.get("imdb"))
+    if tmdb_id:
+        item["tmdbId"] = tmdb_id
+    if imdb_id:
+        item["imdbId"] = imdb_id
+    return {key: value for key, value in item.items() if value not in (None, "", [], {})}
+
+
+def receiver_member_identity(member: dict[str, Any]) -> str:
+    barcode = external_metadata_barcode(member.get("barcode"))
+    if barcode:
+        return f"barcode:{barcode.casefold()}"
+    tmdb_id = clean_text(member.get("tmdbId") or member.get("tmdb_id"))
+    if tmdb_id:
+        return f"tmdb:{tmdb_id.casefold()}"
+    imdb_id = clean_text(member.get("imdbId") or member.get("imdb_id"))
+    if imdb_id:
+        return f"imdb:{imdb_id.casefold()}"
+    title = (clean_text(member.get("title") or member.get("name")) or "").casefold()
+    year = clean_text(member.get("year") or member.get("releaseYear") or member.get("release_year"))
+    return f"title:{title}:{year}"
+
+
+def merge_receiver_members(
+    base_members: list[dict[str, Any]],
+    override_members: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    index_by_identity: dict[str, int] = {}
+    for member in [*(base_members or []), *(override_members or [])]:
+        if not isinstance(member, dict):
+            continue
+        identity = receiver_member_identity(member)
+        if not identity or identity == "title::":
+            continue
+        if identity in index_by_identity:
+            existing_index = index_by_identity[identity]
+            merged[existing_index] = {
+                **merged[existing_index],
+                **{key: value for key, value in member.items() if value not in (None, "", [], {})},
+            }
+            continue
+        index_by_identity[identity] = len(merged)
+        merged.append(member)
+    merged.sort(key=lambda item: int(item.get("sortOrder") or 999999))
+    for index, member in enumerate(merged, start=1):
+        member["sortOrder"] = index
+    return merged
+
+
 def container_receiver_payload(
     conn,
     existing: dict[str, Any],
     payload: dict[str, Any],
     *,
     force_members: bool = False,
+    member_overrides: list[dict[str, Any]] | None = None,
     source_label: str = "DiscVault local edit",
     source_provider: str = "discvault_local_edit",
 ) -> dict[str, Any] | None:
@@ -28610,7 +28689,7 @@ def container_receiver_payload(
             contribution[target_field] = value
             if target_field not in changed_fields:
                 changed_fields.append(target_field)
-    members = container_receiver_member_payload(conn, existing.get("id"))
+    members = merge_receiver_members(container_receiver_member_payload(conn, existing.get("id")), member_overrides)
     if members and (contribution or force_members):
         contribution["members"] = members
         contribution["movies"] = members
@@ -38906,6 +38985,7 @@ def register_routes(flask_app: Flask) -> None:
 
         imported_movies = []
         applied_members = []
+        receiver_member_overrides: list[dict[str, Any]] = []
         metadata_refresh_movie_ids: list[str] = []
         decision_counts = {
             "created": 0,
@@ -38964,7 +39044,30 @@ def register_routes(flask_app: Flask) -> None:
                     (container_uuid, movie_id, index),
                 )
             detail = movie_detail_entity(conn, movie_id)
-            imported_movies.append(detail.get("movie") if detail else {"id": str(movie_id), "title": payload.get("title")})
+            imported_movie = detail.get("movie") if detail else {"id": str(movie_id), "title": payload.get("title")}
+            imported_movies.append(imported_movie)
+            receiver_member = receiver_member_payload_from_raw(
+                {
+                    **member,
+                    "title": payload.get("title"),
+                    "originalTitle": payload.get("originalTitle") or member.get("originalTitle") or member.get("original_title"),
+                    "year": payload.get("year") or member.get("year"),
+                    "format": payload.get("format") or member.get("format"),
+                    "barcode": payload.get("barcode") or member.get("barcode"),
+                    "publicId": imported_movie.get("public_id") or imported_movie.get("publicId"),
+                    "posterUrl": (
+                        member.get("posterUrl")
+                        or member.get("poster_url")
+                        or (payload.get("metadata") or {}).get("poster_url")
+                        or (payload.get("metadata") or {}).get("posterUrl")
+                    ),
+                    "sourceUrl": member.get("sourceUrl") or member.get("source_url"),
+                    "sourceRef": member.get("sourceRef") or member.get("source_ref"),
+                },
+                sort_order=index,
+            )
+            if receiver_member:
+                receiver_member_overrides.append(receiver_member)
             applied_members.append(
                 {
                     "movieId": str(movie_id),
@@ -39021,6 +39124,7 @@ def register_routes(flask_app: Flask) -> None:
             "container": container_detail_entity(conn, container_uuid),
             "movies": imported_movies,
             "appliedMembers": applied_members,
+            "receiverMembers": receiver_member_overrides,
             "queuedMetadataRefreshJobs": queued_jobs,
             "decisionCounts": decision_counts,
             "containerId": str(container_uuid),
@@ -39335,6 +39439,7 @@ def register_routes(flask_app: Flask) -> None:
                             imported_container,
                             imported_container,
                             force_members=True,
+                            member_overrides=box_set_import.get("receiverMembers") or [],
                             source_label="DiscVault box-set import",
                             source_provider="discvault_box_set_import",
                         )
