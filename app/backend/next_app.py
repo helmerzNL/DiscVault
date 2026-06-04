@@ -38127,6 +38127,10 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Movie not found", 404)
             payload = movie_update_payload(body, existing=existing)
+            receiver_proposal = movie_edit_receiver_proposal(existing, payload)
+            receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
+            revision = 0
+            entity = existing
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(

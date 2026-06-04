@@ -13,6 +13,7 @@ try:
     from app.backend.next_app import import_source_match_candidate_score
     from app.backend.next_app import import_source_match_title_key
     from app.backend.next_app import NextApiError
+    from app.backend.next_app import movie_edit_receiver_proposal
     from app.backend.next_app import movie_payload_fields
     from app.backend.next_app import movie_update_payload
     from app.backend.next_app import merge_selected_import_movie_candidate
@@ -29,6 +30,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     import_source_match_candidate_score = None
     import_source_match_title_key = None
     NextApiError = None
+    movie_edit_receiver_proposal = None
     movie_payload_fields = None
     movie_update_payload = None
     merge_selected_import_movie_candidate = None
@@ -71,6 +73,24 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                 {"title": "Updated", "releaseDate": "31-05-2026"},
                 existing={"title": "Existing"},
             )
+
+    def test_movie_edit_receiver_proposal_tracks_public_field_changes(self):
+        proposal = movie_edit_receiver_proposal(
+            {
+                "title": "Existing",
+                "barcode": "123",
+                "notes": "Private note",
+            },
+            {
+                "title": "Existing",
+                "barcode": "456",
+                "notes": "Updated private note",
+            },
+        )
+
+        self.assertEqual(proposal["movieUpdates"], {"barcode": "456"})
+        self.assertEqual(proposal["metadataUpdates"], {"barcode": "456"})
+        self.assertEqual(proposal["provenance"][0]["pluginId"], "discvault_local_edit")
 
     def test_movie_payload_fields_drops_year_only_release_date(self):
         payload = movie_payload_fields(
