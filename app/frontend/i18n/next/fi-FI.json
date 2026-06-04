@@ -67,6 +67,8 @@
   "common.untitled": "Nimetön",
   "common.close": "Sulje",
   "common.edit": "Muokkaa",
+  "common.save": "Tallenna",
+  "common.cancel": "Peruuta",
   "language.label": "Kieli",
   "uiPreview.navLists": "Listat",
   "migration.containers": "Säiliöt",

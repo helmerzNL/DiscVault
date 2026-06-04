@@ -76,6 +76,8 @@
   "common.untitled": "Untitled",
   "common.close": "Close",
   "common.edit": "Edit",
+  "common.save": "Save",
+  "common.cancel": "Cancel",
   "language.label": "Language",
   "migration.containers": "Containers",
   "migration.containersHelp": "Box-sets and collections",

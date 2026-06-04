@@ -76,6 +76,8 @@
   "common.untitled": "Zonder titel",
   "common.close": "Sluiten",
   "common.edit": "Bewerken",
+  "common.save": "Opslaan",
+  "common.cancel": "Annuleren",
   "language.label": "Taal",
   "migration.containers": "Containers",
   "migration.containersHelp": "Box-sets en collecties",

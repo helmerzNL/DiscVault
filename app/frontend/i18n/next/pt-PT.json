@@ -67,6 +67,8 @@
   "common.untitled": "Sem título",
   "common.close": "Fechar",
   "common.edit": "Editar",
+  "common.save": "Guardar",
+  "common.cancel": "Cancelar",
   "language.label": "Idioma",
   "uiPreview.navLists": "Listas",
   "migration.containers": "Contentores",

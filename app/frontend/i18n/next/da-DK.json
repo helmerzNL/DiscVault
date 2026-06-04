@@ -67,6 +67,8 @@
   "common.untitled": "Uden titel",
   "common.close": "Luk",
   "common.edit": "Rediger",
+  "common.save": "Gem",
+  "common.cancel": "Annuller",
   "language.label": "Sprog",
   "uiPreview.navLists": "Lister",
   "migration.containers": "Containere",
