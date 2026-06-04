@@ -122,6 +122,8 @@ METADATA_MEDIA_FIELDS = {
     "backdrop_url": "backdrop",
 }
 
+METADATA_NAMESPACE = uuid.UUID("7c76309b-063d-4c63-b925-2f49fdad332c")
+
 MOVIE_FIELD_ALIASES = {
     "sortTitle": "sort_title",
     "originalTitle": "original_title",
@@ -805,6 +807,178 @@ def normalize_date_value(value: Any) -> str | None:
     return None
 
 
+def metadata_stable_uuid(kind: str, key: str) -> uuid.UUID:
+    return uuid.uuid5(METADATA_NAMESPACE, f"{kind}:{key}")
+
+
+def parse_sort_order(value: Any, fallback: int) -> int:
+    if isinstance(value, int):
+        return value
+    text = clean_text(value)
+    if not text:
+        return fallback
+    try:
+        return int(text)
+    except ValueError:
+        return fallback
+
+
+def normalize_credit_role(value: Any, *, default: str = "") -> str:
+    role = (clean_text(value) or default or "").casefold()
+    if role in {"cast", "actor", "acting", "performer"}:
+        return "actor"
+    if role in {"crew", "director", "writer", "producer", "production"}:
+        return "crew"
+    return clean_text(value) or default or "credit"
+
+
+def normalize_credit_entries(
+    value: Any,
+    *,
+    plugin_id: str,
+    source_label: str,
+    source_ref: str,
+    default_role: str = "",
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+
+    def add_from_item(item: Any, *, role_hint: str, fallback_sort_order: int) -> None:
+        if isinstance(item, str):
+            item = {"name": item}
+        if not isinstance(item, dict):
+            return
+        name = clean_text(
+            item.get("name")
+            or item.get("personName")
+            or item.get("person_name")
+            or item.get("displayName")
+            or item.get("display_name")
+        )
+        if not name:
+            return
+        role = normalize_credit_role(
+            item.get("role") or item.get("creditType") or item.get("credit_type") or role_hint,
+            default=role_hint or default_role,
+        )
+        character = clean_text(item.get("character") or item.get("as"))
+        job = clean_text(item.get("job") or item.get("department"))
+        if role == "crew" and not job and role_hint not in {"actor", "cast"}:
+            job = clean_text(item.get("role"))
+        identifiers = item.get("identifiers") if isinstance(item.get("identifiers"), dict) else {}
+        tmdb_id = clean_text(
+            item.get("tmdbId")
+            or item.get("tmdb_id")
+            or item.get("tmdb")
+            or identifiers.get("tmdb")
+            or identifiers.get("tmdbId")
+        )
+        sort_order = parse_sort_order(
+            item.get("sortOrder") or item.get("sort_order") or item.get("order"),
+            fallback_sort_order,
+        )
+        identity = tmdb_id or name.casefold()
+        key = (identity, role, character or "", job or "", source_label.casefold())
+        if key in seen:
+            return
+        seen.add(key)
+        entry = {
+            "role": role,
+            "name": name,
+            "character": character,
+            "job": job,
+            "tmdbId": tmdb_id,
+            "sortOrder": sort_order,
+            "sourceProvider": plugin_id,
+            "sourceLabel": source_label,
+            "sourceRef": source_ref,
+        }
+        for image_key in ("profileUrl", "profile_url", "photoUrl", "photo_url", "profilePath", "profile_path", "photoFile", "photo_file"):
+            if value_present(item.get(image_key)):
+                entry[image_key] = item.get(image_key)
+        entries.append(entry)
+
+    def add(value_to_add: Any, *, role_hint: str = "") -> None:
+        if isinstance(value_to_add, dict):
+            if any(key in value_to_add for key in ("cast", "actors")):
+                add(value_to_add.get("cast") or value_to_add.get("actors"), role_hint="actor")
+            if "crew" in value_to_add:
+                add(value_to_add.get("crew"), role_hint="crew")
+            if any(key in value_to_add for key in ("credits", "people", "moviePeople", "movie_people")):
+                for key in ("credits", "people", "moviePeople", "movie_people"):
+                    if key in value_to_add:
+                        add(value_to_add.get(key), role_hint=role_hint)
+            if "name" in value_to_add or "personName" in value_to_add or "person_name" in value_to_add:
+                add_from_item(value_to_add, role_hint=role_hint or default_role, fallback_sort_order=len(entries))
+            return
+        if isinstance(value_to_add, (list, tuple)):
+            for item in value_to_add:
+                add_from_item(item, role_hint=role_hint or default_role, fallback_sort_order=len(entries))
+            return
+
+    add(value, role_hint=default_role)
+    return entries[:120]
+
+
+def plugin_credit_updates(
+    result: dict[str, Any],
+    movie_source: dict[str, Any],
+    *,
+    plugin_id: str,
+    source_label: str,
+    source_ref: str,
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for source in (movie_source, result):
+        if not isinstance(source, dict):
+            continue
+        for key in ("credits", "people", "moviePeople", "movie_people"):
+            if key in source:
+                merged.extend(
+                    normalize_credit_entries(
+                        source.get(key),
+                        plugin_id=plugin_id,
+                        source_label=source_label,
+                        source_ref=source_ref,
+                    )
+                )
+        if "cast" in source or "actors" in source:
+            merged.extend(
+                normalize_credit_entries(
+                    source.get("cast") or source.get("actors"),
+                    plugin_id=plugin_id,
+                    source_label=source_label,
+                    source_ref=source_ref,
+                    default_role="actor",
+                )
+            )
+        if "crew" in source:
+            merged.extend(
+                normalize_credit_entries(
+                    source.get("crew"),
+                    plugin_id=plugin_id,
+                    source_label=source_label,
+                    source_ref=source_ref,
+                    default_role="crew",
+                )
+            )
+    deduped: list[dict[str, Any]] = []
+    for item in merged:
+        identity = clean_text(item.get("tmdbId")) or (clean_text(item.get("name")) or "").casefold()
+        key = (
+            identity,
+            clean_text(item.get("role")) or "",
+            clean_text(item.get("character")) or "",
+            clean_text(item.get("job")) or "",
+        )
+        if not identity or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped[:120]
+
+
 def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(result, dict):
         result = {"value": result}
@@ -891,6 +1065,16 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
             if provider and identifier and identifier_type == "movie_id":
                 identifiers[provider] = identifier
 
+    source_label = result.get("sourceLabel") or result.get("providerLabel") or plugin_id
+    source_ref = result.get("sourceRef") or result.get("sourceUrl") or result.get("source_url") or ""
+    credit_updates = plugin_credit_updates(
+        result,
+        movie_source,
+        plugin_id=plugin_id,
+        source_label=source_label,
+        source_ref=source_ref,
+    )
+
     source_format = (
         movie_updates.get("format")
         or technical_updates.get("format")
@@ -901,8 +1085,6 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         or ""
     )
     media_updates: dict[str, dict[str, Any]] = {}
-    source_label = result.get("sourceLabel") or result.get("providerLabel") or plugin_id
-    source_ref = result.get("sourceRef") or result.get("sourceUrl") or result.get("source_url") or ""
     poster_options = image_url_options(
         metadata_updates.get("poster_url"),
         metadata_updates.get("posters"),
@@ -948,6 +1130,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
         "identifiers": identifiers,
+        "credits": credit_updates,
         "candidates": result.get("items") or result.get("candidates") or [],
         "boxSetProposal": result.get("boxSetProposal") or result.get("box_set_proposal"),
         "boxSetProposals": result.get("boxSetProposals") or result.get("box_set_proposals") or [],
@@ -1067,6 +1250,8 @@ def merge_metadata_results(
     technical_updates: dict[str, Any] = {}
     media_updates: dict[str, dict[str, Any]] = {}
     identifiers: dict[str, str] = {}
+    credits: list[dict[str, Any]] = []
+    credit_keys: set[tuple[str, str, str, str]] = set()
     provenance: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     field_decisions_by_key: dict[tuple[str, str], dict[str, Any]] = {}
@@ -1261,6 +1446,20 @@ def merge_metadata_results(
             )
             if accepted_identifier:
                 identifiers[provider] = identifier
+        for credit in result.get("credits") or []:
+            if not isinstance(credit, dict):
+                continue
+            identity = clean_text(credit.get("tmdbId")) or (clean_text(credit.get("name")) or "").casefold()
+            key = (
+                identity,
+                clean_text(credit.get("role")) or "",
+                clean_text(credit.get("character")) or "",
+                clean_text(credit.get("job")) or "",
+            )
+            if not identity or key in credit_keys:
+                continue
+            credit_keys.add(key)
+            credits.append(credit)
 
     field_decisions = list(field_decisions_by_key.values())
     return {
@@ -1269,6 +1468,7 @@ def merge_metadata_results(
         "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
         "identifiers": identifiers,
+        "credits": credits,
         "provenance": provenance,
         "skipped": skipped,
         "fieldDecisions": field_decisions,
@@ -1276,10 +1476,11 @@ def merge_metadata_results(
 
 
 def count_update_fields(proposal: dict[str, Any]) -> int:
-    return sum(
+    field_count = sum(
         len(proposal.get(key) or {})
         for key in ("movieUpdates", "metadataUpdates", "technicalUpdates", "mediaUpdates", "identifiers")
     )
+    return field_count + len(proposal.get("credits") or [])
 
 
 def summarize_metadata_execution(
@@ -1416,6 +1617,7 @@ def metadata_result_summary(result: dict[str, Any]) -> dict[str, Any]:
         "technicalFields": sorted((result.get("technicalUpdates") or {}).keys()),
         "mediaKinds": sorted((result.get("mediaUpdates") or {}).keys()),
         "identifierProviders": sorted((result.get("identifiers") or {}).keys()),
+        "creditCount": len(result.get("credits") or []),
         "candidateCount": len(result.get("candidates") or []),
         "hasBoxSetProposal": bool(result.get("boxSetProposal")),
     }
@@ -1466,6 +1668,10 @@ def metadata_fetch_audit_payload(
         "finalWrites": [item for item in field_decisions if item.get("written")],
         "proposalStats": preview.get("proposalStats") or {},
         "applied": applied.get("applied") if applied else {},
+        "creditStats": {
+            "proposed": len(proposal.get("credits") or []),
+            "applied": (applied.get("applied") or {}).get("credits") if applied else {},
+        },
     }
 
 
@@ -1885,6 +2091,7 @@ def run_metadata_source_pipeline(
         "proposalStats": {
             "acceptedFields": len(merge.get("provenance") or []),
             "skippedFields": len(merge.get("skipped") or []),
+            "creditUpdates": len(merge.get("credits") or []),
             "fieldDecisions": len(field_decisions),
             "conflictFields": len([item for item in field_decisions if item.get("conflict")]),
             "winnerFields": len([item for item in field_decisions if item.get("winner")]),
@@ -2216,6 +2423,205 @@ def link_media_option(
     }
 
 
+def metadata_person_public_id(credit: dict[str, Any]) -> str:
+    tmdb_id = clean_text(credit.get("tmdbId"))
+    if tmdb_id:
+        return f"metadata-person-tmdb-{tmdb_id}"
+    digest = hashlib.sha256((clean_text(credit.get("name")) or "").casefold().encode("utf-8")).hexdigest()[:20]
+    return f"metadata-person-{digest}"
+
+
+def ensure_metadata_person(conn, credit: dict[str, Any]) -> UUID | None:
+    name = clean_text(credit.get("name"))
+    if not name or not table_exists(conn, "people"):
+        return None
+    tmdb_id = clean_text(credit.get("tmdbId"))
+    person_id: UUID | None = None
+    metadata = {
+        "source": "metadata_refresh",
+        "source_provider": clean_text(credit.get("sourceProvider")),
+        "source_label": clean_text(credit.get("sourceLabel")),
+        "source_ref": clean_text(credit.get("sourceRef")),
+    }
+    if tmdb_id:
+        metadata["tmdb_id"] = tmdb_id
+    for image_key in ("profileUrl", "profile_url", "photoUrl", "photo_url", "profilePath", "profile_path", "photoFile", "photo_file"):
+        if value_present(credit.get(image_key)):
+            metadata[image_key] = credit.get(image_key)
+
+    with conn.cursor() as cur:
+        if tmdb_id and table_exists(conn, "person_identifiers"):
+            cur.execute(
+                """
+                SELECT person_id
+                FROM person_identifiers
+                WHERE provider_id='tmdb'
+                  AND identifier_type='person_id'
+                  AND identifier=%s
+                LIMIT 1
+                """,
+                (tmdb_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                person_id = row["person_id"] if isinstance(row, dict) else row[0]
+        if not person_id:
+            cur.execute(
+                """
+                SELECT id
+                FROM people
+                WHERE lower(name)=lower(%s)
+                ORDER BY created_at
+                LIMIT 1
+                """,
+                (name,),
+            )
+            row = cur.fetchone()
+            if row:
+                person_id = row["id"] if isinstance(row, dict) else row[0]
+        if person_id:
+            cur.execute(
+                """
+                UPDATE people
+                SET name=%s,
+                    known_for=COALESCE(known_for, %s),
+                    metadata=metadata || %s,
+                    updated_at=now()
+                WHERE id=%s
+                """,
+                (
+                    name,
+                    "Acting" if clean_text(credit.get("role")) == "actor" else clean_text(credit.get("job")),
+                    Jsonb(json_ready(metadata)),
+                    person_id,
+                ),
+            )
+        else:
+            public_id = metadata_person_public_id(credit)
+            person_id = metadata_stable_uuid("people", public_id)
+            cur.execute(
+                """
+                INSERT INTO people (
+                    id, public_id, name, known_for, metadata, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, now(), now())
+                ON CONFLICT (public_id) DO UPDATE SET
+                    name=EXCLUDED.name,
+                    known_for=COALESCE(people.known_for, EXCLUDED.known_for),
+                    metadata=people.metadata || EXCLUDED.metadata,
+                    updated_at=now()
+                RETURNING id
+                """,
+                (
+                    person_id,
+                    public_id,
+                    name,
+                    "Acting" if clean_text(credit.get("role")) == "actor" else clean_text(credit.get("job")),
+                    Jsonb(json_ready(metadata)),
+                ),
+            )
+            row = cur.fetchone()
+            if row:
+                person_id = row["id"] if isinstance(row, dict) else row[0]
+        if tmdb_id and person_id and table_exists(conn, "person_identifiers"):
+            cur.execute(
+                """
+                INSERT INTO person_identifiers (person_id, provider_id, identifier_type, identifier)
+                VALUES (%s, 'tmdb', 'person_id', %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (person_id, tmdb_id),
+            )
+    return UUID(str(person_id)) if person_id else None
+
+
+def apply_credit_updates(conn, *, movie_id: UUID, credits: list[dict[str, Any]]) -> dict[str, Any]:
+    if not credits:
+        return {"written": 0, "updated": 0, "people": 0, "skipped": 0}
+    if not table_exists(conn, "people") or not table_exists(conn, "movie_credits"):
+        return {"written": 0, "updated": 0, "people": 0, "skipped": len(credits), "reason": "credit_tables_missing"}
+
+    written = 0
+    updated = 0
+    people: set[str] = set()
+    skipped = 0
+    applied_items: list[dict[str, Any]] = []
+    with conn.cursor() as cur:
+        for credit in credits:
+            if not isinstance(credit, dict):
+                skipped += 1
+                continue
+            person_id = ensure_metadata_person(conn, credit)
+            if not person_id:
+                skipped += 1
+                continue
+            people.add(str(person_id))
+            role = normalize_credit_role(credit.get("role"), default="credit")
+            character = clean_text(credit.get("character")) or None
+            job = clean_text(credit.get("job")) or None
+            sort_order = parse_sort_order(credit.get("sortOrder"), 0)
+            cur.execute(
+                """
+                SELECT id
+                FROM movie_credits
+                WHERE movie_id=%s
+                  AND person_id=%s
+                  AND credit_type=%s
+                  AND job IS NOT DISTINCT FROM %s
+                  AND character IS NOT DISTINCT FROM %s
+                LIMIT 1
+                """,
+                (movie_id, person_id, role, job, character),
+            )
+            row = cur.fetchone()
+            if row:
+                credit_id = row["id"] if isinstance(row, dict) else row[0]
+                cur.execute(
+                    """
+                    UPDATE movie_credits
+                    SET sort_order=%s
+                    WHERE id=%s
+                    """,
+                    (sort_order, credit_id),
+                )
+                updated += 1
+            else:
+                credit_id = metadata_stable_uuid(
+                    "movie_credits",
+                    f"{movie_id}:{person_id}:{role}:{job or ''}:{character or ''}",
+                )
+                cur.execute(
+                    """
+                    INSERT INTO movie_credits (
+                        id, movie_id, person_id, credit_type, character, job, sort_order
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (credit_id, movie_id, person_id, role, character, job, sort_order),
+                )
+                written += int(cur.rowcount or 0)
+            applied_items.append(
+                {
+                    "name": clean_text(credit.get("name")),
+                    "role": role,
+                    "character": character,
+                    "job": job,
+                    "sortOrder": sort_order,
+                    "sourceProvider": clean_text(credit.get("sourceProvider")),
+                    "sourceLabel": clean_text(credit.get("sourceLabel")),
+                }
+            )
+    return {
+        "written": written,
+        "updated": updated,
+        "people": len(people),
+        "skipped": skipped,
+        "items": applied_items[:40],
+        "itemCount": len(applied_items),
+    }
+
+
 def apply_metadata_proposal(
     conn,
     movie_id: UUID | str,
@@ -2229,6 +2635,7 @@ def apply_metadata_proposal(
     technical_updates = proposal.get("technicalUpdates") or {}
     media_updates = proposal.get("mediaUpdates") or {}
     identifiers = proposal.get("identifiers") or {}
+    credit_updates = proposal.get("credits") or []
     provenance = proposal.get("provenance") or []
     metadata_updates = dict(metadata_updates)
     if metadata_updates:
@@ -2238,7 +2645,7 @@ def apply_metadata_proposal(
         if has_locked_primary_media(conn, movie_id=movie_uuid, kind="backdrop"):
             for key in ("backdrop_url", "backdropUrl", "backdrop"):
                 metadata_updates.pop(key, None)
-    changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers)
+    changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers or credit_updates)
 
     if not changed:
         return {
@@ -2252,6 +2659,7 @@ def apply_metadata_proposal(
             ),
         }
 
+    applied_credit_updates: dict[str, Any] = {}
     with conn.cursor() as cur:
         if movie_updates or metadata_updates:
             assignments = ["updated_at=now()"]
@@ -2384,6 +2792,9 @@ def apply_metadata_proposal(
                     ),
                 )
 
+    if credit_updates:
+        applied_credit_updates = apply_credit_updates(conn, movie_id=movie_uuid, credits=credit_updates)
+
     revision = record_sync_change(
         conn,
         movie_uuid,
@@ -2394,6 +2805,7 @@ def apply_metadata_proposal(
             "technicalUpdates": technical_updates,
             "mediaUpdates": media_updates,
             "identifiers": identifiers,
+            "credits": credit_updates,
             "fieldDecisions": proposal.get("fieldDecisions") or [],
         },
     )
@@ -2403,6 +2815,7 @@ def apply_metadata_proposal(
         "technicalUpdates": technical_updates,
         "mediaUpdates": applied_media_updates,
         "identifiers": identifiers,
+        "credits": applied_credit_updates,
         "provenance": len(provenance),
     }
     return {

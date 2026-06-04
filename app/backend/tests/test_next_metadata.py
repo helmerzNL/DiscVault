@@ -274,6 +274,36 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["mediaUpdates"]["poster"]["sourceUrl"], "https://provider/poster.jpg")
         self.assertEqual(merged["movieUpdates"]["rating"], "8.1")
 
+    def test_plugin_credits_are_kept_in_metadata_refresh_proposal(self):
+        current = {"title": "Aladdin", "format": "4K UHD", "metadata": {}}
+        result = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {
+                "status": "hit",
+                "sourceLabel": "TMDb",
+                "sourceRef": "tmdb:420817",
+                "credits": [
+                    {"role": "actor", "name": "Will Smith", "character": "Genie", "tmdbId": 2888, "sortOrder": 0},
+                    {"role": "crew", "name": "Guy Ritchie", "job": "Director", "tmdbId": 956, "sortOrder": 0},
+                ],
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[result],
+            overwrite_enabled=False,
+            target_format="4K UHD",
+        )
+
+        self.assertEqual(len(result["credits"]), 2)
+        self.assertEqual(len(merged["credits"]), 2)
+        self.assertEqual(merged["credits"][0]["name"], "Will Smith")
+        self.assertEqual(merged["credits"][0]["role"], "actor")
+        self.assertEqual(merged["credits"][1]["job"], "Director")
+        self.assertEqual(merged["credits"][1]["sourceLabel"], "TMDb")
+
     def test_preferred_overwrite_allows_provider_to_replace_display_fields(self):
         current = {
             "title": "Manual Title",
@@ -622,12 +652,14 @@ class NextMetadataPolicyTests(unittest.TestCase):
                     "technicalUpdates": {"hdr": "HDR10"},
                     "mediaUpdates": {"poster": {"sourceUrl": "https://example/poster.jpg"}},
                     "identifiers": {"tmdb": "420817"},
+                    "credits": [{"role": "crew", "name": "Guy Ritchie", "job": "Director"}],
                     "candidates": [{}],
                 }
             ],
             "proposal": {
                 "provenance": [{"pluginId": "movievault_26", "field": "rating", "target": "movie"}],
                 "skipped": [{"pluginId": "tmdb", "field": "title", "reason": "existing value retained"}],
+                "credits": [{"role": "crew", "name": "Guy Ritchie", "job": "Director"}],
             },
             "proposalStats": {"acceptedFields": 1, "skippedFields": 1},
         }
@@ -647,6 +679,8 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(payload["providerResults"][0]["technicalFields"], ["hdr"])
         self.assertEqual(payload["providerResults"][0]["mediaKinds"], ["poster"])
         self.assertEqual(payload["providerResults"][0]["identifierProviders"], ["tmdb"])
+        self.assertEqual(payload["providerResults"][0]["creditCount"], 1)
+        self.assertEqual(payload["creditStats"]["proposed"], 1)
         self.assertNotIn("Authorization", str(payload))
         self.assertNotIn("apiToken", str(payload))
 
