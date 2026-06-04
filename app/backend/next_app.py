@@ -7246,10 +7246,33 @@ def ui_preview_html(
       gap: 10px;
       padding-top: 4px;
       min-width: 0;
+      flex-wrap: wrap;
     }
     .import-result-action-footer .primary-button {
       min-height: 42px;
       min-width: min(100%, 190px);
+    }
+    .import-result-action-status {
+      width: 100%;
+      margin-top: 2px;
+      padding: 8px 10px;
+      border-radius: 14px;
+      border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      color: var(--muted);
+      font-size: .84rem;
+      font-weight: 720;
+      overflow-wrap: anywhere;
+    }
+    .import-result-action-status.good {
+      border-color: color-mix(in srgb, var(--success) 46%, var(--line));
+      color: var(--success);
+      background: color-mix(in srgb, var(--success) 10%, var(--bg-solid));
+    }
+    .import-result-action-status.bad {
+      border-color: color-mix(in srgb, var(--danger) 44%, var(--line));
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 10%, var(--bg-solid));
     }
     .import-card-head,
     .import-source-head,
@@ -12247,7 +12270,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", boxSetMemberEdits: {}, addResult: null, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupActionMessage: "", lookupActionTone: "", activeTab: "add"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -17638,6 +17661,16 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function setImportLookupActionMessage(message, tone = "") {
+      importCenter.lookupActionMessage = message || "";
+      importCenter.lookupActionTone = tone || "";
+      const node = document.getElementById("importLookupActionStatus");
+      if (node) {
+        node.textContent = importCenter.lookupActionMessage;
+        node.className = `import-result-action-status ${importCenter.lookupActionTone}`.trim();
+        node.classList.toggle("hidden", !importCenter.lookupActionMessage);
+      }
+    }
     function setImportFileMessage(message, tone) {
       const node = document.getElementById("importFileMessage");
       if (!node) return;
@@ -19553,15 +19586,34 @@ def ui_preview_html(
     }
     function selectedBoxSetProposal() {
       const proposals = barcodeBoxSetProposals();
-      return proposals.find((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey) || proposals.find((proposal) => {
+      const selected = proposals.find((proposal) => proposal.proposalKey === importCenter.selectedBoxSetProposalKey);
+      if (selected) {
+        importCenter.selectedBoxSetProposalSnapshot = selected;
+        return selected;
+      }
+      if (importCenter.selectedBoxSetProposalSnapshot && boxSetProposalMembers(importCenter.selectedBoxSetProposalSnapshot).length >= 2) {
+        return importCenter.selectedBoxSetProposalSnapshot;
+      }
+      const fallback = proposals.find((proposal) => {
         const members = boxSetProposalMembers(proposal);
         return Array.isArray(members) && members.length >= 2;
       }) || null;
+      if (fallback) importCenter.selectedBoxSetProposalSnapshot = fallback;
+      return fallback;
     }
     function boxSetProposalByKey(proposalKey) {
       const key = String(proposalKey || "");
       if (!key) return null;
-      return barcodeBoxSetProposals().find((proposal) => proposal.proposalKey === key) || null;
+      const proposal = barcodeBoxSetProposals().find((item) => item.proposalKey === key) || null;
+      if (proposal) {
+        importCenter.selectedBoxSetProposalSnapshot = proposal;
+        return proposal;
+      }
+      const snapshot = importCenter.selectedBoxSetProposalSnapshot;
+      if (snapshot && (snapshot.proposalKey === key || snapshot._proposalKey === key || boxSetProposalMembers(snapshot).length >= 2)) {
+        return snapshot;
+      }
+      return null;
     }
     function boxSetProposalMembers(proposal) {
       if (!proposal || typeof proposal !== "object") return [];
@@ -20097,6 +20149,7 @@ def ui_preview_html(
         <div class="import-result-action-footer">
           ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
           ${secondaryBoxSetActionKey ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" data-box-set-proposal-key="${escapeHtml(secondaryBoxSetActionKey)}" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
+          <div id="importLookupActionStatus" class="import-result-action-status ${escapeHtml(importCenter.lookupActionTone || "")} ${importCenter.lookupActionMessage ? "" : "hidden"}">${escapeHtml(importCenter.lookupActionMessage || "")}</div>
         </div>
       `;
       if (!Array.isArray(results) || !results.length) {
@@ -20267,7 +20320,9 @@ def ui_preview_html(
         importCenter.barcodeLookup = payload;
         importCenter.selectedMovieCandidateKey = "";
         importCenter.selectedBoxSetProposalKey = "";
+        importCenter.selectedBoxSetProposalSnapshot = null;
         importCenter.boxSetMemberEdits = {};
+        setImportLookupActionMessage("", "");
         renderBarcodeLookup();
         setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
         console.log("movie import preview", payload);
@@ -20310,6 +20365,11 @@ def ui_preview_html(
           ? `${tNext("importCenter.addBoxSet", "Add box-set")}...`
           : tNext("importCenter.addingMovie", "Adding movie...")
       );
+      setImportLookupActionMessage(
+        wantsBoxSet
+          ? `${tNext("importCenter.addBoxSet", "Add box-set")}: ${tNext("importCenter.resolvingSelection", "resolving selection...")}`
+          : tNext("importCenter.addingMovie", "Adding movie...")
+      );
       if (button) button.disabled = true;
       try {
         const selectedProposal = wantsBoxSet
@@ -20317,16 +20377,23 @@ def ui_preview_html(
           : null;
         const selectedMovieCandidate = wantsBoxSet ? null : selectedLookupMovieCandidate();
         if (wantsBoxSet && !selectedProposal) {
+          setImportLookupActionMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
           setImportCenterMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
           return;
         }
         if (selectedProposal && !importCenter.selectedBoxSetProposalKey) {
           importCenter.selectedBoxSetProposalKey = selectedProposal.proposalKey || importBoxSetProposalKey(selectedProposal);
         }
-        const boxSetMembers = selectedProposal ? selectedBoxSetMembersForImport() : [];
+        if (selectedProposal) importCenter.selectedBoxSetProposalSnapshot = selectedProposal;
+        const boxSetMembers = selectedProposal ? proposalMembersForImport(selectedProposal) : [];
         if (selectedProposal && boxSetMembers.length < 2) {
+          setImportLookupActionMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
           setImportCenterMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
           return;
+        }
+        if (wantsBoxSet) {
+          const provider = selectedProposal?.provider || selectedProposal?.source || selectedProposal?.member_source || "";
+          setImportLookupActionMessage(`${tNext("importCenter.addBoxSet", "Add box-set")}: ${boxSetMembers.length} ${tNext("importCenter.members", "members")}${provider ? ` / ${provider}` : ""}. ${tNext("importCenter.sending", "Sending...")}`);
         }
         const selectedProposalPayload = selectedProposal
           ? {
@@ -20351,6 +20418,7 @@ def ui_preview_html(
             selectedMovieCandidate: wantsBoxSet ? null : selectedMovieCandidate,
             boxSetProposalKey: wantsBoxSet ? (importCenter.selectedBoxSetProposalKey || selectedProposal?.proposalKey || selectedProposal?._proposalKey || "") : "",
             boxSetProposal: wantsBoxSet ? selectedProposalPayload : null,
+            selectedBoxSetCandidate: wantsBoxSet ? selectedProposalPayload : null,
             boxSetMembers: wantsBoxSet ? boxSetMembers : [],
             metadataPreview: importCenter.barcodeLookup || null
           })
@@ -20368,6 +20436,7 @@ def ui_preview_html(
           : payload.state === "box_set_created"
             ? "Box-set added."
             : "Movie added.";
+        setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
         renderBarcodeLookup();
         if (importedContainerId) openAppContainerDetail(importedContainerId);
@@ -20377,6 +20446,7 @@ def ui_preview_html(
           setImportCenterMessage(`${tNext(messageKey, messageFallback)} ${error.message || String(error)}`, "bad");
         });
       } catch (error) {
+        setImportLookupActionMessage(error.message || String(error), "bad");
         setImportCenterMessage(error.message || String(error), "bad");
       } finally {
         if (button) button.disabled = false;
