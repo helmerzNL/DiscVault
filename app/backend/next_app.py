@@ -28521,7 +28521,7 @@ def container_receiver_member_payload(conn, container_id: UUID | str | None) -> 
                 m.year,
                 m.barcode,
                 m.format,
-                m.poster_url,
+                m.metadata->>'poster_url' AS poster_url,
                 m.metadata
             FROM container_movies cm
             JOIN movies m ON m.id = cm.movie_id
