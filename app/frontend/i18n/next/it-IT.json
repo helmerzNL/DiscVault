@@ -867,6 +867,8 @@
   "appAdmin.auditEvent": "Evento audit",
   "appAdmin.auditActor": "Attore",
   "appAdmin.auditDetails": "Dettagli audit",
+  "appAdmin.copyAuditJson": "Copia JSON",
+  "appAdmin.auditJsonCopied": "JSON audit copiato.",
   "appAdmin.noAuditEvents": "Nessun evento audit ancora.",
   "appAdmin.featureAudit": "Vedi registro audit",
   "appAdmin.movievaultConnection": "Connessione MovieVault",

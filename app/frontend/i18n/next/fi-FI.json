@@ -867,6 +867,8 @@
   "appAdmin.auditEvent": "Auditointitapahtuma",
   "appAdmin.auditActor": "Tekija",
   "appAdmin.auditDetails": "Auditointitiedot",
+  "appAdmin.copyAuditJson": "Kopioi JSON",
+  "appAdmin.auditJsonCopied": "Audit-JSON kopioitu.",
   "appAdmin.noAuditEvents": "Ei auditointitapahtumia viela.",
   "appAdmin.featureAudit": "Nayta auditointiloki",
   "appAdmin.movievaultConnection": "MovieVault-yhteys",
