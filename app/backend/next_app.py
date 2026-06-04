@@ -16612,6 +16612,15 @@ def ui_preview_html(
         panel.classList.toggle("hidden", panel.id !== panelId);
       });
     }
+    function activeDetailPanel(group, fallbackPanelId = "") {
+      if (!group) return fallbackPanelId || "";
+      const activeButton = [...document.querySelectorAll("[data-detail-tab]")]
+        .find((button) => button.dataset.detailTab === group && button.classList.contains("active"));
+      if (activeButton?.dataset?.detailPanel) return activeButton.dataset.detailPanel;
+      const visiblePanel = [...document.querySelectorAll("[data-detail-panel-group]")]
+        .find((panel) => panel.dataset.detailPanelGroup === group && !panel.classList.contains("hidden"));
+      return visiblePanel?.id || fallbackPanelId || "";
+    }
     function containerTypeLabel(type) {
       const key = String(type || "container");
       return tNext(`containerDetail.type.${key}`, key.replace(/_/g, " "));
@@ -17350,6 +17359,7 @@ def ui_preview_html(
       if (message) setContainerDetailMessage(message, tone);
     }
     function renderContainerDetail(detail) {
+      const activePanelId = activeDetailPanel("containerDetail", "containerDetailOverviewPanel");
       activeContainerPayload = detail;
       const container = detail.container || {};
       activeContainerId = container.id || activeContainerId || "";
@@ -17451,7 +17461,7 @@ def ui_preview_html(
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("containerDetailVideos").innerHTML = videoCardsHtml(containerVideoItems(detail));
-      activateDetailTab("containerDetail", "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailOverviewPanel");
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
     }
