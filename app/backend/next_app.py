@@ -19568,7 +19568,7 @@ def ui_preview_html(
       const seen = new Set();
       (metadata.results || []).forEach((result) => {
         const raw = result?.raw && typeof result.raw === "object" ? result.raw : {};
-        const proposalCandidates = [
+        const explicitProposalCandidates = [
           result?.boxSetProposal,
           result?.box_set_proposal,
           raw.boxSetProposal,
@@ -19576,13 +19576,19 @@ def ui_preview_html(
           ...(Array.isArray(result?.boxSetProposals) ? result.boxSetProposals : []),
           ...(Array.isArray(result?.box_set_proposals) ? result.box_set_proposals : []),
           ...(Array.isArray(raw.boxSetProposals) ? raw.boxSetProposals : []),
-          ...(Array.isArray(raw.box_set_proposals) ? raw.box_set_proposals : []),
+          ...(Array.isArray(raw.box_set_proposals) ? raw.box_set_proposals : [])
+        ];
+        const taggedProposalCandidates = [
           ...(Array.isArray(result?.candidates) ? result.candidates : []),
           ...(Array.isArray(result?.items) ? result.items : []),
           ...(Array.isArray(result?.matches) ? result.matches : []),
           ...(Array.isArray(raw.candidates) ? raw.candidates : []),
           ...(Array.isArray(raw.items) ? raw.items : []),
           ...(Array.isArray(raw.matches) ? raw.matches : [])
+        ].filter((proposal) => lookupCandidateLooksLikeBoxSet(proposal));
+        const proposalCandidates = [
+          ...explicitProposalCandidates,
+          ...taggedProposalCandidates
         ];
         proposalCandidates.forEach((proposal) => {
           if (!proposal || typeof proposal !== "object") return;
@@ -38403,13 +38409,20 @@ def register_routes(flask_app: Flask) -> None:
             proposal_candidates = []
             if isinstance(proposal, dict):
                 proposal_candidates.append(proposal)
-            for key in ("boxSetProposals", "box_set_proposals", "candidates", "items", "matches"):
+            for key in ("boxSetProposals", "box_set_proposals"):
                 value = result.get(key)
                 if isinstance(value, list):
                     proposal_candidates.extend(item for item in value if isinstance(item, dict))
                 raw_value = raw.get(key)
                 if isinstance(raw_value, list):
                     proposal_candidates.extend(item for item in raw_value if isinstance(item, dict))
+            for key in ("candidates", "items", "matches"):
+                value = result.get(key)
+                if isinstance(value, list):
+                    proposal_candidates.extend(item for item in value if isinstance(item, dict) and metadata_value_looks_like_box_set(item))
+                raw_value = raw.get(key)
+                if isinstance(raw_value, list):
+                    proposal_candidates.extend(item for item in raw_value if isinstance(item, dict) and metadata_value_looks_like_box_set(item))
             for proposal_candidate in proposal_candidates:
                 members = box_set_proposal_members(proposal_candidate)
                 if len(members) < 2:
