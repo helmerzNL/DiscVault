@@ -260,79 +260,61 @@ def _movie_payload(item):
     }
 
 
-def _member_list(payload):
-    if isinstance(payload, list):
-        return payload
-    if not isinstance(payload, dict):
-        return []
-    for key in (
-        "members",
-        "memberMovies",
-        "member_movies",
-        "memberReleases",
-        "member_releases",
-        "movies",
-        "items",
-        "titles",
-        "includedTitles",
-        "included_titles",
-        "boxSetMovies",
-        "box_set_movies",
-        "boxSetMembers",
-        "box_set_members",
-        "bundleMembers",
-        "bundle_members",
-        "moviesInSet",
-        "movies_in_set",
-        "children",
-        "parts",
-        "discs",
-        "discItems",
-        "disc_items",
-        "contents",
-        "releases",
-    ):
-        value = payload.get(key)
-        if isinstance(value, list):
-            return value
-        if isinstance(value, dict):
-            found = _member_list(value)
-            if found:
-                return found
-            nested_items = _items(value)
-            if nested_items and nested_items != [value]:
-                return nested_items
-    for key in (
-        "boxSetProposal",
-        "box_set_proposal",
-        "boxSet",
-        "box_set",
-        "boxSetCandidate",
-        "box_set_candidate",
-        "proposal",
-        "candidate",
-        "container",
-        "bundle",
-        "set",
-        "release",
-        "data",
-        "result",
-        "item",
-    ):
-        nested = payload.get(key)
-        found = _member_list(nested)
-        if found:
-            return found
-    return []
+_BOX_SET_DIRECT_KEYS = (
+    "boxSetProposal",
+    "box_set_proposal",
+    "boxSet",
+    "box_set",
+    "boxSetCandidate",
+    "box_set_candidate",
+)
+
+_BOX_SET_PRIMARY_MEMBER_KEYS = (
+    "members",
+    "memberMovies",
+    "member_movies",
+    "memberReleases",
+    "member_releases",
+    "includedTitles",
+    "included_titles",
+    "boxSetMovies",
+    "box_set_movies",
+    "boxSetMembers",
+    "box_set_members",
+    "bundleMembers",
+    "bundle_members",
+    "moviesInSet",
+    "movies_in_set",
+)
+
+_BOX_SET_GENERIC_MEMBER_KEYS = (
+    "movies",
+    "items",
+    "titles",
+    "children",
+    "parts",
+    "discs",
+    "discItems",
+    "disc_items",
+    "contents",
+    "releases",
+)
 
 
-def _box_set_signal(item):
+def _box_set_payload_marker(item):
     if not isinstance(item, dict):
         return False
-    for key in ("boxSetProposal", "box_set_proposal", "boxSet", "box_set", "boxSetCandidate", "box_set_candidate"):
-        if isinstance(item.get(key), dict):
-            return True
+    if any(isinstance(item.get(key), dict) for key in _BOX_SET_DIRECT_KEYS):
+        return True
     if item.get("isBoxSet") is True or item.get("is_box_set") is True:
+        return True
+    if item.get("detectedWithoutMembers") is True or item.get("detected_without_members") is True:
+        return True
+    if item.get("memberCount") is not None or item.get("member_count") is not None:
+        return True
+    if item.get("memberConfidence") or item.get("member_confidence") or item.get("memberSource") or item.get("member_source"):
+        return True
+    if _first_value(item, "boxSetTitle", "box_set_title", "collectionTitle", "collection_title"):
         return True
     type_text = _text(
         _first_value(
@@ -354,6 +336,75 @@ def _box_set_signal(item):
     return type_key in {"box_set", "boxset"} or "box_set" in type_key or "boxset" in type_key
 
 
+def _member_list(payload):
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+    for key in _BOX_SET_DIRECT_KEYS:
+        found = _member_list(payload.get(key))
+        if found:
+            return found
+    for key in _BOX_SET_PRIMARY_MEMBER_KEYS:
+        value = payload.get(key)
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            found = _member_list(value)
+            if found:
+                return found
+            nested_items = _items(value)
+            if nested_items and nested_items != [value]:
+                return nested_items
+    has_parent_title = bool(_first_value(payload, "title", "name", "boxSetTitle", "box_set_title"))
+    if has_parent_title:
+        for key in _BOX_SET_GENERIC_MEMBER_KEYS:
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+            if isinstance(value, dict):
+                found = _member_list(value)
+                if found:
+                    return found
+                nested_items = _items(value)
+                if nested_items and nested_items != [value]:
+                    return nested_items
+    if _box_set_payload_marker(payload):
+        for key in _BOX_SET_GENERIC_MEMBER_KEYS:
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+            if isinstance(value, dict):
+                found = _member_list(value)
+                if found:
+                    return found
+                nested_items = _items(value)
+                if nested_items and nested_items != [value]:
+                    return nested_items
+    for key in (
+        "proposal",
+        "candidate",
+        "container",
+        "bundle",
+        "set",
+        "release",
+        "data",
+        "result",
+        "item",
+    ):
+        nested = payload.get(key)
+        found = _member_list(nested)
+        if found:
+            return found
+    return []
+
+
+def _box_set_signal(item):
+    if not isinstance(item, dict):
+        return False
+    return _box_set_payload_marker(item)
+
+
 def _box_set_numeric_id(item):
     if not isinstance(item, dict):
         return ""
@@ -365,14 +416,6 @@ def _box_set_numeric_id(item):
 def _box_set_entity(payload):
     if not isinstance(payload, dict):
         return {}
-    direct_keys = (
-        "boxSetProposal",
-        "box_set_proposal",
-        "boxSet",
-        "box_set",
-        "boxSetCandidate",
-        "box_set_candidate",
-    )
     wrapper_keys = (
         "data",
         "result",
@@ -383,40 +426,16 @@ def _box_set_entity(payload):
         "set",
         "release",
     )
-    member_keys = (
-        "members",
-        "memberMovies",
-        "member_movies",
-        "memberReleases",
-        "member_releases",
-        "movies",
-        "titles",
-        "includedTitles",
-        "included_titles",
-        "boxSetMovies",
-        "box_set_movies",
-        "boxSetMembers",
-        "box_set_members",
-        "bundleMembers",
-        "bundle_members",
-        "moviesInSet",
-        "movies_in_set",
-        "children",
-        "parts",
-        "discs",
-        "discItems",
-        "disc_items",
-        "contents",
-        "releases",
-    )
-    for key in direct_keys:
+    for key in _BOX_SET_DIRECT_KEYS:
         value = payload.get(key)
         if isinstance(value, dict):
             return _box_set_entity(value) or value
     if _box_set_signal(payload):
         return payload
     has_parent_title = bool(_first_value(payload, "title", "name", "boxSetTitle", "box_set_title"))
-    if has_parent_title and any(isinstance(payload.get(key), list) for key in member_keys):
+    if has_parent_title and any(isinstance(payload.get(key), list) for key in _BOX_SET_PRIMARY_MEMBER_KEYS):
+        return payload
+    if has_parent_title and any(isinstance(payload.get(key), list) for key in _BOX_SET_GENERIC_MEMBER_KEYS):
         return payload
     for key in wrapper_keys:
         value = payload.get(key)
