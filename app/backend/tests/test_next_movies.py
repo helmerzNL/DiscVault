@@ -16,6 +16,7 @@ try:
     from app.backend.next_app import movie_payload_fields
     from app.backend.next_app import movie_update_payload
     from app.backend.next_app import merge_selected_import_movie_candidate
+    from app.backend.next_app import box_set_proposal_audit_summary
     from app.backend.next_app import box_set_proposal_member_list
     from app.backend.next_app import box_set_proposal_sort_key
     from app.backend.next_app import selected_import_movie_candidate_from_body
@@ -31,6 +32,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     movie_payload_fields = None
     movie_update_payload = None
     merge_selected_import_movie_candidate = None
+    box_set_proposal_audit_summary = None
     box_set_proposal_member_list = None
     box_set_proposal_sort_key = None
     selected_import_movie_candidate_from_body = None
@@ -241,6 +243,27 @@ class NextMovieEditPolicyTests(unittest.TestCase):
 
         self.assertIs(proposals[0], movievault)
         self.assertEqual(len(box_set_proposal_member_list(proposals[0])), 3)
+
+    def test_box_set_proposal_audit_summary_shows_provider_and_members(self):
+        summary = box_set_proposal_audit_summary(
+            {
+                "provider": "movievault_26",
+                "title": "Back to the Future Trilogy DVD",
+                "barcode": "5050582369601",
+                "format": "DVD",
+                "memberConfidence": "identified",
+                "members": [
+                    {"title": "Back to the Future", "year": "1985", "format": "DVD"},
+                    {"title": "Back to the Future Part II", "year": "1989", "format": "DVD"},
+                    {"title": "Back to the Future Part III", "year": "1990", "format": "DVD"},
+                ],
+            }
+        )
+
+        self.assertEqual(summary["provider"], "movievault_26")
+        self.assertEqual(summary["memberCount"], 3)
+        self.assertFalse(summary["candidateOnly"])
+        self.assertEqual(summary["members"][0]["title"], "Back to the Future")
 
 
 if __name__ == "__main__":
