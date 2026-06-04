@@ -19,6 +19,7 @@ sys.modules.setdefault(
 
 from app.backend.next_metadata import canonicalize_plugin_result
 from app.backend.next_metadata import external_metadata_barcode
+from app.backend.next_metadata import metadata_field_decisions_with_write_state
 from app.backend.next_metadata import metadata_fetch_audit_payload
 from app.backend.next_metadata import metadata_source_plugin_allowed
 from app.backend.next_metadata import merge_metadata_results
@@ -305,6 +306,71 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["metadataUpdates"]["poster_url"], "https://provider/poster.jpg")
         self.assertEqual(merged["mediaUpdates"]["poster"]["sourceUrl"], "https://provider/poster.jpg")
 
+    def test_field_decisions_record_priority_winner_for_conflicting_fields(self):
+        current = {"title": "Manual Title", "overview": "Manual overview", "format": "4K UHD", "metadata": {}}
+        tmdb_result = {
+            "pluginId": "tmdb",
+            "entrypoint": "lookup_external_id",
+            "sourceLabel": "TMDb",
+            "sourceRef": "tmdb:1",
+            "movieUpdates": {"overview": "TMDb overview"},
+        }
+        movievault_result = {
+            "pluginId": "movievault_26",
+            "entrypoint": "movie_details",
+            "sourceLabel": "MovieVault 26",
+            "sourceRef": "movievault:1",
+            "movieUpdates": {"overview": "MovieVault overview"},
+        }
+
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[tmdb_result, movievault_result],
+            overwrite_enabled=True,
+            target_format="4K UHD",
+        )
+
+        decision = next(item for item in merged["fieldDecisions"] if item["target"] == "movie" and item["field"] == "overview")
+        self.assertEqual(merged["movieUpdates"]["overview"], "TMDb overview")
+        self.assertTrue(decision["conflict"])
+        self.assertEqual(decision["winner"]["pluginId"], "tmdb")
+        self.assertEqual(decision["finalValue"], "TMDb overview")
+        self.assertEqual(len(decision["candidates"]), 2)
+        self.assertTrue(decision["candidates"][0]["winner"])
+        self.assertFalse(decision["candidates"][1]["accepted"])
+        self.assertEqual(decision["candidates"][1]["reason"], "higher-priority provider already selected this field")
+
+    def test_field_decisions_mark_later_provider_rejected_without_overwrite(self):
+        current = {"title": "Manual Title", "format": "4K UHD", "metadata": {}}
+        tmdb_result = {
+            "pluginId": "tmdb",
+            "entrypoint": "lookup_external_id",
+            "sourceLabel": "TMDb",
+            "movieUpdates": {"rating": "7.1"},
+        }
+        omdb_result = {
+            "pluginId": "omdb",
+            "entrypoint": "lookup_external_id",
+            "sourceLabel": "OMDb",
+            "movieUpdates": {"rating": "7.2"},
+        }
+
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[tmdb_result, omdb_result],
+            overwrite_enabled=False,
+            target_format="4K UHD",
+        )
+
+        decision = next(item for item in merged["fieldDecisions"] if item["target"] == "movie" and item["field"] == "rating")
+        self.assertEqual(merged["movieUpdates"]["rating"], "7.1")
+        self.assertEqual(decision["winner"]["pluginId"], "tmdb")
+        self.assertEqual(decision["acceptedCandidateCount"], 1)
+        self.assertFalse(decision["candidates"][1]["accepted"])
+        self.assertEqual(decision["candidates"][1]["reason"], "higher-priority provider already selected this field")
+
     def test_provider_image_options_are_kept_as_media_choices(self):
         current = {"title": "Manual Title", "format": "4K UHD", "metadata": {"poster_url": "https://local/poster.jpg"}}
         result = canonicalize_plugin_result(
@@ -335,6 +401,42 @@ class NextMetadataPolicyTests(unittest.TestCase):
             merged["mediaUpdates"]["poster"]["options"],
             ["https://provider/poster-main.jpg", "https://provider/poster-alt.jpg"],
         )
+        decision = next(item for item in merged["fieldDecisions"] if item["target"] == "media" and item["field"] == "poster")
+        self.assertEqual(decision["winner"]["pluginId"], "tmdb")
+        self.assertEqual(decision["finalValue"], "https://provider/poster-main.jpg")
+
+    def test_field_decisions_are_marked_written_from_applied_payload(self):
+        decisions = [
+            {
+                "target": "movie",
+                "field": "overview",
+                "winner": {"pluginId": "tmdb"},
+                "candidates": [],
+            },
+            {
+                "target": "metadata",
+                "field": "poster_url",
+                "winner": {"pluginId": "tmdb"},
+                "candidates": [],
+            },
+        ]
+
+        enriched = metadata_field_decisions_with_write_state(
+            decisions,
+            applied={
+                "changed": True,
+                "applied": {
+                    "movieUpdates": {"overview": "Fresh overview"},
+                    "metadataUpdates": {},
+                },
+            },
+            dry_run=False,
+        )
+
+        self.assertTrue(enriched[0]["written"])
+        self.assertEqual(enriched[0]["writeState"], "written")
+        self.assertFalse(enriched[1]["written"])
+        self.assertEqual(enriched[1]["writeState"], "not_written")
 
     def test_synthetic_barcodes_are_not_sent_to_external_sources(self):
         self.assertEqual(external_metadata_barcode("IMPORT-BACK_TO_THE_FUTURE-1985"), "")

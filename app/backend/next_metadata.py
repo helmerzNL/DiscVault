@@ -1015,6 +1015,43 @@ def should_apply_field(
     return False, "existing value retained"
 
 
+def metadata_decision_initial_value(
+    *,
+    target: str,
+    field: str,
+    current: dict[str, Any],
+    technical_current: dict[str, Any],
+) -> Any:
+    if target == "technical":
+        return technical_current.get(field)
+    if target == "metadata":
+        metadata = current.get("metadata") if isinstance(current.get("metadata"), dict) else {}
+        return metadata.get(field)
+    return current.get(field)
+
+
+def metadata_decision_candidate(
+    result: dict[str, Any],
+    *,
+    value: Any,
+    accepted: bool,
+    reason: str,
+    order: int,
+) -> dict[str, Any]:
+    return {
+        "pluginId": result["pluginId"],
+        "entrypoint": result["entrypoint"],
+        "sourceLabel": result.get("sourceLabel") or result["pluginId"],
+        "sourceRef": result.get("sourceRef") or "",
+        "sourceFormat": result.get("sourceFormat") or "",
+        "order": order,
+        "accepted": bool(accepted),
+        "winner": False,
+        "reason": reason,
+        "value": json_ready(value),
+    }
+
+
 def merge_metadata_results(
     *,
     current: dict[str, Any] | None,
@@ -1032,9 +1069,76 @@ def merge_metadata_results(
     identifiers: dict[str, str] = {}
     provenance: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    field_decisions_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    selected_field_keys: set[tuple[str, str]] = set()
     working_movie = dict(current)
     working_metadata = dict(current.get("metadata") or {})
     working_technical = dict(technical_current)
+
+    def decision_for(target: str, field: str) -> dict[str, Any]:
+        key = (target, field)
+        if key not in field_decisions_by_key:
+            field_decisions_by_key[key] = {
+                "target": target,
+                "field": field,
+                "initialValue": json_ready(
+                    metadata_decision_initial_value(
+                        target=target,
+                        field=field,
+                        current=current,
+                        technical_current=technical_current,
+                    )
+                ),
+                "finalValue": json_ready(
+                    metadata_decision_initial_value(
+                        target=target,
+                        field=field,
+                        current=current,
+                        technical_current=technical_current,
+                    )
+                ),
+                "winner": None,
+                "candidates": [],
+                "candidateCount": 0,
+                "acceptedCandidateCount": 0,
+                "conflict": False,
+                "changed": False,
+                "outcome": "retained_existing",
+            }
+        return field_decisions_by_key[key]
+
+    def add_decision_candidate(
+        *,
+        target: str,
+        field: str,
+        result: dict[str, Any],
+        value: Any,
+        accepted: bool,
+        reason: str,
+    ) -> None:
+        decision = decision_for(target, field)
+        candidate = metadata_decision_candidate(
+            result,
+            value=value,
+            accepted=accepted,
+            reason=reason,
+            order=len(decision["candidates"]) + 1,
+        )
+        decision["candidates"].append(candidate)
+        decision["candidateCount"] = len(decision["candidates"])
+        decision["acceptedCandidateCount"] = len([item for item in decision["candidates"] if item.get("accepted")])
+        decision["conflict"] = decision["candidateCount"] > 1
+        if accepted:
+            for item in decision["candidates"]:
+                item["winner"] = False
+            candidate["winner"] = True
+            decision["winner"] = {
+                key: candidate[key]
+                for key in ("pluginId", "entrypoint", "sourceLabel", "sourceRef", "sourceFormat", "reason", "order")
+            }
+            decision["finalValue"] = json_ready(value)
+            decision["changed"] = decision["finalValue"] != decision["initialValue"]
+            decision["outcome"] = "winner_selected"
 
     def merge_bucket(bucket: dict[str, Any], target: str, result: dict[str, Any], release_priority: bool) -> None:
         for field, value in bucket.items():
@@ -1044,16 +1148,21 @@ def merge_metadata_results(
                 current_value = working_metadata.get(field)
             else:
                 current_value = working_movie.get(field)
-            allowed, reason = should_apply_field(
-                field=field,
-                current_value=current_value,
-                incoming_value=value,
-                overwrite_enabled=overwrite_enabled,
-                target_format=target_format,
-                source_format=result.get("sourceFormat") or "",
-                release_priority=release_priority,
-                source_context=(result.get("raw") or {}).get("sourceContext") or "",
-            )
+            decision_key = (target, field)
+            if decision_key in selected_field_keys:
+                allowed = False
+                reason = "higher-priority provider already selected this field"
+            else:
+                allowed, reason = should_apply_field(
+                    field=field,
+                    current_value=current_value,
+                    incoming_value=value,
+                    overwrite_enabled=overwrite_enabled,
+                    target_format=target_format,
+                    source_format=result.get("sourceFormat") or "",
+                    release_priority=release_priority,
+                    source_context=(result.get("raw") or {}).get("sourceContext") or "",
+                )
             item = {
                 "field": field,
                 "target": target,
@@ -1061,6 +1170,14 @@ def merge_metadata_results(
                 "entrypoint": result["entrypoint"],
                 "reason": reason,
             }
+            add_decision_candidate(
+                target=target,
+                field=field,
+                result=result,
+                value=value,
+                accepted=allowed,
+                reason=reason,
+            )
             if not allowed:
                 skipped.append(item)
                 continue
@@ -1073,6 +1190,7 @@ def merge_metadata_results(
             else:
                 movie_updates[field] = value
                 working_movie[field] = value
+            selected_field_keys.add(decision_key)
             provenance.append({**item, "sourceRef": result.get("sourceRef") or "", "sourceLabel": result.get("sourceLabel") or result["pluginId"]})
 
     for result in results:
@@ -1097,6 +1215,14 @@ def merge_metadata_results(
                 existing_options = image_url_options(media_updates[kind].get("options"))
                 merged_options = image_url_options(existing_options, options)
                 media_updates[kind]["options"] = merged_options
+                add_decision_candidate(
+                    target="media",
+                    field=kind,
+                    result=result,
+                    value=source_url,
+                    accepted=False,
+                    reason="media already selected from an earlier provider",
+                )
                 skipped.append({**item, "reason": "media already selected from an earlier provider"})
                 continue
             media_updates[kind] = {
@@ -1108,11 +1234,35 @@ def merge_metadata_results(
                 "sourceLabel": media_update.get("sourceLabel") or result.get("sourceLabel") or result["pluginId"],
                 "sourceRef": media_update.get("sourceRef") or result.get("sourceRef") or "",
             }
+            add_decision_candidate(
+                target="media",
+                field=kind,
+                result=result,
+                value=source_url,
+                accepted=True,
+                reason="provider image selected as primary media asset",
+            )
             provenance.append({**item, "reason": "provider image selected as primary media asset"})
         for provider, identifier in (result.get("identifiers") or {}).items():
-            if identifier and provider not in identifiers:
+            if not identifier:
+                continue
+            identifier_result = {
+                **result,
+                "sourceRef": result.get("sourceRef") or f"{provider}:{identifier}",
+            }
+            accepted_identifier = provider not in identifiers
+            add_decision_candidate(
+                target="identifier",
+                field=str(provider),
+                result=identifier_result,
+                value=str(identifier),
+                accepted=accepted_identifier,
+                reason="identifier provider selected" if accepted_identifier else "identifier already selected from an earlier provider",
+            )
+            if accepted_identifier:
                 identifiers[provider] = identifier
 
+    field_decisions = list(field_decisions_by_key.values())
     return {
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
@@ -1121,6 +1271,7 @@ def merge_metadata_results(
         "identifiers": identifiers,
         "provenance": provenance,
         "skipped": skipped,
+        "fieldDecisions": field_decisions,
     }
 
 
@@ -1280,6 +1431,11 @@ def metadata_fetch_audit_payload(
 ) -> dict[str, Any]:
     proposal = preview.get("proposal") or {}
     applied = applied or {}
+    field_decisions = metadata_field_decisions_with_write_state(
+        proposal.get("fieldDecisions") or [],
+        applied=applied,
+        dry_run=dry_run,
+    )
     return {
         "movieId": str(movie_id),
         "title": movie.get("title"),
@@ -1306,9 +1462,59 @@ def metadata_fetch_audit_payload(
         "providerResults": [metadata_result_summary(item) for item in (preview.get("results") or [])],
         "acceptedFields": proposal.get("provenance") or [],
         "skippedFields": proposal.get("skipped") or [],
+        "fieldDecisions": field_decisions,
+        "finalWrites": [item for item in field_decisions if item.get("written")],
         "proposalStats": preview.get("proposalStats") or {},
         "applied": applied.get("applied") if applied else {},
     }
+
+
+def metadata_field_decisions_with_write_state(
+    field_decisions: list[dict[str, Any]],
+    *,
+    applied: dict[str, Any] | None,
+    dry_run: bool,
+) -> list[dict[str, Any]]:
+    applied = applied or {}
+    applied_payload = applied.get("applied") if isinstance(applied.get("applied"), dict) else {}
+    applied_payload = applied_payload if isinstance(applied_payload, dict) else {}
+    applied_buckets = {
+        "movie": applied_payload.get("movieUpdates") or {},
+        "metadata": applied_payload.get("metadataUpdates") or {},
+        "technical": applied_payload.get("technicalUpdates") or {},
+        "media": applied_payload.get("mediaUpdates") or {},
+        "identifier": applied_payload.get("identifiers") or {},
+    }
+    enriched: list[dict[str, Any]] = []
+    for decision in field_decisions:
+        if not isinstance(decision, dict):
+            continue
+        target = str(decision.get("target") or "")
+        field = str(decision.get("field") or "")
+        bucket = applied_buckets.get(target) or {}
+        applied_value = None
+        written = False
+        write_state = "dry_run" if dry_run else "not_written"
+        if not dry_run and isinstance(bucket, dict) and field in bucket:
+            applied_value = bucket.get(field)
+            written = True
+            write_state = "written"
+            if target == "media" and isinstance(applied_value, dict):
+                if applied_value.get("lockedPrimary"):
+                    write_state = "primary_locked_option_added"
+                elif applied_value.get("option"):
+                    write_state = "media_option_added"
+        elif not dry_run and not applied.get("changed"):
+            write_state = "unchanged"
+        enriched.append(
+            {
+                **decision,
+                "written": written,
+                "writeState": write_state,
+                "appliedValue": json_ready(applied_value) if written else None,
+            }
+        )
+    return enriched
 
 
 def metadata_provider_title_hints(results: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -1407,6 +1613,12 @@ def receiver_contribution_payload(
         "movieId": str(movie_id),
         "sourceProviders": source_providers,
         "acceptedFields": proposal.get("provenance") or [],
+        "fieldDecisions": applied.get("fieldDecisions") or proposal.get("fieldDecisions") or [],
+        "finalWrites": [
+            item
+            for item in (applied.get("fieldDecisions") or [])
+            if isinstance(item, dict) and item.get("written")
+        ],
         "applied": applied_fields,
     }
     if provider_title_hints:
@@ -1662,6 +1874,7 @@ def run_metadata_source_pipeline(
         results=normalized_results,
         proposal=merge,
     )
+    field_decisions = merge.get("fieldDecisions") or []
     return {
         "query": query,
         "settings": {"preferredProviderOverwrite": overwrite_enabled},
@@ -1672,6 +1885,9 @@ def run_metadata_source_pipeline(
         "proposalStats": {
             "acceptedFields": len(merge.get("provenance") or []),
             "skippedFields": len(merge.get("skipped") or []),
+            "fieldDecisions": len(field_decisions),
+            "conflictFields": len([item for item in field_decisions if item.get("conflict")]),
+            "winnerFields": len([item for item in field_decisions if item.get("winner")]),
             "updateFields": count_update_fields(merge),
             "formatBlockedFields": len(
                 [
@@ -2025,7 +2241,16 @@ def apply_metadata_proposal(
     changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers)
 
     if not changed:
-        return {"changed": False, "revision": 0, "applied": {}}
+        return {
+            "changed": False,
+            "revision": 0,
+            "applied": {},
+            "fieldDecisions": metadata_field_decisions_with_write_state(
+                proposal.get("fieldDecisions") or [],
+                applied={"changed": False, "applied": {}},
+                dry_run=False,
+            ),
+        }
 
     with conn.cursor() as cur:
         if movie_updates or metadata_updates:
@@ -2169,19 +2394,26 @@ def apply_metadata_proposal(
             "technicalUpdates": technical_updates,
             "mediaUpdates": media_updates,
             "identifiers": identifiers,
+            "fieldDecisions": proposal.get("fieldDecisions") or [],
         },
     )
+    applied_payload = {
+        "movieUpdates": movie_updates,
+        "metadataUpdates": metadata_updates,
+        "technicalUpdates": technical_updates,
+        "mediaUpdates": applied_media_updates,
+        "identifiers": identifiers,
+        "provenance": len(provenance),
+    }
     return {
         "changed": True,
         "revision": revision,
-        "applied": {
-            "movieUpdates": movie_updates,
-            "metadataUpdates": metadata_updates,
-            "technicalUpdates": technical_updates,
-            "mediaUpdates": applied_media_updates,
-            "identifiers": identifiers,
-            "provenance": len(provenance),
-        },
+        "applied": applied_payload,
+        "fieldDecisions": metadata_field_decisions_with_write_state(
+            proposal.get("fieldDecisions") or [],
+            applied={"changed": True, "applied": applied_payload},
+            dry_run=False,
+        ),
     }
 
 
