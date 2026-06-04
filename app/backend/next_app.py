@@ -38628,6 +38628,25 @@ def register_routes(flask_app: Flask) -> None:
             identifiers["imdb"] = imdb_id
         return identifiers
 
+    def existing_movie_row_matches_box_set_member(row: dict[str, Any], member: dict[str, Any]) -> bool:
+        member_title = clean_text(member.get("title") or member.get("originalTitle") or member.get("original_title"))
+        member_year = clean_text(member.get("year"))
+        member_format = clean_text(member.get("format"))
+        row_title_values = [
+            clean_text(row.get("title")),
+            clean_text(row.get("original_title")),
+            clean_text(row.get("sort_title")),
+        ]
+        if member_title:
+            member_title_key = member_title.casefold()
+            if not any(value and value.casefold() == member_title_key for value in row_title_values):
+                return False
+        if member_year and clean_text(row.get("year")) and clean_text(row.get("year")) != member_year:
+            return False
+        if member_format and clean_text(row.get("format")) and not compatible_box_set_member_format(row.get("format"), member_format):
+            return False
+        return True
+
     def existing_movie_for_box_set_member(conn, member: dict[str, Any]) -> UUID | None:
         barcode = clean_text(member.get("barcode"))
         title = clean_text(member.get("title") or member.get("originalTitle") or member.get("original_title"))
@@ -38643,16 +38662,17 @@ def register_routes(flask_app: Flask) -> None:
                 for provider, identifier in identifiers.items():
                     cur.execute(
                         """
-                        SELECT movie_id
-                        FROM movie_identifiers
-                        WHERE provider_id=%s AND identifier_type='movie_id' AND identifier=%s
-                        LIMIT 1
+                        SELECT m.id, m.title, m.original_title, m.sort_title, m.year, m.format
+                        FROM movie_identifiers mi
+                        JOIN movies m ON m.id = mi.movie_id
+                        WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
+                        ORDER BY m.updated_at DESC
                         """,
                         (provider, identifier),
                     )
-                    row = cur.fetchone()
-                    if row:
-                        return row["movie_id"]
+                    for row in cur.fetchall():
+                        if existing_movie_row_matches_box_set_member(row, member):
+                            return row["id"]
             if title and year:
                 cur.execute(
                     """

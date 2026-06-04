@@ -288,6 +288,47 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["boxSetProposal"]["member_count"], 2)
         self.assertEqual(len(result["boxSetProposals"]), 1)
 
+    def test_box_set_proposal_members_win_over_generic_items(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                self.assertEqual(path, "/api/v1/barcodes/5050582369601")
+                return {
+                    "status": "ok",
+                    "items": [
+                        {"title": "Back to the Future", "year": 1985},
+                        {"title": "Back to the Future Part II", "year": 1989},
+                        {"title": "Back to the Future Part III", "year": 1990},
+                        {"title": "Looking Back to the Future", "year": 2009},
+                    ],
+                    "boxSetProposal": {
+                        "entityType": "box_set",
+                        "id": "mv_bttf_dvd",
+                        "title": "Back to the Future Trilogy DVD",
+                        "barcode": "5050582369601",
+                        "format": "DVD",
+                        "members": [
+                            {"title": "Back to the Future", "year": 1985, "format": "DVD"},
+                            {"title": "Back to the Future Part II", "year": 1989, "format": "DVD"},
+                            {"title": "Back to the Future Part III", "year": 1990, "format": "DVD"},
+                        ],
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode({"barcode": "5050582369601"}, {"movievault": {"enabled": True}})
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["boxSetProposal"]["member_count"], 3)
+        self.assertEqual(
+            [member["title"] for member in result["boxSetProposal"]["members"]],
+            ["Back to the Future", "Back to the Future Part II", "Back to the Future Part III"],
+        )
+        self.assertEqual(result["items"], [])
+        self.assertEqual(result["candidates"], [])
+
     def test_box_set_candidates_omits_invalid_barcode_parameter(self):
         captured = {}
         original_get = movievault_26._get
