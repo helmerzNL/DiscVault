@@ -2844,6 +2844,104 @@ def migration_readiness(conn) -> dict[str, Any]:
     }
 
 
+def migration_dry_run_diff(readiness: dict[str, Any], imported: dict[str, Any] | None = None) -> dict[str, Any]:
+    source_counts = ((readiness.get("legacyData") or {}).get("sourceCounts") or {})
+    target_counts = ((readiness.get("targetDatabase") or {}).get("counts") or {})
+    imported_counts = imported or {}
+    rows = [
+        {
+            "key": "movies",
+            "label": "Movies",
+            "source": int(source_counts.get("movies") or 0),
+            "target": int(target_counts.get("movies") or 0),
+            "imported": int(imported_counts.get("movies") or 0),
+        },
+        {
+            "key": "people",
+            "label": "People",
+            "source": int(source_counts.get("people") or 0),
+            "target": int(target_counts.get("people") or 0),
+            "imported": int(imported_counts.get("people") or 0),
+        },
+        {
+            "key": "movie_credits",
+            "label": "Movie credits",
+            "source": int(source_counts.get("movie_people") or 0),
+            "target": int(target_counts.get("movie_credits") or 0),
+            "imported": int(imported_counts.get("movie_credits") or 0),
+        },
+        {
+            "key": "containers",
+            "label": "Containers",
+            "source": int(source_counts.get("box_sets") or 0) + int(source_counts.get("collections") or 0),
+            "target": int(target_counts.get("containers") or 0),
+            "imported": int(imported_counts.get("containers_box_set") or 0) + int(imported_counts.get("containers_collection") or 0),
+        },
+        {
+            "key": "container_movies",
+            "label": "Container movies",
+            "source": int(source_counts.get("box_set_movies") or 0),
+            "target": int(target_counts.get("container_movies") or 0),
+            "imported": int(imported_counts.get("box_set_movies") or 0),
+        },
+        {
+            "key": "collection_items",
+            "label": "Collection items",
+            "source": int(source_counts.get("collection_items") or 0),
+            "target": int(target_counts.get("collection_items") or 0),
+            "imported": int(imported_counts.get("collection_items") or 0),
+        },
+        {
+            "key": "media_groups",
+            "label": "Media groups",
+            "source": int(source_counts.get("media_groups") or source_counts.get("groups") or 0),
+            "target": int(target_counts.get("media_groups") or 0),
+            "imported": int(imported_counts.get("media_groups") or 0),
+        },
+        {
+            "key": "users",
+            "label": "Users",
+            "source": int(source_counts.get("users") or 0),
+            "target": int(target_counts.get("users") or 0),
+            "imported": int(imported_counts.get("users") or 0),
+        },
+    ]
+    for row in rows:
+        row["remaining"] = max(0, int(row["source"]) - int(row["target"]))
+        row["matched"] = int(row["target"]) >= int(row["source"]) if int(row["source"]) else True
+    return {
+        "state": readiness.get("state"),
+        "rows": rows,
+        "sourceTotal": sum(int(row["source"]) for row in rows),
+        "targetTotal": sum(int(row["target"]) for row in rows),
+        "importedTotal": sum(int(row["imported"]) for row in rows),
+    }
+
+
+def migration_recovery_plan(readiness: dict[str, Any], latest_job: dict[str, Any] | None) -> dict[str, Any]:
+    state = readiness.get("state") or "unknown"
+    latest_status = (latest_job or {}).get("status")
+    latest_error = clean_text((latest_job or {}).get("error"))
+    can_retry = bool(readiness.get("canStart")) and state in {"ready_for_confirmation", "ready_for_security_backfill"}
+    actions = list(readiness.get("requiredActions") or [])
+    if latest_error:
+        actions.insert(0, "Review the failed migration job error and retry after correcting the source or plugin configuration.")
+    if state == "blocked_target_not_empty":
+        actions.append("Use the test reset button only on a disposable beta database, or create a clean PostgreSQL target.")
+    if state == "blocked_source_unreadable":
+        actions.append("Verify that the legacy data directory is mounted and readable by the DiscVault 26 container.")
+    if state == "ready_for_security_backfill":
+        actions.append("Run the security backfill to import legacy users, passkeys and sharing groups.")
+    return {
+        "state": state,
+        "latestJobStatus": latest_status,
+        "latestJobError": latest_error,
+        "canRetry": can_retry,
+        "testResetEnabled": test_database_reset_enabled(),
+        "actions": actions,
+    }
+
+
 def migration_report(conn) -> dict[str, Any]:
     readiness = migration_readiness(conn)
     latest_run = readiness.get("latestRun")
@@ -2891,6 +2989,8 @@ def migration_report(conn) -> dict[str, Any]:
             "warnings": warnings,
         },
         "metadataPlugins": plugin_summary(conn),
+        "dryRunDiff": migration_dry_run_diff(readiness, imported or {}),
+        "recovery": migration_recovery_plan(readiness, latest_job),
         "testReset": {
             "enabled": test_database_reset_enabled(),
             "confirmation": TEST_DATABASE_RESET_CONFIRMATION,
@@ -3769,6 +3869,8 @@ def migration_dashboard_html() -> str:
           <span id="migrationFlowBadge" class="badge warn" data-next-i18n="common.loading">Loading</span>
         </div>
         <div class="summary-grid" id="migrationFlowSummary"></div>
+        <div class="option-list" id="migrationRecoveryPanel"></div>
+        <div class="option-list" id="migrationDryRunDiffPanel"></div>
         <div class="option-list" id="migrationFlowOptions"></div>
         <label class="confirm-box hidden" id="migrationConfirmBox">
           <input type="checkbox" id="migrationConfirmCheckbox">
@@ -4262,6 +4364,57 @@ def migration_dashboard_html() -> str:
     function flowSummaryItem(value, label) {
       return `<div class="summary-item"><strong>${escapeHtml(formatNumber(value))}</strong><span>${escapeHtml(label)}</span></div>`;
     }
+    function renderMigrationRecovery(report) {
+      const node = document.getElementById("migrationRecoveryPanel");
+      if (!node) return;
+      const recovery = report.recovery || {};
+      const actions = recovery.actions || [];
+      if (!actions.length && !recovery.latestJobError) {
+        node.innerHTML = "";
+        return;
+      }
+      node.innerHTML = `
+        <label class="option-row">
+          <input type="checkbox" checked disabled>
+          <span>
+            <strong>${escapeHtml(tNext("migration.recoveryTitle", "Recovery plan"))}</strong>
+            <span>${escapeHtml(recovery.latestJobError || tNext("migration.recoveryHelp", "Use these steps if migration cannot continue."))}</span>
+          </span>
+        </label>
+        ${actions.slice(0, 5).map((action) => `
+          <label class="option-row">
+            <input type="checkbox" disabled>
+            <span><strong>${escapeHtml(tNext("migration.requiredAction", "Action"))}</strong><span>${escapeHtml(action)}</span></span>
+          </label>
+        `).join("")}
+      `;
+    }
+    function renderMigrationDryRunDiff(report) {
+      const node = document.getElementById("migrationDryRunDiffPanel");
+      if (!node) return;
+      const rows = (report.dryRunDiff || {}).rows || [];
+      if (!rows.length) {
+        node.innerHTML = "";
+        return;
+      }
+      node.innerHTML = `
+        <label class="option-row">
+          <input type="checkbox" checked disabled>
+          <span>
+            <strong>${escapeHtml(tNext("migration.dryRunDiffTitle", "Source and target comparison"))}</strong>
+            <span>${escapeHtml(tNext("migration.dryRunDiffHelp", "Legacy counts compared with what is currently stored in PostgreSQL."))}</span>
+          </span>
+        </label>
+        <div class="source-stats">
+          ${rows.slice(0, 8).map((row) => `
+            <span class="source-stat">
+              <strong>${escapeHtml(formatNumber(row.target))}/${escapeHtml(formatNumber(row.source))}</strong>
+              ${escapeHtml(row.label || row.key || "-")}
+            </span>
+          `).join("")}
+        </div>
+      `;
+    }
     function selectedImportSource(report) {
       const sources = Array.isArray(report.importSources) ? report.importSources : [];
       return sources.find((source) => source.pluginId && source.pluginId === selectedImportSourceId) || report.source || {};
@@ -4326,6 +4479,8 @@ def migration_dashboard_html() -> str:
           flowSummaryItem(imageCountFromSource(source), tNext("migration.images", "Images"))
         ].join("");
       }
+      renderMigrationRecovery(report);
+      renderMigrationDryRunDiff(report);
       const options = document.getElementById("migrationFlowOptions");
       if (options) {
         options.innerHTML = [
@@ -7350,10 +7505,14 @@ def ui_preview_html(
     }
     .import-scanner-card {
       overflow: hidden;
+      border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+      background:
+        linear-gradient(155deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 82%, transparent);
     }
     .import-scanner-spotlight {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(320px, .8fr);
+      grid-template-columns: minmax(380px, 1.2fr) minmax(320px, .8fr);
       gap: 16px;
       align-items: start;
       margin-top: 14px;
@@ -7369,6 +7528,11 @@ def ui_preview_html(
       border-radius: 20px;
       background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+    }
+    .import-file-upload-card.secondary {
+      margin-top: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 58%, transparent);
+      box-shadow: none;
     }
     .import-file-upload-card .login-message,
     .import-file-summary {
@@ -8244,23 +8408,23 @@ def ui_preview_html(
       display: grid;
       gap: 10px;
       min-width: 0;
-      padding: 14px;
+      padding: 16px;
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 22px;
       background:
-        linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 52%),
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), transparent 52%),
         color-mix(in srgb, var(--bg-solid) 76%, transparent);
-      box-shadow: var(--shadow-soft);
+      box-shadow: 0 24px 70px color-mix(in srgb, var(--shadow) 28%, transparent), inset 0 1px 0 rgba(255,255,255,.12);
     }
     .barcode-scanner-viewport {
       position: relative;
       overflow: hidden;
       display: grid;
       place-items: center;
-      min-height: 310px;
+      min-height: clamp(300px, 42vw, 520px);
       aspect-ratio: 16 / 11;
       border: 1px solid var(--line);
-      border-radius: 16px;
+      border-radius: 20px;
       background:
         linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 46%),
         color-mix(in srgb, var(--bg-solid) 88%, #000);
@@ -8273,6 +8437,42 @@ def ui_preview_html(
       border-radius: 18px;
       background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
       padding: 14px;
+    }
+    .import-batch-card {
+      display: grid;
+      gap: 10px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .import-batch-card textarea {
+      width: 100%;
+      min-height: 92px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+      font-weight: 620;
+    }
+    .import-batch-list {
+      display: grid;
+      gap: 6px;
+    }
+    .import-batch-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+    }
+    .import-batch-row strong,
+    .import-batch-row span {
+      overflow-wrap: anywhere;
     }
     .barcode-scanner-viewport video,
     .barcode-scanner-viewport canvas {
@@ -9768,6 +9968,30 @@ def ui_preview_html(
       margin-top: 12px;
       min-width: 0;
     }
+    #appAdminOperationsFeatures.operations-feature-grid {
+      grid-template-columns: 1fr;
+    }
+    .operations-feature-group {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+      border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+      border-radius: 18px;
+      padding: 12px;
+      background: color-mix(in srgb, var(--field) 40%, transparent);
+    }
+    .operations-feature-group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .operations-feature-group-head strong {
+      font-size: .96rem;
+    }
+    .operations-feature-group .operations-feature-grid {
+      margin-top: 0;
+    }
     .operations-dashboard-card,
     .operations-feature-card {
       min-width: 0;
@@ -10759,8 +10983,17 @@ def ui_preview_html(
       .import-file-upload-card button {
         width: 100%;
       }
+      .import-batch-card .button-row {
+        justify-content: stretch;
+      }
+      .import-batch-card button {
+        width: 100%;
+      }
+      .import-batch-row {
+        grid-template-columns: 1fr;
+      }
       .barcode-scanner-viewport {
-        min-height: min(420px, 58vh);
+        min-height: min(420px, 52vh);
       }
       .import-mode-tabs button {
         flex: 1 0 auto;
@@ -11292,19 +11525,6 @@ def ui_preview_html(
                 <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding a movie.</p>
               </div>
             </div>
-            <div class="import-file-upload-card" id="importFileUploadCard">
-              <div>
-                <strong data-next-i18n="importCenter.fileTitle">Import file</strong>
-                <p class="import-source-meta" data-next-i18n="importCenter.fileHelp">Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.</p>
-                <div class="import-source-meta" id="importFileName" data-next-i18n="importCenter.fileSupported">Supported: CSV, TSV, JSON, XML and ZIP.</div>
-              </div>
-              <div class="button-row compact">
-                <input class="hidden" id="importFileInput" type="file" accept=".csv,.tsv,.json,.xml,.zip,application/json,text/csv,text/tab-separated-values,application/xml,text/xml,application/zip">
-                <button type="button" class="primary-button" id="importFileBrowseButton" data-next-i18n="importCenter.fileBrowse">Import / browse</button>
-              </div>
-              <div class="login-message" id="importFileMessage"></div>
-              <div class="import-file-summary" id="importFileSummary"></div>
-            </div>
             <div class="import-scanner-spotlight">
               <div class="barcode-scanner-shell">
                 <div class="import-card-head">
@@ -11346,7 +11566,33 @@ def ui_preview_html(
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
                 </form>
+                <div class="import-batch-card">
+                  <div>
+                    <strong data-next-i18n="importCenter.batchTitle">Batch barcodes</strong>
+                    <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Paste multiple EAN or UPC barcodes. DiscVault checks them one by one through the same metadata plugin flow.</p>
+                  </div>
+                  <textarea id="importBatchBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.batchPlaceholder" placeholder="8712626064312&#10;5051890315526"></textarea>
+                  <div class="button-row compact">
+                    <button type="button" class="secondary-button" id="importBatchClearButton" data-next-i18n="common.clear">Clear</button>
+                    <button type="button" class="primary-button" id="importBatchLookupButton" data-next-i18n="importCenter.batchLookup">Check batch</button>
+                  </div>
+                  <div class="login-message" id="importBatchMessage"></div>
+                  <div class="import-batch-list" id="importBatchList"></div>
+                </div>
               </div>
+            </div>
+            <div class="import-file-upload-card secondary" id="importFileUploadCard">
+              <div>
+                <strong data-next-i18n="importCenter.fileTitle">Import file</strong>
+                <p class="import-source-meta" data-next-i18n="importCenter.fileHelp">Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.</p>
+                <div class="import-source-meta" id="importFileName" data-next-i18n="importCenter.fileSupported">Supported: CSV, TSV, JSON, XML and ZIP.</div>
+              </div>
+              <div class="button-row compact">
+                <input class="hidden" id="importFileInput" type="file" accept=".csv,.tsv,.json,.xml,.zip,application/json,text/csv,text/tab-separated-values,application/xml,text/xml,application/zip">
+                <button type="button" class="primary-button" id="importFileBrowseButton" data-next-i18n="importCenter.fileBrowse">Import / browse</button>
+              </div>
+              <div class="login-message" id="importFileMessage"></div>
+              <div class="import-file-summary" id="importFileSummary"></div>
             </div>
             <div class="import-result-list" id="importBarcodeResults"></div>
           </div>
@@ -12702,7 +12948,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeTab: "add"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -14207,23 +14453,67 @@ def ui_preview_html(
     }
     function appAdminOperationsFeatureLabel(key) {
       const labels = {
-        metadata_audit_v2: ["appAdmin.featureMetadataAuditV2", "Metadata Refresh Audit v2"],
-        crew_refresh_ui: ["appAdmin.featureCrewRefreshUi", "Crew Refresh UI"],
-        movievault_contribution_status: ["appAdmin.featureMovieVaultContributionStatus", "MovieVault Contribution Status"],
-        boxset_member_reconciliation: ["appAdmin.featureBoxSetMemberReconciliation", "Box-set Member Reconciliation"],
-        artwork_manager_v2: ["appAdmin.featureArtworkManagerV2", "Artwork Manager v2"],
-        import_result_review_v2: ["appAdmin.featureImportResultReviewV2", "Import Result Review v2"],
-        duplicate_detection_center: ["appAdmin.featureDuplicateDetectionCenter", "Duplicate Detection Center"],
-        plugin_execution_logs: ["appAdmin.featurePluginExecutionLogs", "Plugin Execution Logs"],
-        plugin_priority_conflict_policy: ["appAdmin.featurePluginPriorityConflictPolicy", "Plugin Priority + Conflict Policy UI"],
-        api_token_presets: ["appAdmin.featureApiTokenPresets", "API Token Permission Presets"],
-        offline_sync_queue_ui: ["appAdmin.featureOfflineSyncQueueUi", "Offline Sync Queue UI"],
-        container_metadata_detail_v2: ["appAdmin.featureContainerMetadataDetailV2", "Container Metadata Detail v2"],
-        watch_sync_quality: ["appAdmin.featureWatchSyncQuality", "Watchlist/Watched Sync Quality"],
-        admin_health_dashboard: ["appAdmin.featureAdminHealthDashboard", "Admin Health Dashboard"],
-        library_command_palette: ["appAdmin.featureLibraryCommandPalette", "Library Command Palette"]
+        migration_recovery_ui: ["appAdmin.featureMigrationRecoveryUi", "Migration Recovery UI"],
+        migration_dry_run_diff: ["appAdmin.featureMigrationDryRunDiff", "Migration Dry-run Diff"],
+        first_run_experience_polish: ["appAdmin.featureFirstRunExperiencePolish", "First-run Experience Polish"],
+        import_match_review_queue: ["appAdmin.featureImportMatchReviewQueue", "Import Match Review Queue"],
+        box_set_member_review_v2: ["appAdmin.featureBoxSetMemberReviewV2", "Box-set Member Review v2"],
+        barcode_batch_mode: ["appAdmin.featureBarcodeBatchMode", "Barcode Batch Mode"],
+        mobile_scanner_polish: ["appAdmin.featureMobileScannerPolish", "Mobile Scanner Polish"],
+        metadata_conflict_resolver: ["appAdmin.featureMetadataConflictResolver", "Metadata Conflict Resolver"],
+        movievault_contribution_inspector: ["appAdmin.featureMovieVaultContributionInspector", "MovieVault Contribution Inspector"],
+        person_metadata_refresh_v2: ["appAdmin.featurePersonMetadataRefreshV2", "Person Metadata Refresh v2"],
+        plugin_health_dashboard: ["appAdmin.featurePluginHealthDashboard", "Plugin Health Dashboard"],
+        plugin_permission_matrix: ["appAdmin.featurePluginPermissionMatrix", "Plugin Permission Matrix"],
+        api_token_wizard: ["appAdmin.featureApiTokenWizard", "API Token Wizard"],
+        artwork_manager_v3: ["appAdmin.featureArtworkManagerV3", "Artwork Manager v3"],
+        containers_native_editor: ["appAdmin.featureContainersNativeEditor", "Collections and Containers Native Editor"],
+        watchlist_watched_sync_center: ["appAdmin.featureWatchlistWatchedSyncCenter", "Watchlist and Watched Sync Center"],
+        offline_queue_ui: ["appAdmin.featureOfflineQueueUi", "Offline Queue UI"],
+        backup_scheduler: ["appAdmin.featureBackupScheduler", "Backup Scheduler"],
+        audit_log_explorer_v2: ["appAdmin.featureAuditLogExplorerV2", "Audit Log Explorer v2"],
+        unified_settings_visibility: ["appAdmin.featureUnifiedSettingsVisibility", "Unified Settings Visibility"]
       };
       const entry = labels[key] || ["appAdmin.featureUnknown", key || "Feature"];
+      return tNext(entry[0], entry[1]);
+    }
+    function appAdminOperationsFeatureGroupLabel(group) {
+      const labels = {
+        startup: ["appAdmin.featureGroupStartup", "Startup"],
+        import: ["importCenter.title", "Import"],
+        metadata: ["appAdmin.featureGroupMetadata", "Metadata"],
+        plugins: ["appAdmin.plugins", "Plugins"],
+        library: ["preferences.tabLibrary", "Library"],
+        lists: ["uiPreview.navLists", "Lists"],
+        operations: ["appAdmin.tabOperations", "Operations"]
+      };
+      const entry = labels[group] || ["appAdmin.featureGroupOther", "Other"];
+      return tNext(entry[0], entry[1]);
+    }
+    function appAdminOperationsFeatureDescription(key) {
+      const descriptions = {
+        migration_recovery_ui: ["appAdmin.featureMigrationRecoveryUiHelp", "Shows retry, reset and source-fix guidance when first-run migration cannot continue."],
+        migration_dry_run_diff: ["appAdmin.featureMigrationDryRunDiffHelp", "Compares legacy source counts with the PostgreSQL target before writing data."],
+        first_run_experience_polish: ["appAdmin.featureFirstRunExperiencePolishHelp", "Keeps onboarding, language choice and migration context in the startup flow."],
+        import_match_review_queue: ["appAdmin.featureImportMatchReviewQueueHelp", "Lets imported rows be reviewed, matched, skipped or corrected before commit."],
+        box_set_member_review_v2: ["appAdmin.featureBoxSetMemberReviewV2Help", "Reviews, searches, removes and contributes box-set members before import."],
+        barcode_batch_mode: ["appAdmin.featureBarcodeBatchModeHelp", "Checks multiple EAN/UPC barcodes through the same metadata plugin lookup flow."],
+        mobile_scanner_polish: ["appAdmin.featureMobileScannerPolishHelp", "Promotes the camera scanner and keeps controls usable on phones and tablets."],
+        metadata_conflict_resolver: ["appAdmin.featureMetadataConflictResolverHelp", "Uses plugin order and conflict policy to decide which provider fills fields."],
+        movievault_contribution_inspector: ["appAdmin.featureMovieVaultContributionInspectorHelp", "Shows what DiscVault fetched and what it contributed to enabled metadata receivers."],
+        person_metadata_refresh_v2: ["appAdmin.featurePersonMetadataRefreshV2Help", "Refreshes person profiles, images and filmography through capable metadata plugins."],
+        plugin_health_dashboard: ["appAdmin.featurePluginHealthDashboardHelp", "Groups plugin health, execution jobs and recent plugin events."],
+        plugin_permission_matrix: ["appAdmin.featurePluginPermissionMatrixHelp", "Separates plugin capabilities by type and gates actions through RBAC."],
+        api_token_wizard: ["appAdmin.featureApiTokenWizardHelp", "Offers API token presets for read-only, import, metadata and automation clients."],
+        artwork_manager_v3: ["appAdmin.featureArtworkManagerV3Help", "Tracks poster/backdrop coverage, uploads, primary selection and overwrite locks."],
+        containers_native_editor: ["appAdmin.featureContainersNativeEditorHelp", "Manages collections, box-sets and vaults with native list/detail editing."],
+        watchlist_watched_sync_center: ["appAdmin.featureWatchlistWatchedSyncCenterHelp", "Keeps Watchlist and Watched history ready for Trakt, Plex and Jellyfin sync."],
+        offline_queue_ui: ["appAdmin.featureOfflineQueueUiHelp", "Surfaces client-side offline readiness and queued actions."],
+        backup_scheduler: ["appAdmin.featureBackupSchedulerHelp", "Prepares functional collection backup exports without auth or plugin secrets."],
+        audit_log_explorer_v2: ["appAdmin.featureAuditLogExplorerV2Help", "Shows full structured audit payloads with copyable JSON."],
+        unified_settings_visibility: ["appAdmin.featureUnifiedSettingsVisibilityHelp", "Hides settings and admin controls from roles without the matching permissions."]
+      };
+      const entry = descriptions[key] || ["appAdmin.featureUnknownHelp", ""];
       return tNext(entry[0], entry[1]);
     }
     function appAdminOperationsRow(title, meta, tag, tone) {
@@ -14288,14 +14578,36 @@ def ui_preview_html(
         `;
       if (featuresNode) {
         const features = operations.features || [];
-        featuresNode.innerHTML = features.length ? features.map((feature) => `
-          <div class="operations-feature-card">
-            <div class="operations-feature-head">
-              <strong>${escapeHtml(appAdminOperationsFeatureLabel(feature.key))}</strong>
-              <span class="tag ${appAdminOperationsStatusClass(feature.status)}">${escapeHtml(appAdminOperationsStatusLabel(feature.status))}</span>
+        const groups = {};
+        features.forEach((feature) => {
+          const group = feature.group || "operations";
+          if (!groups[group]) groups[group] = [];
+          groups[group].push(feature);
+        });
+        featuresNode.innerHTML = features.length ? Object.entries(groups).map(([group, items]) => `
+          <div class="operations-feature-group">
+            <div class="operations-feature-group-head">
+              <strong>${escapeHtml(appAdminOperationsFeatureGroupLabel(group))}</strong>
+              <span class="tag">${escapeHtml(formatNumber(items.length))}</span>
             </div>
-            <span>${escapeHtml(tNext("appAdmin.featureRequires", "Requires one of"))}</span>
-            <div class="admin-member-cloud">${appAdminPermissionTags(feature.permissionKeys || [], 3)}</div>
+            <div class="operations-feature-grid">
+              ${items.map((feature) => {
+                const description = appAdminOperationsFeatureDescription(feature.key);
+                const signalTags = Object.entries(feature.signals || {}).slice(0, 3).map(([key, value]) => `<span class="tag blue">${escapeHtml(key)} ${escapeHtml(String(value))}</span>`).join("");
+                return `
+                  <div class="operations-feature-card">
+                    <div class="operations-feature-head">
+                      <strong>${escapeHtml(appAdminOperationsFeatureLabel(feature.key))}</strong>
+                      <span class="tag ${appAdminOperationsStatusClass(feature.status)}">${escapeHtml(appAdminOperationsStatusLabel(feature.status))}</span>
+                    </div>
+                    ${description ? `<span>${escapeHtml(description)}</span>` : ""}
+                    <span>${escapeHtml(tNext("appAdmin.featureRequires", "Requires one of"))}</span>
+                    <div class="admin-member-cloud">${appAdminPermissionTags(feature.permissionKeys || [], 3)}</div>
+                    ${signalTags ? `<div class="admin-member-cloud">${signalTags}</div>` : ""}
+                  </div>
+                `;
+              }).join("")}
+            </div>
           </div>
         `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noOperationsFeatures", "No operations features reported."))}</div>`;
       }
@@ -20088,6 +20400,12 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function setImportBatchMessage(message, tone) {
+      const node = document.getElementById("importBatchMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
     function validateImportBarcode(code) {
       const value = String(code || "").replace(/\\D/g, "");
       if (/^\\d{13}$/.test(value)) {
@@ -20108,6 +20426,108 @@ def ui_preview_html(
     }
     function normalizeImportBarcode(value) {
       return String(value || "").replace(/\\D/g, "");
+    }
+    function parseImportBatchBarcodes(value) {
+      const text = String(value || "");
+      const candidates = text
+        .split(/[^0-9]+/)
+        .map((item) => normalizeImportBarcode(item))
+        .filter(Boolean);
+      const seen = new Set();
+      const valid = [];
+      const invalid = [];
+      candidates.forEach((barcode) => {
+        if (seen.has(barcode)) return;
+        seen.add(barcode);
+        if (validateImportBarcode(barcode)) valid.push(barcode);
+        else invalid.push(barcode);
+      });
+      return {valid, invalid};
+    }
+    function renderImportBatchList() {
+      const list = document.getElementById("importBatchList");
+      if (!list) return;
+      const rows = importCenter.batchResults || [];
+      list.innerHTML = rows.length ? rows.map((row) => {
+        const statusClass = row.status === "ok" ? "good" : row.status === "error" ? "bad" : "blue";
+        const countText = [
+          row.movieCandidates !== undefined ? `${formatNumber(row.movieCandidates)} ${tNext("importCenter.batchMovies", "movies")}` : "",
+          row.boxSetCandidates !== undefined ? `${formatNumber(row.boxSetCandidates)} ${tNext("importCenter.batchBoxSets", "box-sets")}` : ""
+        ].filter(Boolean).join(" / ");
+        return `
+          <div class="import-batch-row">
+            <span>
+              <strong>${escapeHtml(row.barcode || "-")}</strong>
+              <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
+            </span>
+            <button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" ? "disabled" : ""}>${escapeHtml(tNext("importCenter.previewBarcode", "Search"))}</button>
+          </div>
+        `;
+      }).join("") : "";
+    }
+    async function previewImportBatchBarcode(barcode) {
+      const input = document.getElementById("importBarcodeInput");
+      const titleInput = document.getElementById("importTitleInput");
+      const yearInput = document.getElementById("importYearInput");
+      if (input) input.value = barcode;
+      if (titleInput) titleInput.value = "";
+      if (yearInput) yearInput.value = "";
+      return previewBarcodeImport();
+    }
+    async function runImportBatchLookup() {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd) || importCenter.batchRunning) return;
+      const textarea = document.getElementById("importBatchBarcodeInput");
+      const parsed = parseImportBatchBarcodes(textarea?.value || "");
+      if (!parsed.valid.length) {
+        setImportBatchMessage(tNext("importCenter.batchNoValid", "No valid EAN or UPC barcodes found."), "bad");
+        importCenter.batchResults = parsed.invalid.map((barcode) => ({barcode, status: "error", message: tNext("importCenter.scanInvalid", "The scanned barcode was not a valid EAN or UPC.")}));
+        renderImportBatchList();
+        return;
+      }
+      importCenter.batchBarcodes = parsed.valid;
+      importCenter.batchResults = [
+        ...parsed.valid.map((barcode) => ({barcode, status: "queued", message: tNext("importCenter.batchQueued", "Queued")})),
+        ...parsed.invalid.map((barcode) => ({barcode, status: "error", message: tNext("importCenter.scanInvalid", "The scanned barcode was not a valid EAN or UPC.")}))
+      ];
+      importCenter.batchRunning = true;
+      setImportBatchMessage(`${tNext("importCenter.batchRunning", "Checking batch...")} ${formatNumber(parsed.valid.length)}`);
+      renderImportBatchList();
+      try {
+        for (const barcode of parsed.valid) {
+          const row = importCenter.batchResults.find((item) => item.barcode === barcode);
+          if (row) {
+            row.status = "running";
+            row.message = tNext("importCenter.previewingLookup", "Searching metadata...");
+            renderImportBatchList();
+          }
+          const payload = await previewImportBatchBarcode(barcode);
+          if (!payload) {
+            if (row) {
+              row.status = "error";
+              row.message = importCenter.lookupPreviewMessage || tNext("importCenter.noBarcodeResults", "No barcode candidates found.");
+            }
+            renderImportBatchList();
+            continue;
+          }
+          const movieCount = lookupMovieCandidates().length;
+          const boxSetCount = barcodeBoxSetProposals().length;
+          if (row) {
+            row.status = "ok";
+            row.movieCandidates = movieCount;
+            row.boxSetCandidates = boxSetCount;
+            row.message = movieCount || boxSetCount
+              ? `${formatNumber(movieCount)} ${tNext("importCenter.batchMovies", "movies")} / ${formatNumber(boxSetCount)} ${tNext("importCenter.batchBoxSets", "box-sets")}`
+              : tNext("importCenter.noBarcodeResults", "No barcode candidates found.");
+          }
+          renderImportBatchList();
+        }
+        setImportBatchMessage(tNext("importCenter.batchDone", "Batch check completed."), "good");
+      } catch (error) {
+        setImportBatchMessage(error.message || String(error), "bad");
+      } finally {
+        importCenter.batchRunning = false;
+        renderImportBatchList();
+      }
     }
     async function applyImportScannerFocus(stream) {
       try {
@@ -21297,6 +21717,7 @@ def ui_preview_html(
       renderImportReview();
       renderImportJobs();
       renderBarcodeLookup();
+      renderImportBatchList();
       applyAppPermissionVisibility();
     }
     async function loadImportCenter() {
@@ -21463,10 +21884,12 @@ def ui_preview_html(
         renderBarcodeLookup();
         setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
         console.log("movie import preview", payload);
+        return payload;
       } catch (error) {
         importCenter.barcodeLookup = null;
         setImportLookupPreviewMessage(error.message || String(error), "bad");
         setImportCenterMessage(error.message || String(error), "bad");
+        return null;
       }
     }
     async function addLookupMovie(trigger = null) {
@@ -24403,6 +24826,19 @@ def ui_preview_html(
         if (metadataJobButton) queueImportJobMetadataRefresh(metadataJobButton.dataset.importMetadataRefreshJob);
       });
       document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
+      document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
+      document.getElementById("importBatchClearButton")?.addEventListener("click", () => {
+        const input = document.getElementById("importBatchBarcodeInput");
+        if (input) input.value = "";
+        importCenter.batchBarcodes = [];
+        importCenter.batchResults = [];
+        setImportBatchMessage("", "");
+        renderImportBatchList();
+      });
+      document.getElementById("importBatchList")?.addEventListener("click", (event) => {
+        const previewButton = event.target.closest("[data-import-batch-preview]");
+        if (previewButton) previewImportBatchBarcode(previewButton.dataset.importBatchPreview || "");
+      });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
         const movieCandidateButton = event.target.closest("[data-movie-candidate-key]");
@@ -36248,22 +36684,28 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
     pending_jobs = int(job_counts.get("pending") or 0)
     failed_jobs = int(job_counts.get("failed") or job_counts.get("error") or 0)
     health_status = operations_status_from_counts(failed_jobs, warning_threshold=0)
+    api_presets = admin_operations_api_presets(conn, actor)
     features = [
-        {"key": "metadata_audit_v2", "status": "ready", "permissionKeys": ["admin.view_audit", "metadata.refresh_bulk"], "signals": {"metadataEvents": len(metadata_events), "receiverEvents": len(receiver_events)}},
-        {"key": "crew_refresh_ui", "status": "ready", "permissionKeys": ["metadata.refresh_one"], "signals": {"personRefreshSupported": True}},
-        {"key": "movievault_contribution_status", "status": "ready", "permissionKeys": ["metadata.manage_receivers", "admin.view_audit"], "signals": {"receiverEvents": len(receiver_events)}},
-        {"key": "boxset_member_reconciliation", "status": container_summary["status"], "permissionKeys": ["containers.edit", "collection.bulk_edit"], "signals": container_summary.get("counts", {})},
-        {"key": "artwork_manager_v2", "status": artwork_summary["status"], "permissionKeys": ["collection.edit_all", "collection.edit_own"], "signals": artwork_summary.get("counts", {})},
-        {"key": "import_result_review_v2", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"importJobs": sum(1 for job in latest_jobs if job.get("jobType") == PLUGIN_EXECUTION_JOB_TYPE)}},
-        {"key": "duplicate_detection_center", "status": duplicate_summary["status"], "permissionKeys": ["collection.import", "collection.bulk_edit"], "signals": duplicate_summary.get("counts", {})},
-        {"key": "plugin_execution_logs", "status": "ready", "permissionKeys": ["metadata.view_plugin_health", "admin.view_jobs"], "signals": {"pluginJobs": len(plugin_jobs), "pluginEvents": len(plugin_events)}},
-        {"key": "plugin_priority_conflict_policy", "status": plugin_policy["status"], "permissionKeys": ["metadata.manage_plugin_order", "metadata.manage_plugins"], "signals": {"enabledSources": len(plugin_policy.get("enabledSources") or [])}},
-        {"key": "api_token_presets", "status": "ready", "permissionKeys": ["api.tokens.manage"], "signals": {"presets": len(admin_operations_api_presets(conn, actor))}},
-        {"key": "offline_sync_queue_ui", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"clientSideQueue": True}},
-        {"key": "container_metadata_detail_v2", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
-        {"key": "watch_sync_quality", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
-        {"key": "admin_health_dashboard", "status": health_status, "permissionKeys": ["admin.view_jobs", "admin.view_settings"], "signals": {"pendingJobs": pending_jobs, "failedJobs": failed_jobs}},
-        {"key": "library_command_palette", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"shortcut": "Cmd/Ctrl+K"}},
+        {"key": "migration_recovery_ui", "group": "startup", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"state": "report.recovery", "failedJobs": failed_jobs}},
+        {"key": "migration_dry_run_diff", "group": "startup", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"sourceDiff": "report.dryRunDiff"}},
+        {"key": "first_run_experience_polish", "group": "startup", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"startupGate": True}},
+        {"key": "import_match_review_queue", "group": "import", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"importJobs": sum(1 for job in latest_jobs if job.get("jobType") == PLUGIN_EXECUTION_JOB_TYPE)}},
+        {"key": "box_set_member_review_v2", "group": "import", "status": container_summary["status"], "permissionKeys": ["collection.import", "containers.edit"], "signals": container_summary.get("counts", {})},
+        {"key": "barcode_batch_mode", "group": "import", "status": "ready", "permissionKeys": ["collection.add", "collection.add_own", "collection.import", "metadata.search"], "signals": {"scanner": "batch_lookup"}},
+        {"key": "mobile_scanner_polish", "group": "import", "status": "ready", "permissionKeys": ["collection.add", "collection.add_own", "collection.import"], "signals": {"responsive": True, "pwa": True}},
+        {"key": "metadata_conflict_resolver", "group": "metadata", "status": plugin_policy["status"], "permissionKeys": ["metadata.manage_plugin_order", "metadata.refresh_bulk"], "signals": {"enabledSources": len(plugin_policy.get("enabledSources") or [])}},
+        {"key": "movievault_contribution_inspector", "group": "metadata", "status": "ready", "permissionKeys": ["metadata.manage_receivers", "admin.view_audit"], "signals": {"receiverEvents": len(receiver_events)}},
+        {"key": "person_metadata_refresh_v2", "group": "metadata", "status": "ready", "permissionKeys": ["metadata.refresh_one"], "signals": {"personRefreshSupported": True}},
+        {"key": "plugin_health_dashboard", "group": "plugins", "status": "ready", "permissionKeys": ["metadata.view_plugin_health", "admin.view_jobs"], "signals": {"pluginJobs": len(plugin_jobs), "pluginEvents": len(plugin_events)}},
+        {"key": "plugin_permission_matrix", "group": "plugins", "status": "ready", "permissionKeys": ["metadata.manage_plugins", "admin.view_settings"], "signals": {"pluginTypes": 7}},
+        {"key": "api_token_wizard", "group": "plugins", "status": "ready", "permissionKeys": ["api.tokens.manage"], "signals": {"presets": len(api_presets)}},
+        {"key": "artwork_manager_v3", "group": "library", "status": artwork_summary["status"], "permissionKeys": ["collection.edit_all", "collection.edit_own"], "signals": artwork_summary.get("counts", {})},
+        {"key": "containers_native_editor", "group": "library", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
+        {"key": "watchlist_watched_sync_center", "group": "lists", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
+        {"key": "offline_queue_ui", "group": "lists", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"clientSideQueue": True}},
+        {"key": "backup_scheduler", "group": "operations", "status": "ready", "permissionKeys": ["admin.backup", "collection.export_functional"], "signals": {"functionalBackups": True}},
+        {"key": "audit_log_explorer_v2", "group": "operations", "status": "ready", "permissionKeys": ["admin.view_audit"], "signals": {"metadataEvents": len(metadata_events), "receiverEvents": len(receiver_events), "pluginEvents": len(plugin_events)}},
+        {"key": "unified_settings_visibility", "group": "operations", "status": "ready", "permissionKeys": ["admin.view_settings"], "signals": {"permissionAware": True}},
     ]
     return {
         "actor": {"id": actor.get("id"), "username": actor.get("username"), "role": actor.get("role")},
@@ -36286,7 +36728,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         "containers": container_summary,
         "watchSync": watch_summary,
         "pluginPolicy": plugin_policy,
-        "apiTokenPresets": admin_operations_api_presets(conn, actor),
+        "apiTokenPresets": api_presets,
         "jobs": {"latest": latest_jobs, "plugin": plugin_jobs, "metadata": metadata_jobs},
         "audit": {"metadata": metadata_events, "receiver": receiver_events, "plugins": plugin_events},
         "features": features,
