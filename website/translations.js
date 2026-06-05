@@ -2000,6 +2000,7 @@ Object.assign(T.da, {
 
 Object.assign(T.en, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Screenshots',
   'hero.eyebrow':'DiscVault 26 beta is available now',
   'hero.h1.line1':'DiscVault 26 is here.',
   'hero.h1.accent':'Built for the next shelf.',
@@ -2067,6 +2068,7 @@ Object.assign(T.en, {
 
 Object.assign(T.nl, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Schermafbeeldingen',
   'hero.eyebrow':'DiscVault 26 beta is nu beschikbaar',
   'hero.h1.line1':'DiscVault 26 is er.',
   'hero.h1.accent':'Gebouwd voor de volgende plank.',
@@ -2134,6 +2136,7 @@ Object.assign(T.nl, {
 
 Object.assign(T.de, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Screenshots',
   'hero.eyebrow':'DiscVault 26 Beta ist jetzt verfügbar',
   'hero.h1.line1':'DiscVault 26 ist da.',
   'hero.h1.accent':'Gebaut für das nächste Regal.',
@@ -2201,6 +2204,7 @@ Object.assign(T.de, {
 
 Object.assign(T.fr, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Captures d’ecran',
   'hero.eyebrow':'La beta de DiscVault 26 est disponible',
   'hero.h1.line1':'DiscVault 26 est la.',
   'hero.h1.accent':'Concu pour la prochaine etagere.',
@@ -2268,6 +2272,7 @@ Object.assign(T.fr, {
 
 Object.assign(T.es, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Capturas',
   'hero.eyebrow':'La beta de DiscVault 26 ya esta disponible',
   'hero.h1.line1':'DiscVault 26 esta aqui.',
   'hero.h1.accent':'Creado para la proxima estanteria.',
@@ -2335,6 +2340,7 @@ Object.assign(T.es, {
 
 Object.assign(T.pt, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Capturas',
   'hero.eyebrow':'A beta do DiscVault 26 ja esta disponivel',
   'hero.h1.line1':'O DiscVault 26 chegou.',
   'hero.h1.accent':'Criado para a proxima prateleira.',
@@ -2402,6 +2408,7 @@ Object.assign(T.pt, {
 
 Object.assign(T.it, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Screenshot',
   'hero.eyebrow':'La beta di DiscVault 26 e disponibile',
   'hero.h1.line1':'DiscVault 26 e arrivato.',
   'hero.h1.accent':'Creato per il prossimo scaffale.',
@@ -2469,6 +2476,7 @@ Object.assign(T.it, {
 
 Object.assign(T.sv, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Skarmbilder',
   'hero.eyebrow':'DiscVault 26 beta finns nu',
   'hero.h1.line1':'DiscVault 26 ar har.',
   'hero.h1.accent':'Byggd for nasta hylla.',
@@ -2536,6 +2544,7 @@ Object.assign(T.sv, {
 
 Object.assign(T.no, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Skjermbilder',
   'hero.eyebrow':'DiscVault 26 beta er tilgjengelig na',
   'hero.h1.line1':'DiscVault 26 er her.',
   'hero.h1.accent':'Bygget for neste hylle.',
@@ -2603,6 +2612,7 @@ Object.assign(T.no, {
 
 Object.assign(T.fi, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Kuvakaappaukset',
   'hero.eyebrow':'DiscVault 26 beta on nyt saatavilla',
   'hero.h1.line1':'DiscVault 26 on taalla.',
   'hero.h1.accent':'Rakennettu seuraavalle hyllylle.',
@@ -2670,6 +2680,7 @@ Object.assign(T.fi, {
 
 Object.assign(T.da, {
   'nav.v26':'DiscVault 26',
+  'nav.screenshots':'Skaermbilleder',
   'hero.eyebrow':'DiscVault 26 beta er tilgaengelig nu',
   'hero.h1.line1':'DiscVault 26 er her.',
   'hero.h1.accent':'Bygget til den naeste hylde.',
