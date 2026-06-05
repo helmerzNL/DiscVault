@@ -11251,8 +11251,8 @@ def ui_preview_html(
             <div class="import-card-head">
               <div>
                 <span class="eyebrow" data-next-i18n="importCenter.addEyebrow">Quick add</span>
-                <h3 data-next-i18n="importCenter.lookupTitle">Film toevoegen</h3>
-                <p data-next-i18n="importCenter.lookupHelp">Scan een barcode of zoek handmatig op barcode of titel voordat je een film toevoegt.</p>
+                <h3 data-next-i18n="importCenter.lookupTitle">Add movie</h3>
+                <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding a movie.</p>
               </div>
             </div>
             <div class="import-file-upload-card" id="importFileUploadCard">
@@ -11273,7 +11273,7 @@ def ui_preview_html(
                 <div class="import-card-head">
                   <div>
                     <strong data-next-i18n="importCenter.scanTitle">Camera scanner</strong>
-                    <p class="import-source-meta" data-next-i18n="importCenter.scanHelp">Werkt in de PWA via HTTPS met camera-toestemming.</p>
+                    <p class="import-source-meta" data-next-i18n="importCenter.scanHelp">Works in the PWA over HTTPS after camera permission.</p>
                   </div>
                   <div class="button-row compact">
                     <button type="button" class="primary-button" id="importScannerStartButton" data-next-i18n="importCenter.scanStart">Scan</button>
@@ -11281,7 +11281,7 @@ def ui_preview_html(
                   </div>
                 </div>
                 <div class="barcode-scanner-viewport" id="importScannerViewport">
-                  <div class="barcode-scanner-placeholder" id="importScannerPlaceholder" data-next-i18n="importCenter.scanPlaceholder">Richt de camera op een EAN of UPC barcode.</div>
+                  <div class="barcode-scanner-placeholder" id="importScannerPlaceholder" data-next-i18n="importCenter.scanPlaceholder">Point the camera at an EAN or UPC barcode.</div>
                 </div>
                 <div class="login-message" id="importScannerMessage"></div>
               </div>
@@ -11296,15 +11296,15 @@ def ui_preview_html(
                     <input id="importBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
                   </label>
                   <label>
-                    <span data-next-i18n="importCenter.manualTitle">Titel</span>
+                    <span data-next-i18n="importCenter.manualTitle">Title</span>
                     <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
                   </label>
                   <label>
-                    <span data-next-i18n="importCenter.manualYear">Jaar</span>
+                    <span data-next-i18n="importCenter.manualYear">Year</span>
                     <input id="importYearInput" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
                   </label>
                   <label>
-                    <span data-next-i18n="importCenter.manualFormat">Formaat</span>
+                    <span data-next-i18n="importCenter.manualFormat">Format</span>
                     <input id="importFormatInput" autocomplete="off" maxlength="80" data-next-i18n-placeholder="importCenter.formatPlaceholder" placeholder="4K UHD">
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
