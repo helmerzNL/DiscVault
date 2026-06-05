@@ -23,7 +23,7 @@ import sqlite3
 import tempfile
 import uuid
 import zipfile
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
