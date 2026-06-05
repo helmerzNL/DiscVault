@@ -9720,6 +9720,155 @@ def ui_preview_html(
     .app-admin-panel[data-app-admin-panel="plugins"] .profile-passkey-list {
       width: 100%;
     }
+    .app-admin-panel[data-app-admin-panel="operations"] .profile-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .operations-dashboard,
+    .operations-feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+      min-width: 0;
+    }
+    .operations-dashboard-card,
+    .operations-feature-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      padding: 11px;
+      display: grid;
+      gap: 7px;
+    }
+    .operations-dashboard-card span,
+    .operations-feature-card span {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 730;
+      line-height: 1.35;
+    }
+    .operations-dashboard-card strong,
+    .operations-feature-card strong {
+      overflow-wrap: anywhere;
+    }
+    .operations-feature-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .operations-row-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .operations-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--field) 54%, transparent);
+      padding: 9px 10px;
+      min-width: 0;
+    }
+    .operations-row strong {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    .operations-row span {
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 650;
+      line-height: 1.35;
+    }
+    .operations-row .tag {
+      justify-self: end;
+      white-space: nowrap;
+    }
+    .command-palette-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      display: grid;
+      place-items: start center;
+      padding: max(24px, env(safe-area-inset-top)) 16px 16px;
+      background: rgba(0,0,0,.38);
+      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(16px);
+    }
+    .command-palette-backdrop.hidden {
+      display: none;
+    }
+    .command-palette {
+      width: min(680px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      box-shadow: var(--shadow-strong);
+      overflow: hidden;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .command-palette input {
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 1rem;
+      padding: 17px 18px;
+      outline: none;
+    }
+    .command-list {
+      display: grid;
+      gap: 6px;
+      max-height: min(62vh, 520px);
+      overflow: auto;
+      padding: 10px;
+    }
+    .command-item {
+      border: 1px solid transparent;
+      border-radius: 16px;
+      background: transparent;
+      color: var(--text);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .command-item:hover,
+    .command-item.active {
+      border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+      background: color-mix(in srgb, var(--accent) 12%, var(--bg-solid));
+    }
+    .command-item strong,
+    .command-item span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .command-item span {
+      color: var(--muted);
+      font-size: .8rem;
+      margin-top: 3px;
+    }
     .plugin-submenu {
       width: 100%;
       max-width: 100%;
@@ -11965,6 +12114,7 @@ def ui_preview_html(
           <button type="button" class="active" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
           <button type="button" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
           <button type="button" data-app-admin-tab="roles" data-next-i18n="appAdmin.tabRoles">Roles</button>
+          <button type="button" data-app-admin-tab="operations" data-next-i18n="appAdmin.tabOperations">Operations</button>
           <button type="button" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
           <button type="button" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
           <button type="button" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
@@ -12145,6 +12295,44 @@ def ui_preview_html(
               <p data-next-i18n="appAdmin.permissionMatrixHelp">Compare which app features each role can use.</p>
               <div class="rbac-feature-summary" id="appAdminRbacFeatureSummary"></div>
               <div id="appAdminPermissionMatrix"></div>
+            </div>
+          </section>
+        </section>
+        <section class="app-admin-panel" data-app-admin-panel="operations">
+          <section class="profile-grid">
+            <div class="detail-card profile-card full">
+              <div class="profile-passkey-head">
+                <div>
+                  <h3 data-next-i18n="appAdmin.operationsTitle">Operations</h3>
+                  <p data-next-i18n="appAdmin.operationsHelp">A compact control room for metadata, plugins, imports, duplicates and automation readiness.</p>
+                </div>
+                <button type="button" class="secondary-button" id="appAdminRefreshOperationsButton" data-next-i18n="appAdmin.refreshOperations">Refresh operations</button>
+              </div>
+              <div class="operations-dashboard" id="appAdminOperationsDashboard"></div>
+              <div class="login-message" id="appAdminOperationsMessage"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.operationsFeatures">Feature readiness</h3>
+              <div class="operations-feature-grid" id="appAdminOperationsFeatures"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.duplicateCenter">Duplicate detection</h3>
+              <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
+              <div class="operations-row-list" id="appAdminDuplicateCenter"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.providerConflictPolicy">Provider priority & conflict policy</h3>
+              <p data-next-i18n="appAdmin.providerConflictPolicyHelp">Shows which metadata source wins when providers disagree, and how protected artwork behaves.</p>
+              <div class="operations-row-list" id="appAdminProviderPolicy"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.apiTokenPresets">API token presets</h3>
+              <p data-next-i18n="appAdmin.apiTokenPresetsHelp">Suggested permission bundles for bots, MCP clients and automations. Only permissions you can grant are shown as available.</p>
+              <div class="operations-row-list" id="appAdminApiTokenPresets"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.operationsSignals">Recent signals</h3>
+              <div class="operations-row-list" id="appAdminOperationsSignals"></div>
             </div>
           </section>
         </section>
@@ -12353,6 +12541,13 @@ def ui_preview_html(
       <div class="login-message" id="legacyPreferencesMessage"></div>
     </div>
   </section>
+  <section class="command-palette-backdrop hidden" id="commandPaletteBackdrop" aria-modal="true" role="dialog" aria-labelledby="commandPaletteTitle">
+    <div class="command-palette">
+      <h2 class="visually-hidden" id="commandPaletteTitle" data-next-i18n="commandPalette.title">Command palette</h2>
+      <input id="commandPaletteInput" autocomplete="off" placeholder="Search commands..." data-next-i18n-placeholder="commandPalette.placeholder" aria-labelledby="commandPaletteTitle">
+      <div class="command-list" id="commandPaletteList"></div>
+    </div>
+  </section>
   <nav class=\"""" + mobile_class + """\" aria-label="Mobile">
     <button type="button" class="mobile-tab active" data-app-route="library">
       <span class="nav-symbol library" aria-hidden="true"></span>
@@ -12436,6 +12631,7 @@ def ui_preview_html(
       pluginJobs: [],
       movieVaultConnections: {},
       metadataJobs: [],
+      operations: null,
       plugins: [],
       rbac: {},
       roles: [],
@@ -12444,6 +12640,7 @@ def ui_preview_html(
       selectedRoleId: "",
       users: []
     };
+    let commandPaletteState = {open: false, query: "", activeIndex: 0};
     let appDebugMode = localStorage.getItem("dv_next_debug_mode") === "true";
     function registerAppServiceWorker() {
       if (!("serviceWorker" in navigator)) return;
@@ -12665,6 +12862,7 @@ def ui_preview_html(
         access: ["security.toggle_auth", "security.manage_invite_only", "users.view", "users.invite", "users.manage_passkeys"],
         users: ["users.view", "users.invite", "users.disable", "users.delete", "users.assign_roles", "groups.view", "groups.create", "groups.invite"],
         roles: ["roles.view", "roles.manage", "security.manage_rbac_mode", "users.assign_roles"],
+        operations: ["admin.view_settings", "admin.view_audit", "admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk", "metadata.manage_plugins", "metadata.view_plugin_health", "collection.import", "collection.bulk_edit", "containers.edit", "api.tokens.manage", "digital_sources.view", "watchlist.manage"],
         plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "plugins.delete", "digital_sources.connect", "digital_sources.manage", "collection.import"],
         digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
         metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"],
@@ -12783,7 +12981,7 @@ def ui_preview_html(
       return true;
     }
     function allowedAppAdminTabs() {
-      return ["access", "users", "roles", "plugins", "digital", "metadata", "backup", "audit"].filter(canUseAdminTab);
+      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "backup", "audit"].filter(canUseAdminTab);
     }
     function canUseAppAdmin() {
       return allowedAppAdminTabs().length > 0;
@@ -13937,6 +14135,184 @@ def ui_preview_html(
     async function copyAppAdminContributionDetails(index) {
       return copyAppAdminAuditPayload((appAdmin.contributionEvents || [])[Number(index)]);
     }
+    function appAdminOperationsStatusClass(status) {
+      const value = String(status || "ok").toLowerCase();
+      if (["ok", "ready", "healthy"].includes(value)) return "good";
+      if (["warning", "pending"].includes(value)) return "blue";
+      if (["attention", "failed", "error"].includes(value)) return "bad";
+      return "";
+    }
+    function appAdminOperationsStatusLabel(status) {
+      const value = String(status || "ok").toLowerCase();
+      const labels = {
+        ok: tNext("appAdmin.statusOk", "OK"),
+        ready: tNext("appAdmin.statusReady", "Ready"),
+        healthy: tNext("appAdmin.statusHealthy", "Healthy"),
+        warning: tNext("appAdmin.statusWarning", "Warning"),
+        pending: tNext("appAdmin.statusPending", "Pending"),
+        attention: tNext("appAdmin.statusAttention", "Attention"),
+        failed: tNext("appAdmin.statusFailed", "Failed"),
+        error: tNext("appAdmin.statusError", "Error")
+      };
+      return labels[value] || status || "OK";
+    }
+    function appAdminOperationsFeatureLabel(key) {
+      const labels = {
+        metadata_audit_v2: ["appAdmin.featureMetadataAuditV2", "Metadata Refresh Audit v2"],
+        crew_refresh_ui: ["appAdmin.featureCrewRefreshUi", "Crew Refresh UI"],
+        movievault_contribution_status: ["appAdmin.featureMovieVaultContributionStatus", "MovieVault Contribution Status"],
+        boxset_member_reconciliation: ["appAdmin.featureBoxSetMemberReconciliation", "Box-set Member Reconciliation"],
+        artwork_manager_v2: ["appAdmin.featureArtworkManagerV2", "Artwork Manager v2"],
+        import_result_review_v2: ["appAdmin.featureImportResultReviewV2", "Import Result Review v2"],
+        duplicate_detection_center: ["appAdmin.featureDuplicateDetectionCenter", "Duplicate Detection Center"],
+        plugin_execution_logs: ["appAdmin.featurePluginExecutionLogs", "Plugin Execution Logs"],
+        plugin_priority_conflict_policy: ["appAdmin.featurePluginPriorityConflictPolicy", "Plugin Priority + Conflict Policy UI"],
+        api_token_presets: ["appAdmin.featureApiTokenPresets", "API Token Permission Presets"],
+        offline_sync_queue_ui: ["appAdmin.featureOfflineSyncQueueUi", "Offline Sync Queue UI"],
+        container_metadata_detail_v2: ["appAdmin.featureContainerMetadataDetailV2", "Container Metadata Detail v2"],
+        watch_sync_quality: ["appAdmin.featureWatchSyncQuality", "Watchlist/Watched Sync Quality"],
+        admin_health_dashboard: ["appAdmin.featureAdminHealthDashboard", "Admin Health Dashboard"],
+        library_command_palette: ["appAdmin.featureLibraryCommandPalette", "Library Command Palette"]
+      };
+      const entry = labels[key] || ["appAdmin.featureUnknown", key || "Feature"];
+      return tNext(entry[0], entry[1]);
+    }
+    function appAdminOperationsRow(title, meta, tag, tone) {
+      return `
+        <div class="operations-row">
+          <div>
+            <strong>${escapeHtml(title || "-")}</strong>
+            <span>${escapeHtml(meta || "")}</span>
+          </div>
+          ${tag ? `<span class="tag ${tone || ""}">${escapeHtml(tag)}</span>` : ""}
+        </div>
+      `;
+    }
+    function renderAppAdminOperations() {
+      const operations = appAdmin.operations || {};
+      const dashboard = document.getElementById("appAdminOperationsDashboard");
+      const featuresNode = document.getElementById("appAdminOperationsFeatures");
+      const duplicateNode = document.getElementById("appAdminDuplicateCenter");
+      const policyNode = document.getElementById("appAdminProviderPolicy");
+      const presetsNode = document.getElementById("appAdminApiTokenPresets");
+      const signalsNode = document.getElementById("appAdminOperationsSignals");
+      if (!dashboard) return;
+      const counts = operations.counts || {};
+      const health = operations.health || {};
+      const duplicates = operations.duplicates || {};
+      const artwork = operations.artwork || {};
+      const watchSync = operations.watchSync || {};
+      const pluginPolicy = operations.pluginPolicy || {};
+      dashboard.innerHTML = operations.status === undefined && !operations.counts
+        ? `<div class="preview-empty">${escapeHtml(tNext("appAdmin.operationsNotLoaded", "Operations data has not been loaded yet."))}</div>`
+        : `
+          <div class="operations-dashboard-card">
+            <span>${escapeHtml(tNext("appAdmin.health", "Health"))}</span>
+            <strong>${escapeHtml(appAdminOperationsStatusLabel(health.status || "ok"))}</strong>
+            <span>${escapeHtml(formatNumber(health.pendingJobs || 0))} ${escapeHtml(tNext("appAdmin.pendingJobs", "pending jobs"))} · ${escapeHtml(formatNumber(health.failedJobs || 0))} ${escapeHtml(tNext("appAdmin.failedJobs", "failed jobs"))}</span>
+          </div>
+          <div class="operations-dashboard-card">
+            <span>${escapeHtml(tNext("collection.movies", "Movies"))}</span>
+            <strong>${escapeHtml(formatNumber(counts.movies))}</strong>
+            <span>${escapeHtml(formatNumber(counts.containers))} ${escapeHtml(tNext("collection.containers", "Containers"))} · ${escapeHtml(formatNumber(counts.people))} ${escapeHtml(tNext("people.title", "People"))}</span>
+          </div>
+          <div class="operations-dashboard-card">
+            <span>${escapeHtml(tNext("appAdmin.duplicateCenter", "Duplicate detection"))}</span>
+            <strong>${escapeHtml(formatNumber(Object.values(duplicates.counts || {}).reduce((sum, value) => sum + Number(value || 0), 0)))}</strong>
+            <span>${escapeHtml(tNext("appAdmin.potentialIssues", "potential issues"))}</span>
+          </div>
+          <div class="operations-dashboard-card">
+            <span>${escapeHtml(tNext("appAdmin.artworkCoverage", "Artwork coverage"))}</span>
+            <strong>${escapeHtml(formatNumber((artwork.counts || {}).moviePosters || 0))}/${escapeHtml(formatNumber((artwork.counts || {}).movies || 0))}</strong>
+            <span>${escapeHtml(formatNumber((artwork.counts || {}).lockedMovieArtwork || 0))} ${escapeHtml(tNext("appAdmin.lockedArtwork", "locked artwork"))}</span>
+          </div>
+          <div class="operations-dashboard-card">
+            <span>${escapeHtml(tNext("appAdmin.watchSync", "Watch sync"))}</span>
+            <strong>${escapeHtml(formatNumber((watchSync.counts || {}).watched || 0))}</strong>
+            <span>${escapeHtml(formatNumber((watchSync.counts || {}).watchlist || 0))} ${escapeHtml(tNext("lists.watchlist", "Watchlist"))}</span>
+          </div>
+          <div class="operations-dashboard-card">
+            <span>${escapeHtml(tNext("appAdmin.providerOrder", "Provider order"))}</span>
+            <strong>${escapeHtml(formatNumber((pluginPolicy.sourceOrder || []).length))}</strong>
+            <span>${escapeHtml((pluginPolicy.sourceOrder || []).slice(0, 4).join(" → ") || "-")}</span>
+          </div>
+        `;
+      if (featuresNode) {
+        const features = operations.features || [];
+        featuresNode.innerHTML = features.length ? features.map((feature) => `
+          <div class="operations-feature-card">
+            <div class="operations-feature-head">
+              <strong>${escapeHtml(appAdminOperationsFeatureLabel(feature.key))}</strong>
+              <span class="tag ${appAdminOperationsStatusClass(feature.status)}">${escapeHtml(appAdminOperationsStatusLabel(feature.status))}</span>
+            </div>
+            <span>${escapeHtml(tNext("appAdmin.featureRequires", "Requires one of"))}</span>
+            <div class="admin-member-cloud">${appAdminPermissionTags(feature.permissionKeys || [], 3)}</div>
+          </div>
+        `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noOperationsFeatures", "No operations features reported."))}</div>`;
+      }
+      if (duplicateNode) {
+        const rows = [
+          ...((duplicates.duplicateBarcodes || []).map((item) => appAdminOperationsRow(
+            `${tNext("common.barcode", "Barcode")} ${item.barcode || "-"}`,
+            (item.titles || []).slice(0, 4).join(", "),
+            `${formatNumber(item.count)}x`,
+            "bad"
+          ))),
+          ...((duplicates.duplicateTitles || []).map((item) => appAdminOperationsRow(
+            `${item.key || "-"} ${item.year ? `(${item.year})` : ""}`,
+            (item.titles || []).slice(0, 4).join(", "),
+            `${formatNumber(item.count)}x`,
+            "blue"
+          ))),
+          ...((duplicates.duplicateExternalIds || []).map((item) => appAdminOperationsRow(
+            `${item.providerId || "-"}:${item.identifier || "-"}`,
+            item.identifierType || "identifier",
+            `${formatNumber(item.count)}x`,
+            "blue"
+          )))
+        ];
+        duplicateNode.innerHTML = rows.join("") || `<div class="preview-empty good">${escapeHtml(tNext("appAdmin.noDuplicateSignals", "No duplicate signals found."))}</div>`;
+      }
+      if (policyNode) {
+        const orderRows = (pluginPolicy.sourceOrder || []).map((pluginId, index) => appAdminOperationsRow(
+          `${index + 1}. ${pluginId}`,
+          tNext("appAdmin.providerOrderHelp", "Higher providers fill empty fields first."),
+          tNext("appAdmin.provider", "Provider"),
+          index === 0 ? "good" : ""
+        ));
+        const policy = pluginPolicy.conflictPolicy || {};
+        policyNode.innerHTML = [
+          appAdminOperationsRow(tNext("appAdmin.fieldConflictPolicy", "Field conflict policy"), policy.fieldPolicy || "first_fills_empty", tNext("appAdmin.policy", "Policy"), "good"),
+          appAdminOperationsRow(tNext("appAdmin.artworkConflictPolicy", "Artwork conflict policy"), policy.artworkPolicy || "primary_locked_artwork_is_protected", tNext("appAdmin.policy", "Policy"), "good"),
+          appAdminOperationsRow(tNext("appAdmin.receiverPolicy", "Receiver policy"), policy.receiverPolicy || "enabled_receivers_get_contributions_after_apply", tNext("appAdmin.policy", "Policy"), "good"),
+          ...orderRows
+        ].join("");
+      }
+      if (presetsNode) {
+        const presets = operations.apiTokenPresets || [];
+        presetsNode.innerHTML = presets.length ? presets.map((preset) => appAdminOperationsRow(
+          preset.name,
+          `${preset.description || ""} ${((preset.grantablePermissionKeys || []).join(", "))}`,
+          preset.available ? tNext("appAdmin.available", "Available") : tNext("appAdmin.partial", "Partial"),
+          preset.available ? "good" : "blue"
+        )).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noApiTokenPresets", "No API token presets available."))}</div>`;
+      }
+      if (signalsNode) {
+        const latestJobs = ((operations.jobs || {}).latest || []).slice(0, 6).map((job) => appAdminOperationsRow(
+          job.jobType || "job",
+          `${shortDateTime(job.createdAt)} · ${job.error || job.id || ""}`,
+          job.status || "-",
+          appAdminJobStatusClass(job.status)
+        ));
+        const receiverEvents = ((operations.audit || {}).receiver || []).slice(0, 6).map((event) => appAdminOperationsRow(
+          event.summary || event.eventType,
+          `${shortDateTime(event.createdAt)} · ${event.targetType || ""} ${event.targetId || ""}`,
+          tNext("appAdmin.receiver", "Receiver"),
+          "blue"
+        ));
+        signalsNode.innerHTML = [...latestJobs, ...receiverEvents].join("") || `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noOperationsSignals", "No recent operations signals."))}</div>`;
+      }
+    }
     function renderAppAdminPlugins() {
       const list = document.getElementById("appAdminPluginsList");
       const plugins = appAdmin.plugins || [];
@@ -14221,6 +14597,153 @@ def ui_preview_html(
       if (!document.getElementById("importView")?.classList.contains("hidden")) renderImportCenter();
       renderAppRoleSimulationBanner();
     }
+    function commandPaletteCommands() {
+      const commands = [
+        {
+          key: "library",
+          label: tNext("commandPalette.library", "Open library"),
+          description: tNext("commandPalette.libraryHelp", "Go to the collection overview."),
+          tag: tNext("uiPreview.navLibrary", "Library"),
+          visible: hasPermission("collection.view"),
+          action: () => showLibraryPage()
+        },
+        {
+          key: "import",
+          label: tNext("commandPalette.import", "Open import"),
+          description: tNext("commandPalette.importHelp", "Scan a barcode, search metadata or import a file."),
+          tag: tNext("importCenter.title", "Import"),
+          visible: hasAnyPermission(APP_PERMISSION_GROUPS.importCenter),
+          action: () => showImportPage()
+        },
+        {
+          key: "lists",
+          label: tNext("commandPalette.lists", "Open lists"),
+          description: tNext("commandPalette.listsHelp", "Watchlist and watched history."),
+          tag: tNext("uiPreview.navLists", "Lists"),
+          visible: hasPermission("watchlist.manage"),
+          action: () => showListsPage()
+        },
+        {
+          key: "notifications",
+          label: tNext("commandPalette.notifications", "Open notifications"),
+          description: tNext("commandPalette.notificationsHelp", "Review app notifications."),
+          tag: tNext("uiPreview.navNotifications", "Notifications"),
+          visible: currentAuthStatus.authenticated,
+          action: () => showNotificationsPage()
+        },
+        {
+          key: "profile",
+          label: tNext("commandPalette.profile", "Open profile"),
+          description: tNext("commandPalette.profileHelp", "Account, preferences, security and API tokens."),
+          tag: tNext("uiPreview.profile", "Profile"),
+          visible: currentAuthStatus.authenticated,
+          action: () => showProfilePage()
+        },
+        {
+          key: "operations",
+          label: tNext("commandPalette.operations", "Open operations"),
+          description: tNext("commandPalette.operationsHelp", "Health, duplicate checks, provider policy and API presets."),
+          tag: tNext("appAdmin.tabOperations", "Operations"),
+          visible: canUseAdminTab("operations"),
+          action: () => {
+            showAdminPage();
+            setAppAdminTab("operations");
+            if (!appAdmin.operations) refreshAppAdminOperations();
+          }
+        },
+        {
+          key: "plugins",
+          label: tNext("commandPalette.plugins", "Open plugins"),
+          description: tNext("commandPalette.pluginsHelp", "Registry, plugin packages and jobs."),
+          tag: tNext("appAdmin.tabPlugins", "Plugins"),
+          visible: canUseAdminTab("plugins"),
+          action: () => {
+            showAdminPage();
+            setAppAdminTab("plugins");
+          }
+        },
+        {
+          key: "metadata_jobs",
+          label: tNext("commandPalette.metadataJobs", "Open metadata jobs"),
+          description: tNext("commandPalette.metadataJobsHelp", "Review recent metadata refresh jobs."),
+          tag: tNext("appAdmin.tabMetadata", "Metadata"),
+          visible: canUseAdminTab("metadata"),
+          action: () => {
+            showAdminPage();
+            setAppAdminTab("metadata");
+          }
+        },
+        {
+          key: "audit",
+          label: tNext("commandPalette.audit", "Open audit log"),
+          description: tNext("commandPalette.auditHelp", "Review detailed audit JSON."),
+          tag: tNext("appAdmin.tabAudit", "Audit"),
+          visible: canUseAdminTab("audit"),
+          action: () => {
+            showAdminPage();
+            setAppAdminTab("audit");
+          }
+        },
+        {
+          key: "refresh",
+          label: tNext("commandPalette.refresh", "Refresh current data"),
+          description: tNext("commandPalette.refreshHelp", "Reload the current DiscVault data surface."),
+          tag: tNext("common.refresh", "Refresh"),
+          visible: true,
+          action: () => refreshAppFlow().catch((error) => {
+            console.warn(error);
+            setGate("library");
+          })
+        }
+      ];
+      return commands.filter((command) => command.visible !== false);
+    }
+    function visibleCommandPaletteCommands() {
+      const query = String(commandPaletteState.query || "").trim().toLowerCase();
+      const commands = commandPaletteCommands();
+      if (!query) return commands;
+      return commands.filter((command) => (
+        `${command.label} ${command.description} ${command.tag}`.toLowerCase().includes(query)
+      ));
+    }
+    function renderCommandPalette() {
+      const backdrop = document.getElementById("commandPaletteBackdrop");
+      const input = document.getElementById("commandPaletteInput");
+      const list = document.getElementById("commandPaletteList");
+      if (!backdrop || !input || !list) return;
+      backdrop.classList.toggle("hidden", !commandPaletteState.open);
+      if (!commandPaletteState.open) return;
+      const commands = visibleCommandPaletteCommands();
+      if (commandPaletteState.activeIndex >= commands.length) commandPaletteState.activeIndex = Math.max(commands.length - 1, 0);
+      input.value = commandPaletteState.query || "";
+      list.innerHTML = commands.length ? commands.map((command, index) => `
+        <button type="button" class="command-item ${index === commandPaletteState.activeIndex ? "active" : ""}" data-command-key="${escapeHtml(command.key)}">
+          <div>
+            <strong>${escapeHtml(command.label)}</strong>
+            <span>${escapeHtml(command.description)}</span>
+          </div>
+          <span class="tag blue">${escapeHtml(command.tag || "")}</span>
+        </button>
+      `).join("") : `<div class="preview-empty">${escapeHtml(tNext("commandPalette.noCommands", "No commands match."))}</div>`;
+    }
+    function openCommandPalette() {
+      commandPaletteState.open = true;
+      commandPaletteState.query = "";
+      commandPaletteState.activeIndex = 0;
+      renderCommandPalette();
+      setTimeout(() => document.getElementById("commandPaletteInput")?.focus(), 0);
+    }
+    function closeCommandPalette() {
+      commandPaletteState.open = false;
+      renderCommandPalette();
+    }
+    function runCommandPaletteCommand(key) {
+      const commands = visibleCommandPaletteCommands();
+      const command = commands.find((item) => item.key === key) || commands[commandPaletteState.activeIndex];
+      if (!command) return;
+      closeCommandPalette();
+      command.action();
+    }
     function setAppAdminRoleSimulation(active) {
       if (currentRole() !== "owner") return;
       const roles = (appAdmin.rbac && appAdmin.rbac.roles) || appAdmin.roles || [];
@@ -14493,6 +15016,7 @@ def ui_preview_html(
         `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPasskeys", "No passkeys found."))}</div>`;
       }
       renderAppAdminRbac();
+      renderAppAdminOperations();
       renderAppAdminPlugins();
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
@@ -14510,13 +15034,14 @@ def ui_preview_html(
         const canLoadUsers = canUseAdminTab("users");
         const canLoadRoles = canUseAdminTab("roles");
         const canLoadPlugins = canUseAdminTab("plugins");
+        const canLoadOperations = canUseAdminTab("operations");
         const canLoadDigital = canUseAdminTab("digital") || canLoadPlugins;
         const canLoadBackup = canUseAdminTab("backup");
         const canLoadMetadata = canUseAdminTab("metadata");
         const canLoadAudit = canUseAdminTab("audit");
         const auditQuery = appAdmin.auditCategory ? `?limit=250&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=250";
         const canLoadContributionEvents = canLoadPlugins && hasActualPermission("admin.view_audit");
-        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, auditPayload, contributionPayload] = await Promise.all([
+        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, auditPayload, contributionPayload, operationsPayload] = await Promise.all([
           canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/users").catch(() => ({users: [], roles: []})) : Promise.resolve({users: [], roles: []}),
           canLoadAccess ? authApiJson("/api/next/auth/credentials").catch(() => ({credentials: []})) : Promise.resolve({credentials: []}),
           canLoadAccess ? authApiJson("/api/next/auth/invite").catch(() => ({invites: []})) : Promise.resolve({invites: []}),
@@ -14528,7 +15053,8 @@ def ui_preview_html(
           canLoadPlugins ? authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
           canLoadMetadata ? authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
           canLoadAudit ? authApiJson(`/api/next/audit/events${auditQuery}`).catch(() => ({events: []})) : Promise.resolve({events: []}),
-          canLoadContributionEvents ? authApiJson("/api/next/audit/events?limit=250&category=metadata").catch(() => ({events: []})) : Promise.resolve({events: []})
+          canLoadContributionEvents ? authApiJson("/api/next/audit/events?limit=250&category=metadata").catch(() => ({events: []})) : Promise.resolve({events: []}),
+          canLoadOperations ? authApiJson("/api/next/admin/operations").catch((error) => ({operations: null, error: error.message || String(error)})) : Promise.resolve({operations: null})
         ]);
         appAdmin.users = usersPayload.users || [];
         appAdmin.credentials = credentialsPayload.credentials || [];
@@ -14544,6 +15070,7 @@ def ui_preview_html(
         appAdmin.metadataJobs = metadataJobsPayload.jobs || [];
         appAdmin.auditEvents = auditPayload.events || [];
         appAdmin.contributionEvents = (contributionPayload.events || []).filter((event) => event.eventType === "metadata.receiver_pushed");
+        appAdmin.operations = operationsPayload.operations || null;
         const configPayloads = canLoadPlugins ? await Promise.all(appAdmin.plugins.map((plugin) =>
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
@@ -14568,6 +15095,7 @@ def ui_preview_html(
         renderAppAdmin();
         setAppAdminMessage("appAdminSecurityMessage", tNext("appAdmin.loaded", "Admin data loaded."), "good");
         setAppAdminMessage("appAdminPluginsMessage", pluginsPayload.error || "", pluginsPayload.error ? "bad" : "");
+        setAppAdminMessage("appAdminOperationsMessage", operationsPayload.error || "", operationsPayload.error ? "bad" : "");
       } catch (error) {
         setAppAdminMessage("appAdminSecurityMessage", error.message || String(error), "bad");
       }
@@ -15086,6 +15614,18 @@ def ui_preview_html(
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginJobsLoaded", "Plugin jobs loaded."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function refreshAppAdminOperations() {
+      if (!canUseAdminTab("operations")) return;
+      setAppAdminMessage("appAdminOperationsMessage", tNext("appAdmin.loadingOperations", "Loading operations..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/operations");
+        appAdmin.operations = payload.operations || null;
+        renderAppAdminOperations();
+        setAppAdminMessage("appAdminOperationsMessage", tNext("appAdmin.operationsLoaded", "Operations loaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminOperationsMessage", error.message || String(error), "bad");
       }
     }
     async function refreshAppAdminMetadataJobs() {
@@ -23458,6 +23998,7 @@ def ui_preview_html(
           });
         }
       });
+      document.getElementById("appAdminRefreshOperationsButton")?.addEventListener("click", () => refreshAppAdminOperations());
       document.getElementById("appAdminRefreshPluginJobsButton")?.addEventListener("click", () => refreshAppAdminPluginJobs());
       document.getElementById("appAdminImportPluginButton")?.addEventListener("click", () => importAppAdminPlugin());
       document.getElementById("appAdminRefreshMetadataJobsButton")?.addEventListener("click", () => refreshAppAdminMetadataJobs());
@@ -23481,6 +24022,19 @@ def ui_preview_html(
       document.getElementById("appAdminContributionQueue")?.addEventListener("click", (event) => {
         const copyButton = event.target.closest("[data-app-admin-contribution-copy]");
         if (copyButton) copyAppAdminContributionDetails(copyButton.dataset.appAdminContributionCopy);
+      });
+      document.getElementById("commandPaletteInput")?.addEventListener("input", (event) => {
+        commandPaletteState.query = event.target.value || "";
+        commandPaletteState.activeIndex = 0;
+        renderCommandPalette();
+        document.getElementById("commandPaletteInput")?.focus();
+      });
+      document.getElementById("commandPaletteList")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-command-key]");
+        if (button) runCommandPaletteCommand(button.dataset.commandKey);
+      });
+      document.getElementById("commandPaletteBackdrop")?.addEventListener("click", (event) => {
+        if (event.target.id === "commandPaletteBackdrop") closeCommandPalette();
       });
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
@@ -23968,6 +24522,33 @@ def ui_preview_html(
         }
       });
       window.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && String(event.key || "").toLowerCase() === "k") {
+          event.preventDefault();
+          openCommandPalette();
+          return;
+        }
+        if (commandPaletteState.open) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closeCommandPalette();
+            return;
+          }
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const commands = visibleCommandPaletteCommands();
+            if (commands.length) {
+              const delta = event.key === "ArrowDown" ? 1 : -1;
+              commandPaletteState.activeIndex = (commandPaletteState.activeIndex + delta + commands.length) % commands.length;
+              renderCommandPalette();
+            }
+            return;
+          }
+          if (event.key === "Enter") {
+            event.preventDefault();
+            runCommandPaletteCommand();
+            return;
+          }
+        }
         if (event.key === "Escape" && activeDetailMovieId) closeAppMovieDetail();
         if (event.key === "Escape" && activeContainerId) closeAppContainerDetail();
         if (event.key === "Escape" && activePersonId) closeAppPersonDetail();
@@ -34963,6 +35544,540 @@ def metadata_refresh_jobs(
     return [job_row(row) for row in rows]
 
 
+ADMIN_OPERATIONS_PERMISSIONS = (
+    "admin.view_settings",
+    "admin.view_audit",
+    "admin.view_jobs",
+    "metadata.refresh_one",
+    "metadata.refresh_bulk",
+    "metadata.manage_plugins",
+    "metadata.manage_plugin_settings",
+    "metadata.manage_receivers",
+    "metadata.view_plugin_health",
+    "collection.import",
+    "collection.add",
+    "collection.bulk_edit",
+    "containers.edit",
+    "api.tokens.manage",
+    "digital_sources.view",
+    "watchlist.manage",
+)
+
+
+def operations_status_from_counts(*values: int, warning_threshold: int = 1) -> str:
+    total = sum(int(value or 0) for value in values)
+    if total <= 0:
+        return "ok"
+    if total <= warning_threshold:
+        return "warning"
+    return "attention"
+
+
+def admin_operations_count_rows(conn, table_name: str, where: str = "", params: tuple[Any, ...] = ()) -> int:
+    if not table_exists(conn, table_name):
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(f'SELECT COUNT(*)::int AS count FROM "{table_name}" {where}', params)
+        row = cur.fetchone() or {}
+    return int(row.get("count") or 0)
+
+
+def admin_operations_job_counts(conn) -> dict[str, int]:
+    if not table_exists(conn, "background_jobs"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT status, COUNT(*)::int AS count
+            FROM background_jobs
+            GROUP BY status
+            """
+        )
+        return {str(row["status"] or "unknown"): int(row["count"] or 0) for row in cur.fetchall()}
+
+
+def admin_operations_latest_jobs(conn, *, job_type: str | None = None, limit: int = 8) -> list[dict[str, Any]]:
+    if not table_exists(conn, "background_jobs"):
+        return []
+    params: list[Any] = []
+    where = ""
+    if job_type:
+        where = "WHERE job_type=%s"
+        params.append(job_type)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, job_type, status, requested_by, payload, result, error, created_at, started_at, finished_at
+            FROM background_jobs
+            {where}
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (*params, limit),
+        )
+        return [job_row(row) for row in cur.fetchall()]
+
+
+def admin_operations_latest_audit_events(
+    conn,
+    *,
+    category: str | None = None,
+    event_type: str | None = None,
+    limit: int = 12,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "audit_events"):
+        return []
+    clauses: list[str] = []
+    params: list[Any] = []
+    if category:
+        clauses.append("category=%s")
+        params.append(category)
+    if event_type:
+        clauses.append("event_type=%s")
+        params.append(event_type)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                id,
+                event_type,
+                category,
+                actor_user_id,
+                actor_username,
+                actor_role,
+                target_type,
+                target_id,
+                summary,
+                metadata,
+                request_ip,
+                user_agent,
+                created_at
+            FROM audit_events
+            {where}
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (*params, limit),
+        )
+        return [audit_event_row(row) for row in cur.fetchall()]
+
+
+def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "duplicateBarcodes": [],
+        "duplicateTitles": [],
+        "duplicateExternalIds": [],
+    }
+    if table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT barcode, COUNT(*)::int AS count, array_agg(title ORDER BY title) AS titles
+                FROM movies
+                WHERE NULLIF(BTRIM(COALESCE(barcode, '')), '') IS NOT NULL
+                GROUP BY barcode
+                HAVING COUNT(*) > 1
+                ORDER BY COUNT(*) DESC, barcode
+                LIMIT 12
+                """
+            )
+            summary["duplicateBarcodes"] = [
+                {"barcode": row.get("barcode"), "count": row.get("count"), "titles": row.get("titles") or []}
+                for row in cur.fetchall()
+            ]
+            cur.execute(
+                """
+                SELECT
+                    LOWER(BTRIM(COALESCE(original_title, title, ''))) AS key,
+                    COALESCE(year, '') AS year,
+                    COUNT(*)::int AS count,
+                    array_agg(title ORDER BY title) AS titles
+                FROM movies
+                WHERE NULLIF(BTRIM(COALESCE(original_title, title, '')), '') IS NOT NULL
+                GROUP BY LOWER(BTRIM(COALESCE(original_title, title, ''))), COALESCE(year, '')
+                HAVING COUNT(*) > 1
+                ORDER BY COUNT(*) DESC, key
+                LIMIT 12
+                """
+            )
+            summary["duplicateTitles"] = [
+                {"key": row.get("key"), "year": row.get("year"), "count": row.get("count"), "titles": row.get("titles") or []}
+                for row in cur.fetchall()
+            ]
+    if table_exists(conn, "movie_identifiers"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT provider_id, identifier_type, identifier, COUNT(*)::int AS count
+                FROM movie_identifiers
+                WHERE NULLIF(BTRIM(COALESCE(identifier, '')), '') IS NOT NULL
+                GROUP BY provider_id, identifier_type, identifier
+                HAVING COUNT(*) > 1
+                ORDER BY COUNT(*) DESC, provider_id, identifier
+                LIMIT 12
+                """
+            )
+            summary["duplicateExternalIds"] = [
+                {
+                    "providerId": row.get("provider_id"),
+                    "identifierType": row.get("identifier_type"),
+                    "identifier": row.get("identifier"),
+                    "count": row.get("count"),
+                }
+                for row in cur.fetchall()
+            ]
+    summary["counts"] = {
+        "barcodes": len(summary["duplicateBarcodes"]),
+        "titles": len(summary["duplicateTitles"]),
+        "externalIds": len(summary["duplicateExternalIds"]),
+    }
+    summary["status"] = operations_status_from_counts(*summary["counts"].values())
+    return summary
+
+
+def admin_operations_artwork_summary(conn) -> dict[str, Any]:
+    movie_count = count_table(conn, "movies")
+    container_count = count_table(conn, "containers")
+    poster_movies = 0
+    backdrop_movies = 0
+    poster_containers = 0
+    backdrop_containers = 0
+    locked_movie_artwork = 0
+    if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+        with conn.cursor() as cur:
+            if table_exists(conn, "movies"):
+                cur.execute(
+                    """
+                    SELECT
+                        COUNT(DISTINCT em.entity_id) FILTER (WHERE ma.kind='poster')::int AS posters,
+                        COUNT(DISTINCT em.entity_id) FILTER (WHERE ma.kind='backdrop')::int AS backdrops
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                    """
+                )
+                row = cur.fetchone() or {}
+                poster_movies = int(row.get("posters") or 0)
+                backdrop_movies = int(row.get("backdrops") or 0)
+            if table_exists(conn, "containers"):
+                cur.execute(
+                    """
+                    SELECT
+                        COUNT(DISTINCT em.entity_id) FILTER (WHERE ma.kind='poster')::int AS posters,
+                        COUNT(DISTINCT em.entity_id) FILTER (WHERE ma.kind='backdrop')::int AS backdrops
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='container'
+                    """
+                )
+                row = cur.fetchone() or {}
+                poster_containers = int(row.get("posters") or 0)
+                backdrop_containers = int(row.get("backdrops") or 0)
+    if table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*)::int AS count
+                FROM movies
+                WHERE LOWER(COALESCE(metadata->>'poster_locked', 'false')) IN ('true', '1', 'yes')
+                   OR LOWER(COALESCE(metadata->>'backdrop_locked', 'false')) IN ('true', '1', 'yes')
+                """
+            )
+            locked_movie_artwork = int((cur.fetchone() or {}).get("count") or 0)
+    missing_movie_posters = max(movie_count - poster_movies, 0)
+    missing_movie_backdrops = max(movie_count - backdrop_movies, 0)
+    missing_container_posters = max(container_count - poster_containers, 0)
+    return {
+        "counts": {
+            "movies": movie_count,
+            "containers": container_count,
+            "moviePosters": poster_movies,
+            "movieBackdrops": backdrop_movies,
+            "containerPosters": poster_containers,
+            "containerBackdrops": backdrop_containers,
+            "missingMoviePosters": missing_movie_posters,
+            "missingMovieBackdrops": missing_movie_backdrops,
+            "missingContainerPosters": missing_container_posters,
+            "lockedMovieArtwork": locked_movie_artwork,
+        },
+        "status": operations_status_from_counts(
+            missing_movie_posters,
+            missing_movie_backdrops,
+            missing_container_posters,
+            warning_threshold=25,
+        ),
+    }
+
+
+def admin_operations_container_summary(conn) -> dict[str, Any]:
+    if not table_exists(conn, "containers"):
+        return {"counts": {}, "items": [], "status": "ok"}
+    with conn.cursor() as cur:
+        member_expr = (
+            """
+            (
+                SELECT COUNT(*)::int
+                FROM container_movies cm
+                WHERE cm.container_id = c.id
+            )
+            """
+            if table_exists(conn, "container_movies")
+            else "0"
+        )
+        cur.execute(
+            f"""
+            SELECT
+                c.id,
+                c.title,
+                c.container_type,
+                c.barcode,
+                c.updated_at,
+                {member_expr} AS member_count
+            FROM containers c
+            WHERE c.container_type IN ('box_set', 'collection', 'vault')
+            ORDER BY c.updated_at DESC NULLS LAST, c.title
+            LIMIT 16
+            """
+        )
+        items = [
+            {
+                "id": row.get("id"),
+                "title": row.get("title"),
+                "containerType": row.get("container_type"),
+                "barcode": row.get("barcode"),
+                "memberCount": row.get("member_count"),
+                "updatedAt": row.get("updated_at"),
+            }
+            for row in cur.fetchall()
+        ]
+        cur.execute(
+            """
+            SELECT container_type, COUNT(*)::int AS count
+            FROM containers
+            GROUP BY container_type
+            ORDER BY container_type
+            """
+        )
+        counts_by_type = {str(row["container_type"] or "unknown"): int(row["count"] or 0) for row in cur.fetchall()}
+    empty_box_sets = sum(1 for item in items if item.get("containerType") == "box_set" and int(item.get("memberCount") or 0) <= 0)
+    missing_box_barcodes = sum(1 for item in items if item.get("containerType") == "box_set" and not clean_text(item.get("barcode")))
+    return {
+        "counts": {
+            "byType": counts_by_type,
+            "emptyBoxSets": empty_box_sets,
+            "missingBoxSetBarcodes": missing_box_barcodes,
+        },
+        "items": items,
+        "status": operations_status_from_counts(empty_box_sets, warning_threshold=0),
+    }
+
+
+def admin_operations_watch_summary(conn) -> dict[str, Any]:
+    watchlist_count = admin_operations_count_rows(conn, "watchlist_items")
+    watched_count = admin_operations_count_rows(conn, "watch_history")
+    stale_watchlist = 0
+    stale_watched = 0
+    latest_watched = []
+    if table_exists(conn, "watchlist_items") and table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*)::int AS count
+                FROM watchlist_items wi
+                LEFT JOIN movies m ON m.id = wi.movie_id
+                WHERE wi.movie_id IS NULL OR m.id IS NULL
+                """
+            )
+            stale_watchlist = int((cur.fetchone() or {}).get("count") or 0)
+    if table_exists(conn, "watch_history") and table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*)::int AS count
+                FROM watch_history wh
+                LEFT JOIN movies m ON m.id = wh.movie_id
+                WHERE wh.movie_id IS NULL OR m.id IS NULL
+                """
+            )
+            stale_watched = int((cur.fetchone() or {}).get("count") or 0)
+            cur.execute(
+                """
+                SELECT
+                    wh.id,
+                    wh.watched_at,
+                    COALESCE(m.title, wh.snapshot->>'title', wh.snapshot->>'movie_title') AS title,
+                    COALESCE(m.format, wh.snapshot->>'format', wh.snapshot->>'movie_format') AS format
+                FROM watch_history wh
+                LEFT JOIN movies m ON m.id = wh.movie_id
+                ORDER BY wh.watched_at DESC
+                LIMIT 8
+                """
+            )
+            latest_watched = [
+                {
+                    "id": row.get("id"),
+                    "title": row.get("title"),
+                    "format": row.get("format"),
+                    "watchedAt": row.get("watched_at"),
+                }
+                for row in cur.fetchall()
+            ]
+    return {
+        "counts": {
+            "watchlist": watchlist_count,
+            "watched": watched_count,
+            "staleWatchlist": stale_watchlist,
+            "staleWatched": stale_watched,
+        },
+        "latestWatched": latest_watched,
+        "status": operations_status_from_counts(stale_watchlist, stale_watched),
+    }
+
+
+def admin_operations_plugin_policy(conn) -> dict[str, Any]:
+    settings = app_settings_map(conn)
+    summary = plugin_summary(conn)
+    plugins = summary.get("items") or []
+    source_order = settings.get("metadata_source_order") or summary.get("enabledOrder") or summary.get("order") or []
+    if isinstance(source_order, str):
+        source_order = [item.strip() for item in source_order.split(",") if item.strip()]
+    if not isinstance(source_order, list):
+        source_order = []
+    enabled_sources = [plugin for plugin in plugins if plugin.get("enabled")]
+    return {
+        "metadataPlugins": summary,
+        "sourceOrder": source_order,
+        "enabledSources": enabled_sources,
+        "conflictPolicy": {
+            "fieldPolicy": "first_fills_empty",
+            "artworkPolicy": "primary_locked_artwork_is_protected",
+            "receiverPolicy": "enabled_receivers_get_contributions_after_apply",
+        },
+        "settings": {
+            "metadataSourceOrder": settings.get("metadata_source_order"),
+            "preferredProviderOverwrite": settings.get("preferred_provider_overwrite", settings.get("metadata_preferred_provider_overwrite", False)),
+        },
+        "status": "ok" if enabled_sources else "attention",
+    }
+
+
+def admin_operations_api_presets(conn, actor: dict[str, Any]) -> list[dict[str, Any]]:
+    actor_permissions = set(actor.get("permissions") or [])
+    if actor.get("role") == "owner":
+        actor_permissions.update(permission_key_catalog(conn))
+    presets = [
+        {
+            "key": "readonly",
+            "name": "Read-only API",
+            "description": "Collection reads, stats and movie lookups.",
+            "permissionKeys": ["api.read", "collection.view", "containers.view"],
+        },
+        {
+            "key": "import_bot",
+            "name": "Import bot",
+            "description": "Barcode/title lookup and adding movies through import flows.",
+            "permissionKeys": ["api.read", "metadata.search", "collection.add", "collection.import"],
+        },
+        {
+            "key": "metadata_bot",
+            "name": "Metadata bot",
+            "description": "Metadata lookup and one/bulk refresh jobs.",
+            "permissionKeys": ["api.read", "metadata.search", "metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"],
+        },
+        {
+            "key": "mcp_reader",
+            "name": "MCP reader",
+            "description": "MCP collection, movie and barcode tools.",
+            "permissionKeys": [
+                "api.read",
+                "mcp.use",
+                "mcp.tool.search_collection",
+                "mcp.tool.get_collection_stats",
+                "mcp.tool.get_movie_details",
+                "mcp.tool.lookup_barcode",
+            ],
+        },
+        {
+            "key": "automation_admin",
+            "name": "Automation admin",
+            "description": "Advanced automation with token management and write access.",
+            "permissionKeys": ["api.read", "api.write", "api.tokens.manage", "collection.bulk_edit", "containers.edit", "metadata.refresh_bulk"],
+        },
+    ]
+    result: list[dict[str, Any]] = []
+    for preset in presets:
+        grantable = [
+            key
+            for key in preset["permissionKeys"]
+            if api_token_permission_is_grantable(key) and (actor.get("role") == "owner" or key in actor_permissions)
+        ]
+        result.append({**preset, "grantablePermissionKeys": grantable, "available": len(grantable) == len(preset["permissionKeys"])})
+    return result
+
+
+def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
+    job_counts = admin_operations_job_counts(conn)
+    latest_jobs = admin_operations_latest_jobs(conn, limit=10)
+    plugin_jobs = admin_operations_latest_jobs(conn, job_type=PLUGIN_EXECUTION_JOB_TYPE, limit=10)
+    metadata_jobs = admin_operations_latest_jobs(conn, job_type=METADATA_REFRESH_JOB_TYPE, limit=10)
+    duplicate_summary = admin_operations_duplicate_summary(conn)
+    artwork_summary = admin_operations_artwork_summary(conn)
+    container_summary = admin_operations_container_summary(conn)
+    watch_summary = admin_operations_watch_summary(conn)
+    plugin_policy = admin_operations_plugin_policy(conn)
+    receiver_events = admin_operations_latest_audit_events(conn, category="metadata", event_type="metadata.receiver_pushed", limit=12)
+    metadata_events = admin_operations_latest_audit_events(conn, category="metadata", limit=12)
+    plugin_events = admin_operations_latest_audit_events(conn, category="plugins", limit=12)
+    pending_jobs = int(job_counts.get("pending") or 0)
+    failed_jobs = int(job_counts.get("failed") or job_counts.get("error") or 0)
+    health_status = operations_status_from_counts(failed_jobs, warning_threshold=0)
+    features = [
+        {"key": "metadata_audit_v2", "status": "ready", "permissionKeys": ["admin.view_audit", "metadata.refresh_bulk"], "signals": {"metadataEvents": len(metadata_events), "receiverEvents": len(receiver_events)}},
+        {"key": "crew_refresh_ui", "status": "ready", "permissionKeys": ["metadata.refresh_one"], "signals": {"personRefreshSupported": True}},
+        {"key": "movievault_contribution_status", "status": "ready", "permissionKeys": ["metadata.manage_receivers", "admin.view_audit"], "signals": {"receiverEvents": len(receiver_events)}},
+        {"key": "boxset_member_reconciliation", "status": container_summary["status"], "permissionKeys": ["containers.edit", "collection.bulk_edit"], "signals": container_summary.get("counts", {})},
+        {"key": "artwork_manager_v2", "status": artwork_summary["status"], "permissionKeys": ["collection.edit_all", "collection.edit_own"], "signals": artwork_summary.get("counts", {})},
+        {"key": "import_result_review_v2", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"importJobs": sum(1 for job in latest_jobs if job.get("jobType") == PLUGIN_EXECUTION_JOB_TYPE)}},
+        {"key": "duplicate_detection_center", "status": duplicate_summary["status"], "permissionKeys": ["collection.import", "collection.bulk_edit"], "signals": duplicate_summary.get("counts", {})},
+        {"key": "plugin_execution_logs", "status": "ready", "permissionKeys": ["metadata.view_plugin_health", "admin.view_jobs"], "signals": {"pluginJobs": len(plugin_jobs), "pluginEvents": len(plugin_events)}},
+        {"key": "plugin_priority_conflict_policy", "status": plugin_policy["status"], "permissionKeys": ["metadata.manage_plugin_order", "metadata.manage_plugins"], "signals": {"enabledSources": len(plugin_policy.get("enabledSources") or [])}},
+        {"key": "api_token_presets", "status": "ready", "permissionKeys": ["api.tokens.manage"], "signals": {"presets": len(admin_operations_api_presets(conn, actor))}},
+        {"key": "offline_sync_queue_ui", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"clientSideQueue": True}},
+        {"key": "container_metadata_detail_v2", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
+        {"key": "watch_sync_quality", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
+        {"key": "admin_health_dashboard", "status": health_status, "permissionKeys": ["admin.view_jobs", "admin.view_settings"], "signals": {"pendingJobs": pending_jobs, "failedJobs": failed_jobs}},
+        {"key": "library_command_palette", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"shortcut": "Cmd/Ctrl+K"}},
+    ]
+    return {
+        "actor": {"id": actor.get("id"), "username": actor.get("username"), "role": actor.get("role")},
+        "counts": {
+            "movies": count_table(conn, "movies"),
+            "people": count_table(conn, "people"),
+            "containers": count_table(conn, "containers"),
+            "mediaAssets": count_table(conn, "media_assets"),
+            "plugins": count_table(conn, "plugins"),
+            "metadataPlugins": count_table(conn, "metadata_plugins"),
+        },
+        "health": {
+            "status": health_status,
+            "jobCounts": job_counts,
+            "pendingJobs": pending_jobs,
+            "failedJobs": failed_jobs,
+        },
+        "duplicates": duplicate_summary,
+        "artwork": artwork_summary,
+        "containers": container_summary,
+        "watchSync": watch_summary,
+        "pluginPolicy": plugin_policy,
+        "apiTokenPresets": admin_operations_api_presets(conn, actor),
+        "jobs": {"latest": latest_jobs, "plugin": plugin_jobs, "metadata": metadata_jobs},
+        "audit": {"metadata": metadata_events, "receiver": receiver_events, "plugins": plugin_events},
+        "features": features,
+        "serverTime": datetime.now(timezone.utc),
+    }
+
+
 PUBLIC_NEXT_PATHS = {
     "/",
     "/app",
@@ -40609,6 +41724,12 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 rows = cur.fetchall()
         return response({"status": "ok", "events": [audit_event_row(row) for row in rows]})
+
+    @flask_app.get("/api/next/admin/operations")
+    def admin_operations():
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ADMIN_OPERATIONS_PERMISSIONS)
+            return response({"status": "ok", "operations": admin_operations_payload(conn, actor)})
 
     @flask_app.post("/api/next/jobs")
     def create_job():
