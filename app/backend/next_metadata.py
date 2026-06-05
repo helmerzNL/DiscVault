@@ -622,7 +622,12 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
             plan.append({"entrypoint": entrypoint, "payload": payload})
 
     base_payload = dict(query)
-    if query.get("previewMode"):
+    has_box_set_preview = any(
+        bool(item.get("boxSetProposal") or item.get("boxSetProposals"))
+        for item in normalized_results
+        if isinstance(item, dict)
+    )
+    if query.get("previewMode") and not (query.get("detectBoxSets") and has_box_set_preview):
         if external_barcode:
             add("search_barcode", {**base_payload, "barcode": external_barcode})
             if query.get("detectBoxSets"):
@@ -631,8 +636,7 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
         if title:
             if "search_title" in capabilities:
                 add("search_title", base_payload)
-            else:
-                add("movie_details", base_payload)
+            add("movie_details", base_payload)
             if query.get("detectBoxSets"):
                 add("box_set_candidates", base_payload)
             return plan
@@ -2054,6 +2058,60 @@ def push_receiver_payload_to_receivers(
     }
 
 
+def preview_enrichment_payload_from_results(query: dict[str, Any], results: list[dict[str, Any]]) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "title": clean_text(query.get("title")),
+        "fallbackTitle": clean_text(query.get("fallbackTitle")),
+        "year": clean_text(query.get("year")),
+        "barcode": clean_text(query.get("externalBarcode") or query.get("barcode")),
+        "format": clean_text(query.get("format")),
+        "mediaFormat": clean_text(query.get("format")),
+        "tmdbId": clean_text(query.get("tmdbId")),
+        "imdbId": clean_text(query.get("imdbId")),
+        "previewMode": False,
+        "previewEnrichment": True,
+    }
+
+    def apply_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+        payload = dict(base)
+        identifiers = candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {}
+        movie = candidate.get("movie") if isinstance(candidate.get("movie"), dict) else {}
+        for source in (candidate, movie):
+            if not isinstance(source, dict):
+                continue
+            payload["title"] = payload.get("title") or clean_text(
+                source.get("title") or source.get("name") or source.get("originalTitle") or source.get("original_title")
+            )
+            payload["year"] = payload.get("year") or clean_text(source.get("year") or source.get("releaseYear") or source.get("release_year"))
+            payload["tmdbId"] = payload.get("tmdbId") or clean_text(source.get("tmdbId") or source.get("tmdb_id") or source.get("tmdb"))
+            payload["imdbId"] = payload.get("imdbId") or clean_text(source.get("imdbId") or source.get("imdb_id") or source.get("imdb"))
+            payload["format"] = payload.get("format") or clean_text(source.get("format") or source.get("mediaFormat") or source.get("media_format"))
+            payload["mediaFormat"] = payload.get("mediaFormat") or payload.get("format")
+        payload["tmdbId"] = payload.get("tmdbId") or clean_text(identifiers.get("tmdb") or identifiers.get("tmdbId"))
+        payload["imdbId"] = payload.get("imdbId") or clean_text(identifiers.get("imdb") or identifiers.get("imdbId"))
+        return {key: value for key, value in payload.items() if value not in (None, "", [], {})}
+
+    if base.get("title") or base.get("tmdbId") or base.get("imdbId"):
+        return {key: value for key, value in base.items() if value not in (None, "", [], {})}
+
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        movie_updates = result.get("movieUpdates") if isinstance(result.get("movieUpdates"), dict) else {}
+        identifiers = result.get("identifiers") if isinstance(result.get("identifiers"), dict) else {}
+        if movie_updates or identifiers:
+            payload = apply_candidate({**movie_updates, "identifiers": identifiers})
+            if payload.get("title") or payload.get("tmdbId") or payload.get("imdbId"):
+                return payload
+        for candidate in result.get("candidates") or []:
+            if not isinstance(candidate, dict):
+                continue
+            payload = apply_candidate(candidate)
+            if payload.get("title") or payload.get("tmdbId") or payload.get("imdbId"):
+                return payload
+    return {}
+
+
 def run_metadata_source_pipeline(
     conn,
     *,
@@ -2148,6 +2206,78 @@ def run_metadata_source_pipeline(
                 continue
             normalized_results.append(normalized)
 
+    preview_enrichment: dict[str, Any] = {"enabled": False, "payload": {}, "plugins": []}
+    if query.get("previewMode"):
+        enrichment_payload = preview_enrichment_payload_from_results(query, normalized_results)
+        if enrichment_payload and (
+            enrichment_payload.get("title")
+            or enrichment_payload.get("tmdbId")
+            or enrichment_payload.get("imdbId")
+        ):
+            preview_enrichment = {"enabled": True, "payload": enrichment_payload, "plugins": []}
+            plugins_with_results = {str(item.get("pluginId") or "") for item in normalized_results}
+            for plugin in plugins:
+                plugin_id = str(plugin.get("id") or "")
+                capabilities = set(plugin.get("capabilities") or (plugin.get("manifest") or {}).get("capabilities") or [])
+                if plugin_id in plugins_with_results or "movie_details" not in capabilities:
+                    continue
+                config = plugin_config_from_db(conn, plugin_id)
+                context = plugin_execution_context(conn, plugin, config, actor)
+                if enable_metadata_lookup_bridge and is_movievault_plugin(plugin_id):
+                    context["metadataLookup"] = metadata_lookup_bridge
+                execution_item = {
+                    "pluginId": plugin_id,
+                    "entrypoint": "movie_details",
+                    "status": "skipped",
+                    "state": "preview_enrichment",
+                    "elapsedMs": None,
+                    "error": None,
+                    "configured": True,
+                    "resultStatus": None,
+                    "candidateCount": 0,
+                    "normalizedSourceFormat": "",
+                    "previewEnrichment": True,
+                }
+                executions.append(execution_item)
+                if plugin_requires_config(plugin, config, "movie_details"):
+                    execution_item["state"] = "needs_configuration"
+                    execution_item["configured"] = False
+                    preview_enrichment["plugins"].append({"pluginId": plugin_id, "state": "needs_configuration"})
+                    continue
+                execution = run_plugin_entrypoint(plugin_id, "movie_details", enrichment_payload, context)
+                execution_item.update(
+                    {
+                        "status": execution.get("status"),
+                        "state": execution.get("state") or "preview_enrichment",
+                        "elapsedMs": execution.get("elapsedMs"),
+                        "error": execution.get("error"),
+                    }
+                )
+                if execution.get("status") != "ok":
+                    preview_enrichment["plugins"].append({"pluginId": plugin_id, "state": execution_item.get("state"), "status": execution.get("status")})
+                    continue
+                normalized = canonicalize_plugin_result(
+                    plugin_id,
+                    "movie_details",
+                    execution.get("result") or {},
+                )
+                execution_item["resultStatus"] = normalized.get("status")
+                execution_item["candidateCount"] = len(normalized.get("candidates") or [])
+                execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
+                preview_enrichment["plugins"].append(
+                    {
+                        "pluginId": plugin_id,
+                        "state": execution_item.get("state"),
+                        "status": execution.get("status"),
+                        "resultStatus": normalized.get("status"),
+                        "creditCount": len(normalized.get("credits") or []),
+                        "localizationCount": len(normalized.get("localizations") or []),
+                    }
+                )
+                if normalized.get("status") in {"miss", "not_found", "needs_configuration"}:
+                    continue
+                normalized_results.append(normalized)
+
     merge = merge_metadata_results(
         current=current,
         technical_current=technical_current,
@@ -2169,6 +2299,7 @@ def run_metadata_source_pipeline(
         "executions": executions,
         "sourceSummary": source_summary,
         "results": normalized_results,
+        "previewEnrichment": preview_enrichment,
         "proposalStats": {
             "acceptedFields": len(merge.get("provenance") or []),
             "skippedFields": len(merge.get("skipped") or []),
@@ -2176,6 +2307,7 @@ def run_metadata_source_pipeline(
             "fieldDecisions": len(field_decisions),
             "conflictFields": len([item for item in field_decisions if item.get("conflict")]),
             "winnerFields": len([item for item in field_decisions if item.get("winner")]),
+            "previewEnrichmentPlugins": len(preview_enrichment.get("plugins") or []),
             "updateFields": count_update_fields(merge),
             "formatBlockedFields": len(
                 [
