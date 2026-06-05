@@ -9580,9 +9580,36 @@ def ui_preview_html(
     .profile-center-card {
       gap: 16px;
     }
+    .profile-view,
+    .profile-center-card,
+    .profile-panel,
+    .profile-card,
+    .profile-section-box,
+    .profile-passkey,
+    .profile-form,
+    .profile-meta,
+    .preference-list,
+    .preference-control-list {
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
     .profile-submenu {
       width: max-content;
       max-width: 100%;
+      overflow-x: auto;
+      justify-content: flex-start;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .profile-submenu::-webkit-scrollbar {
+      display: none;
+    }
+    .profile-submenu button {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .profile-panel {
       display: grid;
@@ -9616,6 +9643,7 @@ def ui_preview_html(
       margin: 0;
       color: var(--muted);
       line-height: 1.45;
+      overflow-wrap: anywhere;
     }
     .detail-card-head.compact {
       gap: 12px;
@@ -9624,6 +9652,19 @@ def ui_preview_html(
     .app-admin-submenu {
       width: max-content;
       max-width: 100%;
+      overflow-x: auto;
+      justify-content: flex-start;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .app-admin-submenu::-webkit-scrollbar {
+      display: none;
+    }
+    .app-admin-submenu button {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .app-admin-panel {
       display: none;
@@ -9641,6 +9682,7 @@ def ui_preview_html(
       margin: 0;
       color: var(--muted);
       line-height: 1.5;
+      overflow-wrap: anywhere;
     }
     .profile-meta {
       display: grid;
@@ -9664,6 +9706,7 @@ def ui_preview_html(
     }
     .profile-meta-row strong {
       overflow-wrap: anywhere;
+      min-width: 0;
     }
     .profile-action-row {
       display: flex;
@@ -9686,6 +9729,8 @@ def ui_preview_html(
     .profile-form textarea {
       min-height: 40px;
       width: 100%;
+      min-width: 0;
+      max-width: 100%;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--bg-solid);
@@ -9764,11 +9809,13 @@ def ui_preview_html(
     }
     .profile-passkey-head strong {
       overflow-wrap: anywhere;
+      min-width: 0;
     }
     .profile-passkey-meta {
       color: var(--muted);
       font-size: .82rem;
       line-height: 1.4;
+      overflow-wrap: anywhere;
     }
     .profile-passkey-actions {
       display: grid;
@@ -11047,13 +11094,19 @@ def ui_preview_html(
       .profile-section-grid {
         grid-template-columns: 1fr;
       }
+      .profile-identity {
+        align-items: flex-start;
+      }
       .profile-submenu,
       .app-admin-submenu {
         width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
       }
       .profile-submenu button,
       .app-admin-submenu button {
         flex: 0 0 auto;
+        max-width: min(76vw, 260px);
       }
       .profile-meta-row {
         grid-template-columns: 1fr;
@@ -11061,6 +11114,45 @@ def ui_preview_html(
       }
       .profile-passkey-actions {
         grid-template-columns: 1fr;
+      }
+      .profile-passkey-head {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+      .profile-card,
+      .profile-section-box,
+      .profile-passkey {
+        overflow: hidden;
+      }
+      .profile-checkbox-row {
+        align-items: flex-start;
+      }
+      .profile-checkbox-row input {
+        flex: 0 0 auto;
+        margin-top: 2px;
+      }
+      .preference-row,
+      .preference-control-row {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+      .preference-row .switch {
+        justify-self: start;
+      }
+      .preference-control-row .segmented {
+        overflow-x: auto;
+        justify-content: flex-start;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .preference-control-row .segmented::-webkit-scrollbar {
+        display: none;
+      }
+      .preference-control-row .segmented button {
+        flex: 1 0 auto;
+        max-width: min(76vw, 260px);
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .container-manager-create,
       .container-manager-row,
@@ -11113,6 +11205,72 @@ def ui_preview_html(
       .app-admin-plugin-import .secondary-button,
       .app-admin-plugin-import .primary-button {
         width: 100%;
+      }
+    }
+    @media (max-width: 560px) {
+      .profile-view {
+        gap: 14px;
+      }
+      .profile-hero,
+      .profile-center-card {
+        border-radius: 18px;
+      }
+      .profile-hero {
+        padding: 16px;
+      }
+      .profile-identity {
+        gap: 12px;
+      }
+      .profile-avatar {
+        width: 58px;
+        height: 58px;
+        font-size: .95rem;
+      }
+      .profile-copy h2 {
+        font-size: 1.55rem;
+        line-height: 1.08;
+      }
+      .profile-copy p {
+        font-size: .9rem;
+      }
+      .profile-center-card,
+      .profile-section-box,
+      .profile-passkey {
+        padding: 12px;
+      }
+      .profile-submenu,
+      .app-admin-submenu {
+        gap: 4px;
+        padding: 4px;
+      }
+      .profile-submenu button,
+      .app-admin-submenu button {
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: .76rem;
+      }
+      .profile-form-actions,
+      .profile-action-row,
+      .profile-hero-actions {
+        gap: 8px;
+      }
+      .profile-form input,
+      .profile-form select,
+      .profile-form textarea,
+      .profile-passkey-actions input,
+      .profile-passkey-actions select {
+        font-size: .9rem;
+      }
+      .profile-passkey-list,
+      .profile-meta,
+      .preference-list,
+      .preference-control-list {
+        gap: 8px;
+      }
+      .preference-row,
+      .preference-control-row {
+        padding: 11px;
+        gap: 10px;
       }
     }
     @media (max-width: 420px) {
