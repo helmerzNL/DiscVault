@@ -5899,6 +5899,18 @@ def ui_preview_html(
       cursor: pointer;
       text-align: left;
     }
+    .nav-item-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .nav-item-label span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .nav-item.active {
       color: var(--text);
       background: var(--bg-solid);
@@ -7505,6 +7517,8 @@ def ui_preview_html(
     }
     .import-scanner-card {
       overflow: hidden;
+      min-width: 0;
+      max-width: 100%;
       border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
       background:
         linear-gradient(155deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 44%),
@@ -7516,6 +7530,8 @@ def ui_preview_html(
       gap: 16px;
       align-items: start;
       margin-top: 14px;
+      min-width: 0;
+      max-width: 100%;
     }
     .import-file-upload-card {
       display: grid;
@@ -8408,6 +8424,8 @@ def ui_preview_html(
       display: grid;
       gap: 10px;
       min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
       padding: 16px;
       border: 1px solid var(--line);
       border-radius: 22px;
@@ -8421,6 +8439,9 @@ def ui_preview_html(
       overflow: hidden;
       display: grid;
       place-items: center;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
       min-height: clamp(300px, 42vw, 520px);
       aspect-ratio: 16 / 11;
       border: 1px solid var(--line);
@@ -9579,6 +9600,7 @@ def ui_preview_html(
     }
     .profile-center-card {
       gap: 16px;
+      overflow: hidden;
     }
     .profile-view,
     .profile-center-card,
@@ -10718,6 +10740,12 @@ def ui_preview_html(
       body {
         padding-bottom: calc(86px + env(safe-area-inset-bottom));
       }
+      .preview-shell {
+        display: block;
+      }
+      .preview-sidebar {
+        display: none;
+      }
       .app-gate {
         padding: 14px;
         align-items: center;
@@ -10795,12 +10823,14 @@ def ui_preview_html(
         right: 12px;
         bottom: calc(10px + env(safe-area-inset-bottom));
         z-index: 20;
-        min-height: 66px;
-        padding: 7px;
-        display: flex;
+        min-height: 70px;
+        padding: 7px 8px;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        align-items: center;
         gap: 4px;
         border: 1px solid color-mix(in srgb, var(--line-strong) 80%, transparent);
-        border-radius: 22px;
+        border-radius: 24px;
         background:
           linear-gradient(180deg, rgba(255,255,255,.70), rgba(255,255,255,.46)),
           color-mix(in srgb, var(--bg-elevated) 84%, transparent);
@@ -10815,7 +10845,6 @@ def ui_preview_html(
         box-shadow: 0 20px 60px rgba(0,0,0,.46);
       }
       .mobile-tab {
-        flex: 1 1 0;
         min-width: 0;
         min-height: 52px;
         border: 0;
@@ -10829,6 +10858,24 @@ def ui_preview_html(
         background: transparent;
         cursor: pointer;
         text-align: center;
+      }
+      .mobile-tab.mobile-tab-primary {
+        min-height: 62px;
+        margin-top: -18px;
+        border-radius: 21px;
+        color: #fff;
+        background:
+          linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), color-mix(in srgb, var(--accent) 78%, #111));
+        box-shadow: 0 18px 34px color-mix(in srgb, var(--accent) 30%, rgba(0,0,0,.28));
+      }
+      .mobile-tab.mobile-tab-primary.active {
+        color: #fff;
+        background:
+          linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #fff), color-mix(in srgb, var(--accent) 80%, #111));
+      }
+      .mobile-tab.mobile-tab-primary .nav-symbol {
+        width: 24px;
+        height: 24px;
       }
       .mobile-tab.active {
         color: var(--text);
@@ -11020,6 +11067,8 @@ def ui_preview_html(
       }
       .import-scanner-spotlight {
         grid-template-columns: 1fr;
+        width: 100%;
+        max-width: 100%;
       }
       .import-file-upload-card {
         grid-template-columns: 1fr;
@@ -11040,7 +11089,9 @@ def ui_preview_html(
         grid-template-columns: 1fr;
       }
       .barcode-scanner-viewport {
-        min-height: min(420px, 52vh);
+        aspect-ratio: 4 / 3;
+        min-height: 0;
+        max-height: min(360px, 56vh);
       }
       .import-mode-tabs button {
         flex: 1 0 auto;
@@ -11208,6 +11259,12 @@ def ui_preview_html(
       }
     }
     @media (max-width: 560px) {
+      body,
+      .preview-main,
+      .profile-view,
+      .import-view {
+        overflow-x: hidden;
+      }
       .profile-view {
         gap: 14px;
       }
@@ -11242,6 +11299,8 @@ def ui_preview_html(
       .app-admin-submenu {
         gap: 4px;
         padding: 4px;
+        width: 100%;
+        max-width: calc(100vw - 48px);
       }
       .profile-submenu button,
       .app-admin-submenu button {
@@ -11271,6 +11330,23 @@ def ui_preview_html(
       .preference-control-row {
         padding: 11px;
         gap: 10px;
+      }
+      .import-scanner-card {
+        padding: 12px;
+      }
+      .barcode-scanner-shell {
+        padding: 12px;
+        border-radius: 18px;
+      }
+      .barcode-scanner-viewport {
+        border-radius: 16px;
+      }
+      .barcode-scanner-frame {
+        width: min(82%, 280px);
+        height: 40%;
+      }
+      .button-row.compact {
+        flex-wrap: wrap;
       }
     }
     @media (max-width: 420px) {
@@ -11403,12 +11479,11 @@ def ui_preview_html(
         </div>
       </div>
       <nav class="nav-section" aria-label="Primary">
-        <button type="button" class="nav-item active" data-app-route="library"><span data-next-i18n="uiPreview.navLibrary">Library</span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="lists"><span data-next-i18n="uiPreview.navLists">Lists</span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="notifications"><span data-next-i18n="uiPreview.navNotifications">Notifications</span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="import"><span data-next-i18n="importCenter.title">Import</span><small id="navImportState">-</small></button>
-        <button type="button" class="nav-item" data-app-route="profile"><span data-next-i18n="uiPreview.profile">Profile</span><small id="navProfileRole">-</small></button>
-        <button type="button" class="nav-item hidden" id="adminNavItem" data-app-route="admin"><span data-next-i18n="uiPreview.admin">Admin</span><small id="navAdminMode">-</small></button>
+        <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label"><span class="nav-symbol library" aria-hidden="true"></span><span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label"><span class="nav-symbol lists" aria-hidden="true"></span><span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label"><span class="nav-symbol import" aria-hidden="true"></span><span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
+        <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label"><span class="nav-symbol notifications" aria-hidden="true"></span><span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label"><span class="nav-symbol profile" aria-hidden="true"></span><span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
       <div class="sidebar-footer">
         <strong data-next-i18n="uiPreview.build">Build</strong><br>
@@ -13008,21 +13083,17 @@ def ui_preview_html(
       <span class="nav-symbol lists" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
+    <button type="button" class="mobile-tab mobile-tab-primary" data-app-route="import">
+      <span class="nav-symbol import" aria-hidden="true"></span>
+      <span data-next-i18n="importCenter.title">Import</span>
+    </button>
     <button type="button" class="mobile-tab" data-app-route="notifications">
       <span class="nav-symbol notifications" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.navNotifications">Notifications</span>
     </button>
-    <button type="button" class="mobile-tab" data-app-route="import">
-      <span class="nav-symbol import" aria-hidden="true"></span>
-      <span data-next-i18n="importCenter.title">Import</span>
-    </button>
     <button type="button" class="mobile-tab" data-app-route="profile">
       <span class="nav-symbol profile" aria-hidden="true"></span>
       <span data-next-i18n="uiPreview.profile">Profile</span>
-    </button>
-    <button type="button" class="mobile-tab hidden" id="mobileAdminTab" data-app-route="admin">
-      <span class="nav-symbol admin" aria-hidden="true"></span>
-      <span data-next-i18n="uiPreview.admin">Admin</span>
     </button>
   </nav>
   <script>
@@ -13455,11 +13526,7 @@ def ui_preview_html(
     }
     function renderAppAdminVisibility() {
       const allowed = canUseAppAdmin();
-      document.getElementById("adminNavItem")?.classList.toggle("hidden", !allowed);
-      document.getElementById("mobileAdminTab")?.classList.toggle("hidden", !allowed);
       document.getElementById("profileOpenAdminButton")?.classList.toggle("hidden", !allowed);
-      const navMode = document.getElementById("navAdminMode");
-      if (navMode) navMode.textContent = allowed ? appRegistrationModeLabel() : "-";
     }
     function applyAppPermissionVisibility() {
       const collectorsEnabled = collectorsModeEnabled();
