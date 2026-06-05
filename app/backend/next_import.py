@@ -18,6 +18,7 @@ import sys
 import uuid
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -175,6 +176,39 @@ def clean_int(value: Any) -> int | None:
         return None
     match = re.search(r"\d+", text)
     return int(match.group(0)) if match else None
+
+
+def clean_date(value: Any) -> str | None:
+    """Normalize loose legacy date values before writing PostgreSQL date fields."""
+    text = clean_text(value)
+    if not text:
+        return None
+    text = text.replace("\\", "/")
+    if text.lower() in {"n/a", "na", "none", "null", "unknown", "0000", "0000-00-00"}:
+        return None
+    if re.fullmatch(r"\d{4}", text):
+        year = int(text)
+        if 1 <= year <= 9999:
+            return f"{year:04d}-01-01"
+        return None
+    if re.fullmatch(r"\d{4}[-/]\d{1,2}", text):
+        year_text, month_text = re.split(r"[-/]", text)
+        try:
+            return date(int(year_text), int(month_text), 1).isoformat()
+        except ValueError:
+            return None
+    iso_match = re.match(r"^(\d{4}-\d{2}-\d{2})", text)
+    if iso_match:
+        try:
+            return date.fromisoformat(iso_match.group(1)).isoformat()
+        except ValueError:
+            return None
+    for fmt in ("%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y", "%Y.%m.%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(text, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
 
 
 def parse_price(value: Any) -> str | None:
@@ -779,8 +813,8 @@ class NextImporter:
                         person_id,
                         f"legacy-person-{source_id}",
                         clean_text(row["name"]) or f"Unknown person {source_id}",
-                        clean_text(row["birthday"]),
-                        clean_text(row["deathday"]),
+                        clean_date(row["birthday"]),
+                        clean_date(row["deathday"]),
                         clean_text(row["place_of_birth"]),
                         clean_text(row["known_for"]),
                         profile_asset_id,
@@ -931,7 +965,7 @@ class NextImporter:
                         clean_text(row["sort_title"]),
                         clean_text(row["original_title"]),
                         clean_text(row["year"]),
-                        clean_text(row["release_date"]),
+                        clean_date(row["release_date"]),
                         clean_text(row["format"]),
                         clean_text(row["edition"]),
                         clean_text(row["edition_type"]),
@@ -941,7 +975,7 @@ class NextImporter:
                         clean_text(row["plot"]),
                         clean_text(row["notes"]),
                         clean_text(row["rating"]),
-                        clean_text(row["purchase_date"]),
+                        clean_date(row["purchase_date"]),
                         parse_price(row["purchase_price"]),
                         clean_text(row["location"]),
                         owner_id,
