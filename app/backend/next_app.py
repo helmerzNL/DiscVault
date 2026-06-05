@@ -2919,9 +2919,17 @@ def startup_status_payload(conn) -> dict[str, Any]:
 
     phase = "ready"
     message = "DiscVault Next is ready."
+    legacy_auth_waiting = bool(
+        not auth_ready
+        and migration_blocks_collection
+        and legacy_auth_required(readiness.get("legacyData") or {})
+    )
     if readiness["migrations"]["state"] != "ready":
         phase = "schema_blocked"
         message = "PostgreSQL migrations must finish before DiscVault Next can start."
+    elif legacy_auth_waiting:
+        phase = "migration_required"
+        message = "Legacy DiscVault data is ready to migrate."
     elif not auth_ready:
         phase = "owner_setup"
         message = "Create the first owner passkey to finish setup."
@@ -2951,6 +2959,8 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "detail": (
                 f"{user_count} user(s), {credential_count} passkey(s)"
                 if auth_ready
+                else "Use the legacy owner/admin passkey to approve migration."
+                if legacy_auth_waiting
                 else "Create the first owner passkey for this DiscVault Next environment."
             ),
         },

@@ -13,7 +13,7 @@ from app.backend.next_import import legacy_role_key
 try:
     from app.backend import next_app
 except ModuleNotFoundError as exc:
-    if exc.name != "psycopg":
+    if exc.name not in {"flask", "psycopg"}:
         raise
     next_app = None
 try:
@@ -75,6 +75,43 @@ class NextMigrationContractTests(unittest.TestCase):
         self.assertEqual([step["key"] for step in payload["steps"]], ["auth", "collection"])
         self.assertEqual(payload["migration"]["state"], "")
         self.assertFalse(payload["migration"]["legacyData"]["found"])
+
+    @unittest.skipIf(next_app is None, "PostgreSQL dependencies are not installed")
+    def test_startup_uses_legacy_passkeys_before_owner_setup(self):
+        readiness = {
+            "state": "ready_for_confirmation",
+            "canStart": True,
+            "requiresConfirmation": True,
+            "requiredActions": ["Confirm migration."],
+            "activeJob": None,
+            "latestRun": None,
+            "legacyData": {
+                "pluginId": "discvault_legacy_import",
+                "pluginName": "DiscVault Legacy",
+                "sourceKind": "sqlite",
+                "status": "ready",
+                "found": True,
+                "readable": True,
+                "sourceCounts": {"movies": 12, "users": 1, "groups": 2, "credentials": 1},
+                "mediaExtensions": {},
+            },
+            "importSources": [{"pluginId": "discvault_legacy_import"}],
+            "migrations": {"state": "ready"},
+        }
+
+        with (
+            patch.object(next_app, "migration_readiness", return_value=readiness),
+            patch.object(next_app, "next_auth_effective_enabled", return_value=False),
+            patch.object(next_app, "count_table", return_value=0),
+            patch.object(next_app, "next_auth_current_user", return_value=None),
+        ):
+            payload = next_app.startup_status_payload(object())
+
+        self.assertEqual(payload["phase"], "migration_required")
+        self.assertFalse(payload["canCreateOwner"])
+        self.assertEqual([step["key"] for step in payload["steps"]], ["auth", "source", "migration", "collection"])
+        self.assertEqual(payload["migration"]["state"], "ready_for_confirmation")
+        self.assertTrue(payload["migration"]["legacyData"]["found"])
 
     @unittest.skipIf(next_generate_recovery_codes is None, "Passkey dependencies are not installed")
     def test_recovery_codes_are_normalized_and_one_time_hashable(self):
