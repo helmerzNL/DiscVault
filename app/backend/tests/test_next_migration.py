@@ -8,6 +8,7 @@ repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
+from app.backend.next_import import clean_date
 from app.backend.next_import import legacy_group_member_role
 from app.backend.next_import import legacy_role_key
 try:
@@ -38,6 +39,14 @@ class NextMigrationContractTests(unittest.TestCase):
     def test_legacy_group_member_role_is_conservative(self):
         self.assertEqual(legacy_group_member_role("manager"), "manager")
         self.assertEqual(legacy_group_member_role("unknown"), "member")
+
+    def test_legacy_date_values_are_normalized_for_postgres(self):
+        self.assertEqual(clean_date("1985"), "1985-01-01")
+        self.assertEqual(clean_date("2024-07"), "2024-07-01")
+        self.assertEqual(clean_date("2024-07-18T12:34:56Z"), "2024-07-18")
+        self.assertEqual(clean_date("18/07/2024"), "2024-07-18")
+        self.assertIsNone(clean_date("0000-00-00"))
+        self.assertIsNone(clean_date("not a date"))
 
     @unittest.skipIf(next_app is None, "PostgreSQL dependencies are not installed")
     def test_startup_owner_setup_hides_migration_context(self):
