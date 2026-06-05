@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - codex/discvault-next
+      - release/v26-dev
+      - release/v26-beta
+      - release/v26
     paths:
       - ".github/workflows/next-postgres-smoke.yml"
       - "app/backend/next_database.py"

@@ -5,7 +5,9 @@ on:
   push:
     branches:
       - main
-      - codex/discvault-next
+      - release/v26-dev
+      - release/v26-beta
+      - release/v26
   pull_request:
 
 jobs:

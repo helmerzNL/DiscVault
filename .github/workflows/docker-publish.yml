@@ -3,11 +3,15 @@ name: Build & Publish Docker Image
 on:
   push:
     branches:
-      - main              # every push to main  → beta tag
+      - main
+      - release/v26-dev
+      - release/v26-beta
+      - release/v26
     tags:
-      - "v*.*.*"          # e.g. v1.0.0         → stable + versioned tags
+      - "v26.*.*"
     paths:
       - "app/**"
+      - ".github/workflows/docker-publish.yml"
   workflow_dispatch:       # allow manual trigger from GitHub UI
 
 concurrency:
@@ -29,7 +33,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # Extract version from tag (v1.2.3 → 1.2.3), beta sha for main, or dev for manual
+      # Extract version from tag (v26.0.0 -> 26.0.0), app/VERSION, or a channel SHA fallback.
       - name: Derive build version
         id: version
         run: |
@@ -59,33 +63,52 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Select Dockerfile
+        id: build-target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            dockerfile="./app/Dockerfile"
+            family="legacy"
+          else
+            dockerfile="./app/Dockerfile.v26"
+            family="v26-stack"
+          fi
+          echo "dockerfile=$dockerfile" >> "$GITHUB_OUTPUT"
+          echo "family=$family" >> "$GITHUB_OUTPUT"
+          echo "Using Dockerfile: $dockerfile ($family)"
+
       # Resolve tags:
-      #   Tag push (v1.2.3)  → :1.2.3, :latest, :stable
-      #   Push to main       → :beta
-      #   Manual run         → :dev, :dev-<sha>
+      #   main                -> :latest, :legacy
+      #   release/v26-dev     -> :dev
+      #   release/v26-beta    -> :v26-beta
+      #   release/v26         -> :v26
+      #   tag v26.0.0         -> :v26.0.0
       - name: Docker meta (tags & labels)
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=beta,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=dev,enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=raw,value=dev-${{ github.sha }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=legacy,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/release/v26-dev' || github.event_name == 'workflow_dispatch' }}
+            type=raw,value=v26-beta,enable=${{ github.ref == 'refs/heads/release/v26-beta' }}
+            type=raw,value=v26,enable=${{ github.ref == 'refs/heads/release/v26' }}
+            type=ref,event=tag,enable=${{ startsWith(github.ref, 'refs/tags/v26.') }}
           labels: |
             org.opencontainers.image.title=DiscVault
             org.opencontainers.image.description=Physical 4K/Blu-ray/DVD collection manager with barcode scanner, web UI and MCP endpoint.
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            eu.discvault.image.family=${{ steps.build-target.outputs.family }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: ./app
-          file: ./app/Dockerfile
+          file: ${{ steps.build-target.outputs.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

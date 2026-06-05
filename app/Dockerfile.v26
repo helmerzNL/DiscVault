@@ -1,0 +1,34 @@
+FROM python:3.12-slim
+
+ARG BUILD_VERSION=dev
+ARG BUILD_SHA=unknown
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    BUILD_VERSION=${BUILD_VERSION} \
+    BUILD_SHA=${BUILD_SHA} \
+    DISCVAULT_BACKEND_VERSION=${BUILD_VERSION} \
+    DISCVAULT_BUILD_SHA=${BUILD_SHA} \
+    TZ=Europe/Amsterdam
+
+WORKDIR /opt/discvault
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt /tmp/requirements-backend.txt
+RUN pip install -r /tmp/requirements-backend.txt
+
+COPY VERSION /opt/discvault/VERSION
+COPY backend /opt/discvault/backend
+COPY frontend /opt/discvault/frontend
+
+RUN mkdir -p /data/posters /data/profiles /data/backups /data/avatars
+
+VOLUME ["/data"]
+
+WORKDIR /opt/discvault/backend
+
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "180", "next_app:app"]
