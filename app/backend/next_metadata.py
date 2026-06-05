@@ -979,6 +979,57 @@ def plugin_credit_updates(
     return deduped[:120]
 
 
+def normalize_localization_entries(
+    value: Any,
+    *,
+    plugin_id: str,
+    source_label: str,
+    source_ref: str,
+) -> list[dict[str, Any]]:
+    raw_items: list[Any] = []
+    if isinstance(value, dict):
+        if isinstance(value.get("localizations"), list):
+            raw_items.extend(value.get("localizations") or [])
+        if isinstance(value.get("translations"), list):
+            raw_items.extend(value.get("translations") or [])
+    elif isinstance(value, (list, tuple)):
+        raw_items.extend(value)
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        payload = item.get("data") if isinstance(item.get("data"), dict) else item
+        lang = clean_text(
+            item.get("lang")
+            or item.get("language")
+            or item.get("locale")
+            or item.get("iso_639_1")
+        )
+        country = clean_text(item.get("country") or item.get("iso_3166_1"))
+        if lang and country and "-" not in lang:
+            lang = f"{lang.lower()}-{country.upper()}"
+        title = clean_text(payload.get("title") or payload.get("name"))
+        overview = clean_text(payload.get("overview") or payload.get("plot") or payload.get("description"))
+        if not lang or not (title or overview):
+            continue
+        key = lang.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            {
+                "lang": lang,
+                "title": title,
+                "overview": overview,
+                "pluginId": plugin_id,
+                "sourceLabel": source_label,
+                "sourceRef": source_ref,
+            }
+        )
+    return rows[:80]
+
+
 def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(result, dict):
         result = {"value": result}
@@ -1074,6 +1125,12 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         source_label=source_label,
         source_ref=source_ref,
     )
+    localization_updates = normalize_localization_entries(
+        result.get("localizations") or result.get("translations") or result,
+        plugin_id=plugin_id,
+        source_label=source_label,
+        source_ref=source_ref,
+    )
 
     source_format = (
         movie_updates.get("format")
@@ -1131,6 +1188,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "mediaUpdates": media_updates,
         "identifiers": identifiers,
         "credits": credit_updates,
+        "localizations": localization_updates,
         "candidates": result.get("items") or result.get("candidates") or [],
         "boxSetProposal": result.get("boxSetProposal") or result.get("box_set_proposal"),
         "boxSetProposals": result.get("boxSetProposals") or result.get("box_set_proposals") or [],
@@ -1251,7 +1309,9 @@ def merge_metadata_results(
     media_updates: dict[str, dict[str, Any]] = {}
     identifiers: dict[str, str] = {}
     credits: list[dict[str, Any]] = []
+    localizations: list[dict[str, Any]] = []
     credit_keys: set[tuple[str, str, str, str]] = set()
+    localization_keys: set[str] = set()
     provenance: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     field_decisions_by_key: dict[tuple[str, str], dict[str, Any]] = {}
@@ -1460,6 +1520,26 @@ def merge_metadata_results(
                 continue
             credit_keys.add(key)
             credits.append(credit)
+        for localization in result.get("localizations") or []:
+            if not isinstance(localization, dict):
+                continue
+            lang = clean_text(localization.get("lang") or localization.get("language") or localization.get("locale"))
+            title = clean_text(localization.get("title"))
+            overview = clean_text(localization.get("overview"))
+            if not lang or not (title or overview):
+                continue
+            key = lang.lower()
+            if key in localization_keys:
+                continue
+            localization_keys.add(key)
+            localizations.append(
+                {
+                    **localization,
+                    "lang": lang,
+                    "title": title,
+                    "overview": overview,
+                }
+            )
 
     field_decisions = list(field_decisions_by_key.values())
     return {
@@ -1469,6 +1549,7 @@ def merge_metadata_results(
         "mediaUpdates": media_updates,
         "identifiers": identifiers,
         "credits": credits,
+        "localizations": localizations,
         "provenance": provenance,
         "skipped": skipped,
         "fieldDecisions": field_decisions,
@@ -1480,7 +1561,7 @@ def count_update_fields(proposal: dict[str, Any]) -> int:
         len(proposal.get(key) or {})
         for key in ("movieUpdates", "metadataUpdates", "technicalUpdates", "mediaUpdates", "identifiers")
     )
-    return field_count + len(proposal.get("credits") or [])
+    return field_count + len(proposal.get("credits") or []) + len(proposal.get("localizations") or [])
 
 
 def summarize_metadata_execution(
@@ -2636,6 +2717,7 @@ def apply_metadata_proposal(
     media_updates = proposal.get("mediaUpdates") or {}
     identifiers = proposal.get("identifiers") or {}
     credit_updates = proposal.get("credits") or []
+    localization_updates = proposal.get("localizations") or []
     provenance = proposal.get("provenance") or []
     metadata_updates = dict(metadata_updates)
     if metadata_updates:
@@ -2645,7 +2727,7 @@ def apply_metadata_proposal(
         if has_locked_primary_media(conn, movie_id=movie_uuid, kind="backdrop"):
             for key in ("backdrop_url", "backdropUrl", "backdrop"):
                 metadata_updates.pop(key, None)
-    changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers or credit_updates)
+    changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers or credit_updates or localization_updates)
 
     if not changed:
         return {
@@ -2736,6 +2818,29 @@ def apply_metadata_proposal(
                     (movie_uuid, provider, str(identifier)),
                 )
 
+        applied_localizations: list[dict[str, Any]] = []
+        if localization_updates and table_exists(conn, "movie_localizations"):
+            for item in localization_updates:
+                if not isinstance(item, dict):
+                    continue
+                lang = clean_text(item.get("lang") or item.get("language") or item.get("locale"))
+                title = clean_text(item.get("title"))
+                overview = clean_text(item.get("overview"))
+                if not lang or not (title or overview):
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO movie_localizations (movie_id, lang, title, overview, updated_at)
+                    VALUES (%s, %s, %s, %s, now())
+                    ON CONFLICT (movie_id, lang) DO UPDATE SET
+                        title=COALESCE(NULLIF(EXCLUDED.title, ''), movie_localizations.title),
+                        overview=COALESCE(NULLIF(EXCLUDED.overview, ''), movie_localizations.overview),
+                        updated_at=now()
+                    """,
+                    (movie_uuid, lang, title or None, overview or None),
+                )
+                applied_localizations.append({"lang": lang, "title": title, "overview": overview})
+
         applied_media_updates: dict[str, Any] = {}
         if media_updates and table_exists(conn, "media_assets") and table_exists(conn, "entity_media"):
             for kind, media_update in media_updates.items():
@@ -2806,6 +2911,7 @@ def apply_metadata_proposal(
             "mediaUpdates": media_updates,
             "identifiers": identifiers,
             "credits": credit_updates,
+            "localizations": localization_updates,
             "fieldDecisions": proposal.get("fieldDecisions") or [],
         },
     )
@@ -2816,6 +2922,7 @@ def apply_metadata_proposal(
         "mediaUpdates": applied_media_updates,
         "identifiers": identifiers,
         "credits": applied_credit_updates,
+        "localizations": applied_localizations,
         "provenance": len(provenance),
     }
     return {
