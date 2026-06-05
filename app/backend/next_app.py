@@ -5853,7 +5853,8 @@ def ui_preview_html(
       align-items: center;
       gap: 11px;
       min-width: 0;
-      padding: 0 8px 8px;
+      padding: 0 8px 14px;
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
     }
     .brand-mark {
       width: 34px;
@@ -5870,6 +5871,11 @@ def ui_preview_html(
       height: 100%;
       display: block;
       object-fit: cover;
+    }
+    .preview-sidebar .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
     }
     .brand strong {
       display: block;
@@ -5926,6 +5932,7 @@ def ui_preview_html(
       display: inline-block;
       position: relative;
       flex: 0 0 auto;
+      opacity: .92;
     }
     .nav-symbol.library {
       border: 2px solid currentColor;
@@ -6084,6 +6091,21 @@ def ui_preview_html(
       display: grid;
       gap: 20px;
       align-content: start;
+    }
+    .mobile-shell-logo {
+      display: none;
+    }
+    .mobile-shell-logo img {
+      width: 22px;
+      height: 22px;
+      display: block;
+      border-radius: 6px;
+    }
+    .mobile-shell-logo span {
+      color: var(--text);
+      font-size: .78rem;
+      font-weight: 820;
+      letter-spacing: 0;
     }
     .topbar {
       display: grid;
@@ -10747,7 +10769,7 @@ def ui_preview_html(
         display: none;
       }
       .app-gate {
-        padding: 14px;
+        padding: calc(env(safe-area-inset-top) + 16px) 14px 14px;
         align-items: center;
       }
       .login-brand-large {
@@ -10805,7 +10827,7 @@ def ui_preview_html(
         grid-template-columns: 1fr;
       }
       .preview-main {
-        padding: 14px 12px 28px;
+        padding: calc(env(safe-area-inset-top) + 12px) 12px 28px;
       }
       .preview-sidebar {
         justify-content: center;
@@ -10816,6 +10838,31 @@ def ui_preview_html(
       }
       .brand {
         padding: 0;
+        border-bottom: 0;
+      }
+      .mobile-shell-logo {
+        justify-self: center;
+        width: max-content;
+        max-width: calc(100vw - 32px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 6px 11px;
+        border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+        border-radius: 999px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.66), rgba(255,255,255,.36)),
+          color-mix(in srgb, var(--bg-elevated) 84%, transparent);
+        box-shadow: 0 12px 34px rgba(0,0,0,.16);
+        backdrop-filter: blur(24px) saturate(180%);
+        -webkit-backdrop-filter: blur(24px) saturate(180%);
+      }
+      html[data-theme="dark"] .mobile-shell-logo {
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.06)),
+          color-mix(in srgb, var(--bg-elevated) 78%, transparent);
+        box-shadow: 0 16px 40px rgba(0,0,0,.38);
       }
       .mobile-tabbar {
         position: fixed;
@@ -10860,22 +10907,20 @@ def ui_preview_html(
         text-align: center;
       }
       .mobile-tab.mobile-tab-primary {
-        min-height: 62px;
-        margin-top: -18px;
-        border-radius: 21px;
-        color: #fff;
-        background:
-          linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), color-mix(in srgb, var(--accent) 78%, #111));
-        box-shadow: 0 18px 34px color-mix(in srgb, var(--accent) 30%, rgba(0,0,0,.28));
+        min-height: 52px;
+        margin-top: 0;
+        border-radius: 16px;
+        color: var(--muted);
+        background: transparent;
+        box-shadow: none;
       }
       .mobile-tab.mobile-tab-primary.active {
-        color: #fff;
-        background:
-          linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #fff), color-mix(in srgb, var(--accent) 80%, #111));
+        color: var(--text);
+        background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
       }
       .mobile-tab.mobile-tab-primary .nav-symbol {
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
       }
       .mobile-tab.active {
         color: var(--text);
@@ -11491,6 +11536,10 @@ def ui_preview_html(
       </div>
     </aside>
     <main class="preview-main">
+      <div class="mobile-shell-logo" aria-hidden="true">
+        <img src="/api/next/assets/logo.svg" alt="">
+        <span>DiscVault</span>
+      </div>
       <div class="app-simulation-banner hidden" id="appRoleSimulationBanner">
         <span id="appRoleSimulationBannerText"></span>
         <button type="button" class="secondary-button" id="appRoleSimulationStopButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
