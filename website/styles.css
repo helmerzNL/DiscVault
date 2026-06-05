@@ -1,7 +1,7 @@
 :root {
   --bg: #0a0a0f;
-  --surface: #12121a;
-  --surface2: #1a1a26;
+  --surface: #18191f;
+  --surface2: #202128;
   --border: #2a2a3e;
   --accent: #e8c547;
   --accent2: #7c6af7;
@@ -27,9 +27,7 @@ body {
   font-family: "DM Sans", system-ui, -apple-system, Segoe UI, sans-serif;
   color: var(--text);
   font-weight: 300;
-  background: radial-gradient(ellipse at 72% -18%, rgba(232, 197, 71, 0.11), transparent 45%),
-    radial-gradient(ellipse at 22% 70%, rgba(72, 138, 174, 0.1), transparent 42%),
-    var(--bg);
+  background: var(--bg);
   line-height: 1.55;
 }
 
@@ -37,10 +35,7 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.5;
-  background-image: linear-gradient(to right, rgba(124, 106, 247, 0.12) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(124, 106, 247, 0.12) 1px, transparent 1px);
-  background-size: 34px 34px;
+  opacity: 0;
   z-index: -1;
 }
 
@@ -64,9 +59,9 @@ body::before {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: rgba(18, 18, 26, 0.72);
+  background: rgba(24, 25, 31, 0.82);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 0.7rem 0.75rem 0.7rem 1rem;
   backdrop-filter: blur(10px);
   position: relative;
@@ -76,7 +71,7 @@ body::before {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.65rem;
   text-decoration: none;
   color: var(--text);
   font-weight: 700;
@@ -85,11 +80,12 @@ body::before {
 }
 
 .brand-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 0 5px rgba(232, 197, 71, 0.15);
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: url("./favicon.svg") center/cover no-repeat var(--bg);
+  border: 1px solid rgba(232, 197, 71, 0.22);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
 }
 
 .site-nav {
@@ -103,7 +99,7 @@ body::before {
   text-decoration: none;
   font-weight: 400;
   font-size: 0.9rem;
-  transition: color 150ms ease;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
 }
 
 .site-nav a:hover {
@@ -113,9 +109,9 @@ body::before {
 .nav-github {
   color: var(--text);
   font-weight: 600;
-  background: var(--surface2);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 0.4rem 0.85rem;
   font-size: 0.82rem;
 }
@@ -198,9 +194,126 @@ body::before {
   transform: translateY(-7px) rotate(-45deg);
 }
 
+@media (min-width: 901px) {
+  body {
+    padding-left: 316px;
+  }
+
+  .wrap {
+    width: min(1180px, calc(100% - 3rem));
+  }
+
+  .site-header.wrap {
+    position: fixed;
+    top: 14px;
+    bottom: 14px;
+    left: 14px;
+    width: 280px;
+    margin: 0;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    background: linear-gradient(180deg, rgba(24, 25, 31, 0.96), rgba(16, 17, 22, 0.98));
+    border-color: rgba(42, 42, 62, 0.88);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.28);
+  }
+
+  .brand {
+    min-height: 48px;
+    margin-right: 0;
+    padding: 4px 2px;
+    align-items: center;
+  }
+
+  .brand span:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 1.1rem;
+    line-height: 1.05;
+  }
+
+  .brand span:last-child::after {
+    content: "Website";
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  .hamburger {
+    display: none;
+  }
+
+  .site-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .site-nav a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0.62rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    color: #a3a5b2;
+    font-size: 0.96rem;
+  }
+
+  .site-nav a:hover,
+  .site-nav a:focus-visible {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.035);
+    border-color: rgba(232, 232, 240, 0.08);
+    outline: none;
+  }
+
+  .site-nav a[href="#discvault26"] {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.045);
+    border-color: rgba(232, 197, 71, 0.24);
+    font-weight: 600;
+  }
+
+  .nav-github {
+    margin-top: auto;
+    justify-content: center;
+    min-height: 40px;
+    background: transparent;
+  }
+
+  .lang-switcher {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 12px 0 0;
+    margin: 4px 0 0;
+    width: 100%;
+  }
+
+  .lang-select {
+    width: 100%;
+    min-height: 38px;
+    background-color: rgba(10, 10, 15, 0.86);
+    border-radius: 8px;
+  }
+
+}
+
 .hero {
   padding: 4.5rem 0 3rem;
   animation: rise 650ms ease-out both;
+}
+
+@media (min-width: 901px) {
+  .hero {
+    padding: 2.6rem 0 3rem;
+  }
 }
 
 .hero-v26 {
@@ -391,7 +504,7 @@ h1 {
   margin: 0;
   flex-shrink: 0;
   scroll-snap-align: start;
-  background: linear-gradient(180deg, rgba(26, 26, 38, 0.85), rgba(18, 18, 26, 0.96));
+  background: linear-gradient(180deg, rgba(32, 33, 40, 0.88), rgba(24, 25, 31, 0.96));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
@@ -679,7 +792,7 @@ h1 {
 
 .card,
 .install-card {
-  background: linear-gradient(180deg, rgba(26, 26, 38, 0.85), rgba(18, 18, 26, 0.96));
+  background: linear-gradient(180deg, rgba(32, 33, 40, 0.88), rgba(24, 25, 31, 0.96));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem;
@@ -881,7 +994,7 @@ code {
   text-decoration: none;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .hero-v26 {
     grid-template-columns: 1fr;
   }
