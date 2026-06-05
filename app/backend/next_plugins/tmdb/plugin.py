@@ -100,6 +100,39 @@ def _credits(data):
     return cast + crew
 
 
+def _locale_key(language, country=""):
+    language = str(language or "").strip().lower()
+    country = str(country or "").strip().upper()
+    if not language:
+        return ""
+    return f"{language}-{country}" if country else language
+
+
+def _localizations(data):
+    rows = []
+    seen = set()
+    for item in ((data.get("translations") or {}).get("translations") or []):
+        payload = item.get("data") or {}
+        title = payload.get("title") or ""
+        overview = payload.get("overview") or ""
+        lang = _locale_key(item.get("iso_639_1"), item.get("iso_3166_1"))
+        if not lang or not (title or overview):
+            continue
+        key = lang.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            {
+                "lang": lang,
+                "title": title,
+                "overview": overview,
+                "source": "tmdb",
+            }
+        )
+    return rows
+
+
 def _normalize_details(data):
     genres = [item.get("name") for item in data.get("genres") or [] if item.get("name")]
     studios = [item.get("name") for item in data.get("production_companies") or [] if item.get("name")]
@@ -156,6 +189,7 @@ def _normalize_details(data):
         "technicalSpecs": {
             "contentRatings": ratings,
         },
+        "localizations": _localizations(data),
         "credits": _credits(data),
         "tmdbId": data.get("id"),
         "imdbId": imdb_id,
@@ -167,7 +201,7 @@ def _details(context, tmdb_id):
         context,
         f"/movie/{tmdb_id}",
         language=_language(context),
-        append_to_response="credits,videos,images,release_dates",
+        append_to_response="credits,videos,images,release_dates,translations,alternative_titles",
         include_image_language="null,en",
     )
 

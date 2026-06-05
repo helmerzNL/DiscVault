@@ -8737,6 +8737,33 @@ def ui_preview_html(
       grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
       gap: 12px;
     }
+    .container-member-grid.view-list,
+    .container-member-grid.view-detail {
+      grid-template-columns: 1fr;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .container-view-mode-control {
+      flex: 0 1 auto;
+      max-width: 100%;
+    }
+    .container-member-row-actions {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 7px;
+    }
+    .container-detail-page.container-editing .container-member-row-actions {
+      display: flex;
+    }
+    .container-member-row-actions .detail-order-button,
+    .container-member-row-actions .detail-remove-button {
+      min-height: 30px;
+    }
+    .container-member-grid .mode-list-card,
+    .container-member-grid .mode-detail-row {
+      cursor: pointer;
+    }
     .detail-mini-card {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -11714,6 +11741,11 @@ def ui_preview_html(
                   <h3 data-next-i18n="containerDetail.memberMovies">Movies</h3>
                   <p data-next-i18n="containerDetail.memberMoviesHelp">Films linked directly to this container.</p>
                 </div>
+                <div class="segmented compact view-mode-control container-view-mode-control" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                  <button type="button" class="active" data-container-view-scope="movies" data-container-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
+                  <button type="button" data-container-view-scope="movies" data-container-view-mode="list" data-next-i18n="collection.viewList">List</button>
+                  <button type="button" data-container-view-scope="movies" data-container-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+                </div>
               </div>
               <div class="container-member-grid" id="containerDetailMovies"></div>
             </div>
@@ -11722,6 +11754,11 @@ def ui_preview_html(
                 <div>
                   <h3 data-next-i18n="containerDetail.collectionItems">Collection items</h3>
                   <p data-next-i18n="containerDetail.collectionItemsHelp">Movies, vaults and box sets grouped in this collection.</p>
+                </div>
+                <div class="segmented compact view-mode-control container-view-mode-control" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                  <button type="button" class="active" data-container-view-scope="items" data-container-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
+                  <button type="button" data-container-view-scope="items" data-container-view-mode="list" data-next-i18n="collection.viewList">List</button>
+                  <button type="button" data-container-view-scope="items" data-container-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
                 </div>
               </div>
               <div class="container-member-grid" id="containerDetailItems"></div>
@@ -12593,6 +12630,8 @@ def ui_preview_html(
     let libraryDetailSort = JSON.parse(localStorage.getItem("dv_next_library_detail_sort") || '{"key":"title","direction":"asc"}');
     let listsViewMode = localStorage.getItem("dv_next_lists_view_mode") || "poster";
     let listsDetailSort = JSON.parse(localStorage.getItem("dv_next_lists_detail_sort") || '{"key":"title","direction":"asc"}');
+    let containerMoviesViewMode = localStorage.getItem("dv_next_container_movies_view_mode") || "poster";
+    let containerItemsViewMode = localStorage.getItem("dv_next_container_items_view_mode") || "poster";
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
@@ -17215,6 +17254,7 @@ def ui_preview_html(
     function containerMemberMovieCardHtml(movie, index, total, canEdit, options = {}) {
       const metadata = movie.metadata || {};
       const poster = usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
+      const title = movie.title || tNext("common.untitled", "Untitled");
       const subtitle = [movie.year, movie.format, movie.edition].filter(Boolean).join(" / ");
       const href = `/movies/${encodeURIComponent(movie.id)}`;
       const removeAttrs = options.removeKind === "item"
@@ -17231,15 +17271,15 @@ def ui_preview_html(
         </div>
       ` : "";
       return `
-        <div class="container-member-card ${canEdit ? "editable" : ""}">
-          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}">
+        <div class="container-member-card ${canEdit ? "editable" : ""}" title="${escapeHtml(title)}">
+          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}" title="${escapeHtml(title)}">
             ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}
             <span class="container-member-index">${escapeHtml(index + 1)}</span>
             ${physicalFormatBadgeHtml(movie.format || movie.edition_type || metadata.format)}
             ${digitalSourceBadgeHtml(movie)}
           </a>
-          <a class="container-member-copy" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}">
-            <strong>${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</strong>
+          <a class="container-member-copy" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}" title="${escapeHtml(title)}">
+            <strong>${escapeHtml(title)}</strong>
             <span class="container-member-kind">${escapeHtml(tNext("containerDetail.type.movie", "Movie"))}</span>
             <span>${escapeHtml(subtitle || tNext("containerDetail.type.movie", "Movie"))}</span>
             ${debugIdHtml(movie.id, "Movie ID")}
@@ -17254,6 +17294,7 @@ def ui_preview_html(
       const itemType = item.item_type || item.container_type || item.entity_type || "container";
       const poster = usableImage(item.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster || metadata.poster_file);
       const href = `/containers/${encodeURIComponent(itemId)}`;
+      const title = item.title || tNext("common.untitled", "Untitled");
       const subtitle = [containerTypeLabel(itemType), item.year, item.badge_label].filter(Boolean).join(" / ");
       const orderAttrs = `data-container-move-item="${escapeHtml(itemId || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
       const removeAttrs = `data-container-remove-item="${escapeHtml(itemId || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
@@ -17265,13 +17306,13 @@ def ui_preview_html(
         </div>
       ` : "";
       return `
-        <div class="container-member-card ${canEdit ? "editable" : ""}">
-          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-container="${escapeHtml(itemId || "")}">
+        <div class="container-member-card ${canEdit ? "editable" : ""}" title="${escapeHtml(title)}">
+          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-container="${escapeHtml(itemId || "")}" title="${escapeHtml(title)}">
             ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(containerTypeLabel(itemType))}</span>`}
             <span class="container-member-index">${escapeHtml(index + 1)}</span>
           </a>
-          <a class="container-member-copy" href="${escapeHtml(href)}" data-open-container="${escapeHtml(itemId || "")}">
-            <strong>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</strong>
+          <a class="container-member-copy" href="${escapeHtml(href)}" data-open-container="${escapeHtml(itemId || "")}" title="${escapeHtml(title)}">
+            <strong>${escapeHtml(title)}</strong>
             <span class="container-member-kind">${escapeHtml(containerTypeLabel(itemType))}</span>
             <span>${escapeHtml(subtitle || containerTypeLabel(itemType))}</span>
             ${debugIdHtml(itemId, "Container ID")}
@@ -17939,6 +17980,71 @@ def ui_preview_html(
       await loadAppSnapshot();
       if (message) setContainerDetailMessage(message, tone);
     }
+    function setContainerMemberGridMode(node, mode) {
+      if (!node) return;
+      const normalized = normalizeViewMode(mode);
+      node.classList.toggle("view-list", normalized === "list");
+      node.classList.toggle("view-detail", normalized === "detail");
+    }
+    function syncContainerViewModeControls() {
+      document.querySelectorAll("[data-container-view-mode]").forEach((button) => {
+        const scope = button.dataset.containerViewScope || "movies";
+        const activeMode = scope === "items" ? containerItemsViewMode : containerMoviesViewMode;
+        button.classList.toggle("active", button.dataset.containerViewMode === activeMode);
+        button.setAttribute("aria-pressed", button.dataset.containerViewMode === activeMode ? "true" : "false");
+      });
+    }
+    function renderContainerMovieEntries(memberMovies, aggregateMovieById, canEditContainerLinks) {
+      const entries = memberMovies.map((movie, index) => {
+        const aggregateMovie = aggregateMovieById.get(String(movie.id)) || {};
+        const displayMovie = Object.assign({}, aggregateMovie, movie, {
+          poster_url: movie.poster_url || aggregateMovie.poster_url,
+          backdrop_url: movie.backdrop_url || aggregateMovie.backdrop_url
+        });
+        return {type: "movie", item: displayMovie, index, total: memberMovies.length, canEdit: canEditContainerLinks, options: {}};
+      });
+      if (!entries.length) return "";
+      if (containerMoviesViewMode === "detail") return containerMemberDetailTableHtml(entries, "movies");
+      if (containerMoviesViewMode === "list") {
+        return entries.map((entry) => containerMemberMovieListHtml(entry.item, entry.index, entry.total, entry.canEdit, entry.options)).join("");
+      }
+      return entries.map((entry) => containerMemberMovieCardHtml(entry.item, entry.index, entry.total, entry.canEdit, entry.options)).join("");
+    }
+    function renderContainerCollectionEntries(collectionItems, aggregateMovieById, canEditContainerLinks) {
+      const entries = collectionItems.map((item, index) => {
+        const itemId = item.entity_id || item.item_id || item.id || "";
+        const itemType = item.item_type || item.container_type || item.entity_type || "movie";
+        if (itemType === "movie") {
+          const aggregateMovie = aggregateMovieById.get(String(itemId)) || {};
+          const displayMovie = Object.assign({}, aggregateMovie, item, {
+            id: itemId,
+            poster_url: item.poster_url || aggregateMovie.poster_url,
+            backdrop_url: item.backdrop_url || aggregateMovie.backdrop_url
+          });
+          return {
+            type: "movie",
+            item: displayMovie,
+            index,
+            total: collectionItems.length,
+            canEdit: canEditContainerLinks,
+            options: {removeKind: "item", removeValue: itemId, itemType: "movie", orderKind: "item"}
+          };
+        }
+        return {type: "container", item, index, total: collectionItems.length, canEdit: canEditContainerLinks};
+      });
+      if (!entries.length) return "";
+      if (containerItemsViewMode === "detail") return containerMemberDetailTableHtml(entries, "items");
+      if (containerItemsViewMode === "list") {
+        return entries.map((entry) => entry.type === "movie"
+          ? containerMemberMovieListHtml(entry.item, entry.index, entry.total, entry.canEdit, entry.options)
+          : containerMemberContainerListHtml(entry.item, entry.index, entry.total, entry.canEdit)
+        ).join("");
+      }
+      return entries.map((entry) => entry.type === "movie"
+        ? containerMemberMovieCardHtml(entry.item, entry.index, entry.total, entry.canEdit, entry.options)
+        : containerMemberContainerCardHtml(entry.item, entry.index, entry.total, entry.canEdit)
+      ).join("");
+    }
     function renderContainerDetail(detail) {
       const activePanelId = activeDetailPanel("containerDetail", "containerDetailOverviewPanel");
       activeContainerPayload = detail;
@@ -17996,36 +18102,13 @@ def ui_preview_html(
       const memberMovies = detail.memberMovies || [];
       const canEditContainerLinks = hasPermission("containers.edit");
       const aggregateMovieById = new Map((detail.aggregateMovies || []).map((movie) => [String(movie.id), movie]));
-      const movieCards = memberMovies.map((movie, index) => {
-        const aggregateMovie = aggregateMovieById.get(String(movie.id)) || {};
-        const displayMovie = Object.assign({}, aggregateMovie, movie, {
-          poster_url: movie.poster_url || aggregateMovie.poster_url,
-          backdrop_url: movie.backdrop_url || aggregateMovie.backdrop_url
-        });
-        return containerMemberMovieCardHtml(displayMovie, index, memberMovies.length, canEditContainerLinks);
-      });
-      document.getElementById("containerDetailMovies").innerHTML = movieCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noMovies", "No movies linked yet."))}</div>`;
+      const moviesNode = document.getElementById("containerDetailMovies");
+      setContainerMemberGridMode(moviesNode, containerMoviesViewMode);
+      moviesNode.innerHTML = renderContainerMovieEntries(memberMovies, aggregateMovieById, canEditContainerLinks) || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noMovies", "No movies linked yet."))}</div>`;
       const collectionItems = detail.collectionItems || [];
-      const itemCards = collectionItems.map((item, index) => {
-        const itemId = item.entity_id || item.item_id || item.id || "";
-        const itemType = item.item_type || item.container_type || item.entity_type || "movie";
-        if (itemType === "movie") {
-          const aggregateMovie = aggregateMovieById.get(String(itemId)) || {};
-          const displayMovie = Object.assign({}, aggregateMovie, item, {
-            id: itemId,
-            poster_url: item.poster_url || aggregateMovie.poster_url,
-            backdrop_url: item.backdrop_url || aggregateMovie.backdrop_url
-          });
-          return containerMemberMovieCardHtml(displayMovie, index, collectionItems.length, canEditContainerLinks, {
-            removeKind: "item",
-            removeValue: itemId,
-            itemType: "movie",
-            orderKind: "item"
-          });
-        }
-        return containerMemberContainerCardHtml(item, index, collectionItems.length, canEditContainerLinks);
-      });
-      document.getElementById("containerDetailItems").innerHTML = itemCards.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noItems", "No collection items linked yet."))}</div>`;
+      const itemsNode = document.getElementById("containerDetailItems");
+      setContainerMemberGridMode(itemsNode, containerItemsViewMode);
+      itemsNode.innerHTML = renderContainerCollectionEntries(collectionItems, aggregateMovieById, canEditContainerLinks) || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noItems", "No collection items linked yet."))}</div>`;
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
         `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
         item.identifier
@@ -18043,6 +18126,7 @@ def ui_preview_html(
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("containerDetailVideos").innerHTML = videoCardsHtml(containerVideoItems(detail));
       activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailOverviewPanel");
+      syncContainerViewModeControls();
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
     }
@@ -18233,6 +18317,110 @@ def ui_preview_html(
         <div class="person-metadata-status-row">
           <strong>${escapeHtml(tNext("personDetail.filmography", "Filmography"))}</strong>
           <span>${escapeHtml(options.canRefreshFilmography ? tNext("personDetail.filmographyReady", "External filmography can be refreshed") : tNext("personDetail.filmographyUnavailable", "Enable extended people pages and link TMDb first"))}</span>
+        </div>
+      `;
+    }
+    function containerMemberMovieRowActionsHtml(movie, index, total, canEdit, options = {}) {
+      if (!canEdit) return "";
+      const removeAttrs = options.removeKind === "item"
+        ? `data-container-remove-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
+        : `data-container-remove-movie="${escapeHtml(movie.id || "")}"`;
+      const orderAttrs = options.orderKind === "item"
+        ? `data-container-move-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
+        : `data-container-move-movie="${escapeHtml(movie.id || "")}"`;
+      return `
+        <span class="container-member-row-actions">
+          <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
+          <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
+        </span>
+      `;
+    }
+    function containerMemberContainerRowActionsHtml(item, index, total, canEdit) {
+      if (!canEdit) return "";
+      const itemId = item.entity_id || item.item_id || item.id || "";
+      const itemType = item.item_type || item.container_type || item.entity_type || "container";
+      const orderAttrs = `data-container-move-item="${escapeHtml(itemId || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
+      const removeAttrs = `data-container-remove-item="${escapeHtml(itemId || "")}" data-item-type="${escapeHtml(itemType || "")}"`;
+      return `
+        <span class="container-member-row-actions">
+          <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
+          <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
+        </span>
+      `;
+    }
+    function containerMemberMovieListHtml(movie, index, total, canEdit, options = {}) {
+      const poster = itemPosterUrl({kind: "movie", movie});
+      const title = movie.title || tNext("common.untitled", "Untitled");
+      const credits = moviePreviewCredits(movie);
+      return `
+        <article class="mode-list-card" data-open-movie="${escapeHtml(movie.id || "")}" tabindex="0" title="${escapeHtml(title)}">
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
+          <span class="mode-list-body">
+            <strong>${escapeHtml(title)}</strong>
+            <span class="mode-list-meta">${[movie.year, physicalFormatLabel(movie.format || movie.edition_type || (movie.metadata || {}).format), movie.edition].filter(Boolean).map(escapeHtml).join(" / ")}</span>
+            <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.director", "Director"))}</span>${personCreditLinksHtml(credits.directors)}</span>
+            <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.actors", "Actors"))}</span>${personCreditLinksHtml(credits.actors)}</span>
+            ${debugIdHtml(movie.id, "Movie ID")}
+            ${containerMemberMovieRowActionsHtml(movie, index, total, canEdit, options)}
+          </span>
+        </article>
+      `;
+    }
+    function containerMemberContainerListHtml(item, index, total, canEdit) {
+      const metadata = item.metadata || {};
+      const itemId = item.entity_id || item.item_id || item.id || "";
+      const itemType = item.item_type || item.container_type || item.entity_type || "container";
+      const poster = usableImage(item.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster || metadata.poster_file);
+      const title = item.title || tNext("common.untitled", "Untitled");
+      return `
+        <article class="mode-list-card" data-open-container="${escapeHtml(itemId || "")}" tabindex="0" title="${escapeHtml(title)}">
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(containerTypeLabel(itemType))}</span>`}</span>
+          <span class="mode-list-body">
+            <strong>${escapeHtml(title)}</strong>
+            <span class="mode-list-meta">${[containerTypeLabel(itemType), item.year, item.badge_label].filter(Boolean).map(escapeHtml).join(" / ")}</span>
+            ${debugIdHtml(itemId, "Container ID")}
+            ${containerMemberContainerRowActionsHtml(item, index, total, canEdit)}
+          </span>
+        </article>
+      `;
+    }
+    function containerMemberDetailRowHtml(entry, scope) {
+      const isMovie = entry.type === "movie";
+      const item = entry.item || {};
+      const movie = isMovie ? item : null;
+      const title = isMovie ? (movie.title || tNext("common.untitled", "Untitled")) : (item.title || tNext("common.untitled", "Untitled"));
+      const itemId = isMovie ? (movie.id || "") : (item.entity_id || item.item_id || item.id || "");
+      const itemType = isMovie ? "movie" : (item.item_type || item.container_type || item.entity_type || "container");
+      const credits = isMovie ? moviePreviewCredits(movie) : {directors: [], actors: []};
+      const targetAttr = isMovie
+        ? `data-open-movie="${escapeHtml(itemId)}"`
+        : `data-open-container="${escapeHtml(itemId)}"`;
+      const actions = isMovie
+        ? containerMemberMovieRowActionsHtml(movie, entry.index, entry.total, entry.canEdit, entry.options || {})
+        : containerMemberContainerRowActionsHtml(item, entry.index, entry.total, entry.canEdit);
+      return `
+        <div class="mode-detail-row" role="row" ${targetAttr} tabindex="0" title="${escapeHtml(title)}">
+          <span role="cell"><strong>${escapeHtml(title)}</strong>${debugIdHtml(itemId, isMovie ? "Movie ID" : "Container ID")}${actions}</span>
+          <span role="cell">${escapeHtml(isMovie ? (movie.year || "") : (item.year || ""))}</span>
+          <span role="cell">${escapeHtml(isMovie ? physicalFormatLabel(movie.format || movie.edition_type || (movie.metadata || {}).format) : containerTypeLabel(itemType))}</span>
+          <span role="cell">${isMovie ? personCreditLinksHtml(credits.directors) : ""}</span>
+          <span role="cell">${isMovie ? personCreditLinksHtml(credits.actors) : ""}</span>
+        </div>
+      `;
+    }
+    function containerMemberDetailTableHtml(entries, scope) {
+      return `
+        <div class="mode-detail-table" role="table">
+          <div class="mode-detail-row mode-detail-head" role="row">
+            <span role="columnheader">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+            <span role="columnheader">${escapeHtml(tNext("collection.yearColumn", "Year"))}</span>
+            <span role="columnheader">${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
+            <span role="columnheader">${escapeHtml(tNext("movieDetail.director", "Director"))}</span>
+            <span role="columnheader">${escapeHtml(tNext("movieDetail.actors", "Actors"))}</span>
+          </div>
+          ${entries.map((entry) => containerMemberDetailRowHtml(entry, scope)).join("")}
         </div>
       `;
     }
@@ -23833,6 +24021,21 @@ def ui_preview_html(
           renderLibrary();
         });
       });
+      document.querySelectorAll("[data-container-view-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const mode = normalizeViewMode(button.dataset.containerViewMode);
+          const scope = button.dataset.containerViewScope || "movies";
+          if (scope === "items") {
+            containerItemsViewMode = mode;
+            localStorage.setItem("dv_next_container_items_view_mode", containerItemsViewMode);
+          } else {
+            containerMoviesViewMode = mode;
+            localStorage.setItem("dv_next_container_movies_view_mode", containerMoviesViewMode);
+          }
+          if (activeContainerPayload) renderContainerDetail(activeContainerPayload);
+          else syncContainerViewModeControls();
+        });
+      });
       document.querySelectorAll("[data-format-filter]").forEach((button) => {
         button.addEventListener("click", () => {
           collectionFormatFilter = button.dataset.formatFilter || "all";
@@ -24465,6 +24668,16 @@ def ui_preview_html(
           moveCollectionItem(moveItem.dataset.itemType, moveItem.dataset.containerMoveItem, moveItem.dataset.direction);
           return;
         }
+        if (removeMovie) {
+          event.preventDefault();
+          removeContainerMovie(removeMovie.dataset.containerRemoveMovie);
+          return;
+        }
+        if (removeItem) {
+          event.preventDefault();
+          removeCollectionItem(removeItem.dataset.itemType, removeItem.dataset.containerRemoveItem);
+          return;
+        }
         if (movieLink) {
           event.preventDefault();
           openAppMovieDetail(movieLink.dataset.openMovie);
@@ -24474,13 +24687,6 @@ def ui_preview_html(
           event.preventDefault();
           openAppContainerDetail(containerLink.dataset.openContainer);
           return;
-        }
-        if (removeMovie) {
-          removeContainerMovie(removeMovie.dataset.containerRemoveMovie);
-          return;
-        }
-        if (removeItem) {
-          removeCollectionItem(removeItem.dataset.itemType, removeItem.dataset.containerRemoveItem);
         }
       });
       document.getElementById("movieMetadataDryRunButton")?.addEventListener("click", () => refreshActiveMovieMetadata(true));
