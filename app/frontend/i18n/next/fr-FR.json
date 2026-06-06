@@ -1440,5 +1440,6 @@
   "appAdmin.restoringArtwork": "Restauration du visuel...",
   "appAdmin.artworkRestored": "Visuel restaure.",
   "appAdmin.purgingArtwork": "Purge des visuels expires...",
-  "appAdmin.artworkPurged": "Visuels expires purges."
+  "appAdmin.artworkPurged": "Visuels expires purges.",
+  "appAdmin.pluginKey": "Cle du plugin"
 }

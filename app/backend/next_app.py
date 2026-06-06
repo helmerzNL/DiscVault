@@ -4359,7 +4359,7 @@ def migration_dashboard_html() -> str:
     function renderWizard(report) {
       const source = report.source || {};
       const counts = importSourceCounts(source);
-      const sourceDetail = source.pluginName || tNext("migration.importSource", "Import Source");
+      const sourceDetail = pluginDisplayName(source.pluginId, source.pluginName || tNext("migration.importSource", "Import Source"));
       const securityCount = Number(counts.users || 0) + Number(counts.credentials || 0) + Number(counts.groups || 0);
       const steps = [
         {
@@ -4678,7 +4678,7 @@ def migration_dashboard_html() -> str:
           <button type="button" class="source-option ${selected ? "selected" : ""}" data-import-source-id="${escapeHtml(pluginId)}">
             <div class="source-option-main">
               <div class="source-option-title">
-                <strong>${escapeHtml(source.pluginName || source.name || pluginId || tNext("migration.importSource", "Import Source"))}</strong>
+                <strong>${escapeHtml(pluginDisplayName(pluginId, source.pluginName || source.name || pluginId || tNext("migration.importSource", "Import Source")))}</strong>
                 <span class="label">${escapeHtml(source.readable ? tNext("migration.sourceDetected", "Legacy source detected") : badge.text)}</span>
               </div>
               <span class="badge ${badge.tone}">${escapeHtml(selected ? tNext("migration.selectedSource", "Selected") : badge.text)}</span>
@@ -4756,7 +4756,7 @@ def migration_dashboard_html() -> str:
       renderMigrationFlow(report);
       renderTestReset(report);
       document.getElementById("sourceList").innerHTML = [
-        row(tNext("migration.importSource", "Import source"), source.pluginName ? `${source.pluginName} (${source.pluginId})` : "-"),
+        row(tNext("migration.importSource", "Import source"), pluginDisplayName(source.pluginId, source.pluginName || "-")),
         row(tNext("migration.sourceKind", "Source kind"), source.sourceKind || "-"),
         row(tNext("migration.sourceStatus", "Source status"), source.status || "-"),
         row(tNext("migration.legacyData", "Legacy data"), source.found ? tNext("migration.sourceFound", "found") : tNext("migration.sourceMissing", "not found")),
@@ -4770,9 +4770,9 @@ def migration_dashboard_html() -> str:
       document.getElementById("skippedList").innerHTML = rowsFromObject(report.summary?.skipped || {});
       document.getElementById("pluginsList").innerHTML = (plugins.items || []).map((plugin) => `
         <div class="plugin">
-          <strong>${escapeHtml(plugin.name)}</strong>
+          <strong>${escapeHtml(pluginDisplayName(plugin))}</strong>
           <span class="badge ${plugin.enabled ? "ok" : "warn"}">${plugin.enabled ? escapeHtml(tNext("common.enabled", "enabled")) : escapeHtml(tNext("common.disabled", "disabled"))}</span>
-          <div class="label mono">${escapeHtml(plugin.id)} / order ${escapeHtml(plugin.orderIndex)}</div>
+          <div class="label mono">${escapeHtml(tNext("appAdmin.pluginKey", "Plugin key"))}: ${escapeHtml(plugin.id)} / order ${escapeHtml(plugin.orderIndex)}</div>
         </div>
       `).join("") || row(tNext("migration.plugins", "Plugins"), "-");
       renderList("actionsList", report.requiredActions || []);
@@ -13474,6 +13474,48 @@ def ui_preview_html(
     function tNext(key, fallback) {
       return localeState.messages[key] || fallback || key;
     }
+    function pluginDisplayName(pluginOrId, fallback = "") {
+      if (!pluginOrId && fallback) return fallback;
+      const direct = pluginOrId && typeof pluginOrId === "object" ? pluginOrId : null;
+      const pluginId = String(direct?.id || direct?.pluginId || direct?.plugin_id || pluginOrId || "").trim();
+      const directName = String(direct?.displayName || direct?.pluginName || direct?.name || direct?.manifest?.name || "").trim();
+      if (directName) return directName;
+      const pools = [
+        appAdmin?.plugins || [],
+        state?.metadataPlugins || [],
+        state?.plugins || [],
+        importCenter?.report?.metadataPlugins?.items || [],
+        importCenter?.report?.importSources || [],
+        importCenter?.preview?.sources || [],
+        adminState?.plugins || []
+      ].filter(Array.isArray);
+      for (const pool of pools) {
+        const match = pool.find((plugin) => {
+          const id = String(plugin?.id || plugin?.pluginId || plugin?.plugin_id || "").trim();
+          return id && id === pluginId;
+        });
+        const name = String(match?.displayName || match?.pluginName || match?.name || match?.manifest?.name || "").trim();
+        if (name) return name;
+      }
+      const known = {
+        movievault: "MovieVault",
+        movievault_26: "MovieVault 26",
+        tmdb: "TMDb",
+        omdb: "OMDb",
+        upcitemdb: "UPCItemDB",
+        bluray_com: "Blu-ray.com",
+        trakt: "Trakt",
+        plex: "Plex",
+        jellyfin: "Jellyfin",
+        discvault_legacy_import: "DiscVault Legacy Import"
+      };
+      if (pluginId && known[pluginId]) return known[pluginId];
+      if (fallback) return fallback;
+      if (!pluginId) return "";
+      return pluginId
+        .replace(/[_-]+/g, " ")
+        .replace(/\\b\\w/g, (char) => char.toUpperCase());
+    }
     function flagCodeForLocale(value) {
       const raw = String(value || "").replace("_", "-").toLowerCase();
       const base = raw.split("-")[0];
@@ -14056,8 +14098,8 @@ def ui_preview_html(
             <div class="app-admin-priority-row">
               <span class="app-admin-priority-rank">${escapeHtml(String(index + 1))}</span>
               <span>
-                <strong>${escapeHtml(plugin.name || plugin.id)}</strong>
-                <span class="profile-passkey-meta">${escapeHtml(plugin.id)} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</span>
+                <strong>${escapeHtml(pluginDisplayName(plugin))}</strong>
+                <span class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.pluginKey", "Plugin key"))}: ${escapeHtml(plugin.id)} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</span>
               </span>
               <span class="tag ${plugin.enabled && !appAdminPluginNeedsConfiguration(plugin) ? "good" : ""}">
                 ${escapeHtml(plugin.enabled ? (appAdminPluginNeedsConfiguration(plugin) ? tNext("appAdmin.configurationNeeded", "Configuration needed") : tNext("appAdmin.enabled", "Enabled")) : tNext("appAdmin.disabled", "Disabled"))}
@@ -14111,7 +14153,7 @@ def ui_preview_html(
           </div>
           <div class="plugin-operation-row">
             <strong>${escapeHtml(tNext("appAdmin.personalListSources", "List sources"))}</strong>
-            <span>${escapeHtml(plugins.map((plugin) => plugin.name || plugin.id).join(", ") || "-")}</span>
+            <span>${escapeHtml(plugins.map((plugin) => pluginDisplayName(plugin)).join(", ") || "-")}</span>
           </div>
           <div class="plugin-operation-row">
             <strong>${escapeHtml(tNext("appAdmin.latestListSyncJobs", "Latest sync jobs"))}</strong>
@@ -14334,8 +14376,8 @@ def ui_preview_html(
         <div class="profile-passkey">
           <div class="profile-passkey-head">
             <div>
-              <strong>${escapeHtml(plugin.name || plugin.id)}</strong>
-              <div class="profile-passkey-meta">${escapeHtml(plugin.id)} &middot; ${escapeHtml(tNext("appAdmin.version", "Version"))} ${escapeHtml(version)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
+              <strong>${escapeHtml(pluginDisplayName(plugin))}</strong>
+              <div class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.pluginKey", "Plugin key"))}: ${escapeHtml(plugin.id)} &middot; ${escapeHtml(tNext("appAdmin.version", "Version"))} ${escapeHtml(version)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
             </div>
             <div class="app-admin-plugin-order">
               ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>` : ""}
@@ -14407,7 +14449,7 @@ def ui_preview_html(
         return `
           <div class="profile-passkey">
             <div class="profile-passkey-head">
-              <strong>${escapeHtml(pluginId)}</strong>
+              <strong>${escapeHtml(pluginDisplayName(pluginId, pluginId))}</strong>
               <span class="tag ${appAdminJobStatusClass(job.status)}">${escapeHtml(job.status || "-")}</span>
             </div>
             <div class="profile-passkey-meta">
@@ -14440,7 +14482,8 @@ def ui_preview_html(
         </div>
         ${events.length ? events.map((event, index) => {
           const meta = event.metadata || {};
-          const receiver = meta.receiverId || meta.receiver_id || meta.pluginId || meta.plugin_id || meta.provider || "receiver";
+          const receiverId = meta.receiverId || meta.receiver_id || meta.pluginId || meta.plugin_id || meta.provider || "receiver";
+          const receiver = pluginDisplayName(receiverId, receiverId);
           const title = meta.title || meta.movieTitle || meta.containerTitle || event.summary || receiver;
           const status = meta.status || meta.state || "pushed";
           const details = auditEventExportPayload(event);
@@ -14488,7 +14531,8 @@ def ui_preview_html(
         const title = item.entityTitle || "-";
         const kindLabel = item.kind === "backdrop" ? tNext("movieDetail.backdrops", "Backdrops") : tNext("movieDetail.posters", "Posters");
         const entityLabel = item.entityType === "container" ? tNext("collection.containers", "Containers") : tNext("collection.movies", "Movies");
-        const provider = media.provider_id || (media.metadata || {}).source || media.storage_backend || "-";
+        const rawProvider = media.provider_id || (media.metadata || {}).source || media.storage_backend || "-";
+        const provider = pluginDisplayName(rawProvider, rawProvider);
         const size = [media.width && media.height ? `${media.width}x${media.height}` : "", media.size_bytes ? formatFileSize(media.size_bytes) : ""].filter(Boolean).join(" · ");
         return `
           <div class="profile-passkey artwork-trash-row">
@@ -14596,7 +14640,7 @@ def ui_preview_html(
         });
       }
       const values = Array.from(names).slice(0, limit);
-      return values.map((name) => `<span class="tag">${escapeHtml(name)}</span>`).join("");
+      return values.map((name) => `<span class="tag">${escapeHtml(pluginDisplayName(name, name))}</span>`).join("");
     }
     function metadataJobReceiverTags(job, limit = 4) {
       const core = metadataJobCoreResult(job);
@@ -14605,7 +14649,7 @@ def ui_preview_html(
       return receivers.slice(0, limit).map((item) => {
         const pluginId = item?.pluginId || item?.plugin_id || item?.receiverId || item?.receiver_id || item?.id || "receiver";
         const status = item?.status || item?.state || "";
-        return `<span class="tag ${status === "ok" || status === "completed" ? "good" : status === "error" ? "bad" : ""}">${escapeHtml(pluginId)}</span>`;
+        return `<span class="tag ${status === "ok" || status === "completed" ? "good" : status === "error" ? "bad" : ""}">${escapeHtml(pluginDisplayName(pluginId, pluginId))}</span>`;
       }).join("");
     }
     function metadataJobStatusLabel(job) {
@@ -14738,17 +14782,18 @@ def ui_preview_html(
       if (!list) return;
       list.innerHTML = sources.length ? sources.map((source) => {
         const pluginId = source.plugin_id || source.pluginId || source.source_type || source.type || "-";
+        const pluginName = pluginDisplayName(pluginId, source.name || pluginId);
         const itemCount = source.itemCount ?? source.item_count ?? source.items ?? 0;
         const matchedCount = source.matchedCount ?? source.matched_count ?? source.matched ?? 0;
         const status = source.status || source.sync_status || source.state || (source.enabled === false ? "disabled" : "active");
         return `
           <div class="profile-passkey">
             <div class="profile-passkey-head">
-              <strong>${escapeHtml(source.name || pluginId)}</strong>
+              <strong>${escapeHtml(pluginName)}</strong>
               <span class="tag ${status === "active" || status === "completed" || status === "ok" ? "good" : ""}">${escapeHtml(String(status).replaceAll("_", " "))}</span>
             </div>
             <div class="profile-passkey-meta">
-              ${escapeHtml(pluginId)}
+              ${escapeHtml(pluginName)}
               &middot;
               ${escapeHtml(tNext("appAdmin.digitalSourceItems", "Items"))}: ${escapeHtml(formatNumber(itemCount))}
               &middot;
@@ -15216,7 +15261,7 @@ def ui_preview_html(
       }
       if (policyNode) {
         const orderRows = (pluginPolicy.sourceOrder || []).map((pluginId, index) => appAdminOperationsRow(
-          `${index + 1}. ${pluginId}`,
+          `${index + 1}. ${pluginDisplayName(pluginId, pluginId)}`,
           tNext("appAdmin.providerOrderHelp", "Higher providers fill empty fields first."),
           tNext("appAdmin.provider", "Provider"),
           index === 0 ? "good" : ""
@@ -19795,7 +19840,7 @@ def ui_preview_html(
         return `
           <button type="button" class="import-source-card ${active ? "active" : ""}" data-import-source="${escapeHtml(sourceId)}">
             <div class="import-source-head">
-              <strong>${escapeHtml(source.pluginName || sourceId || tNext("importCenter.source", "Source"))}</strong>
+              <strong>${escapeHtml(pluginDisplayName(sourceId, source.pluginName || sourceId || tNext("importCenter.source", "Source")))}</strong>
               <span class="tag ${ready ? "good" : ""}">${escapeHtml(statusLabel)}</span>
             </div>
             <div class="import-source-meta">
@@ -19836,7 +19881,7 @@ def ui_preview_html(
         </div>
         ${selected && importSourceId(selected) ? `
           <div class="import-source-meta">
-            ${escapeHtml(tNext("importCenter.fileChosenSource", "Chosen source"))}: ${escapeHtml(selected.pluginName || selected.pluginId || "-")}
+            ${escapeHtml(tNext("importCenter.fileChosenSource", "Chosen source"))}: ${escapeHtml(pluginDisplayName(selected.pluginId, selected.pluginName || selected.pluginId || "-"))}
           </div>
         ` : ""}
         ${candidates.length ? `
@@ -19844,7 +19889,7 @@ def ui_preview_html(
           <div class="import-counts">
             ${candidates.map((candidate) => {
               const ok = candidate.found && candidate.readable;
-              return `<span class="tag ${ok ? "good" : ""}">${escapeHtml(candidate.pluginName || candidate.pluginId || "-")}</span>`;
+              return `<span class="tag ${ok ? "good" : ""}">${escapeHtml(pluginDisplayName(candidate.pluginId, candidate.pluginName || candidate.pluginId || "-"))}</span>`;
             }).join("")}
           </div>
         ` : ""}
@@ -19960,7 +20005,7 @@ def ui_preview_html(
       const identifiers = item.identifiers && typeof item.identifiers === "object" ? item.identifiers : {};
       return {
         provider: item.provider || "",
-        sourceLabel: item.sourceLabel || item.provider || "",
+        sourceLabel: pluginDisplayName(item.sourceLabel || item.provider || "", item.sourceLabel || item.provider || ""),
         title: item.title || "",
         year: item.year || "",
         format: item.format || "",
@@ -19992,7 +20037,7 @@ def ui_preview_html(
         seen.add(key);
         suggestions.push({
           provider,
-          sourceLabel: sourceLabel || provider,
+          sourceLabel: pluginDisplayName(provider, sourceLabel || provider),
           title,
           year,
           posterUrl: candidate.posterUrl || candidate.poster_url || candidate.poster || "",
@@ -20004,7 +20049,7 @@ def ui_preview_html(
       (metadata.results || []).forEach((result) => {
         if (!result || typeof result !== "object" || suggestions.length >= 5) return;
         const provider = result.pluginId || result.provider || "metadata";
-        const sourceLabel = result.sourceLabel || provider;
+        const sourceLabel = pluginDisplayName(provider, result.sourceLabel || provider);
         (result.candidates || []).forEach((candidate) => {
           if (suggestions.length < 5) append(provider, sourceLabel, candidate);
         });
@@ -20091,7 +20136,7 @@ def ui_preview_html(
       const recommended = importRecommendedMatch(row);
       const recommendedIdentity = recommended ? importSuggestionIdentity(recommended) : "";
       const sourceText = sources.length
-        ? sources.slice(0, 3).map((source) => source.name || source.pluginId || source.sourceLabel).filter(Boolean).join(" / ")
+        ? sources.slice(0, 3).map((source) => pluginDisplayName(source.pluginId || source.id || source.sourceLabel, source.name || source.sourceLabel || source.pluginId)).filter(Boolean).join(" / ")
         : "";
       if (!items.length && !sourceText && !data.error) return "";
       return `
@@ -20103,7 +20148,7 @@ def ui_preview_html(
           ${data.error ? `<div class="import-source-meta">${escapeHtml(data.error)}</div>` : ""}
           ${items.length ? `<div class="import-metadata-suggestion-list">
             ${items.map((item, suggestionIndex) => {
-              const meta = [item.year, item.sourceLabel || item.provider].filter(Boolean).join(" / ");
+              const meta = [item.year, pluginDisplayName(item.provider, item.sourceLabel || item.provider)].filter(Boolean).join(" / ");
               const ids = item.identifiers || {};
               const idText = Object.entries(ids).map(([key, value]) => `${key}:${value}`).join(" ");
               const isSelected = selectedIdentity && selectedIdentity === importSuggestionIdentity(item);
@@ -20519,7 +20564,7 @@ def ui_preview_html(
             <div class="import-preview-summary-card">
               <span>${escapeHtml(tNext("importCenter.actionTotal", "Total"))}</span>
               <strong>${escapeHtml(formatNumber(summary.total || ((source.sample || []).length || 0)))}</strong>
-              <div class="import-source-meta">${escapeHtml((source.pluginName || source.pluginId || "-"))}</div>
+              <div class="import-source-meta">${escapeHtml(pluginDisplayName(source.pluginId, source.pluginName || source.pluginId || "-"))}</div>
             </div>
             <div class="import-preview-summary-card">
               <span>${escapeHtml(tNext("importCenter.mappingHealth", "Mapping"))}</span>
@@ -20665,7 +20710,7 @@ def ui_preview_html(
       plan.innerHTML = `
         <div class="profile-meta-row">
           <span>${escapeHtml(tNext("importCenter.selected", "Selected"))}</span>
-          <strong>${escapeHtml(source.pluginName || source.pluginId || "-")}</strong>
+          <strong>${escapeHtml(pluginDisplayName(source.pluginId, source.pluginName || source.pluginId || "-"))}</strong>
         </div>
         <div class="profile-meta-row">
           <span>${escapeHtml(tNext("importCenter.source", "Source"))}</span>
@@ -20838,6 +20883,7 @@ def ui_preview_html(
       }
       const persistence = importJobPersistence(job);
       const pluginId = importJobPluginId(job);
+      const pluginName = pluginDisplayName(pluginId, pluginId || tNext("importCenter.source", "Source"));
       const stats = importPostReviewStats(persistence);
       const movies = Array.isArray(persistence.movies) ? persistence.movies : [];
       const createdMovies = movies.filter((movie) => movie.action === "created");
@@ -20863,7 +20909,7 @@ def ui_preview_html(
               <span class="eyebrow">${escapeHtml(tNext("importCenter.postReviewEyebrow", "Latest import"))}</span>
               <h3>${escapeHtml(tNext("importCenter.postReviewTitle", "Import result"))}</h3>
               <p class="import-source-meta">
-                ${escapeHtml(pluginId || tNext("importCenter.source", "Source"))}
+                ${escapeHtml(pluginName)}
                 ${job.finishedAt || job.finished_at ? `&middot; ${escapeHtml(shortDateTime(job.finishedAt || job.finished_at))}` : ""}
               </p>
             </div>
@@ -20904,7 +20950,7 @@ def ui_preview_html(
       const current = select.value || "all";
       const plugins = Array.from(new Set((importCenter.jobs || []).map(importJobPluginId).filter(Boolean))).sort();
       select.innerHTML = `<option value="all">${escapeHtml(tNext("importCenter.historyAllSources", "All sources"))}</option>`
-        + plugins.map((pluginId) => `<option value="${escapeHtml(pluginId)}" ${pluginId === current ? "selected" : ""}>${escapeHtml(pluginId)}</option>`).join("");
+        + plugins.map((pluginId) => `<option value="${escapeHtml(pluginId)}" ${pluginId === current ? "selected" : ""}>${escapeHtml(pluginDisplayName(pluginId, pluginId))}</option>`).join("");
       if (current !== "all" && !plugins.includes(current)) select.value = "all";
     }
     function renderImportJobContainers(persistence) {
@@ -21016,7 +21062,7 @@ def ui_preview_html(
               ${job.error ? `&middot; ${escapeHtml(job.error)}` : ""}
             </div>
             <div class="import-counts">
-              ${pluginId ? `<span class="tag">${escapeHtml(tNext("importCenter.plugin", "Plugin"))} ${escapeHtml(pluginId)}</span>` : ""}
+              ${pluginId ? `<span class="tag">${escapeHtml(tNext("importCenter.plugin", "Plugin"))} ${escapeHtml(pluginDisplayName(pluginId, pluginId))}</span>` : ""}
               ${entrypoint ? `<span class="tag">${escapeHtml(tNext("importCenter.entrypoint", "Entrypoint"))} ${escapeHtml(entrypoint)}</span>` : ""}
               ${movieId ? `<span class="tag">${escapeHtml(tNext("importCenter.movie", "Movie"))} ${escapeHtml(String(movieId).slice(0, 8))}</span>` : ""}
               ${payload.dryRun !== undefined ? `<span class="tag ${payload.dryRun ? "" : "good"}">${escapeHtml(tNext("importCenter.dryRun", "Dry run"))} ${escapeHtml(String(payload.dryRun))}</span>` : ""}
@@ -21622,7 +21668,7 @@ def ui_preview_html(
       ).trim();
       if (!title) return null;
       const provider = String(candidate.provider || candidate.pluginId || candidate.providerId || result?.pluginId || result?.provider || result?.providerId || "").trim();
-      const sourceLabel = String(candidate.sourceLabel || candidate.providerLabel || result?.sourceLabel || result?.providerLabel || provider || "").trim();
+      const sourceLabel = pluginDisplayName(provider, String(candidate.sourceLabel || candidate.providerLabel || result?.sourceLabel || result?.providerLabel || provider || "").trim());
       const sourceRef = String(candidate.sourceRef || candidate.sourceUrl || candidate.source_url || candidate.detailUrl || candidate.detail_url || result?.sourceRef || result?.sourceUrl || result?.source_url || "").trim();
       const year = String(candidate.year || candidate.releaseYear || candidate.release_year || candidate.movieYear || candidate.movie_year || movieUpdates.year || "").trim();
       const format = String(candidate.format || candidate.mediaFormat || candidate.media_format || candidate.releaseFormat || candidate.release_format || movieUpdates.format || technicalUpdates.format || result?.sourceFormat || "").trim();
@@ -21925,7 +21971,7 @@ def ui_preview_html(
           ${error ? `<div class="login-message bad">${escapeHtml(error)}</div>` : ""}
           ${suggestions.slice(0, 3).map((item, suggestionIndex) => {
             const title = item.title || item.originalTitle || item.name || tNext("common.untitled", "Untitled");
-            const meta = [item.year, item.providerId || item.pluginId || item.source, item.tmdbId ? `TMDb ${item.tmdbId}` : "", item.imdbId || ""].filter(Boolean).join(" / ");
+            const meta = [item.year, pluginDisplayName(item.providerId || item.pluginId || item.source, item.source || item.pluginId || item.providerId || ""), item.tmdbId ? `TMDb ${item.tmdbId}` : "", item.imdbId || ""].filter(Boolean).join(" / ");
             return `
               <div class="import-member-match-row">
                 <span>
@@ -22147,8 +22193,8 @@ def ui_preview_html(
           ${url ? `<img src="${escapeHtml(url)}" alt="">` : `<span class="import-result-art-fallback">${escapeHtml(String(label || "?").trim().slice(0, 1).toUpperCase() || "?")}</span>`}
         </div>
       `;
-      const itemTitle = (item) => resultTitle(item) || item?.providerId || item?.pluginId || tNext("importCenter.result", "Result");
-      const itemProvider = (item) => item?.providerId || item?.pluginId || item?.source || item?.name || "";
+      const itemTitle = (item) => resultTitle(item) || pluginDisplayName(item?.providerId || item?.pluginId || item?.source || item?.name, item?.name || "") || tNext("importCenter.result", "Result");
+      const itemProvider = (item) => pluginDisplayName(item?.providerId || item?.pluginId || item?.source || item?.name, item?.name || item?.source || item?.pluginId || item?.providerId || "");
       const resultMetaParts = (item) => [
         resultYear(item),
         resultFormat(item),
@@ -22295,7 +22341,8 @@ def ui_preview_html(
       };
       const boxSetCard = boxSetProposals.length ? boxSetProposals.map((proposal) => {
         const members = boxSetProposalMembers(proposal);
-        const provider = proposal.provider || proposal.source || proposal.member_source || "";
+        const providerId = proposal.provider || proposal.source || proposal.member_source || "";
+        const provider = pluginDisplayName(providerId, providerId);
         const memberCount = Array.isArray(members) ? members.length : 0;
         const proposalKey = proposal.proposalKey || "";
         const selected = proposalKey && proposalKey === importCenter.selectedBoxSetProposalKey;
@@ -25623,7 +25670,7 @@ def ui_preview_html(
           importCenter.selectedMovieCandidateKey = movieCandidateButton.dataset.movieCandidateKey || "";
           importCenter.selectedBoxSetProposalKey = "";
           const selected = selectedLookupMovieCandidate();
-          const provider = selected?.sourceLabel || selected?.provider || "";
+          const provider = pluginDisplayName(selected?.provider, selected?.sourceLabel || selected?.provider || "");
           const title = selected?.title || "";
           setImportCenterMessage(`${tNext("importCenter.selectedMatch", "Selected match")}: ${title}${provider ? ` / ${provider}` : ""}`, "good");
           renderBarcodeLookup();
@@ -25634,7 +25681,8 @@ def ui_preview_html(
           importCenter.selectedBoxSetProposalKey = proposalButton.dataset.boxSetProposalKey || "";
           importCenter.selectedMovieCandidateKey = "";
           const selectedProposal = selectedBoxSetProposal();
-          const provider = selectedProposal?.provider || selectedProposal?.source || selectedProposal?.member_source || "";
+          const providerId = selectedProposal?.provider || selectedProposal?.source || selectedProposal?.member_source || "";
+          const provider = pluginDisplayName(providerId, providerId);
           const memberCount = selectedProposal ? selectedBoxSetMembersForImport().length : 0;
           setImportCenterMessage(`${tNext("importCenter.providerSelected", "Selected provider")}: ${provider} / ${tNext("importCenter.members", "members")}: ${memberCount}`, "good");
           renderBarcodeLookup();
@@ -28434,8 +28482,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <div class="admin-row">
             <div class="admin-plugin-head">
               <div>
-                <strong>${escapeHtml(plugin.name || plugin.id)}</strong>
-                <div class="muted">${escapeHtml(plugin.id)} &middot; ${escapeHtml(pluginCategoryLabel(plugin))} &middot; order ${escapeHtml(plugin.orderIndex || "-")}</div>
+                <strong>${escapeHtml(pluginDisplayName(plugin))}</strong>
+                <div class="muted">${escapeHtml(tNext("appAdmin.pluginKey", "Plugin key"))}: ${escapeHtml(plugin.id)} &middot; ${escapeHtml(pluginCategoryLabel(plugin))} &middot; order ${escapeHtml(plugin.orderIndex || "-")}</div>
               </div>
               <span class="tag ${plugin.enabled ? "good" : ""}">${plugin.enabled ? "enabled" : "disabled"}</span>
             </div>
@@ -28512,7 +28560,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const pluginId = (job.payload || {}).pluginId || result.pluginId || "-";
       const entrypoint = (job.payload || {}).entrypoint || result.entrypoint || job.jobType || "-";
       const bits = [
-        `${escapeHtml(pluginId)} / ${escapeHtml(entrypoint)}`,
+        `${escapeHtml(pluginDisplayName(pluginId, pluginId))} / ${escapeHtml(entrypoint)}`,
         persistence.items != null ? `${number(persistence.items)} items` : "",
         persistence.matched != null ? `${number(persistence.matched)} matched` : "",
         execution.elapsedMs != null ? `${number(execution.elapsedMs)} ms` : ""
@@ -28591,7 +28639,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       node.innerHTML = sources.length ? sources.map((source) => `
         <div class="admin-row">
           <div class="admin-row-head">
-            <strong>${escapeHtml(source.name || source.pluginId)}</strong>
+            <strong>${escapeHtml(pluginDisplayName(source.pluginId, source.name || source.pluginId))}</strong>
             <span class="tag ${metadataStateClass(source.state)}">${escapeHtml((source.state || "-").replaceAll("_", " "))}</span>
           </div>
           <div class="muted">${escapeHtml(source.reason || "-")}</div>
@@ -28960,11 +29008,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       adminState.plugins = (payload.registry && payload.registry.plugins) || adminState.plugins;
       renderAdminPlugins(adminState.plugins);
       renderAdminSummary();
-      setAdminStatus(`${pluginId} ${enabled ? "enabled" : "disabled"}.`, "good");
+      setAdminStatus(`${pluginDisplayName(pluginId, pluginId)} ${enabled ? "enabled" : "disabled"}.`, "good");
     }
     async function deleteAdminPlugin(pluginId) {
       if (!pluginId) return;
-      if (!window.confirm(`Delete plugin ${pluginId} from DiscVault?`)) return;
+      if (!window.confirm(`Delete plugin ${pluginDisplayName(pluginId, pluginId)} from DiscVault?`)) return;
       const typed = window.prompt(`Type the plugin id to confirm deletion: ${pluginId}`, "");
       if (typed !== pluginId) {
         setAdminStatus("Plugin deletion cancelled.", "bad");
@@ -28980,7 +29028,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       delete adminState.pluginExecutions[pluginId];
       renderAdminPlugins(adminState.plugins);
       renderAdminSummary();
-      setAdminStatus(`${pluginId} deleted.`, "good");
+      setAdminStatus(`${pluginDisplayName(pluginId, pluginId)} deleted.`, "good");
     }
     async function checkPluginHealth(pluginId) {
       const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/health`, {
@@ -28988,7 +29036,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       });
       adminState.pluginHealth[pluginId] = payload.health || {};
       renderAdminPlugins(adminState.plugins);
-      setAdminStatus(`${pluginId} health: ${(payload.health && payload.health.state) || "unknown"}.`, "info");
+      setAdminStatus(`${pluginDisplayName(pluginId, pluginId)} health: ${(payload.health && payload.health.state) || "unknown"}.`, "info");
     }
     function coercePluginValue(value, type) {
       const trimmed = String(value || "").trim();
@@ -29025,12 +29073,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         adminState.plugins = adminState.plugins.map((plugin) => plugin.id === pluginId ? payload.plugin : plugin);
       }
       renderAdminPlugins(adminState.plugins);
-      setAdminStatus(`${pluginId} configuration saved.`, "good");
+      setAdminStatus(`${pluginDisplayName(pluginId, pluginId)} configuration saved.`, "good");
     }
     function summarizePluginExecution(pluginId, entrypoint, execution) {
       const result = (execution && execution.result) || {};
       const parts = [
-        `${pluginId} ${entrypoint}`,
+        `${pluginDisplayName(pluginId, pluginId)} ${entrypoint}`,
         execution && execution.state ? execution.state : "",
         Array.isArray(result.libraries) ? `${number(result.libraries.length)} libraries` : "",
         Array.isArray(result.items) ? `${number(result.items.length)} items` : "",
@@ -29069,15 +29117,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         if (job.status === "completed") {
           await refreshDigitalSourcesForPlugins();
           const persistence = (job.result && job.result.persistence) || {};
-          setAdminStatus(`${pluginId} sync completed: ${number(persistence.items || 0)} items, ${number(persistence.matched || 0)} matched.`, "good");
+          setAdminStatus(`${pluginDisplayName(pluginId, pluginId)} sync completed: ${number(persistence.items || 0)} items, ${number(persistence.matched || 0)} matched.`, "good");
           return job;
         }
         if (job.status === "failed") {
-          setAdminStatus(`${pluginId} sync failed: ${job.error || "unknown error"}.`, "bad");
+          setAdminStatus(`${pluginDisplayName(pluginId, pluginId)} sync failed: ${job.error || "unknown error"}.`, "bad");
           return job;
         }
       }
-      setAdminStatus(`${pluginId} sync is still running. Refresh Admin for the latest status.`, "info");
+      setAdminStatus(`${pluginDisplayName(pluginId, pluginId)} sync is still running. Refresh Admin for the latest status.`, "info");
     }
     async function queuePluginExecution(pluginId, entrypoint) {
       const payload = await authJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/jobs`, {
@@ -29085,7 +29133,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         body: JSON.stringify({entrypoint, payload: {}})
       });
       if (payload.job) upsertPluginJob(payload.job);
-      setAdminStatus(`${pluginId} ${entrypoint} queued: ${payload.job ? payload.job.id : "-"}.`, "good");
+      setAdminStatus(`${pluginDisplayName(pluginId, pluginId)} ${entrypoint} queued: ${payload.job ? payload.job.id : "-"}.`, "good");
       if (payload.job && payload.job.id) {
         pollPluginJob(payload.job.id, pluginId).catch((error) => setAdminStatus(error.message, "bad"));
       }

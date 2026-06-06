@@ -1533,5 +1533,6 @@
   "appAdmin.restoringArtwork": "Restoring artwork...",
   "appAdmin.artworkRestored": "Artwork restored.",
   "appAdmin.purgingArtwork": "Purging expired artwork...",
-  "appAdmin.artworkPurged": "Expired artwork purged."
+  "appAdmin.artworkPurged": "Expired artwork purged.",
+  "appAdmin.pluginKey": "Plugin key"
 }

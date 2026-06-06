@@ -1440,5 +1440,6 @@
   "appAdmin.restoringArtwork": "Artwork wird wiederhergestellt...",
   "appAdmin.artworkRestored": "Artwork wiederhergestellt.",
   "appAdmin.purgingArtwork": "Faellige Artworks werden geloescht...",
-  "appAdmin.artworkPurged": "Faellige Artworks geloescht."
+  "appAdmin.artworkPurged": "Faellige Artworks geloescht.",
+  "appAdmin.pluginKey": "Plugin-Schluessel"
 }
