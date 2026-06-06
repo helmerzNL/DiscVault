@@ -1015,6 +1015,25 @@ code {
   padding: 1rem;
 }
 
+.faq-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.faq-links a {
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.42rem 0.75rem;
+  background: var(--surface2);
+}
+
+.faq-links a:hover {
+  border-color: var(--accent-border);
+}
+
 .faq-article h4 {
   margin: 1.1rem 0 0.45rem;
   font-size: 0.95rem;
