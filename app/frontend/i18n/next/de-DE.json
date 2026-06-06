@@ -1441,5 +1441,8 @@
   "appAdmin.artworkRestored": "Artwork wiederhergestellt.",
   "appAdmin.purgingArtwork": "Faellige Artworks werden geloescht...",
   "appAdmin.artworkPurged": "Faellige Artworks geloescht.",
-  "appAdmin.pluginKey": "Plugin-Schluessel"
+  "appAdmin.pluginKey": "Plugin-Schluessel",
+  "movieDetail.openOnService": "Auf {service} oeffnen",
+  "movieDetail.playWithService": "Mit {service} abspielen",
+  "movieDetail.multipleDigitalItems": "{count} Eintraege"
 }

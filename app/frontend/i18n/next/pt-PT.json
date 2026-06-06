@@ -1441,5 +1441,8 @@
   "appAdmin.artworkRestored": "Arte restaurada.",
   "appAdmin.purgingArtwork": "A purgar arte expirada...",
   "appAdmin.artworkPurged": "Arte expirada purgada.",
-  "appAdmin.pluginKey": "Chave do plugin"
+  "appAdmin.pluginKey": "Chave do plugin",
+  "movieDetail.openOnService": "Abrir em {service}",
+  "movieDetail.playWithService": "Reproduzir com {service}",
+  "movieDetail.multipleDigitalItems": "{count} itens"
 }

@@ -9133,6 +9133,90 @@ def ui_preview_html(
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
+    .detail-service-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 58%),
+        var(--bg-solid);
+      padding: 12px;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      align-items: center;
+      gap: 11px;
+      color: inherit;
+      text-decoration: none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.09);
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+    }
+    .detail-service-card[href]:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 58%),
+        var(--bg-elevated);
+    }
+    .detail-service-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      display: inline-grid;
+      place-items: center;
+      background: color-mix(in srgb, var(--bg-elevated) 78%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 8px 18px rgba(0,0,0,.15);
+      overflow: hidden;
+    }
+    .detail-service-logo svg {
+      width: 28px;
+      height: 28px;
+      display: block;
+    }
+    .detail-service-logo.wordmark {
+      width: auto;
+      min-width: 42px;
+      padding: 0 7px;
+      font-size: .7rem;
+      font-weight: 900;
+      letter-spacing: 0;
+      line-height: 1;
+    }
+    .detail-service-logo.imdb {
+      background: #f5c518;
+      color: #111;
+      border-radius: 9px;
+    }
+    .detail-service-logo.tmdb {
+      background: linear-gradient(135deg, #01b4e4, #90cea1);
+      color: #062033;
+      border-radius: 999px;
+    }
+    .detail-service-logo.plex {
+      background: #16181d;
+    }
+    .detail-service-logo.jellyfin {
+      background: radial-gradient(circle at 65% 35%, #7b61ff, #00a4dc 54%, #111827);
+    }
+    .detail-service-copy {
+      min-width: 0;
+      display: grid;
+      gap: 3px;
+    }
+    .detail-service-copy strong {
+      overflow-wrap: anywhere;
+    }
+    .detail-service-copy span {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .detail-service-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
     .container-member-card {
       min-width: 0;
       border: 1px solid var(--line);
@@ -18060,6 +18144,71 @@ def ui_preview_html(
         ? `<a class="detail-mini-card" href="${escapeHtml(href)}"${linkAttrs}>${body}</a>`
         : `<div class="detail-mini-card">${body}</div>`;
     }
+    function externalServiceLogoHtml(service) {
+      const lower = String(service || "").toLowerCase();
+      if (lower.includes("plex") || lower.includes("jellyfin")) {
+        const cls = lower.includes("plex") ? "plex" : "jellyfin";
+        return `<span class="detail-service-logo ${cls}">${digitalSourceLogoHtml(service)}</span>`;
+      }
+      if (lower.includes("imdb")) {
+        return `<span class="detail-service-logo wordmark imdb" aria-hidden="true">IMDb</span>`;
+      }
+      if (lower.includes("tmdb") || lower.includes("movie db") || lower.includes("themoviedb")) {
+        return `<span class="detail-service-logo wordmark tmdb" aria-hidden="true">TMDb</span>`;
+      }
+      return `<span class="detail-service-logo wordmark" aria-hidden="true">${escapeHtml(String(service || "DV").slice(0, 2).toUpperCase())}</span>`;
+    }
+    function externalServiceCard(title, subtitle, href, service, meta = []) {
+      const body = `
+        ${externalServiceLogoHtml(service || title)}
+        <span class="detail-service-copy">
+          <strong>${escapeHtml(title || service || tNext("common.open", "Open"))}</strong>
+          ${subtitle ? `<span>${escapeHtml(subtitle)}</span>` : ""}
+          ${meta.length ? `<span class="detail-service-meta">${meta.map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}</span>` : ""}
+        </span>
+      `;
+      return href
+        ? `<a class="detail-service-card" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${body}</a>`
+        : `<div class="detail-service-card">${body}</div>`;
+    }
+    function movieIdentifierUrl(item) {
+      const provider = String(item?.provider_id || item?.providerId || "").toLowerCase();
+      const identifier = String(item?.identifier || "").trim();
+      if (!identifier) return "";
+      if (provider === "imdb") return `https://www.imdb.com/title/${encodeURIComponent(identifier)}/`;
+      if (provider === "tmdb") return `https://www.themoviedb.org/movie/${encodeURIComponent(identifier)}`;
+      return "";
+    }
+    function movieIdentifierServiceLabel(item) {
+      const provider = String(item?.provider_id || item?.providerId || "").toLowerCase();
+      if (provider === "imdb") return "IMDb";
+      if (provider === "tmdb") return "TMDb";
+      return item?.provider_id || item?.providerId || "";
+    }
+    function movieIdentifierLinkCard(item) {
+      const service = movieIdentifierServiceLabel(item);
+      const href = movieIdentifierUrl(item);
+      const label = service ? tNext("movieDetail.openOnService", "Open on {service}").replace("{service}", service) : tNext("common.open", "Open");
+      const meta = [item.identifier_type || "", item.identifier || ""].filter(Boolean);
+      return externalServiceCard(label, item.identifier || "", href, service, meta);
+    }
+    function digitalPlaybackServiceKey(item) {
+      return String(item?.plugin_id || item?.pluginId || item?.source_name || item?.sourceName || "").toLowerCase();
+    }
+    function digitalPlaybackLinkCard(item, serviceItemCount = 1) {
+      const rawService = item.source_name || item.sourceName || item.plugin_id || item.pluginId || tNext("uiPreview.digitalItems", "Digital links");
+      const service = pluginDisplayName(item.plugin_id || item.pluginId || rawService, rawService);
+      const variantCount = Number(item.variant_count || item.variantCount || 0);
+      const itemCount = Math.max(Number(serviceItemCount || 0), variantCount || 0);
+      const title = tNext("movieDetail.playWithService", "Play with {service}").replace("{service}", service);
+      const meta = [
+        item.title || "",
+        item.year || "",
+        itemCount > 1 ? tNext("movieDetail.multipleDigitalItems", "{count} items").replace("{count}", String(itemCount)) : "",
+        item.source_type || item.sourceType || ""
+      ].filter(Boolean);
+      return externalServiceCard(title, meta.slice(0, 2).join(" / "), item.playback_url || item.playbackUrl || "", service, meta.slice(2));
+    }
     function personImageUrl(credit) {
       return usableImage(credit?.profile_url || credit?.profileUrl || "");
     }
@@ -18811,15 +18960,19 @@ def ui_preview_html(
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
       if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || []) : "";
-      const identifiers = (detail.identifiers || []).map((item) => miniCard(
-        `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
-        item.identifier
-      ));
-      const digital = (detail.digitalItems || []).map((item) => miniCard(
-        item.source_name || item.plugin_id || tNext("uiPreview.digitalItems", "Digital links"),
-        [item.title, item.year, item.variant_count > 1 ? `${item.variant_count} variants` : ""].filter(Boolean).join(" / "),
-        item.playback_url || ""
-      ));
+      const identifiers = (detail.identifiers || []).map((item) => {
+        const service = movieIdentifierServiceLabel(item);
+        return service === "IMDb" || service === "TMDb"
+          ? movieIdentifierLinkCard(item)
+          : miniCard(`${item.provider_id || ""} ${item.identifier_type || ""}`.trim(), item.identifier);
+      });
+      const digitalItems = detail.digitalItems || [];
+      const digitalCounts = digitalItems.reduce((counts, item) => {
+        const key = digitalPlaybackServiceKey(item) || "digital";
+        counts[key] = (counts[key] || 0) + 1;
+        return counts;
+      }, {});
+      const digital = digitalItems.map((item) => digitalPlaybackLinkCard(item, digitalCounts[digitalPlaybackServiceKey(item) || "digital"] || 1));
       document.getElementById("movieDetailLinks").innerHTML = [...identifiers, ...digital].join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noLinks", "No links yet."))}</div>`;
       const containerCards = collectorsModeEnabled() ? (detail.containers || []).map((container) => miniCard(
         container.title,

@@ -1441,5 +1441,8 @@
   "appAdmin.artworkRestored": "Visuel restaure.",
   "appAdmin.purgingArtwork": "Purge des visuels expires...",
   "appAdmin.artworkPurged": "Visuels expires purges.",
-  "appAdmin.pluginKey": "Cle du plugin"
+  "appAdmin.pluginKey": "Cle du plugin",
+  "movieDetail.openOnService": "Ouvrir sur {service}",
+  "movieDetail.playWithService": "Lire avec {service}",
+  "movieDetail.multipleDigitalItems": "{count} elements"
 }
