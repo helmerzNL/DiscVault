@@ -8796,6 +8796,10 @@ def ui_preview_html(
       align-items: end;
       max-width: 980px;
     }
+    .movie-detail-copy {
+      min-width: 0;
+      max-width: 82ch;
+    }
     .movie-detail-poster {
       aspect-ratio: 2 / 3;
       border-radius: var(--radius);
@@ -11441,6 +11445,50 @@ def ui_preview_html(
       .movie-detail-title {
         font-size: clamp(1.65rem, 9vw, 3rem);
       }
+      #movieDetailPage .movie-detail-summary,
+      #personDetailPage .movie-detail-summary {
+        grid-template-columns: minmax(118px, min(42vw, 168px)) minmax(0, 1fr);
+        align-items: start;
+        gap: 12px 14px;
+      }
+      #movieDetailPage .movie-detail-copy,
+      #personDetailPage .person-detail-copy {
+        display: contents;
+      }
+      #movieDetailPage .movie-detail-poster,
+      #personDetailPage .person-detail-portrait {
+        grid-row: 1 / span 3;
+        width: 100%;
+        max-width: none;
+        align-self: start;
+      }
+      #movieDetailPage .movie-detail-summary .eyebrow,
+      #movieDetailPage .movie-detail-title,
+      #movieDetailPage .hero-meta,
+      #personDetailPage .movie-detail-summary .eyebrow,
+      #personDetailPage .movie-detail-title,
+      #personDetailPage .hero-meta {
+        grid-column: 2;
+      }
+      #movieDetailPage .movie-detail-overview,
+      #personDetailPage .movie-detail-overview {
+        grid-column: 1 / -1;
+        max-width: none;
+        max-height: min(34vh, 16rem);
+        overflow: auto;
+        overscroll-behavior: contain;
+        padding-right: 4px;
+        margin-top: 0;
+        font-size: .95rem;
+        line-height: 1.5;
+        scrollbar-gutter: stable;
+      }
+      #personDetailPage .movie-detail-overview {
+        max-height: min(38vh, 18rem);
+      }
+      #personDetailPage .detail-message {
+        grid-column: 1 / -1;
+      }
       .movie-detail-actions {
         align-items: stretch;
         flex: 1 1 100%;
@@ -12423,7 +12471,7 @@ def ui_preview_html(
           <button type="button" class="movie-detail-back" id="movieDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Previous</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
-            <div>
+            <div class="movie-detail-copy">
               <span class="eyebrow" data-next-i18n="movieDetail.title">Movie details</span>
               <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
               <div class="hero-meta" id="movieDetailTags"></div>
