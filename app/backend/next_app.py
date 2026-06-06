@@ -10062,6 +10062,9 @@ def ui_preview_html(
     #appAdminOperationsFeatures.operations-feature-grid {
       grid-template-columns: 1fr;
     }
+    .feature-cluster-grid {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    }
     .operations-feature-group {
       display: grid;
       gap: 10px;
@@ -10093,6 +10096,13 @@ def ui_preview_html(
       display: grid;
       gap: 7px;
     }
+    .feature-cluster-card {
+      align-content: start;
+      gap: 10px;
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--bg-solid) 86%, transparent), color-mix(in srgb, var(--field) 62%, transparent));
+      box-shadow: 0 10px 24px color-mix(in srgb, #000 7%, transparent);
+    }
     .operations-dashboard-card span,
     .operations-feature-card span {
       color: var(--muted);
@@ -10109,6 +10119,15 @@ def ui_preview_html(
       align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
+    }
+    .profile-action-row.compact {
+      margin-top: 2px;
+      gap: 8px;
+    }
+    .profile-action-row.compact .secondary-button {
+      min-height: 34px;
+      padding: 7px 10px;
+      font-size: .78rem;
     }
     .operations-row-list {
       display: grid;
@@ -12891,6 +12910,11 @@ def ui_preview_html(
               <div class="operations-feature-grid" id="appAdminOperationsFeatures"></div>
             </div>
             <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.v26FeatureActionCenter">v26 Feature Action Center</h3>
+              <p data-next-i18n="appAdmin.v26FeatureActionCenterHelp">Ten larger feature tracks with their owner surface, status and required permissions.</p>
+              <div class="operations-feature-grid feature-cluster-grid" id="appAdminFeatureClusters"></div>
+            </div>
+            <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.duplicateCenter">Duplicate detection</h3>
               <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
               <div class="operations-row-list" id="appAdminDuplicateCenter"></div>
@@ -14751,7 +14775,17 @@ def ui_preview_html(
         offline_queue_ui: ["appAdmin.featureOfflineQueueUi", "Offline Queue UI"],
         backup_scheduler: ["appAdmin.featureBackupScheduler", "Backup Scheduler"],
         audit_log_explorer_v2: ["appAdmin.featureAuditLogExplorerV2", "Audit Log Explorer v2"],
-        unified_settings_visibility: ["appAdmin.featureUnifiedSettingsVisibility", "Unified Settings Visibility"]
+        unified_settings_visibility: ["appAdmin.featureUnifiedSettingsVisibility", "Unified Settings Visibility"],
+        metadata_conflict_review_ui: ["appAdmin.featureMetadataConflictReviewUi", "Metadata Conflict Review UI"],
+        person_detail_v2: ["appAdmin.featurePersonDetailV2", "Person Detail v2"],
+        movievault_contribution_center_v2: ["appAdmin.featureMovieVaultContributionCenterV2", "MovieVault Contribution Center v2"],
+        import_wizard_v2: ["appAdmin.featureImportWizardV2", "Import Wizard v2"],
+        box_set_member_resolver: ["appAdmin.featureBoxSetMemberResolver", "Box-set Member Resolver"],
+        smart_collections: ["appAdmin.featureSmartCollections", "Smart Collections"],
+        advanced_artwork_studio: ["appAdmin.featureAdvancedArtworkStudio", "Advanced Artwork Studio"],
+        notification_rules: ["appAdmin.featureNotificationRules", "Notification Rules"],
+        api_mcp_test_console: ["appAdmin.featureApiMcpTestConsole", "API/MCP Test Console"],
+        mobile_native_sheets: ["appAdmin.featureMobileNativeSheets", "Mobile Native Sheets"]
       };
       const entry = labels[key] || ["appAdmin.featureUnknown", key || "Feature"];
       return tNext(entry[0], entry[1]);
@@ -14795,7 +14829,17 @@ def ui_preview_html(
         offline_queue_ui: ["appAdmin.featureOfflineQueueUiHelp", "Surfaces client-side offline readiness and queued actions."],
         backup_scheduler: ["appAdmin.featureBackupSchedulerHelp", "Prepares functional collection backup exports without auth or plugin secrets."],
         audit_log_explorer_v2: ["appAdmin.featureAuditLogExplorerV2Help", "Shows full structured audit payloads with copyable JSON."],
-        unified_settings_visibility: ["appAdmin.featureUnifiedSettingsVisibilityHelp", "Hides settings and admin controls from roles without the matching permissions."]
+        unified_settings_visibility: ["appAdmin.featureUnifiedSettingsVisibilityHelp", "Hides settings and admin controls from roles without the matching permissions."],
+        metadata_conflict_review_ui: ["appAdmin.featureMetadataConflictReviewUiHelp", "Compares provider proposals, accepted fields and receiver pushes from one audit-first view."],
+        person_detail_v2: ["appAdmin.featurePersonDetailV2Help", "Makes people pages richer with profile artwork, credits, local metadata refresh and filmography hooks."],
+        movievault_contribution_center_v2: ["appAdmin.featureMovieVaultContributionCenterV2Help", "Tracks MovieVault receiver status, contribution payloads and reconnect health."],
+        import_wizard_v2: ["appAdmin.featureImportWizardV2Help", "Guides barcode, title, CSV and plugin imports through match review before saving."],
+        box_set_member_resolver: ["appAdmin.featureBoxSetMemberResolverHelp", "Finds, removes, reorders and contributes box-set members with provider-backed evidence."],
+        smart_collections: ["appAdmin.featureSmartCollectionsHelp", "Prepares saved filters for formats, groups, watched state, digital availability and containers."],
+        advanced_artwork_studio: ["appAdmin.featureAdvancedArtworkStudioHelp", "Collects poster/backdrop uploads, primary selection, provider options and overwrite locks."],
+        notification_rules: ["appAdmin.featureNotificationRulesHelp", "Organizes native push preferences and notification inbox rules by event type."],
+        api_mcp_test_console: ["appAdmin.featureApiMcpTestConsoleHelp", "Shows token presets, MCP tools and API permissions for bot and automation testing."],
+        mobile_native_sheets: ["appAdmin.featureMobileNativeSheetsHelp", "Keeps mobile admin, import, profile and selection flows aligned with the native sheet style."]
       };
       const entry = descriptions[key] || ["appAdmin.featureUnknownHelp", ""];
       return tNext(entry[0], entry[1]);
@@ -14815,6 +14859,7 @@ def ui_preview_html(
       const operations = appAdmin.operations || {};
       const dashboard = document.getElementById("appAdminOperationsDashboard");
       const featuresNode = document.getElementById("appAdminOperationsFeatures");
+      const clustersNode = document.getElementById("appAdminFeatureClusters");
       const duplicateNode = document.getElementById("appAdminDuplicateCenter");
       const policyNode = document.getElementById("appAdminProviderPolicy");
       const presetsNode = document.getElementById("appAdminApiTokenPresets");
@@ -14894,6 +14939,28 @@ def ui_preview_html(
             </div>
           </div>
         `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noOperationsFeatures", "No operations features reported."))}</div>`;
+      }
+      if (clustersNode) {
+        const clusters = operations.featureClusters || [];
+        clustersNode.innerHTML = clusters.length ? clusters.map((cluster) => {
+          const signals = Object.entries(cluster.signals || {}).slice(0, 4).map(([key, value]) => `<span class="tag blue">${escapeHtml(key)} ${escapeHtml(String(value))}</span>`).join("");
+          const actionTab = cluster.actionTab || "operations";
+          const canOpen = canUseAdminTab(actionTab);
+          return `
+            <div class="operations-feature-card feature-cluster-card">
+              <div class="operations-feature-head">
+                <strong>${escapeHtml(appAdminOperationsFeatureLabel(cluster.key))}</strong>
+                <span class="tag ${appAdminOperationsStatusClass(cluster.status)}">${escapeHtml(appAdminOperationsStatusLabel(cluster.status))}</span>
+              </div>
+              <span>${escapeHtml(appAdminOperationsFeatureDescription(cluster.key))}</span>
+              <div class="admin-member-cloud">${appAdminPermissionTags(cluster.permissionKeys || [], 4)}</div>
+              ${signals ? `<div class="admin-member-cloud">${signals}</div>` : ""}
+              <div class="profile-action-row compact">
+                <button type="button" class="secondary-button" data-app-admin-feature-tab="${escapeHtml(actionTab)}"${canOpen ? "" : " disabled"}>${escapeHtml(tNext("appAdmin.openFeatureSurface", "Open"))}</button>
+              </div>
+            </div>
+          `;
+        }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noFeatureClusters", "No v26 feature clusters reported."))}</div>`;
       }
       if (duplicateNode) {
         const rows = [
@@ -24858,6 +24925,11 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminPluginTypeTab(button.dataset.appAdminPluginTypeTab));
+      });
+      document.getElementById("appAdminFeatureClusters")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-app-admin-feature-tab]");
+        if (!button || button.disabled) return;
+        setAppAdminTab(button.dataset.appAdminFeatureTab || "operations");
       });
       document.querySelectorAll("[data-app-admin-registration-mode]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminRegistrationMode(button.dataset.appAdminRegistrationMode));
@@ -37022,6 +37094,81 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         {"key": "audit_log_explorer_v2", "group": "operations", "status": "ready", "permissionKeys": ["admin.view_audit"], "signals": {"metadataEvents": len(metadata_events), "receiverEvents": len(receiver_events), "pluginEvents": len(plugin_events)}},
         {"key": "unified_settings_visibility", "group": "operations", "status": "ready", "permissionKeys": ["admin.view_settings"], "signals": {"permissionAware": True}},
     ]
+    feature_clusters = [
+        {
+            "key": "metadata_conflict_review_ui",
+            "status": plugin_policy["status"],
+            "actionTab": "metadata",
+            "permissionKeys": ["metadata.refresh_bulk", "metadata.manage_plugin_order", "admin.view_audit"],
+            "signals": {"sources": len(plugin_policy.get("enabledSources") or []), "metadataEvents": len(metadata_events)},
+        },
+        {
+            "key": "person_detail_v2",
+            "status": "ready",
+            "actionTab": "metadata",
+            "permissionKeys": ["metadata.refresh_one", "collection.view"],
+            "signals": {"people": count_table(conn, "people"), "refresh": True},
+        },
+        {
+            "key": "movievault_contribution_center_v2",
+            "status": "ready" if receiver_events else "pending",
+            "actionTab": "plugins",
+            "permissionKeys": ["metadata.manage_receivers", "metadata.view_plugin_health", "admin.view_audit"],
+            "signals": {"receiverEvents": len(receiver_events), "policy": plugin_policy.get("conflictPolicy", {}).get("receiverPolicy", "receiver_push")},
+        },
+        {
+            "key": "import_wizard_v2",
+            "status": "ready",
+            "actionTab": "operations",
+            "permissionKeys": ["collection.import", "collection.add", "metadata.search"],
+            "signals": {"jobs": sum(1 for job in latest_jobs if job.get("jobType") in {PLUGIN_EXECUTION_JOB_TYPE, "migration.import_sqlite"})},
+        },
+        {
+            "key": "box_set_member_resolver",
+            "status": container_summary["status"],
+            "actionTab": "operations",
+            "permissionKeys": ["collection.import", "containers.edit", "metadata.search"],
+            "signals": container_summary.get("counts", {}),
+        },
+        {
+            "key": "smart_collections",
+            "status": "ready",
+            "actionTab": "operations",
+            "permissionKeys": ["collection.view", "containers.view"],
+            "signals": {"movies": count_table(conn, "movies"), "containers": count_table(conn, "containers"), "filters": True},
+        },
+        {
+            "key": "advanced_artwork_studio",
+            "status": artwork_summary["status"],
+            "actionTab": "operations",
+            "permissionKeys": ["collection.edit_all", "collection.edit_own"],
+            "signals": artwork_summary.get("counts", {}),
+        },
+        {
+            "key": "notification_rules",
+            "status": "ready",
+            "actionTab": "operations",
+            "permissionKeys": ["collection.view"],
+            "signals": {
+                "notifications": count_table(conn, "user_notifications") if table_exists(conn, "user_notifications") else 0,
+                "subscriptions": count_table(conn, "push_subscriptions") if table_exists(conn, "push_subscriptions") else 0,
+            },
+        },
+        {
+            "key": "api_mcp_test_console",
+            "status": "ready",
+            "actionTab": "plugins",
+            "permissionKeys": ["api.read", "api.write", "api.tokens.manage", "mcp.use"],
+            "signals": {"presets": len(api_presets), "mcpTools": 4},
+        },
+        {
+            "key": "mobile_native_sheets",
+            "status": "ready",
+            "actionTab": "operations",
+            "permissionKeys": ["collection.view"],
+            "signals": {"safeArea": True, "bottomNav": True, "pwa": True},
+        },
+    ]
     return {
         "actor": {"id": actor.get("id"), "username": actor.get("username"), "role": actor.get("role")},
         "counts": {
@@ -37047,6 +37194,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         "jobs": {"latest": latest_jobs, "plugin": plugin_jobs, "metadata": metadata_jobs},
         "audit": {"metadata": metadata_events, "receiver": receiver_events, "plugins": plugin_events},
         "features": features,
+        "featureClusters": feature_clusters,
         "serverTime": datetime.now(timezone.utc),
     }
 
