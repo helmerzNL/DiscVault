@@ -27182,6 +27182,105 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     .detail-section.full {
       grid-column: 1 / -1;
     }
+    .collection-video-groups {
+      display: grid;
+      gap: 14px;
+      margin-top: 10px;
+      min-width: 0;
+    }
+    .collection-video-type-group {
+      display: grid;
+      gap: 9px;
+      min-width: 0;
+    }
+    .collection-video-group-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+    .collection-video-group-head strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: .92rem;
+    }
+    .collection-video-group-head span {
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .collection-video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+      gap: 12px;
+      min-width: 0;
+    }
+    .collection-video-card {
+      border: 1px solid var(--soft-line);
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+      color: inherit;
+      display: grid;
+      min-width: 0;
+      overflow: hidden;
+      text-decoration: none;
+      box-shadow: var(--control-shadow);
+    }
+    .collection-video-card > strong,
+    .collection-video-card > span {
+      margin: 0 10px;
+    }
+    .collection-video-card > strong {
+      margin-top: 10px;
+      overflow-wrap: anywhere;
+    }
+    .collection-video-card > span {
+      color: var(--muted);
+      font-size: .8rem;
+      margin-bottom: 10px;
+      overflow-wrap: anywhere;
+    }
+    .collection-video-copy {
+      display: grid;
+      gap: 4px;
+      padding: 9px 10px 10px;
+      min-width: 0;
+    }
+    .collection-video-copy strong {
+      overflow-wrap: anywhere;
+    }
+    .collection-video-copy span {
+      color: var(--muted);
+      font-size: .8rem;
+      overflow-wrap: anywhere;
+    }
+    .collection-video-link {
+      color: var(--blue);
+      font-size: .8rem;
+      font-weight: 700;
+      margin-top: 2px;
+      text-decoration: none;
+      width: max-content;
+    }
+    .collection-video-link:hover {
+      text-decoration: underline;
+    }
+    .collection-video-embed {
+      aspect-ratio: 16 / 9;
+      background: #050507;
+      overflow: hidden;
+      width: 100%;
+    }
+    .collection-video-embed iframe {
+      border: 0;
+      display: block;
+      height: 100%;
+      width: 100%;
+    }
     .field-list {
       display: grid;
       gap: 8px;
@@ -28033,6 +28132,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <section class="detail-section">
             <h3>Digital Sources</h3>
             <div class="field-list" id="detailDigital"></div>
+          </section>
+          <section class="detail-section full">
+            <h3 data-next-i18n="movieDetail.videos">Videos</h3>
+            <div class="collection-video-groups" id="detailVideos"></div>
           </section>
           <section class="detail-section full">
             <h3>Cast & Crew</h3>
@@ -29990,6 +30093,113 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const rows = entries.filter(([, value]) => value !== null && value !== undefined && value !== "");
       return rows.length ? rows.map(([label, value]) => field(label, value)).join("") : field("None", "-");
     }
+    function usableVideoUrl(value) {
+      const text = String(value || "");
+      return text.startsWith("http://") || text.startsWith("https://") ? text : "";
+    }
+    function youtubeEmbedUrl(value) {
+      const text = usableVideoUrl(value);
+      if (!text) return "";
+      try {
+        const url = new URL(text);
+        const host = url.hostname.replace(/^www\\./, "").toLowerCase();
+        let videoId = "";
+        if (host === "youtu.be") {
+          videoId = url.pathname.split("/").filter(Boolean)[0] || "";
+        } else if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
+          if (url.pathname === "/watch") videoId = url.searchParams.get("v") || "";
+          else {
+            const parts = url.pathname.split("/").filter(Boolean);
+            if (["embed", "shorts", "live", "v"].includes(parts[0])) videoId = parts[1] || "";
+          }
+        }
+        if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return "";
+        return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?rel=0`;
+      } catch (_) {
+        return "";
+      }
+    }
+    function collectionMovieVideoItems(movie, metadata) {
+      const videos = [];
+      const seen = new Set();
+      const addVideo = (item) => {
+        const url = usableVideoUrl(item?.url || item?.video_url || item?.href || "");
+        if (!url || seen.has(url)) return;
+        seen.add(url);
+        videos.push({
+          label: item?.label || item?.name || item?.title || item?.type || tNext("movieDetail.video", "Video"),
+          type: item?.type || "",
+          source: item?.source || item?.provider || "",
+          url
+        });
+      };
+      addVideo({label: tNext("movieDetail.trailer", "Trailer"), type: "Trailer", source: "metadata", url: movie.trailer_url || metadata.trailer_url});
+      (Array.isArray(metadata.videos) ? metadata.videos : []).forEach(addVideo);
+      return videos;
+    }
+    function collectionVideoTypeLabel(video) {
+      return String(video?.type || "").trim() || tNext("movieDetail.video", "Video");
+    }
+    function collectionVideoTypeSortValue(label) {
+      const key = String(label || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      const order = ["trailer", "teaser", "clip", "featurette", "behind the scenes", "interview", "bloopers"];
+      const index = order.findIndex((item) => key === item || key.endsWith(` ${item}`) || key.includes(item));
+      return index >= 0 ? index : order.length;
+    }
+    function collectionVideoCardHtml(video) {
+      const title = video?.label || tNext("movieDetail.video", "Video");
+      const meta = [video?.type, video?.source].filter(Boolean).join(" / ") || tNext("movieDetail.openVideo", "Open video");
+      const url = usableVideoUrl(video?.url || "");
+      const embedUrl = youtubeEmbedUrl(url);
+      if (embedUrl) {
+        return `
+          <article class="collection-video-card embedded">
+            <div class="collection-video-embed">
+              <iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(title)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            </div>
+            <div class="collection-video-copy">
+              <strong>${escapeHtml(title)}</strong>
+              <span>${escapeHtml(meta)}</span>
+              ${url ? `<a class="collection-video-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(tNext("movieDetail.openVideo", "Open video"))}</a>` : ""}
+            </div>
+          </article>
+        `;
+      }
+      return `
+        <a class="collection-video-card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(meta)}</span>
+        </a>
+      `;
+    }
+    function collectionMovieVideoGroupsHtml(videos) {
+      if (!videos.length) {
+        return `<div class="empty small">${escapeHtml(tNext("movieDetail.noVideos", "No videos imported yet."))}</div>`;
+      }
+      const typeGroups = new Map();
+      videos.forEach((video) => {
+        const label = collectionVideoTypeLabel(video);
+        const key = label.toLowerCase();
+        if (!typeGroups.has(key)) {
+          typeGroups.set(key, {label, sortValue: collectionVideoTypeSortValue(label), videos: []});
+        }
+        typeGroups.get(key).videos.push(video);
+      });
+      const orderedTypeGroups = [...typeGroups.values()].sort((a, b) => {
+        const orderDelta = a.sortValue - b.sortValue;
+        if (orderDelta) return orderDelta;
+        return a.label.localeCompare(b.label, undefined, {sensitivity: "base"});
+      });
+      return orderedTypeGroups.map((group) => `
+        <section class="collection-video-type-group">
+          <div class="collection-video-group-head">
+            <strong>${escapeHtml(group.label)}</strong>
+            <span>${escapeHtml(number(group.videos.length))} ${escapeHtml(tNext("movieDetail.videos", "Videos"))}</span>
+          </div>
+          <div class="collection-video-grid">${group.videos.map(collectionVideoCardHtml).join("")}</div>
+        </section>
+      `).join("");
+    }
     function movieMatches(movie, query) {
       if (!query) return true;
       const haystack = [
@@ -30136,6 +30346,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             );
           }).join("")
         : field("None", "-");
+      document.getElementById("detailVideos").innerHTML = collectionMovieVideoGroupsHtml(collectionMovieVideoItems(movie, metadata));
       document.getElementById("detailCredits").innerHTML = (detail.credits || []).length
         ? detail.credits.map((credit) => `
           <div class="credit">
@@ -30162,6 +30373,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailContainers").innerHTML = field("None", "-");
       document.getElementById("detailGroups").innerHTML = field("None", "-");
       document.getElementById("detailDigital").innerHTML = field("None", "-");
+      document.getElementById("detailVideos").innerHTML = `<div class="empty small">${escapeHtml(tNext("movieDetail.noVideos", "No videos imported yet."))}</div>`;
       document.getElementById("detailCredits").innerHTML = `<div class="empty">No credits loaded.</div>`;
     }
     async function openMovieDetail(movieId) {
@@ -30172,6 +30384,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailPoster").textContent = "Loading";
       document.getElementById("detailTags").innerHTML = "";
       document.getElementById("detailGroups").innerHTML = "";
+      document.getElementById("detailVideos").innerHTML = "";
       try {
         const payload = await json(`/api/next/movies/${encodeURIComponent(movieId)}`, 15000);
         renderMovieDetail(payload.detail || {});
