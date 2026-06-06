@@ -9723,6 +9723,12 @@ def ui_preview_html(
     .container-video-movie-groups .video-card {
       width: 100%;
     }
+    #movieDetailVideos,
+    #containerDetailVideos,
+    .container-video-movie-groups .detail-grid {
+      width: 100%;
+      grid-template-columns: 1fr;
+    }
     .art-option-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -9868,6 +9874,35 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .82rem;
       line-height: 1.35;
+    }
+    .video-card-copy {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .video-card-link {
+      color: var(--accent);
+      font-size: .82rem;
+      font-weight: 760;
+      text-decoration: none;
+      width: fit-content;
+    }
+    .video-card-link:hover {
+      text-decoration: underline;
+    }
+    .video-embed {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: calc(var(--radius) - 3px);
+      overflow: hidden;
+      background: #05070a;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+    .video-embed iframe {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
     }
     .profile-hero {
       border: 1px solid var(--line);
@@ -18892,16 +18927,59 @@ def ui_preview_html(
       const text = String(value || "");
       return text.startsWith("http://") || text.startsWith("https://") ? text : "";
     }
+    function youtubeEmbedUrl(value) {
+      const text = usableVideoUrl(value);
+      if (!text) return "";
+      try {
+        const url = new URL(text);
+        const host = url.hostname.replace(/^www\\./, "").toLowerCase();
+        let videoId = "";
+        if (host === "youtu.be") {
+          videoId = url.pathname.split("/").filter(Boolean)[0] || "";
+        } else if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
+          if (url.pathname === "/watch") videoId = url.searchParams.get("v") || "";
+          else {
+            const parts = url.pathname.split("/").filter(Boolean);
+            if (["embed", "shorts", "live", "v"].includes(parts[0])) videoId = parts[1] || "";
+          }
+        }
+        if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return "";
+        return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?rel=0`;
+      } catch (_) {
+        return "";
+      }
+    }
+    function videoCardHtml(video) {
+      const title = video?.label || tNext("movieDetail.video", "Video");
+      const meta = [video?.type, video?.source].filter(Boolean).join(" / ") || tNext("movieDetail.openVideo", "Open video");
+      const url = usableVideoUrl(video?.url || "");
+      const embedUrl = youtubeEmbedUrl(url);
+      if (embedUrl) {
+        return `
+          <article class="video-card embedded">
+            <div class="video-embed">
+              <iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(title)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            </div>
+            <div class="video-card-copy">
+              <strong>${escapeHtml(title)}</strong>
+              <span>${escapeHtml(meta)}</span>
+              ${url ? `<a class="video-card-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(tNext("movieDetail.openVideo", "Open video"))}</a>` : ""}
+            </div>
+          </article>
+        `;
+      }
+      return `
+        <a class="video-card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(meta)}</span>
+        </a>
+      `;
+    }
     function videoCardsHtml(videos) {
       if (!videos.length) {
         return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noVideos", "No videos imported yet."))}</div>`;
       }
-      return videos.map((video) => `
-        <a class="video-card" href="${escapeHtml(video.url)}" target="_blank" rel="noopener noreferrer">
-          <strong>${escapeHtml(video.label || tNext("movieDetail.video", "Video"))}</strong>
-          <span>${escapeHtml([video.type, video.source].filter(Boolean).join(" / ") || tNext("movieDetail.openVideo", "Open video"))}</span>
-        </a>
-      `).join("");
+      return videos.map(videoCardHtml).join("");
     }
     function containerVideoItems(detail) {
       const container = detail.container || {};
@@ -18940,12 +19018,7 @@ def ui_preview_html(
       return index >= 0 ? index : order.length;
     }
     function containerVideoCardHtml(video) {
-      return `
-        <a class="video-card" href="${escapeHtml(video.url)}" target="_blank" rel="noopener noreferrer">
-          <strong>${escapeHtml(video.label || tNext("movieDetail.video", "Video"))}</strong>
-          <span>${escapeHtml([video.type, video.source].filter(Boolean).join(" / ") || tNext("movieDetail.openVideo", "Open video"))}</span>
-        </a>
-      `;
+      return videoCardHtml(video);
     }
     function containerVideoGroupsHtml(detail) {
       const videos = containerVideoItems(detail);
