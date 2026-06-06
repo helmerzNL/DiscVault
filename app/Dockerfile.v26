@@ -19,10 +19,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /tmp/requirements-backend.txt
-RUN pip install -r /tmp/requirements-backend.txt
+COPY mcp-server/requirements.txt /tmp/requirements-mcp.txt
+RUN pip install -r /tmp/requirements-backend.txt \
+    && pip install -r /tmp/requirements-mcp.txt
 
 COPY VERSION /opt/discvault/VERSION
 COPY backend /opt/discvault/backend
+COPY mcp-server /opt/discvault/mcp-server
 COPY frontend /opt/discvault/frontend
 
 RUN mkdir -p /data/posters /data/profiles /data/backups /data/avatars
