@@ -288,6 +288,24 @@ NEXT_I18N_LOCALES: tuple[dict[str, str], ...] = (
     {"locale": "da-DK", "legacy": "da", "nativeName": "Dansk", "englishName": "Danish"},
     {"locale": "nb-NO", "legacy": "no", "nativeName": "Norsk", "englishName": "Norwegian"},
     {"locale": "fi-FI", "legacy": "fi", "nativeName": "Suomi", "englishName": "Finnish"},
+    {"locale": "pl-PL", "legacy": "pl", "nativeName": "Polski", "englishName": "Polish"},
+    {"locale": "cs-CZ", "legacy": "cs", "nativeName": "Čeština", "englishName": "Czech"},
+    {"locale": "sk-SK", "legacy": "sk", "nativeName": "Slovenčina", "englishName": "Slovak"},
+    {"locale": "hu-HU", "legacy": "hu", "nativeName": "Magyar", "englishName": "Hungarian"},
+    {"locale": "ro-RO", "legacy": "ro", "nativeName": "Română", "englishName": "Romanian"},
+    {"locale": "bg-BG", "legacy": "bg", "nativeName": "Български", "englishName": "Bulgarian"},
+    {"locale": "el-GR", "legacy": "el", "nativeName": "Ελληνικά", "englishName": "Greek"},
+    {"locale": "uk-UA", "legacy": "uk", "nativeName": "Українська", "englishName": "Ukrainian"},
+    {"locale": "hr-HR", "legacy": "hr", "nativeName": "Hrvatski", "englishName": "Croatian"},
+    {"locale": "sl-SI", "legacy": "sl", "nativeName": "Slovenščina", "englishName": "Slovenian"},
+    {"locale": "et-EE", "legacy": "et", "nativeName": "Eesti", "englishName": "Estonian"},
+    {"locale": "lv-LV", "legacy": "lv", "nativeName": "Latviešu", "englishName": "Latvian"},
+    {"locale": "lt-LT", "legacy": "lt", "nativeName": "Lietuvių", "englishName": "Lithuanian"},
+    {"locale": "tr-TR", "legacy": "tr", "nativeName": "Türkçe", "englishName": "Turkish"},
+    {"locale": "ja-JP", "legacy": "ja", "nativeName": "日本語", "englishName": "Japanese"},
+    {"locale": "zh-CN", "legacy": "zh-CN", "nativeName": "简体中文", "englishName": "Chinese (Simplified)"},
+    {"locale": "zh-TW", "legacy": "zh-TW", "nativeName": "繁體中文", "englishName": "Chinese (Traditional)"},
+    {"locale": "ko-KR", "legacy": "ko", "nativeName": "한국어", "englishName": "Korean"},
 )
 NEXT_I18N_FLAGS: dict[str, str] = {
     "nl-NL": "🇳🇱",
@@ -301,13 +319,31 @@ NEXT_I18N_FLAGS: dict[str, str] = {
     "da-DK": "🇩🇰",
     "nb-NO": "🇳🇴",
     "fi-FI": "🇫🇮",
+    "pl-PL": "🇵🇱",
+    "cs-CZ": "🇨🇿",
+    "sk-SK": "🇸🇰",
+    "hu-HU": "🇭🇺",
+    "ro-RO": "🇷🇴",
+    "bg-BG": "🇧🇬",
+    "el-GR": "🇬🇷",
+    "uk-UA": "🇺🇦",
+    "hr-HR": "🇭🇷",
+    "sl-SI": "🇸🇮",
+    "et-EE": "🇪🇪",
+    "lv-LV": "🇱🇻",
+    "lt-LT": "🇱🇹",
+    "tr-TR": "🇹🇷",
+    "ja-JP": "🇯🇵",
+    "zh-CN": "🇨🇳",
+    "zh-TW": "🇹🇼",
+    "ko-KR": "🇰🇷",
 }
 NEXT_I18N_ALIASES = {
     item["legacy"].lower(): item["locale"] for item in NEXT_I18N_LOCALES
 } | {
     item["locale"].lower(): item["locale"] for item in NEXT_I18N_LOCALES
 }
-NEXT_I18N_ALIASES.update({"nb": "nb-NO", "no-no": "nb-NO", "en-gb": "en-US"})
+NEXT_I18N_ALIASES.update({"nb": "nb-NO", "no-no": "nb-NO", "en-gb": "en-US", "zh": "zh-CN", "zh-hans": "zh-CN", "zh-hant": "zh-TW"})
 
 APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "theme": "system",
@@ -343,7 +379,7 @@ APP_BOOLEAN_PREFERENCES = {
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
-    "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA"},
+    "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "SK", "HU", "RO", "BG", "GR", "UA", "HR", "SI", "EE", "LV", "LT", "TR", "JP", "CN", "TW", "KR"},
 }
 
 
@@ -4029,7 +4065,25 @@ def migration_dashboard_html() -> str:
       {locale: "sv-SE", legacy: "sv", nativeName: "Svenska"},
       {locale: "da-DK", legacy: "da", nativeName: "Dansk"},
       {locale: "nb-NO", legacy: "no", nativeName: "Norsk"},
-      {locale: "fi-FI", legacy: "fi", nativeName: "Suomi"}
+      {locale: "fi-FI", legacy: "fi", nativeName: "Suomi"},
+      {locale: "pl-PL", legacy: "pl", nativeName: "Polski"},
+      {locale: "cs-CZ", legacy: "cs", nativeName: "Cestina"},
+      {locale: "sk-SK", legacy: "sk", nativeName: "Slovencina"},
+      {locale: "hu-HU", legacy: "hu", nativeName: "Magyar"},
+      {locale: "ro-RO", legacy: "ro", nativeName: "Romana"},
+      {locale: "bg-BG", legacy: "bg", nativeName: "Bulgarian"},
+      {locale: "el-GR", legacy: "el", nativeName: "Greek"},
+      {locale: "uk-UA", legacy: "uk", nativeName: "Ukrainian"},
+      {locale: "hr-HR", legacy: "hr", nativeName: "Hrvatski"},
+      {locale: "sl-SI", legacy: "sl", nativeName: "Slovenscina"},
+      {locale: "et-EE", legacy: "et", nativeName: "Eesti"},
+      {locale: "lv-LV", legacy: "lv", nativeName: "Latviesu"},
+      {locale: "lt-LT", legacy: "lt", nativeName: "Lietuviu"},
+      {locale: "tr-TR", legacy: "tr", nativeName: "Turkce"},
+      {locale: "ja-JP", legacy: "ja", nativeName: "Japanese"},
+      {locale: "zh-CN", legacy: "zh-CN", nativeName: "Chinese Simplified"},
+      {locale: "zh-TW", legacy: "zh-TW", nativeName: "Chinese Traditional"},
+      {locale: "ko-KR", legacy: "ko", nativeName: "Korean"}
     ];
     const nextI18n = {locale: "nl-NL", messages: {}, locales: NEXT_I18N_FALLBACK_LOCALES};
     let selectedImportSourceId = null;
@@ -4048,6 +4102,9 @@ def migration_dashboard_html() -> str:
       aliases.nb = "nb-NO";
       aliases["no-no"] = "nb-NO";
       aliases["en-gb"] = "en-US";
+      aliases.zh = "zh-CN";
+      aliases["zh-hans"] = "zh-CN";
+      aliases["zh-hant"] = "zh-TW";
       if (raw && aliases[raw]) return aliases[raw];
       return aliases[raw.split("-", 1)[0]] || "nl-NL";
     }
@@ -13604,13 +13661,13 @@ def ui_preview_html(
       const raw = String(value || "").replace("_", "-").toLowerCase();
       const base = raw.split("-")[0];
       const region = raw.split("-")[1] || "";
-      const map = {en: "us", nb: "no", no: "no", da: "da", sv: "sv", fi: "fi", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it"};
-      if (["us", "gb", "ca", "nl", "de", "fr", "es", "pt", "it", "da", "sv", "fi", "no"].includes(region)) return region;
+      const map = {en: "us", nb: "no", no: "no", da: "da", sv: "sv", fi: "fi", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", pl: "pl", cs: "cz", sk: "sk", hu: "hu", ro: "ro", bg: "bg", el: "gr", uk: "ua", hr: "hr", sl: "si", et: "ee", lv: "lv", lt: "lt", tr: "tr", ja: "jp", zh: "cn", ko: "kr"};
+      if (["us", "gb", "ca", "nl", "de", "fr", "es", "pt", "it", "da", "sv", "fi", "no", "pl", "cz", "sk", "hu", "ro", "bg", "gr", "ua", "hr", "si", "ee", "lv", "lt", "tr", "jp", "cn", "tw", "kr"].includes(region)) return region;
       return map[base] || base || "us";
     }
     function flagCodeForCountry(value) {
       const raw = String(value || "").trim().toLowerCase();
-      const map = {uk: "gb", gb: "gb", us: "us", ca: "ca", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", da: "da", sv: "sv", fi: "fi", nb: "no", no: "no"};
+      const map = {uk: "gb", gb: "gb", us: "us", ca: "ca", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", da: "da", sv: "sv", fi: "fi", nb: "no", no: "no", pl: "pl", cz: "cz", cs: "cz", sk: "sk", hu: "hu", ro: "ro", bg: "bg", gr: "gr", el: "gr", ua: "ua", hr: "hr", si: "si", sl: "si", ee: "ee", et: "ee", lv: "lv", lt: "lt", tr: "tr", jp: "jp", ja: "jp", cn: "cn", zh: "cn", tw: "tw", kr: "kr", ko: "kr"};
       return map[raw] || flagCodeForLocale(raw);
     }
     function flagIconHtml(value, label = "") {
@@ -17899,7 +17956,7 @@ def ui_preview_html(
       const label = physicalFormatLabel(value);
       return label ? `<span class="physical-format-badge">${escapeHtml(label)}</span>` : "";
     }
-    const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA"];
+    const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "SK", "HU", "RO", "BG", "GR", "UA", "HR", "SI", "EE", "LV", "LT", "TR", "JP", "CN", "TW", "KR"];
     function ratingCountryLabel(code) {
       try {
         const displayNames = new Intl.DisplayNames([localeState.locale || "en-US"], {type: "region"});
