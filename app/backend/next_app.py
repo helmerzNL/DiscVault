@@ -12468,7 +12468,7 @@ def ui_preview_html(
       <section class="movie-detail-page hidden" id="movieDetailPage" aria-labelledby="movieDetailTitle">
         <section class="movie-detail-hero" id="movieDetailHero">
           <img id="movieDetailBackdrop" alt="">
-          <button type="button" class="movie-detail-back" id="movieDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Previous</button>
+          <button type="button" class="movie-detail-back" id="movieDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
             <div class="movie-detail-copy">
@@ -12656,7 +12656,7 @@ def ui_preview_html(
       <section class="movie-detail-page container-detail-page hidden" id="containerDetailPage" aria-labelledby="containerDetailTitle">
         <section class="movie-detail-hero" id="containerDetailHero">
           <img id="containerDetailBackdrop" alt="">
-          <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Previous</button>
+          <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Back</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="containerDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
             <div>
