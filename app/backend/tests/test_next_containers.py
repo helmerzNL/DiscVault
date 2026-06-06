@@ -15,6 +15,7 @@ try:
     from app.backend.next_app import merge_receiver_members
     from app.backend.next_app import receiver_member_payload_from_raw
     from app.backend.next_app import normalize_container_type
+    from app.backend.next_app import should_reuse_box_set_container_for_import
     from app.backend.next_app import with_preview_media_urls
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
     if exc.name != "flask":
@@ -26,6 +27,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     merge_receiver_members = None
     receiver_member_payload_from_raw = None
     normalize_container_type = None
+    should_reuse_box_set_container_for_import = None
     with_preview_media_urls = None
 
 
@@ -151,6 +153,35 @@ class NextContainerPolicyTests(unittest.TestCase):
         self.assertEqual([item["title"] for item in merged], ["Movie One", "Movie Two", "Manual Preview Member"])
         self.assertEqual(merged[2]["tmdbId"], "12345")
         self.assertEqual(merged[2]["posterUrl"], "https://image.example/manual.jpg")
+
+    def test_box_set_import_with_barcode_does_not_reuse_title_only_container(self):
+        existing_4k = {
+            "barcode": "5053083220914",
+            "metadata": {"format": "Ultra HD Blu-ray"},
+        }
+
+        self.assertFalse(
+            should_reuse_box_set_container_for_import(
+                existing_4k,
+                incoming_barcode="5050582369601",
+                incoming_format="DVD",
+            )
+        )
+
+    def test_box_set_import_without_barcode_requires_compatible_unbarcoded_format(self):
+        existing_dvd = {"barcode": "", "metadata": {"format": "DVD"}}
+        existing_4k = {"barcode": "", "metadata": {"format": "Ultra HD Blu-ray"}}
+        existing_barcoded = {"barcode": "5053083220914", "metadata": {"format": "Ultra HD Blu-ray"}}
+
+        self.assertTrue(
+            should_reuse_box_set_container_for_import(existing_dvd, incoming_format="DVD")
+        )
+        self.assertFalse(
+            should_reuse_box_set_container_for_import(existing_4k, incoming_format="DVD")
+        )
+        self.assertFalse(
+            should_reuse_box_set_container_for_import(existing_barcoded, incoming_format="DVD")
+        )
 
 
 if __name__ == "__main__":

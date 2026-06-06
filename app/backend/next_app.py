@@ -396,6 +396,50 @@ def response(payload: dict[str, Any], status: int = 200):
     return jsonify(json_ready(payload)), status
 
 
+def physical_media_format_key(value: Any) -> str:
+    text = (clean_text(value) or "").casefold().replace("-", " ").replace("_", " ").replace("/", " ")
+    text = " ".join(text.split())
+    if not text:
+        return ""
+    if "ultra hd" in text or "uhd" in text or "4k" in text:
+        return "ultra_hd_blu_ray"
+    if "blu ray" in text or "bluray" in text or text == "bd":
+        return "blu_ray"
+    if text in {"dvd", "dvd video"}:
+        return "dvd"
+    if "hd dvd" in text or "hddvd" in text:
+        return "hd_dvd"
+    if "laserdisc" in text or "laser disc" in text:
+        return "laserdisc"
+    if "svcd" in text or "vcd" in text:
+        return "vcd_svcd"
+    return text
+
+
+def physical_media_formats_compatible(candidate: Any, expected: Any) -> bool:
+    candidate_key = physical_media_format_key(candidate)
+    expected_key = physical_media_format_key(expected)
+    return not candidate_key or not expected_key or candidate_key == expected_key
+
+
+def should_reuse_box_set_container_for_import(
+    candidate: dict[str, Any],
+    *,
+    incoming_barcode: Any = "",
+    incoming_format: Any = "",
+) -> bool:
+    """Protect physical box-set releases from title-only cross-edition reuse."""
+    incoming_barcode_text = (clean_text(incoming_barcode) or "").casefold()
+    candidate_barcode_text = (clean_text(candidate.get("barcode")) or "").casefold()
+    if incoming_barcode_text:
+        return bool(candidate_barcode_text and candidate_barcode_text == incoming_barcode_text)
+    if candidate_barcode_text:
+        return False
+    metadata = candidate.get("metadata") if isinstance(candidate.get("metadata"), dict) else {}
+    candidate_format = clean_text(metadata.get("format") or metadata.get("media_format"))
+    return physical_media_formats_compatible(candidate_format, incoming_format)
+
+
 def html_response(html: str):
     result = Response(html, mimetype="text/html")
     result.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -41586,6 +41630,8 @@ def register_routes(flask_app: Flask) -> None:
             "source": provider_label,
             "import_source": "plugin_box_set",
             "provider": provider_label,
+            "format": fallback_format,
+            "media_format": fallback_format,
             "box_set_proposal_key": proposal.get("_proposalKey"),
             "movievault_id": proposal.get("movievault_id"),
             "member_source": member_source,
@@ -41603,18 +41649,26 @@ def register_routes(flask_app: Flask) -> None:
                     (barcode,),
                 )
                 existing_container = cur.fetchone()
-            if not existing_container:
+            if not existing_container and not barcode:
                 cur.execute(
                     """
-                    SELECT id
+                    SELECT id, barcode, metadata
                     FROM containers
                     WHERE container_type='box_set'
                       AND lower(title)=lower(%s)
-                    LIMIT 1
+                    ORDER BY updated_at DESC
+                    LIMIT 10
                     """,
                     (title,),
                 )
-                existing_container = cur.fetchone()
+                for candidate in cur.fetchall():
+                    if should_reuse_box_set_container_for_import(
+                        candidate,
+                        incoming_barcode=barcode,
+                        incoming_format=fallback_format,
+                    ):
+                        existing_container = candidate
+                        break
         container_created = False
         if existing_container:
             container_uuid = existing_container["id"]
