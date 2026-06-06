@@ -198,6 +198,12 @@ API_TOKEN_DEFAULT_PERMISSION_KEYS = (
     "mcp.tool.lookup_barcode",
     "metadata.search",
 )
+ARTWORK_TRASH_RETENTION_OPTIONS = {
+    "1h": {"seconds": 3600, "interval": "1 hour"},
+    "1d": {"seconds": 86400, "interval": "1 day"},
+    "7d": {"seconds": 604800, "interval": "7 days"},
+    "30d": {"seconds": 2592000, "interval": "30 days"},
+}
 TARGET_DATA_TABLES = (
     "movies",
     "people",
@@ -4921,6 +4927,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -4931,6 +4938,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -5088,6 +5096,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dic
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='container'
                       AND em.entity_id=c.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -5098,6 +5107,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dic
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='container'
                       AND em.entity_id=c.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -9951,6 +9961,34 @@ def ui_preview_html(
       overflow-wrap: anywhere;
       min-width: 0;
     }
+    .artwork-trash-row {
+      grid-template-columns: 72px minmax(0, 1fr) auto;
+      align-items: center;
+    }
+    .artwork-trash-row .profile-passkey-main {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .artwork-option-thumb.small {
+      width: 72px;
+      height: 92px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 88%, transparent);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: .72rem;
+      text-align: center;
+    }
+    .artwork-option-thumb.small img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
     .profile-passkey-meta {
       color: var(--muted);
       font-size: .82rem;
@@ -11329,6 +11367,18 @@ def ui_preview_html(
       .profile-passkey-head {
         display: grid;
         grid-template-columns: 1fr;
+      }
+      .artwork-trash-row {
+        grid-template-columns: 56px minmax(0, 1fr);
+        align-items: start;
+      }
+      .artwork-trash-row .secondary-button {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+      .artwork-option-thumb.small {
+        width: 56px;
+        height: 76px;
       }
       .profile-card,
       .profile-section-box,
@@ -13001,7 +13051,7 @@ def ui_preview_html(
               <div class="operations-dashboard" id="appAdminOperationsDashboard"></div>
               <div class="login-message" id="appAdminOperationsMessage"></div>
             </div>
-            <div class="detail-card profile-card full">
+            <div class="detail-card profile-card full" id="appAdminArtworkTrashCard">
               <h3 data-next-i18n="appAdmin.operationsFeatures">Feature readiness</h3>
               <div class="operations-feature-grid" id="appAdminOperationsFeatures"></div>
             </div>
@@ -13132,6 +13182,30 @@ def ui_preview_html(
                 <button type="button" class="secondary-button" id="appAdminRefreshMetadataJobsButton" data-next-i18n="appAdmin.refreshMetadataJobs">Refresh metadata jobs</button>
               </div>
               <div class="login-message" id="appAdminMetadataMessage"></div>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</h3>
+              <p data-next-i18n="appAdmin.deletedArtworkHelp">Restore removed posters and backdrops, or let DiscVault permanently clean them after a retention period.</p>
+              <div class="profile-form">
+                <label class="profile-checkbox-row" for="appAdminArtworkTrashPurgeEnabled">
+                  <input id="appAdminArtworkTrashPurgeEnabled" type="checkbox">
+                  <span data-next-i18n="appAdmin.enableArtworkCleanup">Automatically purge deleted artwork</span>
+                </label>
+                <label for="appAdminArtworkTrashRetention">
+                  <span data-next-i18n="appAdmin.artworkRetention">Permanently delete after</span>
+                  <select id="appAdminArtworkTrashRetention">
+                    <option value="1h" data-next-i18n="appAdmin.artworkRetention1h">1 hour</option>
+                    <option value="1d" data-next-i18n="appAdmin.artworkRetention1d">1 day</option>
+                    <option value="7d" data-next-i18n="appAdmin.artworkRetention7d">7 days</option>
+                    <option value="30d" data-next-i18n="appAdmin.artworkRetention30d">30 days</option>
+                  </select>
+                </label>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="appAdminSaveArtworkTrashSettingsButton" data-next-i18n="appAdmin.saveArtworkCleanup">Save cleanup settings</button>
+                  <button type="button" class="secondary-button" id="appAdminPurgeArtworkTrashButton" data-next-i18n="appAdmin.purgeExpiredArtwork">Purge expired now</button>
+                </div>
+              </div>
+              <div class="profile-passkey-list" id="appAdminArtworkTrashList"></div>
             </div>
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.metadataJobs">Metadata jobs</h3>
@@ -13323,6 +13397,7 @@ def ui_preview_html(
       pluginHealth: {},
       pluginJobs: [],
       movieVaultConnections: {},
+      metadataArtworkTrash: {items: [], settings: {}, purge: {}},
       metadataJobs: [],
       operations: null,
       plugins: [],
@@ -13555,10 +13630,10 @@ def ui_preview_html(
         access: ["security.toggle_auth", "security.manage_invite_only", "users.view", "users.invite", "users.manage_passkeys"],
         users: ["users.view", "users.invite", "users.disable", "users.delete", "users.assign_roles", "groups.view", "groups.create", "groups.invite"],
         roles: ["roles.view", "roles.manage", "security.manage_rbac_mode", "users.assign_roles"],
-        operations: ["admin.view_settings", "admin.view_audit", "admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk", "metadata.manage_plugins", "metadata.view_plugin_health", "collection.import", "collection.bulk_edit", "containers.edit", "api.tokens.manage", "digital_sources.view", "watchlist.manage"],
+        operations: ["admin.view_settings", "admin.view_audit", "admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk", "metadata.manage_plugins", "metadata.manage_artwork_trash", "metadata.view_plugin_health", "collection.import", "collection.bulk_edit", "containers.edit", "api.tokens.manage", "digital_sources.view", "watchlist.manage"],
         plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "plugins.delete", "digital_sources.connect", "digital_sources.manage", "collection.import"],
         digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
-        metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"],
+        metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "metadata.manage_artwork_trash", "admin.view_jobs"],
         backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"],
         audit: ["admin.view_audit"]
       },
@@ -13732,6 +13807,7 @@ def ui_preview_html(
       document.querySelectorAll("#containerMetadataDryRunButton, #containerMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !(collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh)));
       });
+      setElementVisible(document.getElementById("appAdminArtworkTrashCard"), hasActualPermission("metadata.manage_artwork_trash"));
       setElementVisible(document.getElementById("movieMetadataJobsButton"), hasAnyPermission(["admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"]));
       const canEditMovies = hasPermission("collection.edit_all");
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
@@ -14383,6 +14459,63 @@ def ui_preview_html(
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noContributions", "No metadata contributions yet."))}</div>`}
       `;
+    }
+    function artworkTrashPurgeLabel(item) {
+      if (!item || !item.purgeAfter) return tNext("appAdmin.artworkNotScheduled", "Not scheduled for permanent cleanup.");
+      const seconds = Number(item.purgeInSeconds || 0);
+      const days = seconds / 86400;
+      let relative = "";
+      if (seconds <= 0) relative = tNext("appAdmin.artworkDueNow", "due now");
+      else if (seconds < 7200) relative = tNext("appAdmin.artworkPurgeInHours", "in {hours} hour(s)").replace("{hours}", String(Math.max(1, Math.ceil(seconds / 3600))));
+      else relative = tNext("appAdmin.artworkPurgeInDays", "in {days} day(s)").replace("{days}", String(Math.max(1, Math.ceil(days))));
+      return `${shortDateTime(item.purgeAfter)} (${relative})`;
+    }
+    function renderAppAdminArtworkTrash() {
+      const list = document.getElementById("appAdminArtworkTrashList");
+      const enabledInput = document.getElementById("appAdminArtworkTrashPurgeEnabled");
+      const retentionSelect = document.getElementById("appAdminArtworkTrashRetention");
+      if (!list) return;
+      const trash = appAdmin.metadataArtworkTrash || {items: [], settings: {}, purge: {}};
+      const settings = trash.settings || {};
+      const items = trash.items || [];
+      if (enabledInput) enabledInput.checked = !!settings.purgeEnabled;
+      if (retentionSelect) {
+        retentionSelect.value = settings.retention || "7d";
+        retentionSelect.disabled = !settings.purgeEnabled;
+      }
+      list.innerHTML = items.length ? items.map((item) => {
+        const media = item.media || {};
+        const title = item.entityTitle || "-";
+        const kindLabel = item.kind === "backdrop" ? tNext("movieDetail.backdrops", "Backdrops") : tNext("movieDetail.posters", "Posters");
+        const entityLabel = item.entityType === "container" ? tNext("collection.containers", "Containers") : tNext("collection.movies", "Movies");
+        const provider = media.provider_id || (media.metadata || {}).source || media.storage_backend || "-";
+        const size = [media.width && media.height ? `${media.width}x${media.height}` : "", media.size_bytes ? formatFileSize(media.size_bytes) : ""].filter(Boolean).join(" · ");
+        return `
+          <div class="profile-passkey artwork-trash-row">
+            <div class="artwork-option-thumb small">${media.url ? `<img src="${escapeHtml(media.url)}" alt="">` : `<span>${escapeHtml(kindLabel)}</span>`}</div>
+            <div class="profile-passkey-main">
+              <div class="profile-passkey-head">
+                <strong>${escapeHtml(title)}</strong>
+                <span class="tag">${escapeHtml(kindLabel)}</span>
+              </div>
+              <div class="profile-passkey-meta">
+                ${escapeHtml(entityLabel)}
+                ${item.movieYear ? ` &middot; ${escapeHtml(item.movieYear)}` : ""}
+                &middot; ${escapeHtml(provider)}
+                ${size ? ` &middot; ${escapeHtml(size)}` : ""}
+              </div>
+              <div class="profile-passkey-meta">
+                ${escapeHtml(tNext("appAdmin.deletedAt", "Deleted at"))}: ${escapeHtml(shortDateTime(item.deletedAt))}
+                &middot;
+                ${escapeHtml(tNext("appAdmin.purgeAt", "Permanent cleanup"))}: ${escapeHtml(artworkTrashPurgeLabel(item))}
+              </div>
+            </div>
+            <button type="button" class="secondary-button" data-app-admin-artwork-restore="${escapeHtml(item.mediaId || "")}" data-entity-type="${escapeHtml(item.entityType || "")}" data-entity-id="${escapeHtml(item.entityId || "")}">
+              ${escapeHtml(tNext("appAdmin.restoreArtwork", "Restore"))}
+            </button>
+          </div>
+        `;
+      }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noDeletedArtwork", "No deleted posters or backdrops."))}</div>`;
     }
     function renderAppAdminMetadataJobs() {
       const node = document.getElementById("appAdminMetadataJobsList");
@@ -15826,6 +15959,7 @@ def ui_preview_html(
       renderAppAdminRbac();
       renderAppAdminOperations();
       renderAppAdminPlugins();
+      renderAppAdminArtworkTrash();
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
       renderAppAdminBackups(appAdmin.backup);
@@ -15849,7 +15983,7 @@ def ui_preview_html(
         const canLoadAudit = canUseAdminTab("audit");
         const auditQuery = appAdmin.auditCategory ? `?limit=250&category=${encodeURIComponent(appAdmin.auditCategory)}` : "?limit=250";
         const canLoadContributionEvents = canLoadPlugins && hasActualPermission("admin.view_audit");
-        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, auditPayload, contributionPayload, operationsPayload] = await Promise.all([
+        const [usersPayload, credentialsPayload, invitesPayload, rbacPayload, groupsPayload, pluginsPayload, digitalSourcesPayload, backupPayload, pluginJobsPayload, metadataJobsPayload, metadataTrashPayload, auditPayload, contributionPayload, operationsPayload] = await Promise.all([
           canLoadAccess || canLoadUsers ? authApiJson("/api/next/auth/users").catch(() => ({users: [], roles: []})) : Promise.resolve({users: [], roles: []}),
           canLoadAccess ? authApiJson("/api/next/auth/credentials").catch(() => ({credentials: []})) : Promise.resolve({credentials: []}),
           canLoadAccess ? authApiJson("/api/next/auth/invite").catch(() => ({invites: []})) : Promise.resolve({invites: []}),
@@ -15860,6 +15994,7 @@ def ui_preview_html(
           canLoadBackup ? authApiJson("/api/next/backup/status").catch((error) => ({status: "error", error: error.message || String(error)})) : Promise.resolve(null),
           canLoadPlugins ? authApiJson("/api/next/jobs?jobType=plugin.execute&limit=10").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
           canLoadMetadata ? authApiJson("/api/next/metadata/jobs?limit=20").catch(() => ({jobs: []})) : Promise.resolve({jobs: []}),
+          canLoadMetadata && hasActualPermission("metadata.manage_artwork_trash") ? authApiJson("/api/next/admin/metadata/artwork-trash").catch(() => ({items: [], settings: {}, purge: {}})) : Promise.resolve({items: [], settings: {}, purge: {}}),
           canLoadAudit ? authApiJson(`/api/next/audit/events${auditQuery}`).catch(() => ({events: []})) : Promise.resolve({events: []}),
           canLoadContributionEvents ? authApiJson("/api/next/audit/events?limit=250&category=metadata").catch(() => ({events: []})) : Promise.resolve({events: []}),
           canLoadOperations ? authApiJson("/api/next/admin/operations").catch((error) => ({operations: null, error: error.message || String(error)})) : Promise.resolve({operations: null})
@@ -15876,6 +16011,7 @@ def ui_preview_html(
         appAdmin.backup = backupPayload || null;
         appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
         appAdmin.metadataJobs = metadataJobsPayload.jobs || [];
+        appAdmin.metadataArtworkTrash = metadataTrashPayload || {items: [], settings: {}, purge: {}};
         appAdmin.auditEvents = auditPayload.events || [];
         appAdmin.contributionEvents = (contributionPayload.events || []).filter((event) => event.eventType === "metadata.receiver_pushed");
         appAdmin.operations = operationsPayload.operations || null;
@@ -16440,10 +16576,63 @@ def ui_preview_html(
       if (!canUseAdminTab("metadata")) return;
       setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.loadingMetadataJobs", "Loading metadata jobs..."));
       try {
-        const payload = await authApiJson("/api/next/metadata/jobs?limit=20");
+        const [payload, trashPayload] = await Promise.all([
+          authApiJson("/api/next/metadata/jobs?limit=20"),
+          hasActualPermission("metadata.manage_artwork_trash")
+            ? authApiJson("/api/next/admin/metadata/artwork-trash").catch(() => ({items: [], settings: {}, purge: {}}))
+            : Promise.resolve({items: [], settings: {}, purge: {}})
+        ]);
         appAdmin.metadataJobs = payload.jobs || [];
+        appAdmin.metadataArtworkTrash = trashPayload || {items: [], settings: {}, purge: {}};
+        renderAppAdminArtworkTrash();
         renderAppAdminMetadataJobs();
         setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.metadataJobsLoaded", "Metadata jobs loaded."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
+      }
+    }
+    async function saveAppAdminArtworkTrashSettings() {
+      const enabledInput = document.getElementById("appAdminArtworkTrashPurgeEnabled");
+      const retentionSelect = document.getElementById("appAdminArtworkTrashRetention");
+      setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.savingArtworkCleanup", "Saving artwork cleanup settings..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/artwork-trash/settings", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            purgeEnabled: !!(enabledInput && enabledInput.checked),
+            retention: retentionSelect ? retentionSelect.value : "7d"
+          })
+        });
+        appAdmin.metadataArtworkTrash = {...(appAdmin.metadataArtworkTrash || {}), settings: payload.settings || {}, purge: payload.purge || {}};
+        await refreshAppAdminMetadataJobs();
+        setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.artworkCleanupSaved", "Artwork cleanup settings saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
+      }
+    }
+    async function restoreAppAdminArtwork(entityType, entityId, mediaId) {
+      if (!entityType || !entityId || !mediaId) return;
+      setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.restoringArtwork", "Restoring artwork..."));
+      try {
+        await authApiJson("/api/next/admin/metadata/artwork-trash/restore", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({entityType, entityId, mediaId})
+        });
+        await refreshAppAdminMetadataJobs();
+        if (activeDetailPayload || activeContainerPayload) await refreshCurrentDetail();
+        setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.artworkRestored", "Artwork restored."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
+      }
+    }
+    async function purgeAppAdminArtworkTrash() {
+      setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.purgingArtwork", "Purging expired artwork..."));
+      try {
+        await authApiJson("/api/next/admin/metadata/artwork-trash/purge", {method: "POST"});
+        await refreshAppAdminMetadataJobs();
+        setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.artworkPurged", "Expired artwork purged."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
       }
@@ -25195,6 +25384,22 @@ def ui_preview_html(
       document.getElementById("appAdminRefreshPluginJobsButton")?.addEventListener("click", () => refreshAppAdminPluginJobs());
       document.getElementById("appAdminImportPluginButton")?.addEventListener("click", () => importAppAdminPlugin());
       document.getElementById("appAdminRefreshMetadataJobsButton")?.addEventListener("click", () => refreshAppAdminMetadataJobs());
+      document.getElementById("appAdminArtworkTrashPurgeEnabled")?.addEventListener("change", (event) => {
+        const select = document.getElementById("appAdminArtworkTrashRetention");
+        if (select) select.disabled = !event.target.checked;
+      });
+      document.getElementById("appAdminSaveArtworkTrashSettingsButton")?.addEventListener("click", () => saveAppAdminArtworkTrashSettings());
+      document.getElementById("appAdminPurgeArtworkTrashButton")?.addEventListener("click", () => purgeAppAdminArtworkTrash());
+      document.getElementById("appAdminArtworkTrashList")?.addEventListener("click", (event) => {
+        const restoreButton = event.target.closest("[data-app-admin-artwork-restore]");
+        if (restoreButton) {
+          restoreAppAdminArtwork(
+            restoreButton.dataset.entityType || "",
+            restoreButton.dataset.entityId || "",
+            restoreButton.dataset.appAdminArtworkRestore || ""
+          );
+        }
+      });
       document.getElementById("appAdminRefreshDigitalSourcesButton")?.addEventListener("click", () => refreshAppAdminDigitalSources());
       document.getElementById("appAdminRefreshBackupButton")?.addEventListener("click", () => refreshAppAdminBackupStatus());
       document.getElementById("appAdminExportBackupButton")?.addEventListener("click", () => exportAppAdminBackupZip());
@@ -33479,6 +33684,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 JOIN media_assets ma ON ma.id = em.media_id
                 WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
+                  AND em.deleted_at IS NULL
                   AND ma.kind='poster'
                 ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                 LIMIT 1
@@ -33489,6 +33695,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 JOIN media_assets ma ON ma.id = em.media_id
                 WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
+                  AND em.deleted_at IS NULL
                   AND ma.kind='backdrop'
                 ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                 LIMIT 1
@@ -33795,8 +34002,9 @@ def media_group_movie_entities(conn, group_id: UUID, *, limit: int = 200) -> lis
                     FROM entity_media em
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
-                      AND em.entity_id=m.id
-                      AND ma.kind='poster'
+                  AND em.entity_id=m.id
+                  AND em.deleted_at IS NULL
+                  AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
                 ) poster_asset ON true
@@ -33805,8 +34013,9 @@ def media_group_movie_entities(conn, group_id: UUID, *, limit: int = 200) -> lis
                     FROM entity_media em
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
-                      AND em.entity_id=m.id
-                      AND ma.kind='backdrop'
+                  AND em.entity_id=m.id
+                  AND em.deleted_at IS NULL
+                  AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
                 ) backdrop_asset ON true
@@ -34003,6 +34212,7 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type=%s AND em.entity_id=%s
+              AND em.deleted_at IS NULL
             ORDER BY em.role, em.sort_order, ma.kind
             """,
             (entity_type, entity_id),
@@ -34305,6 +34515,7 @@ def person_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[d
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -34315,6 +34526,7 @@ def person_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[d
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -34417,6 +34629,7 @@ def person_digital_credit_entities(conn, person_id: UUID, *, limit: int = 240) -
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -34427,6 +34640,7 @@ def person_digital_credit_entities(conn, person_id: UUID, *, limit: int = 240) -
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -34923,6 +35137,7 @@ def set_primary_movie_media_asset(
             WHERE em.entity_type='movie'
               AND em.entity_id=%s
               AND em.media_id=%s
+              AND em.deleted_at IS NULL
               AND ma.kind=%s
             """,
             (movie_id, media_id, kind),
@@ -34939,6 +35154,7 @@ def set_primary_movie_media_asset(
             WHERE ma.id = em.media_id
               AND em.entity_type='movie'
               AND em.entity_id=%s
+              AND em.deleted_at IS NULL
               AND ma.kind=%s
               AND em.is_primary=true
             """,
@@ -34952,6 +35168,7 @@ def set_primary_movie_media_asset(
             WHERE entity_type='movie'
               AND entity_id=%s
               AND media_id=%s
+              AND deleted_at IS NULL
             """,
             (movie_id, media_id),
         )
@@ -35294,6 +35511,7 @@ def create_uploaded_movie_media_asset(
                 JOIN media_assets ma ON ma.id = em.media_id
                 WHERE em.entity_type='movie'
                   AND em.entity_id=%s
+                  AND em.deleted_at IS NULL
                   AND ma.kind=%s
                 """,
                 (movie_id, kind),
@@ -35314,7 +35532,11 @@ def create_uploaded_movie_media_asset(
             VALUES ('movie', %s, %s, %s, %s, %s)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 is_primary=EXCLUDED.is_primary,
-                sort_order=EXCLUDED.sort_order
+                sort_order=EXCLUDED.sort_order,
+                deleted_at=NULL,
+                deleted_by=NULL,
+                purge_after=NULL,
+                restore_metadata='{}'::jsonb
             """,
             (movie_id, media["id"], kind, primary, sort_order),
         )
@@ -35399,6 +35621,7 @@ def set_primary_container_media_asset(
             WHERE ma.id = em.media_id
               AND em.entity_type='container'
               AND em.entity_id=%s
+              AND em.deleted_at IS NULL
               AND ma.kind=%s
               AND em.is_primary=true
             """,
@@ -35417,7 +35640,11 @@ def set_primary_container_media_asset(
             VALUES ('container', %s, %s, %s, true, 0)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 is_primary=true,
-                sort_order=0
+                sort_order=0,
+                deleted_at=NULL,
+                deleted_by=NULL,
+                purge_after=NULL,
+                restore_metadata='{}'::jsonb
             """,
             (container_id, media_id, kind),
         )
@@ -35560,6 +35787,7 @@ def create_uploaded_container_media_asset(
                 JOIN media_assets ma ON ma.id = em.media_id
                 WHERE em.entity_type='container'
                   AND em.entity_id=%s
+                  AND em.deleted_at IS NULL
                   AND ma.kind=%s
                 """,
                 (container_id, kind),
@@ -35579,7 +35807,11 @@ def create_uploaded_container_media_asset(
             VALUES ('container', %s, %s, %s, %s, %s)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 is_primary=EXCLUDED.is_primary,
-                sort_order=EXCLUDED.sort_order
+                sort_order=EXCLUDED.sort_order,
+                deleted_at=NULL,
+                deleted_by=NULL,
+                purge_after=NULL,
+                restore_metadata='{}'::jsonb
             """,
             (container_id, media["id"], kind, primary, sort_order),
         )
@@ -35599,6 +35831,175 @@ def create_uploaded_container_media_asset(
     media["sort_order"] = sort_order
     media["url"] = media_asset_public_url(media)
     return {"containerId": str(container_id), "kind": kind, "media": media, "revision": 0}
+
+
+def artwork_trash_settings(conn) -> dict[str, Any]:
+    enabled = bool(app_setting_value(conn, "artwork_trash_purge_enabled", False))
+    retention = clean_text(app_setting_value(conn, "artwork_trash_retention", "7d")) or "7d"
+    if retention not in ARTWORK_TRASH_RETENTION_OPTIONS:
+        retention = "7d"
+    option = ARTWORK_TRASH_RETENTION_OPTIONS[retention]
+    return {
+        "purgeEnabled": enabled,
+        "retention": retention,
+        "retentionSeconds": option["seconds"],
+        "retentionInterval": option["interval"],
+        "options": [
+            {"value": key, "seconds": value["seconds"], "interval": value["interval"]}
+            for key, value in ARTWORK_TRASH_RETENTION_OPTIONS.items()
+        ],
+    }
+
+
+def delete_local_media_asset_file(asset: dict[str, Any]) -> bool:
+    if clean_text(asset.get("storage_backend")) != "local":
+        return False
+    storage_key = clean_text(asset.get("storage_key"))
+    if not storage_key:
+        return False
+    data_dir = legacy_data_dir().resolve()
+    target = (data_dir / storage_key).resolve()
+    try:
+        target.relative_to(data_dir)
+    except ValueError:
+        return False
+    if not target.is_file():
+        return False
+    target.unlink()
+    return True
+
+
+def purge_expired_artwork_trash(conn) -> dict[str, Any]:
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM entity_media
+            WHERE deleted_at IS NOT NULL
+              AND purge_after IS NOT NULL
+              AND purge_after <= now()
+            RETURNING media_id
+            """
+        )
+        deleted_media_ids = [row["media_id"] for row in cur.fetchall()]
+        purged_assets = 0
+        purged_files = 0
+        for media_id in deleted_media_ids:
+            cur.execute("SELECT COUNT(*)::int AS refs FROM entity_media WHERE media_id=%s", (media_id,))
+            if int((cur.fetchone() or {}).get("refs") or 0) > 0:
+                continue
+            cur.execute(
+                """
+                DELETE FROM media_assets
+                WHERE id=%s
+                  AND kind IN ('poster', 'backdrop')
+                RETURNING id, storage_backend, storage_key
+                """,
+                (media_id,),
+            )
+            asset = cur.fetchone()
+            if not asset:
+                continue
+            purged_assets += 1
+            try:
+                if delete_local_media_asset_file(asset):
+                    purged_files += 1
+            except OSError:
+                pass
+    return {"purgedLinks": len(deleted_media_ids), "purgedAssets": purged_assets, "purgedFiles": purged_files}
+
+
+def artwork_trash_entries(conn, *, limit: int = 200) -> dict[str, Any]:
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return {"items": [], "settings": artwork_trash_settings(conn), "purge": {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}}
+    purge = purge_expired_artwork_trash(conn)
+    settings = artwork_trash_settings(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                em.entity_type,
+                em.entity_id,
+                em.media_id,
+                em.role,
+                em.deleted_at,
+                em.deleted_by,
+                em.purge_after,
+                em.restore_metadata,
+                EXTRACT(EPOCH FROM (em.purge_after - now()))::int AS purge_in_seconds,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                COALESCE(m.title, c.title) AS entity_title,
+                m.year AS movie_year,
+                c.container_type,
+                u.username AS deleted_by_username,
+                u.display_name AS deleted_by_display_name
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            LEFT JOIN movies m ON em.entity_type='movie' AND m.id = em.entity_id
+            LEFT JOIN containers c ON em.entity_type='container' AND c.id = em.entity_id
+            LEFT JOIN users u ON u.id = em.deleted_by
+            WHERE em.deleted_at IS NOT NULL
+              AND ma.kind IN ('poster', 'backdrop')
+            ORDER BY em.deleted_at DESC
+            LIMIT %s
+            """,
+            (min(max(int(limit or 200), 1), 500),),
+        )
+        rows = cur.fetchall()
+    items = []
+    for row in rows:
+        row["url"] = media_asset_public_url(row)
+        purge_seconds = row.get("purge_in_seconds")
+        if purge_seconds is not None:
+            purge_seconds = max(int(purge_seconds), 0)
+        items.append(
+            {
+                "entityType": row.get("entity_type"),
+                "entityId": row.get("entity_id"),
+                "entityTitle": row.get("entity_title") or "-",
+                "movieYear": row.get("movie_year"),
+                "containerType": row.get("container_type"),
+                "mediaId": row.get("media_id"),
+                "kind": row.get("kind"),
+                "role": row.get("role"),
+                "deletedAt": row.get("deleted_at"),
+                "deletedBy": row.get("deleted_by"),
+                "deletedByUsername": row.get("deleted_by_username") or row.get("deleted_by_display_name"),
+                "purgeAfter": row.get("purge_after"),
+                "purgeInSeconds": purge_seconds,
+                "purgeEnabled": bool(row.get("purge_after")),
+                "restoreMetadata": row.get("restore_metadata") or {},
+                "media": {
+                    "id": row.get("media_id"),
+                    "kind": row.get("kind"),
+                    "variant": row.get("variant"),
+                    "storage_backend": row.get("storage_backend"),
+                    "storage_key": row.get("storage_key"),
+                    "source_url": row.get("source_url"),
+                    "provider_id": row.get("provider_id"),
+                    "content_type": row.get("content_type"),
+                    "width": row.get("width"),
+                    "height": row.get("height"),
+                    "size_bytes": row.get("size_bytes"),
+                    "sha256": row.get("sha256"),
+                    "metadata": row.get("metadata") or {},
+                    "url": row.get("url"),
+                },
+            }
+        )
+    return {"items": items, "settings": settings, "purge": purge}
 
 
 def delete_entity_artwork_media_asset(
@@ -35648,6 +36049,7 @@ def delete_entity_artwork_media_asset(
               AND em.media_id=%s
               AND em.role=%s
               AND ma.kind=%s
+              AND em.deleted_at IS NULL
             """,
             (entity_type, entity_id, media_id, kind, kind),
         )
@@ -35655,19 +36057,38 @@ def delete_entity_artwork_media_asset(
         if not deleted_media:
             raise NextApiError("Media asset is not linked to this item", 404)
         was_primary = bool(deleted_media.get("is_primary"))
+        settings = artwork_trash_settings(conn)
+        actor_id = actor.get("id") if actor else None
         cur.execute(
             """
-            DELETE FROM entity_media
+            UPDATE entity_media
+            SET deleted_at=now(),
+                deleted_by=%s,
+                purge_after=CASE WHEN %s THEN now() + (%s)::interval ELSE NULL END,
+                is_primary=false,
+                restore_metadata=%s
             WHERE entity_type=%s
               AND entity_id=%s
               AND media_id=%s
               AND role=%s
+              AND deleted_at IS NULL
+            RETURNING deleted_at, purge_after
             """,
-            (entity_type, entity_id, media_id, kind),
+            (
+                actor_id,
+                settings["purgeEnabled"],
+                settings["retentionInterval"],
+                Jsonb(json_ready({"wasPrimary": was_primary, "sortOrder": deleted_media.get("sort_order")})),
+                entity_type,
+                entity_id,
+                media_id,
+                kind,
+            ),
         )
-        deleted_links = max(int(cur.rowcount or 0), 0)
-        if not deleted_links:
+        trash_row = cur.fetchone()
+        if not trash_row:
             raise NextApiError("Media asset is not linked to this item", 404)
+        deleted_links = 1
 
         replacement = None
         if was_primary:
@@ -35696,6 +36117,7 @@ def delete_entity_artwork_media_asset(
                   AND em.entity_id=%s
                   AND em.role=%s
                   AND ma.kind=%s
+                  AND em.deleted_at IS NULL
                 ORDER BY em.sort_order, ma.created_at
                 LIMIT 1
                 """,
@@ -35728,15 +36150,8 @@ def delete_entity_artwork_media_asset(
         else:
             cur.execute(f"UPDATE {entity_table} SET updated_at=now() WHERE id=%s", (entity_id,))
 
-        cur.execute("SELECT COUNT(*) AS refs FROM entity_media WHERE media_id=%s", (media_id,))
-        ref_row = cur.fetchone()
-        asset_deleted = False
-        if int((ref_row or {}).get("refs") or 0) == 0:
-            cur.execute("DELETE FROM media_assets WHERE id=%s AND kind=%s", (media_id, kind))
-            asset_deleted = bool(cur.rowcount)
-
     revision = 0
-    operation = f"{entity_type}.media_deleted"
+    operation = f"{entity_type}.media_trashed"
     payload = {
         f"{entity_type}Id": str(entity_id),
         "operation": operation,
@@ -35744,7 +36159,8 @@ def delete_entity_artwork_media_asset(
         "mediaId": str(media_id),
         "wasPrimary": was_primary,
         "replacementMediaId": str(replacement["id"]) if replacement else None,
-        "assetDeleted": asset_deleted,
+        "purgeEnabled": settings["purgeEnabled"],
+        "purgeAfter": trash_row.get("purge_after"),
         "actor": actor_job_payload(actor or {}) if actor else None,
     }
     if entity_type == "movie":
@@ -35757,8 +36173,129 @@ def delete_entity_artwork_media_asset(
         "mediaId": str(media_id),
         "deleted": deleted_media,
         "deletedLinks": deleted_links,
-        "assetDeleted": asset_deleted,
+        "trashed": True,
+        "purgeAfter": trash_row.get("purge_after"),
+        "purgeEnabled": settings["purgeEnabled"],
         "replacement": replacement,
+        "revision": revision,
+    }
+
+
+def restore_entity_artwork_media_asset(
+    conn,
+    *,
+    entity_type: str,
+    entity_id: UUID,
+    media_id: UUID,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if entity_type not in {"movie", "container"}:
+        raise NextApiError("entityType must be movie or container", 400)
+    entity_table = "movies" if entity_type == "movie" else "containers"
+    if not table_exists(conn, entity_table) or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order,
+                em.restore_metadata
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type=%s
+              AND em.entity_id=%s
+              AND em.media_id=%s
+              AND em.deleted_at IS NOT NULL
+              AND ma.kind IN ('poster', 'backdrop')
+            """,
+            (entity_type, entity_id, media_id),
+        )
+        media = cur.fetchone()
+        if not media:
+            raise NextApiError("Deleted artwork was not found", 404)
+        kind = media["kind"]
+        restore_metadata = media.get("restore_metadata") if isinstance(media.get("restore_metadata"), dict) else {}
+        cur.execute(
+            """
+            SELECT COUNT(*)::int AS primary_count
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type=%s
+              AND em.entity_id=%s
+              AND em.deleted_at IS NULL
+              AND em.is_primary=true
+              AND ma.kind=%s
+            """,
+            (entity_type, entity_id, kind),
+        )
+        has_primary = int((cur.fetchone() or {}).get("primary_count") or 0) > 0
+        make_primary = bool(restore_metadata.get("wasPrimary")) and not has_primary
+        sort_order = int(restore_metadata.get("sortOrder") or media.get("sort_order") or (0 if make_primary else 1))
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET deleted_at=NULL,
+                deleted_by=NULL,
+                purge_after=NULL,
+                is_primary=%s,
+                sort_order=%s,
+                restore_metadata='{}'::jsonb
+            WHERE entity_type=%s
+              AND entity_id=%s
+              AND media_id=%s
+              AND role=%s
+            """,
+            (make_primary, 0 if make_primary else sort_order, entity_type, entity_id, media_id, media.get("role") or kind),
+        )
+        metadata_patch: dict[str, Any] = {}
+        if make_primary:
+            metadata_patch = {f"{kind}_url": media_asset_public_url(media), f"{kind}_locked": True}
+        if metadata_patch:
+            cur.execute(
+                f"UPDATE {entity_table} SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+                (Jsonb(json_ready(metadata_patch)), entity_id),
+            )
+        else:
+            cur.execute(f"UPDATE {entity_table} SET updated_at=now() WHERE id=%s", (entity_id,))
+    revision = 0
+    if entity_type == "movie":
+        revision = record_sync_change(
+            conn,
+            entity_id,
+            {
+                "movieId": str(entity_id),
+                "operation": "movie.media_restored",
+                "kind": kind,
+                "mediaId": str(media_id),
+                "primary": make_primary,
+                "actor": actor_job_payload(actor or {}) if actor else None,
+            },
+        )
+    media["url"] = media_asset_public_url(media)
+    media["is_primary"] = make_primary
+    media["sort_order"] = 0 if make_primary else sort_order
+    return {
+        f"{entity_type}Id": str(entity_id),
+        "kind": kind,
+        "mediaId": str(media_id),
+        "media": media,
+        "restored": True,
+        "primary": make_primary,
         "revision": revision,
     }
 
@@ -35952,6 +36489,7 @@ def container_aggregate_movie_entities(conn, container_id: UUID, *, max_depth: i
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -35962,6 +36500,7 @@ def container_aggregate_movie_entities(conn, container_id: UUID, *, max_depth: i
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -36084,6 +36623,7 @@ def container_aggregate_media_asset_entities(conn, movies: list[dict[str, Any]])
                 JOIN movies m ON m.id = em.entity_id
                 WHERE em.entity_type='movie'
                   AND em.entity_id = ANY(%s)
+                  AND em.deleted_at IS NULL
                   AND ma.kind IN ('poster', 'backdrop')
                 ORDER BY lower(m.title), ma.kind, em.is_primary DESC, em.sort_order, ma.created_at
                 """,
@@ -36942,6 +37482,7 @@ ADMIN_OPERATIONS_PERMISSIONS = (
     "metadata.manage_plugins",
     "metadata.manage_plugin_settings",
     "metadata.manage_receivers",
+    "metadata.manage_artwork_trash",
     "metadata.view_plugin_health",
     "collection.import",
     "collection.add",
@@ -37144,6 +37685,7 @@ def admin_operations_artwork_summary(conn) -> dict[str, Any]:
                     FROM entity_media em
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
+                      AND em.deleted_at IS NULL
                     """
                 )
                 row = cur.fetchone() or {}
@@ -37158,6 +37700,7 @@ def admin_operations_artwork_summary(conn) -> dict[str, Any]:
                     FROM entity_media em
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='container'
+                      AND em.deleted_at IS NULL
                     """
                 )
                 row = cur.fetchone() or {}
@@ -37696,6 +38239,10 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 db = cur.fetchone()
             migrations = migration_overview(conn)
+            artwork_purge = {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}
+            if migrations.get("state") == "ready":
+                with conn.transaction():
+                    artwork_purge = purge_expired_artwork_trash(conn)
         migration_state = migrations["state"]
         is_ready = migration_state == "ready"
         return response(
@@ -37706,6 +38253,7 @@ def register_routes(flask_app: Flask) -> None:
                 "sha": build_sha(),
                 "database": db,
                 "migrations": migrations,
+                "maintenance": {"artworkTrash": artwork_purge},
             },
             200 if is_ready else 503,
         )
@@ -40665,6 +41213,7 @@ def register_routes(flask_app: Flask) -> None:
                             JOIN media_assets ma ON ma.id = em.media_id
                             WHERE em.entity_type='movie'
                               AND em.entity_id=m.id
+                              AND em.deleted_at IS NULL
                               AND ma.kind='poster'
                             ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                             LIMIT 1
@@ -40675,6 +41224,7 @@ def register_routes(flask_app: Flask) -> None:
                             JOIN media_assets ma ON ma.id = em.media_id
                             WHERE em.entity_type='movie'
                               AND em.entity_id=m.id
+                              AND em.deleted_at IS NULL
                               AND ma.kind='backdrop'
                             ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                             LIMIT 1
@@ -42870,6 +43420,108 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
         return response({"status": "ok", "job": job, "importPlan": import_plan}, 201)
+
+    @flask_app.get("/api/next/admin/metadata/artwork-trash")
+    def admin_metadata_artwork_trash():
+        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        with connect() as conn:
+            require_next_permission(conn, "metadata.manage_artwork_trash")
+            with conn.transaction():
+                result = artwork_trash_entries(conn, limit=limit)
+        return response({"status": "ok", **result})
+
+    @flask_app.patch("/api/next/admin/metadata/artwork-trash/settings")
+    def admin_metadata_artwork_trash_settings_update():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Settings body must be an object", 400)
+        retention = clean_text(body.get("retention") or body.get("retentionValue") or body.get("retention_value")) or "7d"
+        if retention not in ARTWORK_TRASH_RETENTION_OPTIONS:
+            raise NextApiError("Unsupported artwork trash retention value", 400)
+        enabled = parse_bool_value(body.get("purgeEnabled") if "purgeEnabled" in body else body.get("purge_enabled"), default=False)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.manage_artwork_trash")
+            with conn.transaction():
+                set_app_setting_value(conn, "artwork_trash_purge_enabled", enabled, actor_id=actor.get("id"))
+                set_app_setting_value(conn, "artwork_trash_retention", retention, actor_id=actor.get("id"))
+                if table_exists(conn, "entity_media"):
+                    with conn.cursor() as cur:
+                        if enabled:
+                            cur.execute(
+                                """
+                                UPDATE entity_media
+                                SET purge_after=deleted_at + (%s)::interval
+                                WHERE deleted_at IS NOT NULL
+                                """,
+                                (ARTWORK_TRASH_RETENTION_OPTIONS[retention]["interval"],),
+                            )
+                        else:
+                            cur.execute(
+                                """
+                                UPDATE entity_media
+                                SET purge_after=NULL
+                                WHERE deleted_at IS NOT NULL
+                                """
+                            )
+                purge = purge_expired_artwork_trash(conn)
+                settings = artwork_trash_settings(conn)
+                audit_event(
+                    conn,
+                    event_type="metadata.artwork_trash_settings_updated",
+                    category="admin",
+                    actor=actor,
+                    target_type="metadata",
+                    summary="Updated artwork trash retention settings",
+                    metadata={"settings": settings, "purge": purge},
+                )
+        return response({"status": "ok", "settings": settings, "purge": purge})
+
+    @flask_app.post("/api/next/admin/metadata/artwork-trash/restore")
+    def admin_metadata_artwork_trash_restore():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Restore body must be an object", 400)
+        entity_type = clean_text(body.get("entityType") or body.get("entity_type")) or ""
+        entity_id = parse_uuid(body.get("entityId") or body.get("entity_id"), "entityId")
+        media_id = parse_uuid(body.get("mediaId") or body.get("media_id"), "mediaId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.manage_artwork_trash")
+            with conn.transaction():
+                result = restore_entity_artwork_media_asset(
+                    conn,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    media_id=media_id,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type=f"{entity_type}.media_restored",
+                    category="admin",
+                    actor=actor,
+                    target_type=entity_type,
+                    target_id=entity_id,
+                    summary="Restored deleted artwork",
+                    metadata={"mediaId": str(media_id), "result": result},
+                )
+        return response({"status": "ok", **result})
+
+    @flask_app.post("/api/next/admin/metadata/artwork-trash/purge")
+    def admin_metadata_artwork_trash_purge():
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.manage_artwork_trash")
+            with conn.transaction():
+                purge = purge_expired_artwork_trash(conn)
+                audit_event(
+                    conn,
+                    event_type="metadata.artwork_trash_purged",
+                    category="admin",
+                    actor=actor,
+                    target_type="metadata",
+                    summary="Purged expired deleted artwork",
+                    metadata={"purge": purge},
+                )
+        return response({"status": "ok", "purge": purge})
 
     @flask_app.get("/api/next/metadata/jobs")
     def metadata_jobs():
