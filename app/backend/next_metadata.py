@@ -2481,6 +2481,7 @@ def apply_primary_media_update(
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type='movie'
               AND em.entity_id=%s
+              AND em.deleted_at IS NULL
               AND em.role=%s
               AND ma.kind=%s
               AND em.is_primary=true
@@ -2491,6 +2492,20 @@ def apply_primary_media_update(
         )
         current = cur.fetchone()
         if current and str(current["id"] if isinstance(current, dict) else current[0]) == str(media_id):
+            return None
+        cur.execute(
+            """
+            SELECT deleted_at
+            FROM entity_media
+            WHERE entity_type='movie'
+              AND entity_id=%s
+              AND media_id=%s
+              AND role=%s
+            """,
+            (movie_id, media_id, role),
+        )
+        existing_link = cur.fetchone()
+        if existing_link and (existing_link["deleted_at"] if isinstance(existing_link, dict) else existing_link[0]):
             return None
         current_metadata = current.get("metadata") if isinstance(current, dict) else (current[3] if current else {})
         current_metadata = current_metadata if isinstance(current_metadata, dict) else {}
@@ -2523,6 +2538,7 @@ def apply_primary_media_update(
             SET is_primary=false, sort_order=GREATEST(sort_order, 1)
             WHERE entity_type='movie'
               AND entity_id=%s
+              AND deleted_at IS NULL
               AND role=%s
               AND is_primary=true
             """,
@@ -2565,6 +2581,7 @@ def has_locked_primary_media(conn, *, movie_id: UUID, kind: str) -> bool:
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type='movie'
               AND em.entity_id=%s
+              AND em.deleted_at IS NULL
               AND em.role=%s
               AND ma.kind=%s
               AND em.is_primary=true
@@ -2600,7 +2617,7 @@ def link_media_option(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT is_primary
+            SELECT is_primary, deleted_at
             FROM entity_media
             WHERE entity_type='movie'
               AND entity_id=%s
@@ -2610,6 +2627,8 @@ def link_media_option(
             (movie_id, media_id, kind),
         )
         row = cur.fetchone()
+        if row and (row["deleted_at"] if isinstance(row, dict) else row[1]):
+            return None
         if row and bool(row["is_primary"] if isinstance(row, dict) else row[0]):
             return None
         cur.execute(
