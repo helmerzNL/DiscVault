@@ -13565,13 +13565,13 @@ def ui_preview_html(
       const directName = String(direct?.displayName || direct?.pluginName || direct?.name || direct?.manifest?.name || "").trim();
       if (directName) return directName;
       const pools = [
-        appAdmin?.plugins || [],
-        state?.metadataPlugins || [],
-        state?.plugins || [],
-        importCenter?.report?.metadataPlugins?.items || [],
-        importCenter?.report?.importSources || [],
-        importCenter?.preview?.sources || [],
-        adminState?.plugins || []
+        typeof appAdmin !== "undefined" ? appAdmin.plugins : [],
+        typeof state !== "undefined" ? state.metadataPlugins : [],
+        typeof state !== "undefined" ? state.plugins : [],
+        typeof importCenter !== "undefined" ? importCenter.report?.metadataPlugins?.items : [],
+        typeof importCenter !== "undefined" ? importCenter.report?.importSources : [],
+        typeof importCenter !== "undefined" ? importCenter.preview?.sources : [],
+        typeof adminState !== "undefined" ? adminState.plugins : []
       ].filter(Array.isArray);
       for (const pool of pools) {
         const match = pool.find((plugin) => {
