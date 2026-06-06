@@ -9737,6 +9737,11 @@ def ui_preview_html(
       grid-column: 1 / -1;
       width: 100%;
     }
+    #containerDetailPosterArtwork > .container-media-groups,
+    #containerDetailBackdropArtwork > .container-media-groups {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
     .video-type-groups .detail-grid {
       width: 100%;
       grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
@@ -30698,6 +30703,58 @@ def container_detail_media_rows(media_assets: list[dict[str, Any]]) -> str:
     return "".join(rows)
 
 
+def container_detail_artwork_cards(media_assets: list[dict[str, Any]], kind: str) -> str:
+    assets = [asset for asset in media_assets if asset.get("kind") == kind]
+    if not assets:
+        return '<div class="empty small">No artwork linked yet.</div>'
+    cards = []
+    for asset in assets:
+        display_url = media_asset_public_url(asset)
+        preview = f'<img src="{h(display_url)}" alt="">' if display_url else "<span>No preview</span>"
+        is_primary = bool(asset.get("is_primary"))
+        tags = [
+            asset.get("provider_id") or asset.get("storage_backend"),
+            asset.get("role"),
+            asset.get("variant"),
+            "Primary" if is_primary else None,
+        ]
+        tags_html = "".join(f'<span class="tag">{h(tag)}</span>' for tag in tags if tag)
+        storage_label = asset.get("source_url") or asset.get("storage_key") or asset.get("sha256") or "Local media asset"
+        cards.append(
+            f"""
+        <article class="container-art-card">
+          <div class="container-art-preview">{preview}</div>
+          <div class="container-art-body">
+            <div class="tags">{tags_html}</div>
+            <strong title="{h(storage_label)}">{h(storage_label)}</strong>
+          </div>
+        </article>
+            """.strip()
+        )
+    return "\n".join(cards)
+
+
+def container_detail_media_gallery(media_assets: list[dict[str, Any]]) -> str:
+    if not media_assets:
+        return '<div class="empty small">No media assets linked yet.</div>'
+    return f"""
+      <div class="container-artwork-sections">
+        <section class="container-artwork-section">
+          <h3>Posters</h3>
+          <div class="container-art-grid">
+            {container_detail_artwork_cards(media_assets, "poster")}
+          </div>
+        </section>
+        <section class="container-artwork-section">
+          <h3>Backdrops</h3>
+          <div class="container-art-grid backdrops">
+            {container_detail_artwork_cards(media_assets, "backdrop")}
+          </div>
+        </section>
+      </div>
+    """.strip()
+
+
 def movie_artwork_upload_form(kind: str) -> str:
     label = "Poster" if kind == "poster" else "Backdrop"
     return f"""
@@ -31609,6 +31666,76 @@ def container_detail_html(detail: dict[str, Any]) -> str:
       font-weight: 560;
       overflow-wrap: anywhere;
     }
+    .container-artwork-sections {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .container-artwork-section {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .container-artwork-section h3 {
+      font-size: .95rem;
+      margin: 0;
+    }
+    .container-art-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(138px, 100%), 1fr));
+      gap: 10px;
+      align-items: start;
+      min-width: 0;
+    }
+    .container-art-grid.backdrops {
+      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+    }
+    .container-art-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      display: grid;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .container-art-preview {
+      aspect-ratio: 2 / 3;
+      background: #151923;
+      color: var(--muted);
+      display: grid;
+      font-size: .78rem;
+      overflow: hidden;
+      place-items: center;
+    }
+    .backdrops .container-art-preview {
+      aspect-ratio: 16 / 9;
+    }
+    .container-art-preview img {
+      display: block;
+      height: 100%;
+      object-fit: cover;
+      width: 100%;
+    }
+    .container-art-body {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      padding: 10px;
+    }
+    .container-art-body .tags {
+      margin-top: 0;
+    }
+    .container-art-body strong {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 560;
+      line-height: 1.35;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     pre {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
@@ -31637,6 +31764,7 @@ def container_detail_html(detail: dict[str, Any]) -> str:
       .layout { grid-template-columns: 1fr; }
       .panel.full { grid-column: auto; }
       .field { grid-template-columns: 1fr; gap: 3px; }
+      .container-artwork-sections { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -31685,7 +31813,7 @@ def container_detail_html(detail: dict[str, Any]) -> str:
       </div>
       <div class="panel">
         <h2>Media Assets</h2>
-        <div class="field-list">""" + container_detail_media_rows(media_assets) + """</div>
+        """ + container_detail_media_gallery(media_assets) + """
       </div>
       <div class="panel">
         <h2>Metadata</h2>
