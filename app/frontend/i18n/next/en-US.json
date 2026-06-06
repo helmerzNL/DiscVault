@@ -321,6 +321,8 @@
   "movieDetail.backToLibrary": "Back to library",
   "movieDetail.previewMetadata": "Preview changes",
   "movieDetail.applyMetadata": "Refresh metadata",
+  "movieDetail.refreshPeople": "Refresh cast & crew people",
+  "movieDetail.peopleRefreshSummary": "People: {previewed} previewed, {refreshed} refreshed, {skipped} skipped.",
   "movieDetail.jobs": "Refresh history",
   "movieDetail.release": "Release",
   "movieDetail.technical": "Technical",

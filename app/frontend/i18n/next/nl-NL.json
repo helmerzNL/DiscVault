@@ -321,6 +321,8 @@
   "movieDetail.backToLibrary": "Terug naar bibliotheek",
   "movieDetail.previewMetadata": "Wijzigingen bekijken",
   "movieDetail.applyMetadata": "Metadata vernieuwen",
+  "movieDetail.refreshPeople": "Cast- en crewpersonen vernieuwen",
+  "movieDetail.peopleRefreshSummary": "Personen: {previewed} bekeken, {refreshed} vernieuwd, {skipped} overgeslagen.",
   "movieDetail.jobs": "Vernieuwhistorie",
   "movieDetail.release": "Release",
   "movieDetail.technical": "Technisch",
