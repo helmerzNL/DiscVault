@@ -11434,7 +11434,7 @@ def ui_preview_html(
         min-height: min(560px, 68vh);
       }
       .movie-detail-hero {
-        padding: 18px 14px 24px;
+        padding: calc(env(safe-area-inset-top) + 68px) 14px 24px;
       }
       .movie-detail-summary {
         grid-template-columns: minmax(88px, 32vw) minmax(0, 1fr);
@@ -11451,16 +11451,19 @@ def ui_preview_html(
         font-size: clamp(1.65rem, 9vw, 3rem);
       }
       #movieDetailPage .movie-detail-summary,
+      #containerDetailPage .movie-detail-summary,
       #personDetailPage .movie-detail-summary {
         grid-template-columns: minmax(118px, min(42vw, 168px)) minmax(0, 1fr);
         align-items: start;
         gap: 12px 14px;
       }
       #movieDetailPage .movie-detail-copy,
+      #containerDetailPage .movie-detail-copy,
       #personDetailPage .person-detail-copy {
         display: contents;
       }
       #movieDetailPage .movie-detail-poster,
+      #containerDetailPage .movie-detail-poster,
       #personDetailPage .person-detail-portrait {
         grid-row: 1 / span 3;
         width: 100%;
@@ -11470,12 +11473,16 @@ def ui_preview_html(
       #movieDetailPage .movie-detail-summary .eyebrow,
       #movieDetailPage .movie-detail-title,
       #movieDetailPage .hero-meta,
+      #containerDetailPage .movie-detail-summary .eyebrow,
+      #containerDetailPage .movie-detail-title,
+      #containerDetailPage .hero-meta,
       #personDetailPage .movie-detail-summary .eyebrow,
       #personDetailPage .movie-detail-title,
       #personDetailPage .hero-meta {
         grid-column: 2;
       }
       #movieDetailPage .movie-detail-overview,
+      #containerDetailPage .movie-detail-overview,
       #personDetailPage .movie-detail-overview {
         grid-column: 1 / -1;
         max-width: none;
