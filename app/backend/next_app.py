@@ -9524,6 +9524,7 @@ def ui_preview_html(
       background: linear-gradient(145deg, #30343c, #181a1f);
       color: rgba(255,255,255,.66);
       font-size: .78rem;
+      position: relative;
     }
     .art-option.backdrop .art-option-preview {
       aspect-ratio: 16 / 9;
@@ -9534,12 +9535,46 @@ def ui_preview_html(
       object-fit: cover;
       display: block;
     }
+    .art-option-badge {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      max-width: calc(100% - 12px);
+      padding: 4px 6px;
+      border-radius: 999px;
+      background: rgba(10, 12, 16, .62);
+      color: #fff;
+      font-size: .68rem;
+      font-weight: 800;
+      line-height: 1;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, .18);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .art-option-badge.locked {
+      left: auto;
+      right: 6px;
+      background: color-mix(in srgb, var(--accent) 72%, rgba(10, 12, 16, .62));
+    }
+    .art-option-source,
+    .art-option-meta {
+      min-width: 0;
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .art-option-actions {
-      display: grid;
-      grid-template-columns: 1fr;
+      display: flex;
+      flex-wrap: wrap;
       gap: 6px;
     }
     .art-option button {
+      flex: 1 1 80px;
       min-height: 30px;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -9556,6 +9591,13 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
       color: var(--danger);
       background: color-mix(in srgb, var(--danger) 8%, var(--bg-elevated));
+    }
+    .art-option button.ghost {
+      flex: 0 1 auto;
+      min-width: 46px;
+      padding-inline: 9px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--bg-elevated) 84%, transparent);
     }
     .art-upload-row {
       display: flex;
@@ -17728,6 +17770,46 @@ def ui_preview_html(
       }
       return "";
     }
+    function mediaAssetSourceLabel(asset, options = {}) {
+      const metadata = asset?.metadata || {};
+      const provider = asset?.provider_id || metadata.providerId || metadata.provider_id || metadata.source || "";
+      if (options.aggregate) {
+        const sourceTitle = asset?.sourceMovieTitle || asset?.source_movie_title || "";
+        return sourceTitle ? `${tNext("containerDetail.fromMovie", "From")} ${sourceTitle}` : tNext("movieDetail.aggregateArtwork", "Member artwork");
+      }
+      if (String(provider || "").toLowerCase() === "upload") return tNext("movieDetail.uploadedArtwork", "Uploaded");
+      if (provider) return provider;
+      if (asset?.source_url) return tNext("movieDetail.providerArtwork", "Provider");
+      return tNext("movieDetail.localArtwork", "Local");
+    }
+    function mediaAssetMetaLine(asset) {
+      const bits = [];
+      const width = Number(asset?.width || 0);
+      const height = Number(asset?.height || 0);
+      if (width && height) bits.push(`${width}x${height}`);
+      const bytes = Number(asset?.size_bytes || asset?.sizeBytes || 0);
+      if (bytes) bits.push(formatFileSize(bytes));
+      const variant = asset?.variant && asset.variant !== "original" ? asset.variant : "";
+      if (variant) bits.push(variant);
+      return bits.join(" / ");
+    }
+    function artworkLockBadgeHtml(asset, kind, metadata = {}) {
+      const assetMetadata = asset?.metadata || {};
+      const locked = assetMetadata.lockedPrimary || assetMetadata.userSelectedPrimary || metadata.primary_artwork_locked || metadata.artwork_locked || metadata[`${kind}_locked`];
+      return locked ? `<span class="art-option-badge locked">${escapeHtml(tNext("movieDetail.locked", "Locked"))}</span>` : "";
+    }
+    function artworkOptionActionsHtml({asset, entity, kind, canDelete}) {
+      const url = mediaAssetUrl(asset);
+      const label = asset.is_primary ? tNext("movieDetail.primary", "Primary") : tNext("movieDetail.setPrimary", "Set primary");
+      return `
+        <div class="art-option-actions">
+          <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="${escapeHtml(entity)}" data-kind="${escapeHtml(kind)}">${escapeHtml(label)}</button>
+          ${url ? `<button type="button" class="ghost" data-app-artwork-open="${escapeHtml(url)}">${escapeHtml(tNext("movieDetail.openArtwork", "Open"))}</button>` : ""}
+          ${url ? `<button type="button" class="ghost" data-app-artwork-copy="${escapeHtml(url)}">${escapeHtml(tNext("movieDetail.copyArtworkUrl", "Copy URL"))}</button>` : ""}
+          ${canDelete ? `<button type="button" class="danger" data-app-artwork-delete="${escapeHtml(asset.id || "")}" data-art-entity="${escapeHtml(entity)}" data-kind="${escapeHtml(kind)}">${escapeHtml(tNext("movieDetail.deleteArtwork", "Delete"))}</button>` : ""}
+        </div>
+      `;
+    }
     function miniCard(title, subtitle, href) {
       const movieMatch = String(href || "").match(/\\/movies\\/([^/?#]+)/);
       const containerMatch = String(href || "").match(/\\/containers\\/([^/?#]+)/);
@@ -17930,6 +18012,8 @@ def ui_preview_html(
         || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
     }
     function containerArtworkOptionsHtml(detail, kind, emptyKey) {
+      const container = detail.container || {};
+      const metadata = container.metadata || {};
       const ownAssets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
       const aggregateAssets = (detail.aggregateMediaAssets || []).filter((asset) => asset.kind === kind);
       const assets = [...ownAssets, ...aggregateAssets];
@@ -17940,18 +18024,21 @@ def ui_preview_html(
       }
       return assets.map((asset) => {
         const url = mediaAssetUrl(asset);
-        const preview = url ? `<img src="${escapeHtml(url)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-        const sourceTitle = asset.sourceMovieTitle || asset.source_movie_title || asset.provider_id || "";
-        const source = sourceTitle ? `${tNext("containerDetail.fromMovie", "From")} ${sourceTitle}` : "";
+        const aggregate = !ownAssetIds.has(String(asset.id || ""));
+        const source = mediaAssetSourceLabel(asset, {aggregate});
+        const metaLine = mediaAssetMetaLine(asset);
+        const preview = url ? `
+          <img src="${escapeHtml(url)}" alt="">
+          ${asset.is_primary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
+          ${artworkLockBadgeHtml(asset, kind, metadata)}
+        ` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
         const canDelete = ownAssetIds.has(String(asset.id || ""));
         return `
           <div class="${className}">
             <div class="art-option-preview">${preview}</div>
             <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source || (asset.is_primary ? tNext("movieDetail.primary", "Primary") : ""))}</div>
-            <div class="art-option-actions">
-              <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="container" data-kind="${escapeHtml(kind)}">${escapeHtml(asset.is_primary ? tNext("movieDetail.primary", "Primary") : tNext("movieDetail.setPrimary", "Set primary"))}</button>
-              ${canDelete ? `<button type="button" class="danger" data-app-artwork-delete="${escapeHtml(asset.id || "")}" data-art-entity="container" data-kind="${escapeHtml(kind)}">${escapeHtml(tNext("movieDetail.deleteArtwork", "Delete"))}</button>` : ""}
-            </div>
+            ${metaLine ? `<div class="art-option-meta">${escapeHtml(metaLine)}</div>` : ""}
+            ${artworkOptionActionsHtml({asset, entity: "container", kind, canDelete})}
           </div>
         `;
       }).join("");
@@ -18061,15 +18148,20 @@ def ui_preview_html(
       }
       return assets.map((asset) => {
         const url = mediaAssetUrl(asset);
-        const preview = url ? `<img src="${escapeHtml(url)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-        const label = asset.is_primary ? tNext("movieDetail.primary", "Primary") : tNext("movieDetail.setPrimary", "Set primary");
+        const metaLine = mediaAssetMetaLine(asset);
+        const source = mediaAssetSourceLabel(asset);
+        const metadata = (detail.movie || {}).metadata || {};
+        const preview = url ? `
+          <img src="${escapeHtml(url)}" alt="">
+          ${asset.is_primary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
+          ${artworkLockBadgeHtml(asset, kind, metadata)}
+        ` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
         return `
           <div class="${className}">
             <div class="art-option-preview">${preview}</div>
-            <div class="art-option-actions">
-              <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="movie" data-kind="${escapeHtml(kind)}">${escapeHtml(label)}</button>
-              <button type="button" class="danger" data-app-artwork-delete="${escapeHtml(asset.id || "")}" data-art-entity="movie" data-kind="${escapeHtml(kind)}">${escapeHtml(tNext("movieDetail.deleteArtwork", "Delete"))}</button>
-            </div>
+            <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source)}</div>
+            ${metaLine ? `<div class="art-option-meta">${escapeHtml(metaLine)}</div>` : ""}
+            ${artworkOptionActionsHtml({asset, entity: "movie", kind, canDelete: true})}
           </div>
         `;
       }).join("");
@@ -18082,6 +18174,8 @@ def ui_preview_html(
       const backdrops = assets.filter((asset) => asset.kind === "backdrop");
       const primaryPoster = posters.find((asset) => asset.is_primary);
       const primaryBackdrop = backdrops.find((asset) => asset.is_primary);
+      const uploads = assets.filter((asset) => String(asset.provider_id || "").toLowerCase() === "upload").length;
+      const providerAssets = assets.length - uploads;
       const metadata = (detail.movie || {}).metadata || {};
       const locked = metadata.primary_artwork_locked || metadata.artwork_locked || metadata.poster_locked || metadata.backdrop_locked;
       node.innerHTML = `
@@ -18097,6 +18191,10 @@ def ui_preview_html(
           <div class="artwork-manager-row">
             <strong>${escapeHtml(tNext("movieDetail.backdrops", "Backdrops"))}</strong>
             <span>${escapeHtml(formatNumber(backdrops.length))}${primaryBackdrop ? ` &middot; ${escapeHtml(tNext("movieDetail.primary", "Primary"))}` : ""}</span>
+          </div>
+          <div class="artwork-manager-row">
+            <strong>${escapeHtml(tNext("movieDetail.artworkSources", "Sources"))}</strong>
+            <span>${escapeHtml(formatNumber(uploads))} ${escapeHtml(tNext("movieDetail.uploadedArtwork", "Uploaded").toLowerCase())} &middot; ${escapeHtml(formatNumber(providerAssets))} ${escapeHtml(tNext("movieDetail.providerArtwork", "Provider").toLowerCase())}</span>
           </div>
         </section>
       `;
@@ -23517,6 +23615,27 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    async function copyArtworkUrl(url) {
+      if (!url) return;
+      const setMessage = activeContainerId ? setContainerDetailMessage : setMovieDetailMessage;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url);
+        } else {
+          const input = document.createElement("textarea");
+          input.value = url;
+          input.style.position = "fixed";
+          input.style.opacity = "0";
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand("copy");
+          input.remove();
+        }
+        setMessage(tNext("movieDetail.artworkUrlCopied", "Artwork URL copied."), "good");
+      } catch (error) {
+        setMessage(error.message || String(error), "bad");
+      }
+    }
     function renderLibrary() {
       if (!collectorsModeEnabled()) selectedContainerIds.clear();
       renderGroupFilter();
@@ -25521,6 +25640,18 @@ def ui_preview_html(
         if (deleteArtwork) {
           event.preventDefault();
           deleteDetailArtwork(deleteArtwork.dataset.artEntity || "movie", deleteArtwork.dataset.appArtworkDelete, deleteArtwork.dataset.kind);
+          return;
+        }
+        const openArtwork = event.target.closest("[data-app-artwork-open]");
+        if (openArtwork) {
+          event.preventDefault();
+          window.open(openArtwork.dataset.appArtworkOpen, "_blank", "noopener,noreferrer");
+          return;
+        }
+        const copyArtwork = event.target.closest("[data-app-artwork-copy]");
+        if (copyArtwork) {
+          event.preventDefault();
+          copyArtworkUrl(copyArtwork.dataset.appArtworkCopy);
           return;
         }
         const tab = event.target.closest("[data-detail-tab]");
