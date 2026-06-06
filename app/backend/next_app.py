@@ -9534,6 +9534,11 @@ def ui_preview_html(
       object-fit: cover;
       display: block;
     }
+    .art-option-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
     .art-option button {
       min-height: 30px;
       border: 1px solid var(--line);
@@ -9546,6 +9551,11 @@ def ui_preview_html(
     .art-option button:disabled {
       cursor: default;
       opacity: .62;
+    }
+    .art-option button.danger {
+      border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 8%, var(--bg-elevated));
     }
     .art-upload-row {
       display: flex;
@@ -13684,7 +13694,7 @@ def ui_preview_html(
       const canEditMovies = hasPermission("collection.edit_all");
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
       if (!canEditMovies) setMovieEditPanelVisible(false);
-      document.querySelectorAll("[data-art-upload-row], [data-app-primary]").forEach((node) => {
+      document.querySelectorAll("[data-art-upload-row], [data-app-primary], [data-app-artwork-delete]").forEach((node) => {
         node.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.artworkManage));
       });
       setElementVisible(document.getElementById("movieDeleteButton"), canDeleteMovieItem(activeDetailPayload?.movie || null));
@@ -17923,6 +17933,7 @@ def ui_preview_html(
       const ownAssets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
       const aggregateAssets = (detail.aggregateMediaAssets || []).filter((asset) => asset.kind === kind);
       const assets = [...ownAssets, ...aggregateAssets];
+      const ownAssetIds = new Set(ownAssets.map((asset) => String(asset.id || "")));
       const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
       if (!assets.length) {
         return `<div class="preview-empty">${escapeHtml(tNext(emptyKey || "movieDetail.noArtwork", "No artwork options yet."))}</div>`;
@@ -17932,11 +17943,15 @@ def ui_preview_html(
         const preview = url ? `<img src="${escapeHtml(url)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
         const sourceTitle = asset.sourceMovieTitle || asset.source_movie_title || asset.provider_id || "";
         const source = sourceTitle ? `${tNext("containerDetail.fromMovie", "From")} ${sourceTitle}` : "";
+        const canDelete = ownAssetIds.has(String(asset.id || ""));
         return `
           <div class="${className}">
             <div class="art-option-preview">${preview}</div>
             <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source || (asset.is_primary ? tNext("movieDetail.primary", "Primary") : ""))}</div>
-            <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="container" data-kind="${escapeHtml(kind)}">${escapeHtml(asset.is_primary ? tNext("movieDetail.primary", "Primary") : tNext("movieDetail.setPrimary", "Set primary"))}</button>
+            <div class="art-option-actions">
+              <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="container" data-kind="${escapeHtml(kind)}">${escapeHtml(asset.is_primary ? tNext("movieDetail.primary", "Primary") : tNext("movieDetail.setPrimary", "Set primary"))}</button>
+              ${canDelete ? `<button type="button" class="danger" data-app-artwork-delete="${escapeHtml(asset.id || "")}" data-art-entity="container" data-kind="${escapeHtml(kind)}">${escapeHtml(tNext("movieDetail.deleteArtwork", "Delete"))}</button>` : ""}
+            </div>
           </div>
         `;
       }).join("");
@@ -18051,7 +18066,10 @@ def ui_preview_html(
         return `
           <div class="${className}">
             <div class="art-option-preview">${preview}</div>
-            <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="movie" data-kind="${escapeHtml(kind)}">${escapeHtml(label)}</button>
+            <div class="art-option-actions">
+              <button type="button" ${asset.is_primary ? "disabled" : ""} data-app-primary="${escapeHtml(asset.id || "")}" data-art-entity="movie" data-kind="${escapeHtml(kind)}">${escapeHtml(label)}</button>
+              <button type="button" class="danger" data-app-artwork-delete="${escapeHtml(asset.id || "")}" data-art-entity="movie" data-kind="${escapeHtml(kind)}">${escapeHtml(tNext("movieDetail.deleteArtwork", "Delete"))}</button>
+            </div>
           </div>
         `;
       }).join("");
@@ -23479,6 +23497,26 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    async function deleteDetailArtwork(entity, mediaId, kind) {
+      const isContainer = entity === "container";
+      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
+      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
+      if (!targetId || !mediaId) return;
+      if (!window.confirm(tNext("movieDetail.deleteArtworkConfirm", "Delete this artwork option?"))) return;
+      setMessage(tNext("movieDetail.deletingArtwork", "Deleting artwork..."));
+      try {
+        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/${encodeURIComponent(mediaId)}?kind=${encodeURIComponent(kind || "")}`, {
+          method: "DELETE"
+        });
+        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
+        if (isContainer) renderContainerDetail(payload.detail || {});
+        else renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMessage(tNext("movieDetail.artworkDeleted", "Artwork deleted."), "good");
+      } catch (error) {
+        setMessage(error.message || String(error), "bad");
+      }
+    }
     function renderLibrary() {
       if (!collectorsModeEnabled()) selectedContainerIds.clear();
       renderGroupFilter();
@@ -25477,6 +25515,12 @@ def ui_preview_html(
         if (uploadArtwork) {
           event.preventDefault();
           uploadDetailArtwork(uploadArtwork.dataset.uploadArtwork || "movie", uploadArtwork.dataset.kind, uploadArtwork.dataset.input);
+          return;
+        }
+        const deleteArtwork = event.target.closest("[data-app-artwork-delete]");
+        if (deleteArtwork) {
+          event.preventDefault();
+          deleteDetailArtwork(deleteArtwork.dataset.artEntity || "movie", deleteArtwork.dataset.appArtworkDelete, deleteArtwork.dataset.kind);
           return;
         }
         const tab = event.target.closest("[data-detail-tab]");
@@ -35426,6 +35470,168 @@ def create_uploaded_container_media_asset(
     return {"containerId": str(container_id), "kind": kind, "media": media, "revision": 0}
 
 
+def delete_entity_artwork_media_asset(
+    conn,
+    *,
+    entity_type: str,
+    entity_id: UUID,
+    media_id: UUID,
+    kind: str,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if entity_type not in {"movie", "container"}:
+        raise NextApiError("entityType must be movie or container", 400)
+    if kind not in MOVIE_ARTWORK_KINDS:
+        raise NextApiError("kind must be poster or backdrop", 400)
+    entity_table = "movies" if entity_type == "movie" else "containers"
+    if not table_exists(conn, entity_table) or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT id FROM {entity_table} WHERE id=%s", (entity_id,))
+        if not cur.fetchone():
+            raise NextApiError("Movie not found" if entity_type == "movie" else "Container not found", 404)
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type=%s
+              AND em.entity_id=%s
+              AND em.media_id=%s
+              AND em.role=%s
+              AND ma.kind=%s
+            """,
+            (entity_type, entity_id, media_id, kind, kind),
+        )
+        deleted_media = cur.fetchone()
+        if not deleted_media:
+            raise NextApiError("Media asset is not linked to this item", 404)
+        was_primary = bool(deleted_media.get("is_primary"))
+        cur.execute(
+            """
+            DELETE FROM entity_media
+            WHERE entity_type=%s
+              AND entity_id=%s
+              AND media_id=%s
+              AND role=%s
+            """,
+            (entity_type, entity_id, media_id, kind),
+        )
+        deleted_links = max(int(cur.rowcount or 0), 0)
+        if not deleted_links:
+            raise NextApiError("Media asset is not linked to this item", 404)
+
+        replacement = None
+        if was_primary:
+            cur.execute(
+                """
+                SELECT
+                    ma.id,
+                    ma.kind,
+                    ma.variant,
+                    ma.storage_backend,
+                    ma.storage_key,
+                    ma.source_url,
+                    ma.provider_id,
+                    ma.content_type,
+                    ma.width,
+                    ma.height,
+                    ma.size_bytes,
+                    ma.sha256,
+                    ma.metadata,
+                    em.role,
+                    em.is_primary,
+                    em.sort_order
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type=%s
+                  AND em.entity_id=%s
+                  AND em.role=%s
+                  AND ma.kind=%s
+                ORDER BY em.sort_order, ma.created_at
+                LIMIT 1
+                """,
+                (entity_type, entity_id, kind, kind),
+            )
+            replacement = cur.fetchone()
+            if replacement:
+                cur.execute(
+                    """
+                    UPDATE entity_media
+                    SET is_primary=true,
+                        sort_order=0
+                    WHERE entity_type=%s
+                      AND entity_id=%s
+                      AND media_id=%s
+                      AND role=%s
+                    """,
+                    (entity_type, entity_id, replacement["id"], kind),
+                )
+                replacement["is_primary"] = True
+                replacement["sort_order"] = 0
+                replacement["url"] = media_asset_public_url(replacement)
+                metadata_patch = {f"{kind}_url": replacement["url"], f"{kind}_locked": True}
+            else:
+                metadata_patch = {f"{kind}_url": None, f"{kind}_locked": False}
+            cur.execute(
+                f"UPDATE {entity_table} SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+                (Jsonb(json_ready(metadata_patch)), entity_id),
+            )
+        else:
+            cur.execute(f"UPDATE {entity_table} SET updated_at=now() WHERE id=%s", (entity_id,))
+
+        cur.execute("SELECT COUNT(*) AS refs FROM entity_media WHERE media_id=%s", (media_id,))
+        ref_row = cur.fetchone()
+        asset_deleted = False
+        if int((ref_row or {}).get("refs") or 0) == 0:
+            cur.execute("DELETE FROM media_assets WHERE id=%s AND kind=%s", (media_id, kind))
+            asset_deleted = bool(cur.rowcount)
+
+    revision = 0
+    operation = f"{entity_type}.media_deleted"
+    payload = {
+        f"{entity_type}Id": str(entity_id),
+        "operation": operation,
+        "kind": kind,
+        "mediaId": str(media_id),
+        "wasPrimary": was_primary,
+        "replacementMediaId": str(replacement["id"]) if replacement else None,
+        "assetDeleted": asset_deleted,
+        "actor": actor_job_payload(actor or {}) if actor else None,
+    }
+    if entity_type == "movie":
+        revision = record_sync_change(conn, entity_id, payload)
+
+    deleted_media["url"] = media_asset_public_url(deleted_media)
+    return {
+        f"{entity_type}Id": str(entity_id),
+        "kind": kind,
+        "mediaId": str(media_id),
+        "deleted": deleted_media,
+        "deletedLinks": deleted_links,
+        "assetDeleted": asset_deleted,
+        "replacement": replacement,
+        "revision": revision,
+    }
+
+
 def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
     if not table_exists(conn, "containers"):
         return None
@@ -40898,6 +41104,34 @@ def register_routes(flask_app: Flask) -> None:
                 )
         return response({"status": "ok", **result}, 201)
 
+    @flask_app.delete("/api/next/movies/<movie_id>/media/<media_id>")
+    def movie_media_delete(movie_id: str, media_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        media_uuid = parse_uuid(media_id, "mediaId")
+        kind = clean_text(request.args.get("kind")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            with conn.transaction():
+                result = delete_entity_artwork_media_asset(
+                    conn,
+                    entity_type="movie",
+                    entity_id=movie_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="movie.media_deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Deleted movie artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
+
     @flask_app.post("/api/next/containers/<container_id>/media/primary")
     def container_media_primary(container_id: str):
         container_uuid = parse_uuid(container_id, "containerId")
@@ -40966,6 +41200,34 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={"kind": kind, "primary": primary, "result": result},
                 )
         return response({"status": "ok", **result}, 201)
+
+    @flask_app.delete("/api/next/containers/<container_id>/media/<media_id>")
+    def container_media_delete(container_id: str, media_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        media_uuid = parse_uuid(media_id, "mediaId")
+        kind = clean_text(request.args.get("kind")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            with conn.transaction():
+                result = delete_entity_artwork_media_asset(
+                    conn,
+                    entity_type="container",
+                    entity_id=container_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="container.media_deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary="Deleted container artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
 
     def metadata_box_set_proposal_key(proposal: dict[str, Any], result: dict[str, Any] | None = None) -> str:
         result = result or {}
