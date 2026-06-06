@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v145";
+const SW_VERSION = "discvault-sw-v146";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -432,13 +432,15 @@ async function handleApi(request, event) {
 
   if (!isGet) {
     try {
-      return await fetch(request);
-    } catch {
+      return await fetch(request.clone());
+    } catch (error) {
       return jsonResponse({
         status: "error",
         offline: true,
+        backend_unreachable: true,
         queueable: false,
-        error: "Offline: this action requires a backend connection.",
+        error: "Backend connection unavailable. Refresh DiscVault and try again.",
+        detail: error && error.message ? error.message : "",
         path: url.pathname
       }, 503);
     }
