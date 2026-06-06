@@ -498,7 +498,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
             query,
         )
 
-        self.assertEqual([item["entrypoint"] for item in plan], ["search_title", "box_set_candidates"])
+        self.assertEqual([item["entrypoint"] for item in plan], ["search_title", "movie_details", "box_set_candidates"])
 
     def test_bootstrap_metadata_source_runs_for_public_barcode_queries(self):
         plugin = {
