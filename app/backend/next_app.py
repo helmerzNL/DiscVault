@@ -12377,7 +12377,7 @@ def ui_preview_html(
       <section class="movie-detail-page hidden" id="movieDetailPage" aria-labelledby="movieDetailTitle">
         <section class="movie-detail-hero" id="movieDetailHero">
           <img id="movieDetailBackdrop" alt="">
-          <button type="button" class="movie-detail-back" id="movieDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back to library</button>
+          <button type="button" class="movie-detail-back" id="movieDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Previous</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
             <div>
@@ -12565,7 +12565,7 @@ def ui_preview_html(
       <section class="movie-detail-page container-detail-page hidden" id="containerDetailPage" aria-labelledby="containerDetailTitle">
         <section class="movie-detail-hero" id="containerDetailHero">
           <img id="containerDetailBackdrop" alt="">
-          <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Back to library</button>
+          <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Previous</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="containerDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
             <div>
@@ -19396,6 +19396,13 @@ def ui_preview_html(
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
+    }
+    function navigatePreviousFromDetail(fallback) {
+      if (window.history.length > 1) {
+        history.back();
+        return;
+      }
+      if (typeof fallback === "function") fallback();
     }
     function setContainerDetailMessage(message, tone) {
       const node = document.getElementById("containerDetailMessage");
@@ -26334,8 +26341,8 @@ def ui_preview_html(
       });
       document.getElementById("createContainerButton")?.addEventListener("click", () => toggleCreateContainerForm());
       document.getElementById("createContainerForm")?.addEventListener("submit", (event) => createContainer(event));
-      document.getElementById("movieDetailBackButton")?.addEventListener("click", () => closeAppMovieDetail());
-      document.getElementById("containerDetailBackButton")?.addEventListener("click", () => closeAppContainerDetail());
+      document.getElementById("movieDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppMovieDetail()));
+      document.getElementById("containerDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppContainerDetail()));
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
