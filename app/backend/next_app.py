@@ -9669,6 +9669,46 @@ def ui_preview_html(
       font-size: .8rem;
       font-weight: 700;
     }
+    .container-media-groups {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .container-media-group {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .container-media-group + .container-media-group {
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .container-media-group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+    .container-media-group-head strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: .92rem;
+    }
+    .container-media-group-head span {
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .container-video-type-group,
+    .container-video-movie-groups {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
     .art-option-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -18473,6 +18513,96 @@ def ui_preview_html(
         || mediaAssetImage(detail.aggregateMediaAssets, kind)
         || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
     }
+    function containerAggregateMovieMap(detail) {
+      return new Map((detail.aggregateMovies || []).map((movie) => [String(movie.id || ""), movie]));
+    }
+    function sourceMovieForContainerItem(item, aggregateMovieById) {
+      const sourceMovieId = String(item?.sourceMovieId || item?.source_movie_id || item?.movieId || item?.movie_id || "");
+      const aggregateMovie = sourceMovieId ? (aggregateMovieById.get(sourceMovieId) || {}) : {};
+      return {
+        id: sourceMovieId || String(aggregateMovie.id || ""),
+        title: item?.sourceMovieTitle || item?.source_movie_title || aggregateMovie.title || aggregateMovie.original_title || "",
+        sortTitle: item?.sourceMovieSortTitle || item?.source_movie_sort_title || aggregateMovie.sort_title || aggregateMovie.title || "",
+        releaseDate: item?.sourceMovieReleaseDate || item?.source_movie_release_date || aggregateMovie.release_date || "",
+        year: item?.sourceMovieYear || item?.source_movie_year || aggregateMovie.year || ""
+      };
+    }
+    function containerMediaReleaseSortValue(movie) {
+      const releaseText = String(movie?.releaseDate || movie?.release_date || "").trim();
+      const releaseMatch = releaseText.match(/^(\\d{4})(?:-(\\d{2}))?(?:-(\\d{2}))?/);
+      if (releaseMatch) {
+        const year = Number(releaseMatch[1]);
+        const month = Number(releaseMatch[2] || "1");
+        const day = Number(releaseMatch[3] || "1");
+        if (year) return (year * 10000) + (Math.max(1, month) * 100) + Math.max(1, day);
+      }
+      const year = Number(String(movie?.year || "").match(/\\d{4}/)?.[0] || 0);
+      return year ? (year * 10000) + 101 : Number.MAX_SAFE_INTEGER;
+    }
+    function containerMediaGroupMeta(movie, count, label) {
+      const date = movie?.releaseDate || movie?.release_date || movie?.year || "";
+      return [date, `${formatNumber(count)} ${String(label || "").toLowerCase()}`].filter(Boolean).join(" / ");
+    }
+    function sortContainerMediaGroups(groups) {
+      return groups.sort((a, b) => {
+        const ownDelta = Number(Boolean(a.isOwnContainer)) - Number(Boolean(b.isOwnContainer));
+        if (ownDelta) return -ownDelta;
+        const dateDelta = a.sortDate - b.sortDate;
+        if (dateDelta) return dateDelta;
+        const titleDelta = a.sortTitle.localeCompare(b.sortTitle, undefined, {sensitivity: "base"});
+        if (titleDelta) return titleDelta;
+        return a.id.localeCompare(b.id);
+      });
+    }
+    function containerMovieGroupsForItems(items, detail, options = {}) {
+      const aggregateMovieById = containerAggregateMovieMap(detail);
+      const groups = new Map();
+      const container = detail.container || {};
+      const ownTitle = container.title || containerTypeLabel(container.container_type || "container");
+      (items || []).forEach((item) => {
+        const hasSourceMovie = Boolean(item?.sourceMovieId || item?.source_movie_id || item?.movieId || item?.movie_id || item?.sourceMovieTitle || item?.source_movie_title);
+        const isOwnContainer = Boolean(item?.isContainerVideo) || Boolean(options.ownItemIds?.has(String(item?.id || ""))) || !hasSourceMovie;
+        const sourceMovie = isOwnContainer
+          ? {id: "__container__", title: ownTitle, sortTitle: ownTitle, releaseDate: container.year || "", year: container.year || ""}
+          : sourceMovieForContainerItem(item, aggregateMovieById);
+        const groupId = isOwnContainer ? "__container__" : (sourceMovie.id ? `movie:${sourceMovie.id}` : `title:${sourceMovie.title || sourceMovie.sortTitle || ""}`);
+        if (!groups.has(groupId)) {
+          const title = sourceMovie.title || sourceMovie.sortTitle || tNext("common.untitled", "Untitled");
+          groups.set(groupId, {
+            id: groupId,
+            title,
+            sortTitle: sourceMovie.sortTitle || title,
+            releaseDate: sourceMovie.releaseDate || "",
+            year: sourceMovie.year || "",
+            isOwnContainer,
+            sortDate: isOwnContainer ? -1 : containerMediaReleaseSortValue(sourceMovie),
+            items: []
+          });
+        }
+        groups.get(groupId).items.push(item);
+      });
+      return sortContainerMediaGroups([...groups.values()]);
+    }
+    function containerArtworkOptionCardHtml(asset, kind, options = {}) {
+      const metadata = options.metadata || {};
+      const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
+      const url = mediaAssetUrl(asset);
+      const source = mediaAssetSourceLabel(asset, {aggregate: options.aggregate});
+      const metaLine = mediaAssetMetaLine(asset);
+      const preview = url ? `
+        <img src="${escapeHtml(url)}" alt="">
+        ${asset.is_primary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
+        ${artworkLockBadgeHtml(asset, kind, metadata)}
+      ` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      return `
+        <div class="${className}">
+          <div class="art-option-preview">${preview}</div>
+          <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source || (asset.is_primary ? tNext("movieDetail.primary", "Primary") : ""))}</div>
+          ${metaLine ? `<div class="art-option-meta">${escapeHtml(metaLine)}</div>` : ""}
+          ${artworkOptionActionsHtml({asset, entity: "container", kind, canDelete: options.canDelete})}
+        </div>
+      `;
+    }
     function containerArtworkOptionsHtml(detail, kind, emptyKey) {
       const container = detail.container || {};
       const metadata = container.metadata || {};
@@ -18480,30 +18610,25 @@ def ui_preview_html(
       const aggregateAssets = (detail.aggregateMediaAssets || []).filter((asset) => asset.kind === kind);
       const assets = [...ownAssets, ...aggregateAssets];
       const ownAssetIds = new Set(ownAssets.map((asset) => String(asset.id || "")));
-      const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
       if (!assets.length) {
         return `<div class="preview-empty">${escapeHtml(tNext(emptyKey || "movieDetail.noArtwork", "No artwork options yet."))}</div>`;
       }
-      return assets.map((asset) => {
-        const url = mediaAssetUrl(asset);
-        const aggregate = !ownAssetIds.has(String(asset.id || ""));
-        const source = mediaAssetSourceLabel(asset, {aggregate});
-        const metaLine = mediaAssetMetaLine(asset);
-        const preview = url ? `
-          <img src="${escapeHtml(url)}" alt="">
-          ${asset.is_primary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
-          ${artworkLockBadgeHtml(asset, kind, metadata)}
-        ` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-        const canDelete = ownAssetIds.has(String(asset.id || ""));
-        return `
-          <div class="${className}">
-            <div class="art-option-preview">${preview}</div>
-            <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source || (asset.is_primary ? tNext("movieDetail.primary", "Primary") : ""))}</div>
-            ${metaLine ? `<div class="art-option-meta">${escapeHtml(metaLine)}</div>` : ""}
-            ${artworkOptionActionsHtml({asset, entity: "container", kind, canDelete})}
+      const label = kind === "backdrop" ? tNext("movieDetail.backdrops", "Backdrops") : tNext("movieDetail.posters", "Posters");
+      const groups = containerMovieGroupsForItems(assets, detail, {ownItemIds: ownAssetIds});
+      return `<div class="container-media-groups">${groups.map((group) => `
+        <section class="container-media-group">
+          <div class="container-media-group-head">
+            <strong title="${escapeHtml(group.title)}">${escapeHtml(group.title)}</strong>
+            <span>${escapeHtml(containerMediaGroupMeta(group, group.items.length, label))}</span>
           </div>
-        `;
-      }).join("");
+          <div class="art-option-grid${kind === "backdrop" ? " backdrops" : ""}">
+            ${group.items.map((asset) => {
+              const aggregate = !ownAssetIds.has(String(asset.id || ""));
+              return containerArtworkOptionCardHtml(asset, kind, {aggregate, canDelete: !aggregate, metadata});
+            }).join("")}
+          </div>
+        </section>
+      `).join("")}</div>`;
     }
     function removableDetailCard(title, subtitle, href, action, actionValue, itemType, options = {}) {
       const attrs = action === "movie"
@@ -18728,7 +18853,7 @@ def ui_preview_html(
       const metadata = container.metadata || {};
       const videos = [];
       const seen = new Set();
-      const addVideo = (item) => {
+      const addVideo = (item, options = {}) => {
         const url = usableVideoUrl(item?.url || item?.video_url || item?.href || "");
         if (!url || seen.has(url)) return;
         seen.add(url);
@@ -18736,13 +18861,81 @@ def ui_preview_html(
         videos.push({
           label: item?.label || item?.name || item?.title || item?.type || tNext("movieDetail.video", "Video"),
           type: item?.type || "",
-          source: [movieTitle, item?.source || item?.provider || ""].filter(Boolean).join(" / "),
+          source: [options.includeMovieInSource ? movieTitle : "", item?.source || item?.provider || ""].filter(Boolean).join(" / "),
+          sourceMovieId: item?.sourceMovieId || item?.source_movie_id || item?.movieId || item?.movie_id || "",
+          sourceMovieTitle: movieTitle,
+          sourceMovieReleaseDate: item?.sourceMovieReleaseDate || item?.source_movie_release_date || "",
+          sourceMovieYear: item?.sourceMovieYear || item?.source_movie_year || "",
+          sourceMovieSortTitle: item?.sourceMovieSortTitle || item?.source_movie_sort_title || "",
+          isContainerVideo: Boolean(options.isContainerVideo),
           url
         });
       };
-      (Array.isArray(metadata.videos) ? metadata.videos : []).forEach(addVideo);
-      (detail.aggregateVideos || []).forEach(addVideo);
+      (Array.isArray(metadata.videos) ? metadata.videos : []).forEach((item) => addVideo(item, {isContainerVideo: true}));
+      (detail.aggregateVideos || []).forEach((item) => addVideo(item));
       return videos;
+    }
+    function containerVideoTypeLabel(video) {
+      return valueText(video?.type || "").trim() || tNext("movieDetail.video", "Video");
+    }
+    function containerVideoTypeSortValue(label) {
+      const key = String(label || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      const order = ["trailer", "teaser", "clip", "featurette", "behind the scenes", "interview", "bloopers"];
+      const index = order.findIndex((item) => key === item || key.endsWith(` ${item}`) || key.includes(item));
+      return index >= 0 ? index : order.length;
+    }
+    function containerVideoCardHtml(video) {
+      return `
+        <a class="video-card" href="${escapeHtml(video.url)}" target="_blank" rel="noopener noreferrer">
+          <strong>${escapeHtml(video.label || tNext("movieDetail.video", "Video"))}</strong>
+          <span>${escapeHtml([video.type, video.source].filter(Boolean).join(" / ") || tNext("movieDetail.openVideo", "Open video"))}</span>
+        </a>
+      `;
+    }
+    function containerVideoGroupsHtml(detail) {
+      const videos = containerVideoItems(detail);
+      if (!videos.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noVideos", "No videos imported yet."))}</div>`;
+      }
+      const aggregateMovieById = containerAggregateMovieMap(detail);
+      const typeGroups = new Map();
+      videos.forEach((video) => {
+        const label = containerVideoTypeLabel(video);
+        const key = label.toLowerCase();
+        if (!typeGroups.has(key)) {
+          typeGroups.set(key, {label, sortValue: containerVideoTypeSortValue(label), videos: []});
+        }
+        typeGroups.get(key).videos.push(video);
+      });
+      const orderedTypeGroups = [...typeGroups.values()].sort((a, b) => {
+        const orderDelta = a.sortValue - b.sortValue;
+        if (orderDelta) return orderDelta;
+        return a.label.localeCompare(b.label, undefined, {sensitivity: "base"});
+      });
+      return `<div class="container-media-groups">${orderedTypeGroups.map((typeGroup) => {
+        const movieGroups = containerMovieGroupsForItems(typeGroup.videos, detail, {
+          ownItemIds: new Set(typeGroup.videos.filter((video) => video.isContainerVideo).map((video) => String(video.url || "")))
+        });
+        return `
+          <section class="container-video-type-group">
+            <div class="container-media-group-head">
+              <strong>${escapeHtml(typeGroup.label)}</strong>
+              <span>${escapeHtml(containerMediaGroupMeta({}, typeGroup.videos.length, tNext("movieDetail.videos", "Videos")))}</span>
+            </div>
+            <div class="container-video-movie-groups">
+              ${movieGroups.map((group) => `
+                <section class="container-media-group">
+                  <div class="container-media-group-head">
+                    <strong title="${escapeHtml(group.title)}">${escapeHtml(group.title)}</strong>
+                    <span>${escapeHtml(containerMediaGroupMeta(group, group.items.length, tNext("movieDetail.videos", "Videos")))}</span>
+                  </div>
+                  <div class="detail-grid">${group.items.map(containerVideoCardHtml).join("")}</div>
+                </section>
+              `).join("")}
+            </div>
+          </section>
+        `;
+      }).join("")}</div>`;
     }
     function detailTagHtml(values) {
       return values.filter(Boolean).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
@@ -19423,7 +19616,7 @@ def ui_preview_html(
       document.getElementById("containerDetailMetadataDetails").innerHTML = document.getElementById("containerDetailMetadata").innerHTML;
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
-      document.getElementById("containerDetailVideos").innerHTML = videoCardsHtml(containerVideoItems(detail));
+      document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
       activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailOverviewPanel");
       syncContainerViewModeControls();
       setContainerDetailMessage("");
@@ -36874,6 +37067,9 @@ def container_aggregate_media_asset_entities(conn, movies: list[dict[str, Any]])
         if source_movie:
             row["sourceMovieId"] = str(source_movie.get("id") or "")
             row["sourceMovieTitle"] = source_movie.get("title") or source_movie.get("original_title") or ""
+            row["sourceMovieReleaseDate"] = source_movie.get("release_date") or ""
+            row["sourceMovieYear"] = source_movie.get("year") or ""
+            row["sourceMovieSortTitle"] = source_movie.get("sort_title") or source_movie.get("title") or ""
         assets.append(row)
 
     movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
@@ -36900,7 +37096,10 @@ def container_aggregate_media_asset_entities(conn, movies: list[dict[str, Any]])
                     em.is_primary,
                     em.sort_order,
                     em.entity_id AS source_movie_id,
-                    m.title AS source_movie_title
+                    m.title AS source_movie_title,
+                    m.sort_title AS source_movie_sort_title,
+                    m.release_date AS source_movie_release_date,
+                    m.year AS source_movie_year
                 FROM entity_media em
                 JOIN media_assets ma ON ma.id = em.media_id
                 JOIN movies m ON m.id = em.entity_id
@@ -36916,6 +37115,9 @@ def container_aggregate_media_asset_entities(conn, movies: list[dict[str, Any]])
                 source_movie = movie_by_id.get(str(row.get("source_movie_id"))) or {
                     "id": row.get("source_movie_id"),
                     "title": row.get("source_movie_title"),
+                    "sort_title": row.get("source_movie_sort_title"),
+                    "release_date": row.get("source_movie_release_date"),
+                    "year": row.get("source_movie_year"),
                 }
                 add_asset(row, source_movie)
 
@@ -36953,6 +37155,9 @@ def container_aggregate_video_entities(movies: list[dict[str, Any]]) -> list[dic
                 "url": url,
                 "sourceMovieId": str(movie.get("id") or ""),
                 "sourceMovieTitle": movie.get("title") or movie.get("original_title") or "",
+                "sourceMovieReleaseDate": movie.get("release_date") or "",
+                "sourceMovieYear": movie.get("year") or "",
+                "sourceMovieSortTitle": movie.get("sort_title") or movie.get("title") or "",
             }
         )
 
