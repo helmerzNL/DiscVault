@@ -5244,6 +5244,27 @@ def collection_container_membership_entities(conn, *, limit: int = 10000) -> lis
             )
             links.extend(cur.fetchall())
     remaining = max(limit - len(links), 0)
+    if remaining and table_exists(conn, "collection_items"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    ci.collection_id AS container_id,
+                    NULL::uuid AS movie_id,
+                    c.container_type,
+                    ci.sort_order,
+                    'collection_container' AS relationship,
+                    ci.item_id AS child_container_id
+                FROM collection_items ci
+                JOIN containers c ON c.id = ci.collection_id
+                WHERE ci.item_type <> 'movie'
+                ORDER BY lower(c.title), ci.sort_order
+                LIMIT %s
+                """,
+                (remaining,),
+            )
+            links.extend(cur.fetchall())
+    remaining = max(limit - len(links), 0)
     if remaining and table_exists(conn, "collection_items") and table_exists(conn, "container_movies"):
         with conn.cursor() as cur:
             cur.execute(
@@ -5258,7 +5279,7 @@ def collection_container_membership_entities(conn, *, limit: int = 10000) -> lis
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.collection_id
                 JOIN container_movies cm ON cm.container_id = ci.item_id
-                WHERE ci.item_type IN ('box_set', 'vault')
+                WHERE ci.item_type <> 'movie'
                 ORDER BY lower(c.title), ci.sort_order
                 LIMIT %s
                 """,
@@ -17853,7 +17874,7 @@ def ui_preview_html(
     }
     function visibleContainerItems(visibleMovieIds = null) {
       if (!collectorsModeEnabled()) return [];
-      return (containers || [])
+      const visibleItems = (containers || [])
         .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container))
         .filter((container) => {
           if (!visibleMovieIds) return true;
@@ -17862,6 +17883,8 @@ def ui_preview_html(
           return [...memberIds].some((movieId) => visibleMovieIds.has(String(movieId)));
         })
         .map((container) => ({kind: "container", container, title: container.title || ""}));
+      const visibleContainerIds = new Set(visibleItems.map((item) => String(item.container?.id || "")).filter(Boolean));
+      return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
     function libraryDisplayItems() {
       const visibleMovies = (movies || []).filter((movie) => movieMatchesGroup(movie) && movieMatchesSearch(movie) && movieMatchesFormat(movie));
