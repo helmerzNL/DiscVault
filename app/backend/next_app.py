@@ -13907,12 +13907,14 @@ def ui_preview_html(
     }
     function movieLocalizationDebugHtml(localizations, movie = null, technicalSpecs = null) {
       const rows = Array.isArray(localizations) ? localizations : [];
+      const ratingsHtml = contentRatingDebugHtml(movie, technicalSpecs);
       if (!rows.length) {
-        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugNoLocalizations", "No localized title or plot rows found."))}</div>`;
+        return `
+          ${ratingsHtml}
+          <div class="preview-empty">${escapeHtml(tNext("movieDetail.debugNoLocalizations", "No localized title or plot rows found."))}</div>
+        `;
       }
-      const contentRatingInfo = preferredContentRatingInfo(movie, technicalSpecs);
-      const contentRatingText = contentRatingValueText(contentRatingInfo);
-      return rows.map((row) => {
+      return ratingsHtml + rows.map((row) => {
         const lang = row.lang || row.locale || row.language || "en";
         const label = localizationLanguageLabel(lang);
         return `
@@ -13923,7 +13925,6 @@ def ui_preview_html(
               <span>${escapeHtml(String(lang).replace("_", "-"))}</span>
             </header>
             <strong>${escapeHtml(valueText(row.title) || tNext("common.untitled", "Untitled"))}</strong>
-            <p>${escapeHtml(tNext("movieDetail.contentRating", "Content rating"))}: ${contentRatingValueHtml(contentRatingInfo) || escapeHtml(contentRatingText)}</p>
             <p>${escapeHtml(valueText(row.overview) || tNext("movieDetail.noOverview", "No overview imported yet."))}</p>
             ${debugIdHtml(row.id || row.lang || row.locale, tNext("movieDetail.debugLocalizationKey", "Key"))}
           </article>
@@ -18186,29 +18187,104 @@ def ui_preview_html(
         return code;
       }
     }
+    function normalizedRatingCountryCode(value) {
+      const raw = String(value || "").trim().replace("_", "-");
+      if (!raw) return "";
+      const upper = raw.toUpperCase();
+      const aliases = {UK: "GB", EL: "GR", CS: "CZ", JA: "JP", KO: "KR", NB: "NO", NO: "NO"};
+      if (RATING_COUNTRIES_ORDER.includes(upper)) return upper;
+      if (aliases[upper] && RATING_COUNTRIES_ORDER.includes(aliases[upper])) return aliases[upper];
+      const region = raw.includes("-") ? raw.split("-").pop().toUpperCase() : "";
+      if (region && RATING_COUNTRIES_ORDER.includes(region)) return region;
+      const flagCode = flagCodeForCountry(raw).toUpperCase();
+      if (RATING_COUNTRIES_ORDER.includes(flagCode)) return flagCode;
+      return upper.length === 2 ? upper : "";
+    }
+    function contentRatingTextFromValue(value) {
+      if (value === null || value === undefined) return "";
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const text = contentRatingTextFromValue(item);
+          if (text) return text;
+        }
+        return "";
+      }
+      if (typeof value === "object") {
+        const candidates = [
+          value.rating,
+          value.certification,
+          value.contentRating,
+          value.content_rating,
+          value.rated,
+          value.value,
+          value.label
+        ];
+        for (const candidate of candidates) {
+          const text = contentRatingTextFromValue(candidate);
+          if (text) return text;
+        }
+        return "";
+      }
+      return valueText(value);
+    }
+    function contentRatingMapFromTmdbReleaseDates(value) {
+      const output = {};
+      const entries = Array.isArray(value?.results) ? value.results : [];
+      entries.forEach((entry) => {
+        const country = normalizedRatingCountryCode(entry?.iso_3166_1 || entry?.country || entry?.countryCode);
+        if (!country) return;
+        const releases = Array.isArray(entry?.release_dates) ? entry.release_dates : [];
+        const sorted = releases.slice().sort((left, right) => (left?.type === 3 ? 0 : 1) - (right?.type === 3 ? 0 : 1));
+        const certification = contentRatingTextFromValue(sorted.find((release) => contentRatingTextFromValue(release?.certification))?.certification);
+        if (certification) output[country] = certification;
+      });
+      return output;
+    }
     function contentRatingMap(value) {
       if (!value) return {};
-      if (typeof value === "object" && !Array.isArray(value)) return value;
       if (typeof value === "string") {
         try {
           const parsed = JSON.parse(value);
-          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+          return contentRatingMap(parsed);
         } catch (error) {
           return {};
         }
       }
+      if (Array.isArray(value)) {
+        return value.reduce((ratings, item) => Object.assign(ratings, contentRatingMap(item)), {});
+      }
+      if (typeof value === "object") {
+        const tmdbRatings = contentRatingMapFromTmdbReleaseDates(value);
+        const output = Object.assign({}, tmdbRatings);
+        const directCountry = normalizedRatingCountryCode(value.iso_3166_1 || value.country || value.countryCode);
+        const directRating = contentRatingTextFromValue(value);
+        if (directCountry && directRating) output[directCountry] = directRating;
+        Object.entries(value).forEach(([rawCountry, rawRating]) => {
+          if (rawCountry === "results") return;
+          const countryFromValue = typeof rawRating === "object"
+            ? normalizedRatingCountryCode(rawRating?.iso_3166_1 || rawRating?.country || rawRating?.countryCode)
+            : "";
+          const country = countryFromValue || normalizedRatingCountryCode(rawCountry);
+          const rating = contentRatingTextFromValue(rawRating);
+          if (country && rating) output[country] = rating;
+        });
+        return output;
+      }
       return {};
     }
-    function preferredContentRatingInfo(movie, technicalSpecs = null) {
+    function mergedContentRatingMap(movie, technicalSpecs = null) {
       const metadata = movie?.metadata || {};
-      const ratings = Object.assign(
+      return Object.assign(
         {},
         contentRatingMap(metadata.content_ratings || metadata.contentRatings),
         contentRatingMap(movie?.content_ratings || movie?.contentRatings),
         contentRatingMap(technicalSpecs?.content_ratings || technicalSpecs?.contentRatings)
       );
-      const selected = String(preferences.rating_country || "NL").toUpperCase();
-      const rating = ratings[selected] || ratings[selected.toLowerCase()];
+    }
+    function preferredContentRatingInfo(movie, technicalSpecs = null) {
+      const ratings = mergedContentRatingMap(movie, technicalSpecs);
+      const selected = normalizedRatingCountryCode(preferences.rating_country || "NL") || "NL";
+      const rating = ratings[selected];
       const text = valueText(rating);
       if (text) return {country: selected, rating: text, unknown: false};
       return {
@@ -18216,6 +18292,13 @@ def ui_preview_html(
         rating: tNext("movieDetail.unknownContentRating", "Unknown content rating"),
         unknown: true
       };
+    }
+    function allContentRatingInfos(movie, technicalSpecs = null) {
+      const ratings = mergedContentRatingMap(movie, technicalSpecs);
+      const extraCountries = Object.keys(ratings).filter((country) => !RATING_COUNTRIES_ORDER.includes(country)).sort();
+      return [...RATING_COUNTRIES_ORDER, ...extraCountries]
+        .map((country) => ({country, rating: valueText(ratings[country]), unknown: false}))
+        .filter((info) => info.rating);
     }
     function preferredContentRating(movie, technicalSpecs = null) {
       return preferredContentRatingInfo(movie, technicalSpecs).rating;
@@ -18235,6 +18318,20 @@ def ui_preview_html(
           ${info.country ? flagIconHtml(info.country, ratingCountryLabel(info.country)) : ""}
           <span>${escapeHtml(info.rating)}</span>
         </span>
+      `;
+    }
+    function contentRatingDebugHtml(movie, technicalSpecs = null) {
+      const infos = allContentRatingInfos(movie, technicalSpecs);
+      const displayInfos = infos.length ? infos : [preferredContentRatingInfo(movie, technicalSpecs)];
+      return `
+        <article class="debug-localization-card">
+          <header>
+            <strong>${escapeHtml(tNext("movieDetail.contentRatings", "Content ratings"))}</strong>
+          </header>
+          <div class="country-list">
+            ${displayInfos.map((info) => contentRatingValueHtml(info)).join("")}
+          </div>
+        </article>
       `;
     }
     function movieScoreLabel(movie) {
