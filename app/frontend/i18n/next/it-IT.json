@@ -1440,5 +1440,6 @@
   "appAdmin.restoringArtwork": "Ripristino artwork...",
   "appAdmin.artworkRestored": "Artwork ripristinata.",
   "appAdmin.purgingArtwork": "Eliminazione artwork scaduta...",
-  "appAdmin.artworkPurged": "Artwork scaduta eliminata."
+  "appAdmin.artworkPurged": "Artwork scaduta eliminata.",
+  "appAdmin.pluginKey": "Chiave plugin"
 }

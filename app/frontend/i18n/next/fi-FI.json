@@ -1440,5 +1440,6 @@
   "appAdmin.restoringArtwork": "Palautetaan artwork...",
   "appAdmin.artworkRestored": "Artwork palautettu.",
   "appAdmin.purgingArtwork": "Siivotaan vanhentunutta artworkia...",
-  "appAdmin.artworkPurged": "Vanhentunut artwork siivottu."
+  "appAdmin.artworkPurged": "Vanhentunut artwork siivottu.",
+  "appAdmin.pluginKey": "Lisäosan avain"
 }

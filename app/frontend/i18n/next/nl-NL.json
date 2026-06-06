@@ -1533,5 +1533,6 @@
   "appAdmin.restoringArtwork": "Artwork herstellen...",
   "appAdmin.artworkRestored": "Artwork hersteld.",
   "appAdmin.purgingArtwork": "Verlopen artwork opruimen...",
-  "appAdmin.artworkPurged": "Verlopen artwork opgeruimd."
+  "appAdmin.artworkPurged": "Verlopen artwork opgeruimd.",
+  "appAdmin.pluginKey": "Pluginsleutel"
 }

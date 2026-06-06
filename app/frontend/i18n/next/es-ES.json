@@ -1440,5 +1440,6 @@
   "appAdmin.restoringArtwork": "Restaurando arte...",
   "appAdmin.artworkRestored": "Arte restaurado.",
   "appAdmin.purgingArtwork": "Purgando arte vencido...",
-  "appAdmin.artworkPurged": "Arte vencido purgado."
+  "appAdmin.artworkPurged": "Arte vencido purgado.",
+  "appAdmin.pluginKey": "Clave del plugin"
 }
