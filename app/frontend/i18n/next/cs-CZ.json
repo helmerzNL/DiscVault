@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Země věkové klasifikace",
   "preferences.ratingCountryHelp": "Vyberte, klasifikace které země se má u filmů zobrazovat.",
   "movieDetail.contentRating": "Věková klasifikace",
+  "movieDetail.unknownContentRating": "Neznámé věkové hodnocení",
   "containerManage.title": "Struktura sbírky",
   "containerManage.description": "Spravujte box sety, trezory a sbírky z jednoho místa.",
   "containerManage.sections": "Sekce struktury sbírky",

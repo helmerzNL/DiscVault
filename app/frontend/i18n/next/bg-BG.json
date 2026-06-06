@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Държава за възрастова класификация",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Възрастова класификация",
+  "movieDetail.unknownContentRating": "Неизвестна възрастова класификация",
   "containerManage.title": "Структура на колекцията",
   "containerManage.description": "Управлявайте бокс сетове, хранилища и колекции от едно място.",
   "containerManage.sections": "Секции на структурата на колекцията",

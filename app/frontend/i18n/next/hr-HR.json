@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Država dobne oznake",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Dobna oznaka",
+  "movieDetail.unknownContentRating": "Nepoznata dobna klasifikacija",
   "containerManage.title": "Struktura zbirke",
   "containerManage.description": "Upravljajte box setovima, trezorima i zbirkama s jednog mjesta.",
   "containerManage.sections": "Odjeljci strukture zbirke",

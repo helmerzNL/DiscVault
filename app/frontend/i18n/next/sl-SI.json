@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Država starostne oznake",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Starostna oznaka",
+  "movieDetail.unknownContentRating": "Neznana starostna klasifikacija",
   "containerManage.title": "Struktura zbirke",
   "containerManage.description": "Upravljajte kompleti, trezorji in zbirkami z enega mesta.",
   "containerManage.sections": "Razdelki strukture zbirke",

@@ -649,6 +649,7 @@
   "preferences.ratingCountry": "Land der Altersfreigabe",
   "preferences.ratingCountryHelp": "Waehle, welches Land die Altersfreigabe bei Filmen anzeigt.",
   "movieDetail.contentRating": "Altersfreigabe",
+  "movieDetail.unknownContentRating": "Unbekannte Altersfreigabe",
   "containerManage.title": "Sammlungsstruktur",
   "containerManage.description": "Box-Sets, Vaults und Sammlungen an einem Ort verwalten.",
   "containerManage.sections": "Bereiche der Sammlungsstruktur",

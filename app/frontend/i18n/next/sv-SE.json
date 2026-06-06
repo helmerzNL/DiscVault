@@ -649,6 +649,7 @@
   "preferences.ratingCountry": "Land for innehallsklassning",
   "preferences.ratingCountryHelp": "Valj vilket lands aldersklassning som visas pa filmer.",
   "movieDetail.contentRating": "Aldersklassning",
+  "movieDetail.unknownContentRating": "Okänd åldersklassificering",
   "containerManage.title": "Samlingsstruktur",
   "containerManage.description": "Hantera boxar, valv och samlingar pa ett stalle.",
   "containerManage.sections": "Samlingsstruktur",

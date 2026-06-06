@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "등급 국가",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "연령 등급",
+  "movieDetail.unknownContentRating": "알 수 없는 연령 등급",
   "containerManage.title": "컬렉션 구조",
   "containerManage.description": "박스 세트, 보관함, 컬렉션을 한곳에서 관리합니다.",
   "containerManage.sections": "컬렉션 구조 섹션",

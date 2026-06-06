@@ -649,6 +649,7 @@
   "preferences.ratingCountry": "Ikarajaluokituksen maa",
   "preferences.ratingCountryHelp": "Valitse minka maan ikarajaluokitus naytetaan elokuvissa.",
   "movieDetail.contentRating": "Ikarajaluokitus",
+  "movieDetail.unknownContentRating": "Tuntematon ikäraja",
   "containerManage.title": "Kokoelman rakenne",
   "containerManage.description": "Hallinnoi box seteja, vaulteja ja kokoelmia yhdessa paikassa.",
   "containerManage.sections": "Kokoelman rakenneosat",

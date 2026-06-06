@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Yaş sınıflandırması ülkesi",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Yaş sınıflandırması",
+  "movieDetail.unknownContentRating": "Bilinmeyen yaş sınıflandırması",
   "containerManage.title": "Koleksiyon yapısı",
   "containerManage.description": "Kutu setlerini, kasaları ve koleksiyonları tek yerden yönetin.",
   "containerManage.sections": "Koleksiyon yapısı bölümleri",

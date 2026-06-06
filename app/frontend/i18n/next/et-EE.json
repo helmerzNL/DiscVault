@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Vanusepiirangu riik",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Vanusepiirang",
+  "movieDetail.unknownContentRating": "Tundmatu vanusepiirang",
   "containerManage.title": "Kogustruktuur",
   "containerManage.description": "Halda karbikomplekte, hoidlaid ja kogusid ühest kohast.",
   "containerManage.sections": "Kogustruktuuri jaotised",

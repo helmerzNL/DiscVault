@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Χώρα ηλικιακής ταξινόμησης",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Ηλικιακή ταξινόμηση",
+  "movieDetail.unknownContentRating": "Άγνωστη ηλικιακή καταλληλότητα",
   "containerManage.title": "Δομή συλλογής",
   "containerManage.description": "Διαχειριστείτε box set, θησαυροφυλάκια και συλλογές από ένα σημείο.",
   "containerManage.sections": "Ενότητες δομής συλλογής",
