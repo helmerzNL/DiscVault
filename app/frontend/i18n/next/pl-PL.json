@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Kraj klasyfikacji wiekowej",
   "preferences.ratingCountryHelp": "Wybierz kraj, którego klasyfikacja wiekowa ma być pokazywana przy filmach.",
   "movieDetail.contentRating": "Klasyfikacja wiekowa",
+  "movieDetail.unknownContentRating": "Nieznana klasyfikacja wiekowa",
   "containerManage.title": "Struktura kolekcji",
   "containerManage.description": "Zarządzaj zestawami, skarbcami i kolekcjami w jednym miejscu.",
   "containerManage.sections": "Sekcje struktury kolekcji",

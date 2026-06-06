@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "レーティングの国",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "年齢レーティング",
+  "movieDetail.unknownContentRating": "不明な年齢区分",
   "containerManage.title": "コレクション構造",
   "containerManage.description": "ボックスセット、保管庫、コレクションを一か所で管理します。",
   "containerManage.sections": "コレクション構造のセクション",

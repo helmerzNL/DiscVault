@@ -13893,11 +13893,13 @@ def ui_preview_html(
         return raw.toUpperCase();
       }
     }
-    function movieLocalizationDebugHtml(localizations) {
+    function movieLocalizationDebugHtml(localizations, movie = null, technicalSpecs = null) {
       const rows = Array.isArray(localizations) ? localizations : [];
       if (!rows.length) {
         return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugNoLocalizations", "No localized title or plot rows found."))}</div>`;
       }
+      const contentRatingInfo = preferredContentRatingInfo(movie, technicalSpecs);
+      const contentRatingText = contentRatingValueText(contentRatingInfo);
       return rows.map((row) => {
         const lang = row.lang || row.locale || row.language || "en";
         const label = localizationLanguageLabel(lang);
@@ -13909,6 +13911,7 @@ def ui_preview_html(
               <span>${escapeHtml(String(lang).replace("_", "-"))}</span>
             </header>
             <strong>${escapeHtml(valueText(row.title) || tNext("common.untitled", "Untitled"))}</strong>
+            <p>${escapeHtml(tNext("movieDetail.contentRating", "Content rating"))}: ${contentRatingValueHtml(contentRatingInfo) || escapeHtml(contentRatingText)}</p>
             <p>${escapeHtml(valueText(row.overview) || tNext("movieDetail.noOverview", "No overview imported yet."))}</p>
             ${debugIdHtml(row.id || row.lang || row.locale, tNext("movieDetail.debugLocalizationKey", "Key"))}
           </article>
@@ -18193,24 +18196,25 @@ def ui_preview_html(
         contentRatingMap(technicalSpecs?.content_ratings || technicalSpecs?.contentRatings)
       );
       const selected = String(preferences.rating_country || "NL").toUpperCase();
-      const candidates = [
-        selected,
-        selected.toLowerCase(),
-        "US",
-        "GB",
-        "CA",
-        "NL"
-      ];
-      for (const country of candidates) {
-        const rating = ratings[country] || ratings[String(country).toLowerCase()];
-        const text = valueText(rating);
-        if (text) return {country: String(country).toUpperCase(), rating: text};
-      }
-      const fallback = valueText(movie?.audience_rating || metadata.audience_rating || metadata.audienceRating || "");
-      return fallback ? {country: "", rating: fallback} : {country: "", rating: ""};
+      const rating = ratings[selected] || ratings[selected.toLowerCase()];
+      const text = valueText(rating);
+      if (text) return {country: selected, rating: text, unknown: false};
+      return {
+        country: selected,
+        rating: tNext("movieDetail.unknownContentRating", "Unknown content rating"),
+        unknown: true
+      };
     }
     function preferredContentRating(movie, technicalSpecs = null) {
       return preferredContentRatingInfo(movie, technicalSpecs).rating;
+    }
+    function contentRatingValueText(info) {
+      if (!info?.rating) return "";
+      return `${info.country ? `${info.country} ` : ""}${info.rating}`;
+    }
+    function contentRatingSummaryText(info) {
+      if (!info?.rating) return "";
+      return `${tNext("movieDetail.contentRating", "Content rating")} ${contentRatingValueText(info)}`;
     }
     function contentRatingValueHtml(info) {
       if (!info?.rating) return "";
@@ -19409,7 +19413,7 @@ def ui_preview_html(
         movie.year,
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
-        contentRating ? `${tNext("movieDetail.contentRating", "Content rating")} ${contentRating}` : "",
+        contentRatingSummaryText(contentRatingInfo),
         movieScoreLabel(movie),
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
         (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : "",
@@ -19443,7 +19447,7 @@ def ui_preview_html(
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
-      if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || []) : "";
+      if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || [], movie, specs) : "";
       const identifiers = (detail.identifiers || []).filter(Boolean).map((item) => {
         const service = movieIdentifierServiceLabel(item);
         return service === "IMDb" || service === "TMDb"

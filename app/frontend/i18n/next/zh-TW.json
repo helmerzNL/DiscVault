@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "分級國家/地區",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "內容分級",
+  "movieDetail.unknownContentRating": "未知年齡分級",
   "containerManage.title": "收藏結構",
   "containerManage.description": "在同一處管理套裝、片庫與收藏。",
   "containerManage.sections": "收藏結構區段",

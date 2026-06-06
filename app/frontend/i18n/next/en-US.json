@@ -871,6 +871,7 @@
   "preferences.ratingCountry": "Content rating country",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Content rating",
+  "movieDetail.unknownContentRating": "Unknown content rating",
   "containerManage.title": "Collection structure",
   "containerManage.description": "Manage box-sets, vaults and collections from one place.",
   "containerManage.sections": "Collection structure sections",

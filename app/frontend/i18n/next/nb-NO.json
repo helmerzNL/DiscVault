@@ -649,6 +649,7 @@
   "preferences.ratingCountry": "Land for aldersklassifisering",
   "preferences.ratingCountryHelp": "Velg hvilket lands aldersklassifisering som vises pa filmer.",
   "movieDetail.contentRating": "Aldersklassifisering",
+  "movieDetail.unknownContentRating": "Ukjent aldersklassifisering",
   "containerManage.title": "Samlingsstruktur",
   "containerManage.description": "Administrer box sets, vaults og samlinger pa ett sted.",
   "containerManage.sections": "Samlingsstruktur",

@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Amžiaus reitingo šalis",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Amžiaus reitingas",
+  "movieDetail.unknownContentRating": "Nežinoma amžiaus klasifikacija",
   "containerManage.title": "Kolekcijos struktūra",
   "containerManage.description": "Valdykite rinkinius, saugyklas ir kolekcijas vienoje vietoje.",
   "containerManage.sections": "Kolekcijos struktūros skyriai",

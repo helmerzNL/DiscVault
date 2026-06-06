@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Vecuma reitinga valsts",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Vecuma reitings",
+  "movieDetail.unknownContentRating": "Nezināma vecuma klasifikācija",
   "containerManage.title": "Kolekcijas struktūra",
   "containerManage.description": "Pārvaldi komplektus, krātuves un kolekcijas vienuviet.",
   "containerManage.sections": "Kolekcijas struktūras sadaļas",

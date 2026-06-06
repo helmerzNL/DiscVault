@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Korhatár-besorolás országa",
   "preferences.ratingCountryHelp": "Válassza ki, mely ország korhatár-besorolása jelenjen meg a filmeken.",
   "movieDetail.contentRating": "Korhatár-besorolás",
+  "movieDetail.unknownContentRating": "Ismeretlen korhatár-besorolás",
   "containerManage.title": "Gyűjteményszerkezet",
   "containerManage.description": "Kezeld egy helyről a box seteket, tárakat és gyűjteményeket.",
   "containerManage.sections": "Gyűjteményszerkezet szakaszai",

@@ -871,6 +871,7 @@
   "preferences.ratingCountry": "Kijkwijzerland",
   "preferences.ratingCountryHelp": "Kies van welk land de leeftijdsclassificatie bij films wordt getoond.",
   "movieDetail.contentRating": "Leeftijdsclassificatie",
+  "movieDetail.unknownContentRating": "Onbekende leeftijdsclassificatie",
   "containerManage.title": "Collectiestructuur",
   "containerManage.description": "Beheer box-sets, vaults en collecties vanaf een plek.",
   "containerManage.sections": "Onderdelen van collectiestructuur",

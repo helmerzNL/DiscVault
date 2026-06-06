@@ -649,6 +649,7 @@
   "preferences.ratingCountry": "Paese della classificazione",
   "preferences.ratingCountryHelp": "Scegli il paese la cui classificazione per eta viene mostrata sui film.",
   "movieDetail.contentRating": "Classificazione per eta",
+  "movieDetail.unknownContentRating": "Classificazione per età sconosciuta",
   "containerManage.title": "Struttura collezione",
   "containerManage.description": "Gestisci box set, vault e collezioni da un unico posto.",
   "containerManage.sections": "Sezioni struttura collezione",

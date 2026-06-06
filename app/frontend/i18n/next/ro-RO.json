@@ -869,6 +869,7 @@
   "preferences.ratingCountry": "Țara clasificării de vârstă",
   "preferences.ratingCountryHelp": "Alege clasificarea de vârstă a țării afișată pentru filme.",
   "movieDetail.contentRating": "Clasificare de vârstă",
+  "movieDetail.unknownContentRating": "Clasificare de vârstă necunoscută",
   "containerManage.title": "Structura colecției",
   "containerManage.description": "Gestionează box seturile, seifurile și colecțiile dintr-un singur loc.",
   "containerManage.sections": "Secțiuni ale structurii colecției",
