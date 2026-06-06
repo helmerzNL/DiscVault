@@ -5408,6 +5408,13 @@ def legacy_media_relative_path(kind: str, value: Any) -> str | None:
             text = "posters/" + text
         elif not text.startswith("posters/"):
             text = "posters/_variants/backdrop/" + text
+    elif kind == "profile":
+        if text.startswith("api/profiles/"):
+            text = "profiles/" + text.removeprefix("api/profiles/")
+        elif text.startswith("offline/profile/"):
+            text = "profiles/" + text
+        elif not text.startswith("profiles/"):
+            text = "profiles/" + text
     parts = [part for part in text.split("/") if part]
     if not parts or any(part in ("..", ".", "") for part in parts):
         return None
@@ -5454,6 +5461,19 @@ def legacy_metadata_image_url(metadata: dict[str, Any], kind: str) -> str:
         or legacy_media_public_url("backdrop", metadata.get("backdropUrl"))
         or legacy_media_public_url("backdrop", metadata.get("backdrop"))
         or legacy_media_public_url("backdrop", metadata.get("poster_file"))
+    )
+
+
+def profile_metadata_image_url(metadata: dict[str, Any]) -> str:
+    return (
+        first_usable_image(
+            metadata.get("profile_url"),
+            metadata.get("profileUrl"),
+            metadata.get("photo_url"),
+            metadata.get("photoUrl"),
+        )
+        or legacy_media_public_url("profile", metadata.get("photo_file"))
+        or legacy_media_public_url("profile", metadata.get("photoFile"))
     )
 
 
@@ -33428,6 +33448,9 @@ def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict
                 "source_url": row.pop("profile_source_url", None),
             }
         )
+        metadata = row.get("person_metadata") if isinstance(row.get("person_metadata"), dict) else {}
+        if not profile_url:
+            profile_url = profile_metadata_image_url(metadata)
         if profile_url:
             row["profile_url"] = profile_url
     return rows
@@ -44064,7 +44087,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/media/legacy/<kind>/<path:filename>")
     def legacy_media(kind: str, filename: str):
-        if kind not in {"poster", "backdrop"}:
+        if kind not in {"poster", "backdrop", "profile"}:
             raise NextApiError("Unsupported legacy media kind", 404)
         path = legacy_media_path(kind, filename)
         if not path:
