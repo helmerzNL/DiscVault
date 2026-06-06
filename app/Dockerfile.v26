@@ -15,7 +15,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /opt/discvault
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /tmp/requirements-backend.txt
@@ -27,11 +27,12 @@ COPY VERSION /opt/discvault/VERSION
 COPY backend /opt/discvault/backend
 COPY mcp-server /opt/discvault/mcp-server
 COPY frontend /opt/discvault/frontend
+COPY deploy/v26/supervisord.conf /etc/supervisor/conf.d/discvault-v26.conf
 
 RUN mkdir -p /data/posters /data/profiles /data/backups /data/avatars
 
 VOLUME ["/data"]
 
-WORKDIR /opt/discvault/backend
+EXPOSE 5000 6090
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "180", "next_app:app"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/discvault-v26.conf"]
