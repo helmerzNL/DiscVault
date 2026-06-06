@@ -622,12 +622,7 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
             plan.append({"entrypoint": entrypoint, "payload": payload})
 
     base_payload = dict(query)
-    has_box_set_preview = any(
-        bool(item.get("boxSetProposal") or item.get("boxSetProposals"))
-        for item in normalized_results
-        if isinstance(item, dict)
-    )
-    if query.get("previewMode") and not (query.get("detectBoxSets") and has_box_set_preview):
+    if query.get("previewMode"):
         if external_barcode:
             add("search_barcode", {**base_payload, "barcode": external_barcode})
             if query.get("detectBoxSets"):
@@ -2207,7 +2202,12 @@ def run_metadata_source_pipeline(
             normalized_results.append(normalized)
 
     preview_enrichment: dict[str, Any] = {"enabled": False, "payload": {}, "plugins": []}
-    if query.get("previewMode"):
+    has_box_set_preview = any(
+        bool(item.get("boxSetProposal") or item.get("boxSetProposals"))
+        for item in normalized_results
+        if isinstance(item, dict)
+    )
+    if query.get("previewMode") and not (query.get("detectBoxSets") and has_box_set_preview):
         enrichment_payload = preview_enrichment_payload_from_results(query, normalized_results)
         if enrichment_payload and (
             enrichment_payload.get("title")
