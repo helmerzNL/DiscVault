@@ -18186,6 +18186,7 @@ def ui_preview_html(
       return item?.provider_id || item?.providerId || "";
     }
     function movieIdentifierLinkCard(item) {
+      item = item || {};
       const service = movieIdentifierServiceLabel(item);
       const href = movieIdentifierUrl(item);
       const label = service ? tNext("movieDetail.openOnService", "Open on {service}").replace("{service}", service) : tNext("common.open", "Open");
@@ -18196,6 +18197,7 @@ def ui_preview_html(
       return String(item?.plugin_id || item?.pluginId || item?.source_name || item?.sourceName || "").toLowerCase();
     }
     function digitalPlaybackLinkCard(item, serviceItemCount = 1) {
+      item = item || {};
       const rawService = item.source_name || item.sourceName || item.plugin_id || item.pluginId || tNext("uiPreview.digitalItems", "Digital links");
       const service = pluginDisplayName(item.plugin_id || item.pluginId || rawService, rawService);
       const variantCount = Number(item.variant_count || item.variantCount || 0);
@@ -18960,13 +18962,13 @@ def ui_preview_html(
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
       if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || []) : "";
-      const identifiers = (detail.identifiers || []).map((item) => {
+      const identifiers = (detail.identifiers || []).filter(Boolean).map((item) => {
         const service = movieIdentifierServiceLabel(item);
         return service === "IMDb" || service === "TMDb"
           ? movieIdentifierLinkCard(item)
           : miniCard(`${item.provider_id || ""} ${item.identifier_type || ""}`.trim(), item.identifier);
       });
-      const digitalItems = detail.digitalItems || [];
+      const digitalItems = (detail.digitalItems || []).filter(Boolean);
       const digitalCounts = digitalItems.reduce((counts, item) => {
         const key = digitalPlaybackServiceKey(item) || "digital";
         counts[key] = (counts[key] || 0) + 1;
