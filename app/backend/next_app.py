@@ -9709,6 +9709,20 @@ def ui_preview_html(
       gap: 12px;
       min-width: 0;
     }
+    .container-media-group > .art-option-grid {
+      width: 100%;
+      grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
+    }
+    .container-media-group > .art-option-grid.backdrops {
+      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+    }
+    .container-video-movie-groups .detail-grid {
+      width: 100%;
+      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+    }
+    .container-video-movie-groups .video-card {
+      width: 100%;
+    }
     .art-option-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
