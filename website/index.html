@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=13" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -38,6 +38,7 @@
       </button>
       <nav class="site-nav" aria-label="Primary">
         <a href="#discvault26" data-i18n="nav.v26">DiscVault 26</a>
+        <a href="#migration" data-i18n="nav.migration">Migration</a>
         <a href="#screenshots" data-i18n="nav.screenshots">Screenshots</a>
         <a href="#features" data-i18n="nav.features">Features</a>
         <a href="#install" data-i18n="nav.install">Install</a>
@@ -48,15 +49,24 @@
           <select class="lang-select" aria-label="Language">
             <option value="da">🇩🇰 Dansk</option>
             <option value="de">🇩🇪 Deutsch</option>
+            <option value="el">🇬🇷 Ελληνικά</option>
             <option value="en">🇬🇧 English</option>
             <option value="es">🇪🇸 Español</option>
+            <option value="cs">🇨🇿 Čeština</option>
             <option value="fr">🇫🇷 Français</option>
+            <option value="hu">🇭🇺 Magyar</option>
             <option value="it">🇮🇹 Italiano</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="ko">🇰🇷 한국어</option>
             <option value="nl">🇳🇱 Nederlands</option>
             <option value="no">🇳🇴 Norsk</option>
+            <option value="pl">🇵🇱 Polski</option>
             <option value="pt">🇵🇹 Português</option>
             <option value="fi">🇫🇮 Suomi</option>
             <option value="sv">🇸🇪 Svenska</option>
+            <option value="tr">🇹🇷 Türkçe</option>
+            <option value="uk">🇺🇦 Українська</option>
+            <option value="zh">🇨🇳 中文</option>
           </select>
         </div>
       </nav>
@@ -143,6 +153,65 @@
             <h3 data-i18n="v26.f6.title">Admin, RBAC, API and MCP</h3>
             <p data-i18n="v26.f6.body">DiscVault 26 adds invite-only flows, owner/admin tools, Basic and Advanced RBAC, role simulation, audit views, API access, and MCP-ready integrations.</p>
           </article>
+        </div>
+      </section>
+
+      <section id="migration" class="wrap section migration-section">
+        <div class="section-head section-head-wide">
+          <p class="eyebrow" data-i18n="migration.eyebrow">DiscVault 26 migration</p>
+          <h2 data-i18n="migration.h2">Move to DiscVault 26 in a few guided steps</h2>
+          <p class="section-lead" data-i18n="migration.lead">The migration wizard checks your current install, helps you authenticate with your passkey, shows what will be moved, and keeps progress visible until DiscVault 26 is ready to launch.</p>
+        </div>
+        <div class="migration-steps">
+          <article class="migration-step">
+            <span>01</span>
+            <h3 data-i18n="migration.step1.title">Confirm your current install</h3>
+            <p data-i18n="migration.step1.body">Start from the existing DiscVault environment and let the wizard detect the source before anything changes.</p>
+          </article>
+          <article class="migration-step">
+            <span>02</span>
+            <h3 data-i18n="migration.step2.title">Review and start safely</h3>
+            <p data-i18n="migration.step2.body">Authenticate, choose the migration scope, and get a final ready screen before the migration begins.</p>
+          </article>
+          <article class="migration-step">
+            <span>03</span>
+            <h3 data-i18n="migration.step3.title">Follow every step</h3>
+            <p data-i18n="migration.step3.body">Progress, completion, and the DiscVault 26 launch screen make the upgrade path clear from start to finish.</p>
+          </article>
+        </div>
+        <div class="carousel carousel-v26 carousel-migration">
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/migration-start.png" alt="DiscVault 26 migration start" loading="lazy" />
+            <figcaption data-i18n="cap.migration.start">Start the migration from your existing DiscVault installation.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/authenticate-passkey.png" alt="DiscVault 26 authenticate with current passkey" loading="lazy" />
+            <figcaption data-i18n="cap.migration.passkey">Authenticate with your passkey before changes are made.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/wizard-review.png" alt="DiscVault 26 migration wizard review" loading="lazy" />
+            <figcaption data-i18n="cap.migration.review">Review what the wizard found in the current install.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/wizard-scope.png" alt="DiscVault 26 migration wizard scope" loading="lazy" />
+            <figcaption data-i18n="cap.migration.scope">Choose what DiscVault 26 should migrate.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/ready-to-start.png" alt="DiscVault 26 ready to start migration" loading="lazy" />
+            <figcaption data-i18n="cap.migration.ready">Confirm the final ready screen before starting.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/migration-progress.png" alt="DiscVault 26 migration in progress" loading="lazy" />
+            <figcaption data-i18n="cap.migration.progress">Watch progress while data and settings are moved.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/migration-finished.png" alt="DiscVault 26 migration finished" loading="lazy" />
+            <figcaption data-i18n="cap.migration.finished">See the completion screen when migration is done.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/start-v26.png" alt="Start DiscVault 26 after migration" loading="lazy" />
+            <figcaption data-i18n="cap.migration.launch">Launch DiscVault 26 from the finished flow.</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -731,7 +800,7 @@
       <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="footer.github">Source on GitHub</a>
     </footer>
 
-    <script src="./translations.js?v=10"></script>
+    <script src="./translations.js?v=11"></script>
     <script>
 
     function setLang(lang) {
