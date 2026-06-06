@@ -379,7 +379,7 @@ APP_BOOLEAN_PREFERENCES = {
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
-    "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "SK", "HU", "RO", "BG", "GR", "UA", "HR", "SI", "EE", "LV", "LT", "TR", "JP", "CN", "TW", "KR"},
+    "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"},
 }
 
 
@@ -18057,7 +18057,7 @@ def ui_preview_html(
       const label = physicalFormatLabel(value);
       return label ? `<span class="physical-format-badge">${escapeHtml(label)}</span>` : "";
     }
-    const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "SK", "HU", "RO", "BG", "GR", "UA", "HR", "SI", "EE", "LV", "LT", "TR", "JP", "CN", "TW", "KR"];
+    const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"];
     function ratingCountryLabel(code) {
       try {
         const displayNames = new Intl.DisplayNames([localeState.locale || "en-US"], {type: "region"});
