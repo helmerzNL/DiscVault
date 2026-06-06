@@ -33,6 +33,7 @@ from uuid import UUID
 from flask import Flask, Response, current_app, jsonify, request, send_file
 from flask import after_this_request
 from flask_cors import CORS
+import requests as http_requests
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from werkzeug.exceptions import HTTPException
@@ -39553,6 +39554,51 @@ def register_routes(flask_app: Flask) -> None:
             },
             401,
         )
+
+    def mcp_proxy_request(path: str = "/mcp"):
+        target = f"http://127.0.0.1:6090{path}"
+        headers = {
+            key: value
+            for key, value in request.headers.items()
+            if key.lower()
+            in {
+                "accept",
+                "authorization",
+                "content-type",
+                "mcp-session-id",
+            }
+        }
+        try:
+            proxied = http_requests.request(
+                request.method,
+                target,
+                data=request.get_data(),
+                headers=headers,
+                timeout=60,
+            )
+        except http_requests.RequestException as exc:
+            return response(
+                {
+                    "status": "error",
+                    "error": "MCP server is not reachable",
+                    "detail": str(exc),
+                },
+                503,
+            )
+        response_headers = {}
+        for header in ("Content-Type", "Mcp-Session-Id"):
+            value = proxied.headers.get(header)
+            if value:
+                response_headers[header] = value
+        return Response(proxied.content, status=proxied.status_code, headers=response_headers)
+
+    @flask_app.route("/mcp", methods=["GET", "POST", "DELETE"])
+    def mcp_proxy():
+        return mcp_proxy_request("/mcp")
+
+    @flask_app.get("/mcp-health")
+    def mcp_health_proxy():
+        return mcp_proxy_request("/health")
 
     @flask_app.get("/api/next/health")
     def health():
