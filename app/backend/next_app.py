@@ -9729,6 +9729,14 @@ def ui_preview_html(
       width: 100%;
       grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
     }
+    #movieDetailVideos > .container-media-groups {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+    .video-type-groups .detail-grid {
+      width: 100%;
+      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+    }
     .art-option-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -18981,6 +18989,34 @@ def ui_preview_html(
       }
       return videos.map(videoCardHtml).join("");
     }
+    function movieVideoGroupsHtml(videos) {
+      if (!videos.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noVideos", "No videos imported yet."))}</div>`;
+      }
+      const typeGroups = new Map();
+      videos.forEach((video) => {
+        const label = containerVideoTypeLabel(video);
+        const key = label.toLowerCase();
+        if (!typeGroups.has(key)) {
+          typeGroups.set(key, {label, sortValue: containerVideoTypeSortValue(label), videos: []});
+        }
+        typeGroups.get(key).videos.push(video);
+      });
+      const orderedTypeGroups = [...typeGroups.values()].sort((a, b) => {
+        const orderDelta = a.sortValue - b.sortValue;
+        if (orderDelta) return orderDelta;
+        return a.label.localeCompare(b.label, undefined, {sensitivity: "base"});
+      });
+      return `<div class="container-media-groups video-type-groups">${orderedTypeGroups.map((group) => `
+        <section class="container-video-type-group">
+          <div class="container-media-group-head">
+            <strong>${escapeHtml(group.label)}</strong>
+            <span>${escapeHtml(containerMediaGroupMeta({}, group.videos.length, tNext("movieDetail.videos", "Videos")))}</span>
+          </div>
+          <div class="detail-grid">${group.videos.map(videoCardHtml).join("")}</div>
+        </section>
+      `).join("")}</div>`;
+    }
     function containerVideoItems(detail) {
       const container = detail.container || {};
       const metadata = container.metadata || {};
@@ -19400,7 +19436,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       renderMovieArtworkManagerStatus(detail);
-      document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
+      document.getElementById("movieDetailVideos").innerHTML = movieVideoGroupsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       document.getElementById("movieDetailCast").innerHTML = castCredits.slice(0, 64).map((credit) => personCardHtml(
