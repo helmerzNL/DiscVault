@@ -64,6 +64,23 @@ ghcr.io/helmerznl/discvault:beta     # DiscVault 26 beta
 | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Admin%20-%20Operations.png" width="420"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Preferences%2001.png" width="420"> |
 | Operations | Preferences |
 
+### Migration to DiscVault 26
+
+DiscVault 26 includes a guided migration flow for existing installations. The
+wizard checks your current data, confirms what can be imported, runs the
+migration, and then opens the new DiscVault 26 app.
+
+| | |
+|---|---|
+| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2001%20-%20Migration%20Start%20.png" width="420"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2002%20-%20Authenticate%20with%20current%20Passkey.png" width="420"> |
+| Start migration | Authenticate with current passkey |
+| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2003%20-%20Migration%20Wizard%2001.png" width="420"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2004%20-%20Migration%20Wizard%2002.png" width="420"> |
+| Review migration wizard | Confirm migration scope |
+| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2005%20-%20Ready%20to%20start%20migration.png" width="420"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2006%20-%20Migration%20in%20progress.png" width="420"> |
+| Ready to start | Migration in progress |
+| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2007%20-%20Migraiton%20finished.png" width="420"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2008%20-%20Start%20DiscVault%2026.png" width="420"> |
+| Migration finished | Start DiscVault 26 |
+
 ### Current stable desktop
 
 | | | |
