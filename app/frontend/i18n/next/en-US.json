@@ -1534,5 +1534,8 @@
   "appAdmin.artworkRestored": "Artwork restored.",
   "appAdmin.purgingArtwork": "Purging expired artwork...",
   "appAdmin.artworkPurged": "Expired artwork purged.",
-  "appAdmin.pluginKey": "Plugin key"
+  "appAdmin.pluginKey": "Plugin key",
+  "movieDetail.openOnService": "Open on {service}",
+  "movieDetail.playWithService": "Play with {service}",
+  "movieDetail.multipleDigitalItems": "{count} items"
 }

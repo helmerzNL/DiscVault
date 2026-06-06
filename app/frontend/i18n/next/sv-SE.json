@@ -1441,5 +1441,8 @@
   "appAdmin.artworkRestored": "Artwork aterstalld.",
   "appAdmin.purgingArtwork": "Rensar forfallen artwork...",
   "appAdmin.artworkPurged": "Forfallen artwork rensad.",
-  "appAdmin.pluginKey": "Pluginnyckel"
+  "appAdmin.pluginKey": "Pluginnyckel",
+  "movieDetail.openOnService": "Oeppna pa {service}",
+  "movieDetail.playWithService": "Spela upp med {service}",
+  "movieDetail.multipleDigitalItems": "{count} objekt"
 }

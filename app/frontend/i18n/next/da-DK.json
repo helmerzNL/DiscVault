@@ -1441,5 +1441,8 @@
   "appAdmin.artworkRestored": "Artwork gendannet.",
   "appAdmin.purgingArtwork": "Rydder udlobet artwork...",
   "appAdmin.artworkPurged": "Udlobet artwork ryddet.",
-  "appAdmin.pluginKey": "Pluginnoegle"
+  "appAdmin.pluginKey": "Pluginnoegle",
+  "movieDetail.openOnService": "Aabn paa {service}",
+  "movieDetail.playWithService": "Afspil med {service}",
+  "movieDetail.multipleDigitalItems": "{count} elementer"
 }

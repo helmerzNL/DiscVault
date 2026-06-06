@@ -1441,5 +1441,8 @@
   "appAdmin.artworkRestored": "Artwork palautettu.",
   "appAdmin.purgingArtwork": "Siivotaan vanhentunutta artworkia...",
   "appAdmin.artworkPurged": "Vanhentunut artwork siivottu.",
-  "appAdmin.pluginKey": "Lisäosan avain"
+  "appAdmin.pluginKey": "Lisäosan avain",
+  "movieDetail.openOnService": "Avaa palvelussa {service}",
+  "movieDetail.playWithService": "Toista palvelulla {service}",
+  "movieDetail.multipleDigitalItems": "{count} kohdetta"
 }

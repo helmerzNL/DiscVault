@@ -1534,5 +1534,8 @@
   "appAdmin.artworkRestored": "Artwork hersteld.",
   "appAdmin.purgingArtwork": "Verlopen artwork opruimen...",
   "appAdmin.artworkPurged": "Verlopen artwork opgeruimd.",
-  "appAdmin.pluginKey": "Pluginsleutel"
+  "appAdmin.pluginKey": "Pluginsleutel",
+  "movieDetail.openOnService": "Openen op {service}",
+  "movieDetail.playWithService": "Afspelen met {service}",
+  "movieDetail.multipleDigitalItems": "{count} items"
 }
