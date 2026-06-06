@@ -359,17 +359,25 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
     if not movie_id:
         raise RuntimeError("movieId is required for metadata refresh jobs")
     dry_run = bool_value(payload.get("dryRun", payload.get("dry_run")), default=False)
+    refresh_people = bool_value(payload.get("refreshPeople", payload.get("refresh_people")), default=False)
     actor = payload.get("requestedBy") or payload.get("requested_by") or {}
     if not isinstance(actor, dict):
         actor = {}
     with connect() as conn:
         result = refresh_movie_metadata(conn, movie_id, dry_run=dry_run, actor=actor)
+        if refresh_people:
+            try:
+                from .next_app import refresh_movie_person_metadata_cascade
+            except ImportError:  # pragma: no cover - supports python next_worker.py
+                from next_app import refresh_movie_person_metadata_cascade
+            result["personRefresh"] = refresh_movie_person_metadata_cascade(conn, movie_id, dry_run=dry_run, actor=actor)
     return {
         "workerId": worker_id,
         "handled": True,
         "jobType": METADATA_REFRESH_JOB_TYPE,
         "movieId": movie_id,
         "dryRun": dry_run,
+        "refreshPeople": refresh_people,
         "result": result,
     }
 
