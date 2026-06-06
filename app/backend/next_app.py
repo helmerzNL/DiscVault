@@ -9727,7 +9727,7 @@ def ui_preview_html(
     #containerDetailVideos,
     .container-video-movie-groups .detail-grid {
       width: 100%;
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
     }
     .art-option-grid {
       display: grid;
