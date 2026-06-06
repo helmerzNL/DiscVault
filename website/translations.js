@@ -2745,3 +2745,427 @@ Object.assign(T.da, {
   'install.note.title':'For opdatering',
   'install.note.body':'Lav forst en backup, behold persistente data og volume mappings, og laes beta release notes for du flytter et eksisterende bibliotek til DiscVault 26.'
 });
+
+['ja','zh','ko','uk','pl','el','hu','cs','tr'].forEach(function(lang) {
+  T[lang] = T[lang] || {};
+});
+
+Object.assign(T.en, {
+  'nav.migration':'Migration',
+  'migration.eyebrow':'DiscVault 26 migration',
+  'migration.h2':'Move to DiscVault 26 in a few guided steps',
+  'migration.lead':'The migration wizard checks your current install, helps you authenticate with your passkey, shows what will be moved, and keeps progress visible until DiscVault 26 is ready to launch.',
+  'migration.step1.title':'Confirm your current install',
+  'migration.step1.body':'Start from the existing DiscVault environment and let the wizard detect the source before anything changes.',
+  'migration.step2.title':'Review and start safely',
+  'migration.step2.body':'Authenticate, choose the migration scope, and get a final ready screen before the migration begins.',
+  'migration.step3.title':'Follow every step',
+  'migration.step3.body':'Progress, completion, and the DiscVault 26 launch screen make the upgrade path clear from start to finish.',
+  'cap.migration.start':'Start the migration from your existing DiscVault installation.',
+  'cap.migration.passkey':'Authenticate with your passkey before changes are made.',
+  'cap.migration.review':'Review what the wizard found in the current install.',
+  'cap.migration.scope':'Choose what DiscVault 26 should migrate.',
+  'cap.migration.ready':'Confirm the final ready screen before starting.',
+  'cap.migration.progress':'Watch progress while data and settings are moved.',
+  'cap.migration.finished':'See the completion screen when migration is done.',
+  'cap.migration.launch':'Launch DiscVault 26 from the finished flow.'
+});
+
+Object.assign(T.nl, {
+  'nav.migration':'Migratie',
+  'migration.eyebrow':'DiscVault 26-migratie',
+  'migration.h2':'Stap voor stap overstappen naar DiscVault 26',
+  'migration.lead':'De migratiewizard controleert je huidige installatie, helpt je aanmelden met je passkey, toont wat er wordt overgezet en houdt de voortgang zichtbaar totdat DiscVault 26 klaar is om te starten.',
+  'migration.step1.title':'Bevestig je huidige installatie',
+  'migration.step1.body':'Start vanuit je bestaande DiscVault-omgeving en laat de wizard de bron detecteren voordat er iets verandert.',
+  'migration.step2.title':'Controleer en start veilig',
+  'migration.step2.body':'Authenticeer, kies de migratiescope en bekijk het laatste gereed-scherm voordat de migratie begint.',
+  'migration.step3.title':'Volg elke stap',
+  'migration.step3.body':'Voortgang, afronding en het DiscVault 26-startscherm maken het upgradepad duidelijk van begin tot eind.',
+  'cap.migration.start':'Start de migratie vanuit je bestaande DiscVault-installatie.',
+  'cap.migration.passkey':'Authenticeer met je passkey voordat er wijzigingen worden gedaan.',
+  'cap.migration.review':'Bekijk wat de wizard in de huidige installatie heeft gevonden.',
+  'cap.migration.scope':'Kies wat DiscVault 26 moet migreren.',
+  'cap.migration.ready':'Bevestig het laatste gereed-scherm voordat je start.',
+  'cap.migration.progress':'Volg de voortgang terwijl data en instellingen worden overgezet.',
+  'cap.migration.finished':'Bekijk het voltooiingsscherm wanneer de migratie klaar is.',
+  'cap.migration.launch':'Start DiscVault 26 vanuit de afgeronde flow.'
+});
+
+Object.assign(T.de, {
+  'nav.migration':'Migration',
+  'migration.eyebrow':'DiscVault 26-Migration',
+  'migration.h2':'In wenigen gefuhrten Schritten zu DiscVault 26 wechseln',
+  'migration.lead':'Der Migrationsassistent pruft deine aktuelle Installation, hilft bei der Anmeldung mit deinem Passkey, zeigt was ubernommen wird und macht den Fortschritt sichtbar, bis DiscVault 26 startbereit ist.',
+  'migration.step1.title':'Aktuelle Installation bestatigen',
+  'migration.step1.body':'Starte aus der bestehenden DiscVault-Umgebung und lass den Assistenten die Quelle erkennen, bevor etwas geandert wird.',
+  'migration.step2.title':'Prufen und sicher starten',
+  'migration.step2.body':'Authentifiziere dich, wahle den Migrationsumfang und prufe den letzten Bereit-Bildschirm, bevor die Migration beginnt.',
+  'migration.step3.title':'Jeden Schritt verfolgen',
+  'migration.step3.body':'Fortschritt, Abschluss und der DiscVault 26-Startbildschirm machen den Upgrade-Pfad von Anfang bis Ende klar.',
+  'cap.migration.start':'Starte die Migration aus deiner bestehenden DiscVault-Installation.',
+  'cap.migration.passkey':'Authentifiziere dich mit deinem Passkey, bevor Anderungen vorgenommen werden.',
+  'cap.migration.review':'Prufe, was der Assistent in der aktuellen Installation gefunden hat.',
+  'cap.migration.scope':'Wahle aus, was DiscVault 26 migrieren soll.',
+  'cap.migration.ready':'Bestatige den letzten Bereit-Bildschirm vor dem Start.',
+  'cap.migration.progress':'Verfolge den Fortschritt, wahrend Daten und Einstellungen ubernommen werden.',
+  'cap.migration.finished':'Sieh den Abschlussbildschirm, wenn die Migration fertig ist.',
+  'cap.migration.launch':'Starte DiscVault 26 aus dem abgeschlossenen Ablauf.'
+});
+
+Object.assign(T.fr, {
+  'nav.migration':'Migration',
+  'migration.eyebrow':'Migration DiscVault 26',
+  'migration.h2':'Passez a DiscVault 26 en quelques etapes guidees',
+  'migration.lead':'L assistant de migration verifie votre installation actuelle, vous aide a vous authentifier avec votre passkey, affiche ce qui sera deplace et garde la progression visible jusqu a ce que DiscVault 26 soit pret a demarrer.',
+  'migration.step1.title':'Confirmez l installation actuelle',
+  'migration.step1.body':'Demarrez depuis l environnement DiscVault existant et laissez l assistant detecter la source avant toute modification.',
+  'migration.step2.title':'Verifiez et lancez en securite',
+  'migration.step2.body':'Authentifiez-vous, choisissez le perimetre de migration et confirmez l ecran final avant le lancement.',
+  'migration.step3.title':'Suivez chaque etape',
+  'migration.step3.body':'La progression, la finalisation et l ecran de lancement DiscVault 26 rendent le parcours de mise a niveau clair du debut a la fin.',
+  'cap.migration.start':'Lancez la migration depuis votre installation DiscVault existante.',
+  'cap.migration.passkey':'Authentifiez-vous avec votre passkey avant toute modification.',
+  'cap.migration.review':'Verifiez ce que l assistant a trouve dans l installation actuelle.',
+  'cap.migration.scope':'Choisissez ce que DiscVault 26 doit migrer.',
+  'cap.migration.ready':'Confirmez l ecran final avant de commencer.',
+  'cap.migration.progress':'Suivez la progression pendant le transfert des donnees et parametres.',
+  'cap.migration.finished':'Affichez l ecran de fin quand la migration est terminee.',
+  'cap.migration.launch':'Lancez DiscVault 26 depuis le flux termine.'
+});
+
+Object.assign(T.es, {
+  'nav.migration':'Migracion',
+  'migration.eyebrow':'Migracion a DiscVault 26',
+  'migration.h2':'Pasa a DiscVault 26 en unos pasos guiados',
+  'migration.lead':'El asistente de migracion revisa tu instalacion actual, te ayuda a autenticarte con tu passkey, muestra que se movera y mantiene visible el progreso hasta que DiscVault 26 este listo para iniciarse.',
+  'migration.step1.title':'Confirma tu instalacion actual',
+  'migration.step1.body':'Empieza desde el entorno DiscVault existente y deja que el asistente detecte el origen antes de cambiar nada.',
+  'migration.step2.title':'Revisa e inicia con seguridad',
+  'migration.step2.body':'Autenticate, elige el alcance de la migracion y confirma la pantalla final antes de empezar.',
+  'migration.step3.title':'Sigue cada paso',
+  'migration.step3.body':'El progreso, la finalizacion y la pantalla de inicio de DiscVault 26 dejan claro todo el camino de actualizacion.',
+  'cap.migration.start':'Inicia la migracion desde tu instalacion DiscVault existente.',
+  'cap.migration.passkey':'Autenticate con tu passkey antes de realizar cambios.',
+  'cap.migration.review':'Revisa lo que el asistente encontro en la instalacion actual.',
+  'cap.migration.scope':'Elige que debe migrar DiscVault 26.',
+  'cap.migration.ready':'Confirma la pantalla final antes de empezar.',
+  'cap.migration.progress':'Observa el progreso mientras se mueven datos y ajustes.',
+  'cap.migration.finished':'Ve la pantalla de finalizacion cuando termine la migracion.',
+  'cap.migration.launch':'Inicia DiscVault 26 desde el flujo completado.'
+});
+
+Object.assign(T.pt, {
+  'nav.migration':'Migracao',
+  'migration.eyebrow':'Migracao para DiscVault 26',
+  'migration.h2':'Mude para o DiscVault 26 em poucos passos guiados',
+  'migration.lead':'O assistente de migracao verifica a instalacao atual, ajuda na autenticacao com a sua passkey, mostra o que sera movido e mantem o progresso visivel ate o DiscVault 26 estar pronto para arrancar.',
+  'migration.step1.title':'Confirme a instalacao atual',
+  'migration.step1.body':'Comece no ambiente DiscVault existente e deixe o assistente detetar a origem antes de qualquer alteracao.',
+  'migration.step2.title':'Reveja e inicie em seguranca',
+  'migration.step2.body':'Autentique-se, escolha o ambito da migracao e confirme o ecra final antes de comecar.',
+  'migration.step3.title':'Acompanhe cada passo',
+  'migration.step3.body':'O progresso, a conclusao e o ecra de inicio do DiscVault 26 tornam claro todo o caminho de atualizacao.',
+  'cap.migration.start':'Inicie a migracao a partir da sua instalacao DiscVault existente.',
+  'cap.migration.passkey':'Autentique-se com a sua passkey antes de serem feitas alteracoes.',
+  'cap.migration.review':'Reveja o que o assistente encontrou na instalacao atual.',
+  'cap.migration.scope':'Escolha o que o DiscVault 26 deve migrar.',
+  'cap.migration.ready':'Confirme o ecra final antes de iniciar.',
+  'cap.migration.progress':'Acompanhe o progresso enquanto dados e definicoes sao movidos.',
+  'cap.migration.finished':'Veja o ecra de conclusao quando a migracao terminar.',
+  'cap.migration.launch':'Inicie o DiscVault 26 a partir do fluxo concluido.'
+});
+
+Object.assign(T.it, {
+  'nav.migration':'Migrazione',
+  'migration.eyebrow':'Migrazione a DiscVault 26',
+  'migration.h2':'Passa a DiscVault 26 in pochi passaggi guidati',
+  'migration.lead':'La procedura guidata controlla l installazione corrente, aiuta ad autenticarti con la passkey, mostra cosa verra spostato e mantiene visibile l avanzamento finche DiscVault 26 e pronto per l avvio.',
+  'migration.step1.title':'Conferma l installazione attuale',
+  'migration.step1.body':'Parti dall ambiente DiscVault esistente e lascia che la procedura rilevi la sorgente prima di qualsiasi modifica.',
+  'migration.step2.title':'Rivedi e avvia in sicurezza',
+  'migration.step2.body':'Autenticati, scegli l ambito della migrazione e conferma la schermata finale prima dell avvio.',
+  'migration.step3.title':'Segui ogni passaggio',
+  'migration.step3.body':'Avanzamento, completamento e schermata di avvio di DiscVault 26 rendono chiaro tutto il percorso di aggiornamento.',
+  'cap.migration.start':'Avvia la migrazione dalla tua installazione DiscVault esistente.',
+  'cap.migration.passkey':'Autenticati con la passkey prima di applicare modifiche.',
+  'cap.migration.review':'Rivedi cosa ha trovato la procedura nell installazione corrente.',
+  'cap.migration.scope':'Scegli cosa deve migrare DiscVault 26.',
+  'cap.migration.ready':'Conferma la schermata finale prima di iniziare.',
+  'cap.migration.progress':'Segui l avanzamento mentre dati e impostazioni vengono spostati.',
+  'cap.migration.finished':'Visualizza la schermata di completamento quando la migrazione e terminata.',
+  'cap.migration.launch':'Avvia DiscVault 26 dal flusso completato.'
+});
+
+Object.assign(T.sv, {
+  'nav.migration':'Migrering',
+  'migration.eyebrow':'DiscVault 26-migrering',
+  'migration.h2':'Flytta till DiscVault 26 i nagra guidade steg',
+  'migration.lead':'Migreringsguiden kontrollerar din aktuella installation, hjalper dig autentisera med din passkey, visar vad som flyttas och haller framstegen synliga tills DiscVault 26 ar klart att starta.',
+  'migration.step1.title':'Bekrafta aktuell installation',
+  'migration.step1.body':'Bora i den befintliga DiscVault-miljon och lat guiden identifiera kallan innan nagot andras.',
+  'migration.step2.title':'Granska och starta sakert',
+  'migration.step2.body':'Autentisera, valj migreringens omfattning och bekrafta den sista redo-skarmen innan migreringen borjar.',
+  'migration.step3.title':'Folj varje steg',
+  'migration.step3.body':'Framsteg, slutfarande och DiscVault 26-startskarmen gor uppgraderingsvagen tydlig fran borjan till slut.',
+  'cap.migration.start':'Starta migreringen fran din befintliga DiscVault-installation.',
+  'cap.migration.passkey':'Autentisera med din passkey innan andringar gors.',
+  'cap.migration.review':'Granska vad guiden hittade i den aktuella installationen.',
+  'cap.migration.scope':'Valj vad DiscVault 26 ska migrera.',
+  'cap.migration.ready':'Bekrafta den sista redo-skarmen innan du startar.',
+  'cap.migration.progress':'Folj framstegen medan data och installningar flyttas.',
+  'cap.migration.finished':'Se slutforskarmen nar migreringen ar klar.',
+  'cap.migration.launch':'Starta DiscVault 26 fran det avslutade flodet.'
+});
+
+Object.assign(T.no, {
+  'nav.migration':'Migrering',
+  'migration.eyebrow':'DiscVault 26-migrering',
+  'migration.h2':'Flytt til DiscVault 26 i noen veiledede steg',
+  'migration.lead':'Migreringsveiviseren kontrollerer gjeldende installasjon, hjelper deg a autentisere med passkey, viser hva som flyttes og holder fremdriften synlig til DiscVault 26 er klart til a starte.',
+  'migration.step1.title':'Bekreft gjeldende installasjon',
+  'migration.step1.body':'Start fra det eksisterende DiscVault-miljoet og la veiviseren oppdage kilden for noe endres.',
+  'migration.step2.title':'Se gjennom og start trygt',
+  'migration.step2.body':'Autentiser, velg migreringsomfang og bekreft siste klarskjerm for migreringen starter.',
+  'migration.step3.title':'Folg hvert steg',
+  'migration.step3.body':'Fremdrift, fullforing og DiscVault 26-startskjermen gjor oppgraderingsveien tydelig fra start til slutt.',
+  'cap.migration.start':'Start migreringen fra din eksisterende DiscVault-installasjon.',
+  'cap.migration.passkey':'Autentiser med passkey for endringer gjores.',
+  'cap.migration.review':'Se gjennom hva veiviseren fant i gjeldende installasjon.',
+  'cap.migration.scope':'Velg hva DiscVault 26 skal migrere.',
+  'cap.migration.ready':'Bekreft siste klarskjerm for du starter.',
+  'cap.migration.progress':'Folg fremdriften mens data og innstillinger flyttes.',
+  'cap.migration.finished':'Se fullforingsskjermen nar migreringen er ferdig.',
+  'cap.migration.launch':'Start DiscVault 26 fra den fullforte flyten.'
+});
+
+Object.assign(T.fi, {
+  'nav.migration':'Migraatio',
+  'migration.eyebrow':'DiscVault 26 -migraatio',
+  'migration.h2':'Siirry DiscVault 26:een muutamassa ohjatussa vaiheessa',
+  'migration.lead':'Migraatioavustaja tarkistaa nykyisen asennuksen, auttaa passkey-tunnistautumisessa, nayttaa mita siirretaan ja pitaa etenemisen nakyvissa kunnes DiscVault 26 on valmis kaynnistettavaksi.',
+  'migration.step1.title':'Vahvista nykyinen asennus',
+  'migration.step1.body':'Aloita nykyisesta DiscVault-ymparistosta ja anna avustajan tunnistaa lahde ennen muutoksia.',
+  'migration.step2.title':'Tarkista ja aloita turvallisesti',
+  'migration.step2.body':'Tunnistaudu, valitse migraation laajuus ja vahvista viimeinen valmiusnaytto ennen aloitusta.',
+  'migration.step3.title':'Seuraa jokaista vaihetta',
+  'migration.step3.body':'Eteneminen, valmistuminen ja DiscVault 26 -kaynnistysnaytto tekevat paivityspolusta selkean alusta loppuun.',
+  'cap.migration.start':'Aloita migraatio nykyisesta DiscVault-asennuksestasi.',
+  'cap.migration.passkey':'Tunnistaudu passkeylla ennen muutoksia.',
+  'cap.migration.review':'Tarkista mita avustaja loysi nykyisesta asennuksesta.',
+  'cap.migration.scope':'Valitse mita DiscVault 26 siirtaa.',
+  'cap.migration.ready':'Vahvista viimeinen valmiusnaytto ennen aloitusta.',
+  'cap.migration.progress':'Seuraa etenemista kun data ja asetukset siirtyvat.',
+  'cap.migration.finished':'Nae valmistumisnaytto kun migraatio on valmis.',
+  'cap.migration.launch':'Kaynnista DiscVault 26 valmiista prosessista.'
+});
+
+Object.assign(T.da, {
+  'nav.migration':'Migration',
+  'migration.eyebrow':'DiscVault 26-migration',
+  'migration.h2':'Flyt til DiscVault 26 i nogle fa guidede trin',
+  'migration.lead':'Migrationsguiden kontrollerer din nuvaerende installation, hjalper dig med at autentificere med din passkey, viser hvad der flyttes og holder fremdriften synlig, indtil DiscVault 26 er klar til start.',
+  'migration.step1.title':'Bekraeft din nuvaerende installation',
+  'migration.step1.body':'Start fra det eksisterende DiscVault-miljo, og lad guiden finde kilden, for noget aendres.',
+  'migration.step2.title':'Gennemga og start sikkert',
+  'migration.step2.body':'Autentificer, vaelg migrationsomfanget og bekraeft den sidste klar-skaerm, for migrationen begynder.',
+  'migration.step3.title':'Folg hvert trin',
+  'migration.step3.body':'Fremdrift, afslutning og DiscVault 26-startskaermen gor opgraderingsvejen tydelig fra start til slut.',
+  'cap.migration.start':'Start migrationen fra din eksisterende DiscVault-installation.',
+  'cap.migration.passkey':'Autentificer med din passkey, for der foretages aendringer.',
+  'cap.migration.review':'Gennemga hvad guiden fandt i den nuvaerende installation.',
+  'cap.migration.scope':'Vaelg hvad DiscVault 26 skal migrere.',
+  'cap.migration.ready':'Bekraeft den sidste klar-skaerm, for du starter.',
+  'cap.migration.progress':'Folg fremdriften mens data og indstillinger flyttes.',
+  'cap.migration.finished':'Se afslutningsskaermen nar migrationen er faerdig.',
+  'cap.migration.launch':'Start DiscVault 26 fra det afsluttede flow.'
+});
+
+Object.assign(T.ja, {
+  'nav.migration':'移行',
+  'migration.eyebrow':'DiscVault 26 への移行',
+  'migration.h2':'ガイドに沿った数ステップで DiscVault 26 へ移行',
+  'migration.lead':'移行ウィザードが現在のインストールを確認し、パスキーでの認証を支援し、移行対象を表示します。DiscVault 26 を起動できるようになるまで進行状況も確認できます。',
+  'migration.step1.title':'現在のインストールを確認',
+  'migration.step1.body':'既存の DiscVault 環境から開始し、変更前にウィザードが移行元を検出します。',
+  'migration.step2.title':'確認して安全に開始',
+  'migration.step2.body':'認証し、移行範囲を選択して、移行開始前に最終準備画面を確認します。',
+  'migration.step3.title':'各ステップを確認',
+  'migration.step3.body':'進行状況、完了画面、DiscVault 26 の起動画面により、最初から最後までアップグレード手順が明確になります。',
+  'cap.migration.start':'既存の DiscVault インストールから移行を開始します。',
+  'cap.migration.passkey':'変更前にパスキーで認証します。',
+  'cap.migration.review':'ウィザードが現在のインストールで検出した内容を確認します。',
+  'cap.migration.scope':'DiscVault 26 が移行する内容を選択します。',
+  'cap.migration.ready':'開始前に最終準備画面を確認します。',
+  'cap.migration.progress':'データと設定の移行中に進行状況を確認します。',
+  'cap.migration.finished':'移行完了時に完了画面を確認します。',
+  'cap.migration.launch':'完了したフローから DiscVault 26 を起動します。'
+});
+
+Object.assign(T.zh, {
+  'nav.migration':'迁移',
+  'migration.eyebrow':'DiscVault 26 迁移',
+  'migration.h2':'通过几个引导步骤迁移到 DiscVault 26',
+  'migration.lead':'迁移向导会检查当前安装，帮助你使用通行密钥完成身份验证，显示将要迁移的内容，并持续展示进度，直到 DiscVault 26 可以启动。',
+  'migration.step1.title':'确认当前安装',
+  'migration.step1.body':'从现有 DiscVault 环境开始，让向导在进行任何更改前检测来源。',
+  'migration.step2.title':'安全检查并开始',
+  'migration.step2.body':'完成身份验证，选择迁移范围，并在迁移开始前确认最终就绪页面。',
+  'migration.step3.title':'跟踪每个步骤',
+  'migration.step3.body':'进度、完成状态和 DiscVault 26 启动页面会让升级路径从开始到结束都清晰可见。',
+  'cap.migration.start':'从现有 DiscVault 安装开始迁移。',
+  'cap.migration.passkey':'在进行更改前使用通行密钥完成身份验证。',
+  'cap.migration.review':'查看向导在当前安装中找到的内容。',
+  'cap.migration.scope':'选择 DiscVault 26 应迁移的内容。',
+  'cap.migration.ready':'在开始前确认最终就绪页面。',
+  'cap.migration.progress':'在数据和设置迁移时查看进度。',
+  'cap.migration.finished':'迁移完成后查看完成页面。',
+  'cap.migration.launch':'从完成流程中启动 DiscVault 26。'
+});
+
+Object.assign(T.ko, {
+  'nav.migration':'마이그레이션',
+  'migration.eyebrow':'DiscVault 26 마이그레이션',
+  'migration.h2':'안내에 따라 몇 단계로 DiscVault 26으로 이동',
+  'migration.lead':'마이그레이션 마법사가 현재 설치를 확인하고, 패스키 인증을 도우며, 이동될 항목을 보여줍니다. DiscVault 26을 실행할 준비가 될 때까지 진행 상황도 계속 표시됩니다.',
+  'migration.step1.title':'현재 설치 확인',
+  'migration.step1.body':'기존 DiscVault 환경에서 시작하고, 변경이 이루어지기 전에 마법사가 원본을 감지하게 합니다.',
+  'migration.step2.title':'검토 후 안전하게 시작',
+  'migration.step2.body':'인증하고, 마이그레이션 범위를 선택한 뒤, 마이그레이션 시작 전에 최종 준비 화면을 확인합니다.',
+  'migration.step3.title':'모든 단계 확인',
+  'migration.step3.body':'진행 상황, 완료 화면, DiscVault 26 실행 화면이 업그레이드 경로를 처음부터 끝까지 명확하게 보여줍니다.',
+  'cap.migration.start':'기존 DiscVault 설치에서 마이그레이션을 시작합니다.',
+  'cap.migration.passkey':'변경이 이루어지기 전에 패스키로 인증합니다.',
+  'cap.migration.review':'마법사가 현재 설치에서 찾은 내용을 검토합니다.',
+  'cap.migration.scope':'DiscVault 26이 마이그레이션할 항목을 선택합니다.',
+  'cap.migration.ready':'시작 전에 최종 준비 화면을 확인합니다.',
+  'cap.migration.progress':'데이터와 설정이 이동되는 동안 진행 상황을 확인합니다.',
+  'cap.migration.finished':'마이그레이션이 완료되면 완료 화면을 확인합니다.',
+  'cap.migration.launch':'완료된 흐름에서 DiscVault 26을 실행합니다.'
+});
+
+Object.assign(T.uk, {
+  'nav.migration':'Міграція',
+  'migration.eyebrow':'Міграція DiscVault 26',
+  'migration.h2':'Перейдіть на DiscVault 26 за кілька кроків із підказками',
+  'migration.lead':'Майстер міграції перевіряє поточне встановлення, допомагає автентифікуватися за допомогою ключа доступу, показує, що буде перенесено, і відображає прогрес, доки DiscVault 26 не буде готовий до запуску.',
+  'migration.step1.title':'Підтвердьте поточне встановлення',
+  'migration.step1.body':'Почніть з наявного середовища DiscVault і дозвольте майстру визначити джерело до внесення будь-яких змін.',
+  'migration.step2.title':'Перевірте й безпечно запустіть',
+  'migration.step2.body':'Автентифікуйтеся, виберіть обсяг міграції та перегляньте фінальний екран готовності перед початком міграції.',
+  'migration.step3.title':'Відстежуйте кожен крок',
+  'migration.step3.body':'Прогрес, завершення та екран запуску DiscVault 26 роблять шлях оновлення зрозумілим від початку до кінця.',
+  'cap.migration.start':'Почніть міграцію з наявного встановлення DiscVault.',
+  'cap.migration.passkey':'Автентифікуйтеся за допомогою ключа доступу до внесення змін.',
+  'cap.migration.review':'Перегляньте, що майстер знайшов у поточному встановленні.',
+  'cap.migration.scope':'Виберіть, що DiscVault 26 має перенести.',
+  'cap.migration.ready':'Підтвердьте фінальний екран готовності перед запуском.',
+  'cap.migration.progress':'Стежте за прогресом під час перенесення даних і налаштувань.',
+  'cap.migration.finished':'Перегляньте екран завершення після міграції.',
+  'cap.migration.launch':'Запустіть DiscVault 26 із завершеного процесу.'
+});
+
+Object.assign(T.pl, {
+  'nav.migration':'Migracja',
+  'migration.eyebrow':'Migracja DiscVault 26',
+  'migration.h2':'Przejdź na DiscVault 26 w kilku prowadzonych krokach',
+  'migration.lead':'Kreator migracji sprawdza bieżącą instalację, pomaga uwierzytelnić się kluczem dostępu, pokazuje, co zostanie przeniesione, i wyświetla postęp aż do momentu, gdy DiscVault 26 będzie gotowy do uruchomienia.',
+  'migration.step1.title':'Potwierdź bieżącą instalację',
+  'migration.step1.body':'Rozpocznij od istniejącego środowiska DiscVault i pozwól kreatorowi wykryć źródło przed wprowadzeniem zmian.',
+  'migration.step2.title':'Sprawdź i bezpiecznie rozpocznij',
+  'migration.step2.body':'Uwierzytelnij się, wybierz zakres migracji i sprawdź końcowy ekran gotowości przed rozpoczęciem migracji.',
+  'migration.step3.title':'Śledź każdy krok',
+  'migration.step3.body':'Postęp, zakończenie i ekran uruchomienia DiscVault 26 jasno pokazują ścieżkę aktualizacji od początku do końca.',
+  'cap.migration.start':'Rozpocznij migrację z istniejącej instalacji DiscVault.',
+  'cap.migration.passkey':'Uwierzytelnij się kluczem dostępu przed wprowadzeniem zmian.',
+  'cap.migration.review':'Sprawdź, co kreator znalazł w bieżącej instalacji.',
+  'cap.migration.scope':'Wybierz, co DiscVault 26 ma migrować.',
+  'cap.migration.ready':'Potwierdź końcowy ekran gotowości przed rozpoczęciem.',
+  'cap.migration.progress':'Obserwuj postęp podczas przenoszenia danych i ustawień.',
+  'cap.migration.finished':'Zobacz ekran zakończenia po ukończeniu migracji.',
+  'cap.migration.launch':'Uruchom DiscVault 26 z zakończonego procesu.'
+});
+
+Object.assign(T.el, {
+  'nav.migration':'Μετεγκατάσταση',
+  'migration.eyebrow':'Μετεγκατάσταση DiscVault 26',
+  'migration.h2':'Μεταβείτε στο DiscVault 26 με λίγα καθοδηγούμενα βήματα',
+  'migration.lead':'Ο οδηγός μετεγκατάστασης ελέγχει την τρέχουσα εγκατάσταση, σας βοηθά να κάνετε έλεγχο ταυτότητας με το κλειδί πρόσβασής σας, δείχνει τι θα μεταφερθεί και διατηρεί ορατή την πρόοδο μέχρι το DiscVault 26 να είναι έτοιμο για εκκίνηση.',
+  'migration.step1.title':'Επιβεβαιώστε την τρέχουσα εγκατάσταση',
+  'migration.step1.body':'Ξεκινήστε από το υπάρχον περιβάλλον DiscVault και αφήστε τον οδηγό να εντοπίσει την προέλευση πριν γίνει οποιαδήποτε αλλαγή.',
+  'migration.step2.title':'Ελέγξτε και ξεκινήστε με ασφάλεια',
+  'migration.step2.body':'Κάντε έλεγχο ταυτότητας, επιλέξτε το εύρος της μετεγκατάστασης και δείτε την τελική οθόνη ετοιμότητας πριν ξεκινήσει η μετεγκατάσταση.',
+  'migration.step3.title':'Παρακολουθήστε κάθε βήμα',
+  'migration.step3.body':'Η πρόοδος, η ολοκλήρωση και η οθόνη εκκίνησης του DiscVault 26 κάνουν τη διαδρομή αναβάθμισης σαφή από την αρχή έως το τέλος.',
+  'cap.migration.start':'Ξεκινήστε τη μετεγκατάσταση από την υπάρχουσα εγκατάσταση DiscVault.',
+  'cap.migration.passkey':'Κάντε έλεγχο ταυτότητας με το κλειδί πρόσβασής σας πριν γίνουν αλλαγές.',
+  'cap.migration.review':'Ελέγξτε τι βρήκε ο οδηγός στην τρέχουσα εγκατάσταση.',
+  'cap.migration.scope':'Επιλέξτε τι θα μετεγκαταστήσει το DiscVault 26.',
+  'cap.migration.ready':'Επιβεβαιώστε την τελική οθόνη ετοιμότητας πριν ξεκινήσετε.',
+  'cap.migration.progress':'Παρακολουθήστε την πρόοδο όσο μεταφέρονται δεδομένα και ρυθμίσεις.',
+  'cap.migration.finished':'Δείτε την οθόνη ολοκλήρωσης όταν τελειώσει η μετεγκατάσταση.',
+  'cap.migration.launch':'Εκκινήστε το DiscVault 26 από την ολοκληρωμένη ροή.'
+});
+
+Object.assign(T.hu, {
+  'nav.migration':'Migráció',
+  'migration.eyebrow':'DiscVault 26 migráció',
+  'migration.h2':'Váltson DiscVault 26-ra néhány vezetett lépésben',
+  'migration.lead':'A migrációs varázsló ellenőrzi a jelenlegi telepítést, segít a hozzáférési kulccsal történő hitelesítésben, megmutatja, mi kerül át, és láthatóvá teszi a folyamatot, amíg a DiscVault 26 készen nem áll az indításra.',
+  'migration.step1.title':'Erősítse meg a jelenlegi telepítést',
+  'migration.step1.body':'Induljon a meglévő DiscVault környezetből, és hagyja, hogy a varázsló a módosítások előtt felismerje a forrást.',
+  'migration.step2.title':'Ellenőrizze és indítsa biztonságosan',
+  'migration.step2.body':'Hitelesítsen, válassza ki a migráció hatókörét, majd tekintse át a végső készenléti képernyőt a migráció indítása előtt.',
+  'migration.step3.title':'Kövesse minden lépést',
+  'migration.step3.body':'A folyamatjelzés, a befejezés és a DiscVault 26 indítóképernyője az elejétől a végéig egyértelművé teszi a frissítési útvonalat.',
+  'cap.migration.start':'Indítsa el a migrációt a meglévő DiscVault telepítésből.',
+  'cap.migration.passkey':'Hitelesítsen a hozzáférési kulccsal, mielőtt módosítások történnek.',
+  'cap.migration.review':'Tekintse át, mit talált a varázsló a jelenlegi telepítésben.',
+  'cap.migration.scope':'Válassza ki, mit migráljon a DiscVault 26.',
+  'cap.migration.ready':'Indítás előtt erősítse meg a végső készenléti képernyőt.',
+  'cap.migration.progress':'Kövesse a folyamatot, miközben az adatok és beállítások átkerülnek.',
+  'cap.migration.finished':'Tekintse meg a befejezési képernyőt, amikor a migráció elkészült.',
+  'cap.migration.launch':'Indítsa el a DiscVault 26-ot a befejezett folyamatból.'
+});
+
+Object.assign(T.cs, {
+  'nav.migration':'Migrace',
+  'migration.eyebrow':'Migrace DiscVault 26',
+  'migration.h2':'Přejděte na DiscVault 26 v několika vedených krocích',
+  'migration.lead':'Průvodce migrací zkontroluje aktuální instalaci, pomůže vám ověřit se pomocí přístupového klíče, zobrazí, co bude přesunuto, a průběžně ukazuje stav, dokud nebude DiscVault 26 připraven ke spuštění.',
+  'migration.step1.title':'Potvrďte aktuální instalaci',
+  'migration.step1.body':'Začněte ve stávajícím prostředí DiscVault a nechte průvodce rozpoznat zdroj dříve, než dojde ke změnám.',
+  'migration.step2.title':'Zkontrolujte a bezpečně spusťte',
+  'migration.step2.body':'Ověřte se, vyberte rozsah migrace a před zahájením migrace potvrďte finální obrazovku připravenosti.',
+  'migration.step3.title':'Sledujte každý krok',
+  'migration.step3.body':'Průběh, dokončení a spouštěcí obrazovka DiscVault 26 zpřehlední cestu upgradu od začátku do konce.',
+  'cap.migration.start':'Spusťte migraci ze stávající instalace DiscVault.',
+  'cap.migration.passkey':'Před provedením změn se ověřte pomocí přístupového klíče.',
+  'cap.migration.review':'Zkontrolujte, co průvodce našel v aktuální instalaci.',
+  'cap.migration.scope':'Vyberte, co má DiscVault 26 migrovat.',
+  'cap.migration.ready':'Před spuštěním potvrďte finální obrazovku připravenosti.',
+  'cap.migration.progress':'Sledujte průběh přesunu dat a nastavení.',
+  'cap.migration.finished':'Po dokončení migrace zobrazte obrazovku dokončení.',
+  'cap.migration.launch':'Spusťte DiscVault 26 z dokončeného procesu.'
+});
+
+Object.assign(T.tr, {
+  'nav.migration':'Geçiş',
+  'migration.eyebrow':'DiscVault 26 geçişi',
+  'migration.h2':'Birkaç yönlendirmeli adımda DiscVault 26\'ya geçin',
+  'migration.lead':'Geçiş sihirbazı mevcut kurulumu kontrol eder, erişim anahtarınızla kimlik doğrulamanıza yardımcı olur, nelerin taşınacağını gösterir ve DiscVault 26 başlatılmaya hazır olana kadar ilerlemeyi görünür tutar.',
+  'migration.step1.title':'Mevcut kurulumu onaylayın',
+  'migration.step1.body':'Mevcut DiscVault ortamından başlayın ve herhangi bir değişiklik yapılmadan önce sihirbazın kaynağı algılamasını sağlayın.',
+  'migration.step2.title':'Gözden geçirin ve güvenle başlatın',
+  'migration.step2.body':'Kimlik doğrulaması yapın, geçiş kapsamını seçin ve geçiş başlamadan önce son hazır ekranını onaylayın.',
+  'migration.step3.title':'Her adımı izleyin',
+  'migration.step3.body':'İlerleme, tamamlama ve DiscVault 26 başlatma ekranı yükseltme yolunu baştan sona net hale getirir.',
+  'cap.migration.start':'Geçişi mevcut DiscVault kurulumunuzdan başlatın.',
+  'cap.migration.passkey':'Değişiklikler yapılmadan önce erişim anahtarınızla kimlik doğrulaması yapın.',
+  'cap.migration.review':'Sihirbazın mevcut kurulumda bulduklarını gözden geçirin.',
+  'cap.migration.scope':'DiscVault 26\'nın neleri taşıyacağını seçin.',
+  'cap.migration.ready':'Başlamadan önce son hazır ekranını onaylayın.',
+  'cap.migration.progress':'Veriler ve ayarlar taşınırken ilerlemeyi izleyin.',
+  'cap.migration.finished':'Geçiş tamamlandığında tamamlama ekranını görün.',
+  'cap.migration.launch':'Tamamlanan akıştan DiscVault 26\'yı başlatın.'
+});
