@@ -25292,7 +25292,7 @@ def ui_preview_html(
         return collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
       }
       if (tab === "api") {
-        return !!(profileApiAccess && profileApiAccess.manageable);
+        return !!(profileApiAccess && (profileApiAccess.manageable || (profileApiAccess.tokens || []).length));
       }
       return true;
     }
@@ -25885,6 +25885,7 @@ def ui_preview_html(
       const access = profileApiAccess || {};
       if (summary) {
         const allowed = access.allowedPermissions || [];
+        const tokens = access.tokens || [];
         summary.innerHTML = `
           <div class="profile-meta-row">
             <span>${escapeHtml(tNext("profile.apiEndpoint", "API endpoint"))}</span>
@@ -25897,6 +25898,14 @@ def ui_preview_html(
           <div class="profile-meta-row">
             <span>${escapeHtml(tNext("profile.tokenPermissions", "Token permissions"))}</span>
             <strong>${escapeHtml(String(allowed.length))}</strong>
+          </div>
+          <div class="profile-meta-row">
+            <span>${escapeHtml(tNext("profile.apiActivityTitle", "API & MCP activity"))}</span>
+            <button type="button" class="secondary-button compact-button" data-profile-api-open="activity">${escapeHtml(tNext("profile.apiTabActivity", "Activity"))}</button>
+          </div>
+          <div class="profile-meta-row">
+            <span>${escapeHtml(tNext("profile.accessTokens", "Access tokens"))}</span>
+            <strong>${escapeHtml(String(tokens.length))}</strong>
           </div>
         `;
       }
@@ -26671,6 +26680,10 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-profile-api-tab]").forEach((button) => {
         button.addEventListener("click", () => setProfileApiTab(button.dataset.profileApiTab));
+      });
+      document.getElementById("profileApiMcpSummary")?.addEventListener("click", (event) => {
+        const openButton = event.target.closest("[data-profile-api-open]");
+        if (openButton) setProfileApiTab(openButton.dataset.profileApiOpen);
       });
       document.getElementById("profileApiAuditRefreshButton")?.addEventListener("click", () => loadProfileApiAuditEvents(true));
       document.getElementById("profileApiAuditTokenFilter")?.addEventListener("change", (event) => {
@@ -40375,7 +40388,7 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_authenticated_user(conn)
             actor["permissions"] = sorted(next_user_permission_keys(conn, actor["id"]))
             access = profile_api_access_payload(conn, actor)
-            if not access.get("manageable"):
+            if not access.get("manageable") and not (access.get("tokens") or []):
                 raise NextApiError("Permission required: API or MCP access", 403)
             if not table_exists(conn, "api_access_tokens") or not table_exists(conn, "audit_events"):
                 return response({"status": "ok", "events": [], "tokenId": str(token_uuid) if token_uuid else "all"})
