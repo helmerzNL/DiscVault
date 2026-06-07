@@ -846,6 +846,55 @@ h1 {
   width: min(70%, 700px);
 }
 
+.legacy-hero .hero-preview {
+  align-self: center;
+}
+
+.legacy-section,
+.legacy-route-section,
+.legacy-wizard {
+  scroll-margin-top: 5rem;
+}
+
+.legacy-checklist,
+.legacy-route-grid,
+.legacy-timeline {
+  margin-top: 1.35rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.legacy-checklist {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.legacy-route-grid,
+.legacy-timeline {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.legacy-docker-grid {
+  margin-top: 1.35rem;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
+  gap: 0.85rem;
+  align-items: stretch;
+}
+
+.legacy-list {
+  margin: 0.8rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--text-muted);
+}
+
+.legacy-list li + li {
+  margin-top: 0.45rem;
+}
+
+.legacy-shot-strip {
+  margin-top: 1.25rem;
+}
+
 .card-v26 {
   border-color: rgba(72, 138, 174, 0.36);
   background: linear-gradient(180deg, rgba(30, 38, 48, 0.9), rgba(18, 18, 26, 0.96));
@@ -1209,6 +1258,10 @@ code {
 
   .cards,
   .coming-soon-grid,
+  .legacy-checklist,
+  .legacy-docker-grid,
+  .legacy-route-grid,
+  .legacy-timeline,
   .migration-steps,
   .install-grid,
   .faq-list {
@@ -1271,6 +1324,10 @@ code {
 
   .migration-step {
     padding: 0.85rem;
+  }
+
+  .legacy-list {
+    padding-left: 1rem;
   }
 
   .wrap {
