@@ -121,6 +121,24 @@
           <details class="card faq-article">
             <summary class="faq-summary">
               <span class="badge badge-new" data-i18n="faq.badge.published">FAQ</span>
+              <span class="faq-summary-title" data-i18n="faq.legacy.title">Staying on the old version</span>
+            </summary>
+            <div class="faq-answer">
+              <p data-i18n="faq.legacy.p1">If you are not ready to move to DiscVault 26 yet, you can stay on the previous DiscVault generation by using the <code>legacy</code> Docker image tag.</p>
+              <p data-i18n="faq.legacy.p2">Use <code>ghcr.io/helmerzNL/DiscVault:legacy</code> instead of <code>latest</code> or <code>beta</code> in your Docker, Docker Compose, or Unraid template configuration. Keep your existing volume mappings, environment variables, ports, and persistent data path unchanged.</p>
+              <h4 data-i18n="faq.legacy.steps.title">Recommended steps</h4>
+              <ul>
+                <li data-i18n="faq.legacy.steps.1">Create a backup before changing the image tag.</li>
+                <li data-i18n="faq.legacy.steps.2">Change only the image tag to <code>legacy</code>.</li>
+                <li data-i18n="faq.legacy.steps.3">Pull the image, recreate the container, and confirm that your collection opens normally.</li>
+              </ul>
+              <p data-i18n="faq.legacy.note">The legacy image is meant for people who want to keep running the old version while DiscVault 26 beta matures. New DiscVault 26 features, migration improvements, and future interface updates are added to the beta and later production images instead.</p>
+            </div>
+          </details>
+
+          <details class="card faq-article">
+            <summary class="faq-summary">
+              <span class="badge badge-new" data-i18n="faq.badge.published">FAQ</span>
               <span class="faq-summary-title" data-i18n="faq.passkeys.title">Passkeys versus passwords</span>
             </summary>
             <div class="faq-answer">
@@ -153,7 +171,7 @@
     </footer>
 
     <script src="./translations.js?v=12"></script>
-    <script src="./translations-extra.js?v=1"></script>
+    <script src="./translations-extra.js?v=2"></script>
     <script>
       document.querySelector('.hamburger').addEventListener('click', function () {
         var open = this.getAttribute('aria-expanded') === 'true';
