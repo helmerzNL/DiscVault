@@ -125,6 +125,7 @@ function switchSettingsSubmenu(name) {
 }
 
 document.addEventListener('click', event => {
+  if (event.defaultPrevented) return;
   const btn = event.target.closest('#panel-settings [data-settings-sub]');
   if (!btn) return;
   event.preventDefault();

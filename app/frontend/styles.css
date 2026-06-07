@@ -2542,6 +2542,7 @@
     letter-spacing: 0.05em;
     cursor: pointer;
     text-align: left;
+    text-decoration: none;
     transition: all 0.15s;
     white-space: nowrap;
   }

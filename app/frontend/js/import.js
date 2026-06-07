@@ -474,9 +474,11 @@ function _openVaultRoute(id) {
   tryOpen(15);
 }
 
-function _openLegacyUpdateRoute() {
+function openLegacyUpdatePage(event) {
+  if (event) event.preventDefault();
   if (authEnabled && !currentUserId) {
     showLoginOverlay();
+    if (window.location.pathname !== '/legacy') history.pushState({ path: '/legacy' }, '', '/legacy');
     return;
   }
   if (typeof _currentSettingsSubmenu !== 'undefined') _currentSettingsSubmenu = 'update';
@@ -484,6 +486,11 @@ function _openLegacyUpdateRoute() {
   setTimeout(() => {
     if (typeof switchSettingsSubmenu === 'function') switchSettingsSubmenu('update');
   }, 0);
+  if (window.location.pathname !== '/legacy') history.pushState({ path: '/legacy' }, '', '/legacy');
+}
+
+function _openLegacyUpdateRoute() {
+  openLegacyUpdatePage();
 }
 
 function _handleRoute() {
