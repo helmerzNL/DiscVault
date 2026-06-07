@@ -143,6 +143,41 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(item["year"], "1987")
         self.assertEqual(item["releaseDate"], "1987-07-17")
 
+    def test_collection_import_explicit_box_set_columns_create_proposal(self):
+        plugin = CollectionImportPlugin(
+            {
+                "id": "import_test",
+                "name": "Import Test",
+                "defaultPath": "",
+                "sourceKind": "test_csv",
+                "aliases": {},
+            }
+        )
+        item = plugin.normalize_row(
+            {
+                "Barcode": "883929704736",
+                "Title": "The Lord of the Rings: The Motion Picture Trilogy",
+                "Year": "2020",
+                "Format": "4K UHD",
+                "IsBoxSet": "Yes",
+                "BoxSetMembers": "The Fellowship of the Ring|The Two Towers|The Return of the King",
+                "Region": "US",
+                "Verified": "Yes",
+            },
+            Path("top50_4kuhd_box-sets.csv"),
+            1,
+        )
+
+        self.assertEqual(item["itemType"], "box_set")
+        self.assertTrue(item["isBoxSet"])
+        self.assertEqual(item["country"], "US")
+        self.assertTrue(item["verified"])
+        self.assertEqual(len(item["boxSetMembers"]), 3)
+        self.assertEqual(item["boxSetMembers"][0]["format"], "4K UHD")
+        self.assertEqual(item["boxSetProposal"]["memberCount"], 3)
+        self.assertTrue(item["boxSetProposal"]["boxSetEvidence"]["membersAreExplicit"])
+        self.assertEqual(item["containers"][0]["containerType"], "box_set")
+
     def test_import_worker_release_date_normalization_is_defensive(self):
         self.assertEqual(import_year("Released in 1998"), "1998")
         self.assertIsNone(import_release_date("1998"))
@@ -260,6 +295,51 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(reviewed["items"][0]["imdbId"], "tt3566834")
         self.assertEqual(reviewed["items"][0]["posterUrl"], "https://image.example/poster.jpg")
         self.assertEqual(reviewed["counts"]["reviewSkipped"], 1)
+        self.assertEqual(reviewed["counts"]["reviewMatched"], 1)
+
+    def test_import_review_applies_box_set_proposal(self):
+        result = {
+            "items": [
+                {
+                    "title": "Back to the Future Trilogy",
+                    "barcode": "5050582369601",
+                    "format": "DVD",
+                }
+            ],
+            "counts": {"movies": 1},
+        }
+        proposal = {
+            "provider": "movievault_26",
+            "title": "Back to the Future Trilogy",
+            "barcode": "5050582369601",
+            "format": "DVD",
+            "members": [
+                {"title": "Back to the Future", "year": "1985", "format": "DVD"},
+                {"title": "Back to the Future Part II", "year": "1989", "format": "DVD"},
+                {"title": "Back to the Future Part III", "year": "1990", "format": "DVD"},
+            ],
+            "boxSetEvidence": {
+                "barcodeMatch": True,
+                "entityType": "box_set",
+                "memberConfidence": "identified",
+                "membersAreExplicit": True,
+                "detectedWithoutMembers": False,
+            },
+        }
+
+        reviewed = apply_collection_import_review(
+            result,
+            {"decisions": [{"index": 1, "action": "create", "boxSetProposal": proposal}]},
+        )
+
+        item = reviewed["items"][0]
+        self.assertEqual(item["itemType"], "box_set")
+        self.assertEqual(item["entityType"], "box_set")
+        self.assertEqual(item["boxSetTitle"], "Back to the Future Trilogy")
+        self.assertEqual(item["boxSetMembers"][1]["title"], "Back to the Future Part II")
+        self.assertEqual(item["boxSetMembers"][1]["format"], "DVD")
+        self.assertEqual(item["containers"][0]["containerType"], "box_set")
+        self.assertEqual(item["containers"][0]["memberCount"], 3)
         self.assertEqual(reviewed["counts"]["reviewMatched"], 1)
 
     def test_bluray_release_title_is_cleaned_for_movie_identity(self):
@@ -505,6 +585,86 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(item["collectionTitle"], "Fantasy Shelf")
         self.assertEqual(item["boxSetTitle"], "The Lord of the Rings")
         self.assertEqual(item["vaultTitle"], "Middle-earth 4K")
+
+    def test_collection_import_plugin_parses_box_set_export_rows(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_file = Path(temp_dir) / "top50_4kuhd_box_sets.csv"
+            export_file.write_text(
+                "Barcode,Title,Year,Format,IsBoxSet,BoxSetMembers,Region,Verified\n"
+                "191329144657,Back to the Future: The Ultimate Trilogy,2020,4K UHD,Yes,"
+                "Back to the Future|Back to the Future Part II|Back to the Future Part III,US,Yes\n",
+                encoding="utf-8",
+            )
+
+            execution = run_plugin_entrypoint(
+                "import_mymovies_dk",
+                "import_source",
+                {"sourcePath": str(export_file)},
+                {},
+            )
+
+        result = execution["result"]
+        self.assertEqual(execution["status"], "ok")
+        item = result["items"][0]
+        proposal = item["boxSetProposal"]
+        self.assertEqual(item["itemType"], "box_set")
+        self.assertEqual(item["boxSetTitle"], "Back to the Future: The Ultimate Trilogy")
+        self.assertEqual(item["country"], "US")
+        self.assertEqual(proposal["barcode"], "191329144657")
+        self.assertEqual(proposal["boxSetEvidence"]["memberConfidence"], "file_explicit")
+        self.assertTrue(proposal["boxSetEvidence"]["membersAreExplicit"])
+        self.assertEqual([member["format"] for member in proposal["members"]], ["4K UHD", "4K UHD", "4K UHD"])
+        self.assertEqual(
+            [member["title"] for member in proposal["members"]],
+            ["Back to the Future", "Back to the Future Part II", "Back to the Future Part III"],
+        )
+        self.assertEqual(result["counts"]["boxSets"], 1)
+
+    def test_collection_import_plugin_detects_box_set_from_member_column_without_flag(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_file = Path(temp_dir) / "box_sets.csv"
+            export_file.write_text(
+                "Barcode,Title,Year,Format,BoxSetMembers\n"
+                "883929704736,The Lord of the Rings: The Motion Picture Trilogy,2020,4K UHD,"
+                "The Fellowship of the Ring|The Two Towers|The Return of the King\n",
+                encoding="utf-8",
+            )
+
+            execution = run_plugin_entrypoint(
+                "import_mymovies_dk",
+                "import_source",
+                {"sourcePath": str(export_file)},
+                {},
+            )
+
+        item = execution["result"]["items"][0]
+        self.assertEqual(item["itemType"], "box_set")
+        self.assertEqual(item["boxSetProposal"]["memberCount"], 3)
+        self.assertTrue(item["boxSetProposal"]["boxSetEvidence"]["membersAreExplicit"])
+
+    def test_import_worker_treats_box_set_export_row_as_container_spec(self):
+        item = {
+            "itemType": "box_set",
+            "title": "Back to the Future: The Ultimate Trilogy",
+            "boxSetTitle": "Back to the Future: The Ultimate Trilogy",
+            "barcode": "191329144657",
+            "format": "4K UHD",
+            "boxSetMembers": [
+                {"title": "Back to the Future", "format": "4K UHD"},
+                {"title": "Back to the Future Part II", "format": "4K UHD"},
+                {"title": "Back to the Future Part III", "format": "4K UHD"},
+            ],
+            "boxSetProposal": {"title": "Back to the Future: The Ultimate Trilogy"},
+        }
+
+        specs = next_worker.import_item_container_specs(item)
+
+        self.assertTrue(next_worker.import_item_is_box_set_container(item))
+        self.assertEqual(specs[0]["containerType"], "box_set")
+        self.assertEqual(specs[0]["barcode"], "191329144657")
+        self.assertEqual(specs[0]["format"], "4K UHD")
+        self.assertEqual(specs[0]["memberCount"], 3)
+        self.assertEqual(specs[0]["boxSetProposal"]["title"], "Back to the Future: The Ultimate Trilogy")
 
     def test_collection_import_plugin_supports_manual_column_mapping(self):
         with tempfile.TemporaryDirectory() as temp_dir:
