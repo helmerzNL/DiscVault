@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Megjeleníti a tömör metaadatfeladat-jelzőt a könyvtárban. Kapcsold ki, ha a frissítési aktivitást csak az Admin felületen szeretnéd látni.",
   "preferences.showDigitalBadgeOnTiles": "Plex/Jellyfin jelvény megjelenítése",
   "preferences.showDigitalBadgeOnTilesHelp": "Kis jelvényt jelenít meg, ha egy film digitálisan is elérhető Plexben vagy Jellyfinben.",
+  "preferences.deleteContainerMembersWithContainer": "Tagok törlése a konténerrel",
+  "preferences.deleteContainerMembersWithContainerHelp": "Box set, Vault vagy gyűjtemény törlésekor a kapcsolt filmek és beágyazott konténerek is törlődnek.",
   "preferences.ratingCountry": "Korhatár-besorolás országa",
   "preferences.ratingCountryHelp": "Válassza ki, mely ország korhatár-besorolása jelenjen meg a filmeken.",
   "movieDetail.contentRating": "Korhatár-besorolás",

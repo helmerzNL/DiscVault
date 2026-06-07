@@ -646,6 +646,8 @@
   "preferences.showMetadataJobsHelp": "Visar den kompakta indikatorn for metadatajobb i biblioteket. Stang av for att d�lja uppdateringsaktivitet utanfor Admin.",
   "preferences.showDigitalBadgeOnTiles": "Visa Plex/Jellyfin-markering pa filmrutor",
   "preferences.showDigitalBadgeOnTilesHelp": "Visar en liten markering nar filmen ocksa finns digitalt i Plex eller Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Ta bort medlemmar med containern",
+  "preferences.deleteContainerMembersWithContainerHelp": "När du tar bort ett box set, Vault eller en samling tas även länkade filmer och kapslade containrar bort.",
   "preferences.ratingCountry": "Land for innehallsklassning",
   "preferences.ratingCountryHelp": "Valj vilket lands aldersklassning som visas pa filmer.",
   "movieDetail.contentRating": "Aldersklassning",

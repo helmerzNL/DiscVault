@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Bibliotekoje rodo kompaktišką metaduomenų užduočių indikatorių. Išjunkite, kad atnaujinimo veikla būtų paslėpta už Administravimo ribų.",
   "preferences.showDigitalBadgeOnTiles": "Rodyti Plex/Jellyfin ženklelį filmų plytelėse",
   "preferences.showDigitalBadgeOnTilesHelp": "Rodo mažą ženklelį, kai filmas taip pat pasiekiamas skaitmeniniu būdu Plex arba Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Ištrinti narius kartu su konteineriu",
+  "preferences.deleteContainerMembersWithContainerHelp": "Ištrinant box setą, Vault arba kolekciją taip pat ištrinami susieti filmai ir įdėtieji konteineriai.",
   "preferences.ratingCountry": "Amžiaus reitingo šalis",
   "preferences.ratingCountryHelp": "Pasirinkite, kurios šalies amžiaus klasifikacija bus rodoma filmams.",
   "movieDetail.contentRating": "Turinio reitingas",

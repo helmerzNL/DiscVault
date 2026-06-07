@@ -646,6 +646,8 @@
   "preferences.showMetadataJobsHelp": "Zeigt den kompakten Metadatenjob-Hinweis in der Bibliothek. Deaktivieren, um Aktualisierungsaktivitaet ausserhalb von Admin auszublenden.",
   "preferences.showDigitalBadgeOnTiles": "Plex/Jellyfin-Badge auf Filmkacheln anzeigen",
   "preferences.showDigitalBadgeOnTilesHelp": "Zeigt ein kleines Badge, wenn ein Film auch digital in Plex oder Jellyfin verfugbar ist.",
+  "preferences.deleteContainerMembersWithContainer": "Mitglieder mit Container löschen",
+  "preferences.deleteContainerMembersWithContainerHelp": "Beim Löschen eines Box-Sets, Vaults oder einer Collection werden auch verknüpfte Filme und verschachtelte Container gelöscht.",
   "preferences.ratingCountry": "Land der Altersfreigabe",
   "preferences.ratingCountryHelp": "Waehle, welches Land die Altersfreigabe bei Filmen anzeigt.",
   "movieDetail.contentRating": "Altersfreigabe",

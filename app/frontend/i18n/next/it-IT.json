@@ -646,6 +646,8 @@
   "preferences.showMetadataJobsHelp": "Mostra l indicatore compatto delle attivita metadati nella libreria. Disattivalo per nascondere l attivita fuori da Admin.",
   "preferences.showDigitalBadgeOnTiles": "Mostra badge Plex/Jellyfin sulle schede film",
   "preferences.showDigitalBadgeOnTilesHelp": "Mostra un piccolo badge quando un film e disponibile anche in Plex o Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Elimina membri con il contenitore",
+  "preferences.deleteContainerMembersWithContainerHelp": "Quando elimini un box set, Vault o una raccolta, elimina anche i film collegati e i contenitori annidati.",
   "preferences.ratingCountry": "Paese della classificazione",
   "preferences.ratingCountryHelp": "Scegli il paese la cui classificazione per eta viene mostrata sui film.",
   "movieDetail.contentRating": "Classificazione per eta",

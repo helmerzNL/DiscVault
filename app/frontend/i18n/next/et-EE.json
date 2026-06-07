@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Kuvab teegis kompaktse metaandmetööde indikaatori. Lülita välja, et värskendustegevus oleks väljaspool Haldust peidetud.",
   "preferences.showDigitalBadgeOnTiles": "Kuva Plex/Jellyfini märk filmipaanidel",
   "preferences.showDigitalBadgeOnTilesHelp": "Kuvab väikese märgi, kui film on digitaalselt saadaval ka Plexis või Jellyfinis.",
+  "preferences.deleteContainerMembersWithContainer": "Kustuta liikmed koos konteineriga",
+  "preferences.deleteContainerMembersWithContainerHelp": "Box seti, Vaulti või kogumi kustutamisel kustutatakse ka seotud filmid ja pesastatud konteinerid.",
   "preferences.ratingCountry": "Vanusepiirangu riik",
   "preferences.ratingCountryHelp": "Vali, millise riigi vanuseklassifikatsiooni filmidel kuvatakse.",
   "movieDetail.contentRating": "Sisureiting",

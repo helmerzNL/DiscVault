@@ -868,6 +868,8 @@
   "preferences.showMetadataJobsHelp": "Shows the compact metadata job indicator in the library. Turn off to keep refresh activity hidden outside Admin.",
   "preferences.showDigitalBadgeOnTiles": "Show Plex/Jellyfin badge on movie tiles",
   "preferences.showDigitalBadgeOnTilesHelp": "Shows a small badge when a movie is also available digitally in Plex or Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Delete members with container",
+  "preferences.deleteContainerMembersWithContainerHelp": "When deleting a box-set, Vault or collection, also deletes its linked movies and nested containers.",
   "preferences.ratingCountry": "Content rating country",
   "preferences.ratingCountryHelp": "Choose which country's age classification is shown on movies.",
   "movieDetail.contentRating": "Content rating",

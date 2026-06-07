@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Bibliotēkā rāda kompakto metadatu uzdevumu indikatoru. Izslēdziet, lai atjaunināšanas aktivitāti paslēptu ārpus Administrēšanas.",
   "preferences.showDigitalBadgeOnTiles": "Rādīt Plex/Jellyfin emblēmu filmu flīzēs",
   "preferences.showDigitalBadgeOnTilesHelp": "Rāda mazu emblēmu, kad filma ir pieejama arī digitāli Plex vai Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Dzēst dalībniekus kopā ar konteineru",
+  "preferences.deleteContainerMembersWithContainerHelp": "Dzēšot box setu, Vault vai kolekciju, tiek dzēstas arī saistītās filmas un iegultie konteineri.",
   "preferences.ratingCountry": "Vecuma reitinga valsts",
   "preferences.ratingCountryHelp": "Izvēlieties, kuras valsts vecuma klasifikācija tiek rādīta filmām.",
   "movieDetail.contentRating": "Satura vērtējums",

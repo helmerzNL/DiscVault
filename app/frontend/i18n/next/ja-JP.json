@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "ライブラリにコンパクトなメタデータジョブインジケーターを表示します。管理画面以外で更新活動を隠すにはオフにします。",
   "preferences.showDigitalBadgeOnTiles": "映画タイルにPlex/Jellyfinバッジを表示",
   "preferences.showDigitalBadgeOnTilesHelp": "映画がPlexまたはJellyfinでもデジタル利用可能な場合、小さなバッジを表示します。",
+  "preferences.deleteContainerMembersWithContainer": "コンテナと一緒にメンバーを削除",
+  "preferences.deleteContainerMembersWithContainerHelp": "ボックスセット、Vault、コレクションを削除すると、リンクされた映画と入れ子のコンテナも削除されます。",
   "preferences.ratingCountry": "レーティングの国",
   "preferences.ratingCountryHelp": "映画に表示する年齢分類の国を選択します。",
   "movieDetail.contentRating": "コンテンツレーティング",

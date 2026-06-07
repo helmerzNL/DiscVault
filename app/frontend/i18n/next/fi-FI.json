@@ -646,6 +646,8 @@
   "preferences.showMetadataJobsHelp": "Nayttaa kompaktin metatietotehtavien ilmaisimen kirjastossa. Poista kaytosta, jos haluat piilottaa paivitystoiminnan Adminin ulkopuolella.",
   "preferences.showDigitalBadgeOnTiles": "Nayta Plex/Jellyfin-merkki elokuvissa",
   "preferences.showDigitalBadgeOnTilesHelp": "Nayttaa pienen merkin, kun elokuva on saatavilla myos Plexissa tai Jellyfinissa.",
+  "preferences.deleteContainerMembersWithContainer": "Poista jäsenet säilön mukana",
+  "preferences.deleteContainerMembersWithContainerHelp": "Kun poistat box setin, Vaultin tai kokoelman, myös siihen liitetyt elokuvat ja sisäkkäiset säilöt poistetaan.",
   "preferences.ratingCountry": "Ikarajaluokituksen maa",
   "preferences.ratingCountryHelp": "Valitse minka maan ikarajaluokitus naytetaan elokuvissa.",
   "movieDetail.contentRating": "Ikarajaluokitus",

@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "在片庫中顯示精簡的中繼資料工作指示器。關閉後可在管理之外隱藏重新整理活動。",
   "preferences.showDigitalBadgeOnTiles": "在電影卡片上顯示 Plex/Jellyfin 徽章",
   "preferences.showDigitalBadgeOnTilesHelp": "當電影也可在 Plex 或 Jellyfin 中以數位方式觀看時，顯示小徽章。",
+  "preferences.deleteContainerMembersWithContainer": "隨容器刪除成員",
+  "preferences.deleteContainerMembersWithContainerHelp": "刪除 box set、Vault 或收藏時，同時刪除關聯的電影與巢狀容器。",
   "preferences.ratingCountry": "分級國家/地區",
   "preferences.ratingCountryHelp": "選擇電影要顯示哪個國家/地區的年齡分級。",
   "movieDetail.contentRating": "內容分級",
