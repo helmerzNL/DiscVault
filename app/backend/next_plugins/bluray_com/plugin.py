@@ -280,6 +280,23 @@ def _candidate_members_from_search(title, preferred_format="", current_url=""):
     return members[:30]
 
 
+def _box_set_evidence(*, members, result, payload=None, explicit=False, candidate=False):
+    payload = payload or {}
+    members = members if isinstance(members, list) else []
+    source_ref = result.get("sourceRef") or result.get("sourceUrl") or result.get("source_url") or ""
+    return {
+        "barcodeMatch": False,
+        "entityType": "box_set",
+        "memberSource": "Blu-ray.com release page" if explicit else "metadata_candidates",
+        "memberConfidence": "needs_member_confirmation" if explicit else "candidate",
+        "memberCount": len(members),
+        "membersAreExplicit": bool(explicit and members),
+        "detectedWithoutMembers": bool(candidate or not explicit),
+        "format": result.get("format") or payload.get("format") or payload.get("mediaFormat") or payload.get("media_type") or "",
+        "sourceRef": source_ref,
+    }
+
+
 def _extract_hdr(value):
     text = str(value or "")
     tokens = []
@@ -356,7 +373,7 @@ def _parse_page(url):
     match = re.search(r"\((\d{4})\)", title)
     if match:
         year = match.group(1)
-    return {
+    parsed = {
         "status": "hit",
         "provider": "bluray_com",
         "sourceLabel": "Blu-ray.com",
@@ -384,6 +401,14 @@ def _parse_page(url):
         "isBoxSetCandidate": is_box_set_candidate,
         "boxSetMembers": box_set_members,
     }
+    if is_box_set_candidate:
+        parsed["boxSetEvidence"] = _box_set_evidence(
+            members=box_set_members,
+            result=parsed,
+            explicit=bool(len(box_set_members) >= 2),
+            candidate=bool(len(box_set_members) < 2),
+        )
+    return parsed
 
 
 def _first_page(query, preferred_format=""):
@@ -471,6 +496,7 @@ def box_set_candidates(payload, context=None):
         members = _candidate_members_from_search(title, result.get("format") or (payload or {}).get("format"), result.get("sourceUrl"))
         if len(members) < 2:
             return {"status": "miss", "provider": "bluray_com", "boxSetProposal": {}}
+        evidence = _box_set_evidence(members=members, result=result, payload=payload, candidate=True)
         return {
             "status": "hit",
             "provider": "bluray_com",
@@ -490,8 +516,13 @@ def box_set_candidates(payload, context=None):
                 "movies": members,
                 "memberCount": len(members),
                 "member_count": len(members),
+                "boxSetEvidence": evidence,
+                "box_set_evidence": evidence,
+                "membersAreExplicit": False,
+                "members_are_explicit": False,
             },
         }
+    evidence = _box_set_evidence(members=members, result=result, payload=payload, explicit=True)
     return {
         "status": "hit",
         "provider": "bluray_com",
@@ -510,5 +541,9 @@ def box_set_candidates(payload, context=None):
             "members": members,
             "memberCount": len(members),
             "member_count": len(members),
+            "boxSetEvidence": evidence,
+            "box_set_evidence": evidence,
+            "membersAreExplicit": True,
+            "members_are_explicit": True,
         },
     }

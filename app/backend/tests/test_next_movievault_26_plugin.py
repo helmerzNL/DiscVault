@@ -205,6 +205,8 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["boxSetProposal"]["title"], "Harry Potter Complete Collection")
         self.assertEqual(result["boxSetProposal"]["member_count"], 2)
         self.assertEqual(result["boxSetProposal"]["members"][0]["title"], "Harry Potter and the Philosopher's Stone")
+        self.assertTrue(result["boxSetProposal"]["boxSetEvidence"]["barcodeMatch"])
+        self.assertTrue(result["boxSetProposal"]["boxSetEvidence"]["membersAreExplicit"])
         self.assertEqual(result["items"], [])
         self.assertEqual(result["candidates"], [])
 
@@ -249,6 +251,8 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "hit")
         self.assertEqual(result["boxSetProposal"]["title"], "Harry Potter Complete Collection")
         self.assertEqual(result["boxSetProposal"]["member_count"], 2)
+        self.assertTrue(result["boxSetProposal"]["boxSetEvidence"]["barcodeMatch"])
+        self.assertTrue(result["boxSetProposal"]["boxSetEvidence"]["membersAreExplicit"])
         self.assertEqual(result["items"], [])
         self.assertEqual(result["candidates"], [])
         self.assertEqual(calls, ["/api/v1/barcodes/5051890315526", "/api/v1/box-sets/42", "/api/v1/box-sets/42/members"])
@@ -322,6 +326,9 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "hit")
         self.assertEqual(result["boxSetProposal"]["member_count"], 3)
+        self.assertTrue(result["boxSetProposal"]["boxSetEvidence"]["barcodeMatch"])
+        self.assertTrue(result["boxSetProposal"]["boxSetEvidence"]["membersAreExplicit"])
+        self.assertEqual(result["boxSetProposal"]["memberConfidence"], "needs_member_confirmation")
         self.assertEqual(
             [member["title"] for member in result["boxSetProposal"]["members"]],
             ["Back to the Future", "Back to the Future Part II", "Back to the Future Part III"],

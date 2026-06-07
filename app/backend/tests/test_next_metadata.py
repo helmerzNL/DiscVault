@@ -144,6 +144,70 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(proposal["members"], members)
         self.assertEqual(proposal["movies"], members)
         self.assertEqual(proposal["memberCount"], 2)
+        self.assertTrue(proposal["boxSetEvidence"]["membersAreExplicit"])
+        self.assertFalse(proposal["boxSetEvidence"]["detectedWithoutMembers"])
+
+    def test_bluray_box_set_candidate_fallback_is_marked_candidate_only_evidence(self):
+        members = [
+            {"title": "RoboCop", "source": "Blu-ray.com candidate search", "sortOrder": 1},
+            {"title": "RoboCop 2", "source": "Blu-ray.com candidate search", "sortOrder": 2},
+        ]
+        with (
+            mock.patch.object(
+                bluray_com_plugin,
+                "technical_specs",
+                return_value={
+                    "status": "hit",
+                    "provider": "bluray_com",
+                    "sourceUrl": "https://www.blu-ray.com/movies/RoboCop-Trilogy-Blu-ray/999/",
+                    "isBoxSetCandidate": True,
+                    "boxSetMembers": [],
+                    "movie": {"title": "RoboCop Trilogy", "format": "Blu-ray"},
+                },
+            ),
+            mock.patch.object(bluray_com_plugin, "_candidate_members_from_search", return_value=members),
+        ):
+            result = bluray_com_plugin.box_set_candidates({"title": "RoboCop Trilogy", "format": "Blu-ray"})
+
+        evidence = result["boxSetProposal"]["boxSetEvidence"]
+        self.assertEqual(evidence["memberConfidence"], "candidate")
+        self.assertFalse(evidence["membersAreExplicit"])
+        self.assertTrue(evidence["detectedWithoutMembers"])
+
+    def test_canonicalize_plugin_result_normalizes_box_set_evidence_contract(self):
+        result = canonicalize_plugin_result(
+            "movievault_26",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "MovieVault 26",
+                "sourceRef": "barcode:5050582369601",
+                "boxSetProposal": {
+                    "title": "Back to the Future Trilogy DVD",
+                    "barcode": "5050582369601",
+                    "format": "DVD",
+                    "members": [
+                        {"title": "Back to the Future", "year": "1985"},
+                        {"title": "Back to the Future Part II", "year": "1989"},
+                        {"title": "Back to the Future Part III", "year": "1990"},
+                    ],
+                    "boxSetEvidence": {
+                        "barcodeMatch": True,
+                        "entityType": "box_set",
+                        "memberSource": "MovieVault 26",
+                        "memberConfidence": "identified",
+                        "membersAreExplicit": True,
+                    },
+                },
+            },
+        )
+
+        evidence = result["boxSetProposal"]["boxSetEvidence"]
+        self.assertTrue(evidence["barcodeMatch"])
+        self.assertEqual(evidence["entityType"], "box_set")
+        self.assertEqual(evidence["memberCount"], 3)
+        self.assertTrue(evidence["membersAreExplicit"])
+        self.assertEqual(evidence["format"], "DVD")
 
     def test_release_specs_do_not_upgrade_across_formats(self):
         current = {

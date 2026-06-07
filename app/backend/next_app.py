@@ -1386,44 +1386,118 @@ def box_set_proposal_provider_text(proposal: dict[str, Any]) -> str:
     ).casefold()
 
 
+def box_set_proposal_evidence(proposal: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(proposal, dict):
+        return {}
+    evidence = proposal.get("boxSetEvidence") or proposal.get("box_set_evidence") or {}
+    return evidence if isinstance(evidence, dict) else {}
+
+
+def box_set_evidence_bool(evidence: dict[str, Any], *keys: str) -> bool:
+    for key in keys:
+        value = evidence.get(key)
+        if isinstance(value, bool):
+            return value
+        text = clean_text(value)
+        if text:
+            return text.casefold() in {"1", "true", "yes", "y", "on"}
+    return False
+
+
+def box_set_proposal_has_explicit_members(proposal: dict[str, Any]) -> bool:
+    members = box_set_proposal_member_list(proposal)
+    if len(members) < 2:
+        return False
+    evidence = box_set_proposal_evidence(proposal)
+    if evidence:
+        return box_set_evidence_bool(evidence, "membersAreExplicit", "members_are_explicit")
+    confidence = (clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")) or "").casefold()
+    return confidence not in {"candidate", "fallback", "metadata_candidates"}
+
+
+def box_set_proposal_has_exact_barcode_match(proposal: dict[str, Any]) -> bool:
+    evidence = box_set_proposal_evidence(proposal)
+    return box_set_evidence_bool(evidence, "barcodeMatch", "barcode_match")
+
+
+def box_set_proposal_is_upcitemdb(proposal: dict[str, Any]) -> bool:
+    return "upcitemdb" in box_set_proposal_provider_text(proposal)
+
+
 def box_set_proposal_is_candidate_only(proposal: dict[str, Any]) -> bool:
     if not isinstance(proposal, dict):
         return True
+    evidence = box_set_proposal_evidence(proposal)
     confidence = (
-        clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")) or ""
+        clean_text(
+            evidence.get("memberConfidence")
+            or evidence.get("member_confidence")
+            or proposal.get("memberConfidence")
+            or proposal.get("member_confidence")
+        ) or ""
     ).casefold()
-    source = (clean_text(proposal.get("memberSource") or proposal.get("member_source")) or "").casefold()
+    source = (
+        clean_text(
+            evidence.get("memberSource")
+            or evidence.get("member_source")
+            or proposal.get("memberSource")
+            or proposal.get("member_source")
+        ) or ""
+    ).casefold()
     return (
-        proposal.get("detectedWithoutMembers") is True
+        box_set_proposal_is_upcitemdb(proposal)
+        or proposal.get("detectedWithoutMembers") is True
         or proposal.get("detected_without_members") is True
+        or evidence.get("detectedWithoutMembers") is True
+        or evidence.get("detected_without_members") is True
         or confidence == "candidate"
         or source == "metadata_candidates"
     )
 
 
-def box_set_proposal_sort_key(proposal: dict[str, Any]) -> tuple[int, int, int, int]:
+def box_set_proposal_sort_key(proposal: dict[str, Any]) -> tuple[int, int, int, int, int]:
     provider = box_set_proposal_provider_text(proposal)
     member_count = len(box_set_proposal_member_list(proposal))
-    if "movievault" in provider:
+    explicit_members = box_set_proposal_has_explicit_members(proposal)
+    exact_barcode = box_set_proposal_has_exact_barcode_match(proposal)
+    candidate_only = box_set_proposal_is_candidate_only(proposal)
+    if "upcitemdb" in provider:
+        provider_rank = 9
+    elif ("movievault_26" in provider or "movievault 26" in provider) and exact_barcode and explicit_members:
         provider_rank = 0
-    elif "tmdb" in provider:
+    elif "movievault" in provider:
         provider_rank = 1
-    elif "bluray" in provider or "blu-ray" in provider:
+    elif ("bluray" in provider or "blu-ray" in provider) and explicit_members:
         provider_rank = 2
-    else:
+    elif "tmdb" in provider:
         provider_rank = 3
-    candidate_rank = 1 if box_set_proposal_is_candidate_only(proposal) else 0
+    elif "bluray" in provider or "blu-ray" in provider:
+        provider_rank = 4
+    else:
+        provider_rank = 5
+    exact_rank = 0 if exact_barcode and explicit_members else 1
+    candidate_rank = 1 if candidate_only else 0
     without_members_rank = 1 if (
         proposal.get("detectedWithoutMembers") is True
         or proposal.get("detected_without_members") is True
+        or box_set_proposal_evidence(proposal).get("detectedWithoutMembers") is True
     ) else 0
-    return (provider_rank, candidate_rank, without_members_rank, -member_count)
+    return (exact_rank, provider_rank, candidate_rank, without_members_rank, -member_count)
+
+
+def box_set_proposal_auto_importable(proposal: dict[str, Any]) -> bool:
+    return (
+        not box_set_proposal_is_candidate_only(proposal)
+        and box_set_proposal_has_exact_barcode_match(proposal)
+        and box_set_proposal_has_explicit_members(proposal)
+    )
 
 
 def box_set_proposal_audit_summary(proposal: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(proposal, dict):
         return {}
     members = box_set_proposal_member_list(proposal)
+    evidence = box_set_proposal_evidence(proposal)
     return {
         "proposalKey": clean_text(proposal.get("_proposalKey") or proposal.get("proposalKey")),
         "provider": clean_text(
@@ -1439,10 +1513,15 @@ def box_set_proposal_audit_summary(proposal: dict[str, Any]) -> dict[str, Any]:
         "memberConfidence": clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")),
         "memberCount": len(members),
         "candidateOnly": box_set_proposal_is_candidate_only(proposal),
+        "autoImportable": box_set_proposal_auto_importable(proposal),
+        "membersAreExplicit": box_set_proposal_has_explicit_members(proposal),
+        "barcodeMatch": box_set_proposal_has_exact_barcode_match(proposal),
         "detectedWithoutMembers": bool(
             proposal.get("detectedWithoutMembers") is True
             or proposal.get("detected_without_members") is True
+            or evidence.get("detectedWithoutMembers") is True
         ),
+        "boxSetEvidence": evidence,
         "rank": list(box_set_proposal_sort_key(proposal)),
         "members": [
             {
@@ -44161,6 +44240,8 @@ def register_routes(flask_app: Flask) -> None:
             return []
         proposals: list[dict[str, Any]] = []
         seen: set[str] = set()
+        query = metadata_result.get("query") if isinstance(metadata_result.get("query"), dict) else {}
+        query_barcode = clean_text(query.get("externalBarcode") or query.get("barcode"))
         for result in metadata_result.get("results") or []:
             if not isinstance(result, dict):
                 continue
@@ -44189,6 +44270,8 @@ def register_routes(flask_app: Flask) -> None:
                 if isinstance(raw_value, list):
                     proposal_candidates.extend(item for item in raw_value if isinstance(item, dict) and metadata_value_looks_like_box_set(item))
             for proposal_candidate in proposal_candidates:
+                if box_set_proposal_is_upcitemdb(proposal_candidate):
+                    continue
                 members = box_set_proposal_members(proposal_candidate)
                 if len(members) < 2:
                     continue
@@ -44204,6 +44287,12 @@ def register_routes(flask_app: Flask) -> None:
                         or proposal_candidate.get("source")
                     ),
                 )
+                evidence = box_set_proposal_evidence(normalized)
+                if query_barcode and clean_text(normalized.get("barcode")) == query_barcode:
+                    evidence = {**evidence, "barcodeMatch": True}
+                if evidence:
+                    normalized["boxSetEvidence"] = evidence
+                    normalized["box_set_evidence"] = evidence
                 key = metadata_box_set_proposal_key(normalized, result)
                 if key in seen:
                     continue
@@ -45138,14 +45227,14 @@ def register_routes(flask_app: Flask) -> None:
         provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
         if not isinstance(provided_box_set_body, dict):
             provided_box_set_body = None
-        selected_candidate_body = body.get("selectedBoxSetCandidate") or body.get("selected_box_set_candidate")
-        if not isinstance(selected_candidate_body, dict):
-            selected_candidate_body = body.get("selectedMovieCandidate") or body.get("selected_movie_candidate")
+        selected_box_set_candidate_body = body.get("selectedBoxSetCandidate") or body.get("selected_box_set_candidate")
+        selected_movie_candidate_body = body.get("selectedMovieCandidate") or body.get("selected_movie_candidate")
+        selected_candidate_body = selected_box_set_candidate_body if isinstance(selected_box_set_candidate_body, dict) else selected_movie_candidate_body
         selected_candidate_is_box_set = (
-            isinstance(selected_candidate_body, dict)
+            isinstance(selected_box_set_candidate_body, dict)
             and (
-                metadata_value_looks_like_box_set(selected_candidate_body)
-                or len(box_set_proposal_members(selected_candidate_body)) >= 2
+                metadata_value_looks_like_box_set(selected_box_set_candidate_body)
+                or len(box_set_proposal_members(selected_box_set_candidate_body)) >= 2
             )
         )
         preview_box_set_proposal = metadata_box_set_proposal(provided_metadata_result, selected_box_set_key_from_body)
@@ -45162,7 +45251,11 @@ def register_routes(flask_app: Flask) -> None:
             provided_box_set_body = provided_box_set_body or selected_candidate_body
             wants_box_set_import = True
             wants_movie_import = False
-        elif preview_box_set_proposal and not explicit_movie_candidate_selected:
+        elif (
+            preview_box_set_proposal
+            and not explicit_movie_candidate_selected
+            and box_set_proposal_auto_importable(preview_box_set_proposal)
+        ):
             provided_box_set_body = provided_box_set_body or preview_box_set_proposal
             wants_box_set_import = True
             wants_movie_import = False
@@ -45265,6 +45358,10 @@ def register_routes(flask_app: Flask) -> None:
                 if wants_box_set_import and not box_set_proposal:
                     raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
                 if wants_box_set_import and box_set_proposal:
+                    body_members = normalized_box_set_members_from_body(body)
+                    explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
+                    if box_set_proposal_is_candidate_only(box_set_proposal) and not explicit_review_payload:
+                        raise NextApiError("Box-set candidate members require review before import.", 422)
                     box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
                     box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
                     box_set_receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_payload"}
