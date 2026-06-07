@@ -175,10 +175,16 @@ function switchToevoegen(sub, options = {}) {
 
 function switchTab(name) {
   closeMeerMenu();
-  const activeTabName = (name === 'logs' || name === 'settings' || name === 'toevoegen'
-    || name === 'scan' || name === 'import' || name === 'admin') ? 'meer'
-    : name;
+  const activeTabName = isMobileNav()
+    ? ((name === 'scan' || name === 'toevoegen') ? 'import'
+      : name === 'notifications' ? 'notifications'
+      : (name === 'logs' || name === 'settings' || name === 'admin') ? 'profile'
+      : name)
+    : ((name === 'logs' || name === 'settings' || name === 'toevoegen'
+      || name === 'scan' || name === 'import' || name === 'notifications' || name === 'admin') ? 'meer'
+      : name);
   const panelName = (name === 'scan' || name === 'import') ? 'toevoegen'
+    : name === 'notifications' ? 'profile'
     : name;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -193,6 +199,7 @@ function switchTab(name) {
   if (name === 'settings') loadSettings();
   if (name === 'admin') loadAdminTab();
   if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
+  if (name === 'notifications') switchProfileSubmenu('notifications');
   if (name === 'toevoegen') switchToevoegen(currentToevoegenSub || 'scan');
   if (name === 'scan') switchToevoegen('scan');
   if (name === 'import') switchToevoegen('import');
