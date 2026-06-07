@@ -106,6 +106,17 @@
     letter-spacing: 0;
   }
 
+  .test-notification-content a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.16em;
+  }
+
+  .test-notification-content a:hover {
+    color: #f7de74;
+  }
+
   .test-notification-dismiss {
     display: none;
     position: absolute;

@@ -42,7 +42,11 @@
     </div>
     <div class="test-notification-content">
       <div class="test-notification-kicker" id="testNotificationBannerTitle" data-i18n="settings.updatePopupTitle">Nieuwe versie beschikbaar</div>
-      <p id="testNotificationBannerText" data-i18n="settings.updatePopupMessage">Nieuwe versie beschikbaar. Kijk voor info in Instellingen -> Update</p>
+      <p id="testNotificationBannerText">
+        <span id="testNotificationBannerPrefix" data-i18n="settings.updatePopupPrefix">Nieuwe versie beschikbaar. Klik</span>
+        <a id="testNotificationBannerLink" href="/legacy" onclick="openLegacyUpdatePage(event)" data-i18n="settings.updatePopupLink">hier</a>
+        <span id="testNotificationBannerSuffix" data-i18n="settings.updatePopupSuffix">voor meer info.</span>
+      </p>
     </div>
     <button
       type="button"
@@ -1527,7 +1531,7 @@
                   </label>
                 </div>
                 <div class="btn-row" style="margin-bottom:10px;">
-                  <a class="btn btn-primary" href="https://discvault.eu/legacy" target="_blank" rel="noopener" data-i18n="settings.updateLink">Meer over upgraden</a>
+                  <a class="btn btn-primary" id="legacyUpgradeInfoLink" href="https://discvault.eu/legacy" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" data-i18n="settings.updateLink">Meer over upgraden</a>
                 </div>
                 <div id="settingsUpdateStatus" class="status-msg"></div>
               </div>
