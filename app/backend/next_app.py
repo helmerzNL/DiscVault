@@ -10950,6 +10950,48 @@ def ui_preview_html(
       font-size: .7rem;
       margin-top: 2px;
     }
+    .profile-api-permission-grid {
+      margin-top: 10px;
+    }
+    .profile-api-permission-domain {
+      display: grid;
+      gap: 7px;
+    }
+    .profile-api-permission-domain .profile-api-domain-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 1px;
+    }
+    .profile-api-permission-domain h4 {
+      margin: 0;
+    }
+    .profile-api-permission-domain label {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 8px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      transition: border-color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .profile-api-permission-domain label:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+    }
+    .profile-api-permission-domain label:has(input:checked) {
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+      background: color-mix(in srgb, var(--accent) 12%, var(--bg-solid));
+    }
+    .profile-api-permission-domain label span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .profile-api-permission-domain .tag {
+      min-height: 21px;
+      padding: 0 7px;
+      font-size: .68rem;
+    }
     .tag {
       min-height: 24px;
       display: inline-flex;
@@ -25535,6 +25577,69 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function profileApiPermissionGroup(permission) {
+      const value = String(permission || "");
+      if (value.startsWith("mcp.tool.")) {
+        return {key: "mcp_tools", order: 50, label: tNext("profile.permissionGroupMcpTools", "MCP tools")};
+      }
+      if (value === "mcp.use" || value.startsWith("mcp.")) {
+        return {key: "mcp", order: 40, label: tNext("profile.permissionGroupMcp", "MCP")};
+      }
+      if (value.startsWith("api.")) {
+        return {key: "api", order: 10, label: tNext("profile.permissionGroupApi", "API")};
+      }
+      if (value.startsWith("collection.") || value.startsWith("containers.")) {
+        return {key: "collection", order: 20, label: tNext("profile.permissionGroupCollection", "Collection")};
+      }
+      if (value.startsWith("metadata.")) {
+        return {key: "metadata", order: 30, label: tNext("profile.permissionGroupMetadata", "Metadata")};
+      }
+      return {key: "other", order: 90, label: tNext("profile.permissionGroupOther", "Other")};
+    }
+    function profileApiPermissionLabel(permission, mcpToolLabels) {
+      const value = String(permission || "");
+      const toolLabel = mcpToolLabels && mcpToolLabels.get(value);
+      if (toolLabel) return String(toolLabel).replaceAll("_", " ");
+      if (value.startsWith("mcp.tool.")) return value.slice("mcp.tool.".length).replaceAll("_", " ");
+      return value;
+    }
+    function profileApiPermissionDescription(permission) {
+      const value = String(permission || "");
+      if (value === "mcp.use") return tNext("profile.permissionMcpUseHelp", "Allow the token to connect to the MCP endpoint.");
+      if (value.startsWith("mcp.tool.")) return tNext("profile.permissionMcpToolHelp", "Allow this MCP command.");
+      if (value.startsWith("api.")) return tNext("profile.permissionApiHelp", "Allow direct DiscVault API access.");
+      if (value.startsWith("collection.") || value.startsWith("containers.")) return tNext("profile.permissionCollectionHelp", "Allow collection changes through API clients.");
+      if (value.startsWith("metadata.")) return tNext("profile.permissionMetadataHelp", "Allow metadata lookup or refresh actions.");
+      return "";
+    }
+    function renderProfileApiPermissionGrid(permissions, defaultPermissions, mcpTools) {
+      const toolLabels = new Map((mcpTools || []).map((tool) => [tool.permission, tool.name]));
+      const groups = new Map();
+      (permissions || []).forEach((permission) => {
+        const group = profileApiPermissionGroup(permission);
+        if (!groups.has(group.key)) groups.set(group.key, {...group, permissions: []});
+        groups.get(group.key).permissions.push(permission);
+      });
+      return Array.from(groups.values())
+        .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
+        .map((group) => `
+          <div class="app-admin-permission-domain profile-api-permission-domain">
+            <div class="profile-api-domain-head">
+              <h4>${escapeHtml(group.label)}</h4>
+              <span class="tag">${escapeHtml(String(group.permissions.length))}</span>
+            </div>
+            ${group.permissions.map((permission) => `
+              <label>
+                <input type="checkbox" data-profile-api-permission="${escapeHtml(permission)}" ${defaultPermissions.has(permission) ? "checked" : ""}>
+                <span>
+                  ${escapeHtml(profileApiPermissionLabel(permission, toolLabels))}
+                  <small>${escapeHtml(profileApiPermissionDescription(permission))}</small>
+                </span>
+              </label>
+            `).join("")}
+          </div>
+        `).join("");
+    }
     function renderProfileApiAccess(newToken) {
       const summary = document.getElementById("profileApiMcpSummary");
       const permissionList = document.getElementById("profileApiPermissionList");
@@ -25569,13 +25674,8 @@ def ui_preview_html(
               <strong>${escapeHtml(tNext("profile.chooseTokenPermissions", "Choose token permissions"))}</strong>
               <span class="tag blue">${escapeHtml(tNext("profile.scopedToken", "Scoped token"))}</span>
             </div>
-            <div class="app-admin-permission-grid">
-              ${permissions.map((permission) => `
-                <label>
-                  <input type="checkbox" data-profile-api-permission="${escapeHtml(permission)}" ${defaultPermissions.has(permission) ? "checked" : ""}>
-                  <span>${escapeHtml(permission)}</span>
-                </label>
-              `).join("")}
+            <div class="app-admin-permission-grid profile-api-permission-grid">
+              ${renderProfileApiPermissionGrid(permissions, defaultPermissions, access.mcpTools || [])}
             </div>
           </div>
         ` : `<div class="preview-empty">${escapeHtml(tNext("profile.noApiPermissions", "No API or MCP permissions available."))}</div>`;
