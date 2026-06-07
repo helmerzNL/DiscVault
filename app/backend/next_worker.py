@@ -34,6 +34,7 @@ try:
     from .next_movievault_connection import movievault_plugin_context
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import lookup_metadata_sources
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
@@ -47,6 +48,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_movievault_connection import movievault_plugin_context
     from next_plugin_runtime import run_plugin_entrypoint
     from next_metadata import METADATA_REFRESH_JOB_TYPE
+    from next_metadata import lookup_metadata_sources
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
@@ -688,6 +690,175 @@ def import_item_container_specs(item: dict[str, Any]) -> list[dict[str, str]]:
     return unique
 
 
+def import_box_set_member_list(proposal: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(proposal, dict):
+        return []
+    for key in ("members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"):
+        value = proposal.get(key)
+        if isinstance(value, list):
+            members = [item for item in value if isinstance(item, dict) and clean_text(item.get("title") or item.get("name"))]
+            if members:
+                return members
+    return []
+
+
+def import_box_set_evidence(proposal: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(proposal, dict):
+        return {}
+    evidence = proposal.get("boxSetEvidence") or proposal.get("box_set_evidence")
+    return evidence if isinstance(evidence, dict) else {}
+
+
+def import_box_set_evidence_bool(evidence: dict[str, Any], *keys: str) -> bool:
+    for key in keys:
+        if key in evidence:
+            return bool_value(evidence.get(key))
+    return False
+
+
+def import_box_set_provider_text(proposal: dict[str, Any]) -> str:
+    return clean_text(
+        proposal.get("provider")
+        or proposal.get("source")
+        or proposal.get("sourceLabel")
+        or proposal.get("memberSource")
+        or proposal.get("member_source")
+    ).casefold()
+
+
+def import_box_set_candidate_only(proposal: dict[str, Any]) -> bool:
+    evidence = import_box_set_evidence(proposal)
+    confidence = clean_text(
+        evidence.get("memberConfidence")
+        or evidence.get("member_confidence")
+        or proposal.get("memberConfidence")
+        or proposal.get("member_confidence")
+    ).casefold()
+    member_source = clean_text(
+        evidence.get("memberSource")
+        or evidence.get("member_source")
+        or proposal.get("memberSource")
+        or proposal.get("member_source")
+    ).casefold()
+    return (
+        bool_value(proposal.get("candidateOnly") or proposal.get("candidate_only"))
+        or bool_value(proposal.get("detectedWithoutMembers") or proposal.get("detected_without_members"))
+        or bool_value(evidence.get("detectedWithoutMembers") or evidence.get("detected_without_members"))
+        or confidence in {"candidate", "fallback", "needs_confirmation"}
+        or member_source in {"metadata_candidates", "candidate_search"}
+    )
+
+
+def import_box_set_auto_importable(proposal: dict[str, Any]) -> bool:
+    if "upcitemdb" in import_box_set_provider_text(proposal):
+        return False
+    members = import_box_set_member_list(proposal)
+    if len(members) < 2 or import_box_set_candidate_only(proposal):
+        return False
+    evidence = import_box_set_evidence(proposal)
+    explicit = import_box_set_evidence_bool(evidence, "membersAreExplicit", "members_are_explicit")
+    if not explicit:
+        confidence = clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")).casefold()
+        explicit = confidence in {"confirmed", "exact", "source_verified", "needs_member_confirmation"}
+    barcode_match = import_box_set_evidence_bool(evidence, "barcodeMatch", "barcode_match")
+    return barcode_match and explicit
+
+
+def import_metadata_box_set_proposals(metadata_result: dict[str, Any]) -> list[dict[str, Any]]:
+    proposals: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    query = metadata_result.get("query") if isinstance(metadata_result.get("query"), dict) else {}
+    query_barcode = clean_text(query.get("externalBarcode") or query.get("barcode"))
+    for result in metadata_result.get("results") or []:
+        if not isinstance(result, dict):
+            continue
+        raw = result.get("raw") if isinstance(result.get("raw"), dict) else {}
+        candidates: list[dict[str, Any]] = []
+        for key in ("boxSetProposal", "box_set_proposal"):
+            value = result.get(key)
+            if isinstance(value, dict):
+                candidates.append(value)
+            raw_value = raw.get(key)
+            if isinstance(raw_value, dict):
+                candidates.append(raw_value)
+        for key in ("boxSetProposals", "box_set_proposals"):
+            value = result.get(key)
+            if isinstance(value, list):
+                candidates.extend(item for item in value if isinstance(item, dict))
+            raw_value = raw.get(key)
+            if isinstance(raw_value, list):
+                candidates.extend(item for item in raw_value if isinstance(item, dict))
+        for candidate in candidates:
+            members = import_box_set_member_list(candidate)
+            if len(members) < 2:
+                continue
+            normalized = {**candidate, "members": members, "movies": members}
+            normalized.setdefault(
+                "provider",
+                clean_text(result.get("pluginId") or result.get("provider") or candidate.get("provider") or candidate.get("source")),
+            )
+            evidence = dict(import_box_set_evidence(normalized))
+            if query_barcode and clean_text(normalized.get("barcode")) == query_barcode:
+                evidence["barcodeMatch"] = True
+            if evidence:
+                normalized["boxSetEvidence"] = evidence
+                normalized["box_set_evidence"] = evidence
+            key = "|".join(
+                [
+                    clean_text(normalized.get("provider")),
+                    clean_text(normalized.get("barcode")),
+                    clean_text(normalized.get("title") or normalized.get("name")).casefold(),
+                    ",".join(clean_text(member.get("title") or member.get("name")).casefold() for member in members[:20]),
+                ]
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            proposals.append(normalized)
+    return sorted(proposals, key=import_box_set_sort_key)
+
+
+def import_box_set_sort_key(proposal: dict[str, Any]) -> tuple[int, int, int, int]:
+    provider = import_box_set_provider_text(proposal)
+    evidence = import_box_set_evidence(proposal)
+    exact = import_box_set_evidence_bool(evidence, "barcodeMatch", "barcode_match")
+    explicit = import_box_set_evidence_bool(evidence, "membersAreExplicit", "members_are_explicit")
+    members = len(import_box_set_member_list(proposal))
+    if "movievault_26" in provider or "movievault 26" in provider:
+        provider_rank = 0
+    elif "movievault" in provider:
+        provider_rank = 1
+    elif "bluray" in provider or "blu-ray" in provider:
+        provider_rank = 2
+    else:
+        provider_rank = 5
+    return (0 if exact and explicit else 1, provider_rank, 1 if import_box_set_candidate_only(proposal) else 0, -members)
+
+
+def detect_import_item_box_set(conn, item: dict[str, Any], actor: dict[str, Any] | None) -> dict[str, Any] | None:
+    barcode = clean_text(item.get("barcode"))
+    if not barcode:
+        return None
+    query = {
+        "barcode": barcode,
+        "externalBarcode": barcode,
+        "title": clean_text(item.get("title")),
+        "year": clean_text(item.get("year")),
+        "format": clean_text(item.get("format")),
+        "detectBoxSets": True,
+        "importBoxSets": True,
+        "previewMode": True,
+    }
+    try:
+        metadata_result = lookup_metadata_sources(conn, query, actor)
+    except Exception as exc:
+        return {"error": str(exc), "barcode": barcode}
+    for proposal in import_metadata_box_set_proposals(metadata_result):
+        if import_box_set_auto_importable(proposal):
+            return {"proposal": proposal, "metadata": metadata_result, "barcode": barcode}
+    return None
+
+
 def import_container_id(plugin_id: str, source_hash: str, container_type: str, title: str) -> UUID:
     return stable_uuid(f"container-import:{plugin_id}:{source_hash}:{container_type}:{title.casefold()}")
 
@@ -701,6 +872,8 @@ def upsert_import_container(
     title: str,
     source_path: str,
     source_kind: str,
+    barcode: str = "",
+    metadata_extra: dict[str, Any] | None = None,
 ) -> tuple[UUID, bool]:
     container_id = import_container_id(plugin_id, source_hash, container_type, title)
     public_id = source_public_id(
@@ -714,11 +887,12 @@ def upsert_import_container(
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=EXCLUDED.title,
+                barcode=COALESCE(EXCLUDED.barcode, containers.barcode),
                 metadata=containers.metadata || EXCLUDED.metadata,
                 updated_at=now()
             """,
@@ -727,6 +901,7 @@ def upsert_import_container(
                 public_id,
                 container_type,
                 title,
+                clean_text(barcode) or None,
                 Jsonb(
                     json_ready(
                         {
@@ -734,6 +909,7 @@ def upsert_import_container(
                             "source_kind": source_kind,
                             "source_path": source_path,
                             "source_hash": source_hash,
+                            **(metadata_extra or {}),
                         }
                     )
                 ),
@@ -901,6 +1077,120 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
     return movie_id, existing_id is None
 
 
+def import_box_set_member_item(parent_item: dict[str, Any], proposal: dict[str, Any], member: dict[str, Any], index: int) -> dict[str, Any]:
+    parent_format = clean_text(parent_item.get("format") or proposal.get("format"))
+    title = clean_text(member.get("title") or member.get("name") or member.get("originalTitle") or member.get("original_title"))
+    item = {
+        "title": title,
+        "originalTitle": clean_text(member.get("originalTitle") or member.get("original_title") or title),
+        "year": clean_text(member.get("year") or member.get("releaseYear") or member.get("release_year")),
+        "releaseDate": clean_text(member.get("releaseDate") or member.get("release_date")),
+        "format": clean_text(member.get("format")) or parent_format,
+        "barcode": clean_text(member.get("barcode")),
+        "tmdbId": clean_text(member.get("tmdbId") or member.get("tmdb_id")),
+        "imdbId": clean_text(member.get("imdbId") or member.get("imdb_id")),
+        "overview": clean_text(member.get("overview") or member.get("plot")),
+        "posterUrl": clean_text(member.get("posterUrl") or member.get("poster_url") or member.get("poster")),
+        "backdropUrl": clean_text(member.get("backdropUrl") or member.get("backdrop_url") or member.get("backdrop")),
+        "sourceProvider": clean_text(member.get("source") or member.get("provider") or proposal.get("provider")),
+        "sourceUrl": clean_text(member.get("sourceUrl") or member.get("source_url")),
+        "sourceFile": parent_item.get("sourceFile"),
+        "externalId": clean_text(
+            member.get("externalId")
+            or member.get("external_id")
+            or member.get("sourceRef")
+            or member.get("source_ref")
+            or f"{clean_text(proposal.get('barcode')) or clean_text(parent_item.get('barcode'))}:member:{index}:{title}"
+        ),
+    }
+    return {key: value for key, value in item.items() if value not in (None, "", [], {})}
+
+
+def persist_import_box_set_item(
+    conn,
+    *,
+    plugin_id: str,
+    source_hash: str,
+    source_path: str,
+    source_kind: str,
+    item: dict[str, Any],
+    detection: dict[str, Any],
+    index: int,
+) -> dict[str, Any]:
+    proposal = detection.get("proposal") if isinstance(detection.get("proposal"), dict) else {}
+    barcode = clean_text(detection.get("barcode") or item.get("barcode") or proposal.get("barcode"))
+    title = clean_text(proposal.get("title") or proposal.get("name") or item.get("title"))
+    if not title:
+        raise RuntimeError("Detected box-set is missing a title")
+    members = import_box_set_member_list(proposal)
+    if len(members) < 2:
+        raise RuntimeError("Detected box-set does not contain enough members")
+    evidence = import_box_set_evidence(proposal)
+    container_id, was_container_created = upsert_import_container(
+        conn,
+        plugin_id=plugin_id,
+        source_hash=source_hash,
+        container_type="box_set",
+        title=title,
+        source_path=source_path,
+        source_kind=source_kind,
+        barcode=barcode,
+        metadata_extra={
+            "box_set_evidence": evidence,
+            "boxSetEvidence": evidence,
+            "member_source": clean_text(proposal.get("memberSource") or proposal.get("member_source") or proposal.get("source")),
+            "member_confidence": clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")),
+            "member_count": len(members),
+            "import_detected_box_set": True,
+        },
+    )
+    imported_members: list[dict[str, Any]] = []
+    movie_ids: list[str] = []
+    created = 0
+    updated = 0
+    links = 0
+    for member_index, member in enumerate(members[:50], start=1):
+        member_item = import_box_set_member_item(item, proposal, member, member_index)
+        if not clean_text(member_item.get("title")):
+            continue
+        movie_id, was_created = upsert_import_movie(conn, plugin_id, member_item)
+        if link_import_movie_to_container(
+            conn,
+            container_id=container_id,
+            container_type="box_set",
+            movie_id=movie_id,
+            sort_order=member_index,
+        ):
+            links += 1
+        movie_ids.append(str(movie_id))
+        created += 1 if was_created else 0
+        updated += 0 if was_created else 1
+        imported_members.append(
+            {
+                "index": member_index,
+                "id": str(movie_id),
+                "title": clean_text(member_item.get("title")),
+                "year": clean_text(member_item.get("year")),
+                "barcode": clean_text(member_item.get("barcode")),
+                "action": "created" if was_created else "updated",
+            }
+        )
+    return {
+        "containerId": str(container_id),
+        "containerTitle": title,
+        "containerCreated": was_container_created,
+        "memberMovieIds": movie_ids,
+        "members": imported_members,
+        "created": created,
+        "updated": updated,
+        "links": links,
+        "memberCount": len(imported_members),
+        "barcode": barcode,
+        "provider": clean_text(proposal.get("provider") or proposal.get("source")),
+        "evidence": evidence,
+    }
+
+
 def queue_import_metadata_refresh_jobs(
     conn,
     movie_ids: list[str],
@@ -968,6 +1258,8 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             updated = 0
             linked = 0
             errors = []
+            box_set_detection_errors = []
+            detected_box_sets: list[dict[str, Any]] = []
             imported_movies: list[dict[str, Any]] = []
             imported_movie_ids: list[str] = []
             created_movie_ids: list[str] = []
@@ -975,6 +1267,69 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                 if not isinstance(item, dict):
                     continue
                 try:
+                    box_set_detection = detect_import_item_box_set(conn, item, actor)
+                    if box_set_detection and box_set_detection.get("error"):
+                        box_set_detection_errors.append(
+                            {
+                                "index": index,
+                                "title": clean_text(item.get("title")),
+                                "barcode": clean_text(item.get("barcode")),
+                                "error": box_set_detection.get("error"),
+                            }
+                        )
+                    if box_set_detection and isinstance(box_set_detection.get("proposal"), dict):
+                        with conn.transaction():
+                            box_set_result = persist_import_box_set_item(
+                                conn,
+                                plugin_id=plugin_id,
+                                source_hash=source_hash,
+                                source_path=source_path,
+                                source_kind=source_kind,
+                                item=item,
+                                detection=box_set_detection,
+                                index=index,
+                            )
+                        imported += 1
+                        created += int(box_set_result.get("created") or 0)
+                        updated += int(box_set_result.get("updated") or 0)
+                        container_links += int(box_set_result.get("links") or 0)
+                        container_id = UUID(str(box_set_result["containerId"]))
+                        container_key = ("box_set", clean_text(box_set_result.get("containerTitle")).casefold())
+                        container_cache[container_key] = container_id
+                        container_titles[container_key] = clean_text(box_set_result.get("containerTitle"))
+                        if box_set_result.get("containerCreated"):
+                            container_created.add(container_id)
+                        member_ids = [str(value) for value in box_set_result.get("memberMovieIds") or [] if value]
+                        imported_movie_ids.extend(member_ids)
+                        created_movie_ids.extend(
+                            str(member.get("id"))
+                            for member in box_set_result.get("members") or []
+                            if member.get("action") == "created" and member.get("id")
+                        )
+                        detected_box_sets.append(
+                            {
+                                "index": index,
+                                "id": box_set_result.get("containerId"),
+                                "title": box_set_result.get("containerTitle"),
+                                "barcode": box_set_result.get("barcode"),
+                                "provider": box_set_result.get("provider"),
+                                "memberCount": box_set_result.get("memberCount"),
+                                "created": box_set_result.get("containerCreated"),
+                            }
+                        )
+                        imported_movies.append(
+                            {
+                                "index": index,
+                                "id": box_set_result.get("containerId"),
+                                "title": box_set_result.get("containerTitle"),
+                                "barcode": box_set_result.get("barcode"),
+                                "action": "box_set_created" if box_set_result.get("containerCreated") else "box_set_updated",
+                                "memberCount": box_set_result.get("memberCount"),
+                                "members": (box_set_result.get("members") or [])[:20],
+                                "reviewAction": clean_text(item.get("importReviewAction")),
+                            }
+                        )
+                        continue
                     local_container_cache: dict[tuple[str, str], UUID] = {}
                     local_container_titles: dict[tuple[str, str], str] = {}
                     local_container_created: set[UUID] = set()
@@ -1040,6 +1395,15 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
 
     review = result.get("review") if isinstance(result.get("review"), dict) else {}
     warnings = result.get("warnings") if isinstance(result.get("warnings"), list) else []
+    if box_set_detection_errors:
+        warnings = [
+            *warnings,
+            {
+                "code": "box_set_detection_lookup_failed",
+                "message": "Some import rows could not be checked for box-set metadata and were imported with the regular movie flow.",
+                "items": box_set_detection_errors[:20],
+            },
+        ]
     summary = {
         "sourceKind": result.get("sourceKind"),
         "sourcePath": result.get("sourcePath"),
@@ -1055,6 +1419,8 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "collectionCreated": False,
         "metadataRefreshQueued": len(metadata_job_ids),
         "metadataJobIds": metadata_job_ids[:200],
+        "boxSetsDetected": len(detected_box_sets),
+        "detectedBoxSets": detected_box_sets[:50],
         "rollbackMovieIds": created_movie_ids,
         "movies": imported_movies[:200],
         "review": review,

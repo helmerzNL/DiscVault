@@ -150,6 +150,80 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(import_release_date("1998/07/24"), "1998-07-24")
         self.assertEqual(parse_release_date("24-07-1998"), "1998-07-24")
 
+    def test_import_metadata_box_set_proposals_accepts_confirmed_barcode_members(self):
+        metadata = {
+            "query": {"barcode": "883929704729"},
+            "results": [
+                {
+                    "pluginId": "movievault_26",
+                    "boxSetProposal": {
+                        "title": "Example Trilogy",
+                        "barcode": "883929704729",
+                        "provider": "movievault_26",
+                        "members": [
+                            {"title": "Example One", "year": "2001", "format": "Blu-ray"},
+                            {"title": "Example Two", "year": "2002", "format": "Blu-ray"},
+                        ],
+                        "boxSetEvidence": {
+                            "barcodeMatch": True,
+                            "membersAreExplicit": True,
+                            "memberConfidence": "confirmed",
+                            "memberSource": "MovieVault",
+                        },
+                    },
+                }
+            ],
+        }
+
+        proposals = next_worker.import_metadata_box_set_proposals(metadata)
+
+        self.assertEqual(len(proposals), 1)
+        self.assertTrue(next_worker.import_box_set_auto_importable(proposals[0]))
+        self.assertEqual(next_worker.import_box_set_member_list(proposals[0])[0]["title"], "Example One")
+
+    def test_import_metadata_box_set_proposals_rejects_candidate_only_sets(self):
+        metadata = {
+            "query": {"barcode": "883929704729"},
+            "results": [
+                {
+                    "pluginId": "bluray_com",
+                    "boxSetProposal": {
+                        "title": "Maybe A Set",
+                        "barcode": "883929704729",
+                        "provider": "bluray_com",
+                        "members": [
+                            {"title": "Candidate One"},
+                            {"title": "Candidate Two"},
+                        ],
+                        "boxSetEvidence": {
+                            "barcodeMatch": True,
+                            "membersAreExplicit": False,
+                            "memberConfidence": "candidate",
+                            "memberSource": "metadata_candidates",
+                            "detectedWithoutMembers": True,
+                        },
+                    },
+                }
+            ],
+        }
+
+        proposals = next_worker.import_metadata_box_set_proposals(metadata)
+
+        self.assertEqual(len(proposals), 1)
+        self.assertFalse(next_worker.import_box_set_auto_importable(proposals[0]))
+
+    def test_import_box_set_member_item_does_not_reuse_parent_barcode(self):
+        member_item = next_worker.import_box_set_member_item(
+            {"title": "Parent Set", "barcode": "883929704729", "format": "Blu-ray"},
+            {"barcode": "883929704729", "provider": "movievault_26"},
+            {"title": "Member Movie", "year": "1999"},
+            1,
+        )
+
+        self.assertEqual(member_item["title"], "Member Movie")
+        self.assertNotIn("barcode", member_item)
+        self.assertEqual(member_item["format"], "Blu-ray")
+
     def test_import_review_applies_selected_metadata_match(self):
         result = {
             "items": [
