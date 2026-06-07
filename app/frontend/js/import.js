@@ -474,6 +474,18 @@ function _openVaultRoute(id) {
   tryOpen(15);
 }
 
+function _openLegacyUpdateRoute() {
+  if (authEnabled && !currentUserId) {
+    showLoginOverlay();
+    return;
+  }
+  if (typeof _currentSettingsSubmenu !== 'undefined') _currentSettingsSubmenu = 'update';
+  switchTabDirect('settings');
+  setTimeout(() => {
+    if (typeof switchSettingsSubmenu === 'function') switchSettingsSubmenu('update');
+  }, 0);
+}
+
 function _handleRoute() {
   // Handle hash-based deep links (e.g. from push notification clicks).
   if (window.location.hash === '#invites') {
@@ -482,6 +494,10 @@ function _handleRoute() {
     return;
   }
   const path = window.location.pathname;
+  if (path === '/legacy') {
+    _openLegacyUpdateRoute();
+    return;
+  }
   const personMatch = path.match(/^\/person\/(\d+)$/);
   if (personMatch) {
     openPersonDetail(parseInt(personMatch[1], 10));
@@ -513,6 +529,7 @@ function _handleRoute() {
 
 window.addEventListener('popstate', (e) => {
   const path = (e.state && e.state.path) || window.location.pathname;
+  if (path === '/legacy') { _openLegacyUpdateRoute(); return; }
   const personMatch = path.match(/^\/person\/(\d+)$/);
   if (personMatch) { openPersonDetail(parseInt(personMatch[1], 10)); return; }
   const movieMatch = path.match(/^\/movie\/(\d+)$/);

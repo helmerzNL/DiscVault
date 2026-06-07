@@ -1520,7 +1520,16 @@
                 <p style="font-size:0.9rem; color:var(--text-muted); line-height:1.75; margin:0 0 16px;" data-i18n="settings.updateDesc">
                   DiscVault was mijn allereerste app. Tijdens de ontwikkeling, samen met Claude Code en GPT Codex, heb ik enorm veel geleerd. Daardoor ontdekte ik ook dat sommige onderdelen niet helemaal goed waren opgezet. Daarom heb ik DiscVault opnieuw vanaf de grond opgebouwd. Deze nieuwe versie is nu beschikbaar. Meer informatie over het upgradeproces vind je op https://discvault.eu/legacy. Deze legacy-versie van DiscVault wordt vanaf 1 juli niet meer ondersteund, maar migreren is heel eenvoudig: bij een upgrade wordt alle huidige data automatisch meegenomen.
                 </p>
-                <a class="btn btn-primary" href="https://discvault.eu/legacy" target="_blank" rel="noopener" data-i18n="settings.updateLink">Meer over upgraden</a>
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+                  <label style="display:flex; align-items:center; gap:10px; font-size:0.88rem; cursor:pointer; color:var(--text);">
+                    <input type="checkbox" id="legacyUpdatePopupToggle" onchange="restoreLegacyUpdatePopup(this)" style="accent-color:var(--accent); width:18px; height:18px; flex-shrink:0;">
+                    <span data-i18n="settings.updateShowPopup">Popup bij volgende opening tonen</span>
+                  </label>
+                </div>
+                <div class="btn-row" style="margin-bottom:10px;">
+                  <a class="btn btn-primary" href="https://discvault.eu/legacy" target="_blank" rel="noopener" data-i18n="settings.updateLink">Meer over upgraden</a>
+                </div>
+                <div id="settingsUpdateStatus" class="status-msg"></div>
               </div>
             </div>
           </div>

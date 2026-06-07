@@ -590,9 +590,15 @@ def register_settings_routes(
 
     @app.route("/api/settings/test-banner", methods=["GET"])
     def get_test_banner_settings():
-        dismissed = _bool_setting("test_notification_banner_dismissed", False)
+        visible = _bool_setting("test_notification_banner_enabled", False)
+        if visible:
+            # One-shot popup: once a logged-in client has fetched it, turn it off
+            # until an admin explicitly enables it again from Settings > Update.
+            _set_setting("test_notification_banner_enabled", "false")
+            _set_setting("test_notification_banner_dismissed", "true")
         return jsonify({
-            "visible": not dismissed,
+            "visible": visible,
+            "enabled": False,
             "message": "This is a test message",
         })
 
@@ -603,14 +609,16 @@ def register_settings_routes(
             return err
         data = request.json or {}
         visible = bool(data.get("visible", True))
+        _set_setting("test_notification_banner_enabled", "true" if visible else "false")
         _set_setting("test_notification_banner_dismissed", "false" if visible else "true")
         add_log(
             "settings",
-            "Test notificatiebanner zichtbaar gemaakt" if visible else "Test notificatiebanner gesloten",
+            "Test notificatiepopup opnieuw ingeschakeld" if visible else "Test notificatiepopup uitgeschakeld",
             level="info",
         )
         return jsonify({
             "visible": visible,
+            "enabled": visible,
             "message": "This is a test message",
         })
 

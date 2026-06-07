@@ -115,14 +115,60 @@ function switchSettingsSubmenu(name) {
     const dst = document.getElementById('aboutVersion');
     if (dst && src) dst.textContent = src.textContent;
   }
+  if (normalizedName === 'update') {
+    const toggle = document.getElementById('legacyUpdatePopupToggle');
+    if (toggle) {
+      toggle.checked = false;
+      toggle.disabled = false;
+    }
+  }
 }
 
 document.addEventListener('click', event => {
   const btn = event.target.closest('#panel-settings [data-settings-sub]');
   if (!btn) return;
   event.preventDefault();
-  switchSettingsSubmenu(btn.getAttribute('data-settings-sub') || 'general');
+  const target = btn.getAttribute('data-settings-sub') || 'general';
+  switchSettingsSubmenu(target);
+  if (target === 'update' && typeof _pushRoute === 'function') {
+    _pushRoute('/legacy');
+  } else if (window.location.pathname === '/legacy' && typeof _pushRoute === 'function') {
+    _pushRoute('/settings');
+  }
 });
+
+async function restoreLegacyUpdatePopup(toggle) {
+  if (toggle && !toggle.checked) return;
+  if (toggle) toggle.disabled = true;
+  showStatus('settingsUpdateStatus', t('settings.updatePopupSaving'), 'info');
+  try {
+    const r = await fetch(`${API}/settings/test-banner`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible: true }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) {
+      showStatus('settingsUpdateStatus', d.error || `HTTP ${r.status}`, 'error');
+      if (toggle) {
+        toggle.checked = false;
+        toggle.disabled = false;
+      }
+      return;
+    }
+    if (toggle) {
+      toggle.checked = false;
+      toggle.disabled = false;
+    }
+    showStatus('settingsUpdateStatus', t('settings.updatePopupShown'), 'success');
+  } catch (e) {
+    if (toggle) {
+      toggle.checked = false;
+      toggle.disabled = false;
+    }
+    showStatus('settingsUpdateStatus', t('js.error', e.message), 'error');
+  }
+}
 
 // ── Rating country picker ────────────────────────────────────────────────────
 

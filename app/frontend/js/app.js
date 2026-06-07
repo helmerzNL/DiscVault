@@ -16,7 +16,7 @@ async function loadTestNotificationBanner() {
     const d = await r.json();
     setTestNotificationBannerVisible(d.visible !== false, d.message || 'This is a test message');
   } catch(e) {
-    setTestNotificationBannerVisible(true, 'This is a test message');
+    setTestNotificationBannerVisible(false);
   }
 }
 
