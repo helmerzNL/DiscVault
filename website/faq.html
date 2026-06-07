@@ -102,7 +102,7 @@
             </summary>
             <div class="faq-answer">
               <p data-i18n="faq.install.p1">DiscVault is designed to run self-hosted. The easiest setup is the all-in-one Docker container, which includes the web app and backend in one image. On Unraid, use the Community Applications template and keep your database and uploaded assets on persistent storage.</p>
-              <p data-i18n="faq.install.p2">For stable use, choose the <code>latest</code> image tag. If you want to test new features early, choose the <code>beta</code> tag and expect occasional changes while features are still being refined.</p>
+              <p data-i18n="faq.install.p2">To install DiscVault 26, use the <code>v26</code> image tag. To stay on the old Legacy version, use the <code>legacy</code> tag instead of <code>latest</code>.</p>
               <p class="faq-links">
                 <a href="https://github.com/helmerzNL/DiscVault/pkgs/container/discvault" target="_blank" rel="noreferrer">GitHub Container Registry</a>
                 <a href="https://github.com/helmerzNL/unraid-templates" target="_blank" rel="noreferrer">Unraid template</a>
@@ -132,7 +132,7 @@
                 <li data-i18n="faq.legacy.steps.2">Change only the image tag to <code>legacy</code>.</li>
                 <li data-i18n="faq.legacy.steps.3">Pull the image, recreate the container, and confirm that your collection opens normally.</li>
               </ul>
-              <p data-i18n="faq.legacy.note">The legacy image is meant for people who want to keep running the old version while DiscVault 26 beta matures. New DiscVault 26 features, migration improvements, and future interface updates are added to the beta and later production images instead.</p>
+              <p data-i18n="faq.legacy.note">The legacy image is meant for people who want to keep running the old version. New DiscVault 26 features, migration improvements, and future interface updates are added to the v26 image instead.</p>
             </div>
           </details>
 
@@ -171,7 +171,7 @@
     </footer>
 
     <script src="./translations.js?v=12"></script>
-    <script src="./translations-extra.js?v=2"></script>
+    <script src="./translations-extra.js?v=3"></script>
     <script>
       document.querySelector('.hamburger').addEventListener('click', function () {
         var open = this.getAttribute('aria-expanded') === 'true';
