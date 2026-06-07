@@ -342,6 +342,35 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(item["containers"][0]["memberCount"], 3)
         self.assertEqual(reviewed["counts"]["reviewMatched"], 1)
 
+    def test_import_metadata_box_set_proposals_tolerates_missing_barcode_fields(self):
+        metadata_result = {
+            "query": {"barcode": "883929704736"},
+            "results": [
+                {
+                    "pluginId": "movievault_26",
+                    "boxSetProposal": {
+                        "title": "The Lord of the Rings: The Motion Picture Trilogy",
+                        "members": [
+                            {"title": "The Fellowship of the Ring"},
+                            {"title": "The Two Towers"},
+                            {"title": "The Return of the King"},
+                        ],
+                        "boxSetEvidence": {
+                            "barcodeMatch": True,
+                            "membersAreExplicit": True,
+                            "memberConfidence": "identified",
+                        },
+                    },
+                }
+            ],
+        }
+
+        proposals = next_worker.import_metadata_box_set_proposals(metadata_result)
+
+        self.assertEqual(len(proposals), 1)
+        self.assertEqual(proposals[0]["provider"], "movievault_26")
+        self.assertEqual(len(proposals[0]["members"]), 3)
+
     def test_bluray_release_title_is_cleaned_for_movie_identity(self):
         self.assertEqual(
             _movie_title_from_release_title("A Minecraft Movie 4K Blu-ray (SteelBook) (France)"),

@@ -784,29 +784,29 @@ def import_box_set_evidence_bool(evidence: dict[str, Any], *keys: str) -> bool:
 
 
 def import_box_set_provider_text(proposal: dict[str, Any]) -> str:
-    return clean_text(
+    return (clean_text(
         proposal.get("provider")
         or proposal.get("source")
         or proposal.get("sourceLabel")
         or proposal.get("memberSource")
         or proposal.get("member_source")
-    ).casefold()
+    ) or "").casefold()
 
 
 def import_box_set_candidate_only(proposal: dict[str, Any]) -> bool:
     evidence = import_box_set_evidence(proposal)
-    confidence = clean_text(
+    confidence = (clean_text(
         evidence.get("memberConfidence")
         or evidence.get("member_confidence")
         or proposal.get("memberConfidence")
         or proposal.get("member_confidence")
-    ).casefold()
-    member_source = clean_text(
+    ) or "").casefold()
+    member_source = (clean_text(
         evidence.get("memberSource")
         or evidence.get("member_source")
         or proposal.get("memberSource")
         or proposal.get("member_source")
-    ).casefold()
+    ) or "").casefold()
     return (
         bool_value(proposal.get("candidateOnly") or proposal.get("candidate_only"))
         or bool_value(proposal.get("detectedWithoutMembers") or proposal.get("detected_without_members"))
@@ -825,7 +825,7 @@ def import_box_set_auto_importable(proposal: dict[str, Any]) -> bool:
     evidence = import_box_set_evidence(proposal)
     explicit = import_box_set_evidence_bool(evidence, "membersAreExplicit", "members_are_explicit")
     if not explicit:
-        confidence = clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")).casefold()
+        confidence = (clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence")) or "").casefold()
         explicit = confidence in {"confirmed", "exact", "source_verified", "needs_member_confirmation"}
     barcode_match = import_box_set_evidence_bool(evidence, "barcodeMatch", "barcode_match")
     return barcode_match and explicit
@@ -872,10 +872,10 @@ def import_metadata_box_set_proposals(metadata_result: dict[str, Any]) -> list[d
                 normalized["box_set_evidence"] = evidence
             key = "|".join(
                 [
-                    clean_text(normalized.get("provider")),
-                    clean_text(normalized.get("barcode")),
-                    clean_text(normalized.get("title") or normalized.get("name")).casefold(),
-                    ",".join(clean_text(member.get("title") or member.get("name")).casefold() for member in members[:20]),
+                    clean_text(normalized.get("provider")) or "",
+                    clean_text(normalized.get("barcode")) or "",
+                    (clean_text(normalized.get("title") or normalized.get("name")) or "").casefold(),
+                    ",".join((clean_text(member.get("title") or member.get("name")) or "").casefold() for member in members[:20]),
                 ]
             )
             if key in seen:
