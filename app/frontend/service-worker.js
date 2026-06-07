@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v146";
+const SW_VERSION = "discvault-sw-v147";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -493,6 +493,18 @@ async function networkFirst(request, cacheName) {
   }
 }
 
+async function appShellNetworkFirst(request) {
+  try {
+    const networkRequest = new Request(request, { cache: "reload" });
+    const resp = await fetch(networkRequest);
+    if (resp && resp.ok) await cachePut(request, resp, APP_CACHE);
+    return resp;
+  } catch {
+    const cached = await cacheMatch(request, APP_CACHE);
+    return cached || appShellFallback();
+  }
+}
+
 async function appShellFallback() {
   for (const path of APP_SHELL_FALLBACKS) {
     const cached = await cacheMatch(new Request(new URL(path, self.location.origin).toString(), { method: "GET" }), APP_CACHE);
@@ -516,9 +528,7 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET") return;
 
   if (request.mode === "navigate") {
-    event.respondWith(
-      networkFirst(request, APP_CACHE).catch(() => appShellFallback())
-    );
+    event.respondWith(appShellNetworkFirst(request));
     return;
   }
 
