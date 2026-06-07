@@ -3171,7 +3171,9 @@ Object.assign(T.tr, {
 });
 Object.keys(T).forEach(function(lang) {
   Object.assign(T[lang], {
-    'screenshots.h2.v26mobile':'Preview DiscVault 26 across desktop and mobile, then compare it with the current desktop app.',
+    'screenshots.h2.v26mobile':'Preview DiscVault 26 across desktop and mobile.',
+    'screenshots.label.v26desktop':'DiscVault 26 desktop',
+    'screenshots.label.v26desktopgallery':'DiscVault 26 desktop gallery',
     'screenshots.label.v26mobile':'DiscVault 26 mobile'
   });
 });
