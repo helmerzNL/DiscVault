@@ -10062,6 +10062,104 @@ def ui_preview_html(
       align-items: start;
       min-width: 0;
     }
+    .profile-api-submenu {
+      margin-bottom: 2px;
+    }
+    .profile-api-panel {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .profile-api-panel[data-profile-api-panel="general"] {
+      grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.35fr);
+      align-items: start;
+    }
+    .profile-api-activity-box {
+      width: 100%;
+    }
+    .profile-api-log-filter-row {
+      display: flex;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+    .profile-api-log-filter-row label {
+      display: grid;
+      gap: 6px;
+      width: min(360px, 100%);
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .profile-api-log-list {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .profile-api-log-row {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 68%, transparent);
+    }
+    .profile-api-log-row-head {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+      min-width: 0;
+    }
+    .profile-api-log-row-title {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .profile-api-log-row-title strong,
+    .profile-api-log-row-title span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .profile-api-log-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+    .profile-api-log-field {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      padding: 8px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .profile-api-log-field span {
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+    .profile-api-log-field strong {
+      min-width: 0;
+      font-size: 0.82rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .profile-api-log-json {
+      margin: 0;
+      max-height: 180px;
+      overflow: auto;
+      padding: 10px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel) 76%, transparent);
+      color: var(--text);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
     .profile-section-box {
       display: grid;
       gap: 12px;
@@ -11744,6 +11842,16 @@ def ui_preview_html(
       .profile-section-grid {
         grid-template-columns: 1fr;
       }
+      .profile-api-panel[data-profile-api-panel="general"],
+      .profile-api-log-grid {
+        grid-template-columns: 1fr;
+      }
+      .profile-api-log-filter-row {
+        justify-content: stretch;
+      }
+      .profile-api-log-filter-row label {
+        width: 100%;
+      }
       .profile-identity {
         align-items: flex-start;
       }
@@ -13193,14 +13301,26 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="api">
-              <div class="profile-section-grid">
+              <div class="segmented profile-submenu profile-api-submenu" role="tablist" aria-label="API and MCP sections">
+                <button type="button" class="active" data-profile-api-tab="general" data-next-i18n="profile.apiTabGeneral">General</button>
+                <button type="button" data-profile-api-tab="create" data-next-i18n="profile.apiTabCreate">Create key</button>
+                <button type="button" data-profile-api-tab="activity" data-next-i18n="profile.apiTabActivity">Activity</button>
+              </div>
+              <div class="profile-api-panel" data-profile-api-panel="general">
                 <section class="profile-section-box">
                   <h4 data-next-i18n="profile.apiMcp">API & MCP</h4>
                   <p data-next-i18n="profile.apiMcpHelp">Create scoped access tokens for external API clients and the DiscVault MCP server.</p>
                   <div class="profile-meta" id="profileApiMcpSummary"></div>
                 </section>
                 <section class="profile-section-box">
+                  <h4 data-next-i18n="profile.accessTokens">Access tokens</h4>
+                  <div class="profile-passkey-list" id="profileApiTokenList"></div>
+                </section>
+              </div>
+              <div class="profile-api-panel hidden" data-profile-api-panel="create">
+                <section class="profile-section-box">
                   <h4 data-next-i18n="profile.createAccessToken">Create access token</h4>
+                  <p data-next-i18n="profile.createAccessTokenHelp">Choose exactly which API and MCP actions this key may use.</p>
                   <form class="profile-form" id="profileApiTokenForm">
                     <label for="profileApiTokenNameInput">
                       <span data-next-i18n="profile.tokenName">Token name</span>
@@ -13215,10 +13335,24 @@ def ui_preview_html(
                   <div class="login-message" id="profileApiMessage"></div>
                 </section>
               </div>
-              <section class="profile-section-box">
-                <h4 data-next-i18n="profile.accessTokens">Access tokens</h4>
-                <div class="profile-passkey-list" id="profileApiTokenList"></div>
-              </section>
+              <div class="profile-api-panel hidden" data-profile-api-panel="activity">
+                <section class="profile-section-box profile-api-activity-box">
+                  <div class="detail-card-head compact">
+                    <div>
+                      <h4 data-next-i18n="profile.apiActivityTitle">API & MCP activity</h4>
+                      <p data-next-i18n="profile.apiActivityHelp">Review API and MCP requests made with your access keys.</p>
+                    </div>
+                    <button type="button" class="secondary-button" id="profileApiAuditRefreshButton" data-next-i18n="profile.apiActivityRefresh">Refresh</button>
+                  </div>
+                  <div class="profile-api-log-filter-row">
+                    <label for="profileApiAuditTokenFilter">
+                      <span data-next-i18n="profile.apiActivityTokenFilter">Access key</span>
+                      <select id="profileApiAuditTokenFilter"></select>
+                    </label>
+                  </div>
+                  <div class="profile-api-log-list" id="profileApiAuditList"></div>
+                </section>
+              </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="about">
               <section class="profile-section-box">
@@ -13783,7 +13917,9 @@ def ui_preview_html(
     let profileCredentials = [];
     let profileRecovery = {};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
+    let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all"};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
+    let activeProfileApiTab = localStorage.getItem("dv_next_profile_api_tab") || "general";
     let containerManagerType = "box_set";
     let appAdmin = {
       activeTab: "access",
@@ -25175,9 +25311,26 @@ def ui_preview_html(
         const visible = canUseProfileTab(panel.dataset.profilePanel);
         panel.classList.toggle("hidden", !visible || panel.dataset.profilePanel !== selected);
       });
+      if (selected === "api") setProfileApiTab(activeProfileApiTab);
     }
     function syncProfilePanelVisibility() {
       setProfileTab(activeProfileTab);
+    }
+    function setProfileApiTab(tab) {
+      const selected = tab || "general";
+      activeProfileApiTab = selected;
+      localStorage.setItem("dv_next_profile_api_tab", selected);
+      document.querySelectorAll("[data-profile-api-tab]").forEach((button) => {
+        const active = button.dataset.profileApiTab === selected;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll("[data-profile-api-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.profileApiPanel !== selected);
+      });
+      if (selected === "activity" && !profileApiAudit.loaded && !profileApiAudit.loading) {
+        loadProfileApiAuditEvents();
+      }
     }
     function renderPreferences() {
       const libraryList = document.getElementById("profilePreferenceList");
@@ -25640,6 +25793,88 @@ def ui_preview_html(
           </div>
         `).join("");
     }
+    function renderProfileApiAuditTokenFilter() {
+      const select = document.getElementById("profileApiAuditTokenFilter");
+      if (!select) return;
+      const current = profileApiAudit.tokenId || "all";
+      const tokens = profileApiAccess?.tokens || [];
+      select.innerHTML = `
+        <option value="all">${escapeHtml(tNext("profile.apiActivityAllTokens", "All keys"))}</option>
+        ${tokens.map((token) => `<option value="${escapeHtml(token.id)}">${escapeHtml(token.name || "API token")}</option>`).join("")}
+      `;
+      select.value = tokens.some((token) => String(token.id) === String(current)) ? current : "all";
+      profileApiAudit.tokenId = select.value;
+    }
+    function apiAuditCommandLabel(event) {
+      const metadata = event?.metadata || {};
+      return metadata.command || metadata.tool || event?.eventType || tNext("profile.apiActivityUnknownCommand", "Unknown command");
+    }
+    function apiAuditRequestSummary(metadata) {
+      const payload = {};
+      if (metadata.query && Object.keys(metadata.query || {}).length) payload.query = metadata.query;
+      if (metadata.request && Object.keys(metadata.request || {}).length) payload.request = metadata.request;
+      if (metadata.body && Object.keys(metadata.body || {}).length) payload.body = metadata.body;
+      return Object.keys(payload).length ? JSON.stringify(payload, null, 2) : "";
+    }
+    function renderProfileApiAudit() {
+      const list = document.getElementById("profileApiAuditList");
+      if (!list) return;
+      renderProfileApiAuditTokenFilter();
+      if (profileApiAudit.loading) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("profile.apiActivityLoading", "Loading activity..."))}</div>`;
+        return;
+      }
+      const events = profileApiAudit.events || [];
+      if (!events.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("profile.apiActivityNoEvents", "No API or MCP activity found for this key."))}</div>`;
+        return;
+      }
+      list.innerHTML = events.map((event) => {
+        const metadata = event.metadata || {};
+        const requestSummary = apiAuditRequestSummary(metadata);
+        const endpoint = [metadata.method, metadata.endpoint].filter(Boolean).join(" ") || event.summary || "-";
+        const agent = metadata.agent || metadata.aiAgent || metadata.toolAgent || event.userAgent || "-";
+        const tokenName = metadata.apiTokenName || tNext("profile.apiActivityUnknownToken", "Unknown key");
+        return `
+          <article class="profile-api-log-row">
+            <div class="profile-api-log-row-head">
+              <div class="profile-api-log-row-title">
+                <strong>${escapeHtml(apiAuditCommandLabel(event))}</strong>
+                <span>${escapeHtml(shortDateTime(event.createdAt))}</span>
+              </div>
+              <span class="tag blue">${escapeHtml(event.category || "api")}</span>
+            </div>
+            <div class="profile-api-log-grid">
+              <div class="profile-api-log-field">
+                <span>${escapeHtml(tNext("profile.apiActivityEndpoint", "Endpoint"))}</span>
+                <strong title="${escapeHtml(endpoint)}">${escapeHtml(endpoint)}</strong>
+              </div>
+              <div class="profile-api-log-field">
+                <span>${escapeHtml(tNext("profile.apiActivityToken", "Access key"))}</span>
+                <strong title="${escapeHtml(tokenName)}">${escapeHtml(tokenName)}</strong>
+              </div>
+              <div class="profile-api-log-field">
+                <span>${escapeHtml(tNext("profile.apiActivityIp", "IP address"))}</span>
+                <strong>${escapeHtml(event.requestIp || "-")}</strong>
+              </div>
+              <div class="profile-api-log-field">
+                <span>${escapeHtml(tNext("profile.apiActivityAgent", "Agent or tool"))}</span>
+                <strong title="${escapeHtml(agent)}">${escapeHtml(agent)}</strong>
+              </div>
+              <div class="profile-api-log-field">
+                <span>${escapeHtml(tNext("profile.apiActivityEvent", "Event"))}</span>
+                <strong title="${escapeHtml(event.eventType || "-")}">${escapeHtml(event.eventType || "-")}</strong>
+              </div>
+              <div class="profile-api-log-field">
+                <span>${escapeHtml(tNext("profile.apiActivityTarget", "Target"))}</span>
+                <strong title="${escapeHtml([event.targetType, event.targetId].filter(Boolean).join(": ") || "-")}">${escapeHtml([event.targetType, event.targetId].filter(Boolean).join(": ") || "-")}</strong>
+              </div>
+            </div>
+            ${requestSummary ? `<pre class="profile-api-log-json" aria-label="${escapeHtml(tNext("profile.apiActivityAsked", "Request"))}">${escapeHtml(requestSummary)}</pre>` : ""}
+          </article>
+        `;
+      }).join("");
+    }
     function renderProfileApiAccess(newToken) {
       const summary = document.getElementById("profileApiMcpSummary");
       const permissionList = document.getElementById("profileApiPermissionList");
@@ -25714,6 +25949,8 @@ def ui_preview_html(
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("profile.noAccessTokens", "No access tokens yet."))}</div>`;
       }
+      renderProfileApiAuditTokenFilter();
+      renderProfileApiAudit();
       syncProfilePanelVisibility();
     }
     async function loadProfileDetails() {
@@ -25893,6 +26130,7 @@ def ui_preview_html(
         profileApiAccess = payload.apiAccess || profileApiAccess;
         if (nameInput) nameInput.value = "";
         renderProfileApiAccess(payload.token);
+        if (activeProfileApiTab === "activity") loadProfileApiAuditEvents(true);
         setProfileApiMessage(tNext("profile.tokenCreated", "Access token created."), "good");
       } catch (error) {
         setProfileApiMessage(error.message || String(error), "bad");
@@ -25908,9 +26146,29 @@ def ui_preview_html(
         const payload = await authApiJson(`/api/next/profile/api-tokens/${encodeURIComponent(tokenId)}`, {method: "DELETE"});
         profileApiAccess = payload.apiAccess || profileApiAccess;
         renderProfileApiAccess();
+        if (activeProfileApiTab === "activity") loadProfileApiAuditEvents(true);
         setProfileApiMessage(tNext("profile.tokenRevoked", "Access token revoked."), "good");
       } catch (error) {
         setProfileApiMessage(error.message || String(error), "bad");
+      }
+    }
+    async function loadProfileApiAuditEvents(force) {
+      if (profileApiAudit.loading && !force) return;
+      profileApiAudit.loading = true;
+      renderProfileApiAudit();
+      try {
+        const tokenId = profileApiAudit.tokenId && profileApiAudit.tokenId !== "all" ? profileApiAudit.tokenId : "";
+        const params = new URLSearchParams({limit: "100"});
+        if (tokenId) params.set("tokenId", tokenId);
+        const payload = await authApiJson(`/api/next/profile/api-audit-events?${params.toString()}`);
+        profileApiAudit.events = payload.events || [];
+        profileApiAudit.loaded = true;
+      } catch (error) {
+        profileApiAudit.events = [];
+        setProfileApiMessage(error.message || String(error), "bad");
+      } finally {
+        profileApiAudit.loading = false;
+        renderProfileApiAudit();
       }
     }
     function setProfileEditMessage(message, tone) {
@@ -26409,6 +26667,15 @@ def ui_preview_html(
       document.getElementById("profileApiTokenList")?.addEventListener("click", (event) => {
         const revokeButton = event.target.closest("[data-profile-api-token-revoke]");
         if (revokeButton) revokeProfileApiToken(revokeButton.dataset.profileApiTokenRevoke);
+      });
+      document.querySelectorAll("[data-profile-api-tab]").forEach((button) => {
+        button.addEventListener("click", () => setProfileApiTab(button.dataset.profileApiTab));
+      });
+      document.getElementById("profileApiAuditRefreshButton")?.addEventListener("click", () => loadProfileApiAuditEvents(true));
+      document.getElementById("profileApiAuditTokenFilter")?.addEventListener("change", (event) => {
+        profileApiAudit.tokenId = event.target.value || "all";
+        profileApiAudit.loaded = false;
+        loadProfileApiAuditEvents(true);
       });
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
@@ -38861,6 +39128,68 @@ def audit_event_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def api_request_query_payload() -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key in request.args.keys():
+        values = request.args.getlist(key)
+        payload[key] = values if len(values) > 1 else (values[0] if values else "")
+    return payload
+
+
+def api_audit_metadata(
+    actor: dict[str, Any] | None,
+    *,
+    command: str,
+    request_payload: dict[str, Any] | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    actor = actor or {}
+    api_token = actor.get("apiToken") or {}
+    metadata: dict[str, Any] = {
+        "command": command,
+        "method": request.method,
+        "endpoint": request.path,
+        "query": api_request_query_payload(),
+        "agent": request.headers.get("X-DiscVault-Agent")
+        or request.headers.get("X-MCP-Client")
+        or request.headers.get("User-Agent"),
+        "tool": request.headers.get("X-DiscVault-MCP-Tool") or command,
+        "apiTokenId": api_token.get("id"),
+        "apiTokenName": api_token.get("name"),
+        "apiTokenScopes": api_token.get("scopes") or [],
+        "apiTokenPermissions": api_token.get("permissionKeys") or [],
+    }
+    if request_payload is not None:
+        metadata["request"] = request_payload
+    if extra:
+        metadata.update(extra)
+    return metadata
+
+
+def audit_api_interaction(
+    conn,
+    actor: dict[str, Any],
+    *,
+    command: str,
+    event_type: str,
+    target_type: str | None = None,
+    target_id: Any = None,
+    summary: str | None = None,
+    request_payload: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    audit_event(
+        conn,
+        event_type=event_type,
+        category="api",
+        actor=actor,
+        target_type=target_type,
+        target_id=target_id,
+        summary=summary,
+        metadata=api_audit_metadata(actor, command=command, request_payload=request_payload, extra=metadata),
+    )
+
+
 def metadata_refresh_jobs(
     conn,
     *,
@@ -39907,7 +40236,15 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="api_access_token",
                     target_id=token_row["id"],
                     summary=f"Created API token {name}",
-                    metadata={"scopes": scopes, "permissionKeys": permission_keys},
+                    metadata={
+                        "apiTokenId": token_row["id"],
+                        "apiTokenName": name,
+                        "command": "create_api_token",
+                        "method": request.method,
+                        "endpoint": request.path,
+                        "scopes": scopes,
+                        "permissionKeys": permission_keys,
+                    },
                 )
             return response(
                 {
@@ -39950,7 +40287,15 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="api_access_token",
                     target_id=token_uuid,
                     summary=f"Revoked API token {token_row.get('name')}",
-                    metadata={"scopes": token_row.get("scopes") or [], "permissionKeys": token_row.get("permission_keys") or []},
+                    metadata={
+                        "apiTokenId": token_uuid,
+                        "apiTokenName": token_row.get("name"),
+                        "command": "revoke_api_token",
+                        "method": request.method,
+                        "endpoint": request.path,
+                        "scopes": token_row.get("scopes") or [],
+                        "permissionKeys": token_row.get("permission_keys") or [],
+                    },
                 )
             return response(
                 {
@@ -39959,6 +40304,66 @@ def register_routes(flask_app: Flask) -> None:
                     "apiAccess": profile_api_access_payload(conn, actor),
                 }
             )
+
+    @flask_app.get("/api/next/profile/api-audit-events")
+    def get_next_profile_api_audit_events():
+        token_id = clean_text(request.args.get("tokenId") or request.args.get("token_id"))
+        token_uuid = None
+        if token_id and token_id.lower() != "all":
+            token_uuid = parse_uuid(token_id, "tokenId")
+        try:
+            limit = int(request.args.get("limit") or 100)
+        except (TypeError, ValueError):
+            limit = 100
+        limit = min(max(limit, 1), 250)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            actor["permissions"] = sorted(next_user_permission_keys(conn, actor["id"]))
+            access = profile_api_access_payload(conn, actor)
+            if not access.get("manageable"):
+                raise NextApiError("Permission required: API or MCP access", 403)
+            if not table_exists(conn, "audit_events"):
+                return response({"status": "ok", "events": [], "tokenId": str(token_uuid) if token_uuid else "all"})
+            conditions = [
+                "actor_user_id=%s",
+                """
+                (
+                    category IN ('api', 'mcp')
+                    OR event_type IN ('api_token.created', 'api_token.revoked')
+                )
+                """,
+                """
+                (
+                    event_type LIKE 'api.%'
+                    OR event_type LIKE 'mcp.%'
+                    OR event_type IN ('api_token.created', 'api_token.revoked')
+                )
+                """,
+            ]
+            params: list[Any] = [actor["id"]]
+            if token_uuid:
+                conditions.append("(metadata->>'apiTokenId'=%s OR target_id=%s)")
+                params.extend([str(token_uuid), str(token_uuid)])
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT id, event_type, category, actor_user_id, actor_username, actor_role,
+                           target_type, target_id, summary, metadata, request_ip, user_agent, created_at
+                    FROM audit_events
+                    WHERE {' AND '.join(conditions)}
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (*params, limit),
+                )
+                rows = cur.fetchall()
+        return response(
+            {
+                "status": "ok",
+                "events": [audit_event_row(row) for row in rows],
+                "tokenId": str(token_uuid) if token_uuid else "all",
+            }
+        )
 
     @flask_app.patch("/api/next/profile")
     def patch_next_profile():
@@ -41546,11 +41951,11 @@ def register_routes(flask_app: Flask) -> None:
                     (*params, limit, offset),
                 )
                 items = cur.fetchall()
-            audit_event(
+            audit_api_interaction(
                 conn,
+                actor,
+                command="search_collection" if query or media_format else "list_all_movies",
                 event_type="api.movies_read",
-                category="api",
-                actor=actor,
                 summary="Read movies through the public API",
                 metadata={"limit": limit, "offset": offset, "query": query, "format": media_format},
             )
@@ -41618,14 +42023,15 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(body.get("metadata") if isinstance(body.get("metadata"), dict) else {}),
                         ),
                     )
-                audit_event(
+                audit_api_interaction(
                     conn,
+                    actor,
+                    command="add_movie",
                     event_type="api.movie_created",
-                    category="api",
-                    actor=actor,
                     target_type="movie",
                     target_id=movie_id,
                     summary=f"Created movie {payload['title']} through the public API",
+                    request_payload={"title": title, "barcode": payload["barcode"], "format": payload["format"]},
                     metadata={"barcode": payload["barcode"]},
                 )
             detail = movie_detail_entity(conn, movie_id)
@@ -41635,8 +42041,18 @@ def register_routes(flask_app: Flask) -> None:
     def public_api_movie_detail(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
         with connect() as conn:
-            require_any_next_permission(conn, ("api.read", "mcp.tool.get_movie_details"))
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_movie_details"))
             detail = movie_detail_entity(conn, movie_uuid)
+            audit_api_interaction(
+                conn,
+                actor,
+                command="get_movie_details",
+                event_type="api.movie_detail_read",
+                target_type="movie",
+                target_id=movie_uuid,
+                summary="Read movie details through the public API",
+                request_payload={"movieId": str(movie_uuid)},
+            )
         if not detail:
             raise NextApiError("Movie not found", 404)
         return response({"status": "ok", "detail": detail})
@@ -41693,14 +42109,15 @@ def register_routes(flask_app: Flask) -> None:
                             movie_uuid,
                         ),
                     )
-                audit_event(
+                audit_api_interaction(
                     conn,
+                    actor,
+                    command="update_movie",
                     event_type="api.movie_updated",
-                    category="api",
-                    actor=actor,
                     target_type="movie",
                     target_id=movie_uuid,
                     summary=f"Updated movie {payload['title']} through the public API",
+                    request_payload={"title": payload["title"], "barcode": payload["barcode"], "format": payload["format"]},
                     metadata={"barcode": payload["barcode"]},
                 )
             detail = movie_detail_entity(conn, movie_uuid)
@@ -41723,11 +42140,11 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Permission required: collection.delete_all", 403)
             with conn.transaction():
                 existing, deleted = delete_movie_records(conn, movie_uuid)
-                audit_event(
+                audit_api_interaction(
                     conn,
+                    actor,
+                    command="delete_movie",
                     event_type="api.movie_deleted",
-                    category="api",
-                    actor=actor,
                     target_type="movie",
                     target_id=movie_uuid,
                     summary=f"Deleted movie {existing.get('title')} through the public API",
@@ -41738,8 +42155,16 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/api/v1/containers")
     def public_api_containers():
         with connect() as conn:
-            require_next_permission(conn, "api.read")
+            actor = require_next_permission(conn, "api.read")
             items = all_container_entities(conn, limit=1000) if table_exists(conn, "containers") else []
+            audit_api_interaction(
+                conn,
+                actor,
+                command="list_containers",
+                event_type="api.containers_read",
+                summary="Read containers through the public API",
+                metadata={"limit": 1000},
+            )
         return response({"status": "ok", "items": items})
 
     @flask_app.post("/api/next/api/v1/containers")
@@ -41781,14 +42206,15 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
-                audit_event(
+                audit_api_interaction(
                     conn,
+                    actor,
+                    command="create_container",
                     event_type="api.container_created",
-                    category="api",
-                    actor=actor,
                     target_type="container",
                     target_id=container_uuid,
                     summary=f"Created {container_type} {payload['title']} through the public API",
+                    request_payload={"containerType": container_type, "title": payload["title"], "barcode": payload["barcode"]},
                     metadata={
                         "containerType": container_type,
                         "publicId": public_id,
@@ -41805,8 +42231,18 @@ def register_routes(flask_app: Flask) -> None:
     def public_api_container_detail(container_id: str):
         container_uuid = parse_uuid(container_id, "containerId")
         with connect() as conn:
-            require_next_permission(conn, "api.read")
+            actor = require_next_permission(conn, "api.read")
             detail = container_detail_entity(conn, container_uuid)
+            audit_api_interaction(
+                conn,
+                actor,
+                command="get_container_details",
+                event_type="api.container_detail_read",
+                target_type="container",
+                target_id=container_uuid,
+                summary="Read container details through the public API",
+                request_payload={"containerId": str(container_uuid)},
+            )
         if not detail:
             raise NextApiError("Container not found", 404)
         return response({"status": "ok", "detail": detail})
@@ -41849,14 +42285,15 @@ def register_routes(flask_app: Flask) -> None:
                             container_uuid,
                         ),
                     )
-                audit_event(
+                audit_api_interaction(
                     conn,
+                    actor,
+                    command="update_container",
                     event_type="api.container_updated",
-                    category="api",
-                    actor=actor,
                     target_type="container",
                     target_id=container_uuid,
                     summary=f"Updated container {payload['title']} through the public API",
+                    request_payload={"title": payload["title"], "barcode": payload["barcode"], "containerType": existing.get("container_type")},
                     metadata={
                         "containerType": existing.get("container_type"),
                         "publicId": existing.get("public_id"),
@@ -41899,11 +42336,11 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "api.write")
             with conn.transaction():
                 existing, deleted = delete_container_records(conn, container_uuid)
-                audit_event(
+                audit_api_interaction(
                     conn,
+                    actor,
+                    command="delete_container",
                     event_type="api.container_deleted",
-                    category="api",
-                    actor=actor,
                     target_type="container",
                     target_id=container_uuid,
                     summary=f"Deleted container {existing.get('title')} through the public API",
@@ -41918,7 +42355,7 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/api/v1/stats")
     def public_api_stats():
         with connect() as conn:
-            require_any_next_permission(conn, ("api.read", "mcp.tool.get_collection_stats"))
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_collection_stats"))
             counts = {
                 "movies": count_table(conn, "movies"),
                 "people": count_table(conn, "people"),
@@ -41928,6 +42365,14 @@ def register_routes(flask_app: Flask) -> None:
                 "mediaAssets": count_table(conn, "media_assets"),
                 "users": count_table(conn, "users"),
             }
+            audit_api_interaction(
+                conn,
+                actor,
+                command="get_collection_stats",
+                event_type="api.stats_read",
+                summary="Read collection stats through the public API",
+                metadata={"counts": counts},
+            )
             return response({"status": "ok", "counts": counts})
 
     @flask_app.get("/api/next/api/v1/lookup/<barcode>")
@@ -41940,6 +42385,18 @@ def register_routes(flask_app: Flask) -> None:
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             metadata = lookup_metadata_sources(conn, {"barcode": query_barcode, "detectBoxSets": True}, actor)
+            audit_api_interaction(
+                conn,
+                actor,
+                command="lookup_barcode",
+                event_type="api.barcode_lookup",
+                summary=f"Looked up barcode {query_barcode} through the public API",
+                request_payload={"barcode": query_barcode},
+                metadata={
+                    "barcode": query_barcode,
+                    "resultCount": len(metadata.get("results") or []) if isinstance(metadata, dict) else 0,
+                },
+            )
         return response({"status": "ok", "barcode": query_barcode, "metadata": metadata})
 
     @flask_app.get("/api/next/api/v1/watchlist")
@@ -41947,11 +42404,21 @@ def register_routes(flask_app: Flask) -> None:
         limit = min(max(int(request.args.get("limit", 200)), 1), 500)
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watchlist"))
+            items = personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit)
+            counts = personal_list_counts(conn, actor.get("id"))
+            audit_api_interaction(
+                conn,
+                actor,
+                command="get_watchlist",
+                event_type="api.watchlist_read",
+                summary="Read watchlist through the public API",
+                metadata={"limit": limit, "itemCount": len(items)},
+            )
             return response(
                 {
                     "status": "ok",
-                    "items": personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit),
-                    "counts": personal_list_counts(conn, actor.get("id")),
+                    "items": items,
+                    "counts": counts,
                 }
             )
 
@@ -41960,19 +42427,37 @@ def register_routes(flask_app: Flask) -> None:
         limit = min(max(int(request.args.get("limit", 200)), 1), 500)
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watch_history"))
+            items = personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit)
+            counts = personal_list_counts(conn, actor.get("id"))
+            audit_api_interaction(
+                conn,
+                actor,
+                command="get_watch_history",
+                event_type="api.watch_history_read",
+                summary="Read watch history through the public API",
+                metadata={"limit": limit, "itemCount": len(items)},
+            )
             return response(
                 {
                     "status": "ok",
-                    "items": personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit),
-                    "counts": personal_list_counts(conn, actor.get("id")),
+                    "items": items,
+                    "counts": counts,
                 }
             )
 
     @flask_app.get("/api/next/api/v1/groups")
     def public_api_groups():
         with connect() as conn:
-            require_any_next_permission(conn, ("api.read", "mcp.tool.get_groups"))
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_groups"))
             groups = media_group_entities(conn, limit=500) if table_exists(conn, "media_groups") else []
+            audit_api_interaction(
+                conn,
+                actor,
+                command="get_groups",
+                event_type="api.groups_read",
+                summary="Read media groups through the public API",
+                metadata={"itemCount": len(groups)},
+            )
         return response({"status": "ok", "items": groups})
 
     @flask_app.get("/api/next/mcp/catalog")
@@ -41990,6 +42475,14 @@ def register_routes(flask_app: Flask) -> None:
                 }
                 for tool in MCP_TOOL_NAMES
             ]
+            audit_api_interaction(
+                conn,
+                actor,
+                command="get_mcp_catalog",
+                event_type="api.mcp_catalog_read",
+                summary="Read MCP tool catalog",
+                metadata={"toolCount": len(tools)},
+            )
         return response({"status": "ok", "endpoint": "/mcp", "tools": tools})
 
     @flask_app.get("/api/next/plugins/registry")
