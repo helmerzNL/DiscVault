@@ -26,15 +26,32 @@
 </head>
 <body>
 
-<div class="test-notification-banner" id="testNotificationBanner" role="status" aria-live="polite">
-  <span id="testNotificationBannerText">This is a test message</span>
-  <button
-    type="button"
-    class="test-notification-dismiss"
-    id="testNotificationDismiss"
-    aria-label="Melding sluiten"
-    onclick="dismissTestNotificationBanner()"
-  >×</button>
+<div
+  class="test-notification-banner"
+  id="testNotificationBanner"
+  role="alertdialog"
+  aria-live="assertive"
+  aria-modal="false"
+  aria-labelledby="testNotificationBannerTitle"
+  aria-describedby="testNotificationBannerText"
+  aria-hidden="true"
+>
+  <div class="test-notification-card">
+    <div class="test-notification-icon" aria-hidden="true">
+      <span class="mdi mdi-alert-circle-outline"></span>
+    </div>
+    <div class="test-notification-content">
+      <div class="test-notification-kicker" id="testNotificationBannerTitle">Belangrijk bericht</div>
+      <p id="testNotificationBannerText">This is a test message</p>
+    </div>
+    <button
+      type="button"
+      class="test-notification-dismiss"
+      id="testNotificationDismiss"
+      aria-label="Melding sluiten"
+      onclick="dismissTestNotificationBanner()"
+    >×</button>
+  </div>
 </div>
 
 <header>
