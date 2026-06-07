@@ -752,6 +752,114 @@ def normalize_field_value(field: str, value: Any) -> Any:
     return normalize_value(value)
 
 
+def normalize_box_set_evidence(
+    value: Any,
+    *,
+    proposal: dict[str, Any] | None = None,
+    plugin_id: str = "",
+    source_ref: str = "",
+) -> dict[str, Any]:
+    evidence_source = value if isinstance(value, dict) else {}
+    proposal = proposal if isinstance(proposal, dict) else {}
+    members = []
+    for key in ("members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"):
+        raw_members = proposal.get(key)
+        if isinstance(raw_members, list):
+            members = [item for item in raw_members if isinstance(item, dict) and clean_text(item.get("title") or item.get("name"))]
+            if members:
+                break
+
+    def first_text(*values: Any) -> str:
+        for item in values:
+            text = clean_text(item)
+            if text:
+                return text
+        return ""
+
+    def first_bool(*values: Any, default: bool = False) -> bool:
+        for item in values:
+            if isinstance(item, bool):
+                return item
+            text = clean_text(item)
+            if text:
+                lowered = text.casefold()
+                if lowered in {"1", "true", "yes", "y", "on"}:
+                    return True
+                if lowered in {"0", "false", "no", "n", "off"}:
+                    return False
+        return default
+
+    member_count = evidence_source.get("memberCount", evidence_source.get("member_count"))
+    try:
+        member_count = int(member_count)
+    except (TypeError, ValueError):
+        member_count = len(members)
+
+    member_confidence = first_text(
+        evidence_source.get("memberConfidence"),
+        evidence_source.get("member_confidence"),
+        proposal.get("memberConfidence"),
+        proposal.get("member_confidence"),
+    )
+    detected_without_members = first_bool(
+        evidence_source.get("detectedWithoutMembers"),
+        evidence_source.get("detected_without_members"),
+        proposal.get("detectedWithoutMembers"),
+        proposal.get("detected_without_members"),
+    )
+    members_are_explicit = first_bool(
+        evidence_source.get("membersAreExplicit"),
+        evidence_source.get("members_are_explicit"),
+        proposal.get("membersAreExplicit"),
+        proposal.get("members_are_explicit"),
+        default=bool(members and member_confidence.casefold() not in {"candidate", "fallback", "metadata_candidates"}),
+    )
+    if detected_without_members or member_confidence.casefold() == "candidate":
+        members_are_explicit = False
+
+    normalized = {
+        "barcodeMatch": first_bool(evidence_source.get("barcodeMatch"), evidence_source.get("barcode_match"), proposal.get("barcodeMatch"), proposal.get("barcode_match")),
+        "entityType": first_text(evidence_source.get("entityType"), evidence_source.get("entity_type"), proposal.get("entityType"), proposal.get("entity_type"), "box_set"),
+        "memberSource": first_text(evidence_source.get("memberSource"), evidence_source.get("member_source"), proposal.get("memberSource"), proposal.get("member_source"), proposal.get("source"), plugin_id),
+        "memberConfidence": member_confidence or ("identified" if members_are_explicit and members else "candidate" if members else "needs_member_confirmation"),
+        "memberCount": max(member_count, 0),
+        "membersAreExplicit": bool(members_are_explicit),
+        "detectedWithoutMembers": bool(detected_without_members),
+        "format": first_text(evidence_source.get("format"), proposal.get("format")),
+        "sourceRef": first_text(evidence_source.get("sourceRef"), evidence_source.get("source_ref"), proposal.get("sourceRef"), proposal.get("source_ref"), proposal.get("detailUrl"), proposal.get("detail_url"), source_ref),
+    }
+    return {key: item for key, item in normalized.items() if value_present(item)}
+
+
+def normalize_box_set_proposal_contract(proposal: Any, *, plugin_id: str, source_ref: str) -> dict[str, Any]:
+    if not isinstance(proposal, dict):
+        return {}
+    normalized = normalize_value(proposal)
+    if not isinstance(normalized, dict):
+        return {}
+    evidence = normalize_box_set_evidence(
+        normalized.get("boxSetEvidence") or normalized.get("box_set_evidence"),
+        proposal=normalized,
+        plugin_id=plugin_id,
+        source_ref=source_ref,
+    )
+    if evidence:
+        normalized["boxSetEvidence"] = evidence
+        normalized["box_set_evidence"] = evidence
+        normalized.setdefault("entityType", evidence.get("entityType"))
+        normalized.setdefault("memberSource", evidence.get("memberSource"))
+        normalized.setdefault("member_source", evidence.get("memberSource"))
+        normalized.setdefault("memberConfidence", evidence.get("memberConfidence"))
+        normalized.setdefault("member_confidence", evidence.get("memberConfidence"))
+        normalized.setdefault("memberCount", evidence.get("memberCount"))
+        normalized.setdefault("member_count", evidence.get("memberCount"))
+        normalized.setdefault("membersAreExplicit", evidence.get("membersAreExplicit"))
+        normalized.setdefault("members_are_explicit", evidence.get("membersAreExplicit"))
+        normalized.setdefault("detectedWithoutMembers", evidence.get("detectedWithoutMembers"))
+        normalized.setdefault("detected_without_members", evidence.get("detectedWithoutMembers"))
+    return {key: item for key, item in normalized.items() if value_present(item)}
+
+
 def image_url_options(*values: Any) -> list[str]:
     options: list[str] = []
     seen: set[str] = set()
@@ -1173,6 +1281,27 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
             "sourceLabel": source_label,
             "sourceRef": source_ref,
         }
+    box_set_proposal = normalize_box_set_proposal_contract(
+        result.get("boxSetProposal") or result.get("box_set_proposal"),
+        plugin_id=plugin_id,
+        source_ref=source_ref,
+    )
+    box_set_proposals = [
+        normalized
+        for normalized in (
+            normalize_box_set_proposal_contract(item, plugin_id=plugin_id, source_ref=source_ref)
+            for item in (result.get("boxSetProposals") or result.get("box_set_proposals") or [])
+        )
+        if normalized
+    ]
+    if box_set_proposal and not box_set_proposals:
+        box_set_proposals = [box_set_proposal]
+    box_set_evidence = normalize_box_set_evidence(
+        result.get("boxSetEvidence") or result.get("box_set_evidence"),
+        proposal=box_set_proposal,
+        plugin_id=plugin_id,
+        source_ref=source_ref,
+    )
     return {
         "pluginId": plugin_id,
         "entrypoint": entrypoint,
@@ -1189,8 +1318,9 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "credits": credit_updates,
         "localizations": localization_updates,
         "candidates": result.get("items") or result.get("candidates") or [],
-        "boxSetProposal": result.get("boxSetProposal") or result.get("box_set_proposal"),
-        "boxSetProposals": result.get("boxSetProposals") or result.get("box_set_proposals") or [],
+        "boxSetEvidence": box_set_evidence,
+        "boxSetProposal": box_set_proposal,
+        "boxSetProposals": box_set_proposals,
         "raw": result,
     }
 

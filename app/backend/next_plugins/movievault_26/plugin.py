@@ -720,6 +720,29 @@ def _identify_member_with_other_plugins(member, context):
     return _merge_member_enrichment(member, enrichment or {}, expected_format), enrichment
 
 
+def _box_set_evidence(proposal, context=None):
+    context = context or {}
+    members = _member_list(proposal)
+    source_ref = _text(context.get("sourceRef") or proposal.get("sourceRef") or proposal.get("movievault_id") or proposal.get("movieVaultId") or proposal.get("id"))
+    input_barcode = _text(context.get("barcode"))
+    proposal_barcode = _text(_first_value(proposal, "barcode", "ean", "upc"))
+    barcode_match = bool(input_barcode and proposal_barcode and input_barcode == proposal_barcode)
+    if not barcode_match and source_ref.startswith("barcode:"):
+        barcode_match = bool(proposal_barcode and source_ref.split(":", 1)[1] == proposal_barcode)
+    members_are_explicit = bool(members)
+    return {
+        "barcodeMatch": barcode_match,
+        "entityType": "box_set",
+        "memberSource": _text(proposal.get("memberSource") or proposal.get("member_source")) or "MovieVault 26",
+        "memberConfidence": "identified" if members and all(not _member_needs_identification(m) for m in members) else "needs_member_confirmation" if members else "needs_member_confirmation",
+        "memberCount": len(members),
+        "membersAreExplicit": members_are_explicit,
+        "detectedWithoutMembers": not members,
+        "format": _text(proposal.get("format")),
+        "sourceRef": source_ref,
+    }
+
+
 def _normalize_box_set_proposal(payload, context=None):
     item = _box_set_entity(payload) if isinstance(payload, dict) else {}
     if not item:
@@ -803,8 +826,8 @@ def _normalize_box_set_proposal(payload, context=None):
         "memberCount": len(members),
         "member_source": "MovieVault 26",
         "memberSource": "MovieVault 26",
-        "member_confidence": "identified" if members and all(not _member_needs_identification(m) for m in members) else "candidate",
-        "memberConfidence": "identified" if members and all(not _member_needs_identification(m) for m in members) else "candidate",
+        "member_confidence": "identified" if members and all(not _member_needs_identification(m) for m in members) else "needs_member_confirmation",
+        "memberConfidence": "identified" if members and all(not _member_needs_identification(m) for m in members) else "needs_member_confirmation",
         "metadata_plugin_fallbacks": lookup_summaries,
     }
     if not members:
@@ -815,6 +838,10 @@ def _normalize_box_set_proposal(payload, context=None):
     if lookup_summaries:
         proposal["member_source"] = "MovieVault 26 + metadata plugins"
         proposal["memberSource"] = "MovieVault 26 + metadata plugins"
+    proposal["boxSetEvidence"] = _box_set_evidence(proposal, context)
+    proposal["box_set_evidence"] = proposal["boxSetEvidence"]
+    proposal["membersAreExplicit"] = proposal["boxSetEvidence"]["membersAreExplicit"]
+    proposal["members_are_explicit"] = proposal["boxSetEvidence"]["membersAreExplicit"]
     return {key: value for key, value in proposal.items() if value not in (None, "", [], {})}
 
 
@@ -969,8 +996,8 @@ def _normalize_result(payload, *, source_ref=""):
             or item.get("container")
         )
         box_set_proposal = (
-            _normalize_box_set_proposal(item, None)
-            or _normalize_box_set_proposal(direct_box_set, None)
+            _normalize_box_set_proposal(item, {"sourceRef": source_ref, "barcode": source_ref.split(":", 1)[1] if source_ref.startswith("barcode:") else ""})
+            or _normalize_box_set_proposal(direct_box_set, {"sourceRef": source_ref, "barcode": source_ref.split(":", 1)[1] if source_ref.startswith("barcode:") else ""})
             or (direct_box_set if isinstance(direct_box_set, dict) else {})
         )
         if isinstance(box_set_proposal, dict) and box_set_proposal:
@@ -1121,7 +1148,11 @@ def box_set_candidates(payload, context=None):
     barcode = str((payload or {}).get("barcode") or "").strip()
     if not _movievault_enabled(context):
         return {"status": "skipped", "provider": PROVIDER_ID, "boxSetProposal": {}, "reason": "disabled"}
-    proposal_context = {**(context or {}), "format": payload.get("format") or payload.get("mediaType") or payload.get("media_type") or ""}
+    proposal_context = {
+        **(context or {}),
+        "format": payload.get("format") or payload.get("mediaType") or payload.get("media_type") or "",
+        "barcode": barcode if _is_public_barcode(barcode) else "",
+    }
     data = _get(context or {}, "/api/v1/box-sets", q=title, year=year, barcode=barcode if _is_public_barcode(barcode) else "")
     sources = [item for item in _items(data) if isinstance(item, dict)]
     if isinstance(data, dict):
@@ -1130,7 +1161,7 @@ def box_set_candidates(payload, context=None):
     seen = set()
     for source in sources:
         candidate = _with_box_set_detail(context or {}, source)
-        proposal = _normalize_box_set_proposal(candidate, proposal_context)
+        proposal = _normalize_box_set_proposal(candidate, {**proposal_context, "sourceRef": _text(_first_value(candidate, "id", "movieVaultId", "movievaultId", "movievault_id"))})
         if not proposal:
             continue
         key = _box_set_proposal_key(proposal)

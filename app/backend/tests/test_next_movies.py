@@ -18,6 +18,7 @@ try:
     from app.backend.next_app import movie_update_payload
     from app.backend.next_app import merge_selected_import_movie_candidate
     from app.backend.next_app import box_set_proposal_audit_summary
+    from app.backend.next_app import box_set_proposal_auto_importable
     from app.backend.next_app import box_set_proposal_member_list
     from app.backend.next_app import box_set_proposal_sort_key
     from app.backend.next_app import selected_import_movie_candidate_from_body
@@ -35,6 +36,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     movie_update_payload = None
     merge_selected_import_movie_candidate = None
     box_set_proposal_audit_summary = None
+    box_set_proposal_auto_importable = None
     box_set_proposal_member_list = None
     box_set_proposal_sort_key = None
     selected_import_movie_candidate_from_body = None
@@ -237,6 +239,7 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         movievault = {
             "provider": "movievault_26",
             "title": "Back to the Future Trilogy",
+            "barcode": "5050582369601",
             "members": [
                 {"title": "Back to the Future", "year": "1985"},
                 {"title": "Back to the Future Part II", "year": "1989"},
@@ -250,6 +253,17 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                 {"title": "Back to the Future Documentary"},
             ],
             "memberConfidence": "identified",
+            "boxSetEvidence": {
+                "barcodeMatch": True,
+                "entityType": "box_set",
+                "memberSource": "MovieVault 26",
+                "memberConfidence": "identified",
+                "memberCount": 3,
+                "membersAreExplicit": True,
+                "detectedWithoutMembers": False,
+                "format": "DVD",
+                "sourceRef": "barcode:5050582369601",
+            },
         }
         bluray_candidate = {
             "provider": "bluray_com",
@@ -263,6 +277,49 @@ class NextMovieEditPolicyTests(unittest.TestCase):
 
         self.assertIs(proposals[0], movievault)
         self.assertEqual(len(box_set_proposal_member_list(proposals[0])), 3)
+        self.assertTrue(box_set_proposal_auto_importable(movievault))
+
+    def test_box_set_proposal_ranking_keeps_bluray_fallback_review_only(self):
+        bluray_explicit = {
+            "provider": "bluray_com",
+            "title": "RoboCop Trilogy",
+            "members": [{"title": "RoboCop"}, {"title": "RoboCop 2"}],
+            "boxSetEvidence": {
+                "entityType": "box_set",
+                "memberSource": "Blu-ray.com release page",
+                "memberConfidence": "needs_member_confirmation",
+                "memberCount": 2,
+                "membersAreExplicit": True,
+                "detectedWithoutMembers": False,
+            },
+        }
+        tmdb_collection = {
+            "provider": "tmdb",
+            "title": "RoboCop Collection",
+            "members": [{"title": "RoboCop"}, {"title": "RoboCop 2"}],
+            "memberConfidence": "identified",
+        }
+        bluray_fallback = {
+            "provider": "bluray_com",
+            "title": "RoboCop Trilogy",
+            "members": [{"title": "RoboCop"}, {"title": "RoboCop 2"}, {"title": "RoboCop Bonus"}],
+            "boxSetEvidence": {
+                "entityType": "box_set",
+                "memberSource": "metadata_candidates",
+                "memberConfidence": "candidate",
+                "memberCount": 3,
+                "membersAreExplicit": False,
+                "detectedWithoutMembers": True,
+            },
+        }
+
+        proposals = sorted([bluray_fallback, tmdb_collection, bluray_explicit], key=box_set_proposal_sort_key)
+
+        self.assertIs(proposals[0], bluray_explicit)
+        self.assertIs(proposals[1], tmdb_collection)
+        self.assertIs(proposals[2], bluray_fallback)
+        self.assertFalse(box_set_proposal_auto_importable(bluray_explicit))
+        self.assertFalse(box_set_proposal_auto_importable(bluray_fallback))
 
     def test_box_set_proposal_audit_summary_shows_provider_and_members(self):
         summary = box_set_proposal_audit_summary(
@@ -283,6 +340,7 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertEqual(summary["provider"], "movievault_26")
         self.assertEqual(summary["memberCount"], 3)
         self.assertFalse(summary["candidateOnly"])
+        self.assertFalse(summary["autoImportable"])
         self.assertEqual(summary["members"][0]["title"], "Back to the Future")
 
 
