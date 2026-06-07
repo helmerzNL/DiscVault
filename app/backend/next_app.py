@@ -40412,6 +40412,15 @@ def register_routes(flask_app: Flask) -> None:
             if not visible_token_ids:
                 return response({"status": "ok", "events": [], "tokenId": "all"})
             token_placeholders = ", ".join(["%s"] * len(visible_token_ids))
+            explicit_token_match = f"""
+                (
+                    metadata->>'apiTokenId' IN ({token_placeholders})
+                    OR metadata->>'api_token_id' IN ({token_placeholders})
+                    OR metadata->>'tokenId' IN ({token_placeholders})
+                    OR metadata->>'accessTokenId' IN ({token_placeholders})
+                    OR (target_type = 'api_access_token' AND target_id IN ({token_placeholders}))
+                )
+            """
             conditions = [
                 """
                 (
@@ -40426,9 +40435,37 @@ def register_routes(flask_app: Flask) -> None:
                     OR event_type IN ('api_token.created', 'api_token.revoked')
                 )
                 """,
-                f"(metadata->>'apiTokenId' IN ({token_placeholders}) OR target_id IN ({token_placeholders}))",
+                explicit_token_match,
             ]
-            params: list[Any] = [*visible_token_ids, *visible_token_ids]
+            params: list[Any] = [
+                *visible_token_ids,
+                *visible_token_ids,
+                *visible_token_ids,
+                *visible_token_ids,
+                *visible_token_ids,
+            ]
+            if not token_uuid:
+                conditions[-1] = f"""
+                (
+                    {explicit_token_match}
+                    OR (
+                        actor_user_id = %s
+                        AND category IN ('api', 'mcp')
+                        AND (
+                            event_type LIKE 'api.%%'
+                            OR event_type LIKE 'mcp.%%'
+                        )
+                        AND COALESCE(
+                            metadata->>'apiTokenId',
+                            metadata->>'api_token_id',
+                            metadata->>'tokenId',
+                            metadata->>'accessTokenId',
+                            ''
+                        ) = ''
+                    )
+                )
+                """
+                params.append(actor["id"])
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
