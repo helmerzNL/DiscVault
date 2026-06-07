@@ -24,7 +24,7 @@ COMMON_ALIASES: dict[str, tuple[str, ...]] = {
     "barcode": ("Barcode", "UPC", "EAN", "UPC/EAN", "EAN/UPC", "Streepjescode", "UPC EAN", "EAN UPC"),
     "format": ("Format", "Formaat", "Media Type", "Medium", "Type", "Media", "Drager", "Disc Type"),
     "edition": ("Edition", "Editie", "Release", "Version", "Versie", "Uitgave"),
-    "country": ("Country", "Land", "Country Code", "Landcode", "Regio"),
+    "country": ("Country", "Land", "Country Code", "Landcode", "Region", "Regio"),
     "language": ("Language", "Taal", "Languages", "Talen", "Audio Language", "Audio Taal"),
     "overview": ("Plot", "Description", "Beschrijving", "Overview", "Synopsis", "Omschrijving", "Samenvatting"),
     "runtime": ("Runtime", "Running Time", "Length", "Speelduur", "Duur", "Minutes", "Minuten"),
@@ -40,9 +40,12 @@ COMMON_ALIASES: dict[str, tuple[str, ...]] = {
     "tags": ("Tags", "Labels", "Status"),
     "collection": ("Collection", "Collectie", "List", "Lijst", "Folder", "Map", "Group", "Groep"),
     "boxSet": ("Box Set", "BoxSet", "Boxset", "Set", "Series", "Serie", "Franchise"),
+    "isBoxSet": ("IsBoxSet", "Is Box Set", "Box Set?", "Boxset?", "Is Boxset", "Container Type"),
+    "boxSetMembers": ("BoxSetMembers", "Box Set Members", "Boxset Members", "Members", "Member Titles", "Box Set Titles"),
     "vault": ("Vault", "Vault Title", "Version Group", "Edition Group"),
     "watchedAt": ("Watched Date", "Bekeken op", "Date Watched", "Viewed At"),
     "watchlisted": ("Watchlist", "Watchlisted", "In Watchlist", "Kijklijst"),
+    "verified": ("Verified", "Verified?", "Geverifieerd", "Confirmed"),
 }
 
 IMPORT_FIELDS = (
@@ -69,10 +72,13 @@ IMPORT_FIELDS = (
     "sourceUrl",
     "collection",
     "boxSet",
+    "isBoxSet",
+    "boxSetMembers",
     "vault",
     "watchedAt",
     "watchlisted",
     "tags",
+    "verified",
 )
 
 
@@ -177,6 +183,25 @@ def bool_value(value: Any, default: bool = False) -> bool:
     if raw in {"0", "false", "no", "n", "off"}:
         return False
     return default
+
+
+def split_member_titles(value: Any) -> list[str]:
+    raw = text(value)
+    if not raw:
+        return []
+    parts = re.split(r"\s*(?:\||;|\r?\n)\s*", raw)
+    members: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        title = re.sub(r"\s+", " ", text(part)).strip()
+        if not title:
+            continue
+        key = title.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        members.append(title)
+    return members
 
 
 def extract_imdb_id(value: Any) -> str:
@@ -323,6 +348,11 @@ class CollectionImportPlugin:
         source_url = text(mapped_value(row, aliases["sourceUrl"], column_mapping.get("sourceUrl")))
         collection_title = text(mapped_value(row, aliases["collection"], column_mapping.get("collectionTitle")))
         box_set_title = text(mapped_value(row, aliases["boxSet"], column_mapping.get("boxSetTitle")))
+        member_titles = split_member_titles(mapped_value(row, aliases["boxSetMembers"], column_mapping.get("boxSetMembers")))
+        is_box_set = bool_value(mapped_value(row, aliases["isBoxSet"], column_mapping.get("isBoxSet")), default=bool(member_titles))
+        verified = bool_value(mapped_value(row, aliases["verified"], column_mapping.get("verified")), default=False)
+        if is_box_set and not box_set_title:
+            box_set_title = title
         vault_title = text(mapped_value(row, aliases["vault"], column_mapping.get("vaultTitle")))
         imdb_id = extract_imdb_id(mapped_value(row, aliases["imdbId"], column_mapping.get("imdbId")))
         tmdb_id = extract_tmdb_id(mapped_value(row, aliases["tmdbId"], column_mapping.get("tmdbId")))
@@ -357,6 +387,75 @@ class CollectionImportPlugin:
             "boxSetTitle": box_set_title,
             "vaultTitle": vault_title,
         }
+        if is_box_set:
+            members = [
+                {
+                    "title": member_title,
+                    "format": media_format,
+                    "source": self.name,
+                    "sourceProvider": self.plugin_id,
+                    "memberConfidence": "file_explicit" if verified else "needs_member_confirmation",
+                    "sortOrder": member_index,
+                    "sort_order": member_index,
+                }
+                for member_index, member_title in enumerate(member_titles, start=1)
+            ]
+            evidence = {
+                "barcodeMatch": bool(barcode),
+                "entityType": "box_set",
+                "memberSource": "import_file",
+                "memberConfidence": "file_explicit" if verified and members else "needs_member_confirmation",
+                "memberCount": len(members),
+                "membersAreExplicit": bool(members),
+                "detectedWithoutMembers": not bool(members),
+                "format": media_format,
+                "sourceRef": f"{source_file.name}:{index}",
+            }
+            proposal = {
+                "title": box_set_title or title,
+                "name": box_set_title or title,
+                "provider": self.plugin_id,
+                "source": self.name,
+                "sourceRef": f"{source_file.name}:{index}",
+                "barcode": barcode,
+                "year": year,
+                "format": media_format,
+                "members": members,
+                "movies": members,
+                "memberCount": len(members),
+                "member_count": len(members),
+                "memberSource": evidence["memberSource"],
+                "member_source": evidence["memberSource"],
+                "memberConfidence": evidence["memberConfidence"],
+                "member_confidence": evidence["memberConfidence"],
+                "membersAreExplicit": evidence["membersAreExplicit"],
+                "members_are_explicit": evidence["membersAreExplicit"],
+                "detectedWithoutMembers": evidence["detectedWithoutMembers"],
+                "detected_without_members": evidence["detectedWithoutMembers"],
+                "boxSetEvidence": evidence,
+                "box_set_evidence": evidence,
+            }
+            movie.update(
+                {
+                    "itemType": "box_set",
+                    "entityType": "box_set",
+                    "isBoxSet": True,
+                    "verified": verified,
+                    "boxSetMemberTitles": member_titles,
+                    "boxSetMembers": members,
+                    "boxSetProposal": {key: value for key, value in proposal.items() if value not in (None, "", [], {})},
+                    "containers": [
+                        {
+                            "containerType": "box_set",
+                            "title": box_set_title or title,
+                            "barcode": barcode,
+                            "format": media_format,
+                            "memberCount": len(members),
+                            "membersAreExplicit": bool(members),
+                        }
+                    ],
+                }
+            )
         watched_at = text(mapped_value(row, aliases["watchedAt"], column_mapping.get("watchedAt")))
         watchlisted = bool_value(mapped_value(row, aliases["watchlisted"], column_mapping.get("watchlisted")), default=False)
         tags = text(mapped_value(row, aliases["tags"], column_mapping.get("tags")))
@@ -432,6 +531,8 @@ class CollectionImportPlugin:
             "sourceUrl": self.field_aliases("sourceUrl"),
             "collectionTitle": self.field_aliases("collection"),
             "boxSetTitle": self.field_aliases("boxSet"),
+            "isBoxSet": self.field_aliases("isBoxSet"),
+            "boxSetMembers": self.field_aliases("boxSetMembers"),
             "vaultTitle": self.field_aliases("vault"),
             "watchedAt": self.field_aliases("watchedAt"),
             "watchlisted": self.field_aliases("watchlisted"),
@@ -507,6 +608,7 @@ class CollectionImportPlugin:
             "sourceCounts": {
                 "files": len(files),
                 "movies": len(items),
+                "boxSets": sum(1 for item in items if item.get("itemType") == "box_set" or item.get("isBoxSet") is True),
                 "watchlist": sum(1 for item in items if (item.get("personal") or {}).get("watchlisted")),
                 "watched": sum(1 for item in items if (item.get("personal") or {}).get("watchedAt")),
             },
@@ -541,6 +643,8 @@ class CollectionImportPlugin:
                     "sourceUrl",
                     "collectionTitle",
                     "boxSetTitle",
+                    "isBoxSet",
+                    "boxSetMembers",
                     "vaultTitle",
                     "watchedAt",
                     "watchlisted",
@@ -591,7 +695,11 @@ class CollectionImportPlugin:
             "sourcePath": str(source_path),
             "sourceDatabaseHash": actual_hash,
             "items": items,
-            "counts": {"files": len(files), "movies": len(items)},
+            "counts": {
+                "files": len(files),
+                "movies": len(items),
+                "boxSets": sum(1 for item in items if item.get("itemType") == "box_set" or item.get("isBoxSet") is True),
+            },
             "mapping": {
                 "availableColumns": columns,
                 "effective": self.column_mapping(payload),

@@ -524,6 +524,7 @@ def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any
 
         metadata_match = decision.get("metadataMatch")
         manual_override = decision.get("manualOverride")
+        box_set_proposal = decision.get("boxSetProposal") or decision.get("box_set_proposal")
         if isinstance(metadata_match, dict):
             apply_match(metadata_match, only_blank=False)
             reviewed["importReviewMatch"] = {
@@ -538,6 +539,46 @@ def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any
                 for key, value in manual_override.items()
                 if value not in (None, "", [], {})
             }
+        if isinstance(box_set_proposal, dict):
+            members = [
+                member
+                for member in (
+                    box_set_proposal.get("members")
+                    or box_set_proposal.get("movies")
+                    or box_set_proposal.get("boxSetMovies")
+                    or box_set_proposal.get("box_set_movies")
+                    or []
+                )
+                if isinstance(member, dict) and clean_text(member.get("title") or member.get("name"))
+            ]
+            reviewed.update(
+                {
+                    "itemType": "box_set",
+                    "entityType": "box_set",
+                    "isBoxSet": True,
+                    "title": clean_text(box_set_proposal.get("title") or box_set_proposal.get("name") or reviewed.get("title")),
+                    "boxSetTitle": clean_text(box_set_proposal.get("title") or box_set_proposal.get("name") or reviewed.get("boxSetTitle") or reviewed.get("title")),
+                    "barcode": clean_text(box_set_proposal.get("barcode") or reviewed.get("barcode")),
+                    "format": clean_text(box_set_proposal.get("format") or reviewed.get("format")),
+                    "boxSetProposal": {
+                        key: value
+                        for key, value in box_set_proposal.items()
+                        if value not in (None, "", [], {})
+                    },
+                    "boxSetMembers": members,
+                    "containers": [
+                        {
+                            "containerType": "box_set",
+                            "title": clean_text(box_set_proposal.get("title") or box_set_proposal.get("name") or reviewed.get("title")),
+                            "barcode": clean_text(box_set_proposal.get("barcode") or reviewed.get("barcode")),
+                            "format": clean_text(box_set_proposal.get("format") or reviewed.get("format")),
+                            "memberCount": len(members),
+                            "membersAreExplicit": bool(members),
+                        }
+                    ],
+                }
+            )
+            reviewed["importReviewBoxSetProposal"] = reviewed["boxSetProposal"]
         return reviewed
 
     kept: list[Any] = []
@@ -558,7 +599,7 @@ def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any
         if isinstance(item, dict):
             item = apply_review_values(item, decision)
             item = {**item, "importReviewAction": action}
-            if decision.get("metadataMatch") or decision.get("manualOverride"):
+            if decision.get("metadataMatch") or decision.get("manualOverride") or decision.get("boxSetProposal") or decision.get("box_set_proposal"):
                 reviewed += 1
         kept.append(item)
     counts = dict(result.get("counts") or {})
@@ -658,8 +699,15 @@ def import_movie_metadata(item: dict[str, Any], plugin_id: str) -> dict[str, Any
     return {key: value for key, value in metadata.items() if value not in (None, "", [], {})}
 
 
-def import_item_container_specs(item: dict[str, Any]) -> list[dict[str, str]]:
-    specs: list[dict[str, str]] = []
+def import_item_is_box_set_container(item: dict[str, Any]) -> bool:
+    if not isinstance(item, dict):
+        return False
+    item_type = clean_text(item.get("itemType") or item.get("item_type") or item.get("entityType") or item.get("entity_type"))
+    return item_type == "box_set" or item.get("isBoxSet") is True or item.get("is_box_set") is True
+
+
+def import_item_container_specs(item: dict[str, Any]) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
     for container_type, title in (
         ("collection", item.get("collectionTitle") or item.get("collection") or item.get("collection_title")),
         ("box_set", item.get("boxSetTitle") or item.get("boxSet") or item.get("box_set") or item.get("box_set_title")),
@@ -667,7 +715,17 @@ def import_item_container_specs(item: dict[str, Any]) -> list[dict[str, str]]:
     ):
         clean_title = clean_text(title)
         if clean_title:
-            specs.append({"containerType": container_type, "title": clean_title})
+            spec: dict[str, Any] = {"containerType": container_type, "title": clean_title}
+            if container_type == "box_set" and import_item_is_box_set_container(item):
+                spec.update(
+                    {
+                        "barcode": clean_text(item.get("barcode")),
+                        "format": clean_text(item.get("format")),
+                        "memberCount": len(item.get("boxSetMembers") or []),
+                        "boxSetProposal": item.get("boxSetProposal") if isinstance(item.get("boxSetProposal"), dict) else {},
+                    }
+                )
+            specs.append(spec)
     for raw in item.get("containers") or []:
         if not isinstance(raw, dict):
             continue
@@ -678,7 +736,16 @@ def import_item_container_specs(item: dict[str, Any]) -> list[dict[str, str]]:
             continue
         title = clean_text(raw.get("title") or raw.get("name"))
         if title:
-            specs.append({"containerType": container_type, "title": title})
+            specs.append(
+                {
+                    "containerType": container_type,
+                    "title": title,
+                    "barcode": clean_text(raw.get("barcode")),
+                    "format": clean_text(raw.get("format")),
+                    "memberCount": raw.get("memberCount") or raw.get("member_count"),
+                    "membersAreExplicit": raw.get("membersAreExplicit") or raw.get("members_are_explicit"),
+                }
+            )
     seen: set[tuple[str, str]] = set()
     unique: list[dict[str, str]] = []
     for spec in specs:
@@ -882,8 +949,30 @@ def upsert_import_container(
         fallback=str(container_id),
     )
     with conn.cursor() as cur:
+        barcode = clean_text(barcode)
+        if barcode:
+            cur.execute(
+                """
+                SELECT id
+                FROM containers
+                WHERE container_type=%s AND barcode=%s
+                LIMIT 1
+                """,
+                (container_type, barcode),
+            )
+            row = cur.fetchone()
+            if row:
+                container_id = row["id"]
         cur.execute("SELECT id FROM containers WHERE id=%s", (container_id,))
         exists = bool(cur.fetchone())
+        metadata = {
+            "import_source": plugin_id,
+            "source_kind": source_kind,
+            "source_path": source_path,
+            "source_hash": source_hash,
+        }
+        if isinstance(metadata_extra, dict):
+            metadata.update({key: value for key, value in metadata_extra.items() if value not in (None, "", [], {})})
         cur.execute(
             """
             INSERT INTO containers (
@@ -892,7 +981,7 @@ def upsert_import_container(
             VALUES (%s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=EXCLUDED.title,
-                barcode=COALESCE(EXCLUDED.barcode, containers.barcode),
+                barcode=COALESCE(NULLIF(containers.barcode, ''), EXCLUDED.barcode),
                 metadata=containers.metadata || EXCLUDED.metadata,
                 updated_at=now()
             """,
@@ -901,16 +990,10 @@ def upsert_import_container(
                 public_id,
                 container_type,
                 title,
-                clean_text(barcode) or None,
+                barcode or None,
                 Jsonb(
                     json_ready(
-                        {
-                            "import_source": plugin_id,
-                            "source_kind": source_kind,
-                            "source_path": source_path,
-                            "source_hash": source_hash,
-                            **(metadata_extra or {}),
-                        }
+                        metadata
                     )
                 ),
             ),
@@ -1253,6 +1336,9 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             container_titles: dict[tuple[str, str], str] = {}
             container_created: set[UUID] = set()
             container_links = 0
+            box_sets_imported = 0
+            box_sets_created = 0
+            box_sets_updated = 0
             imported = 0
             created = 0
             updated = 0
@@ -1334,6 +1420,61 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                     local_container_titles: dict[tuple[str, str], str] = {}
                     local_container_created: set[UUID] = set()
                     local_container_links = 0
+                    if import_item_is_box_set_container(item):
+                        with conn.transaction():
+                            if table_exists(conn, "containers"):
+                                for spec in import_item_container_specs(item):
+                                    if spec["containerType"] != "box_set":
+                                        continue
+                                    key = (spec["containerType"], spec["title"].casefold())
+                                    spec_container_id = container_cache.get(key) or local_container_cache.get(key)
+                                    if not spec_container_id:
+                                        local_container_titles[key] = spec["title"]
+                                        proposal = spec.get("boxSetProposal") if isinstance(spec.get("boxSetProposal"), dict) else {}
+                                        spec_container_id, was_container_created = upsert_import_container(
+                                            conn,
+                                            plugin_id=plugin_id,
+                                            source_hash=source_hash,
+                                            container_type=spec["containerType"],
+                                            title=spec["title"],
+                                            source_path=source_path,
+                                            source_kind=source_kind,
+                                            barcode=clean_text(spec.get("barcode") or item.get("barcode")),
+                                            metadata_extra={
+                                                "format": clean_text(spec.get("format") or item.get("format")),
+                                                "import_item_type": "box_set",
+                                                "box_set_proposal": proposal,
+                                                "member_count": spec.get("memberCount") or len(item.get("boxSetMembers") or []),
+                                                "members_are_explicit": spec.get("membersAreExplicit") or bool(item.get("boxSetMembers")),
+                                            },
+                                        )
+                                        local_container_cache[key] = spec_container_id
+                                        if was_container_created:
+                                            local_container_created.add(spec_container_id)
+                        imported += 1
+                        box_sets_imported += 1
+                        if local_container_created:
+                            box_sets_created += 1
+                            created += 1
+                        else:
+                            box_sets_updated += 1
+                            updated += 1
+                        container_cache.update(local_container_cache)
+                        container_titles.update(local_container_titles)
+                        container_created.update(local_container_created)
+                        imported_movies.append(
+                            {
+                                "index": index,
+                                "id": str(next(iter(local_container_cache.values()), "")),
+                                "title": clean_text(item.get("title")),
+                                "year": clean_text(item.get("year")),
+                                "barcode": clean_text(item.get("barcode")),
+                                "action": "container_created" if local_container_created else "container_updated",
+                                "reviewAction": clean_text(item.get("importReviewAction")),
+                                "itemType": "box_set",
+                            }
+                        )
+                        continue
                     with conn.transaction():
                         movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
                         if table_exists(conn, "containers"):
@@ -1350,6 +1491,12 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                                         title=spec["title"],
                                         source_path=source_path,
                                         source_kind=source_kind,
+                                        barcode=clean_text(spec.get("barcode")),
+                                        metadata_extra={
+                                            "format": clean_text(spec.get("format")),
+                                            "member_count": spec.get("memberCount"),
+                                            "members_are_explicit": spec.get("membersAreExplicit"),
+                                        },
                                     )
                                     local_container_cache[key] = spec_container_id
                                     if was_container_created:
@@ -1413,6 +1560,9 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "updated": updated,
         "linkedToCollection": linked,
         "linkedToContainers": container_links,
+        "boxSetsImported": box_sets_imported,
+        "boxSetsCreated": box_sets_created,
+        "boxSetsUpdated": box_sets_updated,
         "containersCreated": len(container_created),
         "containersTouched": len(container_cache),
         "collectionId": None,
