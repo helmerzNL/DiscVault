@@ -895,6 +895,16 @@ h1 {
   margin-top: 1.25rem;
 }
 
+.legacy-alert-card {
+  border-color: rgba(218, 107, 107, 0.48);
+  background: linear-gradient(180deg, rgba(48, 30, 34, 0.9), rgba(18, 18, 26, 0.96));
+}
+
+.legacy-alert-card .badge {
+  background: #d97878;
+  color: #0a0a0f;
+}
+
 .card-v26 {
   border-color: rgba(72, 138, 174, 0.36);
   background: linear-gradient(180deg, rgba(30, 38, 48, 0.9), rgba(18, 18, 26, 0.96));
