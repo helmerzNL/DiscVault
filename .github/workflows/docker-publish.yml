@@ -71,6 +71,7 @@ jobs:
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=legacy,enable=${{ github.ref == 'refs/heads/legacy' }}
+            type=raw,value=beta,enable=${{ github.ref == 'refs/heads/legacy' }}
             type=raw,value=dev-${{ github.sha }},enable=${{ github.event_name == 'workflow_dispatch' }}
           labels: |
             org.opencontainers.image.title=DiscVault
