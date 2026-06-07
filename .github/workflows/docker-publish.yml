@@ -3,12 +3,14 @@ name: Build & Publish Docker Image
 on:
   push:
     branches:
-      - main              # every push to main  → beta tag
+      - main
+      - legacy
     tags:
-      - "v*.*.*"          # e.g. v1.0.0         → stable + versioned tags
+      - "v*.*.*"
     paths:
       - "app/**"
-  workflow_dispatch:       # allow manual trigger from GitHub UI
+      - ".github/workflows/docker-publish.yml"
+  workflow_dispatch:
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -29,7 +31,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # Extract version from tag (v1.2.3 → 1.2.3), beta sha for main, or dev for manual
       - name: Derive build version
         id: version
         run: |
@@ -38,6 +39,8 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
           elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
             VERSION="beta-${SHA:0:7}"
+          elif [[ "${GITHUB_REF}" == refs/heads/legacy ]]; then
+            VERSION="legacy-${SHA:0:7}"
           else
             VERSION="dev-${SHA:0:7}"
           fi
@@ -56,10 +59,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Resolve tags:
-      #   Tag push (v1.2.3)  -> :1.2.3, :stable
-      #   Push to main       -> :latest, :legacy
-      #   Manual run         → :dev-<sha>
       - name: Docker meta (tags & labels)
         id: meta
         uses: docker/metadata-action@v6
@@ -71,7 +70,7 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=legacy,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=legacy,enable=${{ github.ref == 'refs/heads/legacy' }}
             type=raw,value=dev-${{ github.sha }},enable=${{ github.event_name == 'workflow_dispatch' }}
           labels: |
             org.opencontainers.image.title=DiscVault
