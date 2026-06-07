@@ -3169,6 +3169,13 @@ Object.assign(T.tr, {
   'cap.migration.finished':'Geçiş tamamlandığında tamamlama ekranını görün.',
   'cap.migration.launch':'Tamamlanan akıştan DiscVault 26\'yı başlatın.'
 });
+Object.keys(T).forEach(function(lang) {
+  Object.assign(T[lang], {
+    'screenshots.h2.v26mobile':'Preview DiscVault 26 across desktop and mobile, then compare it with the current desktop app.',
+    'screenshots.label.v26mobile':'DiscVault 26 mobile'
+  });
+});
+
 /* Final completion overrides for the new DiscVault 26 languages. */
 Object.assign(T.ja, {
   'nav.v26':'DiscVault 26','nav.migration':'移行','nav.screenshots':'スクリーンショット','nav.features':'機能','nav.install':'インストール','nav.community':'コミュニティ','nav.faq':'FAQ',
