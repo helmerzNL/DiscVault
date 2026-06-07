@@ -92,7 +92,7 @@ async function loadSettings() {
 
 // ── Settings submenu switching ───────────────────────────────────────────────
 
-const SETTINGS_SECTIONS = ['settingsSubGeneral', 'settingsSubCollectionmgmt', 'settingsSubAbout'];
+const SETTINGS_SECTIONS = ['settingsSubGeneral', 'settingsSubCollectionmgmt', 'settingsSubAbout', 'settingsSubUpdate'];
 let _currentSettingsSubmenu = 'general';
 
 function switchSettingsSubmenu(name) {
@@ -101,7 +101,7 @@ function switchSettingsSubmenu(name) {
     btn.classList.toggle('active', btn.getAttribute('data-settings-sub') === name);
   });
   document.querySelectorAll('#panel-settings .profile-sub-section').forEach(s => s.classList.remove('active'));
-  const map = { general: 'settingsSubGeneral', collectionmgmt: 'settingsSubCollectionmgmt', about: 'settingsSubAbout' };
+  const map = { general: 'settingsSubGeneral', collectionmgmt: 'settingsSubCollectionmgmt', about: 'settingsSubAbout', update: 'settingsSubUpdate' };
   const el = document.getElementById(map[name] || map.general);
   if (el) el.classList.add('active');
   if (name === 'collectionmgmt') {

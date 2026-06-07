@@ -1356,6 +1356,10 @@
           <span class="mdi mdi-information-outline profile-sidebar-icon" aria-hidden="true"></span>
           <span data-i18n="settings.menuAbout">Over</span>
         </button>
+        <button class="profile-sidebar-btn" type="button" data-settings-sub="update" onclick="switchSettingsSubmenu('update')">
+          <span class="mdi mdi-update profile-sidebar-icon" aria-hidden="true"></span>
+          <span data-i18n="settings.menuUpdate">Update</span>
+        </button>
       </nav>
 
       <!-- Content area -->
@@ -1498,6 +1502,26 @@
               <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.6; margin:0;" data-i18n="settings.aboutTmdb">
                 Filmdata wordt aangeboden door The Movie Database (TMDB). Dit product gebruikt de TMDB API maar is niet bekrachtigd of gecertificeerd door TMDB.
               </p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ── UPDATE ── -->
+        <div class="profile-sub-section" id="settingsSubUpdate">
+
+          <div class="card">
+            <div style="display:flex; align-items:flex-start; gap:16px;">
+              <div style="width:54px; height:54px; border-radius:16px; background:linear-gradient(135deg, rgba(232,197,71,.22), rgba(124,106,247,.18)); border:1px solid rgba(232,197,71,.35); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span class="mdi mdi-rocket-launch-outline" style="font-size:1.8rem; color:var(--accent);" aria-hidden="true"></span>
+              </div>
+              <div>
+                <div class="card-title" style="margin-bottom:10px;" data-i18n="settings.updateTitle">DiscVault 26 is beschikbaar</div>
+                <p style="font-size:0.9rem; color:var(--text-muted); line-height:1.75; margin:0 0 16px;" data-i18n="settings.updateDesc">
+                  DiscVault was mijn allereerste app. Tijdens de ontwikkeling, samen met Claude Code en GPT Codex, heb ik enorm veel geleerd. Daardoor ontdekte ik ook dat sommige onderdelen niet helemaal goed waren opgezet. Daarom heb ik DiscVault opnieuw vanaf de grond opgebouwd. Deze nieuwe versie is nu beschikbaar. Meer informatie over het upgradeproces vind je op https://discvault.eu/legacy. Deze legacy-versie van DiscVault wordt vanaf 1 juli niet meer ondersteund, maar migreren is heel eenvoudig: bij een upgrade wordt alle huidige data automatisch meegenomen.
+                </p>
+                <a class="btn btn-primary" href="https://discvault.eu/legacy" target="_blank" rel="noopener" data-i18n="settings.updateLink">Meer over upgraden</a>
+              </div>
             </div>
           </div>
 
