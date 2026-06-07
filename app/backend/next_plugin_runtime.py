@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,9 @@ from typing import Any, Callable
 JsonbFactory = Callable[[Any], Any]
 TableExists = Callable[[Any, str], bool]
 
-DEFAULT_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
+BUNDLED_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
+DEFAULT_PLUGIN_DIR = BUNDLED_PLUGIN_DIR
+PLUGIN_INITIALIZED_MARKER = ".initialized"
 VALID_CATEGORIES = {
     "metadata_source",
     "metadata_bootstrap",
@@ -70,8 +73,9 @@ class PluginDiscovery:
 
 
 def plugin_paths() -> list[Path]:
+    seed_default_plugins_if_needed()
     configured = os.environ.get("DISCVAULT_PLUGIN_PATHS", "").strip()
-    paths = [DEFAULT_PLUGIN_DIR]
+    paths = [persistent_plugin_dir()]
     if configured:
         for item in configured.split(os.pathsep):
             item = item.strip()
@@ -86,6 +90,88 @@ def plugin_paths() -> list[Path]:
             seen.add(key)
             unique.append(resolved)
     return unique
+
+
+def discvault_data_dir() -> Path:
+    raw = (
+        os.environ.get("DISCVAULT_DATA_DIR")
+        or os.environ.get("DISCVAULT_LEGACY_DATA_DIR")
+        or os.environ.get("DISCVAULT_SQLITE_IMPORT_DATA")
+        or "/data"
+    )
+    return Path(raw).expanduser()
+
+
+def persistent_plugin_dir() -> Path:
+    raw = os.environ.get("DISCVAULT_PLUGIN_DIR", "").strip()
+    return Path(raw).expanduser() if raw else discvault_data_dir() / "plugins"
+
+
+def bundled_plugin_dir() -> Path:
+    raw = os.environ.get("DISCVAULT_BUNDLED_PLUGIN_DIR", "").strip()
+    return Path(raw).expanduser() if raw else BUNDLED_PLUGIN_DIR
+
+
+def plugin_dir_contains_plugins(path: Path) -> bool:
+    if not path.exists() or not path.is_dir():
+        return False
+    return any(item.is_dir() and (item / "manifest.json").exists() for item in path.iterdir())
+
+
+def bundled_default_plugin_dirs() -> list[Path]:
+    source_root = bundled_plugin_dir()
+    if not source_root.exists() or not source_root.is_dir():
+        return []
+    return sorted(
+        item
+        for item in source_root.iterdir()
+        if item.is_dir() and (item / "manifest.json").exists()
+    )
+
+
+def seed_default_plugins_if_needed() -> dict[str, Any]:
+    plugin_root = persistent_plugin_dir()
+    marker = plugin_root / PLUGIN_INITIALIZED_MARKER
+    result: dict[str, Any] = {
+        "path": str(plugin_root),
+        "marker": str(marker),
+        "initialized": marker.exists(),
+        "seeded": [],
+        "skippedExisting": [],
+        "errors": [],
+    }
+    if marker.exists():
+        return result
+
+    try:
+        plugin_root.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        result["errors"].append({"path": str(plugin_root), "error": str(exc)})
+        return result
+
+    if not plugin_dir_contains_plugins(plugin_root):
+        for source in bundled_default_plugin_dirs():
+            target = plugin_root / source.name
+            if target.exists():
+                result["skippedExisting"].append(source.name)
+                continue
+            try:
+                shutil.copytree(source, target)
+                result["seeded"].append(source.name)
+            except Exception as exc:
+                result["errors"].append({"path": str(target), "error": str(exc)})
+
+    marker_payload = {
+        "initializedAt": int(time.time()),
+        "source": str(bundled_plugin_dir()),
+        "seeded": result["seeded"],
+    }
+    try:
+        marker.write_text(json.dumps(marker_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        result["initialized"] = True
+    except Exception as exc:
+        result["errors"].append({"path": str(marker), "error": str(exc)})
+    return result
 
 
 def normalize_categories(manifest: dict[str, Any]) -> list[str]:
@@ -210,7 +296,10 @@ def load_runtime_module(plugin: PluginDiscovery):
 def discover_plugins() -> dict[str, Any]:
     plugins: list[PluginDiscovery] = []
     errors: list[dict[str, Any]] = []
-    for base_path in plugin_paths():
+    seed = seed_default_plugins_if_needed()
+    errors.extend(seed.get("errors") or [])
+    paths = plugin_paths()
+    for base_path in paths:
         if not base_path.exists():
             continue
         for plugin_dir in sorted(item for item in base_path.iterdir() if item.is_dir()):
@@ -228,7 +317,8 @@ def discover_plugins() -> dict[str, Any]:
             except Exception as exc:
                 errors.append({"path": str(plugin_dir), "error": str(exc)})
     return {
-        "paths": [str(path) for path in plugin_paths()],
+        "paths": [str(path) for path in paths],
+        "seed": seed,
         "plugins": plugins,
         "errors": errors,
     }
@@ -528,6 +618,16 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                         ),
                     )
                     synced_plugin_ids.append(manifest["id"])
+                cur.execute(
+                    """
+                    UPDATE plugins
+                    SET installed=false,
+                        enabled=false,
+                        updated_at=now()
+                    WHERE NOT (id = ANY(%s))
+                    """,
+                    (synced_plugin_ids,),
+                )
 
     if has_metadata_plugins_table:
         with conn.transaction():
@@ -574,6 +674,16 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                         ),
                     )
                     synced_metadata_ids.append(manifest["id"])
+                cur.execute(
+                    """
+                    UPDATE metadata_plugins
+                    SET installed=false,
+                        enabled=false,
+                        updated_at=now()
+                    WHERE NOT (id = ANY(%s))
+                    """,
+                    (synced_metadata_ids,),
+                )
 
                 if has_plugins_table:
                     cur.execute(

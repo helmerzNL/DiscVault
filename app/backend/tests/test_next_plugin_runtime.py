@@ -1,5 +1,6 @@
 import os
 import importlib
+import json
 import sqlite3
 import sys
 import tempfile
@@ -34,7 +35,9 @@ sys.modules.setdefault("psycopg.types", psycopg_types_module)
 sys.modules.setdefault("psycopg.types.json", psycopg_types_json_module)
 
 from app.backend.next_plugin_runtime import discover_plugins
+from app.backend.next_plugin_runtime import persistent_plugin_dir
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
+from app.backend.next_plugin_runtime import seed_default_plugins_if_needed
 from app.backend import next_worker
 from app.backend.next_worker import apply_collection_import_review
 from app.backend.next_worker import import_release_date
@@ -67,6 +70,84 @@ class FakeHTTPError(Exception):
 
 
 class NextPluginRuntimeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._plugin_data_dir = tempfile.TemporaryDirectory()
+        cls._plugin_env_keys = (
+            "DISCVAULT_DATA_DIR",
+            "DISCVAULT_PLUGIN_DIR",
+            "DISCVAULT_PLUGIN_PATHS",
+            "DISCVAULT_BUNDLED_PLUGIN_DIR",
+        )
+        cls._old_plugin_env = {key: os.environ.get(key) for key in cls._plugin_env_keys}
+        os.environ["DISCVAULT_DATA_DIR"] = cls._plugin_data_dir.name
+        os.environ.pop("DISCVAULT_PLUGIN_DIR", None)
+        os.environ.pop("DISCVAULT_PLUGIN_PATHS", None)
+        os.environ.pop("DISCVAULT_BUNDLED_PLUGIN_DIR", None)
+
+    @classmethod
+    def tearDownClass(cls):
+        for key, value in cls._old_plugin_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        cls._plugin_data_dir.cleanup()
+
+    def test_default_plugins_are_seeded_to_persistent_data_dir_once(self):
+        discovery = discover_plugins()
+        plugin_root = persistent_plugin_dir()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        self.assertTrue((plugin_root / ".initialized").exists())
+        self.assertTrue((plugin_root / "tmdb" / "manifest.json").exists())
+        self.assertIn(str(plugin_root.resolve()), discovery["paths"])
+        self.assertIn("tmdb", plugins)
+        self.assertEqual(plugins["tmdb"].path, plugin_root.resolve() / "tmdb")
+
+    def test_initialized_empty_plugin_dir_does_not_reseed_defaults(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugin_root = Path(temp_dir) / "plugins"
+            plugin_root.mkdir()
+            (plugin_root / ".initialized").write_text("{}", encoding="utf-8")
+            with patch.dict(os.environ, {"DISCVAULT_DATA_DIR": temp_dir}, clear=False):
+                os.environ.pop("DISCVAULT_PLUGIN_DIR", None)
+                os.environ.pop("DISCVAULT_PLUGIN_PATHS", None)
+                result = seed_default_plugins_if_needed()
+                discovery = discover_plugins()
+
+            self.assertEqual(result["seeded"], [])
+            self.assertFalse((plugin_root / "tmdb").exists())
+            self.assertEqual(discovery["plugins"], [])
+
+    def test_existing_plugin_dir_without_marker_is_marked_without_reseeding_defaults(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugin_root = Path(temp_dir) / "plugins"
+            custom = plugin_root / "custom_source"
+            custom.mkdir(parents=True)
+            (custom / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "id": "custom_source",
+                        "name": "Custom Source",
+                        "version": "1.0.0",
+                        "categories": ["metadata_source"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"DISCVAULT_DATA_DIR": temp_dir}, clear=False):
+                os.environ.pop("DISCVAULT_PLUGIN_DIR", None)
+                os.environ.pop("DISCVAULT_PLUGIN_PATHS", None)
+                result = seed_default_plugins_if_needed()
+                discovery = discover_plugins()
+
+            plugins = {plugin.plugin_id for plugin in discovery["plugins"]}
+            self.assertEqual(result["seeded"], [])
+            self.assertTrue((plugin_root / ".initialized").exists())
+            self.assertIn("custom_source", plugins)
+            self.assertNotIn("tmdb", plugins)
+
     def test_plugin_import_job_fails_when_persistence_writes_no_rows(self):
         class FakeConnection:
             def __enter__(self):
