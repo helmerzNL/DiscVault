@@ -96,25 +96,33 @@ const SETTINGS_SECTIONS = ['settingsSubGeneral', 'settingsSubCollectionmgmt', 's
 let _currentSettingsSubmenu = 'general';
 
 function switchSettingsSubmenu(name) {
-  _currentSettingsSubmenu = name;
+  const map = { general: 'settingsSubGeneral', collectionmgmt: 'settingsSubCollectionmgmt', about: 'settingsSubAbout', update: 'settingsSubUpdate' };
+  const normalizedName = map[name] ? name : 'general';
+  _currentSettingsSubmenu = normalizedName;
   document.querySelectorAll('[data-settings-sub]').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-settings-sub') === name);
+    btn.classList.toggle('active', btn.getAttribute('data-settings-sub') === normalizedName);
   });
   document.querySelectorAll('#panel-settings .profile-sub-section').forEach(s => s.classList.remove('active'));
-  const map = { general: 'settingsSubGeneral', collectionmgmt: 'settingsSubCollectionmgmt', about: 'settingsSubAbout', update: 'settingsSubUpdate' };
-  const el = document.getElementById(map[name] || map.general);
+  const el = document.getElementById(map[normalizedName] || map.general);
   if (el) el.classList.add('active');
-  if (name === 'collectionmgmt') {
+  if (normalizedName === 'collectionmgmt') {
     loadCollectorsModeSetting();
     loadGroupEditionsSetting();
     loadGroupMgmtList();
   }
-  if (name === 'about') {
+  if (normalizedName === 'about') {
     const src = document.getElementById('settingsVersion');
     const dst = document.getElementById('aboutVersion');
     if (dst && src) dst.textContent = src.textContent;
   }
 }
+
+document.addEventListener('click', event => {
+  const btn = event.target.closest('#panel-settings [data-settings-sub]');
+  if (!btn) return;
+  event.preventDefault();
+  switchSettingsSubmenu(btn.getAttribute('data-settings-sub') || 'general');
+});
 
 // ── Rating country picker ────────────────────────────────────────────────────
 
