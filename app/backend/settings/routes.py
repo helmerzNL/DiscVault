@@ -599,7 +599,7 @@ def register_settings_routes(
         return jsonify({
             "visible": visible,
             "enabled": False,
-            "message": "This is a test message",
+            "message_key": "settings.updatePopupMessage",
         })
 
     @app.route("/api/settings/test-banner", methods=["POST"])
@@ -619,7 +619,7 @@ def register_settings_routes(
         return jsonify({
             "visible": visible,
             "enabled": visible,
-            "message": "This is a test message",
+            "message_key": "settings.updatePopupMessage",
         })
 
     @app.route("/api/settings/registration", methods=["GET"])

@@ -1,9 +1,11 @@
 // ── Init ──────────────────────────────────────────────────────────────────────
-function setTestNotificationBannerVisible(visible, message = 'This is a test message') {
+function setTestNotificationBannerVisible(visible, message = '') {
   const banner = document.getElementById('testNotificationBanner');
+  const title = document.getElementById('testNotificationBannerTitle');
   const text = document.getElementById('testNotificationBannerText');
   const canDismiss = !authEnabled || currentUserRole === 'admin';
-  if (text) text.textContent = message || 'This is a test message';
+  if (title) title.textContent = t('settings.updatePopupTitle');
+  if (text) text.textContent = message || t('settings.updatePopupMessage');
   document.body.classList.toggle('has-test-notification', !!visible);
   document.body.classList.toggle('can-dismiss-test-notification', !!visible && canDismiss);
   if (banner) banner.setAttribute('aria-hidden', visible ? 'false' : 'true');
@@ -14,7 +16,8 @@ async function loadTestNotificationBanner() {
     const r = await fetch(`${API}/settings/test-banner`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
-    setTestNotificationBannerVisible(d.visible !== false, d.message || 'This is a test message');
+    const message = d.message_key ? t(d.message_key) : (d.message || t('settings.updatePopupMessage'));
+    setTestNotificationBannerVisible(d.visible !== false, message);
   } catch(e) {
     setTestNotificationBannerVisible(false);
   }
