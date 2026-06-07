@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Pokazuje wskaźnik zadania kompaktowych metadanych w bibliotece. Wyłącz, aby ukryć aktywność odświeżania poza administratorem.",
   "preferences.showDigitalBadgeOnTiles": "Pokaż oznaczenie Plex/Jellyfin",
   "preferences.showDigitalBadgeOnTilesHelp": "Pokazuje małą plakietkę, gdy film jest również dostępny cyfrowo w Plex lub Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Usuń członków wraz z kontenerem",
+  "preferences.deleteContainerMembersWithContainerHelp": "Podczas usuwania box setu, Vaulta lub kolekcji usuwa także powiązane filmy i zagnieżdżone kontenery.",
   "preferences.ratingCountry": "Kraj klasyfikacji wiekowej",
   "preferences.ratingCountryHelp": "Wybierz kraj, którego klasyfikacja wiekowa ma być pokazywana przy filmach.",
   "movieDetail.contentRating": "Klasyfikacja wiekowa",

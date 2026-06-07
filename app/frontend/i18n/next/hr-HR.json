@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Prikazuje sažeti indikator zadataka metapodataka u biblioteci. Isključite da biste sakrili aktivnost osvježavanja izvan Administracije.",
   "preferences.showDigitalBadgeOnTiles": "Prikaži oznaku Plex/Jellyfin na pločicama filmova",
   "preferences.showDigitalBadgeOnTilesHelp": "Prikazuje malu oznaku kada je film dostupan i digitalno u Plexu ili Jellyfinu.",
+  "preferences.deleteContainerMembersWithContainer": "Izbriši članove s kontejnerom",
+  "preferences.deleteContainerMembersWithContainerHelp": "Pri brisanju box seta, Vaulta ili kolekcije brišu se i povezani filmovi te ugniježđeni kontejneri.",
   "preferences.ratingCountry": "Država dobne oznake",
   "preferences.ratingCountryHelp": "Odaberite klasifikaciju po dobi koje zemlje želite prikazati na filmovima.",
   "movieDetail.contentRating": "Dobna oznaka",

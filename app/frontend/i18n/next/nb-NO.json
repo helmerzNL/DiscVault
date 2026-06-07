@@ -646,6 +646,8 @@
   "preferences.showMetadataJobsHelp": "Viser den kompakte indikatoren for metadatajobber i biblioteket. Sl� av for � skjule oppdateringsaktivitet utenfor Admin.",
   "preferences.showDigitalBadgeOnTiles": "Vis Plex/Jellyfin-merke pa filmfliser",
   "preferences.showDigitalBadgeOnTilesHelp": "Viser et lite merke nar filmen ogsa finnes digitalt i Plex eller Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Slett medlemmer med containeren",
+  "preferences.deleteContainerMembersWithContainerHelp": "Når du sletter et box set, Vault eller en samling, slettes også tilknyttede filmer og nestede containere.",
   "preferences.ratingCountry": "Land for aldersklassifisering",
   "preferences.ratingCountryHelp": "Velg hvilket lands aldersklassifisering som vises pa filmer.",
   "movieDetail.contentRating": "Aldersklassifisering",

@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Afișează indicatorul compact pentru joburile de metadate în bibliotecă. Dezactivează pentru a ascunde activitatea de reîmprospătare în afara Admin.",
   "preferences.showDigitalBadgeOnTiles": "Afișează insigna Plex/Jellyfin",
   "preferences.showDigitalBadgeOnTilesHelp": "Afișează o insignă mică atunci când un film este disponibil și digital în Plex sau Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Șterge membrii cu containerul",
+  "preferences.deleteContainerMembersWithContainerHelp": "La ștergerea unui box set, Vault sau colecții, se șterg și filmele asociate și containerele imbricate.",
   "preferences.ratingCountry": "Țara clasificării de vârstă",
   "preferences.ratingCountryHelp": "Alege clasificarea de vârstă a țării afișată pentru filme.",
   "movieDetail.contentRating": "Clasificare de vârstă",

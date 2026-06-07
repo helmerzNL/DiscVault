@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "라이브러리에 간단한 메타데이터 작업 표시기를 보여줍니다. 관리 화면 밖에서 새로 고침 활동을 숨기려면 끄세요.",
   "preferences.showDigitalBadgeOnTiles": "영화 타일에 Plex/Jellyfin 배지 표시",
   "preferences.showDigitalBadgeOnTilesHelp": "영화가 Plex 또는 Jellyfin에서도 디지털로 제공될 때 작은 배지를 표시합니다.",
+  "preferences.deleteContainerMembersWithContainer": "컨테이너와 함께 멤버 삭제",
+  "preferences.deleteContainerMembersWithContainerHelp": "박스 세트, Vault 또는 컬렉션을 삭제할 때 연결된 영화와 중첩 컨테이너도 함께 삭제합니다.",
   "preferences.ratingCountry": "등급 국가",
   "preferences.ratingCountryHelp": "영화에 표시할 연령 등급 국가를 선택하세요.",
   "movieDetail.contentRating": "콘텐츠 등급",

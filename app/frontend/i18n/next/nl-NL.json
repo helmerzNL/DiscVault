@@ -868,6 +868,8 @@
   "preferences.showMetadataJobsHelp": "Toont de compacte metadatataken-indicator in de bibliotheek. Zet dit uit om vernieuwactiviteit buiten Beheer verborgen te houden.",
   "preferences.showDigitalBadgeOnTiles": "Plex/Jellyfin badge tonen op filmtegel",
   "preferences.showDigitalBadgeOnTilesHelp": "Toon een klein icoon als een film ook digitaal beschikbaar is in Plex of Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Members verwijderen met container",
+  "preferences.deleteContainerMembersWithContainerHelp": "Verwijder bij het verwijderen van een box-set, vault of collectie ook de gekoppelde films en geneste containers.",
   "preferences.ratingCountry": "Kijkwijzerland",
   "preferences.ratingCountryHelp": "Kies van welk land de leeftijdsclassificatie bij films wordt getoond.",
   "movieDetail.contentRating": "Leeftijdsclassificatie",

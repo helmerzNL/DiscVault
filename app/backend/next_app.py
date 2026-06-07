@@ -361,6 +361,7 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_container_format_badges": True,
     "show_container_member_badges": True,
     "show_digital_badge_on_tiles": True,
+    "delete_container_members_with_container": False,
     "show_metadata_jobs": True,
     "rating_country": "NL",
     "default_media_group_id": "",
@@ -379,6 +380,7 @@ APP_BOOLEAN_PREFERENCES = {
     "show_container_format_badges",
     "show_container_member_badges",
     "show_digital_badge_on_tiles",
+    "delete_container_members_with_container",
     "show_metadata_jobs",
 }
 APP_CHOICE_PREFERENCES = {
@@ -25279,7 +25281,8 @@ def ui_preview_html(
       ["show_local_title", "preferences.showLocalTitle", "preferences.showLocalTitleHelp"],
       ["rating_country", "preferences.ratingCountry", "preferences.ratingCountryHelp"],
       ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"],
-      ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"]
+      ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"],
+      ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp"]
     ];
     const preferenceCollectorLabels = [
       ["collectors_mode", "preferences.collectorsMode", "preferences.collectorsModeHelp"],
@@ -32855,11 +32858,60 @@ def delete_movie_records(conn, movie_id: UUID) -> tuple[dict[str, Any], dict[str
     return existing, deleted
 
 
-def delete_container_records(conn, container_id: UUID) -> tuple[dict[str, Any], dict[str, int]]:
+def container_direct_member_ids(conn, container_id: UUID, container_type: str) -> tuple[list[UUID], list[UUID]]:
+    movie_ids: list[UUID] = []
+    container_ids: list[UUID] = []
+    if container_type in {"box_set", "vault"} and table_exists(conn, "container_movies"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT movie_id FROM container_movies WHERE container_id=%s ORDER BY sort_order", (container_id,))
+            movie_ids = [row["movie_id"] for row in cur.fetchall() if row.get("movie_id")]
+    if container_type == "collection" and table_exists(conn, "collection_items"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT item_type, item_id
+                FROM collection_items
+                WHERE collection_id=%s
+                ORDER BY sort_order
+                """,
+                (container_id,),
+            )
+            for row in cur.fetchall():
+                item_type = clean_text(row.get("item_type"))
+                item_id = row.get("item_id")
+                if not item_id:
+                    continue
+                if item_type == "movie":
+                    movie_ids.append(item_id)
+                elif item_type in {"vault", "box_set", "collection"}:
+                    container_ids.append(item_id)
+    return list(dict.fromkeys(movie_ids)), list(dict.fromkeys(container_ids))
+
+
+def merge_deleted_counts(target: dict[str, int], source: dict[str, int]) -> None:
+    for key, value in source.items():
+        target[key] = target.get(key, 0) + int(value or 0)
+
+
+def delete_container_records(
+    conn,
+    container_id: UUID,
+    *,
+    delete_members: bool = False,
+    visited_containers: set[UUID] | None = None,
+) -> tuple[dict[str, Any], dict[str, int]]:
+    visited_containers = visited_containers or set()
+    if container_id in visited_containers:
+        return {"id": str(container_id), "title": "", "container_type": ""}, {"containers_skipped_cycle": 1}
+    visited_containers.add(container_id)
     existing = container_entity(conn, container_id)
     if not existing:
         raise NextApiError("Container not found", 404)
     deleted: dict[str, int] = {}
+    member_movie_ids: list[UUID] = []
+    member_container_ids: list[UUID] = []
+    if delete_members and existing.get("container_type") in {"box_set", "vault", "collection"}:
+        member_movie_ids, member_container_ids = container_direct_member_ids(conn, container_id, existing.get("container_type"))
     with conn.cursor() as cur:
         if table_exists(conn, "collection_items"):
             cur.execute(
@@ -32881,6 +32933,27 @@ def delete_container_records(conn, container_id: UUID) -> tuple[dict[str, Any], 
             deleted["metadata_field_provenance"] = max(int(cur.rowcount or 0), 0)
         cur.execute("DELETE FROM containers WHERE id=%s", (container_id,))
         deleted["containers"] = max(int(cur.rowcount or 0), 0)
+    if delete_members:
+        deleted["member_movies_requested"] = len(member_movie_ids)
+        deleted["member_containers_requested"] = len(member_container_ids)
+        for member_container_id in member_container_ids:
+            if member_container_id == container_id:
+                continue
+            nested = container_entity(conn, member_container_id)
+            if not nested:
+                continue
+            _nested_existing, nested_deleted = delete_container_records(
+                conn,
+                member_container_id,
+                delete_members=True,
+                visited_containers=visited_containers,
+            )
+            merge_deleted_counts(deleted, nested_deleted)
+        for member_movie_id in member_movie_ids:
+            if not movie_entity(conn, member_movie_id):
+                continue
+            _movie, movie_deleted = delete_movie_records(conn, member_movie_id)
+            merge_deleted_counts(deleted, movie_deleted)
     return existing, deleted
 
 
@@ -33483,6 +33556,13 @@ def app_effective_preferences(conn, user_id: UUID | str | None = None) -> dict[s
     values = app_global_preferences(conn)
     values.update(app_user_preferences(conn, user_id))
     return values
+
+
+def actor_delete_container_members_enabled(conn, actor: dict[str, Any] | None) -> bool:
+    actor_id = (actor or {}).get("id")
+    if not actor_id:
+        return bool(APP_PREFERENCE_DEFAULTS["delete_container_members_with_container"])
+    return bool(app_effective_preferences(conn, actor_id).get("delete_container_members_with_container"))
 
 
 def set_app_user_preferences(conn, user_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any]:
@@ -41680,8 +41760,9 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("containerId is required", 400)
         with connect() as conn:
             actor = require_next_permission(conn, "containers.delete")
+            delete_members = actor_delete_container_members_enabled(conn, actor)
             with conn.transaction():
-                existing, deleted = delete_container_records(conn, container_uuid)
+                existing, deleted = delete_container_records(conn, container_uuid, delete_members=delete_members)
                 audit_event(
                     conn,
                     event_type="container.deleted",
@@ -41693,6 +41774,7 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={
                         "containerType": existing.get("container_type"),
                         "title": existing.get("title"),
+                        "deleteMembers": delete_members,
                         "deleted": deleted,
                     },
                 )
@@ -41702,6 +41784,7 @@ def register_routes(flask_app: Flask) -> None:
                 "deleted": deleted,
                 "containerId": str(container_uuid),
                 "containerType": existing.get("container_type"),
+                "deleteMembers": delete_members,
             }
         )
 
@@ -41879,6 +41962,7 @@ def register_routes(flask_app: Flask) -> None:
             )
             permissions = {str(item) for item in actor.get("permissions") or []}
             can_delete_containers = actor.get("role") == "owner" or "*" in permissions or "containers.delete" in permissions
+            delete_container_members = actor_delete_container_members_enabled(conn, actor)
             if container_ids and not can_delete_containers:
                 raise NextApiError("Permission required: containers.delete", 403)
             if movie_ids:
@@ -41919,12 +42003,17 @@ def register_routes(flask_app: Flask) -> None:
                             },
                         )
                 for container_uuid in container_ids:
-                    container, deleted = delete_container_records(conn, container_uuid)
+                    container, deleted = delete_container_records(
+                        conn,
+                        container_uuid,
+                        delete_members=delete_container_members,
+                    )
                     deleted_containers.append(
                         {
                             "id": str(container_uuid),
                             "title": container.get("title"),
                             "containerType": container.get("container_type"),
+                            "deleteMembers": delete_container_members,
                             "deleted": deleted,
                         }
                     )
@@ -41940,6 +42029,7 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={
                         "movieIds": [str(item) for item in movie_ids],
                         "containerIds": [str(item) for item in container_ids],
+                        "deleteContainerMembers": delete_container_members,
                         "deleted": deleted_counts,
                     },
                 )
@@ -41949,6 +42039,7 @@ def register_routes(flask_app: Flask) -> None:
                 "deleted": deleted_counts,
                 "movies": deleted_movies,
                 "containers": deleted_containers,
+                "deleteContainerMembers": delete_container_members,
                 "requested": len(movie_ids) + len(container_ids),
             }
         )
@@ -42606,8 +42697,9 @@ def register_routes(flask_app: Flask) -> None:
         container_uuid = parse_uuid(container_id, "containerId")
         with connect() as conn:
             actor = require_next_permission(conn, "api.write")
+            delete_members = actor_delete_container_members_enabled(conn, actor)
             with conn.transaction():
-                existing, deleted = delete_container_records(conn, container_uuid)
+                existing, deleted = delete_container_records(conn, container_uuid, delete_members=delete_members)
                 audit_api_interaction(
                     conn,
                     actor,
@@ -42619,10 +42711,11 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={
                         "containerType": existing.get("container_type"),
                         "title": existing.get("title"),
+                        "deleteMembers": delete_members,
                         "deleted": deleted,
                     },
                 )
-        return response({"status": "ok", "containerId": str(container_uuid), "deleted": deleted})
+        return response({"status": "ok", "containerId": str(container_uuid), "deleteMembers": delete_members, "deleted": deleted})
 
     @flask_app.get("/api/next/api/v1/stats")
     def public_api_stats():

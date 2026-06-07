@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Εμφανίζει τον συμπαγή δείκτη εργασιών μεταδεδομένων στη βιβλιοθήκη. Απενεργοποιήστε το για απόκρυψη της δραστηριότητας ανανέωσης εκτός Διαχείρισης.",
   "preferences.showDigitalBadgeOnTiles": "Εμφάνιση σήματος Plex/Jellyfin στα πλακίδια ταινιών",
   "preferences.showDigitalBadgeOnTilesHelp": "Εμφανίζει μικρό σήμα όταν μια ταινία είναι διαθέσιμη και ψηφιακά σε Plex ή Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Διαγραφή μελών μαζί με το κοντέινερ",
+  "preferences.deleteContainerMembersWithContainerHelp": "Όταν διαγράφεις box set, Vault ή συλλογή, διαγράφονται επίσης οι συνδεδεμένες ταινίες και τα ένθετα κοντέινερ.",
   "preferences.ratingCountry": "Χώρα ηλικιακής ταξινόμησης",
   "preferences.ratingCountryHelp": "Επιλέξτε ποιας χώρας η ηλικιακή ταξινόμηση θα εμφανίζεται στις ταινίες.",
   "movieDetail.contentRating": "Ηλικιακή ταξινόμηση",

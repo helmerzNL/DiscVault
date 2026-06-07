@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Показва компактния индикатор за задачи за метаданни в библиотеката. Изключете, за да скриете активността по обновяване извън Админ.",
   "preferences.showDigitalBadgeOnTiles": "Показвай значка Plex/Jellyfin върху филмовите плочки",
   "preferences.showDigitalBadgeOnTilesHelp": "Показва малка значка, когато филмът е наличен и дигитално в Plex или Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Изтриване на членовете с контейнера",
+  "preferences.deleteContainerMembersWithContainerHelp": "При изтриване на box set, Vault или колекция се изтриват и свързаните филми и вложени контейнери.",
   "preferences.ratingCountry": "Държава за възрастова класификация",
   "preferences.ratingCountryHelp": "Изберете класификацията за възраст на коя държава да се показва при филмите.",
   "movieDetail.contentRating": "Възрастова класификация",

@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Kitaplıkta kompakt meta veri işi göstergesini gösterir. Yenileme etkinliğini Yönetim dışında gizlemek için kapatın.",
   "preferences.showDigitalBadgeOnTiles": "Film karolarında Plex/Jellyfin rozetini göster",
   "preferences.showDigitalBadgeOnTilesHelp": "Bir film Plex veya Jellyfin'de dijital olarak da mevcut olduğunda küçük bir rozet gösterir.",
+  "preferences.deleteContainerMembersWithContainer": "Konteynerle birlikte üyeleri sil",
+  "preferences.deleteContainerMembersWithContainerHelp": "Bir box set, Vault veya koleksiyon silindiğinde bağlı filmler ve iç içe konteynerler de silinir.",
   "preferences.ratingCountry": "Yaş sınıflandırması ülkesi",
   "preferences.ratingCountryHelp": "Filmlerde hangi ülkenin yaş sınıflandırmasının gösterileceğini seçin.",
   "movieDetail.contentRating": "İçerik derecelendirmesi",

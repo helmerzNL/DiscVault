@@ -866,6 +866,8 @@
   "preferences.showMetadataJobsHelp": "Zobrazuje indikátor úlohy kompaktných metadát v knižnici. Vypnite, aby bola aktivita obnovenia skrytá mimo správcu.",
   "preferences.showDigitalBadgeOnTiles": "Zobraziť štítok Plex/Jellyfin",
   "preferences.showDigitalBadgeOnTilesHelp": "Zobrazuje malý odznak, keď je film dostupný aj digitálne v Plex alebo Jellyfin.",
+  "preferences.deleteContainerMembersWithContainer": "Odstrániť členov s kontajnerom",
+  "preferences.deleteContainerMembersWithContainerHelp": "Pri odstránení box setu, Vaultu alebo kolekcie sa odstránia aj prepojené filmy a vnorené kontajnery.",
   "preferences.ratingCountry": "Krajina vekovej klasifikácie",
   "preferences.ratingCountryHelp": "Vyberte, klasifikácia ktorej krajiny sa má zobrazovať pri filmoch.",
   "movieDetail.contentRating": "Veková klasifikácia",
