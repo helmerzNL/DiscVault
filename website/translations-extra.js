@@ -219,3 +219,224 @@
   }
   ["cs", "tr"].forEach(function (lang) { applyLocalized(lang, sets[lang]); });
 })();
+
+(function () {
+  var legacy = {
+    en: [
+      "Staying on the old version",
+      "If you are not ready to move to DiscVault 26 yet, you can stay on the previous DiscVault generation by using the <code>legacy</code> Docker image tag.",
+      "Use <code>ghcr.io/helmerzNL/DiscVault:legacy</code> instead of <code>latest</code> or <code>beta</code> in your Docker, Docker Compose, or Unraid template configuration. Keep your existing volume mappings, environment variables, ports, and persistent data path unchanged.",
+      "Recommended steps",
+      "Create a backup before changing the image tag.",
+      "Change only the image tag to <code>legacy</code>.",
+      "Pull the image, recreate the container, and confirm that your collection opens normally.",
+      "The legacy image is meant for people who want to keep running the old version while DiscVault 26 beta matures. New DiscVault 26 features, migration improvements, and future interface updates are added to the beta and later production images instead."
+    ],
+    nl: [
+      "Op de oude versie blijven",
+      "Ben je nog niet klaar om naar DiscVault 26 te gaan, dan kun je op de vorige generatie DiscVault blijven door de Docker image-tag <code>legacy</code> te gebruiken.",
+      "Gebruik <code>ghcr.io/helmerzNL/DiscVault:legacy</code> in plaats van <code>latest</code> of <code>beta</code> in je Docker-, Docker Compose- of Unraid-templateconfiguratie. Laat je bestaande volume mappings, environment variables, poorten en persistente datamap ongewijzigd.",
+      "Aanbevolen stappen",
+      "Maak een back-up voordat je de image-tag wijzigt.",
+      "Wijzig alleen de image-tag naar <code>legacy</code>.",
+      "Pull de image, maak de container opnieuw aan en controleer of je collectie normaal opent.",
+      "De legacy image is bedoeld voor mensen die de oude versie willen blijven draaien terwijl DiscVault 26 beta verder rijpt. Nieuwe DiscVault 26-features, migratieverbeteringen en toekomstige interface-updates worden toegevoegd aan de beta en later aan de productie-images."
+    ],
+    fr: [
+      "Rester sur l'ancienne version",
+      "Si vous n'etes pas encore pret a passer a DiscVault 26, vous pouvez rester sur la generation precedente de DiscVault avec le tag d'image Docker <code>legacy</code>.",
+      "Utilisez <code>ghcr.io/helmerzNL/DiscVault:legacy</code> au lieu de <code>latest</code> ou <code>beta</code> dans Docker, Docker Compose ou le template Unraid. Conservez vos volumes, variables d'environnement, ports et chemin de donnees persistantes.",
+      "Etapes recommandees",
+      "Creez une sauvegarde avant de modifier le tag de l'image.",
+      "Ne changez que le tag de l'image vers <code>legacy</code>.",
+      "Telechargez l'image, recreez le conteneur et verifiez que votre collection s'ouvre normalement.",
+      "L'image legacy est destinee aux personnes qui veulent continuer a utiliser l'ancienne version pendant que DiscVault 26 beta murit. Les nouvelles fonctions DiscVault 26, les ameliorations de migration et les futures mises a jour d'interface sont ajoutees aux images beta puis production."
+    ],
+    de: [
+      "Auf der alten Version bleiben",
+      "Wenn du noch nicht zu DiscVault 26 wechseln mochtest, kannst du mit dem Docker-Image-Tag <code>legacy</code> auf der vorherigen DiscVault-Generation bleiben.",
+      "Verwende <code>ghcr.io/helmerzNL/DiscVault:legacy</code> statt <code>latest</code> oder <code>beta</code> in Docker, Docker Compose oder deiner Unraid-Template-Konfiguration. Behalte bestehende Volume-Mappings, Umgebungsvariablen, Ports und den persistenten Datenpfad bei.",
+      "Empfohlene Schritte",
+      "Erstelle ein Backup, bevor du den Image-Tag anderst.",
+      "Andere nur den Image-Tag auf <code>legacy</code>.",
+      "Pull das Image, erstelle den Container neu und prufe, ob deine Sammlung normal geoffnet wird.",
+      "Das legacy Image ist fur Nutzer gedacht, die die alte Version weiter betreiben mochten, wahrend DiscVault 26 beta reift. Neue DiscVault 26-Funktionen, Migrationsverbesserungen und kunftige Interface-Updates landen stattdessen in den beta- und spateren production-Images."
+    ],
+    es: [
+      "Permanecer en la version anterior",
+      "Si todavia no quieres pasar a DiscVault 26, puedes seguir usando la generacion anterior de DiscVault con la etiqueta de imagen Docker <code>legacy</code>.",
+      "Usa <code>ghcr.io/helmerzNL/DiscVault:legacy</code> en lugar de <code>latest</code> o <code>beta</code> en Docker, Docker Compose o la plantilla de Unraid. Mantén sin cambios los volumenes, variables de entorno, puertos y ruta de datos persistentes.",
+      "Pasos recomendados",
+      "Crea una copia de seguridad antes de cambiar la etiqueta de la imagen.",
+      "Cambia solo la etiqueta de la imagen a <code>legacy</code>.",
+      "Descarga la imagen, recrea el contenedor y confirma que tu coleccion se abre con normalidad.",
+      "La imagen legacy esta pensada para quienes quieren seguir ejecutando la version anterior mientras DiscVault 26 beta madura. Las nuevas funciones de DiscVault 26, las mejoras de migracion y las futuras actualizaciones de interfaz se agregan a las imagenes beta y luego de produccion."
+    ],
+    pt: [
+      "Ficar na versao antiga",
+      "Se ainda nao estiveres pronto para mudar para o DiscVault 26, podes ficar na geracao anterior do DiscVault usando a tag de imagem Docker <code>legacy</code>.",
+      "Usa <code>ghcr.io/helmerzNL/DiscVault:legacy</code> em vez de <code>latest</code> ou <code>beta</code> na configuracao Docker, Docker Compose ou template Unraid. Mantem os volumes, variaveis de ambiente, portas e caminho de dados persistentes inalterados.",
+      "Passos recomendados",
+      "Cria uma copia de seguranca antes de mudar a tag da imagem.",
+      "Altera apenas a tag da imagem para <code>legacy</code>.",
+      "Faz pull da imagem, recria o container e confirma que a colecao abre normalmente.",
+      "A imagem legacy destina-se a quem quer continuar a usar a versao antiga enquanto o DiscVault 26 beta amadurece. As novas funcionalidades do DiscVault 26, melhorias de migracao e futuras atualizacoes de interface entram nas imagens beta e depois production."
+    ],
+    it: [
+      "Restare sulla vecchia versione",
+      "Se non sei ancora pronto a passare a DiscVault 26, puoi restare sulla generazione precedente di DiscVault usando il tag immagine Docker <code>legacy</code>.",
+      "Usa <code>ghcr.io/helmerzNL/DiscVault:legacy</code> invece di <code>latest</code> o <code>beta</code> nella configurazione Docker, Docker Compose o nel template Unraid. Mantieni invariati volumi, variabili d'ambiente, porte e percorso dei dati persistenti.",
+      "Passaggi consigliati",
+      "Crea un backup prima di modificare il tag dell'immagine.",
+      "Cambia solo il tag dell'immagine in <code>legacy</code>.",
+      "Esegui il pull dell'immagine, ricrea il container e verifica che la collezione si apra normalmente.",
+      "L'immagine legacy e pensata per chi vuole continuare a usare la vecchia versione mentre DiscVault 26 beta matura. Le nuove funzioni di DiscVault 26, i miglioramenti di migrazione e i futuri aggiornamenti dell'interfaccia vengono aggiunti alle immagini beta e poi production."
+    ],
+    sv: [
+      "Stanna pa den gamla versionen",
+      "Om du inte ar redo att ga over till DiscVault 26 kan du stanna pa den tidigare DiscVault-generationen genom att anvanda Docker image-taggen <code>legacy</code>.",
+      "Anvand <code>ghcr.io/helmerzNL/DiscVault:legacy</code> i stallet for <code>latest</code> eller <code>beta</code> i Docker, Docker Compose eller Unraid-mallen. Behall befintliga volym-mappningar, miljo-variabler, portar och persistent datasokvag oforandrade.",
+      "Rekommenderade steg",
+      "Skapa en backup innan du andrar image-taggen.",
+      "Andra endast image-taggen till <code>legacy</code>.",
+      "Gor pull av imagen, skapa om containern och kontrollera att samlingen oppnas normalt.",
+      "Legacy-imagen ar avsedd for dem som vill kora den gamla versionen medan DiscVault 26 beta mognar. Nya DiscVault 26-funktioner, migreringsforbattringar och kommande interface-uppdateringar laggs i beta- och senare production-images."
+    ],
+    no: [
+      "Bli pa den gamle versjonen",
+      "Hvis du ikke er klar til a ga til DiscVault 26 enna, kan du bli pa forrige DiscVault-generasjon ved a bruke Docker image-taggen <code>legacy</code>.",
+      "Bruk <code>ghcr.io/helmerzNL/DiscVault:legacy</code> i stedet for <code>latest</code> eller <code>beta</code> i Docker, Docker Compose eller Unraid-template. Behold eksisterende volumkoblinger, miljo-variabler, porter og persistent datasti uendret.",
+      "Anbefalte steg",
+      "Lag en sikkerhetskopi for du endrer image-taggen.",
+      "Endre bare image-taggen til <code>legacy</code>.",
+      "Pull imaget, opprett containeren pa nytt og bekreft at samlingen apnes normalt.",
+      "Legacy-imaget er ment for deg som vil fortsette med den gamle versjonen mens DiscVault 26 beta modnes. Nye DiscVault 26-funksjoner, migreringsforbedringer og fremtidige grensesnittoppdateringer legges til beta- og senere produksjonsimages."
+    ],
+    fi: [
+      "Pysy vanhassa versiossa",
+      "Jos et ole viela valmis siirtymaan DiscVault 26:een, voit pysya edellisessa DiscVault-sukupolvessa kayttamalla Docker-imagen tagia <code>legacy</code>.",
+      "Kayta <code>ghcr.io/helmerzNL/DiscVault:legacy</code> tagien <code>latest</code> tai <code>beta</code> sijaan Docker-, Docker Compose- tai Unraid-template-asetuksissa. Pida nykyiset volume mappingit, ymparistomuuttujat, portit ja pysyvan datan polku ennallaan.",
+      "Suositellut vaiheet",
+      "Tee varmuuskopio ennen image-tagin vaihtamista.",
+      "Vaihda vain image-tagiksi <code>legacy</code>.",
+      "Pullaa image, luo container uudelleen ja varmista, etta kokoelma avautuu normaalisti.",
+      "Legacy-image on tarkoitettu kayttajille, jotka haluavat jatkaa vanhalla versiolla DiscVault 26 betan kypsyessa. Uudet DiscVault 26 -ominaisuudet, migraatioparannukset ja tulevat kayttoliittymapaivitykset lisataan beta- ja myohemmin production-imageihin."
+    ],
+    da: [
+      "Bliv pa den gamle version",
+      "Hvis du endnu ikke er klar til at skifte til DiscVault 26, kan du blive pa den tidligere DiscVault-generation ved at bruge Docker image-tagget <code>legacy</code>.",
+      "Brug <code>ghcr.io/helmerzNL/DiscVault:legacy</code> i stedet for <code>latest</code> eller <code>beta</code> i Docker, Docker Compose eller Unraid-template. Behold dine eksisterende volume mappings, miljo-variabler, porte og persistente datasti uandret.",
+      "Anbefalede trin",
+      "Lav en backup, for du andrer image-tagget.",
+      "Andr kun image-tagget til <code>legacy</code>.",
+      "Pull imaget, genskab containeren og bekraft, at din samling abner normalt.",
+      "Legacy-imaget er til dem, der vil fortsatte med den gamle version, mens DiscVault 26 beta modnes. Nye DiscVault 26-funktioner, migreringsforbedringer og kommende interface-opdateringer tilfojes beta- og senere production-images."
+    ],
+    ja: [
+      "旧バージョンを使い続ける",
+      "まだ DiscVault 26 へ移行する準備ができていない場合は、Docker image tag の <code>legacy</code> を使って以前の DiscVault 世代を使い続けられます。",
+      "Docker、Docker Compose、Unraid template の設定で <code>latest</code> や <code>beta</code> の代わりに <code>ghcr.io/helmerzNL/DiscVault:legacy</code> を指定してください。既存の volume mappings、environment variables、ports、persistent data path は変更しないでください。",
+      "推奨手順",
+      "image tag を変更する前に backup を作成します。",
+      "変更するのは image tag を <code>legacy</code> にする部分だけです。",
+      "image を pull し、container を再作成して、collection が通常どおり開くことを確認します。",
+      "legacy image は、DiscVault 26 beta が成熟するまで旧バージョンを動かし続けたい人向けです。新しい DiscVault 26 features、migration improvements、今後の interface updates は beta image と、その後の production image に追加されます。"
+    ],
+    zh: [
+      "继续使用旧版本",
+      "如果你还没有准备好迁移到 DiscVault 26，可以使用 Docker image tag <code>legacy</code> 继续运行上一代 DiscVault。",
+      "在 Docker、Docker Compose 或 Unraid template 配置中，使用 <code>ghcr.io/helmerzNL/DiscVault:legacy</code> 代替 <code>latest</code> 或 <code>beta</code>。保持现有 volume mappings、environment variables、ports 和 persistent data path 不变。",
+      "推荐步骤",
+      "更改 image tag 前先创建 backup。",
+      "只把 image tag 改为 <code>legacy</code>。",
+      "pull 该 image，重新创建 container，并确认 collection 可以正常打开。",
+      "legacy image 面向希望在 DiscVault 26 beta 成熟前继续运行旧版本的用户。新的 DiscVault 26 features、migration improvements 和未来 interface updates 会加入 beta image，并随后进入 production image。"
+    ],
+    ko: [
+      "이전 버전에 머무르기",
+      "아직 DiscVault 26으로 이동할 준비가 되지 않았다면 Docker image tag <code>legacy</code>를 사용해 이전 DiscVault 세대를 계속 사용할 수 있습니다.",
+      "Docker, Docker Compose 또는 Unraid template 설정에서 <code>latest</code>나 <code>beta</code> 대신 <code>ghcr.io/helmerzNL/DiscVault:legacy</code>를 사용하세요. 기존 volume mappings, environment variables, ports, persistent data path는 그대로 유지하세요.",
+      "권장 단계",
+      "image tag를 변경하기 전에 backup을 만드세요.",
+      "image tag만 <code>legacy</code>로 변경하세요.",
+      "image를 pull하고 container를 다시 만든 뒤 collection이 정상적으로 열리는지 확인하세요.",
+      "legacy image는 DiscVault 26 beta가 성숙하는 동안 이전 버전을 계속 실행하려는 사용자를 위한 것입니다. 새로운 DiscVault 26 features, migration improvements, future interface updates는 beta image와 이후 production image에 추가됩니다."
+    ],
+    uk: [
+      "Залишитися на старій версії",
+      "Якщо ви ще не готові переходити на DiscVault 26, можна залишитися на попередньому поколінні DiscVault за допомогою Docker image tag <code>legacy</code>.",
+      "У Docker, Docker Compose або Unraid template використовуйте <code>ghcr.io/helmerzNL/DiscVault:legacy</code> замість <code>latest</code> чи <code>beta</code>. Не змінюйте наявні volume mappings, environment variables, ports і persistent data path.",
+      "Рекомендовані кроки",
+      "Створіть backup перед зміною image tag.",
+      "Змініть лише image tag на <code>legacy</code>.",
+      "Зробіть pull image, створіть container заново й перевірте, що collection відкривається нормально.",
+      "Legacy image призначений для тих, хто хоче продовжувати використовувати стару версію, поки DiscVault 26 beta дозріває. Нові DiscVault 26 features, migration improvements і майбутні interface updates додаються до beta, а потім до production images."
+    ],
+    pl: [
+      "Pozostanie przy starej wersji",
+      "Jeśli nie chcesz jeszcze przechodzić na DiscVault 26, możesz zostać przy poprzedniej generacji DiscVault, używając Docker image tag <code>legacy</code>.",
+      "W Docker, Docker Compose albo Unraid template użyj <code>ghcr.io/helmerzNL/DiscVault:legacy</code> zamiast <code>latest</code> lub <code>beta</code>. Pozostaw bez zmian dotychczasowe volume mappings, environment variables, ports i persistent data path.",
+      "Zalecane kroki",
+      "Utwórz backup przed zmianą image tag.",
+      "Zmień tylko image tag na <code>legacy</code>.",
+      "Wykonaj pull image, odtwórz container i sprawdź, czy collection otwiera się normalnie.",
+      "Legacy image jest dla osób, które chcą nadal uruchamiać starą wersję, gdy DiscVault 26 beta dojrzewa. Nowe DiscVault 26 features, migration improvements i przyszłe interface updates trafiają do beta, a później do production images."
+    ],
+    el: [
+      "Παραμονή στην παλιά έκδοση",
+      "Αν δεν είστε ακόμη έτοιμοι να μεταβείτε στο DiscVault 26, μπορείτε να μείνετε στην προηγούμενη γενιά DiscVault χρησιμοποιώντας το Docker image tag <code>legacy</code>.",
+      "Σε Docker, Docker Compose ή Unraid template χρησιμοποιήστε <code>ghcr.io/helmerzNL/DiscVault:legacy</code> αντί για <code>latest</code> ή <code>beta</code>. Κρατήστε ίδια τα volume mappings, environment variables, ports και persistent data path.",
+      "Προτεινόμενα βήματα",
+      "Δημιουργήστε backup πριν αλλάξετε το image tag.",
+      "Αλλάξτε μόνο το image tag σε <code>legacy</code>.",
+      "Κάντε pull το image, ξαναδημιουργήστε το container και επιβεβαιώστε ότι το collection ανοίγει κανονικά.",
+      "Το legacy image προορίζεται για όσους θέλουν να συνεχίσουν την παλιά έκδοση όσο ωριμάζει το DiscVault 26 beta. Τα νέα DiscVault 26 features, migration improvements και μελλοντικά interface updates προστίθενται στα beta και αργότερα production images."
+    ],
+    hu: [
+      "Maradás a régi verzión",
+      "Ha még nem áll készen a DiscVault 26-ra váltásra, a Docker image tag <code>legacy</code> használatával maradhat az előző DiscVault-generáción.",
+      "Docker, Docker Compose vagy Unraid template konfigurációban használja a <code>ghcr.io/helmerzNL/DiscVault:legacy</code> image-et a <code>latest</code> vagy <code>beta</code> helyett. Hagyja változatlanul a volume mappings, environment variables, ports és persistent data path beállításokat.",
+      "Javasolt lépések",
+      "Készítsen backupot az image tag módosítása előtt.",
+      "Csak az image taget módosítsa erre: <code>legacy</code>.",
+      "Pullolja az image-et, hozza létre újra a containert, és ellenőrizze, hogy a collection normálisan megnyílik.",
+      "A legacy image azoknak szól, akik a DiscVault 26 beta éréséig a régi verziót szeretnék futtatni. Az új DiscVault 26 features, migration improvements és jövőbeli interface updates a beta, majd a production images részei lesznek."
+    ],
+    cs: [
+      "Zůstat na staré verzi",
+      "Pokud ještě nejste připraveni přejít na DiscVault 26, můžete zůstat na předchozí generaci DiscVault pomocí Docker image tagu <code>legacy</code>.",
+      "V Dockeru, Docker Compose nebo Unraid template použijte <code>ghcr.io/helmerzNL/DiscVault:legacy</code> místo <code>latest</code> nebo <code>beta</code>. Ponechte beze změny stávající volume mappings, environment variables, ports a persistent data path.",
+      "Doporučené kroky",
+      "Před změnou image tagu vytvořte backup.",
+      "Změňte pouze image tag na <code>legacy</code>.",
+      "Stáhněte image, znovu vytvořte container a ověřte, že se collection otevírá normálně.",
+      "Legacy image je určen pro ty, kteří chtějí dál používat starou verzi, zatímco DiscVault 26 beta dozrává. Nové DiscVault 26 features, migration improvements a budoucí interface updates se přidávají do beta a později production images."
+    ],
+    tr: [
+      "Eski sürümde kalmak",
+      "DiscVault 26'ya geçmeye henüz hazır değilseniz, Docker image tag <code>legacy</code> kullanarak önceki DiscVault neslinde kalabilirsiniz.",
+      "Docker, Docker Compose veya Unraid template yapılandırmasında <code>latest</code> ya da <code>beta</code> yerine <code>ghcr.io/helmerzNL/DiscVault:legacy</code> kullanın. Mevcut volume mappings, environment variables, ports ve persistent data path ayarlarını değiştirmeyin.",
+      "Önerilen adımlar",
+      "Image tag değiştirmeden önce backup oluşturun.",
+      "Yalnızca image tag değerini <code>legacy</code> yapın.",
+      "Image'i pull edin, container'ı yeniden oluşturun ve collection'ın normal açıldığını doğrulayın.",
+      "Legacy image, DiscVault 26 beta olgunlaşırken eski sürümü çalıştırmaya devam etmek isteyenler içindir. Yeni DiscVault 26 features, migration improvements ve future interface updates beta image'e, ardından production images'a eklenir."
+    ]
+  };
+  var keys = [
+    "faq.legacy.title",
+    "faq.legacy.p1",
+    "faq.legacy.p2",
+    "faq.legacy.steps.title",
+    "faq.legacy.steps.1",
+    "faq.legacy.steps.2",
+    "faq.legacy.steps.3",
+    "faq.legacy.note"
+  ];
+  Object.keys(legacy).forEach(function (lang) {
+    if (!T[lang]) return;
+    keys.forEach(function (key, index) {
+      T[lang][key] = legacy[lang][index];
+    });
+  });
+})();
