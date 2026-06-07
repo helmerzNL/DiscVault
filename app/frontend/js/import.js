@@ -390,10 +390,16 @@ function resetImport() {
 }
 
 function switchTabDirect(name) {
-  const activeTabName = (name === 'logs' || name === 'settings' || name === 'toevoegen'
-    || name === 'scan' || name === 'import') ? 'meer'
-    : name;
+  const activeTabName = isMobileNav()
+    ? ((name === 'scan' || name === 'toevoegen') ? 'import'
+      : name === 'notifications' ? 'notifications'
+      : (name === 'logs' || name === 'settings' || name === 'admin') ? 'profile'
+      : name)
+    : ((name === 'logs' || name === 'settings' || name === 'toevoegen'
+      || name === 'scan' || name === 'import' || name === 'notifications' || name === 'admin') ? 'meer'
+      : name);
   const panelName = (name === 'scan' || name === 'import') ? 'toevoegen'
+    : name === 'notifications' ? 'profile'
     : name;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -408,6 +414,7 @@ function switchTabDirect(name) {
   if (name === 'settings') loadSettings();
   if (name === 'admin')    loadAdminTab();
   if (name === 'profile') switchProfileSubmenu(currentProfileSubmenu || 'general');
+  if (name === 'notifications') switchProfileSubmenu('notifications');
   if (name === 'toevoegen') switchToevoegen((typeof currentToevoegenSub !== 'undefined' && currentToevoegenSub) || 'scan');
   if (name === 'scan') switchToevoegen('scan');
   if (name === 'import') switchToevoegen('import');
@@ -429,7 +436,7 @@ const _TAB_PATHS = { collection:'/', settings:'/settings', search:'/search', lis
 const _PATH_TABS = { '/':'collection', '/settings':'settings', '/search':'search', '/lists':'lists', '/add':'toevoegen', '/profile':'profile', '/admin':'admin' };
 
 function _tabPath(tab) {
-  const base = (tab === 'logs') ? 'settings' : (tab === 'scan' || tab === 'import') ? 'toevoegen' : tab;
+  const base = (tab === 'logs') ? 'settings' : (tab === 'scan' || tab === 'import') ? 'toevoegen' : tab === 'notifications' ? 'profile' : tab;
   return _TAB_PATHS[base] || '/';
 }
 function _pushRoute(path) {

@@ -84,22 +84,30 @@
 
 <nav class="main-nav" id="mainNav">
   <div class="tab active" data-tab="collection" onclick="switchTab('collection')">
-    <span class="tab-icon mdi mdi-view-grid-outline" aria-hidden="true"></span>
+    <span class="tab-icon mdi mdi-view-grid" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.collection">Collectie</span>
   </div>
   <div class="tab" data-tab="lists" onclick="switchTab('lists')">
-    <span class="tab-icon mdi mdi-playlist-check" aria-hidden="true"></span>
+    <span class="tab-icon mdi mdi-bookmark" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.lists">Lijsten</span>
   </div>
-  <div class="tab" data-tab="search" onclick="switchTab('search')">
+  <div class="tab tab-desktop" data-tab="search" onclick="switchTab('search')">
     <span class="tab-icon mdi mdi-magnify" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.search">Zoeken</span>
   </div>
+  <div class="tab tab-mobile" data-tab="import" onclick="switchTab('import')">
+    <span class="tab-icon mdi mdi-plus-circle" aria-hidden="true"></span>
+    <span class="tab-label" data-i18n="nav.import">Import</span>
+  </div>
+  <div class="tab tab-mobile" data-tab="notifications" onclick="switchTab('notifications')">
+    <span class="tab-icon mdi mdi-bell" aria-hidden="true"></span>
+    <span class="tab-label" data-i18n="nav.notifications">Notificaties</span>
+  </div>
   <div class="tab" data-tab="profile" onclick="switchTab('profile')">
-    <span class="tab-icon mdi mdi-account-circle-outline" aria-hidden="true"></span>
+    <span class="tab-icon mdi mdi-account" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.profile">Profiel</span>
   </div>
-  <div class="tab" data-tab="meer" id="tabMeer" onclick="toggleMeerMenu(event)">
+  <div class="tab tab-desktop" data-tab="meer" id="tabMeer" onclick="toggleMeerMenu(event)">
     <span class="tab-icon mdi mdi-dots-horizontal" aria-hidden="true"></span>
     <span class="tab-label" data-i18n="nav.more">Meer</span>
   </div>
