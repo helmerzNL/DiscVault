@@ -12,6 +12,7 @@ import html as html_lib
 import base64
 from difflib import SequenceMatcher
 import hashlib
+import ipaddress
 import io
 import json as json_lib
 import mimetypes
@@ -39104,10 +39105,64 @@ def audit_event(
                 str(target_id) if target_id is not None else None,
                 summary,
                 Jsonb(json_ready(redact_sensitive_payload(metadata or {}))),
-                request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip(),
+                public_request_ip(),
                 request.headers.get("User-Agent"),
             ),
         )
+
+
+def normalize_request_ip_candidate(value: Any) -> str:
+    text = str(value or "").strip().strip('"').strip("'")
+    if not text:
+        return ""
+    if text.lower().startswith("for="):
+        text = text[4:].strip().strip('"').strip("'")
+    if ";" in text:
+        text = text.split(";", 1)[0].strip()
+    if text.startswith("[") and "]" in text:
+        return text[1:text.index("]")].strip()
+    if text.count(":") == 1:
+        host, port = text.rsplit(":", 1)
+        if port.isdigit():
+            text = host
+    return text.strip()
+
+
+def public_request_ip() -> str:
+    candidates: list[str] = []
+    for header in ("CF-Connecting-IP", "True-Client-IP", "X-Real-IP", "X-Client-IP"):
+        value = normalize_request_ip_candidate(request.headers.get(header))
+        if value:
+            candidates.append(value)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        candidates.extend(
+            normalize_request_ip_candidate(part)
+            for part in str(forwarded_for).split(",")
+        )
+    forwarded = request.headers.get("Forwarded")
+    if forwarded:
+        for segment in str(forwarded).split(","):
+            for part in segment.split(";"):
+                part = part.strip()
+                if part.lower().startswith("for="):
+                    candidates.append(normalize_request_ip_candidate(part))
+    remote = normalize_request_ip_candidate(request.remote_addr)
+    if remote:
+        candidates.append(remote)
+    valid_candidates: list[str] = []
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            parsed = ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        normalized = str(parsed)
+        valid_candidates.append(normalized)
+        if parsed.is_global:
+            return normalized
+    return valid_candidates[0] if valid_candidates else ""
 
 
 def audit_event_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -40322,10 +40377,29 @@ def register_routes(flask_app: Flask) -> None:
             access = profile_api_access_payload(conn, actor)
             if not access.get("manageable"):
                 raise NextApiError("Permission required: API or MCP access", 403)
-            if not table_exists(conn, "audit_events"):
+            if not table_exists(conn, "api_access_tokens") or not table_exists(conn, "audit_events"):
                 return response({"status": "ok", "events": [], "tokenId": str(token_uuid) if token_uuid else "all"})
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM api_access_tokens
+                    WHERE user_id=%s
+                    """,
+                    (actor["id"],),
+                )
+                owned_token_ids = [str(row["id"]) for row in cur.fetchall()]
+            if token_uuid:
+                requested_token_id = str(token_uuid)
+                if requested_token_id not in owned_token_ids:
+                    return response({"status": "ok", "events": [], "tokenId": requested_token_id})
+                visible_token_ids = [requested_token_id]
+            else:
+                visible_token_ids = owned_token_ids
+            if not visible_token_ids:
+                return response({"status": "ok", "events": [], "tokenId": "all"})
+            token_placeholders = ", ".join(["%s"] * len(visible_token_ids))
             conditions = [
-                "actor_user_id=%s",
                 """
                 (
                     category IN ('api', 'mcp')
@@ -40339,11 +40413,9 @@ def register_routes(flask_app: Flask) -> None:
                     OR event_type IN ('api_token.created', 'api_token.revoked')
                 )
                 """,
+                f"(metadata->>'apiTokenId' IN ({token_placeholders}) OR target_id IN ({token_placeholders}))",
             ]
-            params: list[Any] = [actor["id"]]
-            if token_uuid:
-                conditions.append("(metadata->>'apiTokenId'=%s OR target_id=%s)")
-                params.extend([str(token_uuid), str(token_uuid)])
+            params: list[Any] = [*visible_token_ids, *visible_token_ids]
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
