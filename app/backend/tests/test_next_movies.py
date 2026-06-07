@@ -12,6 +12,10 @@ try:
     from app.backend.next_app import import_source_recommended_match
     from app.backend.next_app import import_source_match_candidate_score
     from app.backend.next_app import import_source_match_title_key
+    from app.backend.next_app import import_source_box_set_reviews
+    from app.backend.next_app import import_source_detected_box_set_proposal
+    from app.backend.next_app import import_source_item_confidence
+    from app.backend.next_app import import_source_item_needs_metadata_suggestion
     from app.backend.next_app import NextApiError
     from app.backend.next_app import movie_edit_receiver_proposal
     from app.backend.next_app import movie_payload_fields
@@ -30,6 +34,10 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     import_source_recommended_match = None
     import_source_match_candidate_score = None
     import_source_match_title_key = None
+    import_source_box_set_reviews = None
+    import_source_detected_box_set_proposal = None
+    import_source_item_confidence = None
+    import_source_item_needs_metadata_suggestion = None
     NextApiError = None
     movie_edit_receiver_proposal = None
     movie_payload_fields = None
@@ -171,6 +179,117 @@ class NextMovieEditPolicyTests(unittest.TestCase):
     def test_import_source_match_title_key_tolerates_empty_values(self):
         self.assertEqual(import_source_match_title_key(None), "")
         self.assertEqual(import_source_match_title_key("Harry Potter 4K Blu-ray SteelBook"), "harry potter")
+
+    def test_import_source_box_set_rows_force_metadata_suggestions_and_member_review(self):
+        item = {
+            "itemType": "box_set",
+            "title": "Back to the Future: The Ultimate Trilogy",
+            "year": "2020",
+            "barcode": "191329144657",
+            "format": "4K UHD",
+        }
+        confidence = import_source_item_confidence(item)
+        proposal = {
+            "provider": "import_mymovies_dk",
+            "title": "Back to the Future: The Ultimate Trilogy",
+            "barcode": "191329144657",
+            "format": "4K UHD",
+            "members": [
+                {"title": "Back to the Future", "format": "4K UHD"},
+                {"title": "Back to the Future Part II", "format": "4K UHD"},
+                {"title": "Back to the Future Part III", "format": "4K UHD"},
+            ],
+            "boxSetEvidence": {
+                "memberConfidence": "file_explicit",
+                "membersAreExplicit": True,
+                "memberCount": 3,
+            },
+        }
+
+        reviews = import_source_box_set_reviews(
+            [
+                {
+                    "containerType": "box_set",
+                    "title": "Back to the Future: The Ultimate Trilogy",
+                    "boxSetProposal": proposal,
+                }
+            ],
+            [],
+        )
+
+        self.assertTrue(import_source_item_needs_metadata_suggestion(item, confidence))
+        self.assertEqual(reviews[0]["memberCount"], 3)
+        self.assertEqual(reviews[0]["members"][1]["title"], "Back to the Future Part II")
+        self.assertEqual(reviews[0]["members"][1]["format"], "4K UHD")
+
+    def test_import_source_barcode_rows_still_check_metadata_for_box_sets(self):
+        item = {
+            "title": "RoboCop",
+            "year": "1987",
+            "barcode": "8712626068546",
+            "format": "Blu-ray",
+        }
+        confidence = import_source_item_confidence(item)
+
+        self.assertIn("exact_identity", confidence["evidence"])
+        self.assertTrue(import_source_item_needs_metadata_suggestion(item, confidence))
+
+    def test_import_source_detected_box_set_from_metadata_is_reviewable(self):
+        explicit = {
+            "provider": "movievault_26",
+            "title": "Back to the Future Trilogy",
+            "barcode": "5050582369601",
+            "format": "DVD",
+            "members": [
+                {"title": "Back to the Future", "format": "DVD"},
+                {"title": "Back to the Future Part II", "format": "DVD"},
+                {"title": "Back to the Future Part III", "format": "DVD"},
+            ],
+            "boxSetEvidence": {
+                "barcodeMatch": True,
+                "entityType": "box_set",
+                "memberConfidence": "identified",
+                "membersAreExplicit": True,
+                "detectedWithoutMembers": False,
+            },
+        }
+        candidate = {
+            "provider": "bluray_com",
+            "title": "Back to the Future Trilogy",
+            "barcode": "5050582369601",
+            "format": "DVD",
+            "members": [
+                {"title": "Back to the Future"},
+                {"title": "Back to the Future Part II"},
+                {"title": "Back to the Future Part III"},
+                {"title": "Bonus Disc"},
+            ],
+            "boxSetEvidence": {
+                "barcodeMatch": True,
+                "entityType": "box_set",
+                "memberConfidence": "candidate",
+                "membersAreExplicit": False,
+                "detectedWithoutMembers": True,
+            },
+        }
+
+        detected = import_source_detected_box_set_proposal({"boxSetProposals": [candidate, explicit]})
+        reviews = import_source_box_set_reviews(
+            [],
+            [
+                {
+                    "index": 1,
+                    "title": "Back to the Future Trilogy",
+                    "barcode": "5050582369601",
+                    "detectedBoxSetProposal": detected,
+                }
+            ],
+        )
+
+        self.assertIs(detected, explicit)
+        self.assertEqual(reviews[0]["memberCount"], 3)
+        self.assertEqual(reviews[0]["members"][0]["provider"], "movievault_26")
+        self.assertEqual(reviews[0]["members"][2]["title"], "Back to the Future Part III")
 
     def test_selected_import_movie_candidate_from_body_normalizes_plugin_fields(self):
         candidate = selected_import_movie_candidate_from_body(

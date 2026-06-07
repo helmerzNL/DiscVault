@@ -1831,10 +1831,18 @@ def import_source_conflicts(conn, items: list[dict[str, Any]], *, limit: int = 5
     return conflicts
 
 
+def import_source_item_is_box_set(item: dict[str, Any]) -> bool:
+    if not isinstance(item, dict):
+        return False
+    item_type = clean_text(item.get("itemType") or item.get("item_type") or item.get("entityType") or item.get("entity_type"))
+    return item_type == "box_set" or item.get("isBoxSet") is True or item.get("is_box_set") is True
+
+
 def import_source_item_container_specs(item: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(item, dict):
         return []
     specs: list[dict[str, Any]] = []
+    is_box_set_item = import_source_item_is_box_set(item)
     field_specs = (
         ("collection", item.get("collectionTitle") or item.get("collection") or item.get("collection_title")),
         ("box_set", item.get("boxSetTitle") or item.get("boxSet") or item.get("box_set") or item.get("box_set_title")),
@@ -1843,7 +1851,18 @@ def import_source_item_container_specs(item: dict[str, Any]) -> list[dict[str, A
     for container_type, title in field_specs:
         clean_title = clean_text(title)
         if clean_title:
-            specs.append({"containerType": container_type, "title": clean_title})
+            spec: dict[str, Any] = {"containerType": container_type, "title": clean_title}
+            if container_type == "box_set" and is_box_set_item:
+                spec.update(
+                    {
+                        "barcode": clean_text(item.get("barcode")),
+                        "format": import_source_item_format(item),
+                        "memberCount": len(item.get("boxSetMembers") or []),
+                        "membersAreExplicit": bool(item.get("boxSetMembers")),
+                        "boxSetProposal": item.get("boxSetProposal") if isinstance(item.get("boxSetProposal"), dict) else {},
+                    }
+                )
+            specs.append(spec)
     for raw in item.get("containers") or []:
         if not isinstance(raw, dict):
             continue
@@ -1854,7 +1873,16 @@ def import_source_item_container_specs(item: dict[str, Any]) -> list[dict[str, A
             continue
         title = clean_text(raw.get("title") or raw.get("name"))
         if title:
-            specs.append({"containerType": container_type, "title": title})
+            specs.append(
+                {
+                    "containerType": container_type,
+                    "title": title,
+                    "barcode": clean_text(raw.get("barcode")),
+                    "format": clean_text(raw.get("format")),
+                    "memberCount": raw.get("memberCount") or raw.get("member_count"),
+                    "membersAreExplicit": raw.get("membersAreExplicit") or raw.get("members_are_explicit"),
+                }
+            )
     seen: set[tuple[str, str]] = set()
     unique: list[dict[str, Any]] = []
     for spec in specs:
@@ -1962,6 +1990,8 @@ def import_source_review_queue(
                     "confidence": confidence,
                     "match": match,
                     "containers": import_source_item_container_specs(item),
+                    "itemType": clean_text(item.get("itemType") or item.get("entityType")),
+                    "boxSetProposal": item.get("boxSetProposal") if isinstance(item.get("boxSetProposal"), dict) else {},
                     "personal": item.get("personal") if isinstance(item.get("personal"), dict) else {},
                 }
             )
@@ -2050,7 +2080,7 @@ def import_source_review_summary(
         if import_source_title_release_risk(row.get("title"), row.get("confidence") if isinstance(row.get("confidence"), dict) else {}):
             release_title_risks += 1
         suggestions = row.get("metadataSuggestions")
-        if isinstance(suggestions, dict) and (suggestions.get("items") or suggestions.get("error")):
+        if isinstance(suggestions, dict) and (suggestions.get("items") or suggestions.get("boxSetProposals") or suggestions.get("error")):
             metadata_suggestions += 1
     needs_review = missing_title + confidence["low"] + release_title_risks
     recommended_action = "review" if needs_review or metadata_suggestions else "ready"
@@ -2076,6 +2106,10 @@ def import_source_review_summary(
 def import_source_item_needs_metadata_suggestion(item: dict[str, Any], confidence: dict[str, Any]) -> bool:
     if not import_source_item_title(item):
         return False
+    if import_source_item_is_box_set(item):
+        return True
+    if clean_text(item.get("barcode")):
+        return True
     if "exact_identity" in set(confidence.get("evidence") or []):
         return False
     score = int(confidence.get("score") or 0)
@@ -2092,13 +2126,14 @@ def import_source_metadata_suggestions(
     title = import_source_item_title(item)
     if not title:
         return None
+    barcode = clean_text(item.get("barcode"))
     query: dict[str, Any] = {
         "title": title,
         "year": import_source_item_year(item),
         "format": import_source_item_format(item),
+        "detectBoxSets": bool(import_source_item_is_box_set(item) or barcode),
         "previewMode": True,
     }
-    barcode = clean_text(item.get("barcode"))
     identifiers = import_source_item_identifiers(item)
     if barcode:
         query["barcode"] = barcode
@@ -2112,7 +2147,9 @@ def import_source_metadata_suggestions(
         return {"query": query, "status": "error", "error": str(exc), "items": [], "sources": []}
 
     suggestions: list[dict[str, Any]] = []
+    box_set_proposals: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
+    seen_box_sets: set[str] = set()
 
     def append_suggestion(provider: str, source_label: str, candidate: dict[str, Any]) -> None:
         candidate_title = clean_text(candidate.get("title") or candidate.get("name") or candidate.get("originalTitle"))
@@ -2149,6 +2186,46 @@ def import_source_metadata_suggestions(
             continue
         provider = clean_text(result_item.get("pluginId")) or clean_text(result_item.get("provider")) or "metadata"
         source_label = clean_text(result_item.get("sourceLabel")) or provider
+        raw = result_item.get("raw") if isinstance(result_item.get("raw"), dict) else {}
+        proposal_candidates = []
+        for value in (
+            result_item.get("boxSetProposal"),
+            result_item.get("box_set_proposal"),
+            raw.get("boxSetProposal"),
+            raw.get("box_set_proposal"),
+        ):
+            if isinstance(value, dict):
+                proposal_candidates.append(value)
+        for key in ("boxSetProposals", "box_set_proposals"):
+            for value in result_item.get(key) or []:
+                if isinstance(value, dict):
+                    proposal_candidates.append(value)
+            for value in raw.get(key) or []:
+                if isinstance(value, dict):
+                    proposal_candidates.append(value)
+        for proposal in proposal_candidates:
+            if not box_set_proposal_member_list(proposal):
+                continue
+            key = json.dumps(
+                {
+                    "provider": provider,
+                    "title": clean_text(proposal.get("title") or proposal.get("name")).casefold(),
+                    "barcode": clean_text(proposal.get("barcode")),
+                    "members": len(box_set_proposal_member_list(proposal)),
+                },
+                sort_keys=True,
+            )
+            if key in seen_box_sets:
+                continue
+            seen_box_sets.add(key)
+            box_set_proposals.append(
+                {
+                    **proposal,
+                    "provider": clean_text(proposal.get("provider") or provider),
+                    "sourceLabel": clean_text(proposal.get("sourceLabel") or source_label),
+                    "audit": box_set_proposal_audit_summary({**proposal, "provider": clean_text(proposal.get("provider") or provider)}),
+                }
+            )
         for candidate in result_item.get("candidates") or []:
             if isinstance(candidate, dict):
                 append_suggestion(provider, source_label, candidate)
@@ -2176,8 +2253,22 @@ def import_source_metadata_suggestions(
         "query": query,
         "status": "ok",
         "items": suggestions[:limit],
+        "boxSetProposals": sorted(box_set_proposals, key=box_set_proposal_sort_key)[:limit],
         "sources": metadata.get("sourceSummary") or [],
     }
+
+
+def import_source_detected_box_set_proposal(suggestions: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(suggestions, dict):
+        return {}
+    proposals = [
+        proposal
+        for proposal in (suggestions.get("boxSetProposals") or [])
+        if isinstance(proposal, dict) and len(box_set_proposal_member_list(proposal)) >= 2
+    ]
+    if not proposals:
+        return {}
+    return sorted(proposals, key=box_set_proposal_sort_key)[0]
 
 
 def import_source_match_title_key(value: Any) -> str:
@@ -2262,9 +2353,43 @@ def import_source_recommended_match(item: dict[str, Any], suggestions: dict[str,
 def import_source_box_set_reviews(container_preview: list[dict[str, Any]], review_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows_by_index = {int(row["index"]): row for row in review_queue if row.get("index")}
     reviews: list[dict[str, Any]] = []
+    seen_reviews: set[tuple[str, str]] = set()
     for container in container_preview:
         container_type = clean_text(container.get("containerType") or container.get("type"))
         if container_type != "box_set":
+            continue
+        proposal = container.get("boxSetProposal") if isinstance(container.get("boxSetProposal"), dict) else {}
+        proposal_members = box_set_proposal_member_list(proposal)
+        if proposal_members:
+            seen_reviews.add((
+                clean_text(proposal.get("barcode") or container.get("barcode")),
+                clean_text(container.get("title") or proposal.get("title") or proposal.get("name")).casefold(),
+            ))
+            reviews.append(
+                {
+                    "containerType": container_type,
+                    "title": container.get("title") or proposal.get("title"),
+                    "barcode": clean_text(proposal.get("barcode") or container.get("barcode")),
+                    "format": clean_text(proposal.get("format") or container.get("format")),
+                    "memberCount": len(proposal_members),
+                    "boxSetProposal": proposal,
+                    "boxSetEvidence": box_set_proposal_evidence(proposal),
+                    "members": [
+                        {
+                            "index": 0,
+                            "title": clean_text(member.get("title") or member.get("name")),
+                            "year": clean_text(member.get("year") or member.get("releaseYear") or member.get("release_year")),
+                            "format": clean_text(member.get("format") or proposal.get("format") or container.get("format")),
+                            "barcode": clean_text(member.get("barcode")),
+                            "provider": clean_text(member.get("provider") or member.get("sourceProvider") or proposal.get("provider")),
+                            "confidence": {"label": clean_text(member.get("memberConfidence") or proposal.get("memberConfidence")) or "needs_member_confirmation"},
+                            "matchState": "proposal_member",
+                            "action": "review",
+                        }
+                        for member in proposal_members
+                    ],
+                }
+            )
             continue
         members = []
         for raw_member in container.get("members") or []:
@@ -2292,6 +2417,44 @@ def import_source_box_set_reviews(container_preview: list[dict[str, Any]], revie
                 "title": container.get("title"),
                 "memberCount": container.get("memberCount") or len(members),
                 "members": members,
+            }
+        )
+        seen_reviews.add((clean_text(container.get("barcode")), clean_text(container.get("title")).casefold()))
+    for row in review_queue:
+        proposal = row.get("detectedBoxSetProposal") if isinstance(row.get("detectedBoxSetProposal"), dict) else {}
+        proposal_members = box_set_proposal_member_list(proposal)
+        if not proposal_members:
+            continue
+        key = (
+            clean_text(proposal.get("barcode") or row.get("barcode")),
+            clean_text(proposal.get("title") or proposal.get("name") or row.get("title")).casefold(),
+        )
+        if key in seen_reviews:
+            continue
+        seen_reviews.add(key)
+        reviews.append(
+            {
+                "containerType": "box_set",
+                "title": clean_text(proposal.get("title") or proposal.get("name") or row.get("title")),
+                "barcode": clean_text(proposal.get("barcode") or row.get("barcode")),
+                "format": clean_text(proposal.get("format") or row.get("format")),
+                "memberCount": len(proposal_members),
+                "boxSetProposal": proposal,
+                "boxSetEvidence": box_set_proposal_evidence(proposal),
+                "members": [
+                    {
+                        "index": row.get("index"),
+                        "title": clean_text(member.get("title") or member.get("name")),
+                        "year": clean_text(member.get("year") or member.get("releaseYear") or member.get("release_year")),
+                        "format": clean_text(member.get("format") or proposal.get("format") or row.get("format")),
+                        "barcode": clean_text(member.get("barcode")),
+                        "provider": clean_text(member.get("provider") or member.get("sourceProvider") or proposal.get("provider")),
+                        "confidence": {"label": clean_text(member.get("memberConfidence") or proposal.get("memberConfidence")) or "needs_member_confirmation"},
+                        "matchState": "metadata_box_set_candidate",
+                        "action": "review",
+                    }
+                    for member in proposal_members
+                ],
             }
         )
     reviews.sort(key=lambda item: str(item.get("title") or "").casefold())
@@ -2357,6 +2520,9 @@ def import_source_action_preview(
                     "members": [],
                 },
             )
+            for optional_key in ("barcode", "format", "memberCount", "membersAreExplicit", "boxSetProposal"):
+                if spec.get(optional_key) not in (None, "", [], {}):
+                    entry[optional_key] = spec.get(optional_key)
             entry["members"].append(
                 {
                     "index": index,
@@ -2379,6 +2545,26 @@ def import_source_action_preview(
             metadata_suggestions = import_source_metadata_suggestions(conn, item=item, actor=actor)
             suggestion_count += 1
         recommended_match = import_source_recommended_match(item, metadata_suggestions)
+        detected_box_set = import_source_detected_box_set_proposal(metadata_suggestions)
+        detected_box_set_audit = box_set_proposal_audit_summary(detected_box_set) if detected_box_set else {}
+        detected_box_set_auto_importable = box_set_proposal_auto_importable(detected_box_set) if detected_box_set else False
+        if detected_box_set:
+            box_title = clean_text(detected_box_set.get("title") or detected_box_set.get("name") or title)
+            if box_title:
+                key = ("box_set", box_title.casefold())
+                entry = containers.setdefault(
+                    key,
+                    {
+                        "containerType": "box_set",
+                        "title": box_title,
+                        "members": [],
+                    },
+                )
+                entry["barcode"] = clean_text(detected_box_set.get("barcode") or item.get("barcode"))
+                entry["format"] = clean_text(detected_box_set.get("format") or import_source_item_format(item))
+                entry["boxSetProposal"] = detected_box_set
+                entry["memberCount"] = len(box_set_proposal_member_list(detected_box_set))
+                entry["membersAreExplicit"] = box_set_proposal_has_explicit_members(detected_box_set)
         if index <= len(review_queue):
             review_queue[index - 1]["metadataSuggestions"] = metadata_suggestions
             review_queue[index - 1]["recommendedMatch"] = recommended_match
@@ -2387,6 +2573,12 @@ def import_source_action_preview(
                 "label": "none",
                 "evidence": [],
             }
+            if detected_box_set:
+                review_queue[index - 1]["boxSetCandidate"] = True
+                review_queue[index - 1]["detectedBoxSetProposal"] = detected_box_set
+                review_queue[index - 1]["detectedBoxSetAudit"] = detected_box_set_audit
+                review_queue[index - 1]["detectedBoxSetAutoImportable"] = detected_box_set_auto_importable
+                review_queue[index - 1]["matchState"] = "box_set_candidate"
         if len(actions) < limit:
             actions.append(
                 {
@@ -2401,6 +2593,10 @@ def import_source_action_preview(
                     "metadataSuggestions": metadata_suggestions,
                     "recommendedMatch": recommended_match,
                     "matchResolution": (recommended_match or {}).get("resolution"),
+                    "boxSetCandidate": bool(detected_box_set),
+                    "detectedBoxSetProposal": detected_box_set,
+                    "detectedBoxSetAudit": detected_box_set_audit,
+                    "detectedBoxSetAutoImportable": detected_box_set_auto_importable,
                     "match": (conflict_by_index.get(index) or {}).get("match"),
                     "containers": specs,
                 }
@@ -21260,9 +21456,14 @@ def ui_preview_html(
         const action = select.value || "import";
         if (!index || !action) return;
         const decision = {index, action};
+        const rows = importReviewRows();
+        const row = rows.find((item) => Number(item.index || 0) === index) || {};
         const selected = importSelectedMatch(index);
         const manual = importManualState(index);
         if (selected) decision.metadataMatch = normalizeImportSuggestion(selected);
+        if (action !== "skip" && row.detectedBoxSetAutoImportable === true && row.detectedBoxSetProposal && typeof row.detectedBoxSetProposal === "object") {
+          decision.boxSetProposal = row.detectedBoxSetProposal;
+        }
         const manualOverride = {};
         ["title", "year", "tmdbId", "imdbId", "posterUrl"].forEach((field) => {
           const value = String(manual[field] || "").trim();
@@ -21477,22 +21678,37 @@ def ui_preview_html(
         const selectedMatch = importSelectedMatch(row.index);
         const manual = importManualState(row.index);
         const releaseRisk = importReleaseTitleRisk(row);
+        const detectedBoxSet = row.detectedBoxSetProposal && typeof row.detectedBoxSetProposal === "object" ? row.detectedBoxSetProposal : null;
+        const detectedBoxSetAudit = row.detectedBoxSetAudit && typeof row.detectedBoxSetAudit === "object" ? row.detectedBoxSetAudit : {};
+        const detectedBoxSetTitle = detectedBoxSet ? (detectedBoxSet.title || detectedBoxSet.name || title) : "";
+        const detectedBoxSetMeta = detectedBoxSet
+          ? [
+              detectedBoxSetAudit.provider || detectedBoxSet.provider || detectedBoxSet.sourceLabel,
+              detectedBoxSetAudit.memberCount ? `${detectedBoxSetAudit.memberCount} ${tNext("importCenter.members", "members")}` : "",
+              detectedBoxSetAudit.memberConfidence || ((detectedBoxSet.boxSetEvidence || {}).memberConfidence) || detectedBoxSet.memberConfidence,
+              row.detectedBoxSetAutoImportable === true ? tNext("importCenter.boxSetReadyForImport", "ready for import") : tNext("importCenter.reviewOnly", "review only"),
+            ].filter(Boolean).join(" / ")
+          : "";
         const actionLabel = row.matchState === "existing"
           ? tNext("importCenter.conflictExisting", "Already in library")
           : row.matchState === "missing_title"
             ? tNext("importCenter.missingTitle", "Missing title")
-            : tNext(`importCenter.action.${row.action}`, row.action || "create");
+            : row.matchState === "box_set_candidate"
+              ? tNext("importCenter.boxSetCandidate", "Box-set")
+              : tNext(`importCenter.action.${row.action}`, row.action || "create");
         return `
           <div class="import-review-row ${action === "skip" ? "is-skip" : ""}">
             <div>
               <div class="import-review-title">
                 <span>${escapeHtml(title)}</span>
                 <span class="tag ${row.action === "create" ? "good" : ""}">${escapeHtml(actionLabel)}</span>
+                ${detectedBoxSet ? `<span class="tag warning">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}</span>` : ""}
                 ${importConfidencePill(row.confidence || {})}
               </div>
               <div class="import-source-meta">${escapeHtml(meta || row.sourceFile || "")}</div>
               ${match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml(match)}</div>` : ""}
               ${containerTags ? `<div class="import-counts">${containerTags}</div>` : ""}
+              ${detectedBoxSet ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}: ${escapeHtml(detectedBoxSetTitle)}${detectedBoxSetMeta ? ` / ${escapeHtml(detectedBoxSetMeta)}` : ""}</div>` : ""}
               ${evidence ? `<div class="import-review-evidence">${evidence}</div>` : ""}
               ${releaseRisk ? `<div class="import-release-warning">${escapeHtml(tNext("importCenter.releaseTitleWarning", "This looks like a release title. Choose the actual movie match before import."))}</div>` : ""}
               ${row.recommendedMatch ? `<div class="import-selected-match import-recommended-match">${escapeHtml(tNext("importCenter.recommendedMatch", "Recommended match"))}: ${escapeHtml(row.recommendedMatch.title || "")} ${escapeHtml(row.recommendedMatch.year || "")}</div>` : ""}
