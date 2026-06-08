@@ -16,7 +16,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: helmerzNL/DiscVault
+  IMAGE_NAME: helmerznl/discvault
 
 jobs:
   build-and-push:
@@ -47,6 +47,12 @@ jobs:
           echo "Build SHA: ${SHA}"
 
       - name: Set up Docker Buildx
+        id: buildx
+        continue-on-error: true
+        uses: docker/setup-buildx-action@v4
+
+      - name: Retry Docker Buildx setup
+        if: steps.buildx.outcome == 'failure'
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
