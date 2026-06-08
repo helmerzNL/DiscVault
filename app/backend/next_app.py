@@ -14105,6 +14105,17 @@ def ui_preview_html(
               <div class="operations-dashboard" id="appAdminOperationsDashboard"></div>
               <div class="login-message" id="appAdminOperationsMessage"></div>
             </div>
+            <div class="detail-card profile-card full">
+              <div class="profile-passkey-head">
+                <div>
+                  <h3 data-next-i18n="appAdmin.collectionHealthTitle">Collection Health</h3>
+                  <p data-next-i18n="appAdmin.collectionHealthHelp">Find missing artwork, barcodes, empty containers and duplicate signals before they become messy.</p>
+                </div>
+                <span class="tag" id="appAdminCollectionHealthStatus">-</span>
+              </div>
+              <div class="operations-dashboard" id="appAdminCollectionHealthSummary"></div>
+              <div class="operations-row-list" id="appAdminCollectionHealthIssues"></div>
+            </div>
             <div class="detail-card profile-card full" id="appAdminArtworkTrashCard">
               <h3 data-next-i18n="appAdmin.operationsFeatures">Feature readiness</h3>
               <div class="operations-feature-grid" id="appAdminOperationsFeatures"></div>
@@ -16128,6 +16139,7 @@ def ui_preview_html(
         backup_restore_v2: ["appAdmin.featureBackupRestoreV2", "Backup and Restore v2"],
         container_management_v3: ["appAdmin.featureContainerManagementV3", "Container Management v3"],
         containers_native_editor: ["appAdmin.featureContainersNativeEditor", "Collections and Containers Native Editor"],
+        collection_health_dashboard: ["appAdmin.featureCollectionHealthDashboard", "Collection Health Dashboard"],
         import_intelligence_v2: ["appAdmin.featureImportIntelligenceV2", "Import Intelligence v2"],
         lending_center: ["appAdmin.featureLendingCenter", "Lending Center"],
         plugin_marketplace_ui: ["appAdmin.featurePluginMarketplaceUi", "Plugin Marketplace UI"],
@@ -16192,6 +16204,7 @@ def ui_preview_html(
         backup_restore_v2: ["appAdmin.featureBackupRestoreV2Help", "Extends functional ZIP backups with restore validation, retention signals and collection-only scope."],
         container_management_v3: ["appAdmin.featureContainerManagementV3Help", "Prepares bulk linking, member ordering, member cleanup preferences and richer container detail views."],
         containers_native_editor: ["appAdmin.featureContainersNativeEditorHelp", "Manages collections, box-sets and vaults with native list/detail editing."],
+        collection_health_dashboard: ["appAdmin.featureCollectionHealthDashboardHelp", "Surfaces missing artwork, barcodes, empty containers and duplicate signals in one operations view."],
         import_intelligence_v2: ["appAdmin.featureImportIntelligenceV2Help", "Classifies imported rows, detects box-sets, surfaces provider coverage and flags conflicts before saving."],
         lending_center: ["appAdmin.featureLendingCenterHelp", "Prepares the future lending list without exposing it to roles that cannot view personal lists."],
         plugin_marketplace_ui: ["appAdmin.featurePluginMarketplaceUiHelp", "Groups plugin types, packages, health and lifecycle actions into a marketplace-style admin surface."],
@@ -16231,6 +16244,80 @@ def ui_preview_html(
         </div>
       `;
     }
+    function appAdminCollectionHealthRows(collectionHealth) {
+      const issues = collectionHealth?.issues || {};
+      const rows = [];
+      const addRows = (items, label, tone, formatter) => {
+        (items || []).slice(0, 8).forEach((item) => {
+          rows.push(appAdminOperationsRow(
+            formatter ? formatter(item) : (item.title || item.name || item.id || "-"),
+            [item.year, item.format, item.containerType, item.barcode].filter(Boolean).join(" · "),
+            label,
+            tone
+          ));
+        });
+      };
+      addRows(issues.missingMoviePosters, tNext("appAdmin.missingPoster", "Missing poster"), "bad");
+      addRows(issues.missingMovieBackdrops, tNext("appAdmin.missingBackdrop", "Missing backdrop"), "blue");
+      addRows(issues.missingMovieBarcodes, tNext("appAdmin.missingBarcode", "Missing barcode"), "bad");
+      addRows(issues.emptyContainers, tNext("appAdmin.emptyContainer", "Empty container"), "bad");
+      addRows(issues.missingContainerPosters, tNext("appAdmin.missingPoster", "Missing poster"), "blue", (item) => item.title || item.id || "-");
+      addRows(issues.boxSetsMissingBarcode, tNext("appAdmin.missingBarcode", "Missing barcode"), "bad", (item) => item.title || item.id || "-");
+      return rows;
+    }
+    function renderAppAdminCollectionHealth() {
+      const collectionHealth = (appAdmin.operations || {}).collectionHealth || {};
+      const summaryNode = document.getElementById("appAdminCollectionHealthSummary");
+      const issuesNode = document.getElementById("appAdminCollectionHealthIssues");
+      const statusNode = document.getElementById("appAdminCollectionHealthStatus");
+      if (!summaryNode || !issuesNode) return;
+      if (!collectionHealth.counts) {
+        if (statusNode) {
+          statusNode.textContent = "-";
+          statusNode.className = "tag";
+        }
+        summaryNode.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("common.loading", "Loading..."))}</div>`;
+        issuesNode.innerHTML = "";
+        return;
+      }
+      const counts = collectionHealth.counts || {};
+      const status = collectionHealth.status || "ok";
+      if (statusNode) {
+        statusNode.textContent = appAdminOperationsStatusLabel(status);
+        statusNode.className = `tag ${appAdminOperationsStatusClass(status)}`;
+      }
+      summaryNode.innerHTML = `
+        <div class="operations-dashboard-card">
+          <span>${escapeHtml(tNext("appAdmin.healthScore", "Health score"))}</span>
+          <strong>${escapeHtml(formatNumber(collectionHealth.score ?? 100))}%</strong>
+          <span>${escapeHtml(formatNumber(counts.totalIssues || 0))} ${escapeHtml(tNext("appAdmin.potentialIssues", "potential issues"))}</span>
+        </div>
+        <div class="operations-dashboard-card">
+          <span>${escapeHtml(tNext("appAdmin.missingArtwork", "Missing artwork"))}</span>
+          <strong>${escapeHtml(formatNumber((counts.missingMoviePosters || 0) + (counts.missingMovieBackdrops || 0) + (counts.missingContainerPosters || 0)))}</strong>
+          <span>${escapeHtml(formatNumber(counts.missingMoviePosters || 0))} ${escapeHtml(tNext("appAdmin.posters", "posters"))} · ${escapeHtml(formatNumber(counts.missingMovieBackdrops || 0))} ${escapeHtml(tNext("appAdmin.backdrops", "backdrops"))}</span>
+        </div>
+        <div class="operations-dashboard-card">
+          <span>${escapeHtml(tNext("appAdmin.barcodeCoverage", "Barcode coverage"))}</span>
+          <strong>${escapeHtml(formatNumber(counts.missingMovieBarcodes || 0))}</strong>
+          <span>${escapeHtml(tNext("appAdmin.moviesWithoutBarcode", "movies without barcode"))}</span>
+        </div>
+        <div class="operations-dashboard-card">
+          <span>${escapeHtml(tNext("collection.containers", "Containers"))}</span>
+          <strong>${escapeHtml(formatNumber(counts.emptyContainers || 0))}</strong>
+          <span>${escapeHtml(formatNumber(counts.boxSetsMissingBarcode || 0))} ${escapeHtml(tNext("appAdmin.boxSetsMissingBarcode", "box-sets missing barcode"))}</span>
+        </div>
+        <div class="operations-dashboard-card">
+          <span>${escapeHtml(tNext("appAdmin.duplicates", "Duplicates"))}</span>
+          <strong>${escapeHtml(formatNumber(counts.duplicateSignals || 0))}</strong>
+          <span>${escapeHtml(tNext("appAdmin.duplicateSignals", "duplicate signals"))}</span>
+        </div>
+      `;
+      const rows = appAdminCollectionHealthRows(collectionHealth);
+      issuesNode.innerHTML = rows.length
+        ? rows.join("")
+        : `<div class="preview-empty good">${escapeHtml(tNext("appAdmin.collectionHealthClean", "No collection health issues found."))}</div>`;
+    }
     function renderAppAdminOperations() {
       const operations = appAdmin.operations || {};
       const dashboard = document.getElementById("appAdminOperationsDashboard");
@@ -16247,6 +16334,7 @@ def ui_preview_html(
       const artwork = operations.artwork || {};
       const watchSync = operations.watchSync || {};
       const pluginPolicy = operations.pluginPolicy || {};
+      renderAppAdminCollectionHealth();
       dashboard.innerHTML = operations.status === undefined && !operations.counts
         ? `<div class="preview-empty">${escapeHtml(tNext("appAdmin.operationsNotLoaded", "Operations data has not been loaded yet."))}</div>`
         : `
@@ -40598,6 +40686,226 @@ def admin_operations_container_summary(conn) -> dict[str, Any]:
     }
 
 
+def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] | None = None) -> dict[str, Any]:
+    duplicate_summary = duplicate_summary or {}
+    movie_count = count_table(conn, "movies")
+    container_count = count_table(conn, "containers")
+    has_movie_media = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+    issues: dict[str, list[dict[str, Any]]] = {
+        "missingMoviePosters": [],
+        "missingMovieBackdrops": [],
+        "missingMovieBarcodes": [],
+        "missingContainerPosters": [],
+        "emptyContainers": [],
+        "boxSetsMissingBarcode": [],
+    }
+    counts: dict[str, int] = {
+        "movies": movie_count,
+        "containers": container_count,
+        "missingMoviePosters": 0,
+        "missingMovieBackdrops": 0,
+        "missingMovieBarcodes": 0,
+        "missingContainerPosters": 0,
+        "emptyContainers": 0,
+        "boxSetsMissingBarcode": 0,
+        "duplicateSignals": sum(int(value or 0) for value in (duplicate_summary.get("counts") or {}).values()),
+    }
+
+    def row_summary(row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": row.get("id"),
+            "title": row.get("title"),
+            "year": row.get("year"),
+            "format": row.get("format"),
+            "barcode": row.get("barcode"),
+            "containerType": row.get("container_type"),
+            "memberCount": row.get("member_count"),
+            "updatedAt": row.get("updated_at"),
+        }
+
+    if table_exists(conn, "movies"):
+        poster_missing_predicate = """
+            NULLIF(BTRIM(COALESCE(m.metadata->>'poster_url', m.metadata->>'poster', '')), '') IS NULL
+        """
+        backdrop_missing_predicate = """
+            NULLIF(BTRIM(COALESCE(m.metadata->>'backdrop_url', m.metadata->>'backdrop', '')), '') IS NULL
+        """
+        if has_movie_media:
+            poster_missing_predicate += """
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
+                      AND ma.kind='poster'
+                )
+            """
+            backdrop_missing_predicate += """
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=m.id
+                      AND em.deleted_at IS NULL
+                      AND ma.kind='backdrop'
+                )
+            """
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT COUNT(*)::int AS count FROM movies m WHERE {poster_missing_predicate}")
+            counts["missingMoviePosters"] = int((cur.fetchone() or {}).get("count") or 0)
+            cur.execute(
+                f"""
+                SELECT m.id, m.title, m.year, m.format, m.barcode, m.updated_at
+                FROM movies m
+                WHERE {poster_missing_predicate}
+                ORDER BY m.updated_at DESC NULLS LAST, lower(COALESCE(m.sort_title, m.title))
+                LIMIT 12
+                """
+            )
+            issues["missingMoviePosters"] = [row_summary(row) for row in cur.fetchall()]
+
+            cur.execute(f"SELECT COUNT(*)::int AS count FROM movies m WHERE {backdrop_missing_predicate}")
+            counts["missingMovieBackdrops"] = int((cur.fetchone() or {}).get("count") or 0)
+            cur.execute(
+                f"""
+                SELECT m.id, m.title, m.year, m.format, m.barcode, m.updated_at
+                FROM movies m
+                WHERE {backdrop_missing_predicate}
+                ORDER BY m.updated_at DESC NULLS LAST, lower(COALESCE(m.sort_title, m.title))
+                LIMIT 12
+                """
+            )
+            issues["missingMovieBackdrops"] = [row_summary(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT COUNT(*)::int AS count
+                FROM movies m
+                WHERE NULLIF(BTRIM(COALESCE(m.barcode, '')), '') IS NULL
+                """
+            )
+            counts["missingMovieBarcodes"] = int((cur.fetchone() or {}).get("count") or 0)
+            cur.execute(
+                """
+                SELECT m.id, m.title, m.year, m.format, m.barcode, m.updated_at
+                FROM movies m
+                WHERE NULLIF(BTRIM(COALESCE(m.barcode, '')), '') IS NULL
+                ORDER BY m.updated_at DESC NULLS LAST, lower(COALESCE(m.sort_title, m.title))
+                LIMIT 12
+                """
+            )
+            issues["missingMovieBarcodes"] = [row_summary(row) for row in cur.fetchall()]
+
+    if table_exists(conn, "containers"):
+        has_container_media = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+        container_poster_missing_predicate = """
+            NULLIF(BTRIM(COALESCE(c.metadata->>'poster_url', c.metadata->>'poster', '')), '') IS NULL
+        """
+        if has_container_media:
+            container_poster_missing_predicate += """
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='container'
+                      AND em.entity_id=c.id
+                      AND em.deleted_at IS NULL
+                      AND ma.kind='poster'
+                )
+            """
+        member_count_expr = (
+            """
+            (
+                SELECT COUNT(*)::int
+                FROM container_movies cm
+                WHERE cm.container_id = c.id
+            )
+            """
+            if table_exists(conn, "container_movies")
+            else "0"
+        )
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT COUNT(*)::int AS count FROM containers c WHERE {container_poster_missing_predicate}")
+            counts["missingContainerPosters"] = int((cur.fetchone() or {}).get("count") or 0)
+            cur.execute(
+                f"""
+                SELECT c.id, c.title, c.container_type, c.barcode, c.updated_at, {member_count_expr} AS member_count
+                FROM containers c
+                WHERE {container_poster_missing_predicate}
+                ORDER BY c.updated_at DESC NULLS LAST, lower(c.title)
+                LIMIT 12
+                """
+            )
+            issues["missingContainerPosters"] = [row_summary(row) for row in cur.fetchall()]
+
+            cur.execute(
+                f"""
+                SELECT COUNT(*)::int AS count
+                FROM containers c
+                WHERE c.container_type IN ('box_set', 'collection', 'vault')
+                  AND {member_count_expr} <= 0
+                """
+            )
+            counts["emptyContainers"] = int((cur.fetchone() or {}).get("count") or 0)
+            cur.execute(
+                f"""
+                SELECT c.id, c.title, c.container_type, c.barcode, c.updated_at, {member_count_expr} AS member_count
+                FROM containers c
+                WHERE c.container_type IN ('box_set', 'collection', 'vault')
+                  AND {member_count_expr} <= 0
+                ORDER BY c.updated_at DESC NULLS LAST, lower(c.title)
+                LIMIT 12
+                """
+            )
+            issues["emptyContainers"] = [row_summary(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT COUNT(*)::int AS count
+                FROM containers c
+                WHERE c.container_type='box_set'
+                  AND NULLIF(BTRIM(COALESCE(c.barcode, '')), '') IS NULL
+                """
+            )
+            counts["boxSetsMissingBarcode"] = int((cur.fetchone() or {}).get("count") or 0)
+            cur.execute(
+                f"""
+                SELECT c.id, c.title, c.container_type, c.barcode, c.updated_at, {member_count_expr} AS member_count
+                FROM containers c
+                WHERE c.container_type='box_set'
+                  AND NULLIF(BTRIM(COALESCE(c.barcode, '')), '') IS NULL
+                ORDER BY c.updated_at DESC NULLS LAST, lower(c.title)
+                LIMIT 12
+                """
+            )
+            issues["boxSetsMissingBarcode"] = [row_summary(row) for row in cur.fetchall()]
+
+    total_issues = sum(
+        int(counts.get(key) or 0)
+        for key in (
+            "missingMoviePosters",
+            "missingMovieBackdrops",
+            "missingMovieBarcodes",
+            "missingContainerPosters",
+            "emptyContainers",
+            "boxSetsMissingBarcode",
+            "duplicateSignals",
+        )
+    )
+    total_items = max(movie_count + container_count, 1)
+    score = max(0, min(100, round(100 - min(1, total_issues / total_items) * 100)))
+    counts["totalIssues"] = total_issues
+    return {
+        "counts": counts,
+        "issues": issues,
+        "score": score,
+        "status": operations_status_from_counts(total_issues, warning_threshold=10),
+    }
+
+
 def admin_operations_watch_summary(conn) -> dict[str, Any]:
     watchlist_count = admin_operations_count_rows(conn, "watchlist_items")
     watched_count = admin_operations_count_rows(conn, "watch_history")
@@ -40775,6 +41083,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
     duplicate_summary = admin_operations_duplicate_summary(conn)
     artwork_summary = admin_operations_artwork_summary(conn)
     container_summary = admin_operations_container_summary(conn)
+    collection_health = admin_operations_collection_health(conn, duplicate_summary)
     watch_summary = admin_operations_watch_summary(conn)
     plugin_policy = admin_operations_plugin_policy(conn)
     receiver_events = admin_operations_latest_audit_events(conn, category="metadata", event_type="metadata.receiver_pushed", limit=12)
@@ -40838,6 +41147,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         {"key": "artwork_manager_v3", "group": "library", "status": artwork_summary["status"], "permissionKeys": ["collection.edit_all", "collection.edit_own"], "signals": artwork_summary.get("counts", {})},
         {"key": "container_management_v3", "group": "library", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
         {"key": "containers_native_editor", "group": "library", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
+        {"key": "collection_health_dashboard", "group": "library", "status": collection_health["status"], "permissionKeys": ["admin.view_settings", "admin.view_jobs", "collection.view"], "signals": collection_health.get("counts", {})},
         {"key": "advanced_search_v2", "group": "library", "status": search_summary["status"], "permissionKeys": ["collection.view"], "signals": search_summary["capabilities"]},
         {"key": "smart_collection_filters", "group": "library", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"formatFilters": True, "containerToggle": True, "sortModes": True}},
         {"key": "tags_smart_rules", "group": "library", "status": tags_summary["status"], "permissionKeys": ["collection.view", "collection.edit_all"], "signals": tags_summary.get("counts", {}) or {"planned": True}},
@@ -40975,6 +41285,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         "duplicates": duplicate_summary,
         "artwork": artwork_summary,
         "containers": container_summary,
+        "collectionHealth": collection_health,
         "watchSync": watch_summary,
         "lending": lending_summary,
         "tags": tags_summary,
