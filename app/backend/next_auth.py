@@ -1656,6 +1656,8 @@ def register_next_auth_routes(
                         raise next_api_error("PKCE verification failed", 400)
                     cur.execute("UPDATE mobile_auth_codes SET used_at=now() WHERE id=%s", (row["id"],))
                     token_payload = issue_mobile_api_token(conn, user_id=row["user_id"], username=row["username"])
+                    role = primary_role(conn, row["user_id"])
+                    effective_permission_keys = sorted(user_permissions(conn, row["user_id"]))
                 audit_event(
                     conn,
                     event_type="auth.mobile_token_exchanged",
@@ -1663,7 +1665,7 @@ def register_next_auth_routes(
                     actor={
                         "id": row["user_id"],
                         "username": row["username"],
-                        "role": primary_role(conn, row["user_id"]),
+                        "role": role,
                     },
                     target_type="api_access_token",
                     target_id=token_payload["tokenRow"]["id"],
@@ -1672,6 +1674,8 @@ def register_next_auth_routes(
                         "mobileFlowId": str(row["mobile_flow_id"]),
                         "apiTokenId": str(token_payload["tokenRow"]["id"]),
                         "permissionKeys": token_payload["permissionKeys"],
+                        "tokenPermissionKeys": token_payload["permissionKeys"],
+                        "effectivePermissionKeys": effective_permission_keys,
                         "scopes": token_payload["scopes"],
                     },
                 )
@@ -1680,6 +1684,9 @@ def register_next_auth_routes(
                 "status": "ok",
                 "token": token_payload["token"],
                 "username": row["username"],
+                "role": role,
+                "tokenPermissionKeys": token_payload["permissionKeys"],
+                "effectivePermissionKeys": effective_permission_keys,
                 "apiToken": {
                     "id": str(token_payload["tokenRow"]["id"]),
                     "name": token_payload["tokenRow"]["name"],

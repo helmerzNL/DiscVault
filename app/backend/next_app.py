@@ -35145,6 +35145,34 @@ def actor_permission_set(actor: dict[str, Any] | None) -> set[str]:
     return {str(item) for item in (actor.get("permissions") or [])}
 
 
+def actor_role_allows_permission(actor: dict[str, Any] | None, permission_key: str) -> bool:
+    permissions = actor_permission_set(actor)
+    return bool(actor and ("*" in permissions or permission_key in permissions))
+
+
+def actor_role_allows_any_permission(actor: dict[str, Any] | None, permission_keys: tuple[str, ...]) -> bool:
+    permissions = actor_permission_set(actor)
+    return bool(actor and ("*" in permissions or permissions.intersection(permission_keys)))
+
+
+def actor_effective_has_permission(actor: dict[str, Any] | None, permission_key: str) -> bool:
+    if not actor:
+        return False
+    if actor_role_allows_permission(actor, permission_key):
+        return True
+    token_permissions = actor_api_token_permission_keys(actor)
+    return bool(token_permissions is not None and ("*" in token_permissions or permission_key in token_permissions))
+
+
+def actor_effective_has_any_permission(actor: dict[str, Any] | None, permission_keys: tuple[str, ...]) -> bool:
+    if not actor:
+        return False
+    if actor_role_allows_any_permission(actor, permission_keys):
+        return True
+    token_permissions = actor_api_token_permission_keys(actor)
+    return bool(token_permissions is not None and ("*" in token_permissions or token_permissions.intersection(permission_keys)))
+
+
 def actor_has_permission(actor: dict[str, Any] | None, permission_key: str) -> bool:
     permissions = actor_permission_set(actor)
     return bool(actor and (actor.get("role") == "owner" or "*" in permissions or permission_key in permissions))
@@ -35153,6 +35181,45 @@ def actor_has_permission(actor: dict[str, Any] | None, permission_key: str) -> b
 def actor_has_any_permission(actor: dict[str, Any] | None, permission_keys: tuple[str, ...]) -> bool:
     permissions = actor_permission_set(actor)
     return bool(actor and (actor.get("role") == "owner" or "*" in permissions or permissions.intersection(permission_keys)))
+
+
+def audit_permission_denied(
+    conn,
+    actor: dict[str, Any],
+    *,
+    required_permissions: tuple[str, ...],
+    reason: str,
+    message: str,
+) -> None:
+    token = actor.get("apiToken") or actor.get("api_token") or {}
+    token_permissions = actor_api_token_permission_keys(actor)
+    try:
+        audit_event(
+            conn,
+            event_type="security.permission_denied",
+            category="security",
+            actor=actor,
+            target_type="permission",
+            target_id=",".join(required_permissions),
+            summary=message,
+            metadata={
+                "requiredPermissions": list(required_permissions),
+                "tokenPermissions": sorted(token_permissions) if token_permissions is not None else [],
+                "rolePermissions": sorted(actor_permission_set(actor)),
+                "userRole": actor.get("role"),
+                "authMethod": "api_token" if token_permissions is not None else "session",
+                "apiToken": {
+                    "id": str(token.get("id")) if token.get("id") is not None else None,
+                    "name": token.get("name"),
+                    "scopes": token.get("scopes") or [],
+                }
+                if isinstance(token, dict) and token
+                else None,
+                "reason": reason,
+            },
+        )
+    except Exception:
+        app.logger.exception("Failed to write permission denied audit event")
 
 
 def require_next_permission(conn, permission_key: str) -> dict[str, Any]:
@@ -35168,12 +35235,18 @@ def require_next_permission(conn, permission_key: str) -> dict[str, Any]:
         raise NextApiError("Unauthorized", 401)
     role = next_user_primary_role(conn, user["id"])
     permissions = next_user_permission_keys(conn, user["id"])
-    if role != "owner" and permission_key not in permissions:
-        raise NextApiError(f"Permission required: {permission_key}", 403)
-    if not actor_token_allows_permission(user, permission_key):
-        raise NextApiError(f"API token permission required: {permission_key}", 403)
     user["role"] = role
     user["permissions"] = sorted(permissions)
+    if not actor_effective_has_permission(user, permission_key):
+        message = f"Permission required: {permission_key}"
+        audit_permission_denied(
+            conn,
+            user,
+            required_permissions=(permission_key,),
+            reason="missing_required_permission",
+            message=message,
+        )
+        raise NextApiError(message, 403)
     return user
 
 
@@ -35190,12 +35263,18 @@ def require_any_next_permission(conn, permission_keys: tuple[str, ...]) -> dict[
         raise NextApiError("Unauthorized", 401)
     role = next_user_primary_role(conn, user["id"])
     permissions = next_user_permission_keys(conn, user["id"])
-    if role != "owner" and not permissions.intersection(permission_keys):
-        raise NextApiError(f"One of these permissions is required: {', '.join(permission_keys)}", 403)
-    if not actor_token_allows_any_permission(user, permission_keys):
-        raise NextApiError(f"API token requires one of these permissions: {', '.join(permission_keys)}", 403)
     user["role"] = role
     user["permissions"] = sorted(permissions)
+    if not actor_effective_has_any_permission(user, permission_keys):
+        message = f"One of these permissions is required: {', '.join(permission_keys)}"
+        audit_permission_denied(
+            conn,
+            user,
+            required_permissions=permission_keys,
+            reason="missing_any_required_permission",
+            message=message,
+        )
+        raise NextApiError(message, 403)
     return user
 
 

@@ -11,6 +11,8 @@ if repo_root not in sys.path:
 try:
     from app.backend.next_app import NextApiError
     from app.backend.next_app import api_token_scopes_for_permissions
+    from app.backend.next_app import actor_effective_has_any_permission
+    from app.backend.next_app import actor_effective_has_permission
     from app.backend.next_app import normalize_api_token_permissions
     from app.backend.next_app import profile_api_access_payload
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
@@ -18,6 +20,8 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
         raise
     NextApiError = None
     api_token_scopes_for_permissions = None
+    actor_effective_has_any_permission = None
+    actor_effective_has_permission = None
     normalize_api_token_permissions = None
     profile_api_access_payload = None
 
@@ -99,6 +103,52 @@ class NextApiTokenPermissionTests(unittest.TestCase):
         scopes = api_token_scopes_for_permissions(["metadata.search", "collection.add"])
 
         self.assertEqual(scopes, ["read", "write"])
+
+    def test_api_token_request_can_use_user_role_permission(self):
+        actor = {
+            "role": "owner",
+            "permissions": ["metadata.refresh_one"],
+            "apiToken": {"permissionKeys": ["api.read"]},
+        }
+
+        self.assertTrue(actor_effective_has_permission(actor, "metadata.refresh_one"))
+
+    def test_custom_role_can_use_metadata_refresh_permission_with_mobile_token(self):
+        actor = {
+            "role": "media_editor",
+            "permissions": ["metadata.refresh_one"],
+            "apiToken": {"permissionKeys": ["api.read", "metadata.search"]},
+        }
+
+        self.assertTrue(actor_effective_has_permission(actor, "metadata.refresh_one"))
+
+    def test_api_token_scope_can_grant_permission_when_role_lacks_it(self):
+        actor = {
+            "role": "media_viewer",
+            "permissions": ["collection.view"],
+            "apiToken": {"permissionKeys": ["metadata.refresh_one"]},
+        }
+
+        self.assertTrue(actor_effective_has_permission(actor, "metadata.refresh_one"))
+
+    def test_request_without_role_or_token_permission_is_denied(self):
+        actor = {
+            "role": "media_viewer",
+            "permissions": ["collection.view"],
+            "apiToken": {"permissionKeys": ["api.read"]},
+        }
+
+        self.assertFalse(actor_effective_has_permission(actor, "metadata.refresh_one"))
+        self.assertFalse(actor_effective_has_any_permission(actor, ("metadata.refresh_one", "metadata.refresh_bulk")))
+
+    def test_owner_role_is_not_a_hardcoded_effective_bypass(self):
+        actor = {
+            "role": "owner",
+            "permissions": [],
+            "apiToken": {"permissionKeys": ["api.read"]},
+        }
+
+        self.assertFalse(actor_effective_has_permission(actor, "metadata.refresh_one"))
 
 
 if __name__ == "__main__":
