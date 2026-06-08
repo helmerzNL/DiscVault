@@ -14685,6 +14685,13 @@ def ui_preview_html(
       if (token) headers.Authorization = `Bearer ${token}`;
       return headers;
     }
+    function currentMobileAuthFlow() {
+      try {
+        return new URLSearchParams(window.location.search || "").get("mobile_flow") || "";
+      } catch (error) {
+        return "";
+      }
+    }
     async function apiJson(url, options) {
       const incoming = Object.assign({}, options || {});
       const timeoutMs = Number(incoming.timeoutMs || 0);
@@ -18196,11 +18203,18 @@ def ui_preview_html(
           type: assertion.type,
           authenticatorAttachment: assertion.authenticatorAttachment
         };
+        const verifyBody = {credential};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) verifyBody.mobile_flow = mobileFlow;
         const verified = await apiJson("/api/next/auth/login/verify", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({credential})
+          body: JSON.stringify(verifyBody)
         });
+        if (verified.callback_url || verified.callbackUrl) {
+          window.location.href = verified.callback_url || verified.callbackUrl;
+          return;
+        }
         if (verified.token) localStorage.setItem("dv_next_token", verified.token);
         setLoginMessage(tNext("auth.signedIn", "Signed in."), "good");
         await refreshAppFlow();
@@ -29924,6 +29938,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function authHeaders() {
       return authToken ? {"Authorization": `Bearer ${authToken}`} : {};
     }
+    function currentMobileAuthFlow() {
+      try {
+        return new URLSearchParams(window.location.search || "").get("mobile_flow") || "";
+      } catch (error) {
+        return "";
+      }
+    }
     function base64urlToBuffer(value) {
       let normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
       while (normalized.length % 4) normalized += "=";
@@ -30359,10 +30380,17 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           type: assertion.type,
           authenticatorAttachment: assertion.authenticatorAttachment
         };
+        const verifyBody = {credential};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) verifyBody.mobile_flow = mobileFlow;
         const verified = await authJson("/api/next/auth/login/verify", {
           method: "POST",
-          body: JSON.stringify({credential})
+          body: JSON.stringify(verifyBody)
         });
+        if (verified.callback_url || verified.callbackUrl) {
+          window.location.href = verified.callback_url || verified.callbackUrl;
+          return;
+        }
         authToken = verified.token || "";
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         setAuthStatus("Signed in.", "good");
