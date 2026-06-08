@@ -5972,6 +5972,22 @@ def ui_preview_html(
     title = "DiscVault" if app_mode else "DiscVault UI Preview"
     shell_class = "preview-shell app-shell-hidden" if app_mode else "preview-shell"
     mobile_class = "mobile-tabbar hidden" if app_mode else "mobile-tabbar"
+    mdi_paths = {
+        "library": "M3 3H11V11H3V3M13 3H21V11H13V3M3 13H11V21H3V13M13 13H21V21H13V13Z",
+        "lists": "M17 3H7A2 2 0 0 0 5 5V21L12 18L19 21V5A2 2 0 0 0 17 3Z",
+        "import": "M12 2A10 10 0 1 1 2 12A10 10 0 0 1 12 2M17 11H13V7H11V11H7V13H11V17H13V13H17V11Z",
+        "notifications": "M12 22A2.5 2.5 0 0 0 14.5 19.5H9.5A2.5 2.5 0 0 0 12 22M18 16V11A6 6 0 0 0 13 5.1V4A1 1 0 0 0 11 4V5.1A6 6 0 0 0 6 11V16L4 18V19H20V18L18 16Z",
+        "profile": "M12 4A4 4 0 1 1 8 8A4 4 0 0 1 12 4M12 14C16.42 14 20 15.79 20 18V20H4V18C4 15.79 7.58 14 12 14Z",
+    }
+
+    def nav_icon(name: str) -> str:
+        path = mdi_paths.get(name, mdi_paths["library"])
+        return (
+            f'<span class="nav-symbol {h(name)}" aria-hidden="true">'
+            f'<svg viewBox="0 0 24 24" focusable="false" role="img"><path d="{path}"></path></svg>'
+            "</span>"
+        )
+
     return """<!doctype html>
 <html lang="en">
 <head>
@@ -6507,6 +6523,31 @@ def ui_preview_html(
       height: 8px;
       bottom: 2px;
       border-radius: 10px 10px 5px 5px;
+    }
+    .nav-symbol,
+    .nav-symbol.library,
+    .nav-symbol.lists,
+    .nav-symbol.import,
+    .nav-symbol.notifications,
+    .nav-symbol.profile {
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      transform: none;
+      display: inline-grid;
+      place-items: center;
+      color: currentColor;
+    }
+    .nav-symbol::before,
+    .nav-symbol::after {
+      content: none !important;
+      display: none !important;
+    }
+    .nav-symbol svg {
+      width: 22px;
+      height: 22px;
+      display: block;
+      fill: currentColor;
     }
     .sidebar-footer {
       margin-top: auto;
@@ -12514,11 +12555,11 @@ def ui_preview_html(
         </div>
       </div>
       <nav class="nav-section" aria-label="Primary">
-        <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label"><span class="nav-symbol library" aria-hidden="true"></span><span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label"><span class="nav-symbol lists" aria-hidden="true"></span><span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label"><span class="nav-symbol import" aria-hidden="true"></span><span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
-        <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label"><span class="nav-symbol notifications" aria-hidden="true"></span><span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
-        <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label"><span class="nav-symbol profile" aria-hidden="true"></span><span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
+        <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label">""" + nav_icon("library") + """<span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
+        <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
       <div class="sidebar-footer">
         <strong data-next-i18n="uiPreview.build">Build</strong><br>
@@ -14174,23 +14215,23 @@ def ui_preview_html(
   </section>
   <nav class=\"""" + mobile_class + """\" aria-label="Mobile">
     <button type="button" class="mobile-tab active" data-app-route="library">
-      <span class="nav-symbol library" aria-hidden="true"></span>
+      """ + nav_icon("library") + """
       <span data-next-i18n="uiPreview.navLibrary">Library</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="lists">
-      <span class="nav-symbol lists" aria-hidden="true"></span>
+      """ + nav_icon("lists") + """
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
     <button type="button" class="mobile-tab mobile-tab-primary" data-app-route="import">
-      <span class="nav-symbol import" aria-hidden="true"></span>
+      """ + nav_icon("import") + """
       <span data-next-i18n="importCenter.title">Import</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="notifications">
-      <span class="nav-symbol notifications" aria-hidden="true"></span>
+      """ + nav_icon("notifications") + """
       <span data-next-i18n="uiPreview.navNotifications">Notifications</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="profile">
-      <span class="nav-symbol profile" aria-hidden="true"></span>
+      """ + nav_icon("profile") + """
       <span data-next-i18n="uiPreview.profile">Profile</span>
     </button>
   </nav>
