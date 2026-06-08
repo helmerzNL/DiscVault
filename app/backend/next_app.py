@@ -6667,6 +6667,76 @@ def ui_preview_html(
       flex: 1 1 280px;
       background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
     }
+    .advanced-search-toggle.active {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .advanced-search-panel {
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+    }
+    .advanced-search-panel.hidden {
+      display: none;
+    }
+    .advanced-search-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .advanced-search-field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+    }
+    .advanced-search-field input,
+    .advanced-search-field select {
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+    }
+    .advanced-search-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .smart-filter-picker {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
+    }
+    .smart-filter-picker select {
+      min-width: 190px;
+      max-width: min(280px, 100%);
+    }
+    .advanced-search-count {
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+    }
     .collection-controls {
       display: flex;
       align-items: center;
@@ -11720,6 +11790,20 @@ def ui_preview_html(
       body {
         padding-bottom: calc(86px + env(safe-area-inset-bottom));
       }
+      .advanced-search-grid {
+        grid-template-columns: 1fr;
+      }
+      .advanced-search-actions {
+        align-items: stretch;
+      }
+      .advanced-search-actions .button-row,
+      .smart-filter-picker {
+        width: 100%;
+      }
+      .advanced-search-actions button,
+      .smart-filter-picker select {
+        flex: 1 1 auto;
+      }
       .preview-shell {
         display: block;
       }
@@ -12583,6 +12667,10 @@ def ui_preview_html(
             <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
           </label>
           <div class="collection-controls">
+            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton">
+              <span data-next-i18n="collection.advancedSearch">Advanced</span>
+              <span class="metadata-job-badge hidden" id="advancedSearchBadge">0</span>
+            </button>
             <div class="segmented compact view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
               <button type="button" class="active" data-library-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
               <button type="button" data-library-view-mode="list" data-next-i18n="collection.viewList">List</button>
@@ -12611,6 +12699,76 @@ def ui_preview_html(
           <div class="segmented compact" id="collectionItemFilter" role="group" aria-label="Item filter" data-next-i18n-aria="collection.itemFilter">
             <button type="button" class="active" data-item-filter="all" data-next-i18n="common.all">All</button>
             <button type="button" data-item-filter="containers" data-next-i18n="collection.containers">Containers</button>
+          </div>
+        </div>
+        <div class="advanced-search-panel hidden" id="advancedSearchPanel">
+          <div class="advanced-search-grid">
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.yearFrom">Year from</span>
+              <input id="advancedYearFrom" type="number" min="1880" max="2100" inputmode="numeric">
+            </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.yearTo">Year to</span>
+              <input id="advancedYearTo" type="number" min="1880" max="2100" inputmode="numeric">
+            </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.crewFilter">Crew or cast</span>
+              <input id="advancedCrewQuery" type="search" data-next-i18n-placeholder="collection.crewFilterPlaceholder" placeholder="Actor, director or crew">
+            </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.digitalFilter">Digital source</span>
+              <select id="advancedDigitalFilter">
+                <option value="any" data-next-i18n="common.any">Any</option>
+                <option value="plex">Plex</option>
+                <option value="jellyfin">Jellyfin</option>
+                <option value="digital" data-next-i18n="collection.hasDigital">Has digital</option>
+                <option value="none" data-next-i18n="collection.noDigital">No digital</option>
+              </select>
+            </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.artworkFilter">Artwork</span>
+              <select id="advancedArtworkFilter">
+                <option value="any" data-next-i18n="common.any">Any</option>
+                <option value="missingPoster" data-next-i18n="collection.missingPoster">Missing poster</option>
+                <option value="missingBackdrop" data-next-i18n="collection.missingBackdrop">Missing backdrop</option>
+                <option value="completeArtwork" data-next-i18n="collection.completeArtwork">Poster and backdrop</option>
+              </select>
+            </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.personalFilter">Personal lists</span>
+              <select id="advancedPersonalFilter">
+                <option value="any" data-next-i18n="common.any">Any</option>
+                <option value="watchlist" data-next-i18n="lists.watchlist">Watchlist</option>
+                <option value="watched" data-next-i18n="lists.watched">Watched</option>
+                <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
+              </select>
+            </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.containerType">Container type</span>
+              <select id="advancedContainerType">
+                <option value="any" data-next-i18n="common.any">Any</option>
+                <option value="movie" data-next-i18n="collection.movies">Movies</option>
+                <option value="container" data-next-i18n="collection.containers">Containers</option>
+                <option value="box_set" data-next-i18n="containerTypes.box_set">Box-set</option>
+                <option value="collection" data-next-i18n="containerTypes.collection">Collection</option>
+                <option value="vault" data-next-i18n="containerTypes.vault">Vault</option>
+              </select>
+            </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.smartFilters">Smart filters</span>
+              <select id="smartFilterSelect"></select>
+            </label>
+          </div>
+          <div class="advanced-search-actions">
+            <div class="smart-filter-picker">
+              <span class="advanced-search-count hidden" id="advancedSearchActiveCount"></span>
+              <button type="button" class="secondary-button compact-button" id="advancedSearchSaveButton" data-next-i18n="collection.saveSmartFilter">Save smart filter</button>
+              <button type="button" class="secondary-button compact-button danger" id="advancedSearchDeleteButton" data-next-i18n="common.delete">Delete</button>
+            </div>
+            <div class="button-row compact">
+              <button type="button" class="secondary-button compact-button" id="advancedSearchResetButton" data-next-i18n="common.reset">Reset</button>
+              <button type="button" class="primary-button compact-button" id="advancedSearchApplyButton" data-next-i18n="common.apply">Apply</button>
+            </div>
           </div>
         </div>
         <div class="bulk-result-panel" id="bulkResultPanel"></div>
@@ -14252,6 +14410,10 @@ def ui_preview_html(
     let collectionItemFilter = localStorage.getItem("dv_next_collection_item_filter") || "all";
     let libraryViewMode = localStorage.getItem("dv_next_library_view_mode") || "poster";
     let libraryDetailSort = JSON.parse(localStorage.getItem("dv_next_library_detail_sort") || '{"key":"title","direction":"asc"}');
+    let advancedSearchOpen = localStorage.getItem("dv_next_advanced_search_open") === "true";
+    let advancedSearch = parseLocalJson("dv_next_advanced_search", {});
+    let smartFilters = parseLocalJson("dv_next_smart_filters", []);
+    let activeSmartFilterId = localStorage.getItem("dv_next_active_smart_filter") || "";
     let listsViewMode = localStorage.getItem("dv_next_lists_view_mode") || "poster";
     let listsDetailSort = JSON.parse(localStorage.getItem("dv_next_lists_detail_sort") || '{"key":"title","direction":"asc"}');
     let containerMoviesViewMode = localStorage.getItem("dv_next_container_movies_view_mode") || "poster";
@@ -18197,6 +18359,14 @@ def ui_preview_html(
       const name = item.nativeName || item.englishName || item.locale || "";
       return item.label || name;
     }
+    function parseLocalJson(key, fallback) {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || "");
+        return parsed == null ? fallback : parsed;
+      } catch (error) {
+        return fallback;
+      }
+    }
     function languageFlagCode(item) {
       const locale = item?.locale || "";
       const code = item?.flagCode || locale.split("-", 2)[1] || item?.legacy || locale;
@@ -18246,6 +18416,8 @@ def ui_preview_html(
         collectionItemFilter = "all";
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
       }
+      advancedSearch = normalizeAdvancedSearch(advancedSearch);
+      smartFilters = Array.isArray(smartFilters) ? smartFilters : [];
       libraryViewMode = normalizeViewMode(libraryViewMode);
       document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
         button.classList.toggle("active", button.dataset.libraryViewMode === libraryViewMode);
@@ -18263,6 +18435,146 @@ def ui_preview_html(
         button.classList.toggle("active", button.dataset.itemFilter === collectionItemFilter);
         button.setAttribute("aria-pressed", button.dataset.itemFilter === collectionItemFilter ? "true" : "false");
       });
+      syncAdvancedSearchControls();
+    }
+    function advancedSearchDefaults() {
+      return {
+        yearFrom: "",
+        yearTo: "",
+        crew: "",
+        digital: "any",
+        artwork: "any",
+        personal: "any",
+        itemType: "any"
+      };
+    }
+    function normalizeAdvancedSearch(value) {
+      const defaults = advancedSearchDefaults();
+      const source = value && typeof value === "object" ? value : {};
+      return {
+        yearFrom: String(source.yearFrom || "").trim(),
+        yearTo: String(source.yearTo || "").trim(),
+        crew: String(source.crew || "").trim(),
+        digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
+        artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
+        personal: ["any", "watchlist", "watched", "unlisted"].includes(source.personal) ? source.personal : "any",
+        itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any"
+      };
+    }
+    function advancedSearchActiveCount(filters = advancedSearch) {
+      const normalized = normalizeAdvancedSearch(filters);
+      let count = 0;
+      if (normalized.yearFrom) count += 1;
+      if (normalized.yearTo) count += 1;
+      if (normalized.crew) count += 1;
+      if (normalized.digital !== "any") count += 1;
+      if (normalized.artwork !== "any") count += 1;
+      if (normalized.personal !== "any") count += 1;
+      if (normalized.itemType !== "any") count += 1;
+      return count;
+    }
+    function setAdvancedControlValue(id, value) {
+      const node = document.getElementById(id);
+      if (node && node.value !== String(value || "")) node.value = String(value || "");
+    }
+    function readAdvancedSearchControls() {
+      return normalizeAdvancedSearch({
+        yearFrom: document.getElementById("advancedYearFrom")?.value || "",
+        yearTo: document.getElementById("advancedYearTo")?.value || "",
+        crew: document.getElementById("advancedCrewQuery")?.value || "",
+        digital: document.getElementById("advancedDigitalFilter")?.value || "any",
+        artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
+        personal: document.getElementById("advancedPersonalFilter")?.value || "any",
+        itemType: document.getElementById("advancedContainerType")?.value || "any"
+      });
+    }
+    function persistAdvancedSearch() {
+      localStorage.setItem("dv_next_advanced_search", JSON.stringify(normalizeAdvancedSearch(advancedSearch)));
+      localStorage.setItem("dv_next_smart_filters", JSON.stringify(Array.isArray(smartFilters) ? smartFilters : []));
+      localStorage.setItem("dv_next_active_smart_filter", activeSmartFilterId || "");
+    }
+    function syncAdvancedSearchControls() {
+      const panel = document.getElementById("advancedSearchPanel");
+      const toggle = document.getElementById("advancedSearchToggleButton");
+      const count = advancedSearchActiveCount();
+      if (panel) panel.classList.toggle("hidden", !advancedSearchOpen);
+      if (toggle) {
+        toggle.classList.toggle("active", advancedSearchOpen || count > 0);
+        toggle.setAttribute("aria-expanded", advancedSearchOpen ? "true" : "false");
+      }
+      const badge = document.getElementById("advancedSearchBadge");
+      if (badge) {
+        badge.textContent = String(count);
+        badge.classList.toggle("hidden", count === 0);
+      }
+      const activeCount = document.getElementById("advancedSearchActiveCount");
+      if (activeCount) {
+        activeCount.textContent = count ? `${count} ${tNext("collection.activeFilters", "active filters")}` : "";
+        activeCount.classList.toggle("hidden", count === 0);
+      }
+      setAdvancedControlValue("advancedYearFrom", advancedSearch.yearFrom);
+      setAdvancedControlValue("advancedYearTo", advancedSearch.yearTo);
+      setAdvancedControlValue("advancedCrewQuery", advancedSearch.crew);
+      setAdvancedControlValue("advancedDigitalFilter", advancedSearch.digital);
+      setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
+      setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
+      setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
+      const select = document.getElementById("smartFilterSelect");
+      if (select) {
+        const filters = Array.isArray(smartFilters) ? smartFilters : [];
+        select.innerHTML = [
+          `<option value="">${escapeHtml(tNext("collection.smartFilterPlaceholder", "Choose smart filter"))}</option>`,
+          ...filters.map((filter) => `<option value="${escapeHtml(filter.id || "")}">${escapeHtml(filter.name || tNext("collection.unnamedSmartFilter", "Unnamed filter"))}</option>`)
+        ].join("");
+        select.value = filters.some((filter) => String(filter.id || "") === String(activeSmartFilterId)) ? activeSmartFilterId : "";
+      }
+      const deleteButton = document.getElementById("advancedSearchDeleteButton");
+      if (deleteButton) deleteButton.disabled = !activeSmartFilterId;
+    }
+    function applyAdvancedSearchFromControls() {
+      advancedSearch = readAdvancedSearchControls();
+      activeSmartFilterId = "";
+      persistAdvancedSearch();
+      renderLibrary();
+    }
+    function resetAdvancedSearch() {
+      advancedSearch = advancedSearchDefaults();
+      activeSmartFilterId = "";
+      persistAdvancedSearch();
+      renderLibrary();
+    }
+    function saveSmartFilter() {
+      const filters = Array.isArray(smartFilters) ? smartFilters : [];
+      const nextFilters = normalizeAdvancedSearch(readAdvancedSearchControls());
+      if (!advancedSearchActiveCount(nextFilters)) return;
+      const name = window.prompt(tNext("collection.smartFilterNamePrompt", "Name this smart filter"));
+      if (!name || !String(name).trim()) return;
+      const id = `smart_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      smartFilters = [...filters, {id, name: String(name).trim(), filters: nextFilters}].slice(-24);
+      advancedSearch = nextFilters;
+      activeSmartFilterId = id;
+      persistAdvancedSearch();
+      renderLibrary();
+    }
+    function applySmartFilter(id) {
+      const found = (Array.isArray(smartFilters) ? smartFilters : []).find((filter) => String(filter.id || "") === String(id || ""));
+      if (!found) {
+        activeSmartFilterId = "";
+        persistAdvancedSearch();
+        syncAdvancedSearchControls();
+        return;
+      }
+      activeSmartFilterId = String(found.id || "");
+      advancedSearch = normalizeAdvancedSearch(found.filters || {});
+      persistAdvancedSearch();
+      renderLibrary();
+    }
+    function deleteSmartFilter() {
+      if (!activeSmartFilterId) return;
+      smartFilters = (Array.isArray(smartFilters) ? smartFilters : []).filter((filter) => String(filter.id || "") !== String(activeSmartFilterId));
+      activeSmartFilterId = "";
+      persistAdvancedSearch();
+      renderLibrary();
     }
     function targetOptionHtml(items, emptyKey, emptyText) {
       if (!items.length) return `<option value="">${escapeHtml(tNext(emptyKey, emptyText))}</option>`;
@@ -18341,6 +18653,76 @@ def ui_preview_html(
       ].join(" ").toLowerCase();
       return haystack.includes(query);
     }
+    function movieTextValue(movie) {
+      const groups = (movie?.media_groups || []).map((group) => group.name).join(" ");
+      return [
+        movie?.title,
+        movie?.original_title,
+        movie?.sort_title,
+        movie?.year,
+        movie?.format,
+        movie?.barcode,
+        movie?.metadata_search,
+        movie?.search_credits,
+        movie?.metadata?.actor,
+        movie?.metadata?.director,
+        movie?.metadata?.producer,
+        groups
+      ].filter(Boolean).join(" ").toLowerCase();
+    }
+    function movieYearNumber(movie) {
+      return Number.parseInt(movie?.year || movie?.release_year || movie?.metadata?.year || "0", 10) || 0;
+    }
+    function movieDigitalSourceNames(movie) {
+      const snapshot = movie?.snapshot || {};
+      const rows = Array.isArray(movie?.digital_sources)
+        ? movie.digital_sources
+        : Array.isArray(movie?.digitalSources)
+          ? movie.digitalSources
+          : Array.isArray(snapshot.digital_sources)
+            ? snapshot.digital_sources
+            : Array.isArray(snapshot.digitalSources)
+              ? snapshot.digitalSources
+              : [];
+      return rows.map((source) => String(source.source_name || source.name || source.plugin_id || source.source || "").toLowerCase()).filter(Boolean);
+    }
+    function movieHasDigitalSource(movie, source) {
+      const names = movieDigitalSourceNames(movie);
+      if (names.length) {
+        if (source === "digital") return true;
+        return names.some((name) => name.includes(source));
+      }
+      return source === "digital" ? Number(movie?.digital_count || 0) > 0 : false;
+    }
+    function moviePosterValue(movie) {
+      return movie?.poster_url || movie?.metadata?.poster_url || movie?.metadata?.poster || movie?.poster || "";
+    }
+    function movieBackdropValue(movie) {
+      return movie?.backdrop_url || movie?.metadata?.backdrop_url || movie?.metadata?.backdrop || movie?.backdrop || "";
+    }
+    function movieIsWatched(movie) {
+      return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched_at || movie?.user_state?.watched);
+    }
+    function movieMatchesAdvancedSearch(movie) {
+      const filters = normalizeAdvancedSearch(advancedSearch);
+      const year = movieYearNumber(movie);
+      const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
+      const yearTo = Number.parseInt(filters.yearTo || "0", 10) || 0;
+      if (yearFrom && (!year || year < yearFrom)) return false;
+      if (yearTo && (!year || year > yearTo)) return false;
+      if (filters.crew && !movieTextValue(movie).includes(filters.crew.toLowerCase())) return false;
+      if (filters.digital === "plex" && !movieHasDigitalSource(movie, "plex")) return false;
+      if (filters.digital === "jellyfin" && !movieHasDigitalSource(movie, "jellyfin")) return false;
+      if (filters.digital === "digital" && !movieHasDigitalSource(movie, "digital")) return false;
+      if (filters.digital === "none" && movieHasDigitalSource(movie, "digital")) return false;
+      if (filters.artwork === "missingPoster" && moviePosterValue(movie)) return false;
+      if (filters.artwork === "missingBackdrop" && movieBackdropValue(movie)) return false;
+      if (filters.artwork === "completeArtwork" && (!moviePosterValue(movie) || !movieBackdropValue(movie))) return false;
+      if (filters.personal === "watchlist" && !movie?.on_watchlist) return false;
+      if (filters.personal === "watched" && !movieIsWatched(movie)) return false;
+      if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
+      return true;
+    }
     function containerMatchesGroup(container) {
       if (!collectorsModeEnabled()) return false;
       const selected = preferences.default_media_group_id || "";
@@ -18371,6 +18753,27 @@ def ui_preview_html(
         memberText
       ].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(query);
+    }
+    function containerPosterValue(container) {
+      return container?.poster_url || container?.metadata?.poster_url || container?.metadata?.poster || container?.poster || "";
+    }
+    function containerBackdropValue(container) {
+      return container?.backdrop_url || container?.metadata?.backdrop_url || container?.metadata?.backdrop || container?.backdrop || "";
+    }
+    function containerMatchesAdvancedSearch(container) {
+      if (!collectorsModeEnabled()) return false;
+      const filters = normalizeAdvancedSearch(advancedSearch);
+      const type = String(container?.container_type || "");
+      if (filters.itemType === "movie") return false;
+      if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
+      const members = containerMemberMovies(container?.id);
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted"].includes(filters.personal)) {
+        if (!members.some((movie) => movieMatchesAdvancedSearch(movie))) return false;
+      }
+      if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
+      if (filters.artwork === "missingBackdrop" && containerBackdropValue(container)) return false;
+      if (filters.artwork === "completeArtwork" && (!containerPosterValue(container) || !containerBackdropValue(container))) return false;
+      return true;
     }
     function normalizedMovieFormat(movie) {
       return String(movie?.format || movie?.edition_type || movie?.metadata?.format || "").toLowerCase();
@@ -18431,7 +18834,7 @@ def ui_preview_html(
     function visibleContainerItems(visibleMovieIds = null) {
       if (!collectorsModeEnabled()) return [];
       const visibleItems = (containers || [])
-        .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container))
+        .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container))
         .filter((container) => {
           if (!visibleMovieIds) return true;
           const memberIds = movieIdSetForContainer(container.id);
@@ -18443,7 +18846,13 @@ def ui_preview_html(
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
     function libraryDisplayItems() {
-      const visibleMovies = (movies || []).filter((movie) => movieMatchesGroup(movie) && movieMatchesSearch(movie) && movieMatchesFormat(movie));
+      const visibleMovies = (movies || []).filter((movie) => (
+        movieMatchesGroup(movie)
+        && movieMatchesSearch(movie)
+        && movieMatchesFormat(movie)
+        && movieMatchesAdvancedSearch(movie)
+        && !["container", "box_set", "collection", "vault"].includes(normalizeAdvancedSearch(advancedSearch).itemType)
+      ));
       if (collectionItemFilter === "containers") {
         return sortLibraryItems(visibleContainerItems());
       }
@@ -18460,7 +18869,7 @@ def ui_preview_html(
       (containers || []).forEach((container) => {
         const memberIds = movieIdSetForContainer(container.id);
         if (!memberIds.size && !activeSearchQuery()) return;
-        if (containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container)) {
+        if (containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container)) {
           visibleContainerIds.add(String(container.id || ""));
         }
       });
@@ -18470,7 +18879,7 @@ def ui_preview_html(
       const representedMovieIds = new Set();
       const containerItems = (containers || [])
         .filter((container) => visibleContainerIds.has(String(container.id || "")))
-        .filter((container) => containerMatchesGroup(container) && containerMatchesFormat(container) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
+        .filter((container) => containerMatchesGroup(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
         .map((container) => {
           movieIdSetForContainer(container.id).forEach((movieId) => representedMovieIds.add(movieId));
           return {kind: "container", container, title: container.title || ""};
@@ -26853,6 +27262,16 @@ def ui_preview_html(
         });
       });
       document.getElementById("previewSearch")?.addEventListener("input", filterMovies);
+      document.getElementById("advancedSearchToggleButton")?.addEventListener("click", () => {
+        advancedSearchOpen = !advancedSearchOpen;
+        localStorage.setItem("dv_next_advanced_search_open", advancedSearchOpen ? "true" : "false");
+        syncAdvancedSearchControls();
+      });
+      document.getElementById("advancedSearchApplyButton")?.addEventListener("click", applyAdvancedSearchFromControls);
+      document.getElementById("advancedSearchResetButton")?.addEventListener("click", resetAdvancedSearch);
+      document.getElementById("advancedSearchSaveButton")?.addEventListener("click", saveSmartFilter);
+      document.getElementById("advancedSearchDeleteButton")?.addEventListener("click", deleteSmartFilter);
+      document.getElementById("smartFilterSelect")?.addEventListener("change", (event) => applySmartFilter(event.target.value || ""));
       document.getElementById("collectionSortSelect")?.addEventListener("change", (event) => {
         collectionSortMode = event.target.value || "title_asc";
         localStorage.setItem("dv_next_collection_sort", collectionSortMode);
