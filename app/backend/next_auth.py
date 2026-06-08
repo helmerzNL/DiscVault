@@ -11,6 +11,7 @@ import secrets
 import struct
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
+from urllib.parse import urlencode
 from uuid import UUID, uuid4
 
 import cbor2
@@ -22,7 +23,7 @@ from cryptography.hazmat.primitives.asymmetric.ec import (
     EllipticCurvePublicNumbers,
 )
 from cryptography.hazmat.primitives.hashes import SHA256
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, jsonify, make_response, redirect, request
 from psycopg.types.json import Jsonb
 
 
@@ -40,6 +41,18 @@ RBAC_PROTECTED_ROLE_KEYS = ("owner", "admin", "media_editor", "media_fan", "medi
 ROLE_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 RECOVERY_CODE_GROUPS = 4
 RECOVERY_CODE_GROUP_LENGTH = 4
+MOBILE_AUTH_FLOW_TTL_SECONDS = 5 * 60
+MOBILE_AUTH_CODE_TTL_SECONDS = 60
+MOBILE_AUTH_ALLOWED_CALLBACK_SCHEMES = {"discvault"}
+MOBILE_AUTH_TOKEN_PERMISSIONS = (
+    "api.read",
+    "metadata.search",
+    "collection.add",
+    "collection.add_own",
+    "collection.import",
+    "collection.edit_all",
+    "watchlist.manage",
+)
 
 
 def _utcnow() -> datetime:
@@ -153,6 +166,16 @@ def next_create_api_token_value() -> str:
 def next_api_token_hash(value: Any) -> str:
     token = str(value or "").strip()
     return hashlib.sha256(f"disc-vault-next-api-token:{_jwt_secret()}:{token}".encode("utf-8")).hexdigest()
+
+
+def next_mobile_auth_code_hash(value: Any) -> str:
+    code = str(value or "").strip()
+    return hashlib.sha256(f"disc-vault-next-mobile-code:{_jwt_secret()}:{code}".encode("utf-8")).hexdigest()
+
+
+def next_pkce_s256_challenge(code_verifier: Any) -> str:
+    verifier = str(code_verifier or "").strip()
+    return _b64url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
 
 
 def _bearer_token() -> str:
@@ -408,6 +431,155 @@ def register_next_auth_routes(
                 """,
                 (key, Jsonb(value), is_secret),
             )
+
+    def mobile_allowed_callback_schemes() -> set[str]:
+        configured = os.environ.get("DISCVAULT_MOBILE_CALLBACK_SCHEMES", "")
+        values = {item.strip().lower() for item in configured.split(",") if item.strip()}
+        return values or MOBILE_AUTH_ALLOWED_CALLBACK_SCHEMES
+
+    def mobile_cleanup(conn) -> None:
+        if not table_exists(conn, "mobile_auth_codes") or not table_exists(conn, "mobile_auth_flows"):
+            return
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM mobile_auth_codes WHERE expires_at < now()")
+            cur.execute("DELETE FROM mobile_auth_flows WHERE expires_at < now()")
+
+    def validate_mobile_flow_start_params() -> dict[str, str]:
+        host = (request.headers.get("X-Forwarded-Host") or request.host or "").split(":", 1)[0].lower()
+        if not _request_is_secure() and host not in {"localhost", "127.0.0.1", "::1"}:
+            raise next_api_error("Mobile auth requires HTTPS", 400)
+        callback_scheme = str(request.args.get("callback_scheme") or "").strip().lower()
+        if callback_scheme not in mobile_allowed_callback_schemes():
+            raise next_api_error("Callback scheme is not allowed", 400)
+        code_challenge = str(request.args.get("code_challenge") or "").strip()
+        code_challenge_method = str(request.args.get("code_challenge_method") or "").strip() or "S256"
+        if code_challenge_method != "S256":
+            raise next_api_error("Only PKCE S256 is supported", 400)
+        if not code_challenge:
+            raise next_api_error("code_challenge is required", 400)
+        if not re.fullmatch(r"[A-Za-z0-9_-]{43,128}", code_challenge):
+            raise next_api_error("code_challenge is not a valid PKCE challenge", 400)
+        state = str(request.args.get("state") or "").strip()
+        if len(state) > 512:
+            raise next_api_error("state is too long", 400)
+        return {
+            "callback_scheme": callback_scheme,
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method,
+        }
+
+    def mobile_callback_url(callback_scheme: str, code: str, state: str | None) -> str:
+        params = {"code": code}
+        if state:
+            params["state"] = state
+        return f"{callback_scheme}://auth-callback?{urlencode(params)}"
+
+    def create_mobile_auth_code(
+        conn,
+        *,
+        mobile_flow_id: UUID,
+        user_id: UUID | str,
+    ) -> dict[str, Any]:
+        if not table_exists(conn, "mobile_auth_flows") or not table_exists(conn, "mobile_auth_codes"):
+            raise next_api_error("Mobile auth tables are not available", 503)
+        mobile_cleanup(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, callback_scheme, state, code_challenge, code_challenge_method, expires_at, used_at
+                FROM mobile_auth_flows
+                WHERE id=%s
+                FOR UPDATE
+                """,
+                (mobile_flow_id,),
+            )
+            flow = cur.fetchone()
+            if not flow or flow.get("used_at") is not None or flow["expires_at"] <= _utcnow():
+                raise next_api_error("Mobile auth flow is expired or already used", 400)
+            if flow["code_challenge_method"] != "S256":
+                raise next_api_error("Mobile auth flow uses an unsupported PKCE method", 400)
+            code = secrets.token_urlsafe(32)
+            cur.execute(
+                """
+                INSERT INTO mobile_auth_codes (
+                    code_hash,
+                    user_id,
+                    mobile_flow_id,
+                    code_challenge,
+                    state,
+                    expires_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    next_mobile_auth_code_hash(code),
+                    user_id,
+                    flow["id"],
+                    flow["code_challenge"],
+                    flow.get("state"),
+                    _utcnow() + timedelta(seconds=MOBILE_AUTH_CODE_TTL_SECONDS),
+                ),
+            )
+            cur.execute("UPDATE mobile_auth_flows SET used_at=now() WHERE id=%s", (flow["id"],))
+        return {
+            "code": code,
+            "callbackUrl": mobile_callback_url(flow["callback_scheme"], code, flow.get("state")),
+            "state": flow.get("state"),
+        }
+
+    def issue_mobile_api_token(conn, *, user_id: UUID | str, username: str) -> dict[str, Any]:
+        if not table_exists(conn, "api_access_tokens"):
+            raise next_api_error("API token table is not available", 503)
+        known_permissions = permission_keys_catalog(conn)
+        role = primary_role(conn, user_id)
+        user_permission_keys = set(user_permissions(conn, user_id))
+        if role in {"owner", "admin"}:
+            permission_keys = [key for key in MOBILE_AUTH_TOKEN_PERMISSIONS if key in known_permissions]
+        else:
+            permission_keys = [
+                key
+                for key in MOBILE_AUTH_TOKEN_PERMISSIONS
+                if key in known_permissions and key in user_permission_keys
+            ]
+        if "api.read" not in permission_keys and "api.read" in known_permissions:
+            permission_keys.insert(0, "api.read")
+        scopes = sorted({key.split(".", 1)[0] for key in permission_keys})
+        token_value = next_create_api_token_value()
+        token_name = "DiscVault iOS"
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO api_access_tokens (
+                    user_id,
+                    name,
+                    token_hash,
+                    scopes,
+                    permission_keys,
+                    created_by,
+                    expires_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, NULL)
+                RETURNING id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
+                """,
+                (
+                    user_id,
+                    token_name,
+                    next_api_token_hash(token_value),
+                    Jsonb(scopes),
+                    Jsonb(permission_keys),
+                    user_id,
+                ),
+            )
+            token_row = cur.fetchone()
+        return {"token": token_value, "tokenRow": token_row, "permissionKeys": permission_keys, "scopes": scopes}
+
+    def permission_keys_catalog(conn) -> set[str]:
+        if not table_exists(conn, "permissions"):
+            return set(MOBILE_AUTH_TOKEN_PERMISSIONS)
+        with conn.cursor() as cur:
+            cur.execute("SELECT key FROM permissions")
+            return {row["key"] for row in cur.fetchall()}
 
     def audit_event(
         conn,
@@ -1253,6 +1425,50 @@ def register_next_auth_routes(
         token = _create_token(str(user_id), username)
         return cookie_response({"status": "ok", "token": token, "username": username}, token)
 
+    @route("/api/next/auth/mobile/start", "/api/auth/mobile/start", methods=["GET"])
+    def mobile_auth_start():
+        params = validate_mobile_flow_start_params()
+        with connect() as conn:
+            if not table_exists(conn, "mobile_auth_flows"):
+                raise next_api_error("Mobile auth tables are not available", 503)
+            with conn.transaction():
+                mobile_cleanup(conn)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO mobile_auth_flows (
+                            callback_scheme,
+                            state,
+                            code_challenge,
+                            code_challenge_method,
+                            expires_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            params["callback_scheme"],
+                            params["state"],
+                            params["code_challenge"],
+                            params["code_challenge_method"],
+                            _utcnow() + timedelta(seconds=MOBILE_AUTH_FLOW_TTL_SECONDS),
+                        ),
+                    )
+                    flow_id = cur.fetchone()["id"]
+                audit_event(
+                    conn,
+                    event_type="auth.mobile_flow_started",
+                    category="security",
+                    summary="Started mobile passkey login flow",
+                    metadata={
+                        "mobileFlowId": flow_id,
+                        "callbackScheme": params["callback_scheme"],
+                        "codeChallengeMethod": params["code_challenge_method"],
+                    },
+                )
+        target = f"/?{urlencode({'mobile_flow': str(flow_id)})}"
+        return redirect(target, code=302)
+
     @route("/api/next/auth/login/options", "/api/auth/login/options", methods=["POST"])
     def login_options():
         with connect() as conn:
@@ -1280,6 +1496,10 @@ def register_next_auth_routes(
     def login_verify():
         body = request.get_json(silent=True) or {}
         credential = body.get("credential") or {}
+        mobile_flow_raw = body.get("mobile_flow") or body.get("mobileFlow")
+        mobile_flow = _parse_uuid(mobile_flow_raw)
+        if mobile_flow_raw and not mobile_flow:
+            raise next_api_error("mobile_flow is invalid", 400)
         credential_id = str(credential.get("id") or "")
         if not credential_id:
             raise next_api_error("Credential id is required", 400)
@@ -1348,11 +1568,118 @@ def register_next_auth_routes(
                     target_type="user",
                     target_id=stored["user_id"],
                     summary=f"{stored['username']} logged in with a passkey",
-                    metadata={"credentialId": credential_id},
+                    metadata={"credentialId": credential_id, "mobileFlow": bool(mobile_flow)},
                 )
+                if mobile_flow:
+                    mobile_code = create_mobile_auth_code(
+                        conn,
+                        mobile_flow_id=mobile_flow,
+                        user_id=stored["user_id"],
+                    )
+                    audit_event(
+                        conn,
+                        event_type="auth.mobile_code_issued",
+                        category="security",
+                        actor={
+                            "id": stored["user_id"],
+                            "username": stored["username"],
+                            "role": primary_role(conn, stored["user_id"]),
+                        },
+                        target_type="user",
+                        target_id=stored["user_id"],
+                        summary=f"Issued mobile one-time code for {stored['username']}",
+                        metadata={"mobileFlowId": mobile_flow},
+                    )
+                    return response(
+                        {
+                            "status": "ok",
+                            "callback_url": mobile_code["callbackUrl"],
+                            "callbackUrl": mobile_code["callbackUrl"],
+                            "state": mobile_code.get("state"),
+                        }
+                    )
 
         token = _create_token(str(stored["user_id"]), stored["username"])
         return cookie_response({"status": "ok", "token": token, "username": stored["username"]}, token)
+
+    @route("/api/next/auth/mobile/exchange", "/api/auth/mobile/exchange", methods=["POST"])
+    def mobile_auth_exchange():
+        body = request.get_json(silent=True) or {}
+        code = str(body.get("code") or "").strip()
+        code_verifier = str(body.get("code_verifier") or body.get("codeVerifier") or "").strip()
+        if not code:
+            raise next_api_error("code is required", 400)
+        if not code_verifier:
+            raise next_api_error("code_verifier is required", 400)
+        try:
+            expected_challenge = next_pkce_s256_challenge(code_verifier)
+        except UnicodeEncodeError as exc:
+            raise next_api_error("code_verifier is not valid ASCII", 400) from exc
+
+        with connect() as conn:
+            if not table_exists(conn, "mobile_auth_codes"):
+                raise next_api_error("Mobile auth tables are not available", 503)
+            with conn.transaction():
+                mobile_cleanup(conn)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT mac.*, u.username, u.status AS user_status
+                        FROM mobile_auth_codes mac
+                        JOIN users u ON u.id = mac.user_id
+                        WHERE mac.code_hash=%s
+                        FOR UPDATE
+                        """,
+                        (next_mobile_auth_code_hash(code),),
+                    )
+                    row = cur.fetchone()
+                    if not row or row.get("used_at") is not None or row["expires_at"] <= _utcnow():
+                        raise next_api_error("Mobile auth code is expired or already used", 400)
+                    if row["user_status"] != "active":
+                        raise next_api_error("User is disabled", 403)
+                    if not secrets.compare_digest(str(row["code_challenge"]), expected_challenge):
+                        raise next_api_error("PKCE verification failed", 400)
+                    cur.execute("UPDATE mobile_auth_codes SET used_at=now() WHERE id=%s", (row["id"],))
+                    token_payload = issue_mobile_api_token(conn, user_id=row["user_id"], username=row["username"])
+                audit_event(
+                    conn,
+                    event_type="auth.mobile_token_exchanged",
+                    category="security",
+                    actor={
+                        "id": row["user_id"],
+                        "username": row["username"],
+                        "role": primary_role(conn, row["user_id"]),
+                    },
+                    target_type="api_access_token",
+                    target_id=token_payload["tokenRow"]["id"],
+                    summary=f"Exchanged mobile auth code for {row['username']}",
+                    metadata={
+                        "mobileFlowId": row["mobile_flow_id"],
+                        "apiTokenId": token_payload["tokenRow"]["id"],
+                        "permissionKeys": token_payload["permissionKeys"],
+                        "scopes": token_payload["scopes"],
+                    },
+                )
+        return response(
+            {
+                "status": "ok",
+                "token": token_payload["token"],
+                "username": row["username"],
+                "apiToken": {
+                    "id": token_payload["tokenRow"]["id"],
+                    "name": token_payload["tokenRow"]["name"],
+                    "scopes": token_payload["tokenRow"]["scopes"] or [],
+                    "permissionKeys": token_payload["tokenRow"]["permission_keys"] or [],
+                    "createdAt": token_payload["tokenRow"]["created_at"].isoformat()
+                    if token_payload["tokenRow"].get("created_at")
+                    else None,
+                    "expiresAt": token_payload["tokenRow"]["expires_at"].isoformat()
+                    if token_payload["tokenRow"].get("expires_at")
+                    else None,
+                    "revokedAt": None,
+                },
+            }
+        )
 
     @route("/api/next/auth/recovery", "/api/auth/recovery", methods=["POST"])
     def recovery_login():
