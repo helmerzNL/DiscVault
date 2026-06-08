@@ -1343,6 +1343,8 @@ def field_format_safe(
 ) -> tuple[bool, str]:
     target = normalize_media_format(target_format)
     source = normalize_media_format(source_format)
+    if field == "content_ratings":
+        return True, "format-neutral certification field"
     if field not in METADATA_RELEASE_FIELDS:
         return True, "format-neutral field"
     if not target or not source:

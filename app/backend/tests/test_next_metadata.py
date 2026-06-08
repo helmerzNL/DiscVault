@@ -465,6 +465,34 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertFalse(decision["candidates"][1]["accepted"])
         self.assertEqual(decision["candidates"][1]["reason"], "higher-priority provider already selected this field")
 
+    def test_tmdb_content_ratings_are_format_neutral(self):
+        current = {"title": "Manual Title", "format": "4K UHD", "metadata": {}}
+        result = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {
+                "status": "hit",
+                "sourceRef": "tmdb:105",
+                "movie": {"title": "Back to the Future"},
+                "technicalSpecs": {"contentRatings": {"NL": "AL", "US": "PG"}},
+            },
+        )
+
+        self.assertEqual(result["technicalUpdates"]["content_ratings"], {"NL": "AL", "US": "PG"})
+
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[result],
+            overwrite_enabled=False,
+            target_format="4K UHD",
+        )
+
+        self.assertEqual(merged["technicalUpdates"]["content_ratings"], {"NL": "AL", "US": "PG"})
+        decision = next(item for item in merged["fieldDecisions"] if item["target"] == "technical" and item["field"] == "content_ratings")
+        self.assertEqual(decision["winner"]["pluginId"], "tmdb")
+        self.assertEqual(decision["winner"]["reason"], "current field is empty")
+
     def test_provider_image_options_are_kept_as_media_choices(self):
         current = {"title": "Manual Title", "format": "4K UHD", "metadata": {"poster_url": "https://local/poster.jpg"}}
         result = canonicalize_plugin_result(
