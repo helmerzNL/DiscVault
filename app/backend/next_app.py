@@ -7018,6 +7018,23 @@ def ui_preview_html(
     .filter-row select {
       min-width: 190px;
     }
+    .group-scope-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      max-width: 100%;
+      padding: 7px 11px;
+      border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-elevated) 82%, transparent);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .bulk-bar {
       display: none;
       align-items: stretch;
@@ -10553,6 +10570,41 @@ def ui_preview_html(
     .member-group-actions input {
       min-width: min(220px, 100%);
     }
+    .member-group-members {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 8px;
+    }
+    .member-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+      padding: 5px 8px;
+      border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-muted) 72%, transparent);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .member-chip small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .member-chip button {
+      width: 20px;
+      height: 20px;
+      border: 0;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--danger) 13%, transparent);
+      color: var(--danger);
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+    }
     .profile-api-submenu {
       margin-bottom: 2px;
     }
@@ -12857,6 +12909,7 @@ def ui_preview_html(
       <section class="library-tools">
         <div class="filter-row">
           <select id="groupFilter" aria-label="Group filter" data-next-i18n-aria="groups.filterLabel"></select>
+          <span class="group-scope-pill" id="groupFilterStatus"></span>
           <button type="button" class="icon-button" id="selectModeButton" data-next-i18n="bulk.select">Select</button>
           <button type="button" class="icon-button metadata-job-toggle hidden" id="libraryMetadataJobsToggleButton">
             <span data-next-i18n="metadataJobs.toggle">Metadata jobs</span>
@@ -14963,7 +15016,13 @@ def ui_preview_html(
     function canViewFullCollectionByDefault() {
       return hasActualPermission("collection.view_all");
     }
+    function validCollectionGroupFilter(value) {
+      const selected = String(value || "");
+      if (!selected || selected === "__mine" || selected === "__ungrouped") return selected;
+      return (mediaGroups || []).some((group) => String(group.id || "") === selected || String(group.publicId || "") === selected) ? selected : "";
+    }
     function effectiveCollectionGroupFilter() {
+      activeCollectionGroupFilter = validCollectionGroupFilter(activeCollectionGroupFilter);
       if (activeCollectionGroupFilter) return activeCollectionGroupFilter;
       return canViewFullCollectionByDefault() ? "" : "__mine";
     }
@@ -18615,8 +18674,24 @@ def ui_preview_html(
     }
     function renderGroupFilter() {
       const select = document.getElementById("groupFilter");
-      if (!select) return;
-      select.innerHTML = groupOptionsHtml();
+      const selected = effectiveCollectionGroupFilter();
+      if (select) {
+        select.innerHTML = groupOptionsHtml();
+        select.value = selected;
+      }
+      const status = document.getElementById("groupFilterStatus");
+      if (status) {
+        const selectedGroup = (mediaGroups || []).find((group) => String(group.id || "") === String(selected) || String(group.publicId || "") === String(selected));
+        const label = selectedGroup?.name
+          ? `${tNext("groups.scopeGroup", "Group")}: ${selectedGroup.name}`
+          : selected === "__mine"
+            ? tNext("groups.scopeMine", "Showing your own library")
+            : selected === "__ungrouped"
+              ? tNext("groups.scopeUngrouped", "Showing media outside groups")
+              : tNext("groups.scopeAll", "Showing all visible media");
+        status.textContent = label;
+        status.title = label;
+      }
     }
     function renderCollectionToolbar() {
       if (!collectorsModeEnabled() && collectionItemFilter === "containers") {
@@ -18937,7 +19012,7 @@ def ui_preview_html(
     }
     function containerMatchesGroup(container) {
       if (!collectorsModeEnabled()) return false;
-      const selected = preferences.default_media_group_id || "";
+      const selected = effectiveCollectionGroupFilter();
       if (!selected) return true;
       const memberMovies = containerMemberMovies(container.id);
       if (!memberMovies.length) return selected === "__ungrouped";
@@ -26510,21 +26585,47 @@ def ui_preview_html(
         `<div class="profile-meta-row"><span>${escapeHtml(tNext("groups.currentScope", "Current"))}</span><strong>${escapeHtml(selectedGroup?.name || (selected === "__ungrouped" ? tNext("groups.ungrouped", "Not in a group") : selected === "__mine" ? tNext("groups.myLibrary", "My library") : tNext("groups.all", "All groups")))}</strong></div>`
       ].join("");
     }
+    function memberGroupDisplayRole(role) {
+      const key = String(role || "").toLowerCase();
+      if (key === "owner") return tNext("groups.roleOwner", "Owner");
+      if (key === "manager") return tNext("groups.roleManager", "Manager");
+      if (key === "member") return tNext("groups.roleMember", "Member");
+      return role || "";
+    }
     function memberGroupCardHtml(group) {
       const id = escapeHtml(group.id || "");
       const members = Array.isArray(group.members) ? group.members : [];
       const role = memberRoleForCurrentUser(group);
       const canInvite = canManageMemberGroup(group);
       const owner = group.created_by_display_name || group.created_by_username || "";
+      const currentId = String(currentUserId() || "");
       const memberRows = members.length
-        ? members.map((member) => `<span class="tag">${escapeHtml(member.display_name || member.username || member.user_id || "")}${member.role ? ` · ${escapeHtml(member.role)}` : ""}</span>`).join("")
+        ? members.map((member) => {
+            const userId = String(member.user_id || member.userId || "");
+            const memberRole = String(member.role || "");
+            const canRemove = canInvite && userId && userId !== currentId && memberRole !== "owner";
+            return `
+              <span class="member-chip">
+                <span>${escapeHtml(member.display_name || member.username || userId || "")}</span>
+                ${memberRole ? `<small>${escapeHtml(memberGroupDisplayRole(memberRole))}</small>` : ""}
+                ${canRemove ? `<button type="button" data-member-group-remove-user="${id}" data-member-group-user-id="${escapeHtml(userId)}" aria-label="${escapeHtml(tNext("groups.removeMember", "Remove member"))}">&times;</button>` : ""}
+              </span>
+            `;
+          }).join("")
         : `<span class="muted-inline">${escapeHtml(tNext("groups.noMembers", "No members yet"))}</span>`;
+      const stats = [
+        owner ? `${tNext("groups.owner", "Owner")}: ${owner}` : "",
+        `${Number(group.movie_count || 0)} ${tNext("groups.movies", "movies")}`,
+        `${Number(group.member_count || members.length || 0)} ${tNext("groups.members", "members")}`,
+        Number(group.pending_invite_count || 0) ? `${Number(group.pending_invite_count || 0)} ${tNext("groups.pendingInvites", "pending invites")}` : "",
+        role ? `${tNext("groups.yourRole", "Your role")}: ${memberGroupDisplayRole(role)}` : ""
+      ].filter(Boolean).join(" / ");
       return `
         <div class="container-manager-row member-group-row" data-member-group-id="${id}">
           <div class="container-manager-meta">
             <strong>${escapeHtml(group.name || tNext("groups.unnamed", "Unnamed group"))}</strong>
-            <span>${escapeHtml([owner ? `${tNext("groups.owner", "Owner")}: ${owner}` : "", `${Number(group.movie_count || 0)} ${tNext("groups.movies", "movies")}`, role ? `${tNext("groups.yourRole", "Your role")}: ${role}` : ""].filter(Boolean).join(" / "))}</span>
-            <div class="tag-row">${memberRows}</div>
+            <span>${escapeHtml(stats)}</span>
+            <div class="member-group-members">${memberRows}</div>
           </div>
           <div class="container-manager-actions member-group-actions">
             <button type="button" class="secondary-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
@@ -26608,6 +26709,22 @@ def ui_preview_html(
         if (input) input.value = "";
         renderMemberGroups();
         setMemberGroupMessage(tNext("groups.inviteSent", "Invite sent."), "good");
+      } catch (error) {
+        setMemberGroupMessage(error.message || String(error), "bad");
+      }
+    }
+    async function removeMemberGroupUser(groupId, userId) {
+      if (!groupId || !userId || !hasActualPermission("groups.invite")) return;
+      const confirmed = window.confirm(tNext("groups.removeConfirm", "Remove this member from the group?"));
+      if (!confirmed) return;
+      setMemberGroupMessage(tNext("groups.removingMember", "Removing member..."));
+      try {
+        const payload = await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, {method: "DELETE"});
+        if (payload.group) {
+          mediaGroups = mediaGroups.map((group) => String(group.id) === String(payload.group.id) ? payload.group : group);
+        }
+        renderMemberGroups();
+        setMemberGroupMessage(tNext("groups.memberRemoved", "Member removed."), "good");
       } catch (error) {
         setMemberGroupMessage(error.message || String(error), "bad");
       }
@@ -27697,7 +27814,7 @@ def ui_preview_html(
         });
       });
       document.getElementById("groupFilter")?.addEventListener("change", (event) => {
-        activeCollectionGroupFilter = event.target.value || "";
+        activeCollectionGroupFilter = validCollectionGroupFilter(event.target.value || "");
         localStorage.setItem("dv_next_collection_group_filter", activeCollectionGroupFilter);
         renderLibrary();
       });
@@ -27773,6 +27890,11 @@ def ui_preview_html(
       setProfileTab(activeProfileTab);
       document.getElementById("memberGroupCreateForm")?.addEventListener("submit", (event) => createMemberGroup(event));
       document.getElementById("memberGroupList")?.addEventListener("click", (event) => {
+        const removeButton = event.target.closest("[data-member-group-remove-user]");
+        if (removeButton) {
+          removeMemberGroupUser(removeButton.dataset.memberGroupRemoveUser, removeButton.dataset.memberGroupUserId);
+          return;
+        }
         const openButton = event.target.closest("[data-member-group-open]");
         if (openButton) {
           openMemberGroupLibrary(openButton.dataset.memberGroupOpen);
