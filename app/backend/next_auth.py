@@ -59,6 +59,20 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _json_ready(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_ready(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    return value
+
+
 def _b64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
@@ -622,7 +636,7 @@ def register_next_auth_routes(
                     target_type,
                     str(target_id) if target_id is not None else None,
                     summary,
-                    Jsonb(metadata or {}),
+                    Jsonb(_json_ready(metadata or {})),
                     request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip(),
                     request.headers.get("User-Agent"),
                 ),
@@ -1455,18 +1469,19 @@ def register_next_auth_routes(
                         ),
                     )
                     flow_id = cur.fetchone()["id"]
+                    flow_id_str = str(flow_id)
                 audit_event(
                     conn,
                     event_type="auth.mobile_flow_started",
                     category="security",
                     summary="Started mobile passkey login flow",
                     metadata={
-                        "mobileFlowId": flow_id,
+                        "mobileFlowId": flow_id_str,
                         "callbackScheme": params["callback_scheme"],
                         "codeChallengeMethod": params["code_challenge_method"],
                     },
                 )
-        target = f"/?{urlencode({'mobile_flow': str(flow_id)})}"
+        target = f"/?{urlencode({'mobile_flow': flow_id_str})}"
         return redirect(target, code=302)
 
     @route("/api/next/auth/login/options", "/api/auth/login/options", methods=["POST"])
@@ -1588,7 +1603,7 @@ def register_next_auth_routes(
                         target_type="user",
                         target_id=stored["user_id"],
                         summary=f"Issued mobile one-time code for {stored['username']}",
-                        metadata={"mobileFlowId": mobile_flow},
+                        metadata={"mobileFlowId": str(mobile_flow)},
                     )
                     return response(
                         {
@@ -1654,8 +1669,8 @@ def register_next_auth_routes(
                     target_id=token_payload["tokenRow"]["id"],
                     summary=f"Exchanged mobile auth code for {row['username']}",
                     metadata={
-                        "mobileFlowId": row["mobile_flow_id"],
-                        "apiTokenId": token_payload["tokenRow"]["id"],
+                        "mobileFlowId": str(row["mobile_flow_id"]),
+                        "apiTokenId": str(token_payload["tokenRow"]["id"]),
                         "permissionKeys": token_payload["permissionKeys"],
                         "scopes": token_payload["scopes"],
                     },
@@ -1666,7 +1681,7 @@ def register_next_auth_routes(
                 "token": token_payload["token"],
                 "username": row["username"],
                 "apiToken": {
-                    "id": token_payload["tokenRow"]["id"],
+                    "id": str(token_payload["tokenRow"]["id"]),
                     "name": token_payload["tokenRow"]["name"],
                     "scopes": token_payload["tokenRow"]["scopes"] or [],
                     "permissionKeys": token_payload["tokenRow"]["permission_keys"] or [],
