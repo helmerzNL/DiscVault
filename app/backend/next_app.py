@@ -8551,6 +8551,42 @@ def ui_preview_html(
     .import-preview-card strong {
       overflow-wrap: anywhere;
     }
+    .import-intelligence-panel {
+      display: grid;
+      gap: 12px;
+      margin: 0 0 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 11%, transparent), transparent 58%),
+        color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      box-shadow: var(--shadow-soft);
+    }
+    .import-intelligence-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .import-intelligence-card {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      padding: 11px;
+    }
+    .import-intelligence-card span {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 780;
+    }
+    .import-intelligence-card strong {
+      font-size: 1.2rem;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
     .import-mapping-card {
       display: grid;
       gap: 12px;
@@ -15884,9 +15920,19 @@ def ui_preview_html(
         plugin_permission_matrix: ["appAdmin.featurePluginPermissionMatrix", "Plugin Permission Matrix"],
         plugin_package_lifecycle: ["appAdmin.featurePluginPackageLifecycle", "Plugin Package Lifecycle"],
         api_token_wizard: ["appAdmin.featureApiTokenWizard", "API Token Wizard"],
+        advanced_search_v2: ["appAdmin.featureAdvancedSearchV2", "Advanced Search v2"],
         artwork_manager_v3: ["appAdmin.featureArtworkManagerV3", "Artwork Manager v3"],
+        backup_restore_v2: ["appAdmin.featureBackupRestoreV2", "Backup and Restore v2"],
+        container_management_v3: ["appAdmin.featureContainerManagementV3", "Container Management v3"],
         containers_native_editor: ["appAdmin.featureContainersNativeEditor", "Collections and Containers Native Editor"],
+        import_intelligence_v2: ["appAdmin.featureImportIntelligenceV2", "Import Intelligence v2"],
+        lending_center: ["appAdmin.featureLendingCenter", "Lending Center"],
+        plugin_marketplace_ui: ["appAdmin.featurePluginMarketplaceUi", "Plugin Marketplace UI"],
+        personal_lists_v2: ["appAdmin.featurePersonalListsV2", "Personal Lists v2"],
+        offline_mode_v2: ["appAdmin.featureOfflineModeV2", "Offline Mode v2"],
+        mobile_polish_pass_v2: ["appAdmin.featureMobilePolishPassV2", "Mobile Polish Pass"],
         smart_collection_filters: ["appAdmin.featureSmartCollectionFilters", "Smart Collection Filters"],
+        tags_smart_rules: ["appAdmin.featureTagsSmartRules", "Tags and Smart Rules"],
         watchlist_watched_sync_center: ["appAdmin.featureWatchlistWatchedSyncCenter", "Watchlist and Watched Sync Center"],
         personal_source_dedupe: ["appAdmin.featurePersonalSourceDedupe", "Personal Source Dedupe"],
         offline_queue_ui: ["appAdmin.featureOfflineQueueUi", "Offline Queue UI"],
@@ -15938,9 +15984,19 @@ def ui_preview_html(
         plugin_permission_matrix: ["appAdmin.featurePluginPermissionMatrixHelp", "Separates plugin capabilities by type and gates actions through RBAC."],
         plugin_package_lifecycle: ["appAdmin.featurePluginPackageLifecycleHelp", "Exports, imports, validates and deletes replaceable plugin packages safely."],
         api_token_wizard: ["appAdmin.featureApiTokenWizardHelp", "Offers API token presets for read-only, import, metadata and automation clients."],
+        advanced_search_v2: ["appAdmin.featureAdvancedSearchV2Help", "Combines title, barcode, crew, format, tags, digital availability and container filters behind permission-aware search."],
         artwork_manager_v3: ["appAdmin.featureArtworkManagerV3Help", "Tracks poster/backdrop coverage, uploads, primary selection and overwrite locks."],
+        backup_restore_v2: ["appAdmin.featureBackupRestoreV2Help", "Extends functional ZIP backups with restore validation, retention signals and collection-only scope."],
+        container_management_v3: ["appAdmin.featureContainerManagementV3Help", "Prepares bulk linking, member ordering, member cleanup preferences and richer container detail views."],
         containers_native_editor: ["appAdmin.featureContainersNativeEditorHelp", "Manages collections, box-sets and vaults with native list/detail editing."],
+        import_intelligence_v2: ["appAdmin.featureImportIntelligenceV2Help", "Classifies imported rows, detects box-sets, surfaces provider coverage and flags conflicts before saving."],
+        lending_center: ["appAdmin.featureLendingCenterHelp", "Prepares the future lending list without exposing it to roles that cannot view personal lists."],
+        plugin_marketplace_ui: ["appAdmin.featurePluginMarketplaceUiHelp", "Groups plugin types, packages, health and lifecycle actions into a marketplace-style admin surface."],
+        personal_lists_v2: ["appAdmin.featurePersonalListsV2Help", "Keeps Watchlist, Watched, future lending and source sync in one Apple-native lists model."],
+        offline_mode_v2: ["appAdmin.featureOfflineModeV2Help", "Keeps the PWA shell, cached collection reads and queued write actions visible as operational signals."],
+        mobile_polish_pass_v2: ["appAdmin.featureMobilePolishPassV2Help", "Tracks bottom navigation, safe-area spacing, compact selectors and mobile profile scaling."],
         smart_collection_filters: ["appAdmin.featureSmartCollectionFiltersHelp", "Combines format filters, sort modes and container toggles in the Library."],
+        tags_smart_rules: ["appAdmin.featureTagsSmartRulesHelp", "Prepares tags and saved smart filters for dynamic collections without leaking hidden library controls."],
         watchlist_watched_sync_center: ["appAdmin.featureWatchlistWatchedSyncCenterHelp", "Keeps Watchlist and Watched history ready for Trakt, Plex and Jellyfin sync."],
         personal_source_dedupe: ["appAdmin.featurePersonalSourceDedupeHelp", "Prevents Trakt, Plex and Jellyfin from logging the same watch moment multiple times."],
         offline_queue_ui: ["appAdmin.featureOfflineQueueUiHelp", "Surfaces client-side offline readiness and queued actions."],
@@ -21625,6 +21681,76 @@ def ui_preview_html(
         </section>
       `;
     }
+    function importIntelligenceSummary(actionPreview, preview) {
+      actionPreview = actionPreview || {};
+      preview = preview || {};
+      const rows = importReviewRows();
+      const actionRows = actionPreview.actions || [];
+      const queueRows = actionPreview.reviewQueue || [];
+      const sourceRows = rows.length ? rows : (queueRows.length ? queueRows : actionRows);
+      const containers = actionPreview.containers || [];
+      const boxSetReviews = actionPreview.boxSetReviews || [];
+      const providerSummary = actionPreview.providerSummary || [];
+      const conflicts = preview.conflicts || [];
+      const detectedBoxSets = sourceRows.filter((row) => row.detectedBoxSetProposal || row.matchState === "box_set_candidate").length;
+      const lowConfidence = sourceRows.filter((row) => ((row.confidence || {}).label || "") === "low").length;
+      const metadataSuggestions = sourceRows.filter((row) => row.metadataSuggestions && (((row.metadataSuggestions || {}).items || []).length || (row.metadataSuggestions || {}).error)).length;
+      const existing = sourceRows.filter((row) => row.matchState === "existing" || row.match).length;
+      return {
+        totalRows: sourceRows.length,
+        create: sourceRows.filter((row) => (row.action || "create") === "create").length,
+        update: sourceRows.filter((row) => (row.action || "") === "update").length,
+        skip: sourceRows.filter((row) => (row.action || "") === "skip").length,
+        boxSets: detectedBoxSets || containers.filter((container) => container.containerType === "box_set").length || boxSetReviews.length,
+        containers: containers.length,
+        providerCount: providerSummary.length,
+        providerHits: providerSummary.reduce((sum, provider) => sum + Number(provider.hitCount || provider.matches || provider.count || 0), 0),
+        conflicts: conflicts.length,
+        lowConfidence,
+        metadataSuggestions,
+        existing,
+      };
+    }
+    function renderImportIntelligencePanel(preview) {
+      preview = preview || {};
+      const actionPreview = preview.actionPreview || {};
+      const summary = importIntelligenceSummary(actionPreview, preview);
+      if (!summary.totalRows && !summary.containers && !summary.providerCount && !summary.conflicts) return "";
+      const needsReview = summary.lowConfidence || summary.conflicts || summary.metadataSuggestions || summary.boxSets;
+      return `
+        <section class="import-intelligence-panel">
+          <div class="import-card-head">
+            <div>
+              <h3>${escapeHtml(tNext("importCenter.intelligenceTitle", "Import Intelligence"))}</h3>
+              <p class="import-source-meta">${escapeHtml(tNext("importCenter.intelligenceHelp", "DiscVault classifies rows, checks active metadata plugins and highlights box-sets before anything is written."))}</p>
+            </div>
+            <span class="tag ${needsReview ? "warning" : "good"}">${escapeHtml(needsReview ? tNext("importCenter.recommended.review", "Review first") : tNext("importCenter.recommended.ready", "Ready to import"))}</span>
+          </div>
+          <div class="import-intelligence-grid">
+            <div class="import-intelligence-card">
+              <span>${escapeHtml(tNext("importCenter.classifiedRows", "Classified rows"))}</span>
+              <strong>${escapeHtml(formatNumber(summary.totalRows))}</strong>
+              <div class="import-source-meta">${escapeHtml(tNext("importCenter.action.create", "Create"))} ${escapeHtml(summary.create)} · ${escapeHtml(tNext("importCenter.action.update", "Update"))} ${escapeHtml(summary.update)}</div>
+            </div>
+            <div class="import-intelligence-card">
+              <span>${escapeHtml(tNext("importCenter.boxSetsDetected", "Box-sets detected"))}</span>
+              <strong>${escapeHtml(formatNumber(summary.boxSets))}</strong>
+              <div class="import-source-meta">${escapeHtml(formatNumber(summary.containers))} ${escapeHtml(tNext("collection.containers", "Containers"))}</div>
+            </div>
+            <div class="import-intelligence-card">
+              <span>${escapeHtml(tNext("importCenter.providerCoverage", "Provider coverage"))}</span>
+              <strong>${escapeHtml(formatNumber(summary.providerCount))}</strong>
+              <div class="import-source-meta">${escapeHtml(formatNumber(summary.providerHits))} ${escapeHtml(tNext("importCenter.matches", "Matches"))}</div>
+            </div>
+            <div class="import-intelligence-card">
+              <span>${escapeHtml(tNext("importCenter.needsReview", "Needs review"))}</span>
+              <strong>${escapeHtml(formatNumber(summary.lowConfidence + summary.conflicts + summary.metadataSuggestions))}</strong>
+              <div class="import-source-meta">${escapeHtml(formatNumber(summary.existing))} ${escapeHtml(tNext("importCenter.conflictExisting", "Already in library"))}</div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
     function renderImportReview() {
       const list = document.getElementById("importCenterReview");
       const summary = document.getElementById("importCenterReviewSummary");
@@ -21668,7 +21794,7 @@ def ui_preview_html(
           </div>
         </div>
       `;
-      list.innerHTML = sections + queue + rows.map((row) => {
+      list.innerHTML = renderImportIntelligencePanel(importCenter.preview || {}) + sections + queue + rows.map((row) => {
         const action = importDecisionValue(row, decisions);
         const title = row.title || tNext("common.untitled", "Untitled");
         const meta = [row.year, row.format, row.barcode, row.provider].filter(Boolean).join(" / ");
@@ -21862,8 +21988,9 @@ def ui_preview_html(
       const sample = source.sample || [];
       const conflicts = preview.conflicts || [];
       const summaryHtml = renderImportPreviewSummary(source, actionPreview);
+      const intelligenceHtml = renderImportIntelligencePanel(preview);
       if (!sample.length && !conflicts.length && !actionRows.length) {
-        previewNode.innerHTML = `${summaryHtml}<div class="preview-empty">${escapeHtml(tNext("importCenter.noPreview", "Inspect a source to preview sample rows and conflicts."))}</div>`;
+        previewNode.innerHTML = `${intelligenceHtml}${summaryHtml}<div class="preview-empty">${escapeHtml(tNext("importCenter.noPreview", "Inspect a source to preview sample rows and conflicts."))}</div>`;
         return;
       }
       const actionLabel = (action) => tNext(`importCenter.action.${action}`, action);
@@ -21924,6 +22051,7 @@ def ui_preview_html(
           </div>`
         : `<div class="import-conflict-list"><span class="tag good">${escapeHtml(tNext("importCenter.noConflicts", "No conflicts in sample"))}</span></div>`;
       previewNode.innerHTML = `
+        ${intelligenceHtml}
         ${summaryHtml}
         <div class="import-card-head">
           <div>
@@ -40196,10 +40324,43 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
     failed_jobs = int(job_counts.get("failed") or job_counts.get("error") or 0)
     health_status = operations_status_from_counts(failed_jobs, warning_threshold=0)
     api_presets = admin_operations_api_presets(conn, actor)
+    lending_tables = [name for name in ("loan_items", "loans", "lending_items", "borrowed_items") if table_exists(conn, name)]
+    tags_tables = [name for name in ("tags", "movie_tags", "media_tags", "smart_collection_rules") if table_exists(conn, name)]
+    lending_summary = {
+        "status": "ready" if lending_tables else "planned",
+        "counts": {name: count_table(conn, name) for name in lending_tables},
+        "tables": lending_tables,
+    }
+    tags_summary = {
+        "status": "ready" if tags_tables else "planned",
+        "counts": {name: count_table(conn, name) for name in tags_tables},
+        "tables": tags_tables,
+    }
+    search_summary = {
+        "status": "ready",
+        "capabilities": {
+            "title": True,
+            "barcode": True,
+            "crew": True,
+            "format": True,
+            "containers": True,
+            "digitalSources": True,
+            "tags": bool(tags_tables),
+        },
+    }
+    offline_summary = {
+        "status": "ready",
+        "capabilities": {"pwaShell": True, "cachedReads": True, "queuedWrites": True, "offlineGuard": True},
+    }
+    backup_v2_summary = {
+        "status": "ready",
+        "capabilities": {"zipExport": True, "restoreValidation": True, "functionalScope": True, "mediaTrashRetention": True},
+    }
     features = [
         {"key": "migration_recovery_ui", "group": "startup", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"state": "report.recovery", "failedJobs": failed_jobs}},
         {"key": "migration_dry_run_diff", "group": "startup", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"sourceDiff": "report.dryRunDiff"}},
         {"key": "first_run_experience_polish", "group": "startup", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"startupGate": True}},
+        {"key": "import_intelligence_v2", "group": "import", "status": "ready", "permissionKeys": ["collection.import", "metadata.search"], "signals": {"providerCoverage": True, "boxSetDetection": True, "conflictSummary": True}},
         {"key": "import_match_review_queue", "group": "import", "status": "ready", "permissionKeys": ["collection.import"], "signals": {"importJobs": sum(1 for job in latest_jobs if job.get("jobType") == PLUGIN_EXECUTION_JOB_TYPE)}},
         {"key": "box_set_member_review_v2", "group": "import", "status": container_summary["status"], "permissionKeys": ["collection.import", "containers.edit"], "signals": container_summary.get("counts", {})},
         {"key": "barcode_batch_mode", "group": "import", "status": "ready", "permissionKeys": ["collection.add", "collection.add_own", "collection.import", "metadata.search"], "signals": {"scanner": "batch_lookup"}},
@@ -40213,14 +40374,23 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         {"key": "plugin_permission_matrix", "group": "plugins", "status": "ready", "permissionKeys": ["metadata.manage_plugins", "admin.view_settings"], "signals": {"pluginTypes": 7}},
         {"key": "api_token_wizard", "group": "plugins", "status": "ready", "permissionKeys": ["api.tokens.manage"], "signals": {"presets": len(api_presets)}},
         {"key": "plugin_package_lifecycle", "group": "plugins", "status": "ready", "permissionKeys": ["metadata.manage_plugins"], "signals": {"importExportDelete": True}},
+        {"key": "plugin_marketplace_ui", "group": "plugins", "status": "ready", "permissionKeys": ["metadata.manage_plugins", "metadata.view_plugin_health"], "signals": {"registryGroups": True, "packageLifecycle": True, "displayNames": True}},
         {"key": "artwork_manager_v3", "group": "library", "status": artwork_summary["status"], "permissionKeys": ["collection.edit_all", "collection.edit_own"], "signals": artwork_summary.get("counts", {})},
+        {"key": "container_management_v3", "group": "library", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
         {"key": "containers_native_editor", "group": "library", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
+        {"key": "advanced_search_v2", "group": "library", "status": search_summary["status"], "permissionKeys": ["collection.view"], "signals": search_summary["capabilities"]},
         {"key": "smart_collection_filters", "group": "library", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"formatFilters": True, "containerToggle": True, "sortModes": True}},
+        {"key": "tags_smart_rules", "group": "library", "status": tags_summary["status"], "permissionKeys": ["collection.view", "collection.edit_all"], "signals": tags_summary.get("counts", {}) or {"planned": True}},
+        {"key": "personal_lists_v2", "group": "lists", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
         {"key": "watchlist_watched_sync_center", "group": "lists", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
+        {"key": "lending_center", "group": "lists", "status": lending_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": lending_summary.get("counts", {}) or {"planned": True}},
         {"key": "personal_source_dedupe", "group": "lists", "status": "ready", "permissionKeys": ["watchlist.manage", "digital_sources.view"], "signals": {"traktPlexJellyfinDedupe": True}},
         {"key": "offline_queue_ui", "group": "lists", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"clientSideQueue": True}},
+        {"key": "offline_mode_v2", "group": "operations", "status": offline_summary["status"], "permissionKeys": ["collection.view"], "signals": offline_summary["capabilities"]},
+        {"key": "backup_restore_v2", "group": "operations", "status": backup_v2_summary["status"], "permissionKeys": ["admin.backup", "collection.export_functional"], "signals": backup_v2_summary["capabilities"]},
         {"key": "backup_scheduler", "group": "operations", "status": "ready", "permissionKeys": ["admin.backup", "collection.export_functional"], "signals": {"functionalBackups": True}},
         {"key": "audit_log_explorer_v2", "group": "operations", "status": "ready", "permissionKeys": ["admin.view_audit"], "signals": {"metadataEvents": len(metadata_events), "receiverEvents": len(receiver_events), "pluginEvents": len(plugin_events)}},
+        {"key": "mobile_polish_pass_v2", "group": "operations", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"safeArea": True, "bottomNav": True, "compactSheets": True}},
         {"key": "unified_settings_visibility", "group": "operations", "status": "ready", "permissionKeys": ["admin.view_settings"], "signals": {"permissionAware": True}},
     ]
     feature_clusters = [
@@ -40253,6 +40423,13 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
             "signals": {"jobs": sum(1 for job in latest_jobs if job.get("jobType") in {PLUGIN_EXECUTION_JOB_TYPE, "migration.import_sqlite"})},
         },
         {
+            "key": "import_intelligence_v2",
+            "status": "ready",
+            "actionTab": "operations",
+            "permissionKeys": ["collection.import", "metadata.search"],
+            "signals": {"reviewQueue": True, "providerCoverage": True, "conflicts": True},
+        },
+        {
             "key": "box_set_member_resolver",
             "status": container_summary["status"],
             "actionTab": "operations",
@@ -40265,6 +40442,13 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
             "actionTab": "operations",
             "permissionKeys": ["collection.view", "containers.view"],
             "signals": {"movies": count_table(conn, "movies"), "containers": count_table(conn, "containers"), "filters": True},
+        },
+        {
+            "key": "tags_smart_rules",
+            "status": tags_summary["status"],
+            "actionTab": "operations",
+            "permissionKeys": ["collection.view", "collection.edit_all"],
+            "signals": tags_summary.get("counts", {}) or {"planned": True},
         },
         {
             "key": "advanced_artwork_studio",
@@ -40284,11 +40468,25 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
             },
         },
         {
+            "key": "lending_center",
+            "status": lending_summary["status"],
+            "actionTab": "operations",
+            "permissionKeys": ["watchlist.manage"],
+            "signals": lending_summary.get("counts", {}) or {"planned": True},
+        },
+        {
             "key": "api_mcp_test_console",
             "status": "ready",
             "actionTab": "plugins",
             "permissionKeys": ["api.read", "api.write", "api.tokens.manage", "mcp.use"],
             "signals": {"presets": len(api_presets), "mcpTools": 4},
+        },
+        {
+            "key": "plugin_marketplace_ui",
+            "status": "ready",
+            "actionTab": "plugins",
+            "permissionKeys": ["metadata.manage_plugins", "metadata.view_plugin_health"],
+            "signals": {"registry": True, "packages": True, "jobs": len(plugin_jobs)},
         },
         {
             "key": "mobile_native_sheets",
@@ -40318,6 +40516,11 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         "artwork": artwork_summary,
         "containers": container_summary,
         "watchSync": watch_summary,
+        "lending": lending_summary,
+        "tags": tags_summary,
+        "search": search_summary,
+        "offline": offline_summary,
+        "backupV2": backup_v2_summary,
         "pluginPolicy": plugin_policy,
         "apiTokenPresets": api_presets,
         "jobs": {"latest": latest_jobs, "plugin": plugin_jobs, "metadata": metadata_jobs},
