@@ -5216,13 +5216,14 @@ def migration_dashboard_html() -> str:
 """
 
 
-def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
+def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "movies"):
         return []
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
     if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     m.id,
                     m.public_id,
@@ -5281,10 +5282,11 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
                 ) backdrop_asset ON true
+                WHERE {visibility_where}
                 ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
                 LIMIT %s
                 """,
-                (limit,),
+                (*visibility_params, limit),
             )
             return attach_movie_search_credits(
                 conn,
@@ -5295,38 +5297,39 @@ def collection_movie_preview_entities(conn, *, limit: int = 200) -> list[dict[st
             )
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                id,
-                public_id,
-                barcode,
-                title,
-                sort_title,
-                original_title,
-                year,
-                format,
-                edition,
-                metadata->>'audience_rating' AS audience_rating,
-                rating,
+                m.id,
+                m.public_id,
+                m.barcode,
+                m.title,
+                m.sort_title,
+                m.original_title,
+                m.year,
+                m.format,
+                m.edition,
+                m.metadata->>'audience_rating' AS audience_rating,
+                m.rating,
                 NULL::jsonb AS content_ratings,
                 concat_ws(' ',
-                    metadata->>'actor',
-                    metadata->>'director',
-                    metadata->>'producer',
-                    metadata->>'writer',
-                    metadata->>'genre',
-                    metadata->>'studios'
+                    m.metadata->>'actor',
+                    m.metadata->>'director',
+                    m.metadata->>'producer',
+                    m.metadata->>'writer',
+                    m.metadata->>'genre',
+                    m.metadata->>'studios'
                 ) AS metadata_search,
-                metadata->>'poster_url' AS poster_url,
-                metadata->>'backdrop_url' AS backdrop_url,
-                owner_id,
-                created_at,
-                updated_at
-            FROM movies
-            ORDER BY lower(COALESCE(sort_title, title)), year NULLS LAST
+                m.metadata->>'poster_url' AS poster_url,
+                m.metadata->>'backdrop_url' AS backdrop_url,
+                m.owner_id,
+                m.created_at,
+                m.updated_at
+            FROM movies m
+            WHERE {visibility_where}
+            ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
             LIMIT %s
             """,
-            (limit,),
+            (*visibility_params, limit),
         )
         return attach_movie_search_credits(
             conn,
@@ -5400,13 +5403,14 @@ def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict
     return movies
 
 
-def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
+def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "containers"):
         return []
+    visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c") if actor else ("TRUE", [])
     if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     c.id,
                     c.public_id,
@@ -5450,44 +5454,47 @@ def collection_container_preview_entities(conn, *, limit: int = 200) -> list[dic
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
                 ) backdrop_asset ON true
+                WHERE {visibility_where}
                 ORDER BY c.container_type, lower(c.title)
                 LIMIT %s
                 """,
-                (limit,),
+                (*visibility_params, limit),
             )
             return [with_preview_media_urls(row) for row in cur.fetchall()]
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                id,
-                public_id,
-                container_type,
-                title,
-                barcode,
-                badge_label,
-                year,
-                description,
-                metadata,
-                created_at,
-                updated_at
-            FROM containers
-            ORDER BY container_type, lower(title)
+                c.id,
+                c.public_id,
+                c.container_type,
+                c.title,
+                c.barcode,
+                c.badge_label,
+                c.year,
+                c.description,
+                c.metadata,
+                c.created_at,
+                c.updated_at
+            FROM containers c
+            WHERE {visibility_where}
+            ORDER BY c.container_type, lower(c.title)
             LIMIT %s
             """,
-            (limit,),
+            (*visibility_params, limit),
         )
         return cur.fetchall()
 
 
-def collection_container_membership_entities(conn, *, limit: int = 10000) -> list[dict[str, Any]]:
+def collection_container_membership_entities(conn, *, limit: int = 10000, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "containers") or not table_exists(conn, "movies"):
         return []
     links: list[dict[str, Any]] = []
     if table_exists(conn, "container_movies"):
+        visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     cm.container_id,
                     cm.movie_id,
@@ -5497,17 +5504,20 @@ def collection_container_membership_entities(conn, *, limit: int = 10000) -> lis
                     NULL::uuid AS child_container_id
                 FROM container_movies cm
                 JOIN containers c ON c.id = cm.container_id
+                JOIN movies m ON m.id = cm.movie_id
+                WHERE {visibility_where}
                 ORDER BY c.container_type, lower(c.title), cm.sort_order
                 LIMIT %s
                 """,
-                (limit,),
+                (*visibility_params, limit),
             )
             links.extend(cur.fetchall())
     remaining = max(limit - len(links), 0)
     if remaining and table_exists(conn, "collection_items"):
+        visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     ci.collection_id AS container_id,
                     ci.item_id AS movie_id,
@@ -5517,18 +5527,21 @@ def collection_container_membership_entities(conn, *, limit: int = 10000) -> lis
                     NULL::uuid AS child_container_id
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.collection_id
+                JOIN movies m ON m.id = ci.item_id
                 WHERE ci.item_type='movie'
+                  AND {visibility_where}
                 ORDER BY lower(c.title), ci.sort_order
                 LIMIT %s
                 """,
-                (remaining,),
+                (*visibility_params, remaining),
             )
             links.extend(cur.fetchall())
     remaining = max(limit - len(links), 0)
     if remaining and table_exists(conn, "collection_items"):
+        visibility_where, visibility_params = visible_container_where_sql(conn, actor, "child_c") if actor else ("TRUE", [])
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     ci.collection_id AS container_id,
                     NULL::uuid AS movie_id,
@@ -5538,18 +5551,21 @@ def collection_container_membership_entities(conn, *, limit: int = 10000) -> lis
                     ci.item_id AS child_container_id
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.collection_id
+                JOIN containers child_c ON child_c.id = ci.item_id
                 WHERE ci.item_type <> 'movie'
+                  AND {visibility_where}
                 ORDER BY lower(c.title), ci.sort_order
                 LIMIT %s
                 """,
-                (remaining,),
+                (*visibility_params, remaining),
             )
             links.extend(cur.fetchall())
     remaining = max(limit - len(links), 0)
     if remaining and table_exists(conn, "collection_items") and table_exists(conn, "container_movies"):
+        visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     ci.collection_id AS container_id,
                     cm.movie_id,
@@ -5560,11 +5576,13 @@ def collection_container_membership_entities(conn, *, limit: int = 10000) -> lis
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.collection_id
                 JOIN container_movies cm ON cm.container_id = ci.item_id
+                JOIN movies m ON m.id = cm.movie_id
                 WHERE ci.item_type <> 'movie'
+                  AND {visibility_where}
                 ORDER BY lower(c.title), ci.sort_order
                 LIMIT %s
                 """,
-                (remaining,),
+                (*visibility_params, remaining),
             )
             links.extend(cur.fetchall())
     return links[:limit]
@@ -5588,12 +5606,12 @@ def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
 def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
     user_id = user.get("id") if user else None
     counts = {
-        "movies": count_table(conn, "movies"),
-        "people": count_table(conn, "people"),
-        "movieCredits": count_table(conn, "movie_credits"),
-        "containers": count_table(conn, "containers"),
-        "mediaGroups": count_table(conn, "media_groups"),
-        "mediaAssets": count_table(conn, "media_assets"),
+        "movies": visible_movie_count(conn, user) if user else count_table(conn, "movies"),
+        "people": visible_people_count(conn, user) if user else count_table(conn, "people"),
+        "movieCredits": visible_movie_credit_count(conn, user) if user else count_table(conn, "movie_credits"),
+        "containers": visible_container_count(conn, user) if user else count_table(conn, "containers"),
+        "mediaGroups": visible_media_group_count(conn, user) if user else count_table(conn, "media_groups"),
+        "mediaAssets": visible_media_asset_count(conn, user) if user else count_table(conn, "media_assets"),
         "metadataPlugins": count_table(conn, "metadata_plugins"),
         "digitalMediaSources": count_table(conn, "digital_media_sources"),
         "digitalMediaItems": count_table(conn, "digital_media_items"),
@@ -5601,14 +5619,14 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
     }
     counts["personalLists"] = personal_list_counts(conn, user_id)
     counts["notifications"] = notification_counts(conn, user_id)
-    movies = collection_movie_preview_entities(conn)
+    movies = collection_movie_preview_entities(conn, actor=user)
     movies = attach_personal_list_state(conn, movies, user_id)
     return {
         "counts": counts,
         "movies": movies,
-        "containers": collection_container_preview_entities(conn),
-        "containerMembership": collection_container_membership_entities(conn),
-        "mediaGroups": media_group_entities(conn, limit=200),
+        "containers": collection_container_preview_entities(conn, actor=user),
+        "containerMembership": collection_container_membership_entities(conn, actor=user),
+        "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
         "preferences": app_effective_preferences(conn, user_id),
         "user": {
@@ -14782,21 +14800,21 @@ def ui_preview_html(
       groupNavigation: ["groups.view", "groups.create", "groups.invite"],
       containerManagement: ["containers.create", "containers.edit", "containers.delete", "collection.bulk_edit"],
       metadataRefresh: ["metadata.refresh_one", "metadata.refresh_bulk"],
-      artworkManage: ["collection.edit_all", "collection.edit_own"],
+      artworkManage: ["collection.edit_all", "collection.edit_own", "collection.edit_group"],
       bulkMetadata: ["metadata.refresh_bulk"],
       bulkGroups: ["groups.invite", "groups.create"],
       bulkContainers: ["containers.edit", "collection.bulk_edit"],
       bulkCollections: ["collection.bulk_edit"],
-      movieDelete: ["collection.delete_all", "collection.delete_own"],
+      movieDelete: ["collection.delete_all", "collection.delete_own", "collection.delete_group"],
       containerDelete: ["containers.delete"],
-      bulkDelete: ["collection.delete_all", "collection.delete_own", "containers.delete"],
+      bulkDelete: ["collection.delete_all", "collection.delete_own", "collection.delete_group", "containers.delete"],
       mediaAdd: ["collection.add", "collection.add_own", "collection.import"]
     };
     const APP_FEATURE_PREVIEW = [
       {key: "collection.view", labelKey: "appAdmin.featureCollectionView", fallback: "View collection", permissions: ["collection.view"]},
       {key: "movie.add", labelKey: "appAdmin.featureMovieAdd", fallback: "Add movies", permissions: ["collection.add", "collection.add_own", "collection.import"]},
-      {key: "movie.edit", labelKey: "appAdmin.featureMovieEdit", fallback: "Edit movies", permissions: ["collection.edit_all", "collection.edit_own"]},
-      {key: "movie.delete", labelKey: "appAdmin.featureMovieDelete", fallback: "Delete movies", permissions: ["collection.delete_all", "collection.delete_own"]},
+      {key: "movie.edit", labelKey: "appAdmin.featureMovieEdit", fallback: "Edit movies", permissions: ["collection.edit_all", "collection.edit_own", "collection.edit_group"]},
+      {key: "movie.delete", labelKey: "appAdmin.featureMovieDelete", fallback: "Delete movies", permissions: ["collection.delete_all", "collection.delete_own", "collection.delete_group"]},
       {key: "metadata.search", labelKey: "appAdmin.featureMetadataSearch", fallback: "Search metadata", permissions: ["metadata.search"]},
       {key: "metadata.refresh_one", labelKey: "appAdmin.featureMetadataRefreshOne", fallback: "Refresh one movie", permissions: ["metadata.refresh_one"]},
       {key: "metadata.refresh_bulk", labelKey: "appAdmin.featureMetadataRefreshBulk", fallback: "Bulk refresh metadata", permissions: ["metadata.refresh_bulk"]},
@@ -14868,6 +14886,7 @@ def ui_preview_html(
     function canDeleteMovieItem(movie) {
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.movieDelete)) return false;
       if (hasPermission("collection.delete_all")) return true;
+      if (hasPermission("collection.delete_group")) return true;
       if (!hasPermission("collection.delete_own")) return false;
       const ownerId = movie?.owner_id || movie?.ownerId || "";
       const userId = currentUserId();
@@ -14951,7 +14970,7 @@ def ui_preview_html(
       });
       setElementVisible(document.getElementById("appAdminArtworkTrashCard"), hasActualPermission("metadata.manage_artwork_trash"));
       setElementVisible(document.getElementById("movieMetadataJobsButton"), hasAnyPermission(["admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"]));
-      const canEditMovies = hasPermission("collection.edit_all");
+      const canEditMovies = hasAnyPermission(["collection.edit_all", "collection.edit_own", "collection.edit_group"]);
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
       if (!canEditMovies) setMovieEditPanelVisible(false);
       document.querySelectorAll("[data-art-upload-row], [data-app-primary], [data-app-artwork-delete]").forEach((node) => {
@@ -34859,6 +34878,22 @@ def actor_token_allows_any_permission(actor: dict[str, Any], permission_keys: tu
     return "*" in token_permissions or bool(token_permissions.intersection(permission_keys))
 
 
+def actor_permission_set(actor: dict[str, Any] | None) -> set[str]:
+    if not actor:
+        return set()
+    return {str(item) for item in (actor.get("permissions") or [])}
+
+
+def actor_has_permission(actor: dict[str, Any] | None, permission_key: str) -> bool:
+    permissions = actor_permission_set(actor)
+    return bool(actor and (actor.get("role") == "owner" or "*" in permissions or permission_key in permissions))
+
+
+def actor_has_any_permission(actor: dict[str, Any] | None, permission_keys: tuple[str, ...]) -> bool:
+    permissions = actor_permission_set(actor)
+    return bool(actor and (actor.get("role") == "owner" or "*" in permissions or permissions.intersection(permission_keys)))
+
+
 def require_next_permission(conn, permission_key: str) -> dict[str, Any]:
     if not next_auth_effective_enabled(conn, table_exists):
         return {
@@ -34901,6 +34936,335 @@ def require_any_next_permission(conn, permission_keys: tuple[str, ...]) -> dict[
     user["role"] = role
     user["permissions"] = sorted(permissions)
     return user
+
+
+def actor_collection_visibility_scope(actor: dict[str, Any] | None) -> dict[str, bool]:
+    permissions = actor_permission_set(actor)
+    if actor and (actor.get("role") == "owner" or "*" in permissions):
+        return {"all": True, "own": True, "group": True}
+    # collection.view is kept as the broad "may use the library" capability for
+    # older installs; new data scope permissions decide which rows are visible.
+    legacy_view = "collection.view" in permissions
+    return {
+        "all": "collection.view_all" in permissions,
+        "own": "collection.view_own" in permissions or legacy_view,
+        "group": "collection.view_group" in permissions or legacy_view,
+    }
+
+
+def visible_movie_where_sql(conn, actor: dict[str, Any] | None, alias: str = "m") -> tuple[str, list[Any]]:
+    scope = actor_collection_visibility_scope(actor)
+    if scope["all"]:
+        return "TRUE", []
+    actor_id = actor.get("id") if actor else None
+    clauses: list[str] = []
+    params: list[Any] = []
+    if actor_id and scope["own"]:
+        clauses.append(f"{alias}.owner_id=%s")
+        params.append(actor_id)
+    if actor_id and scope["group"] and table_exists(conn, "media_group_movies") and table_exists(conn, "media_group_members"):
+        clauses.append(
+            f"""
+            EXISTS (
+                SELECT 1
+                FROM media_group_movies vis_mgm
+                JOIN media_group_members vis_member ON vis_member.group_id = vis_mgm.group_id
+                WHERE vis_mgm.movie_id = {alias}.id
+                  AND vis_member.user_id = %s
+            )
+            """
+        )
+        params.append(actor_id)
+    if not clauses:
+        return "FALSE", []
+    return "(" + " OR ".join(clauses) + ")", params
+
+
+def visible_container_where_sql(conn, actor: dict[str, Any] | None, alias: str = "c") -> tuple[str, list[Any]]:
+    if actor_collection_visibility_scope(actor)["all"]:
+        return "TRUE", []
+    clauses: list[str] = []
+    params: list[Any] = []
+    if table_exists(conn, "container_movies") and table_exists(conn, "movies"):
+        movie_where, movie_params = visible_movie_where_sql(conn, actor, "vis_m")
+        clauses.append(
+            f"""
+            EXISTS (
+                SELECT 1
+                FROM container_movies vis_cm
+                JOIN movies vis_m ON vis_m.id = vis_cm.movie_id
+                WHERE vis_cm.container_id = {alias}.id
+                  AND {movie_where}
+            )
+            """
+        )
+        params.extend(movie_params)
+    if table_exists(conn, "collection_items") and table_exists(conn, "movies"):
+        movie_where, movie_params = visible_movie_where_sql(conn, actor, "vis_m")
+        clauses.append(
+            f"""
+            EXISTS (
+                SELECT 1
+                FROM collection_items vis_ci
+                JOIN movies vis_m ON vis_m.id = vis_ci.item_id
+                WHERE vis_ci.collection_id = {alias}.id
+                  AND vis_ci.item_type='movie'
+                  AND {movie_where}
+            )
+            """
+        )
+        params.extend(movie_params)
+    if table_exists(conn, "collection_items") and table_exists(conn, "container_movies") and table_exists(conn, "movies"):
+        movie_where, movie_params = visible_movie_where_sql(conn, actor, "vis_m")
+        clauses.append(
+            f"""
+            EXISTS (
+                SELECT 1
+                FROM collection_items vis_child
+                JOIN container_movies vis_cm ON vis_cm.container_id = vis_child.item_id
+                JOIN movies vis_m ON vis_m.id = vis_cm.movie_id
+                WHERE vis_child.collection_id = {alias}.id
+                  AND vis_child.item_type IN ('box_set', 'vault', 'collection')
+                  AND {movie_where}
+            )
+            """
+        )
+        params.extend(movie_params)
+    if not clauses:
+        return "FALSE", []
+    return "(" + " OR ".join(clauses) + ")", params
+
+
+def actor_can_view_movie(conn, actor: dict[str, Any] | None, movie_id: UUID) -> bool:
+    if actor_collection_visibility_scope(actor)["all"]:
+        return True
+    if not actor_has_any_permission(actor, ("collection.view", "collection.view_own", "collection.view_group")):
+        return False
+    where, params = visible_movie_where_sql(conn, actor, "m")
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT 1 FROM movies m WHERE m.id=%s AND {where} LIMIT 1", (movie_id, *params))
+        return cur.fetchone() is not None
+
+
+def actor_can_view_container(conn, actor: dict[str, Any] | None, container_id: UUID) -> bool:
+    if actor_collection_visibility_scope(actor)["all"]:
+        return True
+    if not actor_has_any_permission(actor, ("containers.view", "collection.view", "collection.view_own", "collection.view_group")):
+        return False
+    where, params = visible_container_where_sql(conn, actor, "c")
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT 1 FROM containers c WHERE c.id=%s AND {where} LIMIT 1", (container_id, *params))
+        return cur.fetchone() is not None
+
+
+def actor_can_view_person(conn, actor: dict[str, Any] | None, person_id: UUID) -> bool:
+    if actor_collection_visibility_scope(actor)["all"]:
+        return True
+    if not actor_has_any_permission(actor, ("collection.view", "collection.view_own", "collection.view_group")):
+        return False
+    if not table_exists(conn, "people") or not table_exists(conn, "movie_credits") or not table_exists(conn, "movies"):
+        return False
+    where, params = visible_movie_where_sql(conn, actor, "m")
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT 1
+            FROM movie_credits mc
+            JOIN movies m ON m.id = mc.movie_id
+            WHERE mc.person_id=%s
+              AND {where}
+            LIMIT 1
+            """,
+            (person_id, *params),
+        )
+        return cur.fetchone() is not None
+
+
+def movie_is_shared_with_actor(conn, actor: dict[str, Any] | None, movie_id: UUID) -> bool:
+    actor_id = actor.get("id") if actor else None
+    if not actor_id or not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_group_members"):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM media_group_movies mgm
+            JOIN media_group_members member ON member.group_id = mgm.group_id
+            WHERE mgm.movie_id=%s
+              AND member.user_id=%s
+            LIMIT 1
+            """,
+            (movie_id, actor_id),
+        )
+        return cur.fetchone() is not None
+
+
+def actor_can_edit_visible_movie(conn, actor: dict[str, Any] | None, movie: dict[str, Any]) -> bool:
+    if not actor_can_view_movie(conn, actor, movie["id"]):
+        return False
+    if actor_has_any_permission(actor, ("collection.edit_all", "collection.bulk_edit", "collection.import")):
+        return True
+    actor_id = (actor or {}).get("id")
+    owner_id = movie.get("owner_id")
+    if actor_has_permission(actor, "collection.edit_own") and actor_id and owner_id and str(actor_id) == str(owner_id):
+        return True
+    return actor_has_permission(actor, "collection.edit_group") and movie_is_shared_with_actor(conn, actor, movie["id"])
+
+
+def actor_can_delete_visible_movie(conn, actor: dict[str, Any] | None, movie: dict[str, Any]) -> bool:
+    if not actor_can_view_movie(conn, actor, movie["id"]):
+        return False
+    if actor_can_delete_movie(actor or {}, movie):
+        return True
+    return actor_has_permission(actor, "collection.delete_group") and movie_is_shared_with_actor(conn, actor, movie["id"])
+
+
+def actor_can_edit_visible_container(conn, actor: dict[str, Any] | None, container_id: UUID) -> bool:
+    return actor_can_view_container(conn, actor, container_id) and actor_has_any_permission(
+        actor,
+        ("containers.edit", "collection.edit_all", "collection.bulk_edit", "collection.import"),
+    )
+
+
+def actor_can_delete_visible_container(conn, actor: dict[str, Any] | None, container_id: UUID) -> bool:
+    return actor_can_view_container(conn, actor, container_id) and actor_has_any_permission(
+        actor,
+        ("containers.edit", "collection.delete_all", "collection.delete_own", "collection.edit_all"),
+    )
+
+
+def actor_can_view_media_group(conn, actor: dict[str, Any] | None, group_id: UUID) -> bool:
+    if actor_has_any_permission(actor, ("collection.view_all", "groups.view_all", "groups.manage", "users.view")):
+        return True
+    actor_id = actor.get("id") if actor else None
+    if not actor_id or not table_exists(conn, "media_group_members"):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM media_groups mg
+            LEFT JOIN media_group_members mgm ON mgm.group_id = mg.id AND mgm.user_id=%s
+            WHERE mg.id=%s
+              AND (mg.created_by=%s OR mgm.user_id IS NOT NULL)
+            LIMIT 1
+            """,
+            (actor_id, group_id, actor_id),
+        )
+        return cur.fetchone() is not None
+
+
+def visible_movie_count(conn, actor: dict[str, Any] | None) -> int:
+    if not table_exists(conn, "movies"):
+        return 0
+    where, params = visible_movie_where_sql(conn, actor, "m")
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*)::int AS count FROM movies m WHERE {where}", params)
+        row = cur.fetchone()
+    return int(row.get("count") or 0) if row else 0
+
+
+def visible_movie_credit_count(conn, actor: dict[str, Any] | None) -> int:
+    if not table_exists(conn, "movie_credits") or not table_exists(conn, "movies"):
+        return 0
+    where, params = visible_movie_where_sql(conn, actor, "m")
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT COUNT(*)::int AS count
+            FROM movie_credits mc
+            JOIN movies m ON m.id = mc.movie_id
+            WHERE {where}
+            """,
+            params,
+        )
+        row = cur.fetchone()
+    return int(row.get("count") or 0) if row else 0
+
+
+def visible_people_count(conn, actor: dict[str, Any] | None) -> int:
+    if actor_collection_visibility_scope(actor)["all"]:
+        return count_table(conn, "people")
+    if not table_exists(conn, "people") or not table_exists(conn, "movie_credits") or not table_exists(conn, "movies"):
+        return 0
+    where, params = visible_movie_where_sql(conn, actor, "m")
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT COUNT(DISTINCT p.id)::int AS count
+            FROM people p
+            JOIN movie_credits mc ON mc.person_id = p.id
+            JOIN movies m ON m.id = mc.movie_id
+            WHERE {where}
+            """,
+            params,
+        )
+        row = cur.fetchone()
+    return int(row.get("count") or 0) if row else 0
+
+
+def visible_container_count(conn, actor: dict[str, Any] | None) -> int:
+    if not table_exists(conn, "containers"):
+        return 0
+    where, params = visible_container_where_sql(conn, actor, "c")
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*)::int AS count FROM containers c WHERE {where}", params)
+        row = cur.fetchone()
+    return int(row.get("count") or 0) if row else 0
+
+
+def visible_media_asset_count(conn, actor: dict[str, Any] | None) -> int:
+    if actor_collection_visibility_scope(actor)["all"]:
+        return count_table(conn, "media_assets")
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return 0
+    movie_where, movie_params = visible_movie_where_sql(conn, actor, "m")
+    container_where, container_params = visible_container_where_sql(conn, actor, "c")
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT COUNT(DISTINCT em.media_id)::int AS count
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            LEFT JOIN movies m ON em.entity_type='movie' AND m.id = em.entity_id
+            LEFT JOIN containers c ON em.entity_type='container' AND c.id = em.entity_id
+            WHERE em.deleted_at IS NULL
+              AND (
+                    (em.entity_type='movie' AND {movie_where})
+                 OR (em.entity_type='container' AND {container_where})
+              )
+            """,
+            (*movie_params, *container_params),
+        )
+        row = cur.fetchone()
+    return int(row.get("count") or 0) if row else 0
+
+
+def visible_media_group_count(conn, actor: dict[str, Any] | None) -> int:
+    if not table_exists(conn, "media_groups"):
+        return 0
+    if not actor or actor_has_any_permission(actor, ("collection.view_all", "groups.view_all", "groups.manage", "users.view")):
+        return count_table(conn, "media_groups")
+    actor_id = actor.get("id")
+    if not actor_id:
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*)::int AS count
+            FROM media_groups mg
+            WHERE mg.created_by=%s
+               OR EXISTS (
+                    SELECT 1
+                    FROM media_group_members mgm
+                    WHERE mgm.group_id=mg.id
+                      AND mgm.user_id=%s
+               )
+            """,
+            (actor_id, actor_id),
+        )
+        row = cur.fetchone()
+    return int(row.get("count") or 0) if row else 0
 
 
 PLUGIN_REGISTRY_VIEW_PERMISSIONS = (
@@ -36530,12 +36894,28 @@ def digital_source_entities(conn) -> list[dict[str, Any]]:
         return rows
 
 
-def media_group_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
+def media_group_entities(conn, *, limit: int = 200, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "media_groups"):
         return []
+    params: list[Any] = []
+    where = ""
+    if actor and not actor_has_any_permission(actor, ("collection.view_all", "groups.view_all", "groups.manage", "users.view")):
+        actor_id = actor.get("id")
+        if not actor_id:
+            return []
+        where = """
+            WHERE mg.created_by=%s
+               OR EXISTS (
+                    SELECT 1
+                    FROM media_group_members scope_mgm
+                    WHERE scope_mgm.group_id=mg.id
+                      AND scope_mgm.user_id=%s
+               )
+        """
+        params.extend([actor_id, actor_id])
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
                 mg.id,
                 mg.public_id,
@@ -36564,10 +36944,11 @@ def media_group_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
                 ) AS pending_invite_count
             FROM media_groups mg
             LEFT JOIN users creator ON creator.id = mg.created_by
+            {where}
             ORDER BY lower(mg.name), mg.created_at
             LIMIT %s
             """,
-            (limit,),
+            (*params, limit),
         )
         groups = cur.fetchall()
     if not groups or not table_exists(conn, "media_group_members") or not table_exists(conn, "users"):
@@ -36600,13 +36981,20 @@ def media_group_entities(conn, *, limit: int = 200) -> list[dict[str, Any]]:
     return groups
 
 
-def media_group_movie_entities(conn, group_id: UUID, *, limit: int = 200) -> list[dict[str, Any]]:
+def media_group_movie_entities(
+    conn,
+    group_id: UUID,
+    *,
+    limit: int = 200,
+    actor: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     if not table_exists(conn, "media_group_movies") or not table_exists(conn, "movies"):
         return []
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
     if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     m.id,
                     m.public_id,
@@ -36657,16 +37045,17 @@ def media_group_movie_entities(conn, group_id: UUID, *, limit: int = 200) -> lis
                     LIMIT 1
                 ) backdrop_asset ON true
                 WHERE mgm.group_id=%s
+                  AND {visibility_where}
                 ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
                 LIMIT %s
                 """,
-                (group_id, limit),
+                (group_id, *visibility_params, limit),
             )
             rows = [with_preview_media_urls(row) for row in cur.fetchall()]
     else:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     m.id,
                     m.public_id,
@@ -36687,17 +37076,20 @@ def media_group_movie_entities(conn, group_id: UUID, *, limit: int = 200) -> lis
                 FROM media_group_movies mgm
                 JOIN movies m ON m.id = mgm.movie_id
                 WHERE mgm.group_id=%s
+                  AND {visibility_where}
                 ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
                 LIMIT %s
                 """,
-                (group_id, limit),
+                (group_id, *visibility_params, limit),
             )
             rows = cur.fetchall()
     return attach_media_group_availability(conn, attach_digital_availability(conn, rows))
 
 
-def media_group_detail_entity(conn, group_id: UUID) -> dict[str, Any] | None:
+def media_group_detail_entity(conn, group_id: UUID, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     if not table_exists(conn, "media_groups"):
+        return None
+    if actor and not actor_can_view_media_group(conn, actor, group_id):
         return None
     with conn.cursor() as cur:
         cur.execute(
@@ -36757,7 +37149,7 @@ def media_group_detail_entity(conn, group_id: UUID) -> dict[str, Any] | None:
                 (group_id,),
             )
             group["members"] = cur.fetchall()
-    group["movies"] = media_group_movie_entities(conn, group_id, limit=500)
+    group["movies"] = media_group_movie_entities(conn, group_id, limit=500, actor=actor)
     return group
 
 
@@ -36967,6 +37359,7 @@ def people_list_entities(
     query: str = "",
     role: str = "all",
     limit: int = 120,
+    actor: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if not table_exists(conn, "people"):
         return []
@@ -36992,22 +37385,33 @@ def people_list_entities(
         """
     )
     profile_join = "LEFT JOIN media_assets ma ON ma.id = p.profile_asset_id" if media_join else ""
-    counts_cte = (
-        """
+    visible_people_clause = ""
+    visibility_params: list[Any] = []
+    if credits_join:
+        if actor is not None and not actor_collection_visibility_scope(actor)["all"]:
+            movie_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
+            counts_source = f"""
+                FROM movie_credits mc
+                JOIN movies m ON m.id = mc.movie_id
+                WHERE {movie_where}
+            """
+            visible_people_clause = "AND COALESCE(cc.movie_count, 0) > 0"
+        else:
+            counts_source = "FROM movie_credits mc"
+        counts_cte = f"""
             WITH credit_counts AS (
                 SELECT
-                    person_id,
+                    mc.person_id,
                     COUNT(*)::int AS credit_count,
-                    COUNT(DISTINCT movie_id)::int AS movie_count,
-                    COUNT(*) FILTER (WHERE lower(credit_type) IN ('actor', 'cast'))::int AS actor_count,
-                    COUNT(*) FILTER (WHERE lower(credit_type) NOT IN ('actor', 'cast'))::int AS crew_count
-                FROM movie_credits
-                GROUP BY person_id
+                    COUNT(DISTINCT mc.movie_id)::int AS movie_count,
+                    COUNT(*) FILTER (WHERE lower(mc.credit_type) IN ('actor', 'cast'))::int AS actor_count,
+                    COUNT(*) FILTER (WHERE lower(mc.credit_type) NOT IN ('actor', 'cast'))::int AS crew_count
+                {counts_source}
+                GROUP BY mc.person_id
             )
         """
-        if credits_join
-        else "WITH credit_counts AS (SELECT NULL::uuid AS person_id, 0::int AS credit_count, 0::int AS movie_count, 0::int AS actor_count, 0::int AS crew_count WHERE false)"
-    )
+    else:
+        counts_cte = "WITH credit_counts AS (SELECT NULL::uuid AS person_id, 0::int AS credit_count, 0::int AS movie_count, 0::int AS actor_count, 0::int AS crew_count WHERE false)"
     search_like = f"%{search}%"
     with conn.cursor() as cur:
         cur.execute(
@@ -37034,6 +37438,7 @@ def people_list_entities(
             LEFT JOIN credit_counts cc ON cc.person_id = p.id
             {profile_join}
             WHERE (%s = '' OR lower(p.name) LIKE %s OR lower(COALESCE(p.known_for, '')) LIKE %s)
+              {visible_people_clause}
               AND (
                 %s = 'all'
                 OR (%s = 'actor' AND COALESCE(cc.actor_count, 0) > 0)
@@ -37042,7 +37447,7 @@ def people_list_entities(
             ORDER BY COALESCE(cc.movie_count, 0) DESC, lower(p.name)
             LIMIT %s
             """,
-            (search, search_like, search_like, role_filter, role_filter, role_filter, limit),
+            (*visibility_params, search, search_like, search_like, role_filter, role_filter, role_filter, limit),
         )
         rows = [dict(row) for row in cur.fetchall()]
     for row in rows:
@@ -37117,9 +37522,20 @@ def person_localization_entities(conn, person_id: UUID) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
-def person_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[dict[str, Any]]:
+def person_credit_entities(
+    conn,
+    person_id: UUID,
+    *,
+    limit: int = 240,
+    actor: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     if not table_exists(conn, "movie_credits") or not table_exists(conn, "movies"):
         return []
+    visibility_clause = ""
+    visibility_params: list[Any] = []
+    if actor is not None and not actor_collection_visibility_scope(actor)["all"]:
+        movie_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
+        visibility_clause = f"AND {movie_where}"
     media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
     media_select = (
         """
@@ -37199,6 +37615,7 @@ def person_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[d
             JOIN movies m ON m.id = mc.movie_id
             {media_join_sql}
             WHERE mc.person_id=%s
+              {visibility_clause}
             ORDER BY
                 lower(COALESCE(m.sort_title, m.title)),
                 m.year NULLS LAST,
@@ -37206,7 +37623,7 @@ def person_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[d
                 mc.credit_type
             LIMIT %s
             """,
-            (person_id, limit),
+            (person_id, *visibility_params, limit),
         )
         return [with_preview_media_urls(row) for row in cur.fetchall()]
 
@@ -37226,7 +37643,13 @@ def group_person_credits_by_job(credits: list[dict[str, Any]]) -> list[dict[str,
     return sorted(groups.values(), key=lambda group: str(group.get("job") or "").lower())
 
 
-def person_digital_credit_entities(conn, person_id: UUID, *, limit: int = 240) -> list[dict[str, Any]]:
+def person_digital_credit_entities(
+    conn,
+    person_id: UUID,
+    *,
+    limit: int = 240,
+    actor: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     if (
         not table_exists(conn, "movie_credits")
         or not table_exists(conn, "movies")
@@ -37234,6 +37657,11 @@ def person_digital_credit_entities(conn, person_id: UUID, *, limit: int = 240) -
         or not table_exists(conn, "digital_media_sources")
     ):
         return []
+    visibility_clause = ""
+    visibility_params: list[Any] = []
+    if actor is not None and not actor_collection_visibility_scope(actor)["all"]:
+        movie_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
+        visibility_clause = f"AND {movie_where}"
     media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
     media_select = (
         """
@@ -37339,6 +37767,7 @@ def person_digital_credit_entities(conn, person_id: UUID, *, limit: int = 240) -
                 JOIN digital_media_sources dms ON dms.id = dmi.source_id
                 {media_join_sql}
                 WHERE mc.person_id=%s
+                  {visibility_clause}
             )
             SELECT *
             FROM ranked
@@ -37346,7 +37775,7 @@ def person_digital_credit_entities(conn, person_id: UUID, *, limit: int = 240) -
             ORDER BY source_name, lower(COALESCE(sort_title, title, digital_title)), sort_order
             LIMIT %s
             """,
-            (person_id, limit),
+            (person_id, *visibility_params, limit),
         )
         rows = []
         for row in cur.fetchall():
@@ -37486,17 +37915,17 @@ def person_filmography_entities(conn, person_metadata: dict[str, Any] | None, *,
     return entries
 
 
-def person_detail_entity(conn, person_id: UUID) -> dict[str, Any] | None:
+def person_detail_entity(conn, person_id: UUID, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     person = person_entity(conn, person_id)
     if not person:
         return None
     localizations = person_localization_entities(conn, person_id)
     person["biography"] = person_biography_value(localizations, person.get("metadata"))
     identifiers = person_identifier_entities(conn, person_id)
-    collection_credits = person_credit_entities(conn, person_id)
+    collection_credits = person_credit_entities(conn, person_id, actor=actor)
     acting_credits = [credit for credit in collection_credits if person_credit_type_is_acting(credit)]
     crew_credits = [credit for credit in collection_credits if not person_credit_type_is_acting(credit)]
-    digital_credits = person_digital_credit_entities(conn, person_id)
+    digital_credits = person_digital_credit_entities(conn, person_id, actor=actor)
     filmography = person_filmography_entities(conn, person.get("metadata"))
     return {
         "person": person,
@@ -39124,12 +39553,13 @@ def container_identifier_entities(conn, container_id: UUID) -> list[dict[str, An
         return cur.fetchall()
 
 
-def container_member_movie_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
+def container_member_movie_entities(conn, container_id: UUID, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "container_movies") or not table_exists(conn, "movies"):
         return []
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
                 m.id,
                 m.public_id,
@@ -39157,21 +39587,23 @@ def container_member_movie_entities(conn, container_id: UUID) -> list[dict[str, 
             FROM container_movies cm
             JOIN movies m ON m.id = cm.movie_id
             WHERE cm.container_id=%s
+              AND {visibility_where}
             ORDER BY cm.sort_order, lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
             """,
-            (container_id,),
+            (container_id, *visibility_params),
         )
         return cur.fetchall()
 
 
-def collection_item_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
+def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "collection_items"):
         return []
     items: list[dict[str, Any]] = []
     if table_exists(conn, "movies"):
+        visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     ci.item_type,
                     ci.item_id,
@@ -39193,15 +39625,17 @@ def collection_item_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
                 FROM collection_items ci
                 JOIN movies m ON m.id = ci.item_id
                 WHERE ci.collection_id=%s AND ci.item_type='movie'
+                  AND {visibility_where}
                 ORDER BY ci.sort_order, lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
                 """,
-                (container_id,),
+                (container_id, *visibility_params),
             )
             items.extend(cur.fetchall())
     if table_exists(conn, "containers"):
+        visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c") if actor else ("TRUE", [])
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     ci.item_type,
                     ci.item_id,
@@ -39222,22 +39656,30 @@ def collection_item_entities(conn, container_id: UUID) -> list[dict[str, Any]]:
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.item_id
                 WHERE ci.collection_id=%s AND ci.item_type <> 'movie'
+                  AND {visibility_where}
                 ORDER BY ci.sort_order, c.container_type, lower(c.title)
                 """,
-                (container_id,),
+                (container_id, *visibility_params),
             )
             items.extend(cur.fetchall())
     return sorted(items, key=lambda item: (item.get("sort_order") or 0, str(item.get("title") or "").lower()))
 
 
-def container_aggregate_movie_entities(conn, container_id: UUID, *, max_depth: int = 4) -> list[dict[str, Any]]:
+def container_aggregate_movie_entities(
+    conn,
+    container_id: UUID,
+    *,
+    max_depth: int = 4,
+    actor: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     if (
         not table_exists(conn, "containers")
         or not table_exists(conn, "movies")
         or not table_exists(conn, "container_movies")
         or not table_exists(conn, "collection_items")
     ):
-        return container_member_movie_entities(conn, container_id)
+        return container_member_movie_entities(conn, container_id, actor=actor)
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
     media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
     media_select = (
         """
@@ -39342,13 +39784,14 @@ def container_aggregate_movie_entities(conn, container_id: UUID, *, max_depth: i
                 FROM movie_links ml
                 JOIN movies m ON m.id = ml.movie_id
                 {media_join_sql}
+                WHERE {visibility_where}
                 ORDER BY m.id, ml.depth, ml.sort_order, lower(COALESCE(m.sort_title, m.title))
             )
             SELECT *
             FROM ranked
             ORDER BY depth, sort_order, lower(COALESCE(sort_title, title)), year NULLS LAST
             """,
-            (container_id, container_id, max_depth),
+            (container_id, container_id, max_depth, *visibility_params),
         )
         rows = cur.fetchall()
     return [with_preview_media_urls(row) for row in rows]
@@ -39567,18 +40010,18 @@ def refresh_container_metadata(
     return {"dryRun": False, "changed": True, "revision": revision, "applied": proposal, "summary": summary}
 
 
-def container_detail_entity(conn, container_id: UUID) -> dict[str, Any] | None:
+def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     container = container_entity(conn, container_id)
     if not container:
         return None
-    aggregate_movies = container_aggregate_movie_entities(conn, container_id)
+    aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
     aggregate_videos = container_aggregate_video_entities(aggregate_movies)
     return {
         "container": container,
         "identifiers": container_identifier_entities(conn, container_id),
-        "memberMovies": container_member_movie_entities(conn, container_id),
-        "collectionItems": collection_item_entities(conn, container_id),
+        "memberMovies": container_member_movie_entities(conn, container_id, actor=actor),
+        "collectionItems": collection_item_entities(conn, container_id, actor=actor),
         "mediaAssets": entity_media_asset_entities(conn, "container", container_id),
         "aggregateMovies": aggregate_movies,
         "aggregateMediaAssets": aggregate_assets,
@@ -39587,68 +40030,72 @@ def container_detail_entity(conn, container_id: UUID) -> dict[str, Any] | None:
     }
 
 
-def all_movie_entities(conn, *, limit: int = 1000) -> list[dict[str, Any]]:
+def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "movies"):
         return []
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                id,
-                public_id,
-                barcode,
-                title,
-                sort_title,
-                original_title,
-                year,
-                release_date,
-                format,
-                edition,
-                edition_type,
-                country,
-                language,
-                runtime_minutes,
-                overview,
-                notes,
-                rating,
-                purchase_date,
-                purchase_price,
-                location,
-                metadata,
-                created_at,
-                updated_at
-            FROM movies
-            ORDER BY lower(COALESCE(sort_title, title)), year NULLS LAST
+                m.id,
+                m.public_id,
+                m.barcode,
+                m.title,
+                m.sort_title,
+                m.original_title,
+                m.year,
+                m.release_date,
+                m.format,
+                m.edition,
+                m.edition_type,
+                m.country,
+                m.language,
+                m.runtime_minutes,
+                m.overview,
+                m.notes,
+                m.rating,
+                m.purchase_date,
+                m.purchase_price,
+                m.location,
+                m.metadata,
+                m.created_at,
+                m.updated_at
+            FROM movies m
+            WHERE {visibility_where}
+            ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
             LIMIT %s
             """,
-            (limit,),
+            (*visibility_params, limit),
         )
         return cur.fetchall()
 
 
-def all_container_entities(conn, *, limit: int = 1000) -> list[dict[str, Any]]:
+def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "containers"):
         return []
+    visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c") if actor else ("TRUE", [])
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                id,
-                public_id,
-                container_type,
-                title,
-                barcode,
-                badge_label,
-                year,
-                description,
-                metadata,
-                created_at,
-                updated_at
-            FROM containers
-            ORDER BY container_type, lower(title)
+                c.id,
+                c.public_id,
+                c.container_type,
+                c.title,
+                c.barcode,
+                c.badge_label,
+                c.year,
+                c.description,
+                c.metadata,
+                c.created_at,
+                c.updated_at
+            FROM containers c
+            WHERE {visibility_where}
+            ORDER BY c.container_type, lower(c.title)
             LIMIT %s
             """,
-            (limit,),
+            (*visibility_params, limit),
         )
         return cur.fetchall()
 
@@ -41172,7 +41619,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         {"key": "api_token_wizard", "group": "plugins", "status": "ready", "permissionKeys": ["api.tokens.manage"], "signals": {"presets": len(api_presets)}},
         {"key": "plugin_package_lifecycle", "group": "plugins", "status": "ready", "permissionKeys": ["metadata.manage_plugins"], "signals": {"importExportDelete": True}},
         {"key": "plugin_marketplace_ui", "group": "plugins", "status": "ready", "permissionKeys": ["metadata.manage_plugins", "metadata.view_plugin_health"], "signals": {"registryGroups": True, "packageLifecycle": True, "displayNames": True}},
-        {"key": "artwork_manager_v3", "group": "library", "status": artwork_summary["status"], "permissionKeys": ["collection.edit_all", "collection.edit_own"], "signals": artwork_summary.get("counts", {})},
+        {"key": "artwork_manager_v3", "group": "library", "status": artwork_summary["status"], "permissionKeys": ["collection.edit_all", "collection.edit_own", "collection.edit_group"], "signals": artwork_summary.get("counts", {})},
         {"key": "container_management_v3", "group": "library", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
         {"key": "containers_native_editor", "group": "library", "status": container_summary["status"], "permissionKeys": ["containers.view", "containers.edit"], "signals": container_summary.get("counts", {})},
         {"key": "collection_health_dashboard", "group": "library", "status": collection_health["status"], "permissionKeys": ["admin.view_settings", "admin.view_jobs", "collection.view"], "signals": collection_health.get("counts", {})},
@@ -41252,7 +41699,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
             "key": "advanced_artwork_studio",
             "status": artwork_summary["status"],
             "actionTab": "operations",
-            "permissionKeys": ["collection.edit_all", "collection.edit_own"],
+            "permissionKeys": ["collection.edit_all", "collection.edit_own", "collection.edit_group"],
             "signals": artwork_summary.get("counts", {}),
         },
         {
@@ -41661,6 +42108,8 @@ def register_routes(flask_app: Flask) -> None:
     def app_snapshot():
         with connect() as conn:
             user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
+            if next_auth_effective_enabled(conn, table_exists) and not user:
+                return response({"status": "ok", "snapshot": empty_collection_dashboard_snapshot()})
             if user:
                 user["role"] = next_user_primary_role(conn, user["id"])
             return response({"status": "ok", "snapshot": collection_dashboard_snapshot(conn, user)})
@@ -42572,8 +43021,8 @@ def register_routes(flask_app: Flask) -> None:
     def media_groups():
         limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
         with connect() as conn:
-            require_next_permission(conn, "groups.view")
-            return response({"status": "ok", "groups": media_group_entities(conn, limit=limit)})
+            actor = require_next_permission(conn, "groups.view")
+            return response({"status": "ok", "groups": media_group_entities(conn, limit=limit, actor=actor)})
 
     @flask_app.get("/api/next/media-groups/<group_id>")
     def media_group_detail(group_id: str):
@@ -42581,8 +43030,8 @@ def register_routes(flask_app: Flask) -> None:
         if not group_uuid:
             raise NextApiError("groupId is required", 400)
         with connect() as conn:
-            require_next_permission(conn, "groups.view")
-            detail = media_group_detail_entity(conn, group_uuid)
+            actor = require_next_permission(conn, "groups.view")
+            detail = media_group_detail_entity(conn, group_uuid, actor=actor)
         if not detail:
             raise NextApiError("Media group not found", 404)
         return response({"status": "ok", "group": detail})
@@ -43176,7 +43625,7 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
-                ("collection.delete_all", "collection.delete_own", "containers.delete"),
+                ("collection.delete_all", "collection.delete_own", "collection.delete_group", "containers.delete"),
             )
             permissions = {str(item) for item in actor.get("permissions") or []}
             can_delete_containers = actor.get("role") == "owner" or "*" in permissions or "containers.delete" in permissions
@@ -43501,6 +43950,9 @@ def register_routes(flask_app: Flask) -> None:
             if media_format:
                 filters.append("m.format=%s")
                 params.append(media_format)
+            visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
+            filters.append(visibility_where)
+            params.extend(visibility_params)
             where = f"WHERE {' AND '.join(filters)}" if filters else ""
             with conn.cursor() as cur:
                 cur.execute(
@@ -43623,6 +44075,8 @@ def register_routes(flask_app: Flask) -> None:
         movie_uuid = parse_uuid(movie_id, "movieId")
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_movie_details"))
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
             detail = movie_detail_entity(conn, movie_uuid)
             audit_api_interaction(
                 conn,
@@ -43649,6 +44103,8 @@ def register_routes(flask_app: Flask) -> None:
             existing = movie_entity(conn, movie_uuid)
             if not existing:
                 raise NextApiError("Movie not found", 404)
+            if not actor_can_edit_visible_movie(conn, actor, existing):
+                raise NextApiError("Permission required: collection.edit_all", 403)
             payload = movie_update_payload(body, existing=existing)
             receiver_proposal = movie_edit_receiver_proposal(existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
@@ -43712,12 +44168,14 @@ def register_routes(flask_app: Flask) -> None:
             existing = movie_entity(conn, movie_uuid)
             if not existing:
                 raise NextApiError("Movie not found", 404)
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
             permissions = set(actor.get("permissions") or [])
             mcp_delete_allowed = (
                 (actor.get("role") == "owner" or "mcp.tool.delete_movie" in permissions)
                 and actor_token_allows_permission(actor, "mcp.tool.delete_movie")
             )
-            if not mcp_delete_allowed and not actor_can_delete_movie(actor, existing):
+            if not mcp_delete_allowed and not actor_can_delete_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.delete_all", 403)
             with conn.transaction():
                 existing, deleted = delete_movie_records(conn, movie_uuid)
@@ -43737,7 +44195,7 @@ def register_routes(flask_app: Flask) -> None:
     def public_api_containers():
         with connect() as conn:
             actor = require_next_permission(conn, "api.read")
-            items = all_container_entities(conn, limit=1000) if table_exists(conn, "containers") else []
+            items = all_container_entities(conn, limit=1000, actor=actor) if table_exists(conn, "containers") else []
             audit_api_interaction(
                 conn,
                 actor,
@@ -43813,7 +44271,9 @@ def register_routes(flask_app: Flask) -> None:
         container_uuid = parse_uuid(container_id, "containerId")
         with connect() as conn:
             actor = require_next_permission(conn, "api.read")
-            detail = container_detail_entity(conn, container_uuid)
+            if not actor_can_view_container(conn, actor, container_uuid):
+                raise NextApiError("Container not found", 404)
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
             audit_api_interaction(
                 conn,
                 actor,
@@ -43839,6 +44299,8 @@ def register_routes(flask_app: Flask) -> None:
             existing = container_entity(conn, container_uuid)
             if not existing:
                 raise NextApiError("Container not found", 404)
+            if not actor_can_edit_visible_container(conn, actor, container_uuid):
+                raise NextApiError("Permission required: containers.edit", 403)
             payload = container_payload(body, existing=existing)
             receiver_payload = container_receiver_payload(conn, existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
@@ -43907,7 +44369,7 @@ def register_routes(flask_app: Flask) -> None:
                             "receiverSummary": receiver_summary,
                         },
                     )
-            detail = container_detail_entity(conn, container_uuid)
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.delete("/api/next/api/v1/containers/<container_id>")
@@ -43915,6 +44377,8 @@ def register_routes(flask_app: Flask) -> None:
         container_uuid = parse_uuid(container_id, "containerId")
         with connect() as conn:
             actor = require_next_permission(conn, "api.write")
+            if not actor_can_delete_visible_container(conn, actor, container_uuid):
+                raise NextApiError("Permission required: containers.edit", 403)
             delete_members = actor_delete_container_members_enabled(conn, actor)
             with conn.transaction():
                 existing, deleted = delete_container_records(conn, container_uuid, delete_members=delete_members)
@@ -43940,12 +44404,12 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_collection_stats"))
             counts = {
-                "movies": count_table(conn, "movies"),
-                "people": count_table(conn, "people"),
-                "movieCredits": count_table(conn, "movie_credits"),
-                "containers": count_table(conn, "containers"),
-                "mediaGroups": count_table(conn, "media_groups"),
-                "mediaAssets": count_table(conn, "media_assets"),
+                "movies": visible_movie_count(conn, actor),
+                "people": visible_people_count(conn, actor),
+                "movieCredits": visible_movie_credit_count(conn, actor),
+                "containers": visible_container_count(conn, actor),
+                "mediaGroups": visible_media_group_count(conn, actor),
+                "mediaAssets": visible_media_asset_count(conn, actor),
                 "users": count_table(conn, "users"),
             }
             audit_api_interaction(
@@ -44032,7 +44496,7 @@ def register_routes(flask_app: Flask) -> None:
     def public_api_groups():
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_groups"))
-            groups = media_group_entities(conn, limit=500) if table_exists(conn, "media_groups") else []
+            groups = media_group_entities(conn, limit=500, actor=actor) if table_exists(conn, "media_groups") else []
             audit_api_interaction(
                 conn,
                 actor,
@@ -44725,13 +45189,21 @@ def register_routes(flask_app: Flask) -> None:
         offset = max(int(request.args.get("offset", 0)), 0)
         query = (request.args.get("q") or "").strip()
         with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
             if not table_exists(conn, "movies"):
                 return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
             params: list[Any] = []
-            where = ""
+            conditions: list[str] = []
             if query:
-                where = "WHERE lower(m.title) LIKE lower(%s)"
+                conditions.append("lower(m.title) LIKE lower(%s)")
                 params.append(f"%{query}%")
+            visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
+            conditions.append(visibility_where)
+            params.extend(visibility_params)
+            where = "WHERE " + " AND ".join(f"({condition})" for condition in conditions)
             with conn.cursor() as cur:
                 if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
                     cur.execute(
@@ -44746,6 +45218,7 @@ def register_routes(flask_app: Flask) -> None:
                             m.year,
                             m.format,
                             m.edition,
+                            m.owner_id,
                             m.metadata->>'poster_url' AS poster_url,
                             m.metadata->>'backdrop_url' AS backdrop_url,
                             poster_asset.id AS poster_asset_id,
@@ -44792,22 +45265,23 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         f"""
                         SELECT
-                            id,
-                            public_id,
-                            barcode,
-                            title,
-                            sort_title,
-                            original_title,
-                            year,
-                            format,
-                            edition,
-                            metadata->>'poster_url' AS poster_url,
-                            metadata->>'backdrop_url' AS backdrop_url,
-                            created_at,
-                            updated_at
+                            m.id,
+                            m.public_id,
+                            m.barcode,
+                            m.title,
+                            m.sort_title,
+                            m.original_title,
+                            m.year,
+                            m.format,
+                            m.edition,
+                            m.owner_id,
+                            m.metadata->>'poster_url' AS poster_url,
+                            m.metadata->>'backdrop_url' AS backdrop_url,
+                            m.created_at,
+                            m.updated_at
                         FROM movies m
                         {where}
-                        ORDER BY lower(COALESCE(sort_title, title)), year NULLS LAST
+                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
                         LIMIT %s OFFSET %s
                         """,
                         (*params, limit, offset),
@@ -44820,12 +45294,17 @@ def register_routes(flask_app: Flask) -> None:
     def movie_detail(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
         with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
             detail = movie_detail_entity(conn, movie_uuid)
-            user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
             if detail:
-                detail["userState"] = personal_movie_state(conn, movie_uuid, user.get("id") if user else None)
+                detail["userState"] = personal_movie_state(conn, movie_uuid, actor.get("id") if actor else None)
         if not detail:
             raise NextApiError("Movie not found", 404)
         return response({"status": "ok", "detail": detail})
@@ -44845,6 +45324,8 @@ def register_routes(flask_app: Flask) -> None:
             existing = movie_entity(conn, movie_uuid)
             if not existing:
                 raise NextApiError("Movie not found", 404)
+            if not actor_can_edit_visible_movie(conn, actor, existing):
+                raise NextApiError("Permission required: collection.edit_all", 403)
             payload = movie_update_payload(body, existing=existing)
             receiver_proposal = movie_edit_receiver_proposal(existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
@@ -44967,13 +45448,13 @@ def register_routes(flask_app: Flask) -> None:
         if not movie_uuid:
             raise NextApiError("movieId is required", 400)
         with connect() as conn:
-            actor = require_any_next_permission(conn, ("collection.delete_all", "collection.delete_own"))
+            actor = require_any_next_permission(conn, ("collection.delete_all", "collection.delete_own", "collection.delete_group"))
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
             existing = movie_entity(conn, movie_uuid)
             if not existing:
                 raise NextApiError("Movie not found", 404)
-            if not actor_can_delete_movie(actor, existing):
+            if not actor_can_delete_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.delete_all", 403)
             with conn.transaction():
                 existing, deleted = delete_movie_records(conn, movie_uuid)
@@ -45053,7 +45534,7 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "watchlist.manage")
             if not table_exists(conn, "watchlist_items"):
                 raise NextApiError("Watchlist table is not available", 503)
-            if not movie_entity(conn, movie_uuid):
+            if not actor_can_view_movie(conn, actor, movie_uuid):
                 raise NextApiError("Movie not found", 404)
             snapshot = personal_list_movie_snapshot(conn, movie_uuid)
             with conn.transaction():
@@ -45127,6 +45608,8 @@ def register_routes(flask_app: Flask) -> None:
         movie_uuid = parse_uuid(movie_id, "movieId")
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
             return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
 
     @flask_app.post("/api/next/movies/<movie_id>/watched")
@@ -45141,7 +45624,7 @@ def register_routes(flask_app: Flask) -> None:
             if not table_exists(conn, "watch_history"):
                 raise NextApiError("Watch history table is not available", 503)
             movie = movie_entity(conn, movie_uuid)
-            if not movie:
+            if not movie or not actor_can_view_movie(conn, actor, movie_uuid):
                 raise NextApiError("Movie not found", 404)
             snapshot = personal_list_movie_snapshot(conn, movie_uuid)
             with conn.transaction():
@@ -45201,18 +45684,22 @@ def register_routes(flask_app: Flask) -> None:
         role = clean_text(request.args.get("role")) or "all"
         limit = int(request.args.get("limit") or 120)
         with connect() as conn:
+            actor = require_any_next_permission(conn, ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"))
             if not table_exists(conn, "people"):
                 raise NextApiError("People table is not available", 503)
-            people = people_list_entities(conn, query=query, role=role, limit=limit)
+            people = people_list_entities(conn, query=query, role=role, limit=limit, actor=actor)
         return response({"status": "ok", "people": people, "query": query, "role": role, "limit": limit})
 
     @flask_app.get("/api/next/people/<person_id>")
     def person_detail(person_id: str):
         person_uuid = parse_uuid(person_id, "personId")
         with connect() as conn:
+            actor = require_any_next_permission(conn, ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"))
             if not table_exists(conn, "people"):
                 raise NextApiError("People table is not available", 503)
-            detail = person_detail_entity(conn, person_uuid)
+            if not actor_can_view_person(conn, actor, person_uuid):
+                raise NextApiError("Person not found", 404)
+            detail = person_detail_entity(conn, person_uuid, actor=actor)
         if not detail:
             raise NextApiError("Person not found", 404)
         return response({"status": "ok", "detail": detail})
@@ -45228,6 +45715,8 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "people"):
                 raise NextApiError("People table is not available", 503)
+            if not actor_can_view_person(conn, actor, person_uuid):
+                raise NextApiError("Person not found", 404)
             with conn.transaction():
                 result = refresh_person_metadata(conn, person_uuid, dry_run=dry_run, actor=actor)
                 audit_event(
@@ -45253,6 +45742,8 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "people"):
                 raise NextApiError("People table is not available", 503)
+            if not actor_can_view_person(conn, actor, person_uuid):
+                raise NextApiError("Person not found", 404)
             with conn.transaction():
                 result = refresh_person_filmography(conn, person_uuid, dry_run=dry_run, actor=actor)
                 audit_event(
@@ -45279,6 +45770,9 @@ def register_routes(flask_app: Flask) -> None:
         kind = clean_text(body.get("kind") or body.get("role")) or ""
         with connect() as conn:
             actor = require_next_permission(conn, "collection.edit_all")
+            movie = movie_entity(conn, movie_uuid)
+            if not movie or not actor_can_edit_visible_movie(conn, actor, movie):
+                raise NextApiError("Movie not found", 404)
             with conn.transaction():
                 result = set_primary_movie_media_asset(
                     conn,
@@ -45313,7 +45807,8 @@ def register_routes(flask_app: Flask) -> None:
 
         with connect() as conn:
             actor = require_next_permission(conn, "collection.edit_all")
-            if not movie_entity(conn, movie_uuid):
+            movie = movie_entity(conn, movie_uuid)
+            if not movie or not actor_can_edit_visible_movie(conn, actor, movie):
                 raise NextApiError("Movie not found", 404)
             upload_info = save_uploaded_artwork_file(upload, kind=kind)
             with conn.transaction():
@@ -45344,6 +45839,9 @@ def register_routes(flask_app: Flask) -> None:
         kind = clean_text(request.args.get("kind")) or ""
         with connect() as conn:
             actor = require_next_permission(conn, "collection.edit_all")
+            movie = movie_entity(conn, movie_uuid)
+            if not movie or not actor_can_edit_visible_movie(conn, actor, movie):
+                raise NextApiError("Movie not found", 404)
             with conn.transaction():
                 result = delete_entity_artwork_media_asset(
                     conn,
@@ -45377,6 +45875,8 @@ def register_routes(flask_app: Flask) -> None:
         kind = clean_text(body.get("kind") or body.get("role")) or ""
         with connect() as conn:
             actor = require_next_permission(conn, "collection.edit_all")
+            if not actor_can_edit_visible_container(conn, actor, container_uuid):
+                raise NextApiError("Container not found", 404)
             with conn.transaction():
                 result = set_primary_container_media_asset(
                     conn,
@@ -45410,7 +45910,7 @@ def register_routes(flask_app: Flask) -> None:
         primary = parse_bool_value(primary_value, default=True)
         with connect() as conn:
             actor = require_next_permission(conn, "collection.edit_all")
-            if not container_entity(conn, container_uuid):
+            if not actor_can_edit_visible_container(conn, actor, container_uuid):
                 raise NextApiError("Container not found", 404)
             upload_info = save_uploaded_artwork_file(upload, kind=kind)
             with conn.transaction():
@@ -45441,6 +45941,8 @@ def register_routes(flask_app: Flask) -> None:
         kind = clean_text(request.args.get("kind")) or ""
         with connect() as conn:
             actor = require_next_permission(conn, "collection.edit_all")
+            if not actor_can_edit_visible_container(conn, actor, container_uuid):
+                raise NextApiError("Container not found", 404)
             with conn.transaction():
                 result = delete_entity_artwork_media_asset(
                     conn,
@@ -47099,7 +47601,9 @@ def register_routes(flask_app: Flask) -> None:
         status = (request.args.get("status") or "").strip()
         movie_id = parse_uuid(request.args.get("movieId") or request.args.get("movie_id"), "movieId")
         with connect() as conn:
-            require_any_next_permission(conn, ("metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"))
+            actor = require_any_next_permission(conn, ("metadata.refresh_one", "metadata.refresh_bulk", "admin.view_jobs"))
+            if movie_id and not actor_has_permission(actor, "admin.view_jobs") and not actor_can_view_movie(conn, actor, movie_id):
+                raise NextApiError("Movie not found", 404)
             jobs = metadata_refresh_jobs(conn, movie_id=movie_id, status=status, limit=limit)
         return response({"status": "ok", "jobs": jobs})
 
@@ -47127,8 +47631,12 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_bulk" if len(movie_ids) > 1 else "metadata.refresh_one")
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
+            visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
             with conn.cursor() as cur:
-                cur.execute("SELECT id FROM movies WHERE id = ANY(%s)", (movie_ids,))
+                cur.execute(
+                    f"SELECT m.id FROM movies m WHERE m.id = ANY(%s) AND {visibility_where}",
+                    (movie_ids, *visibility_params),
+                )
                 found_ids = {row["id"] for row in cur.fetchall()}
             missing = [str(item) for item in movie_ids if item not in found_ids]
             if missing:
@@ -47171,6 +47679,8 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
             result = preview_movie_metadata(conn, movie_uuid, actor)
         return response({"status": "ok", "metadata": result})
 
@@ -47186,6 +47696,8 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
             with conn.transaction():
                 result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
                 result["personRefresh"] = (
@@ -47227,7 +47739,7 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
-            if not movie_entity(conn, movie_uuid):
+            if not actor_can_view_movie(conn, actor, movie_uuid):
                 raise NextApiError("Movie not found", 404)
             with conn.transaction():
                 job = create_background_job(
@@ -47257,8 +47769,14 @@ def register_routes(flask_app: Flask) -> None:
     def movie_detail_view(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
         with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
             if not table_exists(conn, "movies"):
                 raise NextApiError("Movie table is not available", 503)
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
             detail = movie_detail_entity(conn, movie_uuid)
         if not detail:
             raise NextApiError("Movie not found", 404)
@@ -47268,31 +47786,39 @@ def register_routes(flask_app: Flask) -> None:
     def containers():
         container_type = (request.args.get("type") or "").strip()
         with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("containers.view", "collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
             if not table_exists(conn, "containers"):
                 return response({"status": "ok", "items": []})
             params: list[Any] = []
-            where = ""
+            conditions: list[str] = []
             if container_type:
-                where = "WHERE container_type = %s"
+                conditions.append("c.container_type = %s")
                 params.append(container_type)
+            visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c")
+            conditions.append(visibility_where)
+            params.extend(visibility_params)
+            where = "WHERE " + " AND ".join(f"({condition})" for condition in conditions)
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
                     SELECT
-                        id,
-                        public_id,
-                        container_type,
-                        title,
-                        barcode,
-                        badge_label,
-                        year,
-                        description,
-                        metadata,
-                        created_at,
-                        updated_at
-                    FROM containers
+                        c.id,
+                        c.public_id,
+                        c.container_type,
+                        c.title,
+                        c.barcode,
+                        c.badge_label,
+                        c.year,
+                        c.description,
+                        c.metadata,
+                        c.created_at,
+                        c.updated_at
+                    FROM containers c
                     {where}
-                    ORDER BY container_type, lower(title)
+                    ORDER BY c.container_type, lower(c.title)
                     LIMIT 200
                     """,
                     params,
@@ -47304,9 +47830,15 @@ def register_routes(flask_app: Flask) -> None:
     def container_detail(container_id: str):
         container_uuid = parse_uuid(container_id, "containerId")
         with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("containers.view", "collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
             if not table_exists(conn, "containers"):
                 raise NextApiError("Container table is not available", 503)
-            detail = container_detail_entity(conn, container_uuid)
+            if not actor_can_view_container(conn, actor, container_uuid):
+                raise NextApiError("Container not found", 404)
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
         if not detail:
             raise NextApiError("Container not found", 404)
         return response({"status": "ok", "detail": detail})
@@ -47322,10 +47854,12 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "containers"):
                 raise NextApiError("Container table is not available", 503)
+            if not actor_can_view_container(conn, actor, container_uuid):
+                raise NextApiError("Container not found", 404)
             with conn.transaction():
                 result = refresh_container_metadata(conn, container_uuid, dry_run=dry_run, actor=actor)
                 receiver_summary: dict[str, Any] = {"skipped": True, "reason": "dry_run" if dry_run else "no_receiver_payload"}
-                detail = container_detail_entity(conn, container_uuid)
+                detail = container_detail_entity(conn, container_uuid, actor=actor)
                 container_entity_payload = detail.get("container") if isinstance(detail, dict) and isinstance(detail.get("container"), dict) else {}
                 if not dry_run and container_entity_payload:
                     receiver_payload = container_receiver_payload(
@@ -47376,9 +47910,15 @@ def register_routes(flask_app: Flask) -> None:
     def container_detail_view(container_id: str):
         container_uuid = parse_uuid(container_id, "containerId")
         with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("containers.view", "collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
             if not table_exists(conn, "containers"):
                 raise NextApiError("Container table is not available", 503)
-            detail = container_detail_entity(conn, container_uuid)
+            if not actor_can_view_container(conn, actor, container_uuid):
+                raise NextApiError("Container not found", 404)
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
         if not detail:
             raise NextApiError("Container not found", 404)
         return html_response(container_detail_html(detail))
