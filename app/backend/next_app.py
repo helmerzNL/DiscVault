@@ -5634,6 +5634,7 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
             "username": user.get("username"),
             "displayName": user.get("display_name") or user.get("username"),
             "role": user.get("role"),
+            "permissions": sorted(user.get("permissions") or []),
         }
         if user
         else None,
@@ -14437,6 +14438,7 @@ def ui_preview_html(
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
     let collectionItemFilter = localStorage.getItem("dv_next_collection_item_filter") || "all";
+    let activeCollectionGroupFilter = localStorage.getItem("dv_next_collection_group_filter") || "";
     let libraryViewMode = localStorage.getItem("dv_next_library_view_mode") || "poster";
     let libraryDetailSort = JSON.parse(localStorage.getItem("dv_next_library_detail_sort") || '{"key":"title","direction":"asc"}');
     let advancedSearchOpen = localStorage.getItem("dv_next_advanced_search_open") === "true";
@@ -14882,6 +14884,13 @@ def ui_preview_html(
     }
     function currentUserId() {
       return currentAuthStatus.user_id || currentAuthStatus.userId || (state.user || {}).id || "";
+    }
+    function canViewFullCollectionByDefault() {
+      return hasActualPermission("collection.view_all");
+    }
+    function effectiveCollectionGroupFilter() {
+      if (activeCollectionGroupFilter) return activeCollectionGroupFilter;
+      return canViewFullCollectionByDefault() ? "" : "__mine";
     }
     function canDeleteMovieItem(movie) {
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.movieDelete)) return false;
@@ -18517,11 +18526,13 @@ def ui_preview_html(
       });
     }
     function groupOptionsHtml() {
-      const selected = preferences.default_media_group_id || "";
-      const options = [
-        `<option value=""${!selected ? " selected" : ""}>${escapeHtml(tNext("groups.all", "All groups"))}</option>`,
-        `<option value="__ungrouped"${selected === "__ungrouped" ? " selected" : ""}>${escapeHtml(tNext("groups.ungrouped", "Not in a group"))}</option>`
-      ];
+      const selected = effectiveCollectionGroupFilter();
+      const options = [];
+      if (canViewFullCollectionByDefault()) {
+        options.push(`<option value=""${!selected ? " selected" : ""}>${escapeHtml(tNext("groups.all", "All groups"))}</option>`);
+      }
+      options.push(`<option value="__mine"${selected === "__mine" ? " selected" : ""}>${escapeHtml(tNext("groups.myLibrary", "My library"))}</option>`);
+      options.push(`<option value="__ungrouped"${selected === "__ungrouped" ? " selected" : ""}>${escapeHtml(tNext("groups.ungrouped", "Not in a group"))}</option>`);
       mediaGroups.forEach((group) => {
         options.push(`<option value="${escapeHtml(group.id)}"${String(group.id) === String(selected) ? " selected" : ""}>${escapeHtml(group.name || group.public_id || group.id)}</option>`);
       });
@@ -18748,9 +18759,14 @@ def ui_preview_html(
       });
     }
     function movieMatchesGroup(movie) {
-      const selected = preferences.default_media_group_id || "";
+      const selected = effectiveCollectionGroupFilter();
       const groups = Array.isArray(movie.media_groups) ? movie.media_groups : [];
       if (!selected) return true;
+      if (selected === "__mine") {
+        const ownerId = movie?.owner_id || movie?.ownerId || "";
+        const userId = currentUserId();
+        return !!ownerId && !!userId && String(ownerId) === String(userId);
+      }
       if (selected === "__ungrouped") return groups.length === 0;
       return groups.some((group) => String(group.id) === String(selected) || String(group.publicId) === String(selected));
     }
@@ -27435,12 +27451,9 @@ def ui_preview_html(
         });
       });
       document.getElementById("groupFilter")?.addEventListener("change", (event) => {
-        preferences.default_media_group_id = event.target.value || "";
-        if (appMode) {
-          updatePreference("default_media_group_id", preferences.default_media_group_id);
-        } else {
-          renderLibrary();
-        }
+        activeCollectionGroupFilter = event.target.value || "";
+        localStorage.setItem("dv_next_collection_group_filter", activeCollectionGroupFilter);
+        renderLibrary();
       });
       document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
       document.getElementById("libraryMetadataJobsToggleButton")?.addEventListener("click", () => toggleLibraryMetadataJobs());
@@ -43165,6 +43178,212 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={"userId": str(user_uuid), "role": role},
                 )
             detail = media_group_detail_entity(conn, group_uuid)
+        return response({"status": "ok", "group": detail})
+
+    @flask_app.post("/api/next/media-groups/<group_id>/invites")
+    def invite_media_group_member(group_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        if not group_uuid:
+            raise NextApiError("groupId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media group invite request body must be an object", 400)
+        username = clean_text(body.get("username") or body.get("inviteeUsername") or body.get("invitee_username")) or ""
+        if not username:
+            raise NextApiError("username is required", 400)
+        role = normalize_media_group_member_role(body.get("role") if isinstance(body, dict) else None)
+        if role == "owner":
+            raise NextApiError("Owner invitations must be handled by an admin", 403)
+        invite_uuid = uuid.uuid4()
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.invite")
+            if not table_exists(conn, "media_group_invites") or not table_exists(conn, "media_group_members") or not table_exists(conn, "media_groups"):
+                raise NextApiError("Media group invites are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT mg.id, mg.name, mg.created_by
+                    FROM media_groups mg
+                    WHERE mg.id=%s
+                    """,
+                    (group_uuid,),
+                )
+                group = cur.fetchone()
+                if not group:
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
+                cur.execute(
+                    """
+                    SELECT id, username, display_name
+                    FROM users
+                    WHERE lower(username)=lower(%s)
+                    LIMIT 1
+                    """,
+                    (username,),
+                )
+                invitee = cur.fetchone()
+                if not invitee:
+                    raise NextApiError("User not found", 404)
+                if actor.get("id") and str(actor["id"]) == str(invitee["id"]):
+                    raise NextApiError("You are already the group owner or member", 400)
+                cur.execute(
+                    "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
+                    (group_uuid, invitee["id"]),
+                )
+                if cur.fetchone():
+                    raise NextApiError("User is already a member of this group", 409)
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM media_group_invites
+                    WHERE group_id=%s
+                      AND invitee_id=%s
+                      AND status='pending'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (group_uuid, invitee["id"]),
+                )
+                existing_invite = cur.fetchone()
+                if existing_invite:
+                    invite_uuid = existing_invite["id"]
+            with conn.transaction():
+                if not existing_invite:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO media_group_invites (
+                                id, group_id, inviter_id, invitee_id, status, metadata, created_at
+                            )
+                            VALUES (%s, %s, %s, %s, 'pending', %s, now())
+                            """,
+                            (
+                                invite_uuid,
+                                group_uuid,
+                                actor.get("id"),
+                                invitee["id"],
+                                Jsonb(
+                                    json_ready(
+                                        {
+                                            "role": role,
+                                            "username": invitee.get("username"),
+                                            "groupName": group.get("name"),
+                                        }
+                                    )
+                                ),
+                            ),
+                        )
+                notification = None
+                if table_exists(conn, "user_notifications"):
+                    notification = create_user_notification(
+                        conn,
+                        invitee["id"],
+                        title="DiscVault group invite",
+                        body=f"{actor.get('display_name') or actor.get('username') or 'DiscVault'} invited you to {group.get('name')}.",
+                        url="/notifications",
+                        pref_key="group_invites",
+                        payload={
+                            "kind": "media_group_invite",
+                            "inviteId": str(invite_uuid),
+                            "groupId": str(group_uuid),
+                            "groupName": group.get("name"),
+                            "inviterId": str(actor.get("id") or ""),
+                        },
+                    )
+                audit_event(
+                    conn,
+                    event_type="group.invite_created",
+                    category="group",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary="Created media group invite",
+                    metadata={
+                        "inviteId": str(invite_uuid),
+                        "inviteeId": str(invitee["id"]),
+                        "username": invitee.get("username"),
+                        "role": role,
+                        "notificationId": str((notification or {}).get("id") or ""),
+                    },
+                )
+            detail = media_group_detail_entity(conn, group_uuid, actor=actor)
+        return response(
+            {
+                "status": "ok",
+                "invite": {
+                    "id": invite_uuid,
+                    "groupId": group_uuid,
+                    "inviteeId": invitee["id"],
+                    "username": invitee.get("username"),
+                    "role": role,
+                    "status": "pending",
+                },
+                "group": detail,
+            },
+            201,
+        )
+
+    @flask_app.post("/api/next/media-groups/invites/<invite_id>/accept")
+    def accept_media_group_invite(invite_id: str):
+        invite_uuid = parse_uuid(invite_id, "inviteId")
+        if not invite_uuid:
+            raise NextApiError("inviteId is required", 400)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            if not table_exists(conn, "media_group_invites") or not table_exists(conn, "media_group_members"):
+                raise NextApiError("Media group invites are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, group_id, invitee_id, status, metadata
+                    FROM media_group_invites
+                    WHERE id=%s
+                    """,
+                    (invite_uuid,),
+                )
+                invite = cur.fetchone()
+                if not invite:
+                    raise NextApiError("Invite not found", 404)
+                if str(invite.get("invitee_id")) != str(actor.get("id")):
+                    raise NextApiError("This invite belongs to another user", 403)
+                if invite.get("status") != "pending":
+                    raise NextApiError("Invite is no longer pending", 409)
+                role = normalize_media_group_member_role((invite.get("metadata") or {}).get("role"))
+                if role == "owner":
+                    role = "member"
+            group_uuid = invite["group_id"]
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO media_group_members (group_id, user_id, role, created_at)
+                        VALUES (%s, %s, %s, now())
+                        ON CONFLICT (group_id, user_id) DO UPDATE SET role=EXCLUDED.role
+                        """,
+                        (group_uuid, actor["id"], role),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE media_group_invites
+                        SET status='accepted',
+                            metadata = metadata || %s::jsonb
+                        WHERE id=%s
+                        """,
+                        (Jsonb({"acceptedAt": datetime.now(timezone.utc).isoformat()}), invite_uuid),
+                    )
+                    cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
+                audit_event(
+                    conn,
+                    event_type="group.invite_accepted",
+                    category="group",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary="Accepted media group invite",
+                    metadata={"inviteId": str(invite_uuid), "role": role},
+                )
+            detail = media_group_detail_entity(conn, group_uuid, actor=actor)
         return response({"status": "ok", "group": detail})
 
     @flask_app.delete("/api/next/media-groups/<group_id>/members/<user_id>")

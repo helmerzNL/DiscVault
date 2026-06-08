@@ -862,7 +862,8 @@
     "edit.manageImages": "Posters en achtergronden beheren",
     "edit.removeImage": "Verwijderen",
     "edit.noImages": "Geen afbeeldingen gevonden.",
-    "edit.confirmRemoveImage": "Deze afbeelding verwijderen?"
+    "edit.confirmRemoveImage": "Deze afbeelding verwijderen?",
+    "groups.myLibrary": "Mijn bibliotheek"
   },
   "en": {
     "nav.collection": "Collection",
@@ -1722,7 +1723,8 @@
     "edit.manageImages": "Manage posters and backdrops",
     "edit.removeImage": "Remove",
     "edit.noImages": "No images found.",
-    "edit.confirmRemoveImage": "Remove this image?"
+    "edit.confirmRemoveImage": "Remove this image?",
+    "groups.myLibrary": "My library"
   },
   "fr": {
     "nav.collection": "Collection",
@@ -2584,7 +2586,8 @@
     "edit.manageImages": "Gérer les affiches et arrière-plans",
     "edit.removeImage": "Supprimer",
     "edit.noImages": "Aucune image trouvée.",
-    "edit.confirmRemoveImage": "Supprimer cette image ?"
+    "edit.confirmRemoveImage": "Supprimer cette image ?",
+    "groups.myLibrary": "Ma bibliothèque"
   },
   "de": {
     "nav.collection": "Sammlung",
@@ -3445,7 +3448,8 @@
     "edit.manageImages": "Poster und Hintergrundbilder verwalten",
     "edit.removeImage": "Entfernen",
     "edit.noImages": "Keine Bilder gefunden.",
-    "edit.confirmRemoveImage": "Dieses Bild entfernen?"
+    "edit.confirmRemoveImage": "Dieses Bild entfernen?",
+    "groups.myLibrary": "Meine Bibliothek"
   },
   "es": {
     "nav.collection": "Colección",
@@ -4306,7 +4310,8 @@
     "edit.manageImages": "Gestionar pósteres y fondos",
     "edit.removeImage": "Eliminar",
     "edit.noImages": "No se encontraron imágenes.",
-    "edit.confirmRemoveImage": "¿Eliminar esta imagen?"
+    "edit.confirmRemoveImage": "¿Eliminar esta imagen?",
+    "groups.myLibrary": "Mi biblioteca"
   },
   "pt": {
     "nav.collection": "Coleção",
@@ -5168,7 +5173,8 @@
     "edit.manageImages": "Gerir posters e fundos",
     "edit.removeImage": "Remover",
     "edit.noImages": "Nenhuma imagem encontrada.",
-    "edit.confirmRemoveImage": "Remover esta imagem?"
+    "edit.confirmRemoveImage": "Remover esta imagem?",
+    "groups.myLibrary": "A minha biblioteca"
   },
   "it": {
     "nav.collection": "Collezione",
@@ -6030,7 +6036,8 @@
     "edit.manageImages": "Gestisci poster e sfondi",
     "edit.removeImage": "Rimuovi",
     "edit.noImages": "Nessuna immagine trovata.",
-    "edit.confirmRemoveImage": "Rimuovere questa immagine?"
+    "edit.confirmRemoveImage": "Rimuovere questa immagine?",
+    "groups.myLibrary": "La mia libreria"
   },
   "sv": {
     "nav.collection": "Samling",
@@ -6890,7 +6897,8 @@
     "edit.manageImages": "Hantera affischer och bakgrunder",
     "edit.removeImage": "Ta bort",
     "edit.noImages": "Inga bilder hittades.",
-    "edit.confirmRemoveImage": "Ta bort den här bilden?"
+    "edit.confirmRemoveImage": "Ta bort den här bilden?",
+    "groups.myLibrary": "Mitt bibliotek"
   },
   "da": {
     "nav.collection": "Samling",
@@ -7750,7 +7758,8 @@
     "edit.manageImages": "Administrer plakater og baggrunde",
     "edit.removeImage": "Fjern",
     "edit.noImages": "Ingen billeder fundet.",
-    "edit.confirmRemoveImage": "Fjern dette billede?"
+    "edit.confirmRemoveImage": "Fjern dette billede?",
+    "groups.myLibrary": "Mit bibliotek"
   },
   "no": {
     "nav.collection": "Samling",
@@ -8610,7 +8619,8 @@
     "edit.manageImages": "Administrer plakater og baktepper",
     "edit.removeImage": "Fjern",
     "edit.noImages": "Ingen bilder funnet.",
-    "edit.confirmRemoveImage": "Fjerne dette bildet?"
+    "edit.confirmRemoveImage": "Fjerne dette bildet?",
+    "groups.myLibrary": "Mitt bibliotek"
   },
   "fi": {
     "nav.collection": "Kokoelma",
@@ -9470,6 +9480,7 @@
     "edit.manageImages": "Hallitse julisteita ja taustoja",
     "edit.removeImage": "Poista",
     "edit.noImages": "Kuvia ei löytynyt.",
-    "edit.confirmRemoveImage": "Poistetaanko tämä kuva?"
+    "edit.confirmRemoveImage": "Poistetaanko tämä kuva?",
+    "groups.myLibrary": "Oma kirjasto"
   }
 }
