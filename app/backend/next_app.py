@@ -387,6 +387,27 @@ APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
     "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"},
 }
+APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
+    "appearance": ("theme",),
+    "library": (
+        "show_featured_hero",
+        "show_collection_search",
+        "show_auto_videos",
+        "show_local_title",
+        "show_extended_people_pages",
+        "show_digital_badge_on_tiles",
+        "rating_country",
+        "default_media_group_id",
+    ),
+    "collectors": (
+        "collectors_mode",
+        "merge_editions_as_title",
+        "show_container_format_badges",
+        "show_container_member_badges",
+        "delete_container_members_with_container",
+        "show_metadata_jobs",
+    ),
+}
 
 
 def create_app() -> Flask:
@@ -35013,6 +35034,141 @@ def profile_api_access_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def actor_effective_permission_keys(conn, actor: dict[str, Any] | None) -> set[str]:
+    if not actor:
+        return set()
+    permissions = set(actor.get("permissions") or [])
+    if actor.get("role") == "owner":
+        permissions.update(permission_key_catalog(conn))
+    token_permissions = actor_api_token_permission_keys(actor)
+    if token_permissions:
+        permissions.update(token_permissions)
+    return {str(item) for item in permissions if item}
+
+
+def app_preference_sections_payload(preferences: dict[str, Any]) -> list[dict[str, Any]]:
+    sections: list[dict[str, Any]] = []
+    for key, preference_keys in APP_PREFERENCE_SECTIONS.items():
+        sections.append(
+            {
+                "key": key,
+                "preferences": [
+                    {
+                        "key": preference_key,
+                        "value": preferences.get(preference_key, APP_PREFERENCE_DEFAULTS.get(preference_key)),
+                        "default": APP_PREFERENCE_DEFAULTS.get(preference_key),
+                        "type": "boolean"
+                        if preference_key in APP_BOOLEAN_PREFERENCES
+                        else "choice"
+                        if preference_key in APP_CHOICE_PREFERENCES
+                        else "string",
+                        "choices": sorted(APP_CHOICE_PREFERENCES.get(preference_key, [])),
+                    }
+                    for preference_key in preference_keys
+                    if preference_key in APP_PREFERENCE_DEFAULTS
+                ],
+            }
+        )
+    return sections
+
+
+def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
+    permissions = actor_effective_permission_keys(conn, actor)
+
+    def has_any(*keys: str) -> bool:
+        return "*" in permissions or bool(permissions.intersection(keys))
+
+    return {
+        "collection": {
+            "view": has_any("collection.view", "collection.view_all", "collection.view_own", "collection.view_group"),
+            "viewAll": has_any("collection.view_all"),
+            "viewOwn": has_any("collection.view_own", "collection.view"),
+            "viewGroups": has_any("collection.view_group", "collection.view", "groups.view", "groups.view_all"),
+            "add": has_any("collection.add", "collection.add_own", "collection.import", "collection.edit_all"),
+            "addOwn": has_any("collection.add_own", "collection.add"),
+            "import": has_any("collection.import"),
+            "edit": has_any("collection.edit_all", "collection.edit_own", "collection.edit_group"),
+            "delete": has_any("collection.delete_all", "collection.delete_own", "collection.delete_group"),
+            "bulkEdit": has_any("collection.bulk_edit", "collection.edit_all"),
+        },
+        "metadata": {
+            "search": has_any("metadata.search", "collection.import", "collection.add", "collection.add_own", "collection.edit_all"),
+            "refreshOne": has_any("metadata.refresh_one"),
+            "refreshBulk": has_any("metadata.refresh_bulk"),
+            "viewJobs": has_any("admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"),
+            "plugins": has_any("metadata.manage_plugins", "metadata.view_plugin_health", "metadata.manage_plugin_settings"),
+        },
+        "import": {
+            "barcodeScanner": has_any("metadata.search", "collection.add", "collection.add_own", "collection.import"),
+            "manualSearch": has_any("metadata.search", "collection.add", "collection.add_own", "collection.import"),
+            "boxSetDetection": has_any("metadata.search", "collection.add", "collection.import", "containers.create"),
+            "fileImport": has_any("collection.import"),
+        },
+        "containers": {
+            "view": has_any("containers.view", "collection.view", "collection.view_all", "collection.view_group"),
+            "create": has_any("containers.create", "collection.import"),
+            "edit": has_any("containers.edit"),
+            "delete": has_any("containers.delete"),
+        },
+        "groups": {
+            "view": has_any("groups.view", "groups.view_all", "groups.manage", "users.view"),
+            "create": has_any("groups.create", "groups.manage"),
+            "invite": has_any("groups.invite", "groups.manage"),
+            "manage": has_any("groups.manage"),
+        },
+        "personal": {
+            "watchlist": has_any("watchlist.manage"),
+            "notifications": True,
+            "push": True,
+        },
+        "api": {
+            "read": has_any("api.read"),
+            "write": has_any("api.write"),
+            "tokensManage": has_any("api.tokens.manage"),
+            "mcp": has_any("mcp.use") or any(key.startswith("mcp.tool.") for key in permissions),
+        },
+        "offline": {
+            "readCache": True,
+            "queuedMutations": True,
+            "syncDelta": True,
+            "conflictDetection": True,
+        },
+    }
+
+
+def mobile_endpoint_contract_payload() -> dict[str, Any]:
+    return {
+        "auth": {
+            "start": "/api/next/auth/mobile/start",
+            "exchange": "/api/next/auth/mobile/exchange",
+            "status": "/api/next/auth/status",
+        },
+        "bootstrap": "/api/next/mobile/bootstrap",
+        "profile": "/api/next/profile",
+        "preferences": "/api/next/preferences",
+        "notifications": "/api/next/notifications",
+        "push": {
+            "status": "/api/next/push/status",
+            "preferences": "/api/next/push/preferences",
+        },
+        "sync": {
+            "state": "/api/next/sync/state",
+            "bootstrap": "/api/next/sync/bootstrap",
+            "delta": "/api/next/sync/delta",
+            "mutations": "/api/next/sync/mutations",
+        },
+        "import": {
+            "metadataLookup": "/api/next/metadata/lookup",
+            "importMovie": "/api/next/import/movie",
+        },
+        "metadata": {
+            "refreshMovie": "/api/next/movies/{movieId}/metadata/refresh",
+            "refreshContainer": "/api/next/containers/{containerId}/metadata/refresh",
+            "jobs": "/api/next/metadata/jobs",
+        },
+    }
+
+
 def normalize_api_token_permissions(conn, actor: dict[str, Any], raw_values: Any) -> list[str]:
     if raw_values in (None, ""):
         raw_values = []
@@ -42454,6 +42610,78 @@ def register_routes(flask_app: Flask) -> None:
                 user["role"] = next_user_primary_role(conn, user["id"])
                 user["permissions"] = sorted(next_user_permission_keys(conn, user["id"]))
             return response({"status": "ok", "snapshot": collection_dashboard_snapshot(conn, user)})
+
+    @flask_app.get("/api/next/mobile/bootstrap")
+    def next_mobile_bootstrap():
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Mobile bootstrap requires a signed-in user", 401)
+            preferences = app_effective_preferences(conn, user_id)
+            token_permissions = actor_api_token_permission_keys(actor)
+            effective_permissions = sorted(actor_effective_permission_keys(conn, actor))
+            push_public_key = None
+            push_subject = None
+            if table_exists(conn, "push_subscriptions"):
+                push_public_key, _ = get_or_create_push_vapid_keys(conn)
+                push_subject = push_vapid_subject()
+            return response(
+                {
+                    "status": "ok",
+                    "mobile": {
+                        "contractVersion": "2026-06-09.1",
+                        "platform": "ios",
+                        "recommendedClient": {
+                            "offlineFirst": True,
+                            "authFlow": "ASWebAuthenticationSession + PKCE",
+                            "barcodeImport": "metadata lookup first, then import selected movie or box-set candidate",
+                        },
+                    },
+                    "app": {
+                        "name": "DiscVault",
+                        "productName": "DiscVault 26",
+                        "version": build_version(),
+                        "serverTime": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    },
+                    "auth": {
+                        "authenticated": True,
+                        "role": actor.get("role"),
+                        "tokenPermissionKeys": sorted(token_permissions) if token_permissions is not None else [],
+                        "effectivePermissionKeys": effective_permissions,
+                    },
+                    "user": next_profile_user_payload(conn, actor),
+                    "capabilities": mobile_feature_capabilities(conn, actor),
+                    "preferences": {
+                        "values": preferences,
+                        "defaults": APP_PREFERENCE_DEFAULTS,
+                        "sections": app_preference_sections_payload(preferences),
+                        "ratingCountries": sorted(APP_CHOICE_PREFERENCES.get("rating_country", [])),
+                    },
+                    "notifications": {
+                        "counts": notification_counts(conn, user_id),
+                        "preferences": notification_preference_map(conn, user_id),
+                        "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
+                        "webPush": {
+                            "available": bool(push_public_key),
+                            "publicKey": push_public_key,
+                            "subject": push_subject,
+                        },
+                        "nativePush": {
+                            "available": False,
+                            "provider": "apns",
+                            "status": "planned",
+                        },
+                    },
+                    "localization": {
+                        "sourceLocale": NEXT_I18N_SOURCE_LOCALE,
+                        "defaultLocale": NEXT_I18N_DEFAULT_LOCALE,
+                        "locales": supported_next_locales(),
+                    },
+                    "apiAccess": profile_api_access_payload(conn, actor),
+                    "endpoints": mobile_endpoint_contract_payload(),
+                }
+            )
 
     @flask_app.get("/api/next/profile")
     def get_next_profile():
