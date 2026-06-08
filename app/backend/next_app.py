@@ -42112,6 +42112,7 @@ def register_routes(flask_app: Flask) -> None:
                 return response({"status": "ok", "snapshot": empty_collection_dashboard_snapshot()})
             if user:
                 user["role"] = next_user_primary_role(conn, user["id"])
+                user["permissions"] = sorted(next_user_permission_keys(conn, user["id"]))
             return response({"status": "ok", "snapshot": collection_dashboard_snapshot(conn, user)})
 
     @flask_app.get("/api/next/profile")
