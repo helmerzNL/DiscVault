@@ -7984,6 +7984,17 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .8rem;
     }
+    .notification-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .notification-actions .secondary-button {
+      min-height: 32px;
+      padding: 7px 12px;
+      font-size: .78rem;
+    }
     .notification-dot {
       width: 10px;
       height: 10px;
@@ -10507,6 +10518,19 @@ def ui_preview_html(
       gap: 14px;
       align-items: start;
       min-width: 0;
+    }
+    .member-group-list {
+      display: grid;
+      gap: 10px;
+    }
+    .member-group-row {
+      align-items: start;
+    }
+    .member-group-actions {
+      align-items: stretch;
+    }
+    .member-group-actions input {
+      min-width: min(220px, 100%);
     }
     .profile-api-submenu {
       margin-bottom: 2px;
@@ -13636,6 +13660,7 @@ def ui_preview_html(
                 <button type="button" class="active" data-profile-tab="account" data-next-i18n="profile.tabAccount">Account</button>
                 <button type="button" data-profile-tab="preferences" data-next-i18n="preferences.title">Preferences</button>
                 <button type="button" data-profile-tab="notifications" data-next-i18n="profile.tabNotifications">Notifications</button>
+                <button type="button" data-profile-tab="groups" data-next-i18n="groups.memberGroups">Groups</button>
                 <button type="button" data-profile-tab="structure" data-next-i18n="profile.tabStructure">Structure</button>
                 <button type="button" data-profile-tab="security" data-next-i18n="profile.security">Security</button>
                 <button type="button" data-profile-tab="api" data-next-i18n="profile.apiMcp">API & MCP</button>
@@ -13770,6 +13795,35 @@ def ui_preview_html(
                 </section>
               </div>
               <div class="login-message" id="pushProfileMessage"></div>
+            </div>
+            <div class="detail-subpanel profile-panel hidden" data-profile-panel="groups">
+              <div class="detail-card-head compact">
+                <div>
+                  <h4 data-next-i18n="groups.memberGroups">Member Groups</h4>
+                  <p data-next-i18n="groups.memberGroupsHelp">Create your own sharing groups and invite friends by username.</p>
+                </div>
+              </div>
+              <div class="profile-section-grid">
+                <section class="profile-section-box" id="memberGroupCreateSection">
+                  <h4 data-next-i18n="groups.createGroup">Create group</h4>
+                  <form class="profile-form" id="memberGroupCreateForm">
+                    <label for="memberGroupNameInput">
+                      <span data-next-i18n="groups.groupName">Group name</span>
+                      <input id="memberGroupNameInput" maxlength="120" autocomplete="off" data-next-i18n-placeholder="groups.groupNamePlaceholder" placeholder="Family movie night">
+                    </label>
+                    <div class="profile-form-actions">
+                      <button type="submit" class="secondary-button" id="memberGroupCreateButton" data-next-i18n="groups.create">Create</button>
+                      <span class="login-message" id="memberGroupMessage"></span>
+                    </div>
+                  </form>
+                </section>
+                <section class="profile-section-box">
+                  <h4 data-next-i18n="groups.libraryScope">Library view</h4>
+                  <p data-next-i18n="groups.libraryScopeHelp">Group-shared films only appear when you explicitly select that group in the library filter.</p>
+                  <div class="profile-meta" id="memberGroupScopeSummary"></div>
+                </section>
+              </div>
+              <div class="container-manager-list member-group-list" id="memberGroupList"></div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="structure">
               <div class="detail-card-head compact">
@@ -25038,18 +25092,29 @@ def ui_preview_html(
       const url = String(payload.url || "/notifications");
       return url.startsWith("/") ? url : "/notifications";
     }
+    function notificationInviteActionsHtml(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind !== "media_group_invite" || !payload.inviteId) return "";
+      return `
+        <span class="notification-actions">
+          <button type="button" class="secondary-button" data-notification-invite-accept="${escapeHtml(payload.inviteId)}">${escapeHtml(tNext("groups.acceptInvite", "Accept"))}</button>
+          <button type="button" class="secondary-button" data-notification-invite-decline="${escapeHtml(payload.inviteId)}">${escapeHtml(tNext("groups.declineInvite", "Decline"))}</button>
+        </span>
+      `;
+    }
     function notificationCardHtml(notification) {
       const unread = !notification.read_at;
       const created = notification.created_at ? formatAppDate(notification.created_at) : "";
       return `
-        <button type="button" class="notification-card ${unread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}">
+        <article class="notification-card ${unread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}" role="button" tabindex="0">
           <span>
             <strong>${escapeHtml(notification.title || tNext("notifications.itemTitle", "Notification"))}</strong>
             ${notification.body ? `<p>${escapeHtml(notification.body)}</p>` : ""}
             <span class="notification-meta">${escapeHtml(created)}</span>
+            ${notificationInviteActionsHtml(notification)}
           </span>
           <span class="notification-dot" aria-hidden="true"></span>
-        </button>
+        </article>
       `;
     }
     function updateNotificationCounts(counts = notificationsState.counts || {}) {
@@ -25074,8 +25139,31 @@ def ui_preview_html(
         empty.classList.toggle("hidden", !!(notificationsState.items || []).length);
       }
       document.querySelectorAll("[data-notification-id]").forEach((button) => {
-        button.addEventListener("click", () => openNotification(button.dataset.notificationId));
+        button.addEventListener("click", (event) => {
+          if (event.target.closest("[data-notification-invite-accept], [data-notification-invite-decline]")) return;
+          openNotification(button.dataset.notificationId);
+        });
+        button.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          openNotification(button.dataset.notificationId);
+        });
       });
+    }
+    async function respondToMediaGroupInvite(inviteId, action) {
+      if (!inviteId || !["accept", "decline"].includes(action)) return;
+      try {
+        await authApiJson(`/api/next/media-groups/invites/${encodeURIComponent(inviteId)}/${action}`, {method: "POST"});
+        notificationsState.loaded = false;
+        await loadNotifications(true);
+        await loadAppSnapshot();
+      } catch (error) {
+        const empty = document.getElementById("notificationsEmptyMessage");
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      }
     }
     async function loadNotifications(force = false) {
       if (notificationsState.loaded && !force) {
@@ -25854,6 +25942,7 @@ def ui_preview_html(
     function renderLibrary() {
       if (!collectorsModeEnabled()) selectedContainerIds.clear();
       renderGroupFilter();
+      renderMemberGroupScopeSummary();
       renderCollectionToolbar();
       renderBulkTargets();
       const search = document.getElementById("previewSearch");
@@ -26309,6 +26398,9 @@ def ui_preview_html(
       if (tab === "api") {
         return !!(profileApiAccess && (profileApiAccess.manageable || (profileApiAccess.tokens || []).length));
       }
+      if (tab === "groups") {
+        return hasActualAnyPermission(["groups.view", "groups.create", "groups.invite"]);
+      }
       return true;
     }
     function setProfileTab(tab) {
@@ -26366,6 +26458,138 @@ def ui_preview_html(
       }
       applyAppPermissionVisibility();
       setPreferenceTab(activePreferenceTab);
+    }
+    function setMemberGroupMessage(message, tone) {
+      const node = document.getElementById("memberGroupMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function memberRoleForCurrentUser(group) {
+      const userId = currentUserId();
+      if (!userId) return "";
+      const members = Array.isArray(group?.members) ? group.members : [];
+      const member = members.find((item) => String(item.user_id || item.userId || "") === String(userId));
+      if (member?.role) return String(member.role);
+      if (String(group?.created_by || group?.createdBy || "") === String(userId)) return "owner";
+      return "";
+    }
+    function canManageMemberGroup(group) {
+      if (hasActualAnyPermission(["groups.view_all", "groups.manage", "users.view"])) return true;
+      if (!hasActualPermission("groups.invite")) return false;
+      return ["owner", "manager"].includes(memberRoleForCurrentUser(group));
+    }
+    function renderMemberGroupScopeSummary() {
+      const node = document.getElementById("memberGroupScopeSummary");
+      if (!node) return;
+      const selected = effectiveCollectionGroupFilter();
+      const selectedGroup = mediaGroups.find((group) => String(group.id) === String(selected));
+      node.innerHTML = [
+        `<div class="profile-meta-row"><span>${escapeHtml(tNext("groups.defaultScope", "Default"))}</span><strong>${escapeHtml(canViewFullCollectionByDefault() ? tNext("groups.all", "All groups") : tNext("groups.myLibrary", "My library"))}</strong></div>`,
+        `<div class="profile-meta-row"><span>${escapeHtml(tNext("groups.currentScope", "Current"))}</span><strong>${escapeHtml(selectedGroup?.name || (selected === "__ungrouped" ? tNext("groups.ungrouped", "Not in a group") : selected === "__mine" ? tNext("groups.myLibrary", "My library") : tNext("groups.all", "All groups")))}</strong></div>`
+      ].join("");
+    }
+    function memberGroupCardHtml(group) {
+      const id = escapeHtml(group.id || "");
+      const members = Array.isArray(group.members) ? group.members : [];
+      const role = memberRoleForCurrentUser(group);
+      const canInvite = canManageMemberGroup(group);
+      const owner = group.created_by_display_name || group.created_by_username || "";
+      const memberRows = members.length
+        ? members.map((member) => `<span class="tag">${escapeHtml(member.display_name || member.username || member.user_id || "")}${member.role ? ` · ${escapeHtml(member.role)}` : ""}</span>`).join("")
+        : `<span class="muted-inline">${escapeHtml(tNext("groups.noMembers", "No members yet"))}</span>`;
+      return `
+        <div class="container-manager-row member-group-row" data-member-group-id="${id}">
+          <div class="container-manager-meta">
+            <strong>${escapeHtml(group.name || tNext("groups.unnamed", "Unnamed group"))}</strong>
+            <span>${escapeHtml([owner ? `${tNext("groups.owner", "Owner")}: ${owner}` : "", `${Number(group.movie_count || 0)} ${tNext("groups.movies", "movies")}`, role ? `${tNext("groups.yourRole", "Your role")}: ${role}` : ""].filter(Boolean).join(" / "))}</span>
+            <div class="tag-row">${memberRows}</div>
+          </div>
+          <div class="container-manager-actions member-group-actions">
+            <button type="button" class="secondary-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
+            ${canInvite ? `
+              <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
+              <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
+            ` : ""}
+          </div>
+        </div>
+      `;
+    }
+    function renderMemberGroups() {
+      const list = document.getElementById("memberGroupList");
+      const createSection = document.getElementById("memberGroupCreateSection");
+      if (createSection) createSection.classList.toggle("hidden", !hasActualPermission("groups.create"));
+      renderMemberGroupScopeSummary();
+      if (!list) return;
+      if (!hasActualAnyPermission(["groups.view", "groups.create", "groups.invite"])) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("groups.noAccess", "You do not have access to member groups."))}</div>`;
+        return;
+      }
+      const groups = Array.isArray(mediaGroups) ? mediaGroups : [];
+      if (!groups.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("groups.empty", "No member groups yet."))}</div>`;
+        return;
+      }
+      list.innerHTML = groups.map(memberGroupCardHtml).join("");
+    }
+    async function createMemberGroup(event) {
+      event?.preventDefault();
+      if (!hasActualPermission("groups.create")) return;
+      const input = document.getElementById("memberGroupNameInput");
+      const name = String(input?.value || "").trim();
+      if (!name) {
+        setMemberGroupMessage(tNext("groups.nameRequired", "Enter a group name first."), "bad");
+        return;
+      }
+      setMemberGroupMessage(tNext("groups.creating", "Creating group..."));
+      try {
+        const payload = await authApiJson("/api/next/media-groups", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name})
+        });
+        if (payload.group) {
+          mediaGroups = [...mediaGroups.filter((group) => String(group.id) !== String(payload.group.id)), payload.group];
+        }
+        if (input) input.value = "";
+        renderGroupFilter();
+        renderMemberGroups();
+        setMemberGroupMessage(tNext("groups.created", "Group created."), "good");
+      } catch (error) {
+        setMemberGroupMessage(error.message || String(error), "bad");
+      }
+    }
+    function openMemberGroupLibrary(groupId) {
+      activeCollectionGroupFilter = groupId || "";
+      localStorage.setItem("dv_next_collection_group_filter", activeCollectionGroupFilter);
+      renderGroupFilter();
+      showLibraryPage(true);
+      renderLibrary();
+    }
+    async function inviteMemberGroupUser(groupId) {
+      if (!groupId || !hasActualPermission("groups.invite")) return;
+      const input = document.querySelector(`[data-member-group-invite="${CSS.escape(groupId)}"]`);
+      const username = String(input?.value || "").trim();
+      if (!username) {
+        setMemberGroupMessage(tNext("groups.usernameRequired", "Enter a username first."), "bad");
+        return;
+      }
+      setMemberGroupMessage(tNext("groups.inviting", "Sending invite..."));
+      try {
+        const payload = await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}/invites`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({username})
+        });
+        if (payload.group) {
+          mediaGroups = mediaGroups.map((group) => String(group.id) === String(payload.group.id) ? payload.group : group);
+        }
+        if (input) input.value = "";
+        renderMemberGroups();
+        setMemberGroupMessage(tNext("groups.inviteSent", "Invite sent."), "good");
+      } catch (error) {
+        setMemberGroupMessage(error.message || String(error), "bad");
+      }
     }
     async function updatePreference(key, value) {
       preferences[key] = value;
@@ -26621,6 +26845,7 @@ def ui_preview_html(
       renderProfilePasskeys();
       renderProfileRecovery();
       renderProfileApiAccess();
+      renderMemberGroups();
       renderContainerManager();
       renderProfileOfflineStatus();
       applyAppPermissionVisibility();
@@ -27495,6 +27720,19 @@ def ui_preview_html(
       });
       document.getElementById("notificationsRefreshButton")?.addEventListener("click", () => loadNotifications(true));
       document.getElementById("notificationsMarkAllReadButton")?.addEventListener("click", () => markAllNotificationsRead());
+      document.getElementById("notificationsList")?.addEventListener("click", (event) => {
+        const acceptButton = event.target.closest("[data-notification-invite-accept]");
+        const declineButton = event.target.closest("[data-notification-invite-decline]");
+        if (acceptButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          respondToMediaGroupInvite(acceptButton.dataset.notificationInviteAccept, "accept");
+        } else if (declineButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          respondToMediaGroupInvite(declineButton.dataset.notificationInviteDecline, "decline");
+        }
+      });
       document.getElementById("pushEnableButton")?.addEventListener("click", () => enablePushNotifications());
       document.getElementById("pushDisableButton")?.addEventListener("click", () => disablePushNotifications());
       document.getElementById("pushRefreshButton")?.addEventListener("click", () => loadPushProfile());
@@ -27512,6 +27750,16 @@ def ui_preview_html(
         button.addEventListener("click", () => setProfileTab(button.dataset.profileTab || "account"));
       });
       setProfileTab(activeProfileTab);
+      document.getElementById("memberGroupCreateForm")?.addEventListener("submit", (event) => createMemberGroup(event));
+      document.getElementById("memberGroupList")?.addEventListener("click", (event) => {
+        const openButton = event.target.closest("[data-member-group-open]");
+        if (openButton) {
+          openMemberGroupLibrary(openButton.dataset.memberGroupOpen);
+          return;
+        }
+        const inviteButton = event.target.closest("[data-member-group-invite-send]");
+        if (inviteButton) inviteMemberGroupUser(inviteButton.dataset.memberGroupInviteSend);
+      });
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.addEventListener("click", () => {
           containerManagerType = button.dataset.containerManagerType || "box_set";
@@ -43385,6 +43633,55 @@ def register_routes(flask_app: Flask) -> None:
                 )
             detail = media_group_detail_entity(conn, group_uuid, actor=actor)
         return response({"status": "ok", "group": detail})
+
+    @flask_app.post("/api/next/media-groups/invites/<invite_id>/decline")
+    def decline_media_group_invite(invite_id: str):
+        invite_uuid = parse_uuid(invite_id, "inviteId")
+        if not invite_uuid:
+            raise NextApiError("inviteId is required", 400)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            if not table_exists(conn, "media_group_invites"):
+                raise NextApiError("Media group invites are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, group_id, invitee_id, status
+                    FROM media_group_invites
+                    WHERE id=%s
+                    """,
+                    (invite_uuid,),
+                )
+                invite = cur.fetchone()
+                if not invite:
+                    raise NextApiError("Invite not found", 404)
+                if str(invite.get("invitee_id")) != str(actor.get("id")):
+                    raise NextApiError("This invite belongs to another user", 403)
+                if invite.get("status") != "pending":
+                    raise NextApiError("Invite is no longer pending", 409)
+            group_uuid = invite["group_id"]
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE media_group_invites
+                        SET status='declined',
+                            metadata = metadata || %s::jsonb
+                        WHERE id=%s
+                        """,
+                        (Jsonb({"declinedAt": datetime.now(timezone.utc).isoformat()}), invite_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="group.invite_declined",
+                    category="group",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary="Declined media group invite",
+                    metadata={"inviteId": str(invite_uuid)},
+                )
+        return response({"status": "declined"})
 
     @flask_app.delete("/api/next/media-groups/<group_id>/members/<user_id>")
     def delete_media_group_member(group_id: str, user_id: str):
