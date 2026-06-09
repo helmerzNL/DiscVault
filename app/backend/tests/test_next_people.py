@@ -11,13 +11,15 @@ try:
     from app.backend.next_app import group_person_credits_by_job
     from app.backend.next_app import person_biography_value
     from app.backend.next_app import person_filmography_entries_from_metadata
+    from app.backend.next_app import select_movie_metadata_person_refresh_credits
     from app.backend.next_plugins.tmdb import plugin as tmdb_plugin
-except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask or requests.
-    if exc.name not in {"flask", "requests"}:
+except ModuleNotFoundError as exc:  # Local minimal test environments may omit web/database deps.
+    if exc.name not in {"flask", "requests", "psycopg"}:
         raise
     group_person_credits_by_job = None
     person_biography_value = None
     person_filmography_entries_from_metadata = None
+    select_movie_metadata_person_refresh_credits = None
     tmdb_plugin = None
 
 
@@ -51,6 +53,28 @@ class NextPeoplePolicyTests(unittest.TestCase):
         by_job = {group["job"]: group for group in groups}
         self.assertEqual(by_job["Director"]["count"], 2)
         self.assertEqual(by_job["Producer"]["count"], 1)
+
+    def test_movie_person_refresh_selection_prioritizes_key_crew_then_cast(self):
+        credits = [
+            {"person_id": "actor-1", "credit_type": "actor", "name": "Actor One"},
+            {"person_id": "crew-1", "credit_type": "crew", "job": "Director", "name": "Director One"},
+            {"person_id": "crew-2", "credit_type": "crew", "job": "Stunts", "name": "Stunt One"},
+        ]
+
+        selected = select_movie_metadata_person_refresh_credits(credits, limit=3)
+
+        self.assertEqual([credit["person_id"] for credit in selected], ["crew-1", "actor-1", "crew-2"])
+
+    def test_movie_person_refresh_selection_can_target_crew_only(self):
+        credits = [
+            {"person_id": "actor-1", "credit_type": "actor", "name": "Actor One"},
+            {"person_id": "crew-1", "credit_type": "crew", "job": "Director", "name": "Director One"},
+            {"person_id": "crew-2", "credit_type": "crew", "job": "Stunts", "name": "Stunt One"},
+        ]
+
+        selected = select_movie_metadata_person_refresh_credits(credits, limit=3, scope="crew")
+
+        self.assertEqual([credit["person_id"] for credit in selected], ["crew-1", "crew-2"])
 
     def test_person_filmography_metadata_normalizes_tmdb_entries(self):
         entries = person_filmography_entries_from_metadata(
