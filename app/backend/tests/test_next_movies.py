@@ -16,6 +16,8 @@ try:
     from app.backend.next_app import import_source_detected_box_set_proposal
     from app.backend.next_app import import_source_item_confidence
     from app.backend.next_app import import_source_item_needs_metadata_suggestion
+    from app.backend.next_app import import_container_preview_key
+    from app.backend.next_app import normalize_import_review
     from app.backend.next_app import NextApiError
     from app.backend.next_app import movie_edit_receiver_proposal
     from app.backend.next_app import movie_payload_fields
@@ -38,6 +40,8 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     import_source_detected_box_set_proposal = None
     import_source_item_confidence = None
     import_source_item_needs_metadata_suggestion = None
+    import_container_preview_key = None
+    normalize_import_review = None
     NextApiError = None
     movie_edit_receiver_proposal = None
     movie_payload_fields = None
@@ -290,6 +294,55 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertEqual(reviews[0]["memberCount"], 3)
         self.assertEqual(reviews[0]["members"][0]["provider"], "movievault_26")
         self.assertEqual(reviews[0]["members"][2]["title"], "Back to the Future Part III")
+
+    def test_box_set_preview_keys_separate_physical_releases(self):
+        dvd_key = import_container_preview_key(
+            "box_set",
+            "Back to the Future Trilogy",
+            media_format="DVD",
+        )
+        uhd_key = import_container_preview_key(
+            "box_set",
+            "Back to the Future Trilogy",
+            media_format="4K UHD",
+        )
+        barcode_key = import_container_preview_key(
+            "box_set",
+            "Back to the Future Trilogy",
+            barcode="5050582369601",
+            media_format="DVD",
+        )
+
+        self.assertNotEqual(dvd_key, uhd_key)
+        self.assertEqual(barcode_key, ("box_set", "barcode", "5050582369601"))
+
+    def test_import_review_preserves_box_set_proposal_and_member_edits(self):
+        review = normalize_import_review(
+            {
+                "decisions": [
+                    {
+                        "index": 1,
+                        "action": "create",
+                        "boxSetProposal": {
+                            "title": "Back to the Future Trilogy",
+                            "barcode": "5050582369601",
+                            "format": "DVD",
+                            "members": [
+                                {"title": "Back to the Future", "format": "4K UHD"},
+                                {"title": "Back to the Future Part II"},
+                            ],
+                        },
+                        "boxSetReviewAccepted": True,
+                    }
+                ]
+            }
+        )
+
+        proposal = review["decisions"][0]["boxSetProposal"]
+        self.assertEqual(proposal["memberCount"], 2)
+        self.assertEqual(proposal["members"][0]["format"], "DVD")
+        self.assertEqual(proposal["movies"][1]["title"], "Back to the Future Part II")
+        self.assertTrue(review["decisions"][0]["boxSetReviewAccepted"])
 
     def test_selected_import_movie_candidate_from_body_normalizes_plugin_fields(self):
         candidate = selected_import_movie_candidate_from_body(
