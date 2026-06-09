@@ -11,6 +11,9 @@ import requests
 PROVIDER_ID = "movievault_26"
 PROVIDER_LABEL = "MovieVault 26"
 DEFAULT_MOVIEVAULT_URL = "https://movies.vaultstack.eu"
+BOOTSTRAP_PATH = "/api/v1/internal/discvault/bootstrap"
+HANDSHAKE_PATH = "/api/v1/internal/discvault/handshake"
+REQUESTED_SCOPES = ("search:read", "contributions:write", "contributions:read")
 PUBLIC_BARCODE_LENGTHS = {8, 12, 13, 14}
 FORBIDDEN_CONTRIBUTION_KEYS = {
     "apiToken",
@@ -123,6 +126,54 @@ def connection_recovery_action(payload, context=None):
     return {"action": ""}
 
 
+def connection_request(payload, context=None):
+    payload = payload if isinstance(payload, dict) else {}
+    phase = _text(payload.get("phase")).lower()
+    body = payload.get("body") if isinstance(payload.get("body"), dict) else {}
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if phase == "bootstrap":
+        public_key = _text(payload.get("publicKey") or payload.get("public_key"))
+        request_body = dict(body)
+        if public_key:
+            request_body["publicKey"] = public_key
+        return {
+            "status": "ok",
+            "provider": PROVIDER_ID,
+            "phase": "bootstrap",
+            "method": "POST",
+            "path": BOOTSTRAP_PATH,
+            "headers": headers,
+            "body": request_body,
+            "auth": "public_key_bootstrap",
+            "requestedScopes": list(REQUESTED_SCOPES),
+        }
+    if phase in {"recovery", "handshake"}:
+        timestamp = _text(payload.get("timestamp"))
+        nonce = _text(payload.get("nonce"))
+        key_id = _text(payload.get("publicKeyId") or payload.get("public_key_id") or payload.get("keyId"))
+        signature = _text(payload.get("signature"))
+        if timestamp:
+            headers["X-DiscVault-Timestamp"] = timestamp
+        if nonce:
+            headers["X-DiscVault-Nonce"] = nonce
+        if key_id:
+            headers["X-DiscVault-Key-Id"] = key_id
+        if signature:
+            headers["X-DiscVault-Signature"] = signature if signature.startswith("key-v1=") else f"key-v1={signature}"
+        return {
+            "status": "ok",
+            "provider": PROVIDER_ID,
+            "phase": "recovery",
+            "method": "POST",
+            "path": HANDSHAKE_PATH,
+            "headers": headers,
+            "body": dict(body),
+            "auth": "signed_recovery",
+            "requestedScopes": list(REQUESTED_SCOPES),
+        }
+    return {"status": "skipped", "provider": PROVIDER_ID, "reason": "unknown_connection_phase"}
+
+
 def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False):
     headers = _headers(context)
     if json_payload is not None:
@@ -201,7 +252,9 @@ def _first(payload):
     return items[0] if items and isinstance(items[0], dict) else {}
 
 
-def _text(value):
+def _text(value, default=""):
+    if value is None:
+        value = default
     if isinstance(value, list):
         return ", ".join(str(item).strip() for item in value if str(item).strip())
     return str(value or "").strip()
@@ -558,6 +611,11 @@ def _member_identity_keys(member):
     return keys
 
 
+def _public_barcode(value):
+    text = _text(value)
+    return text if _is_public_barcode(text) else ""
+
+
 def _format_key(value):
     text = _text(value).casefold().replace("-", " ").replace("_", " ").replace("/", " ")
     text = " ".join(text.split())
@@ -843,6 +901,143 @@ def _normalize_box_set_proposal(payload, context=None):
     proposal["membersAreExplicit"] = proposal["boxSetEvidence"]["membersAreExplicit"]
     proposal["members_are_explicit"] = proposal["boxSetEvidence"]["membersAreExplicit"]
     return {key: value for key, value in proposal.items() if value not in (None, "", [], {})}
+
+
+def _container_type(payload):
+    raw = _text(
+        _first_value(
+            payload if isinstance(payload, dict) else {},
+            "containerType",
+            "container_type",
+            "entityType",
+            "entity_type",
+            "type",
+        )
+    ).casefold()
+    normalized = raw.replace("-", "_").replace(" ", "_")
+    if normalized in {"boxset", "box_set"} or "box_set" in normalized or "boxset" in normalized:
+        return "box_set"
+    if normalized == "vault" or "vault" in normalized:
+        return "vault"
+    if normalized == "collection" or "collection" in normalized:
+        return "collection"
+    return normalized or "container"
+
+
+def _container_members(payload, context=None):
+    members = []
+    seen = set()
+    selected_format = _selected_format(context or {}, payload if isinstance(payload, dict) else {})
+    for index, raw_member in enumerate(_member_list(payload)[:100], start=1):
+        member = _normalize_member(raw_member, index)
+        if not member:
+            continue
+        if selected_format and not member.get("format"):
+            member["format"] = selected_format
+        keys = _member_identity_keys(member)
+        if keys and seen.intersection(keys):
+            continue
+        if keys:
+            seen.update(keys)
+        members.append(member)
+    return members
+
+
+def prepare_barcode_update(payload, context=None):
+    payload = payload if isinstance(payload, dict) else {}
+    barcode = _public_barcode(payload.get("barcode") or payload.get("newBarcode") or payload.get("new_barcode"))
+    if not barcode:
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "not_public_barcode"}
+    entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "release")
+    identity = _text(payload.get("identity") or payload.get("id") or payload.get("movievaultId") or payload.get("movievault_id") or barcode)
+    reference = _public_reference(_source_reference(payload) or payload)
+    update_payload = {"barcode": barcode}
+    return {
+        "status": "ok",
+        "provider": PROVIDER_ID,
+        "operation": "barcode_update",
+        "entityType": entity_type,
+        "identity": identity,
+        "sourceReference": reference,
+        "payload": update_payload,
+        "contribution": {
+            "entityType": entity_type,
+            "identity": identity,
+            "sourceReference": reference,
+            "payload": update_payload,
+            "metadata": {"changedFields": ["barcode"], "sourceProviders": ["discvault"]},
+        },
+    }
+
+
+def prepare_container_update(payload, context=None):
+    payload = payload if isinstance(payload, dict) else {}
+    container = payload.get("container") if isinstance(payload.get("container"), dict) else payload
+    container_type = _container_type(container)
+    title = _text(_first_value(container, "title", "name", "boxSetTitle", "box_set_title"))
+    barcode = _public_barcode(_first_value(container, "barcode", "ean", "upc"))
+    members = _container_members(container, context)
+    update_payload = {
+        "title": title,
+        "barcode": barcode,
+        "format": _text(_first_value(container, "format", "mediaType", "media_type")),
+        "posterUrl": _image_url(_first_value(container, "posterUrl", "poster_url", "poster", "image")),
+        "backdropUrl": _image_url(_first_value(container, "backdropUrl", "backdrop_url", "backdrop")),
+    }
+    if members:
+        update_payload["members"] = members
+        update_payload["boxSetMovies"] = members
+        update_payload["memberCount"] = len(members)
+    update_payload = _safe_contribution_value(update_payload)
+    update_payload = {key: value for key, value in update_payload.items() if value not in (None, "", [], {})}
+    identity = _text(
+        payload.get("identity")
+        or _first_value(container, "movieVaultId", "movievault_id", "id", "publicId", "public_id")
+        or barcode
+        or title
+    )
+    reference = _public_reference(_source_reference(payload) or container)
+    return {
+        "status": "ok" if update_payload else "skipped",
+        "provider": PROVIDER_ID,
+        "operation": "container_update",
+        "entityType": container_type,
+        "identity": identity,
+        "sourceReference": reference,
+        "payload": update_payload,
+        "memberIntelligence": {
+            "memberCount": len(members),
+            "membersIdentified": sum(1 for member in members if not _member_needs_identification(member)),
+            "membersNeedingConfirmation": sum(1 for member in members if _member_needs_identification(member)),
+            "memberSource": PROVIDER_LABEL,
+        },
+        "contribution": {
+            "entityType": "box_set" if container_type == "box_set" else "release",
+            "identity": identity,
+            "sourceReference": reference,
+            "payload": update_payload,
+            "metadata": {
+                "changedFields": sorted(update_payload.keys()),
+                "sourceProviders": ["discvault"],
+            },
+        },
+    }
+
+
+def member_intelligence(payload, context=None):
+    payload = payload if isinstance(payload, dict) else {}
+    proposal = _normalize_box_set_proposal(payload, context or {}) or payload
+    members = _container_members(proposal, context)
+    return {
+        "status": "ok",
+        "provider": PROVIDER_ID,
+        "memberCount": len(members),
+        "members": members,
+        "membersIdentified": sum(1 for member in members if not _member_needs_identification(member)),
+        "membersNeedingConfirmation": sum(1 for member in members if _member_needs_identification(member)),
+        "memberConfidence": "identified" if members and all(not _member_needs_identification(member) for member in members) else "needs_member_confirmation",
+        "memberSource": PROVIDER_LABEL,
+    }
 
 
 def _technical_payload(item):

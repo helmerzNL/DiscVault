@@ -3,6 +3,7 @@ import sys
 import types
 import unittest
 import json
+import importlib.machinery
 from pathlib import Path
 
 
@@ -10,14 +11,12 @@ repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
-sys.modules.setdefault(
-    "requests",
-    types.SimpleNamespace(
-        get=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests")),
-        post=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests")),
-        request=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests")),
-    ),
-)
+_requests_stub = types.ModuleType("requests")
+_requests_stub.__spec__ = importlib.machinery.ModuleSpec("requests", None)
+_requests_stub.get = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests"))
+_requests_stub.post = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests"))
+_requests_stub.request = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("requests is stubbed in tests"))
+sys.modules.setdefault("requests", _requests_stub)
 
 from app.backend.next_plugins.movievault_26 import plugin as movievault_26
 from app.backend.next_import import legacy_metadata_plugin_plan
@@ -51,9 +50,14 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.3.6")
+        self.assertEqual(manifest["version"], "1.4.0")
+        self.assertIn("connection_request", manifest["capabilities"])
+        self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
         self.assertIn("activity_summary", manifest["capabilities"])
+        self.assertIn("prepare_container_update", manifest["capabilities"])
+        self.assertIn("prepare_barcode_update", manifest["capabilities"])
+        self.assertIn("member_intelligence", manifest["capabilities"])
 
     def test_movievault_26_runtime_exposes_receiver_observability_hooks(self):
         discovery = discover_plugins()
@@ -61,6 +65,11 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
         self.assertIn("describe_payload", plugin.runtime["entrypoints"])
         self.assertIn("activity_summary", plugin.runtime["entrypoints"])
+        self.assertIn("connection_request", plugin.runtime["entrypoints"])
+        self.assertIn("connection_recovery_action", plugin.runtime["entrypoints"])
+        self.assertIn("prepare_container_update", plugin.runtime["entrypoints"])
+        self.assertIn("prepare_barcode_update", plugin.runtime["entrypoints"])
+        self.assertIn("member_intelligence", plugin.runtime["entrypoints"])
 
     def test_legacy_movievault_settings_keep_logical_provider_id(self):
         plan = legacy_metadata_plugin_plan(
@@ -104,6 +113,34 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
         self.assertEqual(bootstrap["action"], "bootstrap")
         self.assertEqual(recover["action"], "recover")
+
+    def test_connection_request_builds_bootstrap_and_signed_recovery_contracts(self):
+        bootstrap = movievault_26.connection_request(
+            {
+                "phase": "bootstrap",
+                "body": {"instanceId": "dv_test", "requestedScopes": ["search:read"]},
+                "publicKey": "public_key_test",
+            },
+            {},
+        )
+        recovery = movievault_26.connection_request(
+            {
+                "phase": "recovery",
+                "body": {"instanceId": "dv_test"},
+                "timestamp": "2026-06-09T12:00:00Z",
+                "nonce": "nonce-test",
+                "publicKeyId": "dvpk_test",
+                "signature": "signature-test",
+            },
+            {},
+        )
+
+        self.assertEqual(bootstrap["path"], "/api/v1/internal/discvault/bootstrap")
+        self.assertEqual(bootstrap["body"]["publicKey"], "public_key_test")
+        self.assertIn("contributions:write", bootstrap["requestedScopes"])
+        self.assertEqual(recovery["path"], "/api/v1/internal/discvault/handshake")
+        self.assertEqual(recovery["headers"]["X-DiscVault-Key-Id"], "dvpk_test")
+        self.assertEqual(recovery["headers"]["X-DiscVault-Signature"], "key-v1=signature-test")
 
     def test_default_base_url_uses_movievault_next(self):
         previous = {key: os.environ.get(key) for key in ("MOVIEVAULT_SEARCH_URL", "MOVIEVAULT_BASE_URL")}
@@ -733,6 +770,69 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["changedFields"], ["barcode"])
         self.assertNotIn("owner_id", result["fields"])
         self.assertNotIn("mv_live_secret", str(result))
+
+    def test_prepare_barcode_update_filters_private_identifiers(self):
+        skipped = movievault_26.prepare_barcode_update({"barcode": "MANUAL-123", "entityType": "release"}, {})
+        result = movievault_26.prepare_barcode_update(
+            {
+                "barcode": "8712626068546",
+                "entityType": "release",
+                "identity": "release-1",
+                "sourceReference": {"type": "release", "barcode": "8712626068546", "owner_id": "user-1"},
+            },
+            {},
+        )
+
+        self.assertEqual(skipped["status"], "skipped")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["payload"], {"barcode": "8712626068546"})
+        self.assertEqual(result["contribution"]["metadata"]["changedFields"], ["barcode"])
+        self.assertNotIn("owner_id", str(result))
+
+    def test_prepare_container_update_keeps_members_and_public_payload_in_plugin(self):
+        result = movievault_26.prepare_container_update(
+            {
+                "identity": "box-1",
+                "container": {
+                    "containerType": "box_set",
+                    "title": "Back to the Future Trilogy",
+                    "barcode": "5050582369601",
+                    "format": "DVD",
+                    "owner_id": "private-owner",
+                    "members": [
+                        {"title": "Back to the Future", "year": "1985", "tmdbId": "105"},
+                        {"title": "Back to the Future Part II", "year": "1989"},
+                    ],
+                },
+            },
+            {},
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["entityType"], "box_set")
+        self.assertEqual(result["payload"]["barcode"], "5050582369601")
+        self.assertEqual(result["payload"]["memberCount"], 2)
+        self.assertEqual(result["memberIntelligence"]["membersIdentified"], 1)
+        self.assertEqual(result["memberIntelligence"]["membersNeedingConfirmation"], 1)
+        self.assertEqual(result["contribution"]["entityType"], "box_set")
+        self.assertNotIn("private-owner", str(result))
+
+    def test_member_intelligence_normalizes_and_dedupes_members(self):
+        result = movievault_26.member_intelligence(
+            {
+                "title": "Example Box",
+                "members": [
+                    {"title": "Example One", "year": "2001", "tmdbId": "1"},
+                    {"title": "Example One", "year": "2001", "tmdbId": "1"},
+                    {"title": "Example Two", "year": "2002"},
+                ],
+            },
+            {},
+        )
+
+        self.assertEqual(result["memberCount"], 2)
+        self.assertEqual(result["membersIdentified"], 1)
+        self.assertEqual(result["membersNeedingConfirmation"], 1)
 
     def test_activity_summary_summarizes_submission_without_secret_values(self):
         result = movievault_26.activity_summary(
