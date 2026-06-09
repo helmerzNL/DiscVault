@@ -13082,6 +13082,14 @@ def ui_preview_html(
               <button type="button" class="secondary-button" id="notificationsMarkAllReadButton" data-next-i18n="notifications.markAllRead">Mark all read</button>
             </div>
           </div>
+          <div class="detail-submenu notification-filter-tabs" role="tablist" aria-label="Notification filter" data-next-i18n-aria="notifications.filter">
+            <button type="button" class="active" data-notification-filter="all" data-next-i18n="notifications.filterAll">All</button>
+            <button type="button" data-notification-filter="unread" data-next-i18n="notifications.filterUnread">Unread</button>
+            <button type="button" data-notification-filter="group_invites" data-next-i18n="notifications.prefGroupInvites">Groups</button>
+            <button type="button" data-notification-filter="metadata_jobs" data-next-i18n="notifications.prefMetadataJobs">Metadata jobs</button>
+            <button type="button" data-notification-filter="imports" data-next-i18n="notifications.prefImports">Imports</button>
+            <button type="button" data-notification-filter="security" data-next-i18n="notifications.prefSecurity">Security</button>
+          </div>
           <div class="notification-list" id="notificationsList"></div>
           <div class="preview-empty hidden" id="notificationsEmptyMessage"></div>
         </section>
@@ -14589,6 +14597,7 @@ def ui_preview_html(
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], counts: {}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
+    let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
     let currentStartup = {};
     let currentAuthStatus = {};
@@ -14951,6 +14960,10 @@ def ui_preview_html(
       {key: "bulk.edit", labelKey: "appAdmin.featureBulkEdit", fallback: "Bulk edit collection", permissions: ["collection.bulk_edit"]},
       {key: "containers.manage", labelKey: "appAdmin.featureContainers", fallback: "Manage box sets, vaults and collections", permissions: ["containers.create", "containers.edit", "containers.delete", "collection.bulk_edit"]},
       {key: "groups.manage", labelKey: "appAdmin.featureGroups", fallback: "Manage groups", permissions: ["groups.view", "groups.create", "groups.invite"]},
+      {key: "import.boxsets", labelKey: "appAdmin.featureImportBoxSets", fallback: "Import box-sets", permissions: ["collection.import", "metadata.search", "containers.edit"]},
+      {key: "notifications.use", labelKey: "appAdmin.featureNotifications", fallback: "Use notifications", permissions: ["collection.view", "watchlist.manage", "groups.view"]},
+      {key: "offline.sync", labelKey: "appAdmin.featureOfflineSync", fallback: "Offline and PWA sync", permissions: ["collection.view"]},
+      {key: "api.mcp", labelKey: "appAdmin.featureApiMcp", fallback: "API and MCP access", permissions: ["api.read", "api.write", "mcp.use", "api.tokens.manage"]},
       {key: "plugins.manage", labelKey: "appAdmin.featurePlugins", fallback: "Manage plugins", permissions: ["metadata.manage_plugins", "metadata.manage_plugin_settings", "metadata.manage_receivers", "plugins.delete"]},
       {key: "digital.manage", labelKey: "appAdmin.featureDigitalSources", fallback: "Manage digital sources", permissions: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"]},
       {key: "backup.export", labelKey: "appAdmin.featureBackupExport", fallback: "Export collection backups", permissions: ["admin.backup", "collection.export_functional"]},
@@ -16503,6 +16516,10 @@ def ui_preview_html(
       const artwork = operations.artwork || {};
       const watchSync = operations.watchSync || {};
       const pluginPolicy = operations.pluginPolicy || {};
+      const offline = operations.offline || {};
+      const features = operations.features || [];
+      const readyFeatures = features.filter((feature) => ["ready", "ok", "healthy"].includes(String(feature.status || "").toLowerCase())).length;
+      const attentionFeatures = features.filter((feature) => ["attention", "failed", "error"].includes(String(feature.status || "").toLowerCase())).length;
       renderAppAdminCollectionHealth();
       dashboard.innerHTML = operations.status === undefined && !operations.counts
         ? `<div class="preview-empty">${escapeHtml(tNext("appAdmin.operationsNotLoaded", "Operations data has not been loaded yet."))}</div>`
@@ -16537,9 +16554,18 @@ def ui_preview_html(
             <strong>${escapeHtml(formatNumber((pluginPolicy.sourceOrder || []).length))}</strong>
             <span>${escapeHtml((pluginPolicy.sourceOrder || []).slice(0, 4).join(" → ") || "-")}</span>
           </div>
+          <div class="operations-dashboard-card">
+            <span>${escapeHtml(tNext("appAdmin.v2Readiness", "v2 readiness"))}</span>
+            <strong>${escapeHtml(formatNumber(readyFeatures))}/${escapeHtml(formatNumber(features.length))}</strong>
+            <span>${escapeHtml(formatNumber(attentionFeatures))} ${escapeHtml(tNext("appAdmin.needAttention", "need attention"))}</span>
+          </div>
+          <div class="operations-dashboard-card">
+            <span>${escapeHtml(tNext("profile.offlineSyncV2", "Offline/PWA Sync v2"))}</span>
+            <strong>${escapeHtml(appAdminOperationsStatusLabel(offline.status || "ready"))}</strong>
+            <span>${escapeHtml(Object.entries(offline.capabilities || {}).filter(([, value]) => value).map(([key]) => key).slice(0, 4).join(" / ") || "-")}</span>
+          </div>
         `;
       if (featuresNode) {
-        const features = operations.features || [];
         const groups = {};
         features.forEach((feature) => {
           const group = feature.group || "operations";
@@ -22254,8 +22280,9 @@ def ui_preview_html(
         const selected = importSelectedMatch(index);
         const manual = importManualState(index);
         if (selected) decision.metadataMatch = normalizeImportSuggestion(selected);
-        if (action !== "skip" && row.detectedBoxSetAutoImportable === true && row.detectedBoxSetProposal && typeof row.detectedBoxSetProposal === "object") {
+        if (action !== "skip" && row.detectedBoxSetProposal && typeof row.detectedBoxSetProposal === "object") {
           decision.boxSetProposal = row.detectedBoxSetProposal;
+          decision.boxSetReviewAccepted = row.detectedBoxSetAutoImportable !== true;
         }
         const manualOverride = {};
         ["title", "year", "tmdbId", "imdbId", "posterUrl"].forEach((field) => {
@@ -22358,8 +22385,16 @@ def ui_preview_html(
             ${boxSetReviews.map((boxSet) => `
               <div class="import-boxset-card">
                 <div class="import-card-head">
-                  <strong>${escapeHtml(boxSet.title || tNext("common.untitled", "Untitled"))}</strong>
+                  <div>
+                    <strong>${escapeHtml(boxSet.title || tNext("common.untitled", "Untitled"))}</strong>
+                    <div class="import-source-meta">${escapeHtml([boxSet.barcode, boxSet.format, (boxSet.boxSetEvidence || {}).memberSource].filter(Boolean).join(" / "))}</div>
+                  </div>
                   <span class="tag">${escapeHtml(boxSet.memberCount || 0)} ${escapeHtml(tNext("importCenter.members", "members"))}</span>
+                </div>
+                <div class="import-counts">
+                  ${(boxSet.boxSetEvidence || {}).barcodeMatch ? `<span class="tag good">${escapeHtml(tNext("importCenter.exactBarcode", "Exact barcode"))}</span>` : ""}
+                  ${(boxSet.boxSetEvidence || {}).membersAreExplicit ? `<span class="tag good">${escapeHtml(tNext("importCenter.explicitMembers", "Explicit members"))}</span>` : `<span class="tag warning">${escapeHtml(tNext("importCenter.memberConfirmationNeeded", "Confirm members"))}</span>`}
+                  ${(boxSet.boxSetEvidence || {}).detectedWithoutMembers ? `<span class="tag warning">${escapeHtml(tNext("importCenter.detectedWithoutMembers", "Detected without members"))}</span>` : ""}
                 </div>
                 <div class="import-boxset-members">
                   ${(boxSet.members || []).slice(0, 10).map((member) => {
@@ -22572,6 +22607,11 @@ def ui_preview_html(
               ${match ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.matches", "Matches"))}: ${escapeHtml(match)}</div>` : ""}
               ${containerTags ? `<div class="import-counts">${containerTags}</div>` : ""}
               ${detectedBoxSet ? `<div class="import-source-meta">${escapeHtml(tNext("importCenter.boxSetDetected", "Box-set detected"))}: ${escapeHtml(detectedBoxSetTitle)}${detectedBoxSetMeta ? ` / ${escapeHtml(detectedBoxSetMeta)}` : ""}</div>` : ""}
+              ${detectedBoxSet ? `<div class="import-counts">
+                ${detectedBoxSetAudit.barcodeMatch ? `<span class="tag good">${escapeHtml(tNext("importCenter.exactBarcode", "Exact barcode"))}</span>` : ""}
+                ${detectedBoxSetAudit.membersAreExplicit ? `<span class="tag good">${escapeHtml(tNext("importCenter.explicitMembers", "Explicit members"))}</span>` : `<span class="tag warning">${escapeHtml(tNext("importCenter.memberConfirmationNeeded", "Confirm members"))}</span>`}
+                ${(detectedBoxSetAudit.memberPreview || []).slice(0, 4).map((member) => `<span class="tag blue">${escapeHtml(member.title || member.name || "-")}${member.year ? ` (${escapeHtml(member.year)})` : ""}</span>`).join("")}
+              </div>` : ""}
               ${evidence ? `<div class="import-review-evidence">${evidence}</div>` : ""}
               ${releaseRisk ? `<div class="import-release-warning">${escapeHtml(tNext("importCenter.releaseTitleWarning", "This looks like a release title. Choose the actual movie match before import."))}</div>` : ""}
               ${row.recommendedMatch ? `<div class="import-selected-match import-recommended-match">${escapeHtml(tNext("importCenter.recommendedMatch", "Recommended match"))}: ${escapeHtml(row.recommendedMatch.title || "")} ${escapeHtml(row.recommendedMatch.year || "")}</div>` : ""}
@@ -25198,15 +25238,26 @@ def ui_preview_html(
         </span>
       `;
     }
+    function notificationPrefKey(notification) {
+      const payload = notification?.payload || {};
+      return String(payload.prefKey || payload.pref_key || payload.kind || "app_updates");
+    }
+    function notificationMatchesFilter(notification) {
+      const filter = String(notificationFilter || "all");
+      if (filter === "all") return true;
+      if (filter === "unread") return !notification.read_at;
+      return notificationPrefKey(notification) === filter || String((notification.payload || {}).kind || "") === filter;
+    }
     function notificationCardHtml(notification) {
       const unread = !notification.read_at;
       const created = notification.created_at ? formatAppDate(notification.created_at) : "";
+      const prefKey = notificationPrefKey(notification);
       return `
         <article class="notification-card ${unread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}" role="button" tabindex="0">
           <span>
             <strong>${escapeHtml(notification.title || tNext("notifications.itemTitle", "Notification"))}</strong>
             ${notification.body ? `<p>${escapeHtml(notification.body)}</p>` : ""}
-            <span class="notification-meta">${escapeHtml(created)}</span>
+            <span class="notification-meta">${escapeHtml(created)}${prefKey ? ` / ${escapeHtml(tNext(`notifications.pref.${prefKey}`, prefKey.replaceAll("_", " ")))}` : ""}</span>
             ${notificationInviteActionsHtml(notification)}
           </span>
           <span class="notification-dot" aria-hidden="true"></span>
@@ -25226,13 +25277,21 @@ def ui_preview_html(
     function renderNotificationsView() {
       const list = document.getElementById("notificationsList");
       const empty = document.getElementById("notificationsEmptyMessage");
+      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "security"].includes(notificationFilter) ? notificationFilter : "all";
+      document.querySelectorAll("[data-notification-filter]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.notificationFilter === notificationFilter);
+        button.setAttribute("aria-pressed", button.dataset.notificationFilter === notificationFilter ? "true" : "false");
+      });
       updateNotificationCounts(notificationsState.counts);
+      const visibleItems = (notificationsState.items || []).filter(notificationMatchesFilter);
       if (list) {
-        list.innerHTML = (notificationsState.items || []).map(notificationCardHtml).join("");
+        list.innerHTML = visibleItems.map(notificationCardHtml).join("");
       }
       if (empty) {
-        empty.textContent = tNext("notifications.empty", "No notifications yet.");
-        empty.classList.toggle("hidden", !!(notificationsState.items || []).length);
+        empty.textContent = notificationFilter === "all"
+          ? tNext("notifications.empty", "No notifications yet.")
+          : tNext("notifications.emptyFilter", "No notifications for this filter.");
+        empty.classList.toggle("hidden", !!visibleItems.length);
       }
       document.querySelectorAll("[data-notification-id]").forEach((button) => {
         button.addEventListener("click", (event) => {
@@ -27002,6 +27061,18 @@ def ui_preview_html(
           return 0;
         }
       })();
+      const queueTypes = (() => {
+        try {
+          const raw = window.localStorage.getItem("dv_next_offline_queue") || window.localStorage.getItem("discvault_offline_queue") || "[]";
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return [];
+          return [...new Set(parsed.map((item) => String(item?.type || item?.method || item?.url || "change")).filter(Boolean))].slice(0, 4);
+        } catch (_) {
+          return [];
+        }
+      })();
+      const installed = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+      const lastSync = localStorage.getItem("dv_next_last_successful_sync") || localStorage.getItem("discvault_last_sync") || "";
       const renderRows = (cacheCount = null) => {
         const cacheText = cacheCount == null
           ? tNext("profile.offlineCacheUnknown", "Cache status unknown")
@@ -27022,6 +27093,26 @@ def ui_preview_html(
           <div class="offline-status-row">
             <strong>${escapeHtml(tNext("profile.offlineQueue", "Offline queue"))}</strong>
             <span>${escapeHtml(tNext("profile.offlineQueueCount", "{count} pending changes").replace("{count}", String(offlineQueue)))}</span>
+          </div>
+          <div class="offline-status-row">
+            <strong>${escapeHtml(tNext("profile.pwaInstallMode", "PWA mode"))}</strong>
+            <span>${escapeHtml(installed ? tNext("profile.pwaStandalone", "Installed app window") : tNext("profile.pwaBrowser", "Browser tab"))}</span>
+          </div>
+          <div class="offline-status-row">
+            <strong>${escapeHtml(tNext("profile.offlineSyncV2", "Offline/PWA Sync v2"))}</strong>
+            <span>${escapeHtml([
+              tNext("profile.cachedReads", "cached reads"),
+              tNext("profile.queuedWrites", "queued writes"),
+              tNext("profile.backendGuard", "backend guard")
+            ].join(" / "))}</span>
+          </div>
+          <div class="offline-status-row">
+            <strong>${escapeHtml(tNext("profile.offlineQueueTypes", "Queued actions"))}</strong>
+            <span>${escapeHtml(queueTypes.length ? queueTypes.join(" / ") : tNext("profile.offlineQueueEmpty", "No queued actions"))}</span>
+          </div>
+          <div class="offline-status-row">
+            <strong>${escapeHtml(tNext("profile.lastSuccessfulSync", "Last successful sync"))}</strong>
+            <span>${escapeHtml(lastSync ? shortDateTime(lastSync) : tNext("profile.notRecorded", "Not recorded"))}</span>
           </div>
         `;
       };
@@ -27858,6 +27949,13 @@ def ui_preview_html(
       });
       document.getElementById("notificationsRefreshButton")?.addEventListener("click", () => loadNotifications(true));
       document.getElementById("notificationsMarkAllReadButton")?.addEventListener("click", () => markAllNotificationsRead());
+      document.querySelectorAll("[data-notification-filter]").forEach((button) => {
+        button.addEventListener("click", () => {
+          notificationFilter = button.dataset.notificationFilter || "all";
+          localStorage.setItem("dv_next_notification_filter", notificationFilter);
+          renderNotificationsView();
+        });
+      });
       document.getElementById("notificationsList")?.addEventListener("click", (event) => {
         const acceptButton = event.target.closest("[data-notification-invite-accept]");
         const declineButton = event.target.closest("[data-notification-invite-decline]");
