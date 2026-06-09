@@ -14,15 +14,21 @@ try:
     from app.backend.next_app import actor_effective_has_any_permission
     from app.backend.next_app import actor_effective_has_permission
     from app.backend.next_app import normalize_api_token_permissions
+    from app.backend.next_app import normalize_profile_api_audit_category
+    from app.backend.next_app import profile_api_audit_category_condition
+    from app.backend.next_app import profile_api_audit_search_term
     from app.backend.next_app import profile_api_access_payload
-except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
-    if exc.name != "flask":
+except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
+    if exc.name not in {"flask", "psycopg"}:
         raise
     NextApiError = None
     api_token_scopes_for_permissions = None
     actor_effective_has_any_permission = None
     actor_effective_has_permission = None
     normalize_api_token_permissions = None
+    normalize_profile_api_audit_category = None
+    profile_api_audit_category_condition = None
+    profile_api_audit_search_term = None
     profile_api_access_payload = None
 
 
@@ -149,6 +155,28 @@ class NextApiTokenPermissionTests(unittest.TestCase):
         }
 
         self.assertFalse(actor_effective_has_permission(actor, "metadata.refresh_one"))
+
+    def test_profile_api_audit_category_filter_is_normalized(self):
+        self.assertEqual(normalize_profile_api_audit_category("MCP"), "mcp")
+        self.assertEqual(normalize_profile_api_audit_category("security"), "security")
+        self.assertEqual(normalize_profile_api_audit_category("not-a-filter"), "all")
+
+    def test_profile_api_audit_category_conditions_scope_events(self):
+        api_sql, api_params = profile_api_audit_category_condition("api")
+        security_sql, security_params = profile_api_audit_category_condition("security")
+        all_sql, all_params = profile_api_audit_category_condition("all")
+
+        self.assertIn("category = %s", api_sql)
+        self.assertIn("api.%", api_sql)
+        self.assertEqual(api_params, ["api"])
+        self.assertIn("api_token.created", security_sql)
+        self.assertEqual(security_params, [])
+        self.assertIn("category IN ('api', 'mcp')", all_sql)
+        self.assertEqual(all_params, [])
+
+    def test_profile_api_audit_search_term_is_trimmed_and_capped(self):
+        self.assertEqual(profile_api_audit_search_term("  /mcp  "), "/mcp")
+        self.assertEqual(len(profile_api_audit_search_term("x" * 200)), 120)
 
 
 if __name__ == "__main__":

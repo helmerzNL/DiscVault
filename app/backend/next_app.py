@@ -10751,14 +10751,16 @@ def ui_preview_html(
       width: 100%;
     }
     .profile-api-log-filter-row {
-      display: flex;
-      justify-content: flex-end;
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.8fr) minmax(220px, 1.1fr);
+      gap: 10px;
+      align-items: end;
       min-width: 0;
     }
     .profile-api-log-filter-row label {
       display: grid;
       gap: 6px;
-      width: min(360px, 100%);
+      min-width: 0;
       font-size: 0.82rem;
       color: var(--muted);
     }
@@ -12534,10 +12536,7 @@ def ui_preview_html(
         grid-template-columns: 1fr;
       }
       .profile-api-log-filter-row {
-        justify-content: stretch;
-      }
-      .profile-api-log-filter-row label {
-        width: 100%;
+        grid-template-columns: 1fr;
       }
       .profile-identity {
         align-items: flex-start;
@@ -14152,6 +14151,19 @@ def ui_preview_html(
                       <span data-next-i18n="profile.apiActivityTokenFilter">Access key</span>
                       <select id="profileApiAuditTokenFilter"></select>
                     </label>
+                    <label for="profileApiAuditCategoryFilter">
+                      <span data-next-i18n="profile.apiActivityTypeFilter">Type</span>
+                      <select id="profileApiAuditCategoryFilter">
+                        <option value="all" data-next-i18n="profile.apiActivityTypeAll">All activity</option>
+                        <option value="api" data-next-i18n="profile.apiActivityTypeApi">API</option>
+                        <option value="mcp" data-next-i18n="profile.apiActivityTypeMcp">MCP</option>
+                        <option value="security" data-next-i18n="profile.apiActivityTypeSecurity">Security</option>
+                      </select>
+                    </label>
+                    <label for="profileApiAuditSearchInput">
+                      <span data-next-i18n="profile.apiActivitySearchFilter">Search</span>
+                      <input id="profileApiAuditSearchInput" type="search" autocomplete="off" data-next-i18n-placeholder="profile.apiActivitySearchPlaceholder" placeholder="Endpoint, tool, agent or IP">
+                    </label>
                   </div>
                   <div class="profile-api-log-list" id="profileApiAuditList"></div>
                 </section>
@@ -14737,7 +14749,7 @@ def ui_preview_html(
     let profileCredentials = [];
     let profileRecovery = {};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
-    let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all"};
+    let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all", category: "all", search: ""};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
     let activeProfileApiTab = localStorage.getItem("dv_next_profile_api_tab") || "general";
     let containerManagerType = "box_set";
@@ -27473,6 +27485,19 @@ def ui_preview_html(
       select.value = tokens.some((token) => String(token.id) === String(current)) ? current : "all";
       profileApiAudit.tokenId = select.value;
     }
+    function renderProfileApiAuditFilters() {
+      renderProfileApiAuditTokenFilter();
+      const category = document.getElementById("profileApiAuditCategoryFilter");
+      if (category) {
+        const value = ["all", "api", "mcp", "security"].includes(profileApiAudit.category) ? profileApiAudit.category : "all";
+        category.value = value;
+        profileApiAudit.category = value;
+      }
+      const search = document.getElementById("profileApiAuditSearchInput");
+      if (search && search.value !== (profileApiAudit.search || "")) {
+        search.value = profileApiAudit.search || "";
+      }
+    }
     function apiAuditCommandLabel(event) {
       const metadata = event?.metadata || {};
       return metadata.command || metadata.tool || event?.eventType || tNext("profile.apiActivityUnknownCommand", "Unknown command");
@@ -27487,7 +27512,7 @@ def ui_preview_html(
     function renderProfileApiAudit() {
       const list = document.getElementById("profileApiAuditList");
       if (!list) return;
-      renderProfileApiAuditTokenFilter();
+      renderProfileApiAuditFilters();
       if (profileApiAudit.loading) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("profile.apiActivityLoading", "Loading activity..."))}</div>`;
         return;
@@ -27626,7 +27651,7 @@ def ui_preview_html(
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("profile.noAccessTokens", "No access tokens yet."))}</div>`;
       }
-      renderProfileApiAuditTokenFilter();
+      renderProfileApiAuditFilters();
       renderProfileApiAudit();
       syncProfilePanelVisibility();
     }
@@ -27837,6 +27862,8 @@ def ui_preview_html(
         const tokenId = profileApiAudit.tokenId && profileApiAudit.tokenId !== "all" ? profileApiAudit.tokenId : "";
         const params = new URLSearchParams({limit: "100"});
         if (tokenId) params.set("tokenId", tokenId);
+        if (profileApiAudit.category && profileApiAudit.category !== "all") params.set("category", profileApiAudit.category);
+        if (profileApiAudit.search) params.set("q", profileApiAudit.search);
         const payload = await authApiJson(`/api/next/profile/api-audit-events?${params.toString()}`);
         profileApiAudit.events = payload.events || [];
         profileApiAudit.loaded = true;
@@ -28399,6 +28426,17 @@ def ui_preview_html(
         profileApiAudit.tokenId = event.target.value || "all";
         profileApiAudit.loaded = false;
         loadProfileApiAuditEvents(true);
+      });
+      document.getElementById("profileApiAuditCategoryFilter")?.addEventListener("change", (event) => {
+        profileApiAudit.category = event.target.value || "all";
+        profileApiAudit.loaded = false;
+        loadProfileApiAuditEvents(true);
+      });
+      document.getElementById("profileApiAuditSearchInput")?.addEventListener("input", (event) => {
+        profileApiAudit.search = String(event.target.value || "").trim();
+        profileApiAudit.loaded = false;
+        window.clearTimeout(profileApiAudit.searchTimer);
+        profileApiAudit.searchTimer = window.setTimeout(() => loadProfileApiAuditEvents(true), 250);
       });
       document.getElementById("importCenterRefreshButton")?.addEventListener("click", () => loadImportCenter());
       document.getElementById("importCenterStartButton")?.addEventListener("click", () => startImportCenterImport());
@@ -41734,6 +41772,43 @@ def api_audit_metadata(
     return metadata
 
 
+PROFILE_API_AUDIT_CATEGORIES = {"all", "api", "mcp", "security"}
+
+
+def normalize_profile_api_audit_category(value: Any) -> str:
+    category = clean_text(value).lower()
+    return category if category in PROFILE_API_AUDIT_CATEGORIES else "all"
+
+
+def profile_api_audit_search_term(value: Any) -> str:
+    return clean_text(value)[:120]
+
+
+def profile_api_audit_category_condition(category: str) -> tuple[str, list[Any]]:
+    category = normalize_profile_api_audit_category(category)
+    if category == "api":
+        return "(category = %s AND event_type LIKE 'api.%%')", ["api"]
+    if category == "mcp":
+        return "(category = %s AND event_type LIKE 'mcp.%%')", ["mcp"]
+    if category == "security":
+        return "(event_type IN ('api_token.created', 'api_token.revoked'))", []
+    return (
+        """
+        (
+            (
+                category IN ('api', 'mcp')
+                AND (
+                    event_type LIKE 'api.%%'
+                    OR event_type LIKE 'mcp.%%'
+                )
+            )
+            OR event_type IN ('api_token.created', 'api_token.revoked')
+        )
+        """,
+        [],
+    )
+
+
 def audit_api_interaction(
     conn,
     actor: dict[str, Any],
@@ -43318,6 +43393,8 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/profile/api-audit-events")
     def get_next_profile_api_audit_events():
         token_id = clean_text(request.args.get("tokenId") or request.args.get("token_id"))
+        category_filter = normalize_profile_api_audit_category(request.args.get("category") or request.args.get("type"))
+        search_term = profile_api_audit_search_term(request.args.get("q") or request.args.get("search"))
         token_uuid = None
         if token_id and token_id.lower() != "all":
             token_uuid = parse_uuid(token_id, "tokenId")
@@ -43333,7 +43410,15 @@ def register_routes(flask_app: Flask) -> None:
             if not access.get("manageable") and not (access.get("tokens") or []):
                 raise NextApiError("Permission required: API or MCP access", 403)
             if not table_exists(conn, "api_access_tokens") or not table_exists(conn, "audit_events"):
-                return response({"status": "ok", "events": [], "tokenId": str(token_uuid) if token_uuid else "all"})
+                return response(
+                    {
+                        "status": "ok",
+                        "events": [],
+                        "tokenId": str(token_uuid) if token_uuid else "all",
+                        "category": category_filter,
+                        "query": search_term,
+                    }
+                )
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -43347,12 +43432,28 @@ def register_routes(flask_app: Flask) -> None:
             if token_uuid:
                 requested_token_id = str(token_uuid)
                 if requested_token_id not in owned_token_ids:
-                    return response({"status": "ok", "events": [], "tokenId": requested_token_id})
+                    return response(
+                        {
+                            "status": "ok",
+                            "events": [],
+                            "tokenId": requested_token_id,
+                            "category": category_filter,
+                            "query": search_term,
+                        }
+                    )
                 visible_token_ids = [requested_token_id]
             else:
                 visible_token_ids = owned_token_ids
             if not visible_token_ids:
-                return response({"status": "ok", "events": [], "tokenId": "all"})
+                return response(
+                    {
+                        "status": "ok",
+                        "events": [],
+                        "tokenId": "all",
+                        "category": category_filter,
+                        "query": search_term,
+                    }
+                )
             token_placeholders = ", ".join(["%s"] * len(visible_token_ids))
             explicit_token_match = f"""
                 (
@@ -43363,23 +43464,13 @@ def register_routes(flask_app: Flask) -> None:
                     OR (target_type = 'api_access_token' AND target_id IN ({token_placeholders}))
                 )
             """
+            category_condition, category_params = profile_api_audit_category_condition(category_filter)
             conditions = [
-                """
-                (
-                    category IN ('api', 'mcp')
-                    OR event_type IN ('api_token.created', 'api_token.revoked')
-                )
-                """,
-                """
-                (
-                    event_type LIKE 'api.%'
-                    OR event_type LIKE 'mcp.%'
-                    OR event_type IN ('api_token.created', 'api_token.revoked')
-                )
-                """,
+                category_condition,
                 explicit_token_match,
             ]
             params: list[Any] = [
+                *category_params,
                 *visible_token_ids,
                 *visible_token_ids,
                 *visible_token_ids,
@@ -43408,6 +43499,30 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 """
                 params.append(actor["id"])
+            if search_term:
+                search_like = f"%{search_term}%"
+                conditions.append(
+                    """
+                    (
+                        event_type ILIKE %s
+                        OR category ILIKE %s
+                        OR COALESCE(summary, '') ILIKE %s
+                        OR COALESCE(target_type, '') ILIKE %s
+                        OR COALESCE(target_id, '') ILIKE %s
+                        OR COALESCE(request_ip, '') ILIKE %s
+                        OR COALESCE(user_agent, '') ILIKE %s
+                        OR COALESCE(metadata->>'command', '') ILIKE %s
+                        OR COALESCE(metadata->>'tool', '') ILIKE %s
+                        OR COALESCE(metadata->>'endpoint', '') ILIKE %s
+                        OR COALESCE(metadata->>'method', '') ILIKE %s
+                        OR COALESCE(metadata->>'agent', '') ILIKE %s
+                        OR COALESCE(metadata->>'apiTokenName', '') ILIKE %s
+                        OR COALESCE(metadata->>'mcpPath', '') ILIKE %s
+                        OR metadata::text ILIKE %s
+                    )
+                    """
+                )
+                params.extend([search_like] * 15)
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
@@ -43426,6 +43541,8 @@ def register_routes(flask_app: Flask) -> None:
                 "status": "ok",
                 "events": [audit_event_row(row) for row in rows],
                 "tokenId": str(token_uuid) if token_uuid else "all",
+                "category": category_filter,
+                "query": search_term,
             }
         )
 
