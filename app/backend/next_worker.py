@@ -124,6 +124,51 @@ def bool_value(value: Any, *, default: bool = False) -> bool:
     return default
 
 
+def physical_media_format_key(value: Any) -> str:
+    text = (clean_text(value) or "").casefold().replace("-", " ").replace("_", " ").replace("/", " ")
+    text = " ".join(text.split())
+    if not text:
+        return ""
+    if "ultra hd" in text or "uhd" in text or "4k" in text:
+        return "ultra_hd_blu_ray"
+    if "blu ray" in text or "bluray" in text or text == "bd":
+        return "blu_ray"
+    if text in {"dvd", "dvd video"}:
+        return "dvd"
+    if "hd dvd" in text or "hddvd" in text:
+        return "hd_dvd"
+    if "laserdisc" in text or "laser disc" in text:
+        return "laserdisc"
+    if "svcd" in text or "vcd" in text:
+        return "vcd_svcd"
+    return text
+
+
+def physical_media_formats_compatible(candidate: Any, expected: Any) -> bool:
+    candidate_key = physical_media_format_key(candidate)
+    expected_key = physical_media_format_key(expected)
+    return not candidate_key or not expected_key or candidate_key == expected_key
+
+
+def import_container_release_key(
+    container_type: str,
+    title: str,
+    *,
+    barcode: Any = "",
+    media_format: Any = "",
+) -> tuple[str, str, str]:
+    type_key = clean_text(container_type)
+    title_key = (clean_text(title) or "").casefold()
+    if type_key == "box_set":
+        barcode_key = (clean_text(barcode) or "").casefold()
+        if barcode_key:
+            return (type_key, "barcode", barcode_key)
+        format_key = physical_media_format_key(media_format)
+        if format_key:
+            return (type_key, "title_format", f"{title_key}:{format_key}")
+    return (type_key, "title", title_key)
+
+
 def plugin_config_payload(settings: Any, secrets_ref: Any) -> dict[str, Any]:
     safe_settings = settings if isinstance(settings, dict) else {}
     refs = secrets_ref if isinstance(secrets_ref, dict) else {}
@@ -540,17 +585,46 @@ def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any
                 if value not in (None, "", [], {})
             }
         if isinstance(box_set_proposal, dict):
-            members = [
-                member
-                for member in (
+            proposal_format = clean_text(box_set_proposal.get("format") or reviewed.get("format"))
+            members = []
+            for index, raw_member in enumerate(
+                (
                     box_set_proposal.get("members")
                     or box_set_proposal.get("movies")
                     or box_set_proposal.get("boxSetMovies")
                     or box_set_proposal.get("box_set_movies")
                     or []
-                )
-                if isinstance(member, dict) and clean_text(member.get("title") or member.get("name"))
-            ]
+                ),
+                start=1,
+            ):
+                if not isinstance(raw_member, dict):
+                    continue
+                member_title = clean_text(raw_member.get("title") or raw_member.get("name"))
+                if not member_title:
+                    continue
+                member = dict(raw_member)
+                member["title"] = member_title
+                member_format = clean_text(member.get("format"))
+                if proposal_format and (not member_format or not physical_media_formats_compatible(member_format, proposal_format)):
+                    member["format"] = proposal_format
+                else:
+                    member["format"] = member_format
+                member["sortOrder"] = int(member.get("sortOrder") or member.get("sort_order") or index)
+                members.append({key: value for key, value in member.items() if value not in (None, "", [], {})})
+            proposal_payload = {
+                key: value
+                for key, value in box_set_proposal.items()
+                if value not in (None, "", [], {})
+            }
+            if members:
+                proposal_payload["members"] = members
+                proposal_payload["movies"] = members
+                proposal_payload["boxSetMovies"] = members
+                proposal_payload["box_set_movies"] = members
+                proposal_payload["memberCount"] = len(members)
+                proposal_payload["member_count"] = len(members)
+                proposal_payload["membersAreExplicit"] = True
+                proposal_payload["members_are_explicit"] = True
             reviewed.update(
                 {
                     "itemType": "box_set",
@@ -559,21 +633,18 @@ def apply_collection_import_review(result: dict[str, Any], review: dict[str, Any
                     "title": clean_text(box_set_proposal.get("title") or box_set_proposal.get("name") or reviewed.get("title")),
                     "boxSetTitle": clean_text(box_set_proposal.get("title") or box_set_proposal.get("name") or reviewed.get("boxSetTitle") or reviewed.get("title")),
                     "barcode": clean_text(box_set_proposal.get("barcode") or reviewed.get("barcode")),
-                    "format": clean_text(box_set_proposal.get("format") or reviewed.get("format")),
-                    "boxSetProposal": {
-                        key: value
-                        for key, value in box_set_proposal.items()
-                        if value not in (None, "", [], {})
-                    },
+                    "format": proposal_format,
+                    "boxSetProposal": proposal_payload,
                     "boxSetMembers": members,
                     "containers": [
                         {
                             "containerType": "box_set",
                             "title": clean_text(box_set_proposal.get("title") or box_set_proposal.get("name") or reviewed.get("title")),
                             "barcode": clean_text(box_set_proposal.get("barcode") or reviewed.get("barcode")),
-                            "format": clean_text(box_set_proposal.get("format") or reviewed.get("format")),
+                            "format": proposal_format,
                             "memberCount": len(members),
                             "membersAreExplicit": bool(members),
+                            "boxSetProposal": proposal_payload,
                         }
                     ],
                 }
@@ -632,6 +703,11 @@ def source_public_id(prefix: str, value: str, *, fallback: str) -> str:
 
 def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "") -> UUID | None:
     barcode = clean_text(item.get("barcode"))
+    item_format = clean_text(item.get("format"))
+
+    def row_format_matches(row: dict[str, Any]) -> bool:
+        return physical_media_formats_compatible(row.get("format"), item_format)
+
     with conn.cursor() as cur:
         public_id = clean_text(public_id)
         if public_id:
@@ -654,32 +730,32 @@ def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "")
                     continue
                 cur.execute(
                     """
-                    SELECT movie_id
-                    FROM movie_identifiers
-                    WHERE provider_id=%s AND identifier_type='movie_id' AND identifier=%s
-                    LIMIT 1
+                    SELECT m.id AS movie_id, m.format
+                    FROM movie_identifiers mi
+                    JOIN movies m ON m.id = mi.movie_id
+                    WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
+                    ORDER BY m.updated_at DESC
                     """,
                     (provider, identifier),
                 )
-                row = cur.fetchone()
-                if row:
-                    return row["movie_id"]
+                for row in cur.fetchall():
+                    if row_format_matches(row):
+                        return row["movie_id"]
         title = clean_text(item.get("title"))
         year = clean_text(item.get("year"))
         if title and year:
             cur.execute(
                 """
-                SELECT id
+                SELECT id, format
                 FROM movies
                 WHERE lower(title)=lower(%s) AND year=%s
                 ORDER BY updated_at DESC
-                LIMIT 1
                 """,
                 (title, year),
             )
-            row = cur.fetchone()
-            if row:
-                return row["id"]
+            for row in cur.fetchall():
+                if row_format_matches(row):
+                    return row["id"]
     return None
 
 
@@ -722,6 +798,7 @@ def import_item_container_specs(item: dict[str, Any]) -> list[dict[str, Any]]:
                         "barcode": clean_text(item.get("barcode")),
                         "format": clean_text(item.get("format")),
                         "memberCount": len(item.get("boxSetMembers") or []),
+                        "membersAreExplicit": bool(item.get("boxSetMembers")),
                         "boxSetProposal": item.get("boxSetProposal") if isinstance(item.get("boxSetProposal"), dict) else {},
                     }
                 )
@@ -744,12 +821,18 @@ def import_item_container_specs(item: dict[str, Any]) -> list[dict[str, Any]]:
                     "format": clean_text(raw.get("format")),
                     "memberCount": raw.get("memberCount") or raw.get("member_count"),
                     "membersAreExplicit": raw.get("membersAreExplicit") or raw.get("members_are_explicit"),
+                    "boxSetProposal": raw.get("boxSetProposal") if isinstance(raw.get("boxSetProposal"), dict) else {},
                 }
             )
-    seen: set[tuple[str, str]] = set()
-    unique: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    unique: list[dict[str, Any]] = []
     for spec in specs:
-        key = (spec["containerType"], spec["title"].casefold())
+        key = import_container_release_key(
+            spec["containerType"],
+            spec["title"],
+            barcode=spec.get("barcode"),
+            media_format=spec.get("format"),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -926,8 +1009,22 @@ def detect_import_item_box_set(conn, item: dict[str, Any], actor: dict[str, Any]
     return None
 
 
-def import_container_id(plugin_id: str, source_hash: str, container_type: str, title: str) -> UUID:
-    return stable_uuid(f"container-import:{plugin_id}:{source_hash}:{container_type}:{title.casefold()}")
+def import_container_id(
+    plugin_id: str,
+    source_hash: str,
+    container_type: str,
+    title: str,
+    *,
+    barcode: Any = "",
+    media_format: Any = "",
+) -> UUID:
+    release_key = import_container_release_key(
+        container_type,
+        title,
+        barcode=barcode,
+        media_format=media_format,
+    )
+    return stable_uuid(f"container-import:{plugin_id}:{source_hash}:{':'.join(release_key)}")
 
 
 def upsert_import_container(
@@ -942,14 +1039,26 @@ def upsert_import_container(
     barcode: str = "",
     metadata_extra: dict[str, Any] | None = None,
 ) -> tuple[UUID, bool]:
-    container_id = import_container_id(plugin_id, source_hash, container_type, title)
+    metadata_extra = metadata_extra if isinstance(metadata_extra, dict) else {}
+    incoming_format = clean_text(metadata_extra.get("format") or metadata_extra.get("media_format"))
+    barcode = clean_text(barcode)
+    container_id = import_container_id(
+        plugin_id,
+        source_hash,
+        container_type,
+        title,
+        barcode=barcode,
+        media_format=incoming_format,
+    )
+    public_identity = f"{plugin_id}-{source_hash[:12]}-{title}"
+    if container_type == "box_set" and (barcode or incoming_format):
+        public_identity = f"{public_identity}-{barcode or incoming_format}"
     public_id = source_public_id(
         f"import-{container_type}",
-        f"{plugin_id}-{source_hash[:12]}-{title}",
+        public_identity,
         fallback=str(container_id),
     )
     with conn.cursor() as cur:
-        barcode = clean_text(barcode)
         if barcode:
             cur.execute(
                 """
@@ -963,6 +1072,23 @@ def upsert_import_container(
             row = cur.fetchone()
             if row:
                 container_id = row["id"]
+        elif container_type == "box_set" and incoming_format:
+            cur.execute(
+                """
+                SELECT id, barcode, metadata
+                FROM containers
+                WHERE container_type=%s AND lower(title)=lower(%s)
+                ORDER BY updated_at DESC
+                """,
+                (container_type, title),
+            )
+            for row in cur.fetchall():
+                existing_barcode = clean_text(row.get("barcode"))
+                existing_metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+                existing_format = clean_text(existing_metadata.get("format") or existing_metadata.get("media_format"))
+                if not existing_barcode and existing_format and physical_media_formats_compatible(existing_format, incoming_format):
+                    container_id = row["id"]
+                    break
         cur.execute("SELECT id FROM containers WHERE id=%s", (container_id,))
         exists = bool(cur.fetchone())
         metadata = {
@@ -971,8 +1097,7 @@ def upsert_import_container(
             "source_path": source_path,
             "source_hash": source_hash,
         }
-        if isinstance(metadata_extra, dict):
-            metadata.update({key: value for key, value in metadata_extra.items() if value not in (None, "", [], {})})
+        metadata.update({key: value for key, value in metadata_extra.items() if value not in (None, "", [], {})})
         cur.execute(
             """
             INSERT INTO containers (
@@ -1163,12 +1288,16 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
 def import_box_set_member_item(parent_item: dict[str, Any], proposal: dict[str, Any], member: dict[str, Any], index: int) -> dict[str, Any]:
     parent_format = clean_text(parent_item.get("format") or proposal.get("format"))
     title = clean_text(member.get("title") or member.get("name") or member.get("originalTitle") or member.get("original_title"))
+    parent_release_ref = clean_text(proposal.get("barcode")) or clean_text(parent_item.get("barcode")) or parent_format or "box-set"
+    member_format = clean_text(member.get("format"))
+    if parent_format and (not member_format or not physical_media_formats_compatible(member_format, parent_format)):
+        member_format = parent_format
     item = {
         "title": title,
         "originalTitle": clean_text(member.get("originalTitle") or member.get("original_title") or title),
         "year": clean_text(member.get("year") or member.get("releaseYear") or member.get("release_year")),
         "releaseDate": clean_text(member.get("releaseDate") or member.get("release_date")),
-        "format": clean_text(member.get("format")) or parent_format,
+        "format": member_format,
         "barcode": clean_text(member.get("barcode")),
         "tmdbId": clean_text(member.get("tmdbId") or member.get("tmdb_id")),
         "imdbId": clean_text(member.get("imdbId") or member.get("imdb_id")),
@@ -1183,7 +1312,7 @@ def import_box_set_member_item(parent_item: dict[str, Any], proposal: dict[str, 
             or member.get("external_id")
             or member.get("sourceRef")
             or member.get("source_ref")
-            or f"{clean_text(proposal.get('barcode')) or clean_text(parent_item.get('barcode'))}:member:{index}:{title}"
+            or f"{parent_release_ref}:member:{index}:{title}"
         ),
     }
     return {key: value for key, value in item.items() if value not in (None, "", [], {})}
@@ -1203,6 +1332,7 @@ def persist_import_box_set_item(
     proposal = detection.get("proposal") if isinstance(detection.get("proposal"), dict) else {}
     barcode = clean_text(detection.get("barcode") or item.get("barcode") or proposal.get("barcode"))
     title = clean_text(proposal.get("title") or proposal.get("name") or item.get("title"))
+    media_format = clean_text(proposal.get("format") or item.get("format"))
     if not title:
         raise RuntimeError("Detected box-set is missing a title")
     members = import_box_set_member_list(proposal)
@@ -1219,6 +1349,7 @@ def persist_import_box_set_item(
         source_kind=source_kind,
         barcode=barcode,
         metadata_extra={
+            "format": media_format,
             "box_set_evidence": evidence,
             "boxSetEvidence": evidence,
             "member_source": clean_text(proposal.get("memberSource") or proposal.get("member_source") or proposal.get("source")),
@@ -1269,6 +1400,7 @@ def persist_import_box_set_item(
         "links": links,
         "memberCount": len(imported_members),
         "barcode": barcode,
+        "format": media_format,
         "provider": clean_text(proposal.get("provider") or proposal.get("source")),
         "evidence": evidence,
     }
@@ -1332,8 +1464,8 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             ).hexdigest()
             source_path = clean_text(result.get("sourcePath"))
             source_kind = clean_text(result.get("sourceKind") or plugin_id)
-            container_cache: dict[tuple[str, str], UUID] = {}
-            container_titles: dict[tuple[str, str], str] = {}
+            container_cache: dict[tuple[str, str, str], UUID] = {}
+            container_titles: dict[tuple[str, str, str], str] = {}
             container_created: set[UUID] = set()
             container_links = 0
             box_sets_imported = 0
@@ -1380,7 +1512,12 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                         updated += int(box_set_result.get("updated") or 0)
                         container_links += int(box_set_result.get("links") or 0)
                         container_id = UUID(str(box_set_result["containerId"]))
-                        container_key = ("box_set", clean_text(box_set_result.get("containerTitle")).casefold())
+                        container_key = import_container_release_key(
+                            "box_set",
+                            clean_text(box_set_result.get("containerTitle")),
+                            barcode=box_set_result.get("barcode"),
+                            media_format=box_set_result.get("format"),
+                        )
                         container_cache[container_key] = container_id
                         container_titles[container_key] = clean_text(box_set_result.get("containerTitle"))
                         if box_set_result.get("containerCreated"):
@@ -1416,8 +1553,8 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                             }
                         )
                         continue
-                    local_container_cache: dict[tuple[str, str], UUID] = {}
-                    local_container_titles: dict[tuple[str, str], str] = {}
+                    local_container_cache: dict[tuple[str, str, str], UUID] = {}
+                    local_container_titles: dict[tuple[str, str, str], str] = {}
                     local_container_created: set[UUID] = set()
                     local_container_links = 0
                     if import_item_is_box_set_container(item):
@@ -1426,7 +1563,12 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                                 for spec in import_item_container_specs(item):
                                     if spec["containerType"] != "box_set":
                                         continue
-                                    key = (spec["containerType"], spec["title"].casefold())
+                                    key = import_container_release_key(
+                                        spec["containerType"],
+                                        spec["title"],
+                                        barcode=spec.get("barcode") or item.get("barcode"),
+                                        media_format=spec.get("format") or item.get("format"),
+                                    )
                                     spec_container_id = container_cache.get(key) or local_container_cache.get(key)
                                     if not spec_container_id:
                                         local_container_titles[key] = spec["title"]
@@ -1479,7 +1621,12 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                         movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
                         if table_exists(conn, "containers"):
                             for spec in import_item_container_specs(item):
-                                key = (spec["containerType"], spec["title"].casefold())
+                                key = import_container_release_key(
+                                    spec["containerType"],
+                                    spec["title"],
+                                    barcode=spec.get("barcode"),
+                                    media_format=spec.get("format"),
+                                )
                                 spec_container_id = container_cache.get(key) or local_container_cache.get(key)
                                 if not spec_container_id:
                                     local_container_titles[key] = spec["title"]
