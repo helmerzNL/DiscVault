@@ -33,6 +33,8 @@ DISCVAULT_PLUGIN_API_VERSION = "next-1"
 SUPPORTED_PLUGIN_API_VERSIONS = {DISCVAULT_PLUGIN_API_VERSION}
 PLUGIN_ENTRYPOINTS = (
     "health_check",
+    "connection_request",
+    "connection_recovery_action",
     "search_title",
     "search_barcode",
     "lookup_external_id",
@@ -47,6 +49,9 @@ PLUGIN_ENTRYPOINTS = (
     "receive_metadata",
     "describe_payload",
     "activity_summary",
+    "prepare_barcode_update",
+    "prepare_container_update",
+    "member_intelligence",
     "discover_library",
     "sync_library",
     "sync_personal_lists",

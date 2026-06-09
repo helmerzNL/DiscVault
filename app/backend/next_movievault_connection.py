@@ -399,18 +399,13 @@ def _plugin_connection_action(plugin_id: str | None, phase: str, response: _Http
     plugin = plugin_id if is_movievault_plugin(plugin_id) else MOVIEVAULT_PLUGIN_ID
     try:
         try:
-            from .next_plugin_runtime import discovered_plugin, load_runtime_module
+            from .next_plugin_runtime import run_plugin_entrypoint
         except ImportError:  # pragma: no cover - supports running modules directly
-            from next_plugin_runtime import discovered_plugin, load_runtime_module
+            from next_plugin_runtime import run_plugin_entrypoint
 
-        discovery, _snapshot = discovered_plugin(plugin)
-        if not discovery:
-            return ""
-        module = load_runtime_module(discovery)
-        handler = getattr(module, "connection_recovery_action", None) if module else None
-        if not callable(handler):
-            return ""
-        result = handler(
+        execution = run_plugin_entrypoint(
+            plugin,
+            "connection_recovery_action",
             {
                 "phase": phase,
                 "statusCode": response.status_code,
@@ -418,11 +413,43 @@ def _plugin_connection_action(plugin_id: str | None, phase: str, response: _Http
             },
             {},
         )
+        result = execution.get("result") if isinstance(execution, dict) and execution.get("status") == "ok" else {}
         if isinstance(result, dict):
             return _text(result.get("action"))
         return _text(result)
     except Exception:
         return ""
+
+
+def _plugin_connection_request(
+    plugin_id: str | None,
+    phase: str,
+    body: dict[str, Any],
+    extra: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any], dict[str, str]]:
+    default_path = BOOTSTRAP_PATH if phase == "bootstrap" else HANDSHAKE_PATH
+    default_headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    plugin = plugin_id if is_movievault_plugin(plugin_id) else MOVIEVAULT_PLUGIN_ID
+    try:
+        try:
+            from .next_plugin_runtime import run_plugin_entrypoint
+        except ImportError:  # pragma: no cover - supports running modules directly
+            from next_plugin_runtime import run_plugin_entrypoint
+
+        execution = run_plugin_entrypoint(
+            plugin,
+            "connection_request",
+            {"phase": phase, "body": body, **(extra or {})},
+            {},
+        )
+        result = execution.get("result") if isinstance(execution, dict) else {}
+        if execution.get("status") != "ok" or not isinstance(result, dict) or result.get("status") != "ok":
+            return default_path, body, default_headers
+        request_body = result.get("body") if isinstance(result.get("body"), dict) else body
+        request_headers = result.get("headers") if isinstance(result.get("headers"), dict) else default_headers
+        return _text(result.get("path") or default_path), request_body, {str(k): str(v) for k, v in request_headers.items()}
+    except Exception:
+        return default_path, body, default_headers
 
 
 def _store_token_response(
@@ -475,12 +502,17 @@ def _bootstrap(
     allow_recovery_fallback: bool = True,
 ) -> dict[str, Any]:
     _private_key, public_key, _public_key_id = _instance_key_pair(conn)
-    payload = {**_connection_payload(conn), "publicKey": public_key}
+    path, request_body, headers = _plugin_connection_request(
+        plugin_id,
+        "bootstrap",
+        _connection_payload(conn),
+        {"publicKey": public_key},
+    )
     try:
         response = _post_json(
-            f"{_ingest_url(conn)}{BOOTSTRAP_PATH}",
-            _raw_json_body(payload),
-            {"Accept": "application/json", "Content-Type": "application/json"},
+            f"{_ingest_url(conn)}{path}",
+            _raw_json_body(request_body),
+            headers,
         )
     except MovieVaultConnectionError as exc:
         _set_setting(conn, LINK_STATUS_KEY, "error")
@@ -518,18 +550,22 @@ def _recover(
     signature_input = f"{timestamp}.{nonce}.{raw_body}".encode("utf-8")
     private_key = serialization.load_pem_private_key(private_key_pem.encode("ascii"), password=None)
     signature = _b64url(private_key.sign(signature_input))
+    path, request_body, headers = _plugin_connection_request(
+        plugin_id,
+        "recovery",
+        payload,
+        {
+            "timestamp": timestamp,
+            "nonce": nonce,
+            "publicKeyId": public_key_id,
+            "signature": f"key-v1={signature}",
+        },
+    )
     try:
         response = _post_json(
-            f"{_ingest_url(conn)}{HANDSHAKE_PATH}",
-            raw_body,
-            {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-DiscVault-Timestamp": timestamp,
-                "X-DiscVault-Nonce": nonce,
-                "X-DiscVault-Key-Id": public_key_id,
-                "X-DiscVault-Signature": f"key-v1={signature}",
-            },
+            f"{_ingest_url(conn)}{path}",
+            _raw_json_body(request_body),
+            headers,
         )
     except MovieVaultConnectionError as exc:
         _set_setting(conn, LINK_STATUS_KEY, "error")
