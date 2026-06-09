@@ -1,7 +1,7 @@
 {
   "id": "movievault_26",
   "name": "MovieVault 26",
-  "version": "1.3.6",
+  "version": "1.4.0",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["metadata_source", "metadata_receiver"],
@@ -10,9 +10,14 @@
     "search_title",
     "movie_details",
     "box_set_candidates",
+    "connection_request",
+    "connection_recovery_action",
     "receive_metadata",
     "describe_payload",
-    "activity_summary"
+    "activity_summary",
+    "prepare_barcode_update",
+    "prepare_container_update",
+    "member_intelligence"
   ],
   "requiresSecrets": false,
   "replacesPlugins": ["movievault"],
