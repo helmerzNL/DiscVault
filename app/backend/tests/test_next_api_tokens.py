@@ -165,12 +165,17 @@ class NextApiTokenPermissionTests(unittest.TestCase):
 
     def test_profile_api_audit_category_conditions_scope_events(self):
         api_sql, api_params = profile_api_audit_category_condition("api")
+        mcp_sql, mcp_params = profile_api_audit_category_condition("mcp")
         security_sql, security_params = profile_api_audit_category_condition("security")
         all_sql, all_params = profile_api_audit_category_condition("all")
 
         self.assertIn("category = %s", api_sql)
         self.assertIn("api.%", api_sql)
+        self.assertIn("api.mcp_", api_sql)
         self.assertEqual(api_params, ["api"])
+        self.assertIn("mcp.%", mcp_sql)
+        self.assertIn("api.mcp_", mcp_sql)
+        self.assertEqual(mcp_params, ["mcp"])
         self.assertIn("api_token.created", security_sql)
         self.assertEqual(security_params, [])
         self.assertIn("category IN ('api', 'mcp')", all_sql)
