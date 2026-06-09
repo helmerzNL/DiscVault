@@ -13602,6 +13602,9 @@ def ui_preview_html(
               <div class="detail-grid" id="movieDetailCast"></div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
+              <div class="button-row compact person-refresh-row">
+                <button type="button" class="secondary-button hidden" id="movieCrewRefreshButton" data-next-i18n="movieDetail.refreshCrewPeople">Refresh crew people</button>
+              </div>
               <div class="detail-grid" id="movieDetailCrew"></div>
             </div>
           </div>
@@ -14891,6 +14894,9 @@ def ui_preview_html(
         .replace("{refreshed}", formatNumber(personRefresh.refreshed || 0))
         .replace("{skipped}", formatNumber(personRefresh.skipped || 0));
     }
+    function normalizedPersonRefreshScope(scope) {
+      return String(scope || "all").toLowerCase() === "crew" ? "crew" : "all";
+    }
     function flagCodeForLocale(value) {
       const raw = String(value || "").replace("_", "-").toLowerCase();
       const base = raw.split("-")[0];
@@ -15292,6 +15298,7 @@ def ui_preview_html(
         button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       });
       setElementVisible(document.getElementById("movieMetadataPeopleOption"), hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
+      setElementVisible(document.getElementById("movieCrewRefreshButton"), hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       document.querySelectorAll("#containerMetadataDryRunButton, #containerMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !(collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh)));
       });
@@ -26092,19 +26099,28 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
-    async function refreshActiveMovieMetadata(dryRun) {
+    async function refreshActiveMovieMetadata(dryRun, personRefreshScope = "all", forceRefreshPeople = false) {
       if (!hasPermission("metadata.refresh_one")) return;
       if (!activeDetailMovieId) return;
-      setMovieDetailMessage(dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
+      const scope = normalizedPersonRefreshScope(personRefreshScope);
+      const refreshPeople = forceRefreshPeople || movieMetadataRefreshPeople;
+      const refreshingCrewOnly = refreshPeople && scope === "crew";
+      setMovieDetailMessage(
+        refreshingCrewOnly
+          ? tNext("movieDetail.refreshingCrewPeople", "Refreshing crew people...")
+          : (dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."))
+      );
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/refresh`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({dryRun, refreshPeople: movieMetadataRefreshPeople})
+          body: JSON.stringify({dryRun, refreshPeople, personRefreshScope: scope})
         });
         const personRefresh = (payload.metadata || {}).personRefresh || null;
         setMovieDetailMessage(
-          (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed."))
+          (refreshingCrewOnly
+            ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
+            : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
             + movieMetadataPeopleRefreshMessage(personRefresh),
           "good"
         );
@@ -28825,6 +28841,7 @@ def ui_preview_html(
       });
       document.getElementById("movieMetadataDryRunButton")?.addEventListener("click", () => refreshActiveMovieMetadata(true));
       document.getElementById("movieMetadataApplyButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false));
+      document.getElementById("movieCrewRefreshButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false, "crew", true));
       document.getElementById("movieMetadataPeopleToggle")?.addEventListener("click", () => setMovieMetadataRefreshPeople(!movieMetadataRefreshPeople));
       setMovieMetadataRefreshPeople(movieMetadataRefreshPeople);
       document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
@@ -38923,11 +38940,22 @@ MOVIE_METADATA_PERSON_REFRESH_CREW_JOBS = {
 }
 
 
-def movie_metadata_person_refresh_empty(*, requested: bool, dry_run: bool, limit: int = MOVIE_METADATA_PERSON_REFRESH_LIMIT) -> dict[str, Any]:
+def normalize_movie_metadata_person_refresh_scope(value: Any) -> str:
+    return "crew" if str(value or "").strip().lower() == "crew" else "all"
+
+
+def movie_metadata_person_refresh_empty(
+    *,
+    requested: bool,
+    dry_run: bool,
+    limit: int = MOVIE_METADATA_PERSON_REFRESH_LIMIT,
+    scope: str = "all",
+) -> dict[str, Any]:
     return {
         "requested": requested,
         "dryRun": dry_run,
         "limit": limit,
+        "scope": normalize_movie_metadata_person_refresh_scope(scope),
         "considered": 0,
         "selected": 0,
         "previewed": 0,
@@ -38943,9 +38971,15 @@ def normalize_person_refresh_job(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
 
-def select_movie_metadata_person_refresh_credits(credits: list[dict[str, Any]], *, limit: int = MOVIE_METADATA_PERSON_REFRESH_LIMIT) -> list[dict[str, Any]]:
+def select_movie_metadata_person_refresh_credits(
+    credits: list[dict[str, Any]],
+    *,
+    limit: int = MOVIE_METADATA_PERSON_REFRESH_LIMIT,
+    scope: str = "all",
+) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
     seen: set[str] = set()
+    normalized_scope = normalize_movie_metadata_person_refresh_scope(scope)
 
     def add_credit(credit: dict[str, Any]) -> None:
         if len(selected) >= limit:
@@ -38964,7 +38998,8 @@ def select_movie_metadata_person_refresh_credits(credits: list[dict[str, Any]], 
     ]
     cast = [credit for credit in credits if person_credit_type_is_acting(credit)]
     other_crew = [credit for credit in credits if not person_credit_type_is_acting(credit) and credit not in priority_crew]
-    for bucket in (priority_crew, cast, other_crew):
+    buckets = (priority_crew, other_crew) if normalized_scope == "crew" else (priority_crew, cast, other_crew)
+    for bucket in buckets:
         for credit in bucket:
             add_credit(credit)
     return selected
@@ -38992,11 +39027,13 @@ def refresh_movie_person_metadata_cascade(
     dry_run: bool = False,
     actor: dict[str, Any] | None = None,
     limit: int = MOVIE_METADATA_PERSON_REFRESH_LIMIT,
+    scope: str = "all",
 ) -> dict[str, Any]:
-    summary = movie_metadata_person_refresh_empty(requested=True, dry_run=dry_run, limit=limit)
+    normalized_scope = normalize_movie_metadata_person_refresh_scope(scope)
+    summary = movie_metadata_person_refresh_empty(requested=True, dry_run=dry_run, limit=limit, scope=normalized_scope)
     movie_uuid = UUID(str(movie_id))
     credits = movie_credit_entities(conn, movie_uuid, limit=80)
-    selected = select_movie_metadata_person_refresh_credits(credits, limit=limit)
+    selected = select_movie_metadata_person_refresh_credits(credits, limit=limit, scope=normalized_scope)
     summary["considered"] = len(credits)
     summary["selected"] = len(selected)
     if not selected:
@@ -48893,6 +48930,9 @@ def register_routes(flask_app: Flask) -> None:
         if len(movie_ids) > 1 and not dry_run and body.get("confirm") != "metadata-bulk-refresh":
             raise NextApiError("Bulk metadata refresh requires confirm=metadata-bulk-refresh when dryRun is false", 400)
         refresh_people = parse_bool_value(body.get("refreshPeople", body.get("refresh_people")), default=False)
+        person_refresh_scope = normalize_movie_metadata_person_refresh_scope(
+            body.get("personRefreshScope", body.get("person_refresh_scope", body.get("refreshPeopleScope", body.get("refresh_people_scope"))))
+        )
 
         with connect() as conn:
             actor = require_next_permission(conn, "metadata.refresh_bulk" if len(movie_ids) > 1 else "metadata.refresh_one")
@@ -48917,6 +48957,7 @@ def register_routes(flask_app: Flask) -> None:
                             "movieId": str(item),
                             "dryRun": dry_run,
                             "refreshPeople": refresh_people,
+                            "personRefreshScope": person_refresh_scope,
                             "requestedBy": actor_job_payload(actor),
                         },
                     )
@@ -48934,10 +48975,11 @@ def register_routes(flask_app: Flask) -> None:
                         "movieIds": [str(item) for item in movie_ids],
                         "dryRun": dry_run,
                         "refreshPeople": refresh_people,
+                        "personRefreshScope": person_refresh_scope,
                         "jobIds": [str(job.get("id")) for job in jobs],
                     },
                 )
-        return response({"status": "ok", "dryRun": dry_run, "refreshPeople": refresh_people, "queued": len(jobs), "jobs": jobs}, 201)
+        return response({"status": "ok", "dryRun": dry_run, "refreshPeople": refresh_people, "personRefreshScope": person_refresh_scope, "queued": len(jobs), "jobs": jobs}, 201)
 
     @flask_app.post("/api/next/movies/<movie_id>/metadata/preview")
     def movie_metadata_preview(movie_id: str):
@@ -48959,6 +49001,9 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Metadata refresh body must be an object", 400)
         dry_run = parse_bool_value(body.get("dryRun", body.get("dry_run")), default=False)
         refresh_people = parse_bool_value(body.get("refreshPeople", body.get("refresh_people")), default=False)
+        person_refresh_scope = normalize_movie_metadata_person_refresh_scope(
+            body.get("personRefreshScope", body.get("person_refresh_scope", body.get("refreshPeopleScope", body.get("refresh_people_scope"))))
+        )
         with connect() as conn:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "movies"):
@@ -48968,9 +49013,9 @@ def register_routes(flask_app: Flask) -> None:
             with conn.transaction():
                 result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
                 result["personRefresh"] = (
-                    refresh_movie_person_metadata_cascade(conn, movie_uuid, dry_run=dry_run, actor=actor)
+                    refresh_movie_person_metadata_cascade(conn, movie_uuid, dry_run=dry_run, actor=actor, scope=person_refresh_scope)
                     if refresh_people
-                    else movie_metadata_person_refresh_empty(requested=False, dry_run=dry_run)
+                    else movie_metadata_person_refresh_empty(requested=False, dry_run=dry_run, scope=person_refresh_scope)
                 )
                 audit_event(
                     conn,
@@ -49002,6 +49047,9 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Metadata refresh body must be an object", 400)
         dry_run = parse_bool_value(body.get("dryRun", body.get("dry_run")), default=False)
         refresh_people = parse_bool_value(body.get("refreshPeople", body.get("refresh_people")), default=False)
+        person_refresh_scope = normalize_movie_metadata_person_refresh_scope(
+            body.get("personRefreshScope", body.get("person_refresh_scope", body.get("refreshPeopleScope", body.get("refresh_people_scope"))))
+        )
         with connect() as conn:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "movies"):
@@ -49016,6 +49064,7 @@ def register_routes(flask_app: Flask) -> None:
                         "movieId": str(movie_uuid),
                         "dryRun": dry_run,
                         "refreshPeople": refresh_people,
+                        "personRefreshScope": person_refresh_scope,
                         "requestedBy": actor_job_payload(actor),
                     },
                 )
@@ -49027,9 +49076,9 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="movie",
                     target_id=movie_uuid,
                     summary="Queued movie metadata refresh",
-                    metadata={"movieId": str(movie_uuid), "dryRun": dry_run, "refreshPeople": refresh_people, "jobId": job.get("id")},
+                    metadata={"movieId": str(movie_uuid), "dryRun": dry_run, "refreshPeople": refresh_people, "personRefreshScope": person_refresh_scope, "jobId": job.get("id")},
                 )
-        return response({"status": "ok", "refreshPeople": refresh_people, "job": job}, 201)
+        return response({"status": "ok", "refreshPeople": refresh_people, "personRefreshScope": person_refresh_scope, "job": job}, 201)
 
     @flask_app.get("/api/next/movies/<movie_id>/view")
     @flask_app.get("/api/next/app/movies/<movie_id>")
