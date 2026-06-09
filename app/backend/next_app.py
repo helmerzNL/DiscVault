@@ -14922,24 +14922,56 @@ def ui_preview_html(
         return raw.toUpperCase();
       }
     }
+    function ratingCountryForLocalization(lang) {
+      const raw = String(lang || "").replace("_", "-");
+      const region = raw.includes("-") ? raw.split("-").pop() : "";
+      const base = raw.split("-")[0].toLowerCase();
+      const languageDefaults = {
+        nl: "NL",
+        de: "DE",
+        fr: "FR",
+        es: "ES",
+        pt: "PT",
+        it: "IT",
+        en: "US",
+        da: "DK",
+        fi: "FI",
+        no: "NO",
+        nb: "NO",
+        sv: "SE",
+        hu: "HU",
+        bg: "BG",
+        lt: "LT",
+        pl: "PL"
+      };
+      return normalizedRatingCountryCode(region) || normalizedRatingCountryCode(languageDefaults[base]);
+    }
+    function contentRatingBadgeHtml(info) {
+      if (!info?.rating || info.unknown) return "";
+      return `
+        <span class="tag blue" title="${escapeHtml(contentRatingSummaryText(info))}">
+          ${info.country ? flagIconHtml(info.country, ratingCountryLabel(info.country)) : ""}
+          ${escapeHtml(info.rating)}
+        </span>
+      `;
+    }
     function movieLocalizationDebugHtml(localizations, movie = null, technicalSpecs = null) {
       const rows = Array.isArray(localizations) ? localizations : [];
-      const ratingsHtml = contentRatingDebugHtml(movie, technicalSpecs);
-      if (!rows.length) {
-        return `
-          ${ratingsHtml}
-          <div class="preview-empty">${escapeHtml(tNext("movieDetail.debugNoLocalizations", "No localized title or plot rows found."))}</div>
-        `;
-      }
-      return ratingsHtml + rows.map((row) => {
+      const ratingsByCountry = new Map(allContentRatingInfos(movie, technicalSpecs).map((info) => [info.country, info]));
+      const usedRatingCountries = new Set();
+      const localizationHtml = rows.map((row) => {
         const lang = row.lang || row.locale || row.language || "en";
         const label = localizationLanguageLabel(lang);
+        const ratingCountry = ratingCountryForLocalization(lang);
+        const ratingInfo = ratingCountry ? ratingsByCountry.get(ratingCountry) : null;
+        if (ratingInfo) usedRatingCountries.add(ratingCountry);
         return `
           <article class="debug-localization-card">
             <header>
               ${flagIconHtml(lang, label)}
               <strong>${escapeHtml(label)}</strong>
               <span>${escapeHtml(String(lang).replace("_", "-"))}</span>
+              ${contentRatingBadgeHtml(ratingInfo)}
             </header>
             <strong>${escapeHtml(valueText(row.title) || tNext("common.untitled", "Untitled"))}</strong>
             <p>${escapeHtml(valueText(row.overview) || tNext("movieDetail.noOverview", "No overview imported yet."))}</p>
@@ -14947,6 +14979,15 @@ def ui_preview_html(
           </article>
         `;
       }).join("");
+      const remainingRatings = Array.from(ratingsByCountry.values()).filter((info) => !usedRatingCountries.has(info.country));
+      const remainingRatingsHtml = remainingRatings.length ? contentRatingDebugHtml(remainingRatings) : "";
+      if (!rows.length) {
+        return `
+          <div class="preview-empty">${escapeHtml(tNext("movieDetail.debugNoLocalizations", "No localized title or plot rows found."))}</div>
+          ${remainingRatingsHtml}
+        `;
+      }
+      return localizationHtml + remainingRatingsHtml;
     }
     function renderAppDebugButton() {
       document.body.classList.toggle("debug-mode", appDebugMode);
@@ -19609,7 +19650,7 @@ def ui_preview_html(
       const label = physicalFormatLabel(value);
       return label ? `<span class="physical-format-badge">${escapeHtml(label)}</span>` : "";
     }
-    const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"];
+    const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "AU", "BR", "DK", "FI", "NO", "SE", "NZ", "IN", "PH", "MY", "PL", "HU", "BG", "LT"];
     function ratingCountryLabel(code) {
       try {
         const displayNames = new Intl.DisplayNames([localeState.locale || "en-US"], {type: "region"});
@@ -19751,13 +19792,14 @@ def ui_preview_html(
         </span>
       `;
     }
-    function contentRatingDebugHtml(movie, technicalSpecs = null) {
-      const infos = allContentRatingInfos(movie, technicalSpecs);
-      const displayInfos = infos.length ? infos : [preferredContentRatingInfo(movie, technicalSpecs)];
+    function contentRatingDebugHtml(infosOrMovie, technicalSpecs = null) {
+      const infos = Array.isArray(infosOrMovie) ? infosOrMovie : allContentRatingInfos(infosOrMovie, technicalSpecs);
+      const displayInfos = infos.length ? infos : (Array.isArray(infosOrMovie) ? [] : [preferredContentRatingInfo(infosOrMovie, technicalSpecs)]);
+      if (!displayInfos.length) return "";
       return `
         <article class="debug-localization-card">
           <header>
-            <strong>${escapeHtml(tNext("movieDetail.contentRatings", "Content ratings"))}</strong>
+            <strong>${escapeHtml(tNext("movieDetail.contentRatingsWithoutLocalization", "Content ratings without localized title or plot"))}</strong>
           </header>
           <div class="country-list">
             ${displayInfos.map((info) => contentRatingValueHtml(info)).join("")}
@@ -29807,6 +29849,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       gap: 8px;
       margin-top: 10px;
     }
+    .admin-stack {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
     .admin-row {
       border: 1px solid var(--soft-line);
       border-radius: var(--radius-md);
@@ -31544,6 +31591,34 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         `<span class="tag" title="${escapeHtml(metadataValuePreview(value))}">${escapeHtml(key)}: ${escapeHtml(metadataValuePreview(value))}</span>`
       ).join("") : `<span class="tag">No fields</span>`;
     }
+    function metadataFieldDecisionRows(decisions) {
+      const rows = Array.isArray(decisions) ? decisions : [];
+      return rows.length ? rows.map((decision) => {
+        const winner = decision.winner || {};
+        const winnerLabel = winner.pluginId
+          ? pluginDisplayName(winner.pluginId, winner.sourceLabel || winner.pluginId)
+          : tNext("appAdmin.retainedExisting", "Retained existing");
+        const rejected = (decision.candidates || [])
+          .filter((candidate) => !candidate.winner)
+          .map((candidate) => `${pluginDisplayName(candidate.pluginId, candidate.sourceLabel || candidate.pluginId)}: ${candidate.reason || "-"}`)
+          .join(" | ");
+        return `
+          <div class="admin-row">
+            <div class="admin-row-head">
+              <strong>${escapeHtml(decision.target || "-")}.${escapeHtml(decision.field || "-")}</strong>
+              <span class="tag ${winner.pluginId ? "good" : "blue"}">${escapeHtml(winnerLabel)}</span>
+            </div>
+            <div class="muted">${escapeHtml(winner.reason || decision.outcome || "-")}</div>
+            <div class="admin-plugin-meta">
+              <span class="tag" title="${escapeHtml(metadataValuePreview(decision.finalValue))}">${escapeHtml(tNext("appAdmin.finalValue", "Final value"))}: ${escapeHtml(metadataValuePreview(decision.finalValue))}</span>
+              <span class="tag ${decision.conflict ? "blue" : ""}">${escapeHtml(formatNumber(decision.candidateCount || 0))} ${escapeHtml(tNext("appAdmin.candidates", "candidates"))}</span>
+              ${decision.written ? `<span class="tag good">${escapeHtml(tNext("appAdmin.written", "Written"))}</span>` : ""}
+            </div>
+            ${rejected ? `<div class="muted">${escapeHtml(tNext("appAdmin.rejectedProviders", "Rejected providers"))}: ${escapeHtml(rejected)}</div>` : ""}
+          </div>
+        `;
+      }).join("") : `<div class="empty">${escapeHtml(tNext("appAdmin.noFieldWinners", "No provider field winners yet."))}</div>`;
+    }
     function metadataCurrentMovieId() {
       const input = document.getElementById("adminMetadataMovieId");
       const movieId = (input && input.value ? input.value : adminState.metadata.movieId || "").trim();
@@ -31631,6 +31706,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         <div class="admin-row">
           <strong>Identifiers</strong>
           <div class="admin-permission-cloud">${metadataBucketTags(proposal.identifiers)}</div>
+        </div>
+        <div class="admin-row">
+          <strong>${escapeHtml(tNext("appAdmin.fieldWinners", "Field winners"))}</strong>
+          <div class="admin-stack">${metadataFieldDecisionRows(proposal.fieldDecisions || [])}</div>
         </div>
       `;
     }
