@@ -407,6 +407,15 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
         raise RuntimeError("movieId is required for metadata refresh jobs")
     dry_run = bool_value(payload.get("dryRun", payload.get("dry_run")), default=False)
     refresh_people = bool_value(payload.get("refreshPeople", payload.get("refresh_people")), default=False)
+    person_refresh_scope = clean_text(
+        payload.get("personRefreshScope")
+        or payload.get("person_refresh_scope")
+        or payload.get("refreshPeopleScope")
+        or payload.get("refresh_people_scope")
+        or "all"
+    )
+    if person_refresh_scope.lower() != "crew":
+        person_refresh_scope = "all"
     actor = payload.get("requestedBy") or payload.get("requested_by") or {}
     if not isinstance(actor, dict):
         actor = {}
@@ -417,7 +426,7 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
                 from .next_app import refresh_movie_person_metadata_cascade
             except ImportError:  # pragma: no cover - supports python next_worker.py
                 from next_app import refresh_movie_person_metadata_cascade
-            result["personRefresh"] = refresh_movie_person_metadata_cascade(conn, movie_id, dry_run=dry_run, actor=actor)
+            result["personRefresh"] = refresh_movie_person_metadata_cascade(conn, movie_id, dry_run=dry_run, actor=actor, scope=person_refresh_scope)
     return {
         "workerId": worker_id,
         "handled": True,
@@ -425,6 +434,7 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
         "movieId": movie_id,
         "dryRun": dry_run,
         "refreshPeople": refresh_people,
+        "personRefreshScope": person_refresh_scope,
         "result": result,
     }
 
