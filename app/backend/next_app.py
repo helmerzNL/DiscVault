@@ -41809,6 +41809,36 @@ def profile_api_audit_category_condition(category: str) -> tuple[str, list[Any]]
     )
 
 
+def profile_api_audit_token_match_condition(
+    token_ids: list[str],
+    token_names: list[str] | None = None,
+) -> tuple[str, list[Any]]:
+    token_ids = [str(token_id) for token_id in token_ids if token_id]
+    token_names = [str(name) for name in (token_names or []) if name]
+    if not token_ids:
+        return "(false)", []
+    token_placeholders = ", ".join(["%s"] * len(token_ids))
+    conditions = [
+        f"metadata->>'apiTokenId' IN ({token_placeholders})",
+        f"metadata->>'api_token_id' IN ({token_placeholders})",
+        f"metadata->>'tokenId' IN ({token_placeholders})",
+        f"metadata->>'accessTokenId' IN ({token_placeholders})",
+        f"(target_type = 'api_access_token' AND target_id IN ({token_placeholders}))",
+    ]
+    params: list[Any] = [
+        *token_ids,
+        *token_ids,
+        *token_ids,
+        *token_ids,
+        *token_ids,
+    ]
+    if token_names:
+        name_placeholders = ", ".join(["%s"] * len(token_names))
+        conditions.append(f"metadata->>'apiTokenName' IN ({name_placeholders})")
+        params.extend(token_names)
+    return f"({' OR '.join(conditions)})", params
+
+
 def audit_api_interaction(
     conn,
     actor: dict[str, Any],
@@ -41831,6 +41861,17 @@ def audit_api_interaction(
         summary=summary,
         metadata=api_audit_metadata(actor, command=command, request_payload=request_payload, extra=metadata),
     )
+
+
+def mcp_request_api_token_value() -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:].strip()
+    for header in ("X-DiscVault-Api-Token", "X-API-Key"):
+        value = str(request.headers.get(header) or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def metadata_refresh_jobs(
@@ -42930,10 +42971,10 @@ def register_routes(flask_app: Flask) -> None:
         body_bytes = request.get_data()
         body_json = request.get_json(silent=True) if body_bytes else None
         bearer_actor: dict[str, Any] | None = None
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
+        api_token = mcp_request_api_token_value()
+        if api_token:
             with connect() as conn:
-                bearer_actor = next_auth_current_api_token_user(conn, auth_header[7:])
+                bearer_actor = next_auth_current_api_token_user(conn, api_token)
         headers = {
             key: value
             for key, value in request.headers.items()
@@ -43034,6 +43075,15 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.route("/mcp", methods=["GET", "POST", "DELETE"])
     def mcp_proxy():
         return mcp_proxy_request("/mcp")
+
+    @flask_app.route("/mcp/", methods=["GET", "POST", "DELETE"])
+    def mcp_proxy_trailing_slash():
+        return mcp_proxy_request("/mcp")
+
+    @flask_app.route("/mcp/<path:subpath>", methods=["GET", "POST", "DELETE"])
+    def mcp_proxy_subpath(subpath: str):
+        cleaned = clean_text(subpath).strip("/")
+        return mcp_proxy_request(f"/mcp/{cleaned}" if cleaned else "/mcp")
 
     @flask_app.get("/mcp-health")
     def mcp_health_proxy():
@@ -43422,16 +43472,22 @@ def register_routes(flask_app: Flask) -> None:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id
+                    SELECT id, name
                     FROM api_access_tokens
                     WHERE user_id=%s
                     """,
                     (actor["id"],),
                 )
-                owned_token_ids = [str(row["id"]) for row in cur.fetchall()]
+                owned_tokens = [
+                    {"id": str(row["id"]), "name": str(row.get("name") or "")}
+                    for row in cur.fetchall()
+                ]
+            owned_tokens_by_id = {token["id"]: token for token in owned_tokens}
+            owned_token_ids = list(owned_tokens_by_id)
             if token_uuid:
                 requested_token_id = str(token_uuid)
-                if requested_token_id not in owned_token_ids:
+                requested_token = owned_tokens_by_id.get(requested_token_id)
+                if not requested_token:
                     return response(
                         {
                             "status": "ok",
@@ -43442,8 +43498,10 @@ def register_routes(flask_app: Flask) -> None:
                         }
                     )
                 visible_token_ids = [requested_token_id]
+                visible_token_names = [requested_token.get("name") or ""]
             else:
                 visible_token_ids = owned_token_ids
+                visible_token_names = [token.get("name") or "" for token in owned_tokens]
             if not visible_token_ids:
                 return response(
                     {
@@ -43454,16 +43512,10 @@ def register_routes(flask_app: Flask) -> None:
                         "query": search_term,
                     }
                 )
-            token_placeholders = ", ".join(["%s"] * len(visible_token_ids))
-            explicit_token_match = f"""
-                (
-                    metadata->>'apiTokenId' IN ({token_placeholders})
-                    OR metadata->>'api_token_id' IN ({token_placeholders})
-                    OR metadata->>'tokenId' IN ({token_placeholders})
-                    OR metadata->>'accessTokenId' IN ({token_placeholders})
-                    OR (target_type = 'api_access_token' AND target_id IN ({token_placeholders}))
-                )
-            """
+            explicit_token_match, token_match_params = profile_api_audit_token_match_condition(
+                visible_token_ids,
+                visible_token_names,
+            )
             category_condition, category_params = profile_api_audit_category_condition(category_filter)
             conditions = [
                 category_condition,
@@ -43471,11 +43523,7 @@ def register_routes(flask_app: Flask) -> None:
             ]
             params: list[Any] = [
                 *category_params,
-                *visible_token_ids,
-                *visible_token_ids,
-                *visible_token_ids,
-                *visible_token_ids,
-                *visible_token_ids,
+                *token_match_params,
             ]
             if not token_uuid:
                 conditions[-1] = f"""
@@ -43483,18 +43531,15 @@ def register_routes(flask_app: Flask) -> None:
                     {explicit_token_match}
                     OR (
                         actor_user_id = %s
-                        AND category IN ('api', 'mcp')
+                        AND (
+                            category IN ('api', 'mcp')
+                            OR event_type IN ('api_token.created', 'api_token.revoked')
+                        )
                         AND (
                             event_type LIKE 'api.%%'
                             OR event_type LIKE 'mcp.%%'
+                            OR event_type IN ('api_token.created', 'api_token.revoked')
                         )
-                        AND COALESCE(
-                            metadata->>'apiTokenId',
-                            metadata->>'api_token_id',
-                            metadata->>'tokenId',
-                            metadata->>'accessTokenId',
-                            ''
-                        ) = ''
                     )
                 )
                 """
