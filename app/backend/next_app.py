@@ -41787,9 +41787,14 @@ def profile_api_audit_search_term(value: Any) -> str:
 def profile_api_audit_category_condition(category: str) -> tuple[str, list[Any]]:
     category = normalize_profile_api_audit_category(category)
     if category == "api":
-        return "(category = %s AND event_type LIKE 'api.%%')", ["api"]
+        return "(category = %s AND event_type LIKE 'api.%%' AND event_type NOT LIKE 'api.mcp_%%')", ["api"]
     if category == "mcp":
-        return "(category = %s AND event_type LIKE 'mcp.%%')", ["mcp"]
+        return """
+            (
+                (category = %s AND event_type LIKE 'mcp.%%')
+                OR event_type LIKE 'api.mcp_%%'
+            )
+            """, ["mcp"]
     if category == "security":
         return "(event_type IN ('api_token.created', 'api_token.revoked'))", []
     return (
@@ -45984,13 +45989,17 @@ def register_routes(flask_app: Flask) -> None:
                 }
                 for tool in MCP_TOOL_NAMES
             ]
-            audit_api_interaction(
+            audit_event(
                 conn,
-                actor,
-                command="get_mcp_catalog",
-                event_type="api.mcp_catalog_read",
+                event_type="mcp.catalog_read",
+                category="mcp",
+                actor=actor,
                 summary="Read MCP tool catalog",
-                metadata={"toolCount": len(tools)},
+                metadata=api_audit_metadata(
+                    actor,
+                    command="get_mcp_catalog",
+                    extra={"toolCount": len(tools)},
+                ),
             )
         return response({"status": "ok", "endpoint": "/mcp", "tools": tools})
 
