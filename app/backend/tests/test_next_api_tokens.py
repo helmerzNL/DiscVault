@@ -17,6 +17,7 @@ try:
     from app.backend.next_app import normalize_profile_api_audit_category
     from app.backend.next_app import profile_api_audit_category_condition
     from app.backend.next_app import profile_api_audit_search_term
+    from app.backend.next_app import profile_api_audit_token_match_condition
     from app.backend.next_app import profile_api_access_payload
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
@@ -29,6 +30,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit o
     normalize_profile_api_audit_category = None
     profile_api_audit_category_condition = None
     profile_api_audit_search_term = None
+    profile_api_audit_token_match_condition = None
     profile_api_access_payload = None
 
 
@@ -177,6 +179,20 @@ class NextApiTokenPermissionTests(unittest.TestCase):
     def test_profile_api_audit_search_term_is_trimmed_and_capped(self):
         self.assertEqual(profile_api_audit_search_term("  /mcp  "), "/mcp")
         self.assertEqual(len(profile_api_audit_search_term("x" * 200)), 120)
+
+    def test_profile_api_audit_token_match_condition_includes_token_names(self):
+        sql, params = profile_api_audit_token_match_condition(["token-1"], ["DiscVault MCP"])
+
+        self.assertIn("metadata->>'apiTokenId'", sql)
+        self.assertIn("target_type = 'api_access_token'", sql)
+        self.assertIn("metadata->>'apiTokenName'", sql)
+        self.assertEqual(params, ["token-1", "token-1", "token-1", "token-1", "token-1", "DiscVault MCP"])
+
+    def test_profile_api_audit_token_match_condition_handles_empty_tokens(self):
+        sql, params = profile_api_audit_token_match_condition([], ["Ignored"])
+
+        self.assertEqual(sql, "(false)")
+        self.assertEqual(params, [])
 
 
 if __name__ == "__main__":
