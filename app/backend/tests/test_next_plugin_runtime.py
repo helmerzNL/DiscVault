@@ -695,6 +695,58 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(specs[0]["memberCount"], 3)
         self.assertEqual(specs[0]["boxSetProposal"]["title"], "Back to the Future: The Ultimate Trilogy")
 
+    def test_import_worker_keeps_same_title_box_set_formats_separate(self):
+        item = {
+            "containers": [
+                {"containerType": "box_set", "title": "Back to the Future Trilogy", "format": "DVD"},
+                {"containerType": "box_set", "title": "Back to the Future Trilogy", "format": "4K UHD"},
+                {"containerType": "box_set", "title": "Back to the Future Trilogy", "format": "DVD"},
+            ],
+        }
+
+        specs = next_worker.import_item_container_specs(item)
+
+        self.assertEqual(len(specs), 2)
+        self.assertEqual([spec["format"] for spec in specs], ["DVD", "4K UHD"])
+
+    def test_import_review_applies_box_set_member_edits_to_worker_result(self):
+        result = {
+            "status": "completed",
+            "items": [
+                {
+                    "title": "Back to the Future Trilogy",
+                    "barcode": "5050582369601",
+                }
+            ],
+            "counts": {},
+        }
+        reviewed = apply_collection_import_review(
+            result,
+            {
+                "decisions": [
+                    {
+                        "index": 1,
+                        "action": "create",
+                        "boxSetProposal": {
+                            "title": "Back to the Future Trilogy",
+                            "barcode": "5050582369601",
+                            "format": "DVD",
+                            "members": [
+                                {"title": "Back to the Future", "format": "4K UHD"},
+                                {"title": "Back to the Future Part II"},
+                            ],
+                        },
+                    }
+                ]
+            },
+        )
+
+        item = reviewed["items"][0]
+        self.assertEqual(item["itemType"], "box_set")
+        self.assertEqual(item["boxSetMembers"][0]["format"], "DVD")
+        self.assertEqual(item["boxSetProposal"]["memberCount"], 2)
+        self.assertEqual(item["containers"][0]["boxSetProposal"]["movies"][1]["title"], "Back to the Future Part II")
+
     def test_collection_import_plugin_supports_manual_column_mapping(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             export_file = Path(temp_dir) / "custom.csv"

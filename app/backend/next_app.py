@@ -509,6 +509,25 @@ def should_reuse_box_set_container_for_import(
     return physical_media_formats_compatible(candidate_format, incoming_format)
 
 
+def import_container_preview_key(
+    container_type: str,
+    title: str,
+    *,
+    barcode: Any = "",
+    media_format: Any = "",
+) -> tuple[str, str, str]:
+    type_key = clean_text(container_type)
+    title_key = (clean_text(title) or "").casefold()
+    if type_key == "box_set":
+        barcode_key = (clean_text(barcode) or "").casefold()
+        if barcode_key:
+            return (type_key, "barcode", barcode_key)
+        format_key = physical_media_format_key(media_format)
+        if format_key:
+            return (type_key, "title_format", f"{title_key}:{format_key}")
+    return (type_key, "title", title_key)
+
+
 def html_response(html: str):
     result = Response(html, mimetype="text/html")
     result.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -1902,12 +1921,18 @@ def import_source_item_container_specs(item: dict[str, Any]) -> list[dict[str, A
                     "format": clean_text(raw.get("format")),
                     "memberCount": raw.get("memberCount") or raw.get("member_count"),
                     "membersAreExplicit": raw.get("membersAreExplicit") or raw.get("members_are_explicit"),
+                    "boxSetProposal": raw.get("boxSetProposal") if isinstance(raw.get("boxSetProposal"), dict) else {},
                 }
             )
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
     unique: list[dict[str, Any]] = []
     for spec in specs:
-        key = (spec["containerType"], spec["title"].casefold())
+        key = import_container_preview_key(
+            spec["containerType"],
+            spec["title"],
+            barcode=spec.get("barcode"),
+            media_format=spec.get("format"),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -2510,7 +2535,7 @@ def import_source_action_preview(
         "linkCollection": 0,
         "linkContainers": 0,
     }
-    containers: dict[tuple[str, str], dict[str, Any]] = {}
+    containers: dict[tuple[str, str, str], dict[str, Any]] = {}
     suggestion_count = 0
     source_title = clean_text(source.get("sourceKind") or plugin_id).replace("_", " ")
     import_collection = {
@@ -2528,11 +2553,16 @@ def import_source_action_preview(
             match = (conflict_by_index.get(index) or {}).get("match")
             action = "update" if match else "create"
             counts[action] += 1
-            counts["linkCollection"] += 1
         specs = import_source_item_container_specs(item)
+        counts["linkCollection"] += sum(1 for spec in specs if spec.get("containerType") == "collection")
         counts["linkContainers"] += len(specs)
         for spec in specs:
-            key = (spec["containerType"], spec["title"].casefold())
+            key = import_container_preview_key(
+                spec["containerType"],
+                spec["title"],
+                barcode=spec.get("barcode"),
+                media_format=spec.get("format"),
+            )
             entry = containers.setdefault(
                 key,
                 {
@@ -2572,7 +2602,12 @@ def import_source_action_preview(
         if detected_box_set:
             box_title = clean_text(detected_box_set.get("title") or detected_box_set.get("name") or title)
             if box_title:
-                key = ("box_set", box_title.casefold())
+                key = import_container_preview_key(
+                    "box_set",
+                    box_title,
+                    barcode=detected_box_set.get("barcode") or item.get("barcode"),
+                    media_format=detected_box_set.get("format") or import_source_item_format(item),
+                )
                 entry = containers.setdefault(
                     key,
                     {
@@ -2848,6 +2883,85 @@ def normalize_import_review(value: Any) -> dict[str, Any]:
         }
         return manual or None
 
+    def normalize_box_set_proposal(raw_value: Any, *, fallback_format: str = "") -> dict[str, Any] | None:
+        if not isinstance(raw_value, dict):
+            return None
+        allowed_proposal_fields = {
+            "title",
+            "name",
+            "provider",
+            "source",
+            "sourceLabel",
+            "sourceRef",
+            "barcode",
+            "format",
+            "year",
+            "year_range",
+            "description",
+            "movievault_id",
+            "proposalKey",
+            "_proposalKey",
+            "memberSource",
+            "member_source",
+            "memberConfidence",
+            "member_confidence",
+            "memberCount",
+            "member_count",
+            "membersAreExplicit",
+            "members_are_explicit",
+            "detectedWithoutMembers",
+            "detected_without_members",
+            "poster",
+            "posterUrl",
+            "poster_url",
+            "backdrop",
+            "backdropUrl",
+            "backdrop_url",
+            "backdropUrls",
+            "backdrop_urls",
+        }
+        proposal = {
+            key: raw_value.get(key)
+            for key in allowed_proposal_fields
+            if raw_value.get(key) not in (None, "", [], {})
+        }
+        for key in ("boxSetEvidence", "box_set_evidence", "metadata_plugin_fallbacks"):
+            value = raw_value.get(key)
+            if value not in (None, "", [], {}) and isinstance(value, (dict, list)):
+                proposal[key] = value
+        title = clean_text(proposal.get("title") or proposal.get("name"))
+        if title:
+            proposal["title"] = title
+            proposal["name"] = title
+        proposal_format = clean_text(proposal.get("format") or fallback_format)
+        if proposal_format:
+            proposal["format"] = proposal_format
+        members = []
+        for index, raw_member in enumerate(box_set_proposal_member_list(raw_value)[:50], start=1):
+            member_title = clean_text(raw_member.get("title") or raw_member.get("name") or raw_member.get("originalTitle") or raw_member.get("original_title"))
+            if not member_title:
+                continue
+            member = dict(raw_member)
+            member["title"] = member_title
+            member["year"] = clean_text(member.get("year") or member.get("releaseYear") or member.get("release_year"))
+            member_format = clean_text(member.get("format"))
+            if proposal_format and (not member_format or not physical_media_formats_compatible(member_format, proposal_format)):
+                member["format"] = proposal_format
+            else:
+                member["format"] = member_format
+            member["sortOrder"] = int(member.get("sortOrder") or member.get("sort_order") or index)
+            members.append({key: value for key, value in member.items() if value not in (None, "", [], {})})
+        if members:
+            proposal["members"] = members
+            proposal["movies"] = members
+            proposal["boxSetMovies"] = members
+            proposal["box_set_movies"] = members
+            proposal["memberCount"] = len(members)
+            proposal["member_count"] = len(members)
+            proposal["membersAreExplicit"] = True
+            proposal["members_are_explicit"] = True
+        return proposal or None
+
     decisions: list[dict[str, Any]] = []
     for raw in value.get("decisions") or []:
         if not isinstance(raw, dict):
@@ -2870,6 +2984,22 @@ def normalize_import_review(value: Any) -> dict[str, Any]:
             decision["metadataMatch"] = metadata_match
         if manual_override:
             decision["manualOverride"] = manual_override
+        if action != "skip":
+            fallback_format = clean_text(
+                (manual_override or {}).get("format")
+                or (metadata_match or {}).get("format")
+            )
+            box_set_proposal = normalize_box_set_proposal(
+                raw.get("boxSetProposal") or raw.get("box_set_proposal"),
+                fallback_format=fallback_format,
+            )
+            if box_set_proposal:
+                decision["boxSetProposal"] = box_set_proposal
+                if "boxSetReviewAccepted" in raw or "box_set_review_accepted" in raw:
+                    decision["boxSetReviewAccepted"] = parse_bool_value(
+                        raw.get("boxSetReviewAccepted", raw.get("box_set_review_accepted")),
+                        default=False,
+                    )
         decisions.append(decision)
     return {"decisions": decisions} if decisions else {}
 
@@ -22281,7 +22411,17 @@ def ui_preview_html(
         const manual = importManualState(index);
         if (selected) decision.metadataMatch = normalizeImportSuggestion(selected);
         if (action !== "skip" && row.detectedBoxSetProposal && typeof row.detectedBoxSetProposal === "object") {
-          decision.boxSetProposal = row.detectedBoxSetProposal;
+          const proposalMembers = proposalMembersForImport(row.detectedBoxSetProposal);
+          decision.boxSetProposal = proposalMembers.length
+            ? {
+                ...row.detectedBoxSetProposal,
+                members: proposalMembers,
+                movies: proposalMembers,
+                boxSetMovies: proposalMembers,
+                box_set_movies: proposalMembers,
+                _proposalKey: row.detectedBoxSetProposal._proposalKey || row.detectedBoxSetProposal.proposalKey || importBoxSetProposalKey(row.detectedBoxSetProposal)
+              }
+            : row.detectedBoxSetProposal;
           decision.boxSetReviewAccepted = row.detectedBoxSetAutoImportable !== true;
         }
         const manualOverride = {};
@@ -47387,17 +47527,21 @@ def register_routes(flask_app: Flask) -> None:
             if title and year:
                 cur.execute(
                     """
-                    SELECT id
+                    SELECT id, title, original_title, sort_title, year, format
                     FROM movies
-                    WHERE lower(COALESCE(sort_title, title, original_title)) = lower(%s)
+                    WHERE (
+                        lower(COALESCE(sort_title, '')) = lower(%s)
+                        OR lower(COALESCE(title, '')) = lower(%s)
+                        OR lower(COALESCE(original_title, '')) = lower(%s)
+                    )
                       AND COALESCE(year, '') = %s
-                    LIMIT 1
+                    ORDER BY updated_at DESC
                     """,
-                    (title, year),
+                    (title, title, title, year),
                 )
-                row = cur.fetchone()
-                if row:
-                    return row["id"]
+                for row in cur.fetchall():
+                    if existing_movie_row_matches_box_set_member(row, member):
+                        return row["id"]
         return None
 
     def normalized_box_set_members_from_body(body: dict[str, Any]) -> list[dict[str, Any]]:
