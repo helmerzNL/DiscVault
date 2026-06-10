@@ -43629,20 +43629,10 @@ def register_routes(flask_app: Flask) -> None:
             if token_uuid:
                 requested_token_id = str(token_uuid)
                 requested_token = owned_tokens_by_id.get(requested_token_id)
-                if not requested_token:
-                    diagnostics["reason"] = "selected_token_not_owned_or_missing"
-                    return response(
-                        {
-                            "status": "ok",
-                            "events": [],
-                            "tokenId": requested_token_id,
-                            "category": category_filter,
-                            "query": search_term,
-                            "diagnostics": diagnostics,
-                        }
-                    )
                 visible_token_ids = [requested_token_id]
-                visible_token_names = [requested_token.get("name") or ""]
+                visible_token_names = [requested_token.get("name") or ""] if requested_token else []
+                if not requested_token:
+                    diagnostics["reason"] = "selected_token_not_in_current_token_list"
             else:
                 visible_token_ids = owned_token_ids
                 visible_token_names = [token.get("name") or "" for token in owned_tokens]
@@ -43652,33 +43642,44 @@ def register_routes(flask_app: Flask) -> None:
                 visible_token_names,
             )
             category_condition, category_params = profile_api_audit_category_condition(category_filter)
+            actor_activity_condition = """
+            (
+                actor_user_id = %s
+                AND (
+                    category IN ('api', 'mcp')
+                    OR event_type LIKE 'api.%%'
+                    OR event_type LIKE 'mcp.%%'
+                    OR event_type IN ('api_token.created', 'api_token.revoked')
+                )
+            )
+            """
+            actor_activity_params = [actor["id"]]
+            visibility_condition = f"({actor_activity_condition} OR {explicit_token_match})"
+            visibility_params = [
+                *actor_activity_params,
+                *token_match_params,
+            ]
+            if token_uuid:
+                selected_token_condition, selected_token_params = profile_api_audit_token_match_condition(
+                    [str(token_uuid)],
+                    [requested_token.get("name") or ""] if requested_token else [],
+                )
+                if category_filter == "mcp":
+                    visibility_condition = f"({actor_activity_condition} OR {selected_token_condition})"
+                else:
+                    visibility_condition = f"({actor_activity_condition} AND {selected_token_condition})"
+                visibility_params = [
+                    *actor_activity_params,
+                    *selected_token_params,
+                ]
             base_conditions = [
                 category_condition,
-                explicit_token_match,
+                visibility_condition,
             ]
             base_params: list[Any] = [
                 *category_params,
-                *token_match_params,
+                *visibility_params,
             ]
-            if not token_uuid:
-                base_conditions[-1] = f"""
-                (
-                    {explicit_token_match}
-                    OR (
-                        actor_user_id = %s
-                        AND (
-                            category IN ('api', 'mcp')
-                            OR event_type IN ('api_token.created', 'api_token.revoked')
-                        )
-                        AND (
-                            event_type LIKE 'api.%%'
-                            OR event_type LIKE 'mcp.%%'
-                            OR event_type IN ('api_token.created', 'api_token.revoked')
-                        )
-                    )
-                )
-                """
-                base_params.append(actor["id"])
             conditions = list(base_conditions)
             params = list(base_params)
             if search_term:
