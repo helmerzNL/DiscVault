@@ -155,6 +155,29 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 else:
                     os.environ[key] = value
 
+    def test_movievault_26_box_set_members_are_deduped_across_release_and_movie_rows(self):
+        proposal = movievault_26._normalize_box_set_proposal(
+            {
+                "title": "Back to the Future Trilogy 4K",
+                "format": "4K UHD",
+                "members": [
+                    {"title": "Back to the Future", "year": "1985", "tmdbId": "105"},
+                    {"title": "Back to the Future Part II", "year": "1989", "tmdbId": "165"},
+                    {"title": "Back to the Future Part III", "year": "1990", "tmdbId": "196"},
+                    {"title": "Back to the Future", "year": "1985"},
+                    {"title": "Back to the Future Part II", "year": "1989"},
+                    {"title": "Back to the Future Part III", "year": "1990"},
+                ],
+            },
+            {"format": "4K UHD"},
+        )
+
+        self.assertEqual(proposal["member_count"], 3)
+        self.assertEqual(
+            [movie["title"] for movie in proposal["movies"]],
+            ["Back to the Future", "Back to the Future Part II", "Back to the Future Part III"],
+        )
+
     def test_barcode_lookup_sends_only_public_barcodes(self):
         original_get = movievault_26._get
         try:
