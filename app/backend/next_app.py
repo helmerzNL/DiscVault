@@ -38407,6 +38407,59 @@ def person_biography_value(localizations: list[dict[str, Any]], metadata: dict[s
     return ""
 
 
+def normalize_native_language(value: Any) -> str:
+    language = clean_text(value).lower().replace("_", "-")
+    if not language:
+        return ""
+    return language.split(",", 1)[0].split(";", 1)[0].strip()
+
+
+def native_date_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "isoformat"):
+        return clean_text(value.isoformat())
+    return clean_text(value)
+
+
+def person_biography_value_for_language(
+    localizations: list[dict[str, Any]],
+    metadata: dict[str, Any] | None = None,
+    language: str = "",
+) -> str:
+    metadata = metadata if isinstance(metadata, dict) else {}
+    language = normalize_native_language(language)
+    localized_by_lang = {
+        str(row.get("lang") or "").lower().replace("_", "-"): clean_text(row.get("biography")) or ""
+        for row in localizations
+        if clean_text(row.get("biography"))
+    }
+    candidates: list[str] = []
+    if language:
+        candidates.append(language)
+        base = language.split("-", 1)[0]
+        if base and base != language:
+            candidates.append(base)
+    candidates.extend(["nl-nl", "nl", "en-us", "en"])
+    for candidate in dict.fromkeys(candidates):
+        if localized_by_lang.get(candidate):
+            return localized_by_lang[candidate]
+    if localized_by_lang:
+        return next(iter(localized_by_lang.values()))
+    metadata_keys: list[str] = []
+    if language:
+        metadata_keys.append(f"biography_{language.replace('-', '_')}")
+        base = language.split("-", 1)[0]
+        if base:
+            metadata_keys.append(f"biography_{base}")
+    metadata_keys.extend(["biography", "bio", "biography_nl", "biography_en"])
+    for key in dict.fromkeys(metadata_keys):
+        value = clean_text(metadata.get(key))
+        if value:
+            return value
+    return ""
+
+
 def person_entity(conn, person_id: UUID) -> dict[str, Any] | None:
     if not table_exists(conn, "people"):
         return None
@@ -38995,25 +39048,39 @@ def person_filmography_entities(conn, person_metadata: dict[str, Any] | None, *,
             )
             local_by_tmdb = {str(row["tmdb_id"]): row for row in cur.fetchall()}
 
-    digital_by_tmdb: dict[str, dict[str, Any]] = {}
+    digital_by_tmdb: dict[str, list[dict[str, Any]]] = {}
     if table_exists(conn, "digital_media_items") and table_exists(conn, "digital_media_sources"):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT DISTINCT ON (dmi.tmdb_id)
+                SELECT
                     dmi.tmdb_id,
                     dmi.id AS digital_item_id,
+                    dmi.external_id,
+                    dmi.title,
+                    dmi.year,
                     dmi.playback_url,
                     dms.name AS source_name,
+                    dms.plugin_id,
                     dms.source_type
                 FROM digital_media_items dmi
                 JOIN digital_media_sources dms ON dms.id = dmi.source_id
                 WHERE dmi.tmdb_id = ANY(%s)
-                ORDER BY dmi.tmdb_id, dms.name, dmi.synced_at DESC
+                ORDER BY
+                    dmi.tmdb_id,
+                    dms.name,
+                    CASE
+                        WHEN dmi.playback_url IS NULL OR dmi.playback_url = '' THEN 1
+                        ELSE 0
+                    END,
+                    dmi.synced_at DESC,
+                    dmi.title,
+                    dmi.external_id
                 """,
                 (tmdb_ids,),
             )
-            digital_by_tmdb = {str(row["tmdb_id"]): row for row in cur.fetchall()}
+            for row in cur.fetchall():
+                digital_by_tmdb.setdefault(str(row["tmdb_id"]), []).append(row)
 
     for entry in entries:
         tmdb_id = str(entry.get("tmdb_id") or "")
@@ -39023,8 +39090,10 @@ def person_filmography_entities(conn, person_metadata: dict[str, Any] | None, *,
             entry["in_collection"] = True
             entry["format"] = local.get("format")
             entry["poster_url"] = entry.get("poster_url") or local.get("poster_url")
-        digital = digital_by_tmdb.get(tmdb_id)
-        if digital:
+        digital_items = digital_by_tmdb.get(tmdb_id) or []
+        if digital_items:
+            digital = digital_items[0]
+            entry["digital_items"] = digital_items
             entry["digital_item_id"] = digital.get("digital_item_id")
             entry["playback_url"] = digital.get("playback_url")
             entry["digital_source_name"] = digital.get("source_name")
@@ -39032,6 +39101,124 @@ def person_filmography_entities(conn, person_metadata: dict[str, Any] | None, *,
             entry["in_digital"] = True
             entry["source_name"] = digital.get("source_name") or entry.get("source_name")
     return entries
+
+
+def native_person_biography_fields(
+    localizations: list[dict[str, Any]],
+    metadata: dict[str, Any] | None = None,
+) -> tuple[dict[str, str], dict[str, str]]:
+    metadata = metadata if isinstance(metadata, dict) else {}
+    fields: dict[str, str] = {}
+    by_language: dict[str, str] = {}
+
+    def add(language: str, biography: Any) -> None:
+        language = normalize_native_language(language)
+        value = clean_text(biography)
+        if not language or not value:
+            return
+        key = f"biography_{language.replace('-', '_')}"
+        fields.setdefault(key, value)
+        by_language.setdefault(language, value)
+        base = language.split("-", 1)[0]
+        if base:
+            fields.setdefault(f"biography_{base}", value)
+            by_language.setdefault(base, value)
+
+    for row in localizations:
+        add(row.get("lang"), row.get("biography"))
+    for key, value in metadata.items():
+        if not str(key).startswith("biography_"):
+            continue
+        add(str(key).replace("biography_", "", 1), value)
+    return fields, by_language
+
+
+def native_person_detail_payload(detail: dict[str, Any], *, language: str = "") -> dict[str, Any]:
+    person = detail.get("person") if isinstance(detail.get("person"), dict) else {}
+    metadata = person.get("metadata") if isinstance(person.get("metadata"), dict) else {}
+    localizations = detail.get("localizations") if isinstance(detail.get("localizations"), list) else []
+    biography_fields, biography_by_language = native_person_biography_fields(localizations, metadata)
+    payload: dict[str, Any] = {
+        "id": str(person.get("id") or ""),
+        "publicId": clean_text(person.get("public_id")),
+        "tmdbId": clean_text(detail.get("tmdbId") or person_tmdb_identifier(person, detail.get("identifiers") or [])),
+        "name": clean_text(person.get("name")),
+        "profileUrl": clean_text(person.get("profile_url") or metadata.get("profileUrl") or metadata.get("profile_url")),
+        "birthday": native_date_value(person.get("birth_date") or metadata.get("birthday") or metadata.get("birthDate")),
+        "deathday": native_date_value(person.get("death_date") or metadata.get("deathday") or metadata.get("deathDate")),
+        "placeOfBirth": clean_text(person.get("place_of_birth") or metadata.get("placeOfBirth") or metadata.get("place_of_birth")),
+        "biography": person_biography_value_for_language(localizations, metadata, language),
+        "knownFor": clean_text(person.get("known_for") or metadata.get("knownFor") or metadata.get("known_for")),
+        "biographyByLanguage": biography_by_language,
+    }
+    payload.update(biography_fields)
+    return payload
+
+
+def native_digital_platform_item(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(row.get("digital_item_id") or row.get("id") or ""),
+        "externalId": clean_text(row.get("external_id")),
+        "title": clean_text(row.get("title") or row.get("digital_title")),
+        "year": clean_text(row.get("year") or row.get("digital_year")),
+        "platform": clean_text(row.get("source_name")),
+        "sourceName": clean_text(row.get("source_name")),
+        "sourceType": clean_text(row.get("source_type")),
+        "pluginId": clean_text(row.get("plugin_id")),
+        "playbackUrl": clean_text(row.get("playback_url")),
+    }
+
+
+def native_person_filmography_item(entry: dict[str, Any]) -> dict[str, Any]:
+    digital_items = [
+        native_digital_platform_item(item)
+        for item in (entry.get("digital_items") if isinstance(entry.get("digital_items"), list) else [])
+        if isinstance(item, dict)
+    ]
+    if not digital_items and (entry.get("playback_url") or entry.get("digital_item_id")):
+        digital_items = [native_digital_platform_item(entry)]
+    platform_urls = [
+        {"platform": item.get("platform") or item.get("sourceName") or "", "url": item.get("playbackUrl") or ""}
+        for item in digital_items
+        if item.get("playbackUrl")
+    ]
+    credit_type = clean_text(entry.get("credit_type") or entry.get("creditType"))
+    acting = person_credit_type_is_acting({"credit_type": credit_type}) or bool(clean_text(entry.get("character")))
+    department = "cast" if acting else "crew"
+    return {
+        "tmdbId": clean_text(entry.get("tmdb_id") or entry.get("tmdbId")),
+        "movieId": str(entry.get("movie_id") or entry.get("movieId") or ""),
+        "title": clean_text(entry.get("title")),
+        "year": clean_text(entry.get("year")),
+        "releaseDate": native_date_value(entry.get("release_date") or entry.get("releaseDate")),
+        "posterUrl": clean_text(entry.get("poster_url") or entry.get("posterUrl")),
+        "character": clean_text(entry.get("character")),
+        "job": clean_text(entry.get("job")),
+        "department": department,
+        "creditType": credit_type or ("actor" if acting else "crew"),
+        "inCollection": bool(entry.get("in_collection") or entry.get("inCollection")),
+        "inDigital": bool(entry.get("in_digital") or entry.get("inDigital") or digital_items),
+        "format": clean_text(entry.get("format")),
+        "sourceName": clean_text(entry.get("source_name") or entry.get("sourceName")),
+        "digitalItems": digital_items,
+        "digitalPlatformUrls": platform_urls,
+    }
+
+
+def native_person_filmography_payload(detail: dict[str, Any], *, language: str = "") -> dict[str, Any]:
+    person = native_person_detail_payload(detail, language=language)
+    items = [native_person_filmography_item(entry) for entry in detail.get("filmography") or [] if isinstance(entry, dict)]
+    cast = [item for item in items if item.get("department") == "cast"]
+    crew = [item for item in items if item.get("department") == "crew"]
+    return {
+        "personId": person["id"],
+        "tmdbId": person.get("tmdbId") or "",
+        "language": normalize_native_language(language),
+        "cast": cast,
+        "crew": crew,
+        "items": items,
+        "counts": {"cast": len(cast), "crew": len(crew), "total": len(items)},
+    }
 
 
 def person_detail_entity(conn, person_id: UUID, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -41208,6 +41395,121 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             (*visibility_params, limit),
         )
         return cur.fetchall()
+
+
+def all_movie_credit_entities(
+    conn,
+    *,
+    movie_limit: int = 1000,
+    credit_limit: int = 50000,
+    actor: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movies") or not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
+        return []
+    movie_limit = max(1, min(int(movie_limit or 1000), 5000))
+    credit_limit = max(1, min(int(credit_limit or 50000), 50000))
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
+    media_join = table_exists(conn, "media_assets")
+    identifiers_join = table_exists(conn, "person_identifiers")
+    profile_select = (
+        """
+                ma.storage_backend AS profile_storage_backend,
+                ma.storage_key AS profile_storage_key,
+                ma.source_url AS profile_source_url,
+        """
+        if media_join
+        else """
+                NULL AS profile_storage_backend,
+                NULL AS profile_storage_key,
+                NULL AS profile_source_url,
+        """
+    )
+    profile_join = "LEFT JOIN media_assets ma ON ma.id = p.profile_asset_id" if media_join else ""
+    tmdb_select = (
+        """
+                (
+                    SELECT pi.identifier
+                    FROM person_identifiers pi
+                    WHERE pi.person_id = p.id
+                      AND lower(pi.provider_id) = 'tmdb'
+                    ORDER BY pi.identifier_type, pi.identifier
+                    LIMIT 1
+                ) AS tmdb_id,
+        """
+        if identifiers_join
+        else "NULL AS tmdb_id,"
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            WITH bootstrap_movies AS (
+                SELECT m.id, lower(COALESCE(m.sort_title, m.title)) AS order_title, m.year
+                FROM movies m
+                WHERE {visibility_where}
+                ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                LIMIT %s
+            )
+            SELECT
+                mc.id,
+                mc.movie_id,
+                mc.person_id,
+                mc.credit_type,
+                mc.character,
+                mc.job,
+                mc.sort_order,
+                p.public_id AS person_public_id,
+                p.name,
+                p.known_for,
+                p.profile_asset_id,
+                p.metadata AS person_metadata,
+{profile_select}
+{tmdb_select}
+                bm.order_title,
+                bm.year AS movie_year
+            FROM movie_credits mc
+            JOIN bootstrap_movies bm ON bm.id = mc.movie_id
+            JOIN people p ON p.id = mc.person_id
+            {profile_join}
+            ORDER BY bm.order_title, bm.year NULLS LAST, mc.movie_id, mc.sort_order, p.name
+            LIMIT %s
+            """,
+            (*visibility_params, movie_limit, credit_limit),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        metadata = row.get("person_metadata") if isinstance(row.get("person_metadata"), dict) else {}
+        profile_url = media_asset_public_url(
+            {
+                "id": row.get("profile_asset_id"),
+                "storage_backend": row.pop("profile_storage_backend", None),
+                "storage_key": row.pop("profile_storage_key", None),
+                "source_url": row.pop("profile_source_url", None),
+            }
+        )
+        if not profile_url:
+            profile_url = profile_metadata_image_url(metadata)
+        credit_type = clean_text(row.get("credit_type"))
+        acting = person_credit_type_is_acting({"credit_type": credit_type})
+        items.append(
+            {
+                "id": str(row.get("id") or ""),
+                "creditId": str(row.get("id") or ""),
+                "movieId": str(row.get("movie_id") or ""),
+                "personId": str(row.get("person_id") or ""),
+                "personPublicId": clean_text(row.get("person_public_id")),
+                "tmdbId": clean_text(row.get("tmdb_id") or metadata.get("tmdbId") or metadata.get("tmdb_id")),
+                "name": clean_text(row.get("name")),
+                "profileUrl": clean_text(profile_url),
+                "knownFor": clean_text(row.get("known_for") or metadata.get("knownFor") or metadata.get("known_for")),
+                "creditType": credit_type,
+                "department": "cast" if acting else "crew",
+                "character": clean_text(row.get("character")),
+                "job": clean_text(row.get("job")),
+                "sortOrder": int(row.get("sort_order") or 0),
+            }
+        )
+    return items
 
 
 def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -47369,6 +47671,7 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/people/<person_id>")
     def person_detail(person_id: str):
         person_uuid = parse_uuid(person_id, "personId")
+        language = request.args.get("language") or request.args.get("lang") or ""
         with connect() as conn:
             actor = require_any_next_permission(conn, ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"))
             if not table_exists(conn, "people"):
@@ -47378,7 +47681,25 @@ def register_routes(flask_app: Flask) -> None:
             detail = person_detail_entity(conn, person_uuid, actor=actor)
         if not detail:
             raise NextApiError("Person not found", 404)
-        return response({"status": "ok", "detail": detail})
+        native_person = native_person_detail_payload(detail, language=language)
+        detail.update(native_person)
+        return response({"status": "ok", "detail": detail, "person": native_person})
+
+    @flask_app.get("/api/next/people/<person_id>/filmography")
+    def person_filmography(person_id: str):
+        person_uuid = parse_uuid(person_id, "personId")
+        language = request.args.get("language") or request.args.get("lang") or ""
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"))
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            if not actor_can_view_person(conn, actor, person_uuid):
+                raise NextApiError("Person not found", 404)
+            detail = person_detail_entity(conn, person_uuid, actor=actor)
+        if not detail:
+            raise NextApiError("Person not found", 404)
+        filmography = native_person_filmography_payload(detail, language=language)
+        return response({"status": "ok", "filmography": filmography, **filmography})
 
     @flask_app.post("/api/next/people/<person_id>/metadata/refresh")
     def refresh_person_metadata_route(person_id: str):
@@ -50569,9 +50890,17 @@ def register_routes(flask_app: Flask) -> None:
         limit = parse_int_arg("limit", 1000, minimum=1, maximum=5000)
         with connect() as conn:
             revision = current_revision(conn)
+            movie_people = all_movie_credit_entities(
+                conn,
+                movie_limit=limit,
+                credit_limit=min(max(limit * 80, 1000), 50000),
+            )
             payload = {
                 "movies": all_movie_entities(conn, limit=limit),
                 "containers": all_container_entities(conn, limit=limit),
+                "moviePeople": movie_people,
+                "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
+                "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],
                 "metadataPlugins": metadata_plugin_entities(conn),
                 "settings": non_secret_settings(conn),
             }
