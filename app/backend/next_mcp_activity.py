@@ -159,10 +159,16 @@ def register_next_mcp_routes(flask_app: Flask, *, connect) -> None:  # pragma: n
                     metadata=metadata,
                 )
         response_headers = {}
-        for header in ("Content-Type", "Mcp-Session-Id"):
-            value = proxied.headers.get(header)
-            if value:
-                response_headers[header] = value
+        # Only echo known-safe MCP protocol content types to prevent reflective XSS.
+        _SAFE_MCP_CONTENT_TYPES = ("application/json", "text/event-stream")
+        content_type = proxied.headers.get("Content-Type", "")
+        if any(safe in content_type for safe in _SAFE_MCP_CONTENT_TYPES):
+            response_headers["Content-Type"] = content_type
+        else:
+            response_headers["Content-Type"] = "application/json"
+        mcp_session_id = proxied.headers.get("Mcp-Session-Id")
+        if mcp_session_id:
+            response_headers["Mcp-Session-Id"] = mcp_session_id
         return Response(proxied.content, status=proxied.status_code, headers=response_headers)
 
     @flask_app.route("/mcp", methods=["GET", "POST", "DELETE"])
