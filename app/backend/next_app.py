@@ -38709,6 +38709,27 @@ def person_credit_entities(
         movie_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
         visibility_clause = f"AND {movie_where}"
     media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+    identifiers_join = table_exists(conn, "movie_identifiers")
+    tmdb_select = (
+        """
+                COALESCE(
+                    (
+                        SELECT mi.identifier
+                        FROM movie_identifiers mi
+                        WHERE mi.movie_id=m.id
+                          AND mi.provider_id='tmdb'
+                        ORDER BY mi.identifier_type, mi.identifier
+                        LIMIT 1
+                    ),
+                    m.metadata->>'tmdbId',
+                    m.metadata->>'tmdb_id'
+                ) AS tmdb_id,
+        """
+        if identifiers_join
+        else """
+                COALESCE(m.metadata->>'tmdbId', m.metadata->>'tmdb_id') AS tmdb_id,
+        """
+    )
     media_select = (
         """
                 poster_asset.id AS poster_asset_id,
@@ -38779,6 +38800,7 @@ def person_credit_entities(
                 m.release_date,
                 m.format,
                 m.edition,
+{tmdb_select}
                 m.metadata->>'poster_url' AS poster_url,
                 m.metadata->>'backdrop_url' AS backdrop_url,
 {media_select}
@@ -38835,6 +38857,28 @@ def person_digital_credit_entities(
         movie_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
         visibility_clause = f"AND {movie_where}"
     media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+    identifiers_join = table_exists(conn, "movie_identifiers")
+    tmdb_select = (
+        """
+                    COALESCE(
+                        dmi.tmdb_id,
+                        (
+                            SELECT mi.identifier
+                            FROM movie_identifiers mi
+                            WHERE mi.movie_id=m.id
+                              AND mi.provider_id='tmdb'
+                            ORDER BY mi.identifier_type, mi.identifier
+                            LIMIT 1
+                        ),
+                        m.metadata->>'tmdbId',
+                        m.metadata->>'tmdb_id'
+                    ) AS tmdb_id,
+        """
+        if identifiers_join
+        else """
+                    COALESCE(dmi.tmdb_id, m.metadata->>'tmdbId', m.metadata->>'tmdb_id') AS tmdb_id,
+        """
+    )
     media_select = (
         """
                 poster_asset.id AS poster_asset_id,
@@ -38896,7 +38940,7 @@ def person_digital_credit_entities(
                     dmi.media_type,
                     dmi.title AS digital_title,
                     dmi.year AS digital_year,
-                    dmi.tmdb_id,
+{tmdb_select}
                     dmi.imdb_id,
                     dmi.playback_url,
                     dmi.metadata AS digital_metadata,
@@ -39019,6 +39063,94 @@ def person_filmography_entries_from_metadata(metadata: dict[str, Any] | None, *,
     add_entries(metadata.get("movie_credits") or metadata.get("movieCredits"), "movie", result, seen)
     add_entries(metadata.get("known_for") or metadata.get("knownFor"), "movie", result, seen)
     return result[:limit]
+
+
+def person_local_filmography_entries(
+    collection_credits: list[dict[str, Any]],
+    digital_credits: list[dict[str, Any]] | None = None,
+    *,
+    limit: int = 240,
+) -> list[dict[str, Any]]:
+    digital_by_movie: dict[str, list[dict[str, Any]]] = {}
+    for item in digital_credits or []:
+        if not isinstance(item, dict):
+            continue
+        movie_id = str(item.get("movie_id") or "")
+        if movie_id:
+            digital_by_movie.setdefault(movie_id, []).append(item)
+
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for credit in collection_credits or []:
+        if not isinstance(credit, dict):
+            continue
+        title = clean_text(credit.get("title") or credit.get("original_title"))
+        if not title:
+            continue
+        tmdb_id = clean_text(credit.get("tmdb_id") or credit.get("tmdbId"))
+        credit_type = clean_text(credit.get("credit_type") or credit.get("creditType")) or "movie"
+        character = clean_text(credit.get("character")) or ""
+        job = clean_text(credit.get("job")) or ""
+        key = (tmdb_id or "", title.lower(), credit_type.lower(), character.lower(), job.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        movie_id = str(credit.get("movie_id") or "")
+        digital_items = digital_by_movie.get(movie_id) or []
+        result.append(
+            {
+                "tmdb_id": tmdb_id,
+                "movie_id": credit.get("movie_id"),
+                "movie_public_id": credit.get("movie_public_id"),
+                "title": title,
+                "year": clean_text(credit.get("year")),
+                "release_date": credit.get("release_date"),
+                "poster_url": clean_text(credit.get("poster_url")),
+                "character": character,
+                "job": job,
+                "credit_type": credit_type,
+                "sort_order": credit.get("sort_order") or 0,
+                "source_name": "DiscVault",
+                "in_collection": True,
+                "format": clean_text(credit.get("format")),
+                "edition": clean_text(credit.get("edition")),
+                "digital_items": digital_items,
+                "in_digital": bool(digital_items),
+            }
+        )
+        if len(result) >= limit:
+            break
+    return result
+
+
+def merge_person_filmography_entries(
+    external_entries: list[dict[str, Any]],
+    local_entries: list[dict[str, Any]],
+    *,
+    limit: int = 240,
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+
+    def key_for(entry: dict[str, Any]) -> tuple[str, str, str, str, str]:
+        tmdb_id = clean_text(entry.get("tmdb_id") or entry.get("tmdbId")) or ""
+        title = (clean_text(entry.get("title")) or "").lower()
+        credit_type = (clean_text(entry.get("credit_type") or entry.get("creditType")) or "").lower()
+        character = (clean_text(entry.get("character")) or "").lower()
+        job = (clean_text(entry.get("job")) or "").lower()
+        return (tmdb_id, title, credit_type, character, job)
+
+    for entry in [*(external_entries or []), *(local_entries or [])]:
+        if not isinstance(entry, dict):
+            continue
+        key = key_for(entry)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(entry)
+        if len(result) >= limit:
+            break
+    return result
 
 
 def person_filmography_entities(conn, person_metadata: dict[str, Any] | None, *, limit: int = 240) -> list[dict[str, Any]]:
@@ -39232,7 +39364,9 @@ def person_detail_entity(conn, person_id: UUID, actor: dict[str, Any] | None = N
     acting_credits = [credit for credit in collection_credits if person_credit_type_is_acting(credit)]
     crew_credits = [credit for credit in collection_credits if not person_credit_type_is_acting(credit)]
     digital_credits = person_digital_credit_entities(conn, person_id, actor=actor)
-    filmography = person_filmography_entities(conn, person.get("metadata"))
+    external_filmography = person_filmography_entities(conn, person.get("metadata"))
+    local_filmography = person_local_filmography_entries(collection_credits, digital_credits)
+    filmography = merge_person_filmography_entries(external_filmography, local_filmography)
     return {
         "person": person,
         "identifiers": identifiers,
@@ -39245,12 +39379,16 @@ def person_detail_entity(conn, person_id: UUID, actor: dict[str, Any] | None = N
         "groupedCrew": group_person_credits_by_job(crew_credits),
         "digitalCredits": digital_credits,
         "filmography": filmography,
+        "externalFilmography": external_filmography,
+        "localFilmography": local_filmography,
         "counts": {
             "collection": len(collection_credits),
             "acting": len(acting_credits),
             "crew": len(crew_credits),
             "digital": len(digital_credits),
             "filmography": len(filmography),
+            "externalFilmography": len(external_filmography),
+            "localFilmography": len(local_filmography),
         },
     }
 
@@ -39567,7 +39705,7 @@ def refresh_person_filmography(
     dry_run: bool = False,
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    detail = person_detail_entity(conn, person_id)
+    detail = person_detail_entity(conn, person_id, actor=actor)
     if not detail:
         raise NextApiError("Person not found", 404)
     tmdb_id = detail.get("tmdbId") or ""
@@ -39609,7 +39747,7 @@ def refresh_person_filmography(
                 """,
                 (Jsonb(json_ready(metadata)), person_id),
             )
-        detail = person_detail_entity(conn, person_id) or detail
+        detail = person_detail_entity(conn, person_id, actor=actor) or detail
     else:
         detail["filmography"] = person_filmography_entries_from_metadata(update_payload)
         detail["counts"] = dict(detail.get("counts") or {})
@@ -42207,12 +42345,12 @@ PROFILE_API_AUDIT_CATEGORIES = {"all", "api", "mcp", "security"}
 
 
 def normalize_profile_api_audit_category(value: Any) -> str:
-    category = clean_text(value).lower()
+    category = (clean_text(value) or "").lower()
     return category if category in PROFILE_API_AUDIT_CATEGORIES else "all"
 
 
 def profile_api_audit_search_term(value: Any) -> str:
-    return clean_text(value)[:120]
+    return (clean_text(value) or "")[:120]
 
 
 def profile_api_audit_category_condition(category: str) -> tuple[str, list[Any]]:
@@ -47689,6 +47827,7 @@ def register_routes(flask_app: Flask) -> None:
     def person_filmography(person_id: str):
         person_uuid = parse_uuid(person_id, "personId")
         language = request.args.get("language") or request.args.get("lang") or ""
+        refresh_info: dict[str, Any] | None = None
         with connect() as conn:
             actor = require_any_next_permission(conn, ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"))
             if not table_exists(conn, "people"):
@@ -47696,10 +47835,33 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_view_person(conn, actor, person_uuid):
                 raise NextApiError("Person not found", 404)
             detail = person_detail_entity(conn, person_uuid, actor=actor)
+            person_metadata = ((detail or {}).get("person") or {}).get("metadata") if detail else {}
+            person_metadata = person_metadata if isinstance(person_metadata, dict) else {}
+            metadata_entries = person_filmography_entries_from_metadata(person_metadata)
+            filmography_checked = bool(
+                person_metadata.get("filmography_fetched_at")
+                or person_metadata.get("filmography_source_ref")
+                or person_metadata.get("filmography_source")
+            )
+            if detail and detail.get("tmdbId") and not metadata_entries and not filmography_checked:
+                try:
+                    refresh = refresh_person_filmography(conn, person_uuid, actor=actor)
+                    detail = refresh.get("detail") or detail
+                    refresh_info = {
+                        "status": "refreshed",
+                        "plugin": refresh.get("plugin"),
+                        "execution": refresh.get("execution"),
+                    }
+                except NextApiError as exc:
+                    refresh_info = {
+                        "status": "skipped",
+                        "reason": str(exc),
+                        "statusCode": exc.status_code,
+                    }
         if not detail:
             raise NextApiError("Person not found", 404)
         filmography = native_person_filmography_payload(detail, language=language)
-        return response({"status": "ok", "filmography": filmography, **filmography})
+        return response({"status": "ok", "filmography": filmography, "refresh": refresh_info, **filmography})
 
     @flask_app.post("/api/next/people/<person_id>/metadata/refresh")
     def refresh_person_metadata_route(person_id: str):

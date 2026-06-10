@@ -170,12 +170,27 @@ Filmography:
 
 `GET /api/next/people/{personId}/filmography?language=nl`
 
+The backend owns filmography hydration. iOS should not call TMDb directly for a
+person page. When a person has a linked `tmdbId` but no stored filmography yet,
+the endpoint asks the enabled TMDb metadata plugin for combined credits, stores
+the result in `people.metadata.filmography` / `people.metadata.combined_credits`,
+then returns the stored data enriched with local DiscVault state.
+
+Even when TMDb is unavailable, the endpoint still falls back to local
+`movie_credits` for that `personId`. Local entries include collection ownership,
+poster URLs, movie identifiers and digital platform availability.
+
 The response separates cast and crew and also provides `items` for one combined
 list:
 
 ```json
 {
   "status": "ok",
+  "refresh": {
+    "status": "refreshed",
+    "plugin": {"id": "tmdb", "name": "TMDb"},
+    "execution": {"status": "ok", "entrypoint": "person_filmography"}
+  },
   "personId": "8bf2cfa8-...",
   "tmdbId": "585",
   "language": "nl",
@@ -211,6 +226,10 @@ list:
   "crew": []
 }
 ```
+
+`refresh` is `null` when stored filmography already existed. It can be
+`{"status":"skipped", ...}` when TMDb is not configured; in that case iOS should
+still render any returned local `cast`, `crew` and `items`.
 
 `movieId` is present when the TMDb film is in the local collection.
 `inCollection` and `inDigital` are independent booleans: a movie can be physical
