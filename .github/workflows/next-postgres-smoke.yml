@@ -255,7 +255,7 @@ jobs:
           assert response.status_code == 200, response.data[:500]
           payload = response.get_json()
           assert payload["status"] == "ok", payload
-          assert any(plugin["id"] == "movievault" for plugin in payload["plugins"]), payload
+          assert any(plugin["id"] == "movievault_26" for plugin in payload["plugins"]), payload
           print("/api/next/plugins/registry", "session-cookie-ok")
 
           update = client.patch("/api/next/plugins/plex", json={"enabled": True, "orderIndex": 105})
