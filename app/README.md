@@ -294,6 +294,72 @@ RBAC, movies, people, containers, media assets, metadata plugins, plugin
 runtime state, digital media source sync, events, offline sync, push
 notifications, entitlements and migration import state.
 
+### Container Member Ordering
+
+DiscVault Next stores container member position on the membership row, not on
+the movie or container row itself.
+
+For `box_set` and `vault` containers, direct movie members are stored in
+`container_movies`:
+
+```sql
+container_movies (
+  container_id uuid,
+  movie_id uuid,
+  sort_order integer not null default 0,
+  created_at timestamptz
+)
+```
+
+`container_id` + `movie_id` is the primary key. `sort_order` is the persisted
+member position for that movie inside that specific box-set or vault. The same
+movie can therefore have different positions in different containers.
+
+For `collection` containers, mixed members are stored in `collection_items`:
+
+```sql
+collection_items (
+  collection_id uuid,
+  item_type text, -- movie, vault, box_set or collection
+  item_id uuid,
+  sort_order integer not null default 0,
+  created_at timestamptz
+)
+```
+
+`collection_id` + `item_type` + `item_id` is the primary key. `sort_order` is
+the persisted position of that item inside the collection.
+
+When members are added through the bulk APIs, DiscVault appends them after the
+current maximum `sort_order` for that container. Reordering writes dense
+1-based positions back to the relevant membership table:
+
+```text
+POST  /api/next/bulk/containers/<containerId>/movies
+PATCH /api/next/containers/<containerId>/movies/order
+
+POST  /api/next/bulk/collections/<collectionId>/items
+PATCH /api/next/collections/<collectionId>/items/order
+```
+
+The reorder endpoints require the request to include every currently linked
+member. This prevents partial order updates from accidentally dropping or
+duplicating positions.
+
+Read paths order by the stored position first and then use a stable title/year
+fallback for ties or legacy rows with `sort_order=0`:
+
+```sql
+ORDER BY sort_order, lower(title), year NULLS LAST
+```
+
+Imports preserve source ordering where available. Legacy SQLite
+`box_set_movies.sort_order`, `vault_movies.sort_order` and
+`collection_items.sort_order` are copied into the Next membership tables.
+Metadata-driven imports and receiver payloads use `sortOrder`/`sort_order`
+from the provider payload, falling back to the member index when no explicit
+order is supplied.
+
 The initial sync API is shared by future PWA, iOS and Android clients. Clients
 use bootstrap to fill a local cache, delta to catch up by revision, and
 mutations to send idempotent offline changes back to the server.
