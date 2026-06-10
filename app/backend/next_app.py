@@ -47,7 +47,7 @@ try:
     from .next_plugin_runtime import plugin_registry_snapshot
     from .next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from .next_plugin_runtime import PLUGIN_ID_PATTERN
-    from .next_plugin_runtime import plugin_paths
+    from .next_plugin_runtime import plugin_install_dir
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
@@ -139,7 +139,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import plugin_registry_snapshot
     from next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from next_plugin_runtime import PLUGIN_ID_PATTERN
-    from next_plugin_runtime import plugin_paths
+    from next_plugin_runtime import plugin_install_dir
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
@@ -36303,7 +36303,7 @@ def validate_import_plugin_root(plugin_root: Path) -> dict[str, Any]:
 
 def install_plugin_from_root(plugin_root: Path, manifest: dict[str, Any]) -> Path:
     plugin_id = str(manifest["id"]).strip()
-    install_base = DEFAULT_PLUGIN_DIR.resolve()
+    install_base = plugin_install_dir().resolve()
     target = (install_base / plugin_id).resolve()
     if install_base != target and install_base not in target.parents:
         raise NextApiError("Plugin target path is not safe", 400)
@@ -36319,7 +36319,13 @@ def plugin_source_path_for_delete(plugin: dict[str, Any]) -> Path | None:
     if not raw_path:
         return None
     source_path = Path(raw_path).resolve()
-    allowed_roots = [path.resolve() for path in plugin_paths()]
+    allowed_roots = [plugin_install_dir().resolve()]
+    bundled_root = DEFAULT_PLUGIN_DIR.resolve()
+    if source_path == bundled_root or bundled_root in source_path.parents:
+        raise NextApiError("Bundled plugins are managed by the DiscVault image and cannot be deleted here", 400)
+    configured = os.environ.get("DISCVAULT_PLUGIN_PATHS", "").strip()
+    if configured:
+        allowed_roots.extend(Path(item.strip()).resolve() for item in configured.split(os.pathsep) if item.strip())
     for root in allowed_roots:
         if source_path == root:
             raise NextApiError("Refusing to delete the plugin root directory", 400)

@@ -33,6 +33,7 @@ sys.modules.setdefault("psycopg.types", psycopg_types_module)
 sys.modules.setdefault("psycopg.types.json", psycopg_types_json_module)
 
 from app.backend.next_plugin_runtime import discover_plugins
+from app.backend.next_plugin_runtime import plugin_install_dir
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
 from app.backend import next_worker
 from app.backend.next_worker import apply_collection_import_review
@@ -383,6 +384,53 @@ class NextPluginRuntimeTests(unittest.TestCase):
 
         self.assertNotIn("discvault_legacy_import", plugins)
         self.assertNotIn("movievault", plugins)
+
+    def test_plugin_install_dir_defaults_to_data_plugins(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": data_dir,
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                },
+            ):
+                self.assertEqual(plugin_install_dir(), Path(data_dir) / "plugins")
+
+    def test_data_plugins_override_bundled_plugin_ids(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            plugin_dir = Path(data_dir) / "plugins" / "tmdb"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "manifest.json").write_text(
+                """
+                {
+                  "id": "tmdb",
+                  "name": "TMDb Data Override",
+                  "version": "9.9.9",
+                  "manifestVersion": 1,
+                  "discVaultPluginApi": "next-1",
+                  "categories": ["metadata_source"],
+                  "capabilities": ["search_title"],
+                  "settingsSchemaVersion": 1,
+                  "settingsSchema": {"settings": [], "secrets": []}
+                }
+                """,
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": data_dir,
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                },
+            ):
+                discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        self.assertEqual(plugins["tmdb"].manifest["name"], "TMDb Data Override")
+        self.assertEqual(plugins["tmdb"].manifest["version"], "9.9.9")
+        self.assertEqual(plugins["tmdb"].path, plugin_dir.resolve())
 
     def test_known_collection_import_plugins_are_discoverable(self):
         discovery = discover_plugins()
