@@ -10769,6 +10769,52 @@ def ui_preview_html(
       gap: 10px;
       min-width: 0;
     }
+    .profile-api-troubleshooting {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+      padding: 10px;
+      border: 1px dashed color-mix(in srgb, var(--line) 82%, var(--accent));
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+    .profile-api-troubleshooting summary {
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 800;
+    }
+    .profile-api-troubleshooting-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+    .profile-api-troubleshooting-row {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      padding: 8px;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg-solid) 68%, transparent);
+    }
+    .profile-api-troubleshooting-row span {
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+    .profile-api-troubleshooting-row strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.82rem;
+    }
+    .profile-api-troubleshooting-tips {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
     .profile-api-log-row {
       display: grid;
       gap: 10px;
@@ -14165,6 +14211,7 @@ def ui_preview_html(
                       <input id="profileApiAuditSearchInput" type="search" autocomplete="off" data-next-i18n-placeholder="profile.apiActivitySearchPlaceholder" placeholder="Endpoint, tool, agent or IP">
                     </label>
                   </div>
+                  <div id="profileApiAuditTroubleshooting"></div>
                   <div class="profile-api-log-list" id="profileApiAuditList"></div>
                 </section>
               </div>
@@ -14749,7 +14796,7 @@ def ui_preview_html(
     let profileCredentials = [];
     let profileRecovery = {};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
-    let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all", category: "all", search: ""};
+    let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all", category: "all", search: "", diagnostics: null, error: "", lastUrl: ""};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
     let activeProfileApiTab = localStorage.getItem("dv_next_profile_api_tab") || "general";
     let containerManagerType = "box_set";
@@ -27509,10 +27556,64 @@ def ui_preview_html(
       if (metadata.body && Object.keys(metadata.body || {}).length) payload.body = metadata.body;
       return Object.keys(payload).length ? JSON.stringify(payload, null, 2) : "";
     }
+    function profileApiAuditDiagnosticValue(value, fallback) {
+      if (value === true) return tNext("common.yes", "Yes");
+      if (value === false) return tNext("common.no", "No");
+      if (value === 0) return "0";
+      if (value) return String(value);
+      return fallback || "-";
+    }
+    function profileApiAuditTroubleshootingHtml() {
+      const diagnostics = profileApiAudit.diagnostics || {};
+      const filters = diagnostics.filters || {};
+      const tables = diagnostics.tables || {};
+      const access = diagnostics.access || {};
+      const counts = diagnostics.counts || {};
+      const eventCount = (profileApiAudit.events || []).length;
+      const open = profileApiAudit.error || profileApiAudit.loaded || eventCount === 0 ? " open" : "";
+      const filterSummary = [
+        `${tNext("profile.apiActivityTokenFilter", "Access key")}: ${filters.tokenId || profileApiAudit.tokenId || "all"}`,
+        `${tNext("profile.apiActivityTypeFilter", "Type")}: ${filters.category || profileApiAudit.category || "all"}`,
+        `${tNext("profile.apiActivitySearchFilter", "Search")}: ${filters.query || profileApiAudit.search || "-"}`
+      ].join(" | ");
+      const rows = [
+        [tNext("profile.apiActivityTroubleshootRequest", "Request"), profileApiAudit.lastUrl || "-"],
+        [tNext("profile.apiActivityTroubleshootFilters", "Filters"), filterSummary],
+        [tNext("profile.apiActivityTroubleshootTables", "Tables"), `audit_events=${profileApiAuditDiagnosticValue(tables.auditEvents)}; api_access_tokens=${profileApiAuditDiagnosticValue(tables.apiAccessTokens)}`],
+        [tNext("profile.apiActivityTroubleshootTokens", "Tokens"), `${profileApiAuditDiagnosticValue(access.ownedTokenCount, "0")} ${tNext("profile.apiActivityTroubleshootOwned", "owned")} / ${profileApiAuditDiagnosticValue(access.visibleTokenCount, "0")} ${tNext("profile.apiActivityTroubleshootVisible", "visible")}`],
+        [tNext("profile.apiActivityTroubleshootMatches", "Matches"), `${profileApiAuditDiagnosticValue(counts.matchingAfterSearch, "0")} ${tNext("profile.apiActivityTroubleshootAfterSearch", "after search")} / ${profileApiAuditDiagnosticValue(counts.matchingBeforeSearch, "0")} ${tNext("profile.apiActivityTroubleshootBeforeSearch", "before search")}`],
+        [tNext("profile.apiActivityTroubleshootReturned", "Returned"), `${profileApiAuditDiagnosticValue(counts.returnedEvents, String(eventCount))} / ${profileApiAuditDiagnosticValue(filters.limit, "100")}`],
+        [tNext("profile.apiActivityTroubleshootUserScoped", "User-scoped"), profileApiAuditDiagnosticValue(counts.userScopedEvents, "0")],
+        [tNext("profile.apiActivityTroubleshootReason", "Reason"), profileApiAudit.error || diagnostics.reason || tNext("profile.apiActivityTroubleshootNoServerReason", "No server-side warning")]
+      ];
+      const tips = [
+        tNext("profile.apiActivityTroubleshootTipAll", "Try All keys + All activity first; selected keys only show events that can be matched to that token."),
+        tNext("profile.apiActivityTroubleshootTipSearch", "Useful searches: mcp, catalog, api.mcp, /mcp, /api/next/mcp/catalog, token name or IP address."),
+        tNext("profile.apiActivityTroubleshootTipRefresh", "After using an external client, click Refresh; the panel shows how many rows matched before and after the search filter.")
+      ];
+      return `
+        <details class="profile-api-troubleshooting"${open}>
+          <summary>${escapeHtml(tNext("profile.apiActivityTroubleshootTitle", "Troubleshooting"))}</summary>
+          <div class="profile-api-troubleshooting-grid">
+            ${rows.map(([label, value]) => `
+              <div class="profile-api-troubleshooting-row">
+                <span>${escapeHtml(label)}</span>
+                <strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong>
+              </div>
+            `).join("")}
+          </div>
+          <ul class="profile-api-troubleshooting-tips">
+            ${tips.map((tip) => `<li>${escapeHtml(tip)}</li>`).join("")}
+          </ul>
+        </details>
+      `;
+    }
     function renderProfileApiAudit() {
       const list = document.getElementById("profileApiAuditList");
       if (!list) return;
       renderProfileApiAuditFilters();
+      const troubleshooting = document.getElementById("profileApiAuditTroubleshooting");
+      if (troubleshooting) troubleshooting.innerHTML = profileApiAuditTroubleshootingHtml();
       if (profileApiAudit.loading) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("profile.apiActivityLoading", "Loading activity..."))}</div>`;
         return;
@@ -27864,11 +27965,17 @@ def ui_preview_html(
         if (tokenId) params.set("tokenId", tokenId);
         if (profileApiAudit.category && profileApiAudit.category !== "all") params.set("category", profileApiAudit.category);
         if (profileApiAudit.search) params.set("q", profileApiAudit.search);
-        const payload = await authApiJson(`/api/next/profile/api-audit-events?${params.toString()}`);
+        const url = `/api/next/profile/api-audit-events?${params.toString()}`;
+        profileApiAudit.lastUrl = url;
+        profileApiAudit.error = "";
+        const payload = await authApiJson(url);
         profileApiAudit.events = payload.events || [];
+        profileApiAudit.diagnostics = payload.diagnostics || null;
         profileApiAudit.loaded = true;
       } catch (error) {
         profileApiAudit.events = [];
+        profileApiAudit.diagnostics = error.payload?.diagnostics || profileApiAudit.diagnostics || null;
+        profileApiAudit.error = error.message || String(error);
         setProfileApiMessage(error.message || String(error), "bad");
       } finally {
         profileApiAudit.loading = false;
@@ -43464,7 +43571,35 @@ def register_routes(flask_app: Flask) -> None:
             access = profile_api_access_payload(conn, actor)
             if not access.get("manageable") and not (access.get("tokens") or []):
                 raise NextApiError("Permission required: API or MCP access", 403)
-            if not table_exists(conn, "api_access_tokens") or not table_exists(conn, "audit_events"):
+            api_tokens_available = table_exists(conn, "api_access_tokens")
+            audit_events_available = table_exists(conn, "audit_events")
+            diagnostics: dict[str, Any] = {
+                "filters": {
+                    "tokenId": str(token_uuid) if token_uuid else "all",
+                    "category": category_filter,
+                    "query": search_term,
+                    "limit": limit,
+                },
+                "tables": {
+                    "apiAccessTokens": api_tokens_available,
+                    "auditEvents": audit_events_available,
+                },
+                "access": {
+                    "manageable": bool(access.get("manageable")),
+                    "available": bool(access.get("available")),
+                    "ownedTokenCount": 0,
+                    "visibleTokenCount": 0,
+                },
+                "counts": {
+                    "matchingBeforeSearch": 0,
+                    "matchingAfterSearch": 0,
+                    "returnedEvents": 0,
+                    "userScopedEvents": 0,
+                },
+                "reason": "",
+            }
+            if not api_tokens_available or not audit_events_available:
+                diagnostics["reason"] = "missing_required_tables"
                 return response(
                     {
                         "status": "ok",
@@ -43472,6 +43607,7 @@ def register_routes(flask_app: Flask) -> None:
                         "tokenId": str(token_uuid) if token_uuid else "all",
                         "category": category_filter,
                         "query": search_term,
+                        "diagnostics": diagnostics,
                     }
                 )
             with conn.cursor() as cur:
@@ -43487,12 +43623,14 @@ def register_routes(flask_app: Flask) -> None:
                     {"id": str(row["id"]), "name": str(row.get("name") or "")}
                     for row in cur.fetchall()
                 ]
+            diagnostics["access"]["ownedTokenCount"] = len(owned_tokens)
             owned_tokens_by_id = {token["id"]: token for token in owned_tokens}
             owned_token_ids = list(owned_tokens_by_id)
             if token_uuid:
                 requested_token_id = str(token_uuid)
                 requested_token = owned_tokens_by_id.get(requested_token_id)
                 if not requested_token:
+                    diagnostics["reason"] = "selected_token_not_owned_or_missing"
                     return response(
                         {
                             "status": "ok",
@@ -43500,6 +43638,7 @@ def register_routes(flask_app: Flask) -> None:
                             "tokenId": requested_token_id,
                             "category": category_filter,
                             "query": search_term,
+                            "diagnostics": diagnostics,
                         }
                     )
                 visible_token_ids = [requested_token_id]
@@ -43507,31 +43646,22 @@ def register_routes(flask_app: Flask) -> None:
             else:
                 visible_token_ids = owned_token_ids
                 visible_token_names = [token.get("name") or "" for token in owned_tokens]
-            if not visible_token_ids:
-                return response(
-                    {
-                        "status": "ok",
-                        "events": [],
-                        "tokenId": "all",
-                        "category": category_filter,
-                        "query": search_term,
-                    }
-                )
+            diagnostics["access"]["visibleTokenCount"] = len(visible_token_ids)
             explicit_token_match, token_match_params = profile_api_audit_token_match_condition(
                 visible_token_ids,
                 visible_token_names,
             )
             category_condition, category_params = profile_api_audit_category_condition(category_filter)
-            conditions = [
+            base_conditions = [
                 category_condition,
                 explicit_token_match,
             ]
-            params: list[Any] = [
+            base_params: list[Any] = [
                 *category_params,
                 *token_match_params,
             ]
             if not token_uuid:
-                conditions[-1] = f"""
+                base_conditions[-1] = f"""
                 (
                     {explicit_token_match}
                     OR (
@@ -43548,7 +43678,9 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 )
                 """
-                params.append(actor["id"])
+                base_params.append(actor["id"])
+            conditions = list(base_conditions)
+            params = list(base_params)
             if search_term:
                 search_like = f"%{search_term}%"
                 conditions.append(
@@ -43576,6 +43708,40 @@ def register_routes(flask_app: Flask) -> None:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
+                    SELECT COUNT(*)::int AS event_count
+                    FROM audit_events
+                    WHERE {' AND '.join(base_conditions)}
+                    """,
+                    tuple(base_params),
+                )
+                matching_before_search = int((cur.fetchone() or {}).get("event_count") or 0)
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*)::int AS event_count
+                    FROM audit_events
+                    WHERE {' AND '.join(conditions)}
+                    """,
+                    tuple(params),
+                )
+                matching_after_search = int((cur.fetchone() or {}).get("event_count") or 0)
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*)::int AS event_count
+                    FROM audit_events
+                    WHERE {category_condition}
+                      AND actor_user_id=%s
+                      AND (
+                        category IN ('api', 'mcp')
+                        OR event_type LIKE 'api.%%'
+                        OR event_type LIKE 'mcp.%%'
+                        OR event_type IN ('api_token.created', 'api_token.revoked')
+                      )
+                    """,
+                    (*category_params, actor["id"]),
+                )
+                user_scoped_events = int((cur.fetchone() or {}).get("event_count") or 0)
+                cur.execute(
+                    f"""
                     SELECT id, event_type, category, actor_user_id, actor_username, actor_role,
                            target_type, target_id, summary, metadata, request_ip, user_agent, created_at
                     FROM audit_events
@@ -43586,6 +43752,21 @@ def register_routes(flask_app: Flask) -> None:
                     (*params, limit),
                 )
                 rows = cur.fetchall()
+            diagnostics["counts"] = {
+                "matchingBeforeSearch": matching_before_search,
+                "matchingAfterSearch": matching_after_search,
+                "returnedEvents": len(rows),
+                "userScopedEvents": user_scoped_events,
+            }
+            if not rows:
+                if search_term and matching_before_search > 0 and matching_after_search == 0:
+                    diagnostics["reason"] = "search_filter_removed_all_matches"
+                elif token_uuid:
+                    diagnostics["reason"] = "selected_token_has_no_matching_activity"
+                elif not visible_token_ids and user_scoped_events == 0:
+                    diagnostics["reason"] = "no_tokens_and_no_user_scoped_activity"
+                else:
+                    diagnostics["reason"] = "no_matching_activity_for_current_filters"
         return response(
             {
                 "status": "ok",
@@ -43593,6 +43774,7 @@ def register_routes(flask_app: Flask) -> None:
                 "tokenId": str(token_uuid) if token_uuid else "all",
                 "category": category_filter,
                 "query": search_term,
+                "diagnostics": diagnostics,
             }
         )
 
