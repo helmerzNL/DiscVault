@@ -50,7 +50,7 @@ class _FakeConn:
 @unittest.skipIf(next_profile is None, "Flask is not installed in this test environment")
 class NextProfileHelperTests(unittest.TestCase):
     def test_profile_helpers_are_reexported_from_next_app(self):
-        for name in ("next_profile_user_payload", "next_profile_recovery_payload"):
+        for name in ("next_profile_user_payload", "next_profile_recovery_payload", "register_next_profile_routes"):
             self.assertIs(getattr(next_app, name), getattr(next_profile, name), name)
 
     def test_recovery_payload_reports_unavailable_when_table_missing(self):

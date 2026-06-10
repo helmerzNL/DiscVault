@@ -40,6 +40,10 @@ unnecessarily risky.
   compatibility. Runtime dependencies that still live in `next_app.py`
   (`permission_key_catalog`, `table_exists`, `media_asset_public_url`,
   `next_user_primary_role`) are resolved lazily to avoid an import cycle.
+  Flask route handlers are registered via `register_next_profile_routes`,
+  `register_next_audit_routes`, and `register_next_mcp_routes`; all three are
+  called from `register_routes()` in `next_app.py` and re-exported for
+  backward compatibility.
 - [ ] Step 5: Split people and native filmography.
 - [ ] Step 6: Split settings, preferences, notifications, and push/PWA.
 - [ ] Step 7: Split collection movies, containers, and media groups.
