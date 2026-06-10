@@ -74,9 +74,15 @@ class PluginDiscovery:
         return str(self.manifest["id"])
 
 
+def plugin_install_dir() -> Path:
+    configured = os.environ.get("DISCVAULT_PLUGIN_INSTALL_DIR", "").strip()
+    data_dir = Path(os.environ.get("DISCVAULT_DATA_DIR") or "/data")
+    return Path(configured) if configured else data_dir / "plugins"
+
+
 def plugin_paths() -> list[Path]:
     configured = os.environ.get("DISCVAULT_PLUGIN_PATHS", "").strip()
-    paths = [DEFAULT_PLUGIN_DIR]
+    paths = [plugin_install_dir(), DEFAULT_PLUGIN_DIR]
     if configured:
         for item in configured.split(os.pathsep):
             item = item.strip()
@@ -215,13 +221,18 @@ def load_runtime_module(plugin: PluginDiscovery):
 def discover_plugins() -> dict[str, Any]:
     plugins: list[PluginDiscovery] = []
     errors: list[dict[str, Any]] = []
+    seen_plugin_ids: set[str] = set()
     for base_path in plugin_paths():
         if not base_path.exists():
             continue
         for plugin_dir in sorted(item for item in base_path.iterdir() if item.is_dir()):
             try:
                 manifest = load_manifest(plugin_dir)
+                plugin_id = str(manifest.get("id") or "")
+                if plugin_id in seen_plugin_ids:
+                    continue
                 module_path, runtime = load_runtime(manifest, plugin_dir)
+                seen_plugin_ids.add(plugin_id)
                 plugins.append(
                     PluginDiscovery(
                         manifest=manifest,
