@@ -9,6 +9,8 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 try:
+    from flask import Flask
+
     from app.backend.next_app import NextApiError
     from app.backend.next_app import api_token_scopes_for_permissions
     from app.backend.next_app import actor_effective_has_any_permission
@@ -19,9 +21,12 @@ try:
     from app.backend.next_app import profile_api_audit_search_term
     from app.backend.next_app import profile_api_audit_token_match_condition
     from app.backend.next_app import profile_api_access_payload
+    from app.backend.next_app import public_request_ip
+    from app.backend.next_app import request_ip_details
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
         raise
+    Flask = None
     NextApiError = None
     api_token_scopes_for_permissions = None
     actor_effective_has_any_permission = None
@@ -32,6 +37,8 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit o
     profile_api_audit_search_term = None
     profile_api_audit_token_match_condition = None
     profile_api_access_payload = None
+    public_request_ip = None
+    request_ip_details = None
 
 
 @unittest.skipIf(normalize_api_token_permissions is None, "Flask is not installed in this test environment")
@@ -201,6 +208,35 @@ class NextApiTokenPermissionTests(unittest.TestCase):
 
         self.assertEqual(sql, "(false)")
         self.assertEqual(params, [])
+
+    def test_public_request_ip_prefers_forwarded_public_client_ip(self):
+        app = Flask(__name__)
+
+        with app.test_request_context(
+            "/api/next/mcp/catalog",
+            headers={"X-Forwarded-For": "8.8.8.8, 172.26.0.5"},
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            details = request_ip_details()
+            selected = public_request_ip()
+
+        self.assertEqual(selected, "8.8.8.8")
+        self.assertEqual(details["ip"], "8.8.8.8")
+        self.assertEqual(details["source"], "X-Forwarded-For[0]")
+
+    def test_public_request_ip_reports_remote_addr_when_no_proxy_header_exists(self):
+        app = Flask(__name__)
+
+        with app.test_request_context(
+            "/api/next/mcp/catalog",
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            details = request_ip_details()
+            selected = public_request_ip()
+
+        self.assertEqual(selected, "172.26.0.5")
+        self.assertEqual(details["source"], "remote_addr")
+        self.assertEqual(details["candidates"], [{"ip": "172.26.0.5", "source": "remote_addr", "scope": "private"}])
 
 
 if __name__ == "__main__":
