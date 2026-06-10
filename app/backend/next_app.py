@@ -41418,6 +41418,7 @@ def metadata_plugin_entities(conn) -> list[dict[str, Any]]:
                 s.secrets_ref
             FROM metadata_plugins p
             LEFT JOIN metadata_plugin_settings s ON s.plugin_id = p.id
+            WHERE p.installed = true
             ORDER BY p.order_index, p.name
             """
         )
