@@ -101,3 +101,117 @@ Use the Next sync endpoints exposed in `endpoints.sync`:
 
 The native app should cache read models locally and queue mutations with stable
 idempotency keys.
+
+### Bootstrap Cast And Crew
+
+`GET /api/next/sync/bootstrap` includes stable people relationships in
+`payload.moviePeople`, split into convenience arrays `payload.movieCast` and
+`payload.movieCrew`.
+
+Each relationship uses PostgreSQL UUIDs:
+
+```json
+{
+  "creditId": "3d4b6e50-...",
+  "movieId": "7b4d4e12-...",
+  "personId": "8bf2cfa8-...",
+  "personPublicId": "person-rutger-hauer",
+  "tmdbId": "585",
+  "name": "Rutger Hauer",
+  "profileUrl": "https://...",
+  "creditType": "actor",
+  "department": "cast",
+  "character": "Roy Batty",
+  "job": "",
+  "sortOrder": 1
+}
+```
+
+Use `personId` as the stable local identity. The same actor or crew member has
+the same `personId` across all movies, so the iOS cache can deduplicate people
+without relying on names.
+
+## People And Filmography
+
+Person detail:
+
+`GET /api/next/people/{personId}?language=nl`
+
+The response keeps the existing web payload in `detail.person`, and also exposes
+an iOS-friendly flattened person payload at `person` and on `detail`:
+
+```json
+{
+  "status": "ok",
+  "person": {
+    "id": "8bf2cfa8-...",
+    "publicId": "person-rutger-hauer",
+    "tmdbId": "585",
+    "name": "Rutger Hauer",
+    "profileUrl": "https://...",
+    "birthday": "1944-01-23",
+    "deathday": "2019-07-19",
+    "placeOfBirth": "Breukelen, Utrecht, Netherlands",
+    "biography": "Nederlandse biografie...",
+    "biography_nl": "Nederlandse biografie...",
+    "biography_en": "English biography...",
+    "biographyByLanguage": {
+      "nl": "Nederlandse biografie...",
+      "en": "English biography..."
+    }
+  }
+}
+```
+
+`language` is optional. When provided, `biography` prefers that localization,
+then its base language, then Dutch, then English, then metadata fallback.
+
+Filmography:
+
+`GET /api/next/people/{personId}/filmography?language=nl`
+
+The response separates cast and crew and also provides `items` for one combined
+list:
+
+```json
+{
+  "status": "ok",
+  "personId": "8bf2cfa8-...",
+  "tmdbId": "585",
+  "language": "nl",
+  "cast": [
+    {
+      "tmdbId": "78",
+      "movieId": "7b4d4e12-...",
+      "title": "Blade Runner",
+      "year": "1982",
+      "releaseDate": "1982-06-25",
+      "posterUrl": "https://...",
+      "character": "Roy Batty",
+      "job": "",
+      "department": "cast",
+      "creditType": "actor",
+      "inCollection": true,
+      "inDigital": true,
+      "digitalItems": [
+        {
+          "id": "2c7d...",
+          "platform": "Plex",
+          "sourceName": "Plex",
+          "sourceType": "plex",
+          "pluginId": "plex",
+          "playbackUrl": "https://..."
+        }
+      ],
+      "digitalPlatformUrls": [
+        {"platform": "Plex", "url": "https://..."}
+      ]
+    }
+  ],
+  "crew": []
+}
+```
+
+`movieId` is present when the TMDb film is in the local collection.
+`inCollection` and `inDigital` are independent booleans: a movie can be physical
+only, digital only, both, or neither.

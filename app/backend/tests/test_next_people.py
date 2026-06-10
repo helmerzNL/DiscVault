@@ -9,6 +9,8 @@ if repo_root not in sys.path:
 
 try:
     from app.backend.next_app import group_person_credits_by_job
+    from app.backend.next_app import native_person_detail_payload
+    from app.backend.next_app import native_person_filmography_payload
     from app.backend.next_app import person_biography_value
     from app.backend.next_app import person_filmography_entries_from_metadata
     from app.backend.next_app import select_movie_metadata_person_refresh_credits
@@ -17,6 +19,8 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit w
     if exc.name not in {"flask", "requests", "psycopg"}:
         raise
     group_person_credits_by_job = None
+    native_person_detail_payload = None
+    native_person_filmography_payload = None
     person_biography_value = None
     person_filmography_entries_from_metadata = None
     select_movie_metadata_person_refresh_credits = None
@@ -146,6 +150,83 @@ class NextPeoplePolicyTests(unittest.TestCase):
         self.assertEqual(result["combinedCredits"]["cast"][0]["tmdbId"], 42)
         self.assertEqual(result["combinedCredits"]["cast"][0]["posterUrl"], "https://image.tmdb.org/t/p/original/actor.jpg")
         self.assertEqual(result["combinedCredits"]["crew"][0]["job"], "Director")
+
+    def test_native_person_detail_payload_flattens_ios_contract(self):
+        detail = {
+            "person": {
+                "id": "person-uuid",
+                "public_id": "person-public",
+                "name": "Rutger Hauer",
+                "profile_url": "https://example.test/profile.jpg",
+                "birth_date": "1944-01-23",
+                "death_date": "2019-07-19",
+                "place_of_birth": "Breukelen, Utrecht, Netherlands",
+                "known_for": "Acting",
+                "metadata": {"biography_en": "English metadata biography"},
+            },
+            "identifiers": [{"provider_id": "tmdb", "identifier": "585"}],
+            "tmdbId": "585",
+            "localizations": [
+                {"lang": "nl", "biography": "Nederlandse biografie"},
+                {"lang": "en", "biography": "English biography"},
+            ],
+        }
+
+        payload = native_person_detail_payload(detail, language="nl")
+
+        self.assertEqual(payload["id"], "person-uuid")
+        self.assertEqual(payload["tmdbId"], "585")
+        self.assertEqual(payload["profileUrl"], "https://example.test/profile.jpg")
+        self.assertEqual(payload["birthday"], "1944-01-23")
+        self.assertEqual(payload["deathday"], "2019-07-19")
+        self.assertEqual(payload["biography"], "Nederlandse biografie")
+        self.assertEqual(payload["biography_nl"], "Nederlandse biografie")
+        self.assertEqual(payload["biography_en"], "English biography")
+
+    def test_native_person_filmography_payload_splits_cast_crew_and_digital_links(self):
+        detail = {
+            "person": {"id": "person-uuid", "name": "Example Person", "metadata": {}},
+            "identifiers": [{"provider_id": "tmdb", "identifier": "123"}],
+            "tmdbId": "123",
+            "localizations": [],
+            "filmography": [
+                {
+                    "tmdb_id": "42",
+                    "movie_id": "movie-uuid",
+                    "title": "Actor Movie",
+                    "year": "2022",
+                    "poster_url": "https://example.test/poster.jpg",
+                    "character": "Lead",
+                    "credit_type": "actor",
+                    "in_collection": True,
+                    "digital_items": [
+                        {
+                            "digital_item_id": "digital-1",
+                            "source_name": "Plex",
+                            "source_type": "plex",
+                            "plugin_id": "plex",
+                            "playback_url": "https://plex.example.test/movie",
+                        }
+                    ],
+                },
+                {
+                    "tmdb_id": "43",
+                    "title": "Crew Movie",
+                    "job": "Director",
+                    "credit_type": "crew",
+                },
+            ],
+        }
+
+        payload = native_person_filmography_payload(detail, language="nl")
+
+        self.assertEqual(payload["personId"], "person-uuid")
+        self.assertEqual(payload["counts"], {"cast": 1, "crew": 1, "total": 2})
+        self.assertEqual(payload["cast"][0]["movieId"], "movie-uuid")
+        self.assertTrue(payload["cast"][0]["inCollection"])
+        self.assertTrue(payload["cast"][0]["inDigital"])
+        self.assertEqual(payload["cast"][0]["digitalPlatformUrls"][0]["platform"], "Plex")
+        self.assertEqual(payload["crew"][0]["job"], "Director")
 
 
 if __name__ == "__main__":
