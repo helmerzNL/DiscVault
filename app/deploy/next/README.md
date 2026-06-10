@@ -136,8 +136,17 @@ limits which roles are assignable through the basic role layer.
 ## Plugin Runtime
 
 DiscVault Next loads plugins from manifest folders. The built-in plugin folder is
-`/opt/discvault/backend/next_plugins`; extra folders can be added later with
-`DISCVAULT_PLUGIN_PATHS` using the platform path separator.
+`/opt/discvault/backend/next_plugins`; this folder is part of the image and
+should be treated as read-only. Installed/uploaded plugins are stored outside the
+code bundle in `/data/plugins` by default.
+
+The default installed plugin directory can be changed with
+`DISCVAULT_PLUGIN_INSTALL_DIR`. If that is not set, DiscVault uses
+`$DISCVAULT_DATA_DIR/plugins`, falling back to `/data/plugins`. Extra read paths
+can still be added with `DISCVAULT_PLUGIN_PATHS` using the platform path
+separator. Data plugins are discovered before bundled plugins, so a plugin in
+`/data/plugins/<plugin_id>` can replace the bundled plugin with the same id
+without modifying the container image.
 
 Plugin categories are separate by design:
 
