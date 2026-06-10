@@ -105,6 +105,32 @@ try:
     from .next_common import parse_uuid_list
     from .next_common import response
     from .next_common import table_exists
+    from .next_mcp_activity import MCP_TOOL_NAMES
+    from .next_mcp_activity import mcp_request_api_token_value
+    from .next_audit import audit_api_interaction
+    from .next_audit import audit_event
+    from .next_audit import audit_event_row
+    from .next_audit import api_audit_metadata
+    from .next_audit import api_request_query_payload
+    from .next_audit import normalize_profile_api_audit_category
+    from .next_audit import normalize_request_ip_candidate
+    from .next_audit import profile_api_audit_category_condition
+    from .next_audit import profile_api_audit_search_term
+    from .next_audit import profile_api_audit_token_match_condition
+    from .next_audit import PROFILE_API_AUDIT_CATEGORIES
+    from .next_audit import public_request_ip
+    from .next_audit import redact_sensitive_payload
+    from .next_audit import request_ip_audit_metadata
+    from .next_audit import request_ip_details
+    from .next_api_token import API_TOKEN_DEFAULT_PERMISSION_KEYS
+    from .next_api_token import API_TOKEN_GRANTABLE_PERMISSION_KEYS
+    from .next_api_token import api_access_token_row
+    from .next_api_token import api_token_permission_is_grantable
+    from .next_api_token import api_token_scopes_for_permissions
+    from .next_api_token import normalize_api_token_permissions
+    from .next_api_token import profile_api_access_payload
+    from .next_profile import next_profile_recovery_payload
+    from .next_profile import next_profile_user_payload
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
@@ -171,6 +197,32 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import parse_uuid_list
     from next_common import response
     from next_common import table_exists
+    from next_mcp_activity import MCP_TOOL_NAMES
+    from next_mcp_activity import mcp_request_api_token_value
+    from next_audit import audit_api_interaction
+    from next_audit import audit_event
+    from next_audit import audit_event_row
+    from next_audit import api_audit_metadata
+    from next_audit import api_request_query_payload
+    from next_audit import normalize_profile_api_audit_category
+    from next_audit import normalize_request_ip_candidate
+    from next_audit import profile_api_audit_category_condition
+    from next_audit import profile_api_audit_search_term
+    from next_audit import profile_api_audit_token_match_condition
+    from next_audit import PROFILE_API_AUDIT_CATEGORIES
+    from next_audit import public_request_ip
+    from next_audit import redact_sensitive_payload
+    from next_audit import request_ip_audit_metadata
+    from next_audit import request_ip_details
+    from next_api_token import API_TOKEN_DEFAULT_PERMISSION_KEYS
+    from next_api_token import API_TOKEN_GRANTABLE_PERMISSION_KEYS
+    from next_api_token import api_access_token_row
+    from next_api_token import api_token_permission_is_grantable
+    from next_api_token import api_token_scopes_for_permissions
+    from next_api_token import normalize_api_token_permissions
+    from next_api_token import profile_api_access_payload
+    from next_profile import next_profile_recovery_payload
+    from next_profile import next_profile_user_payload
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
@@ -178,47 +230,6 @@ MIGRATION_LEGACY_AUTH_CHALLENGE_KEY = "migration:legacy-auth"
 MIGRATION_LEGACY_AUTH_GRANT_PREFIX = "migration:legacy-grant:"
 MIGRATION_LEGACY_AUTH_GRANT_SECONDS = 30 * 60
 PLUGIN_EXECUTION_JOB_TYPE = "plugin.execute"
-MCP_TOOL_NAMES = (
-    "search_collection",
-    "get_collection_stats",
-    "get_movie_details",
-    "add_movie",
-    "delete_movie",
-    "lookup_barcode",
-    "list_all_movies",
-    "get_watchlist",
-    "get_watch_history",
-    "get_groups",
-)
-API_TOKEN_GRANTABLE_PERMISSION_KEYS = (
-    "api.read",
-    "api.write",
-    "api.tokens.manage",
-    "mcp.use",
-    "collection.view",
-    "collection.add",
-    "collection.add_own",
-    "collection.import",
-    "collection.edit_all",
-    "collection.bulk_edit",
-    "containers.view",
-    "containers.create",
-    "containers.edit",
-    "groups.view",
-    "metadata.search",
-    "metadata.refresh_one",
-    "metadata.refresh_bulk",
-    "admin.view_jobs",
-)
-API_TOKEN_DEFAULT_PERMISSION_KEYS = (
-    "api.read",
-    "mcp.use",
-    "mcp.tool.search_collection",
-    "mcp.tool.get_collection_stats",
-    "mcp.tool.get_movie_details",
-    "mcp.tool.lookup_barcode",
-    "metadata.search",
-)
 ARTWORK_TRASH_RETENTION_OPTIONS = {
     "1h": {"seconds": 3600, "interval": "1 hour"},
     "1d": {"seconds": 86400, "interval": "1 day"},
@@ -35403,179 +35414,12 @@ def next_user_primary_role(conn, user_id: UUID | str) -> str | None:
     return row["key"] if row else None
 
 
-def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
-    user_id = user["id"]
-    avatar: dict[str, Any] | None = None
-    fresh_user = user
-    if table_exists(conn, "users"):
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    u.id,
-                    u.username,
-                    u.display_name,
-                    u.first_name,
-                    u.last_name,
-                    u.status,
-                    u.avatar_asset_id,
-                    u.updated_at,
-                    ma.id AS avatar_id,
-                    ma.kind AS avatar_kind,
-                    ma.variant AS avatar_variant,
-                    ma.storage_backend AS avatar_storage_backend,
-                    ma.storage_key AS avatar_storage_key,
-                    ma.source_url AS avatar_source_url,
-                    ma.provider_id AS avatar_provider_id,
-                    ma.content_type AS avatar_content_type,
-                    ma.width AS avatar_width,
-                    ma.height AS avatar_height,
-                    ma.size_bytes AS avatar_size_bytes,
-                    ma.sha256 AS avatar_sha256,
-                    ma.metadata AS avatar_metadata,
-                    ma.created_at AS avatar_created_at
-                FROM users u
-                LEFT JOIN media_assets ma ON ma.id = u.avatar_asset_id
-                WHERE u.id=%s
-                """,
-                (user_id,),
-            )
-            row = cur.fetchone()
-        if row:
-            fresh_user = row
-            if row.get("avatar_id"):
-                avatar = {
-                    "id": row.get("avatar_id"),
-                    "kind": row.get("avatar_kind"),
-                    "variant": row.get("avatar_variant"),
-                    "storage_backend": row.get("avatar_storage_backend"),
-                    "storage_key": row.get("avatar_storage_key"),
-                    "source_url": row.get("avatar_source_url"),
-                    "provider_id": row.get("avatar_provider_id"),
-                    "content_type": row.get("avatar_content_type"),
-                    "width": row.get("avatar_width"),
-                    "height": row.get("avatar_height"),
-                    "size_bytes": row.get("avatar_size_bytes"),
-                    "sha256": row.get("avatar_sha256"),
-                    "metadata": row.get("avatar_metadata"),
-                    "created_at": row.get("avatar_created_at"),
-                }
-    avatar_url = media_asset_public_url(avatar)
-    display_name = fresh_user.get("display_name") or fresh_user.get("username")
-    return {
-        "id": fresh_user.get("id"),
-        "username": fresh_user.get("username"),
-        "displayName": display_name,
-        "display_name": display_name,
-        "first_name": fresh_user.get("first_name"),
-        "last_name": fresh_user.get("last_name"),
-        "role": fresh_user.get("role") or next_user_primary_role(conn, user_id),
-        "avatarAssetId": fresh_user.get("avatar_asset_id"),
-        "avatar_asset_id": fresh_user.get("avatar_asset_id"),
-        "avatarUrl": avatar_url,
-        "avatar_url": avatar_url,
-        "updated_at": fresh_user.get("updated_at"),
-    }
-
-
-def next_profile_recovery_payload(conn, user_id: UUID | str) -> dict[str, Any]:
-    if not table_exists(conn, "recovery_codes"):
-        return {
-            "available": False,
-            "activeCount": 0,
-            "usedCount": 0,
-            "lastGeneratedAt": None,
-        }
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                COUNT(*) FILTER (
-                    WHERE used_at IS NULL
-                      AND (expires_at IS NULL OR expires_at > now())
-                )::int AS active_count,
-                COUNT(*) FILTER (WHERE used_at IS NOT NULL)::int AS used_count,
-                MAX(created_at) AS last_generated_at
-            FROM recovery_codes
-            WHERE user_id=%s
-            """,
-            (user_id,),
-        )
-        row = cur.fetchone() or {}
-    return {
-        "available": True,
-        "activeCount": int(row.get("active_count") or 0),
-        "usedCount": int(row.get("used_count") or 0),
-        "lastGeneratedAt": row.get("last_generated_at"),
-    }
-
-
 def permission_key_catalog(conn) -> set[str]:
     if not table_exists(conn, "permissions"):
         return set()
     with conn.cursor() as cur:
         cur.execute("SELECT key FROM permissions")
         return {str(row["key"]) for row in cur.fetchall()}
-
-
-def api_access_token_row(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": row.get("id"),
-        "name": row.get("name"),
-        "scopes": row.get("scopes") or [],
-        "permissionKeys": row.get("permission_keys") or row.get("permissionKeys") or [],
-        "createdAt": row.get("created_at"),
-        "lastUsedAt": row.get("last_used_at"),
-        "expiresAt": row.get("expires_at"),
-        "revokedAt": row.get("revoked_at"),
-    }
-
-
-def api_token_permission_is_grantable(permission_key: str) -> bool:
-    return (
-        permission_key in API_TOKEN_GRANTABLE_PERMISSION_KEYS
-        or permission_key.startswith("mcp.tool.")
-    )
-
-
-def profile_api_access_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
-    permissions = set(actor.get("permissions") or [])
-    if actor.get("role") == "owner":
-        permissions.update(permission_key_catalog(conn))
-    manageable = any(
-        key in permissions
-        for key in ("api.tokens.manage", "api.read", "api.write", "mcp.use")
-    ) or bool({key for key in permissions if key.startswith("mcp.tool.")})
-    tokens: list[dict[str, Any]] = []
-    if table_exists(conn, "api_access_tokens") and actor.get("id"):
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
-                FROM api_access_tokens
-                WHERE user_id=%s
-                ORDER BY revoked_at NULLS FIRST, created_at DESC
-                """,
-                (actor["id"],),
-            )
-            tokens = [api_access_token_row(row) for row in cur.fetchall()]
-    return {
-        "available": table_exists(conn, "api_access_tokens"),
-        "manageable": manageable,
-        "tokens": tokens,
-        "allowedPermissions": sorted(
-            key for key in permissions
-            if api_token_permission_is_grantable(key)
-        ),
-        "defaultPermissions": sorted(
-            key for key in API_TOKEN_DEFAULT_PERMISSION_KEYS
-            if key in permissions
-        ),
-        "mcpTools": [
-            {"name": tool, "permission": f"mcp.tool.{tool}"}
-            for tool in MCP_TOOL_NAMES
-        ],
-    }
 
 
 def actor_effective_permission_keys(conn, actor: dict[str, Any] | None) -> set[str]:
@@ -35711,71 +35555,6 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "jobs": "/api/next/metadata/jobs",
         },
     }
-
-
-def normalize_api_token_permissions(conn, actor: dict[str, Any], raw_values: Any) -> list[str]:
-    if raw_values in (None, ""):
-        raw_values = []
-    if not isinstance(raw_values, list):
-        raise NextApiError("permissionKeys must be an array", 400)
-    known = permission_key_catalog(conn)
-    actor_permissions = set(actor.get("permissions") or [])
-    if actor.get("role") == "owner":
-        actor_permissions.update(known)
-    normalized: list[str] = []
-    for item in raw_values:
-        key = clean_text(item)
-        if not key:
-            continue
-        if key not in known:
-            raise NextApiError(f"Unknown permission: {key}", 400)
-        if not api_token_permission_is_grantable(key):
-            raise NextApiError(f"Permission is not valid for API tokens: {key}", 400)
-        if key not in actor_permissions:
-            raise NextApiError(f"You cannot grant API token permission: {key}", 403)
-        if key not in normalized:
-            normalized.append(key)
-    if not normalized:
-        defaults = [
-            key
-            for key in API_TOKEN_DEFAULT_PERMISSION_KEYS
-            if key in actor_permissions
-        ]
-        normalized = defaults
-    if not normalized:
-        raise NextApiError("No API or MCP token permissions are available for this user", 403)
-    return normalized
-
-
-def api_token_scopes_for_permissions(permission_keys: list[str]) -> list[str]:
-    scopes: list[str] = []
-    read_permissions = {
-        "api.read",
-        "collection.view",
-        "containers.view",
-        "groups.view",
-        "metadata.search",
-    }
-    write_permissions = {
-        "api.write",
-        "collection.add",
-        "collection.add_own",
-        "collection.import",
-        "collection.edit_all",
-        "collection.bulk_edit",
-        "containers.create",
-        "containers.edit",
-        "metadata.refresh_one",
-        "metadata.refresh_bulk",
-    }
-    permission_set = set(permission_keys)
-    if permission_set.intersection(read_permissions):
-        scopes.append("read")
-    if permission_set.intersection(write_permissions):
-        scopes.append("write")
-    if "mcp.use" in permission_keys or any(key.startswith("mcp.tool.") for key in permission_keys):
-        scopes.append("mcp")
-    return scopes
 
 
 def require_next_admin_user(conn) -> dict[str, Any]:
@@ -41958,28 +41737,6 @@ def plugin_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def redact_sensitive_payload(value: Any) -> Any:
-    if isinstance(value, dict):
-        redacted = {}
-        for key, item in value.items():
-            lowered = str(key).lower()
-            if lowered in {"secret", "secrets", "token", "password", "apikey", "api_key"}:
-                if isinstance(item, dict):
-                    redacted[key] = {name: "***" for name in item}
-                elif isinstance(item, list):
-                    redacted[key] = ["***" for _ in item]
-                elif item in (None, ""):
-                    redacted[key] = item
-                else:
-                    redacted[key] = "***"
-            else:
-                redacted[key] = redact_sensitive_payload(item)
-        return redacted
-    if isinstance(value, list):
-        return [redact_sensitive_payload(item) for item in value]
-    return value
-
-
 def job_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -42102,315 +41859,6 @@ def queue_receiver_payload_to_receivers(
             "sourceProviders": ((payload.get("metadata") or {}).get("sourceProviders") or []),
         },
     }
-
-
-def audit_event(
-    conn,
-    *,
-    event_type: str,
-    category: str = "system",
-    actor: dict[str, Any] | None = None,
-    target_type: str | None = None,
-    target_id: Any = None,
-    summary: str | None = None,
-    metadata: dict[str, Any] | None = None,
-) -> None:
-    if not table_exists(conn, "audit_events"):
-        return
-    actor = actor or {}
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO audit_events (
-                event_type,
-                category,
-                actor_user_id,
-                actor_username,
-                actor_role,
-                target_type,
-                target_id,
-                summary,
-                metadata,
-                request_ip,
-                user_agent
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                event_type,
-                category,
-                actor.get("id"),
-                actor.get("username"),
-                actor.get("role"),
-                target_type,
-                str(target_id) if target_id is not None else None,
-                summary,
-                Jsonb(json_ready(redact_sensitive_payload(metadata or {}))),
-                public_request_ip(),
-                request.headers.get("User-Agent"),
-            ),
-        )
-
-
-def normalize_request_ip_candidate(value: Any) -> str:
-    text = str(value or "").strip().strip('"').strip("'")
-    if not text:
-        return ""
-    if text.lower().startswith("for="):
-        text = text[4:].strip().strip('"').strip("'")
-    if ";" in text:
-        text = text.split(";", 1)[0].strip()
-    if text.startswith("[") and "]" in text:
-        return text[1:text.index("]")].strip()
-    if text.count(":") == 1:
-        host, port = text.rsplit(":", 1)
-        if port.isdigit():
-            text = host
-    return text.strip()
-
-
-def request_ip_details() -> dict[str, Any]:
-    candidates: list[dict[str, str]] = []
-
-    def add_candidate(source: str, value: Any) -> None:
-        candidate = normalize_request_ip_candidate(value)
-        if not candidate:
-            return
-        try:
-            parsed = ipaddress.ip_address(candidate)
-        except ValueError:
-            return
-        normalized = str(parsed)
-        if any(item["ip"] == normalized and item["source"] == source for item in candidates):
-            return
-        candidates.append(
-            {
-                "ip": normalized,
-                "source": source,
-                "scope": "public" if parsed.is_global else "private",
-            }
-        )
-
-    for header in (
-        "CF-Connecting-IP",
-        "True-Client-IP",
-        "Fastly-Client-IP",
-        "Fly-Client-IP",
-        "X-Azure-ClientIP",
-        "X-Real-IP",
-        "X-Client-IP",
-        "X-Cluster-Client-IP",
-    ):
-        add_candidate(header, request.headers.get(header))
-    for header in ("X-Forwarded-For", "X-Original-Forwarded-For"):
-        forwarded_for = request.headers.get(header)
-        if not forwarded_for:
-            continue
-        for index, part in enumerate(str(forwarded_for).split(",")):
-            add_candidate(f"{header}[{index}]", part)
-    forwarded = request.headers.get("Forwarded")
-    if forwarded:
-        for segment_index, segment in enumerate(str(forwarded).split(",")):
-            for part in segment.split(";"):
-                part = part.strip()
-                if part.lower().startswith("for="):
-                    add_candidate(f"Forwarded[{segment_index}]", part)
-    add_candidate("remote_addr", request.remote_addr)
-
-    selected = ""
-    selected_source = ""
-    for item in candidates:
-        if item["scope"] == "public":
-            selected = item["ip"]
-            selected_source = item["source"]
-            break
-    if not selected and candidates:
-        selected = candidates[0]["ip"]
-        selected_source = candidates[0]["source"]
-    return {
-        "ip": selected,
-        "source": selected_source,
-        "candidates": candidates,
-    }
-
-
-def public_request_ip() -> str:
-    return str(request_ip_details().get("ip") or "")
-
-
-def request_ip_audit_metadata() -> dict[str, Any]:
-    details = request_ip_details()
-    metadata: dict[str, Any] = {
-        "requestIpSource": details.get("source") or "",
-    }
-    candidates = details.get("candidates")
-    if candidates:
-        metadata["requestIpCandidates"] = candidates
-    return metadata
-
-
-def audit_event_row(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": row["id"],
-        "eventType": row["event_type"],
-        "category": row["category"],
-        "actorUserId": row.get("actor_user_id"),
-        "actorUsername": row.get("actor_username"),
-        "actorRole": row.get("actor_role"),
-        "targetType": row.get("target_type"),
-        "targetId": row.get("target_id"),
-        "summary": row.get("summary"),
-        "metadata": redact_sensitive_payload(row.get("metadata") or {}),
-        "requestIp": row.get("request_ip"),
-        "userAgent": row.get("user_agent"),
-        "createdAt": row.get("created_at"),
-    }
-
-
-def api_request_query_payload() -> dict[str, Any]:
-    payload: dict[str, Any] = {}
-    for key in request.args.keys():
-        values = request.args.getlist(key)
-        payload[key] = values if len(values) > 1 else (values[0] if values else "")
-    return payload
-
-
-def api_audit_metadata(
-    actor: dict[str, Any] | None,
-    *,
-    command: str,
-    request_payload: dict[str, Any] | None = None,
-    extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    actor = actor or {}
-    api_token = actor.get("apiToken") or {}
-    metadata: dict[str, Any] = {
-        "command": command,
-        "method": request.method,
-        "endpoint": request.path,
-        "query": api_request_query_payload(),
-        "agent": request.headers.get("X-DiscVault-Agent")
-        or request.headers.get("X-MCP-Client")
-        or request.headers.get("User-Agent"),
-        "tool": request.headers.get("X-DiscVault-MCP-Tool") or command,
-        "apiTokenId": api_token.get("id"),
-        "apiTokenName": api_token.get("name"),
-        "apiTokenScopes": api_token.get("scopes") or [],
-        "apiTokenPermissions": api_token.get("permissionKeys") or [],
-    }
-    metadata.update(request_ip_audit_metadata())
-    if request_payload is not None:
-        metadata["request"] = request_payload
-    if extra:
-        metadata.update(extra)
-    return metadata
-
-
-PROFILE_API_AUDIT_CATEGORIES = {"all", "api", "mcp", "security"}
-
-
-def normalize_profile_api_audit_category(value: Any) -> str:
-    category = (clean_text(value) or "").lower()
-    return category if category in PROFILE_API_AUDIT_CATEGORIES else "all"
-
-
-def profile_api_audit_search_term(value: Any) -> str:
-    return (clean_text(value) or "")[:120]
-
-
-def profile_api_audit_category_condition(category: str) -> tuple[str, list[Any]]:
-    category = normalize_profile_api_audit_category(category)
-    if category == "api":
-        return "(category = %s AND event_type LIKE 'api.%%' AND event_type NOT LIKE 'api.mcp_%%')", ["api"]
-    if category == "mcp":
-        return """
-            (
-                (category = %s AND event_type LIKE 'mcp.%%')
-                OR event_type LIKE 'api.mcp_%%'
-            )
-            """, ["mcp"]
-    if category == "security":
-        return "(event_type IN ('api_token.created', 'api_token.revoked'))", []
-    return (
-        """
-        (
-            (
-                category IN ('api', 'mcp')
-                AND (
-                    event_type LIKE 'api.%%'
-                    OR event_type LIKE 'mcp.%%'
-                )
-            )
-            OR event_type IN ('api_token.created', 'api_token.revoked')
-        )
-        """,
-        [],
-    )
-
-
-def profile_api_audit_token_match_condition(
-    token_ids: list[str],
-    token_names: list[str] | None = None,
-) -> tuple[str, list[Any]]:
-    token_ids = [str(token_id) for token_id in token_ids if token_id]
-    token_names = [str(name) for name in (token_names or []) if name]
-    if not token_ids:
-        return "(false)", []
-    token_placeholders = ", ".join(["%s"] * len(token_ids))
-    conditions = [
-        f"metadata->>'apiTokenId' IN ({token_placeholders})",
-        f"metadata->>'api_token_id' IN ({token_placeholders})",
-        f"metadata->>'tokenId' IN ({token_placeholders})",
-        f"metadata->>'accessTokenId' IN ({token_placeholders})",
-        f"(target_type = 'api_access_token' AND target_id IN ({token_placeholders}))",
-    ]
-    params: list[Any] = [
-        *token_ids,
-        *token_ids,
-        *token_ids,
-        *token_ids,
-        *token_ids,
-    ]
-    if token_names:
-        name_placeholders = ", ".join(["%s"] * len(token_names))
-        conditions.append(f"metadata->>'apiTokenName' IN ({name_placeholders})")
-        params.extend(token_names)
-    return f"({' OR '.join(conditions)})", params
-
-
-def audit_api_interaction(
-    conn,
-    actor: dict[str, Any],
-    *,
-    command: str,
-    event_type: str,
-    target_type: str | None = None,
-    target_id: Any = None,
-    summary: str | None = None,
-    request_payload: dict[str, Any] | None = None,
-    metadata: dict[str, Any] | None = None,
-) -> None:
-    audit_event(
-        conn,
-        event_type=event_type,
-        category="api",
-        actor=actor,
-        target_type=target_type,
-        target_id=target_id,
-        summary=summary,
-        metadata=api_audit_metadata(actor, command=command, request_payload=request_payload, extra=metadata),
-    )
-
-
-def mcp_request_api_token_value() -> str:
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        return auth_header[7:].strip()
-    for header in ("X-DiscVault-Api-Token", "X-API-Key"):
-        value = str(request.headers.get(header) or "").strip()
-        if value:
-            return value
-    return ""
 
 
 def metadata_refresh_jobs(
