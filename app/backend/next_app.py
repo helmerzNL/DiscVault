@@ -38408,7 +38408,7 @@ def person_biography_value(localizations: list[dict[str, Any]], metadata: dict[s
 
 
 def normalize_native_language(value: Any) -> str:
-    language = clean_text(value).lower().replace("_", "-")
+    language = (clean_text(value) or "").lower().replace("_", "-")
     if not language:
         return ""
     return language.split(",", 1)[0].split(";", 1)[0].strip()
