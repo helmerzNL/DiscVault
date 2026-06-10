@@ -10881,6 +10881,17 @@ def ui_preview_html(
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
+    .profile-api-log-metadata {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .profile-api-log-metadata summary {
+      cursor: pointer;
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 800;
+    }
     .profile-section-box {
       display: grid;
       gap: 12px;
@@ -27556,6 +27567,10 @@ def ui_preview_html(
       if (metadata.body && Object.keys(metadata.body || {}).length) payload.body = metadata.body;
       return Object.keys(payload).length ? JSON.stringify(payload, null, 2) : "";
     }
+    function apiAuditMetadataSummary(metadata) {
+      const payload = metadata && typeof metadata === "object" ? metadata : {};
+      return Object.keys(payload).length ? JSON.stringify(payload, null, 2) : "";
+    }
     function profileApiAuditDiagnosticValue(value, fallback) {
       if (value === true) return tNext("common.yes", "Yes");
       if (value === false) return tNext("common.no", "No");
@@ -27626,6 +27641,7 @@ def ui_preview_html(
       list.innerHTML = events.map((event) => {
         const metadata = event.metadata || {};
         const requestSummary = apiAuditRequestSummary(metadata);
+        const metadataSummary = apiAuditMetadataSummary(metadata);
         const endpoint = [metadata.method, metadata.endpoint].filter(Boolean).join(" ") || event.summary || "-";
         const agent = metadata.agent || metadata.aiAgent || metadata.toolAgent || event.userAgent || "-";
         const tokenName = metadata.apiTokenName || tNext("profile.apiActivityUnknownToken", "Unknown key");
@@ -27665,6 +27681,12 @@ def ui_preview_html(
               </div>
             </div>
             ${requestSummary ? `<pre class="profile-api-log-json" aria-label="${escapeHtml(tNext("profile.apiActivityAsked", "Request"))}">${escapeHtml(requestSummary)}</pre>` : ""}
+            ${metadataSummary ? `
+              <details class="profile-api-log-metadata">
+                <summary>${escapeHtml(tNext("profile.apiActivityMetadata", "Metadata"))}</summary>
+                <pre class="profile-api-log-json" aria-label="${escapeHtml(tNext("profile.apiActivityMetadata", "Metadata"))}">${escapeHtml(metadataSummary)}</pre>
+              </details>
+            ` : ""}
           </article>
         `;
       }).join("");
