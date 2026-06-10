@@ -382,6 +382,7 @@ class NextPluginRuntimeTests(unittest.TestCase):
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
 
         self.assertNotIn("discvault_legacy_import", plugins)
+        self.assertNotIn("movievault", plugins)
 
     def test_known_collection_import_plugins_are_discoverable(self):
         discovery = discover_plugins()
