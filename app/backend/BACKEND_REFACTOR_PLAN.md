@@ -34,7 +34,12 @@ unnecessarily risky.
   (`NextApiError`, `json_ready`, `response`, `parse_int_arg`, `parse_uuid`,
   `parse_bool_value`, `parse_uuid_list`, `table_exists`, `count_table`).
   `next_app.py` re-imports these names for backward compatibility.
-- [ ] Step 4: Split profile, API tokens, audit activity, and MCP activity.
+- [x] Step 4: Split profile, API tokens, audit activity, and MCP activity into
+  `next_profile.py`, `next_api_token.py`, `next_audit.py`, and
+  `next_mcp_activity.py`. `next_app.py` re-imports these names for backward
+  compatibility. Runtime dependencies that still live in `next_app.py`
+  (`permission_key_catalog`, `table_exists`, `media_asset_public_url`,
+  `next_user_primary_role`) are resolved lazily to avoid an import cycle.
 - [ ] Step 5: Split people and native filmography.
 - [ ] Step 6: Split settings, preferences, notifications, and push/PWA.
 - [ ] Step 7: Split collection movies, containers, and media groups.
@@ -51,6 +56,14 @@ package layout below describes the logical grouping rather than a literal path:
 
 - `next_common.py`: `NextApiError`, `json_ready`, `response`, request parsing,
   UUID helpers, and table helpers.
+- `next_audit.py`: audit-event persistence, request-IP resolution, API/MCP audit
+  metadata, sensitive-payload redaction, and profile API audit filters.
+- `next_api_token.py`: API token permission catalogs, token payload helpers, and
+  the profile API access payload.
+- `next_profile.py`: profile account payloads (user details and recovery-code
+  status).
+- `next_mcp_activity.py`: MCP tool catalog and API-token extraction for MCP
+  requests.
 - `next/i18n.py`: locale catalog loading, supported locales, flags, and
   language normalization.
 - `next/security.py`: permission checks, visibility SQL, actor helpers, and
