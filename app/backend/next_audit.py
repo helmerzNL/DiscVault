@@ -13,15 +13,29 @@ from __future__ import annotations
 import ipaddress
 from typing import Any
 
-from flask import request
+from flask import Flask, request
 from psycopg.types.json import Jsonb
 
 try:  # pragma: no cover - exercised indirectly by both layouts
-    from .next_common import json_ready, table_exists
+    from .next_common import json_ready, parse_int_arg, response, table_exists
     from .next_import import clean_text
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
-    from next_common import json_ready, table_exists
+    from next_common import json_ready, parse_int_arg, response, table_exists
     from next_import import clean_text
+
+
+def _next_app():
+    """Return the ``next_app`` module lazily to avoid circular imports.
+
+    ``require_next_permission`` still lives in ``next_app`` (it belongs to the
+    security domain that has not been split yet). Importing it lazily keeps
+    test mocks targeting ``app.backend.next_app`` effective.
+    """
+    try:  # pragma: no cover - import shape depends on runtime layout
+        from . import next_app
+    except ImportError:  # pragma: no cover - supports gunicorn next_app:app
+        import next_app
+    return next_app
 
 
 def redact_sensitive_payload(value: Any) -> Any:
@@ -342,3 +356,53 @@ def audit_api_interaction(
         summary=summary,
         metadata=api_audit_metadata(actor, command=command, request_payload=request_payload, extra=metadata),
     )
+
+
+def register_next_audit_routes(flask_app: Flask, *, connect) -> None:  # pragma: no cover - Flask integration
+    """Register the admin audit-events route on *flask_app*.
+
+    ``connect`` must be a callable that returns a database connection context
+    manager (i.e. the ``connect`` closure defined in ``next_app.py``).
+    """
+    from flask import request as _request  # already imported at module level; alias for clarity
+
+    @flask_app.get("/api/next/audit/events")
+    def audit_events():
+        limit = parse_int_arg("limit", 100, minimum=1, maximum=250)
+        category = clean_text(_request.args.get("category") or "")
+        with connect() as conn:
+            _next_app().require_next_permission(conn, "admin.view_audit")
+            if not table_exists(conn, "audit_events"):
+                return response({"status": "ok", "events": []})
+            clauses: list[str] = []
+            params: list[Any] = []
+            if category:
+                clauses.append("category=%s")
+                params.append(category)
+            where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                        id,
+                        event_type,
+                        category,
+                        actor_user_id,
+                        actor_username,
+                        actor_role,
+                        target_type,
+                        target_id,
+                        summary,
+                        metadata,
+                        request_ip,
+                        user_agent,
+                        created_at
+                    FROM audit_events
+                    {where}
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (*params, limit),
+                )
+                rows = cur.fetchall()
+        return response({"status": "ok", "events": [audit_event_row(row) for row in rows]})

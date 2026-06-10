@@ -38,6 +38,7 @@ class NextAuditHelperTests(unittest.TestCase):
             "redact_sensitive_payload",
             "request_ip_audit_metadata",
             "request_ip_details",
+            "register_next_audit_routes",
         ]
         for name in names:
             self.assertIs(getattr(next_app, name), getattr(next_audit, name), name)
