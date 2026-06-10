@@ -533,6 +533,18 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                         ),
                     )
                     synced_plugin_ids.append(manifest["id"])
+                if synced_plugin_ids:
+                    cur.execute(
+                        """
+                        UPDATE plugins
+                        SET installed=false,
+                            enabled=false,
+                            updated_at=now()
+                        WHERE NOT (id = ANY(%s))
+                          AND installed=true
+                        """,
+                        (synced_plugin_ids,),
+                    )
 
     if has_metadata_plugins_table:
         with conn.transaction():
@@ -579,6 +591,18 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                         ),
                     )
                     synced_metadata_ids.append(manifest["id"])
+                if synced_metadata_ids:
+                    cur.execute(
+                        """
+                        UPDATE metadata_plugins
+                        SET installed=false,
+                            enabled=false,
+                            updated_at=now()
+                        WHERE NOT (id = ANY(%s))
+                          AND installed=true
+                        """,
+                        (synced_metadata_ids,),
+                    )
 
                 if has_plugins_table:
                     cur.execute(
@@ -641,6 +665,7 @@ def plugin_registry_snapshot(conn, table_exists: TableExists, Jsonb: JsonbFactor
                     s.secrets_ref
                 FROM plugins p
                 LEFT JOIN plugin_settings s ON s.plugin_id = p.id
+                WHERE p.installed = true
                 ORDER BY p.order_index, p.name
                 """
             )
