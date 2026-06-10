@@ -42248,41 +42248,84 @@ def normalize_request_ip_candidate(value: Any) -> str:
     return text.strip()
 
 
-def public_request_ip() -> str:
-    candidates: list[str] = []
-    for header in ("CF-Connecting-IP", "True-Client-IP", "X-Real-IP", "X-Client-IP"):
-        value = normalize_request_ip_candidate(request.headers.get(header))
-        if value:
-            candidates.append(value)
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        candidates.extend(
-            normalize_request_ip_candidate(part)
-            for part in str(forwarded_for).split(",")
-        )
-    forwarded = request.headers.get("Forwarded")
-    if forwarded:
-        for segment in str(forwarded).split(","):
-            for part in segment.split(";"):
-                part = part.strip()
-                if part.lower().startswith("for="):
-                    candidates.append(normalize_request_ip_candidate(part))
-    remote = normalize_request_ip_candidate(request.remote_addr)
-    if remote:
-        candidates.append(remote)
-    valid_candidates: list[str] = []
-    for candidate in candidates:
+def request_ip_details() -> dict[str, Any]:
+    candidates: list[dict[str, str]] = []
+
+    def add_candidate(source: str, value: Any) -> None:
+        candidate = normalize_request_ip_candidate(value)
         if not candidate:
-            continue
+            return
         try:
             parsed = ipaddress.ip_address(candidate)
         except ValueError:
-            continue
+            return
         normalized = str(parsed)
-        valid_candidates.append(normalized)
-        if parsed.is_global:
-            return normalized
-    return valid_candidates[0] if valid_candidates else ""
+        if any(item["ip"] == normalized and item["source"] == source for item in candidates):
+            return
+        candidates.append(
+            {
+                "ip": normalized,
+                "source": source,
+                "scope": "public" if parsed.is_global else "private",
+            }
+        )
+
+    for header in (
+        "CF-Connecting-IP",
+        "True-Client-IP",
+        "Fastly-Client-IP",
+        "Fly-Client-IP",
+        "X-Azure-ClientIP",
+        "X-Real-IP",
+        "X-Client-IP",
+        "X-Cluster-Client-IP",
+    ):
+        add_candidate(header, request.headers.get(header))
+    for header in ("X-Forwarded-For", "X-Original-Forwarded-For"):
+        forwarded_for = request.headers.get(header)
+        if not forwarded_for:
+            continue
+        for index, part in enumerate(str(forwarded_for).split(",")):
+            add_candidate(f"{header}[{index}]", part)
+    forwarded = request.headers.get("Forwarded")
+    if forwarded:
+        for segment_index, segment in enumerate(str(forwarded).split(",")):
+            for part in segment.split(";"):
+                part = part.strip()
+                if part.lower().startswith("for="):
+                    add_candidate(f"Forwarded[{segment_index}]", part)
+    add_candidate("remote_addr", request.remote_addr)
+
+    selected = ""
+    selected_source = ""
+    for item in candidates:
+        if item["scope"] == "public":
+            selected = item["ip"]
+            selected_source = item["source"]
+            break
+    if not selected and candidates:
+        selected = candidates[0]["ip"]
+        selected_source = candidates[0]["source"]
+    return {
+        "ip": selected,
+        "source": selected_source,
+        "candidates": candidates,
+    }
+
+
+def public_request_ip() -> str:
+    return str(request_ip_details().get("ip") or "")
+
+
+def request_ip_audit_metadata() -> dict[str, Any]:
+    details = request_ip_details()
+    metadata: dict[str, Any] = {
+        "requestIpSource": details.get("source") or "",
+    }
+    candidates = details.get("candidates")
+    if candidates:
+        metadata["requestIpCandidates"] = candidates
+    return metadata
 
 
 def audit_event_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -42334,6 +42377,7 @@ def api_audit_metadata(
         "apiTokenScopes": api_token.get("scopes") or [],
         "apiTokenPermissions": api_token.get("permissionKeys") or [],
     }
+    metadata.update(request_ip_audit_metadata())
     if request_payload is not None:
         metadata["request"] = request_payload
     if extra:
