@@ -25,7 +25,6 @@ import tempfile
 import uuid
 import zipfile
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -97,6 +96,15 @@ try:
     from .next_movievault_connection import refresh_movievault_connection
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
+    from .next_common import NextApiError
+    from .next_common import count_table
+    from .next_common import json_ready
+    from .next_common import parse_bool_value
+    from .next_common import parse_int_arg
+    from .next_common import parse_uuid
+    from .next_common import parse_uuid_list
+    from .next_common import response
+    from .next_common import table_exists
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
@@ -154,6 +162,15 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import refresh_movievault_connection
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
+    from next_common import NextApiError
+    from next_common import count_table
+    from next_common import json_ready
+    from next_common import parse_bool_value
+    from next_common import parse_int_arg
+    from next_common import parse_uuid
+    from next_common import parse_uuid_list
+    from next_common import response
+    from next_common import table_exists
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
@@ -416,14 +433,6 @@ def create_app() -> Flask:
     register_routes(flask_app)
     return flask_app
 
-class NextApiError(RuntimeError):
-    """Expected API error with a caller-facing status code."""
-
-    def __init__(self, message: str, status_code: int = 500) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-
-
 def database_url() -> str:
     value = os.environ.get("DATABASE_URL", "").strip()
     if not value:
@@ -443,26 +452,6 @@ def build_version() -> str:
 
 def build_sha() -> str:
     return version_build_sha()
-
-
-def json_ready(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(key): json_ready(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [json_ready(item) for item in value]
-    if isinstance(value, tuple):
-        return [json_ready(item) for item in value]
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
-    if isinstance(value, UUID):
-        return str(value)
-    if isinstance(value, Decimal):
-        return float(value)
-    return value
-
-
-def response(payload: dict[str, Any], status: int = 200):
-    return jsonify(json_ready(payload)), status
 
 
 def physical_media_format_key(value: Any) -> str:
@@ -707,22 +696,6 @@ def next_i18n_messages(locale: str) -> dict[str, Any]:
     if not messages:
         raise NextApiError("Next i18n catalogs are not available", 500)
     return messages
-
-
-def table_exists(conn, table_name: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
-        row = cur.fetchone()
-    return bool(row and row["table_name"])
-
-
-def count_table(conn, table_name: str) -> int:
-    if not table_exists(conn, table_name):
-        return 0
-    with conn.cursor() as cur:
-        cur.execute(f'SELECT COUNT(*) AS count FROM "{table_name}"')
-        row = cur.fetchone()
-    return int(row["count"] if row else 0)
 
 
 def legacy_data_dir() -> Path:
@@ -34263,39 +34236,6 @@ def container_detail_html(detail: dict[str, Any]) -> str:
 """
 
 
-def parse_int_arg(name: str, default: int, *, minimum: int = 0, maximum: int = 1000) -> int:
-    raw = request.args.get(name, str(default))
-    try:
-        value = int(raw)
-    except (TypeError, ValueError) as exc:
-        raise NextApiError(f"Invalid integer value for {name}", 400) from exc
-    return min(max(value, minimum), maximum)
-
-
-def parse_uuid(value: Any, field_name: str) -> UUID | None:
-    if value in (None, ""):
-        return None
-    try:
-        return UUID(str(value))
-    except ValueError as exc:
-        raise NextApiError(f"Invalid UUID for {field_name}", 400) from exc
-
-
-def parse_bool_value(value: Any, *, default: bool = False) -> bool:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    text = str(value).strip().lower()
-    if text in {"1", "true", "yes", "on"}:
-        return True
-    if text in {"0", "false", "no", "off"}:
-        return False
-    return default
-
-
 def normalize_media_group_member_role(value: Any) -> str:
     role = str(value or "member").strip().lower().replace(" ", "_")
     if role not in MEDIA_GROUP_MEMBER_ROLES:
@@ -34322,25 +34262,6 @@ def can_manage_media_group_members(conn, group_id: UUID, actor: dict[str, Any]) 
         )
         member = cur.fetchone()
     return bool(member and member.get("role") in {"owner", "manager"})
-
-
-def parse_uuid_list(values: Any, field_name: str, *, maximum: int = 250) -> list[UUID]:
-    if values in (None, ""):
-        return []
-    if not isinstance(values, list):
-        raise NextApiError(f"{field_name} must be an array", 400)
-    if len(values) > maximum:
-        raise NextApiError(f"At most {maximum} {field_name} values are allowed", 400)
-    parsed: list[UUID] = []
-    seen: set[UUID] = set()
-    for value in values:
-        item = parse_uuid(value, field_name)
-        if not item:
-            raise NextApiError(f"{field_name} must not contain empty values", 400)
-        if item not in seen:
-            parsed.append(item)
-            seen.add(item)
-    return parsed
 
 
 def require_existing_movie_ids(conn, movie_ids: list[UUID]) -> None:
