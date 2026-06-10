@@ -9,20 +9,24 @@ if repo_root not in sys.path:
 
 try:
     from app.backend.next_app import group_person_credits_by_job
+    from app.backend.next_app import merge_person_filmography_entries
     from app.backend.next_app import native_person_detail_payload
     from app.backend.next_app import native_person_filmography_payload
     from app.backend.next_app import person_biography_value
     from app.backend.next_app import person_filmography_entries_from_metadata
+    from app.backend.next_app import person_local_filmography_entries
     from app.backend.next_app import select_movie_metadata_person_refresh_credits
     from app.backend.next_plugins.tmdb import plugin as tmdb_plugin
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit web/database deps.
     if exc.name not in {"flask", "requests", "psycopg"}:
         raise
     group_person_credits_by_job = None
+    merge_person_filmography_entries = None
     native_person_detail_payload = None
     native_person_filmography_payload = None
     person_biography_value = None
     person_filmography_entries_from_metadata = None
+    person_local_filmography_entries = None
     select_movie_metadata_person_refresh_credits = None
     tmdb_plugin = None
 
@@ -197,6 +201,64 @@ class NextPeoplePolicyTests(unittest.TestCase):
 
         self.assertEqual(payload["id"], "person-uuid")
         self.assertEqual(payload["biography"], "Fallback biography")
+
+    def test_local_person_filmography_entries_expose_collection_and_digital_state(self):
+        entries = person_local_filmography_entries(
+            [
+                {
+                    "movie_id": "movie-uuid",
+                    "movie_public_id": "movie-public",
+                    "tmdb_id": "987654",
+                    "title": "Collected Movie",
+                    "year": "2026",
+                    "poster_url": "https://example.test/poster.jpg",
+                    "character": "Lead",
+                    "credit_type": "actor",
+                    "format": "4K UHD",
+                }
+            ],
+            [
+                {
+                    "movie_id": "movie-uuid",
+                    "digital_item_id": "digital-uuid",
+                    "source_name": "Plex",
+                    "source_type": "plex",
+                    "plugin_id": "plex",
+                    "playback_url": "https://plex.example.test/movie",
+                }
+            ],
+        )
+
+        self.assertEqual(entries[0]["tmdb_id"], "987654")
+        self.assertEqual(entries[0]["movie_id"], "movie-uuid")
+        self.assertTrue(entries[0]["in_collection"])
+        self.assertTrue(entries[0]["in_digital"])
+        self.assertEqual(entries[0]["digital_items"][0]["source_name"], "Plex")
+
+    def test_person_filmography_merge_preserves_tmdb_and_local_fallback_entries(self):
+        entries = merge_person_filmography_entries(
+            [
+                {
+                    "tmdb_id": "42",
+                    "title": "External Movie",
+                    "character": "Lead",
+                    "credit_type": "actor",
+                }
+            ],
+            [
+                {
+                    "tmdb_id": "99",
+                    "movie_id": "local-movie",
+                    "title": "Local Movie",
+                    "job": "Director",
+                    "credit_type": "crew",
+                    "in_collection": True,
+                }
+            ],
+        )
+
+        self.assertEqual([entry["tmdb_id"] for entry in entries], ["42", "99"])
+        self.assertTrue(entries[1]["in_collection"])
 
     def test_native_person_filmography_payload_splits_cast_crew_and_digital_links(self):
         detail = {

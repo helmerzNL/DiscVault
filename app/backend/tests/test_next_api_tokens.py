@@ -159,6 +159,8 @@ class NextApiTokenPermissionTests(unittest.TestCase):
         self.assertFalse(actor_effective_has_permission(actor, "metadata.refresh_one"))
 
     def test_profile_api_audit_category_filter_is_normalized(self):
+        self.assertEqual(normalize_profile_api_audit_category(None), "all")
+        self.assertEqual(normalize_profile_api_audit_category(""), "all")
         self.assertEqual(normalize_profile_api_audit_category("MCP"), "mcp")
         self.assertEqual(normalize_profile_api_audit_category("security"), "security")
         self.assertEqual(normalize_profile_api_audit_category("not-a-filter"), "all")
@@ -182,6 +184,7 @@ class NextApiTokenPermissionTests(unittest.TestCase):
         self.assertEqual(all_params, [])
 
     def test_profile_api_audit_search_term_is_trimmed_and_capped(self):
+        self.assertEqual(profile_api_audit_search_term(None), "")
         self.assertEqual(profile_api_audit_search_term("  /mcp  "), "/mcp")
         self.assertEqual(len(profile_api_audit_search_term("x" * 200)), 120)
 
