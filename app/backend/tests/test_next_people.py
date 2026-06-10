@@ -183,6 +183,21 @@ class NextPeoplePolicyTests(unittest.TestCase):
         self.assertEqual(payload["biography_nl"], "Nederlandse biografie")
         self.assertEqual(payload["biography_en"], "English biography")
 
+    def test_native_person_detail_payload_accepts_empty_language(self):
+        detail = {
+            "person": {
+                "id": "person-uuid",
+                "name": "Example Person",
+                "metadata": {"biography": "Fallback biography"},
+            },
+            "localizations": [],
+        }
+
+        payload = native_person_detail_payload(detail)
+
+        self.assertEqual(payload["id"], "person-uuid")
+        self.assertEqual(payload["biography"], "Fallback biography")
+
     def test_native_person_filmography_payload_splits_cast_crew_and_digital_links(self):
         detail = {
             "person": {"id": "person-uuid", "name": "Example Person", "metadata": {}},
