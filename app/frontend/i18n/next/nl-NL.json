@@ -1375,6 +1375,7 @@
   "profile.apiActivityEvent": "Gebeurtenis",
   "profile.apiActivityTarget": "Doel",
   "profile.apiActivityAsked": "Verzoek",
+  "profile.apiActivityMetadata": "Metadata",
   "profile.apiActivityUnknownCommand": "Onbekend commando",
   "profile.apiActivityUnknownToken": "Onbekende sleutel",
   "profile.apiActivityTypeFilter": "Type",

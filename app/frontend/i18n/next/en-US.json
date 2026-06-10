@@ -1375,6 +1375,7 @@
   "profile.apiActivityEvent": "Event",
   "profile.apiActivityTarget": "Target",
   "profile.apiActivityAsked": "Request",
+  "profile.apiActivityMetadata": "Metadata",
   "profile.apiActivityUnknownCommand": "Unknown command",
   "profile.apiActivityUnknownToken": "Unknown key",
   "profile.apiActivityTypeFilter": "Type",
