@@ -30,7 +30,10 @@ unnecessarily risky.
   - `config.py`
   - `db.py`
   - `logging_utils.py`
-- [ ] Step 3: Extract shared infrastructure helpers.
+- [x] Step 3: Extract shared infrastructure helpers into `next_common.py`
+  (`NextApiError`, `json_ready`, `response`, `parse_int_arg`, `parse_uuid`,
+  `parse_bool_value`, `parse_uuid_list`, `table_exists`, `count_table`).
+  `next_app.py` re-imports these names for backward compatibility.
 - [ ] Step 4: Split profile, API tokens, audit activity, and MCP activity.
 - [ ] Step 5: Split people and native filmography.
 - [ ] Step 6: Split settings, preferences, notifications, and push/PWA.
@@ -41,11 +44,13 @@ unnecessarily risky.
 
 ## Proposed Module Layout
 
-Use small domain packages under `app/backend/next/` while keeping the existing
-`next_*.py` modules until they can be folded in safely:
+The shared infrastructure helpers now live in the flat `app/backend/next_common.py`
+module (consistent with the existing `next_*.py`, `config.py`, and `db.py`
+siblings). Remaining domains may follow the same flat-module convention; the
+package layout below describes the logical grouping rather than a literal path:
 
-- `next/common.py`: `NextApiError`, `json_ready`, `response`, request parsing,
-  UUID/date helpers, and table helpers.
+- `next_common.py`: `NextApiError`, `json_ready`, `response`, request parsing,
+  UUID helpers, and table helpers.
 - `next/i18n.py`: locale catalog loading, supported locales, flags, and
   language normalization.
 - `next/security.py`: permission checks, visibility SQL, actor helpers, and
