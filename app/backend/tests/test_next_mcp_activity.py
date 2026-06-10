@@ -25,6 +25,7 @@ class NextMcpActivityHelperTests(unittest.TestCase):
     def test_helpers_are_reexported_from_next_app(self):
         self.assertIs(next_app.MCP_TOOL_NAMES, next_mcp_activity.MCP_TOOL_NAMES)
         self.assertIs(next_app.mcp_request_api_token_value, next_mcp_activity.mcp_request_api_token_value)
+        self.assertIs(next_app.register_next_mcp_routes, next_mcp_activity.register_next_mcp_routes)
 
     def test_mcp_tool_names_include_core_tools(self):
         self.assertIn("search_collection", next_mcp_activity.MCP_TOOL_NAMES)
