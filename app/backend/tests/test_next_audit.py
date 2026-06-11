@@ -120,6 +120,23 @@ class NextAuditHelperTests(unittest.TestCase):
         self.assertEqual(metadata["apiTokenId"], "tok-1")
         self.assertEqual(metadata["apiTokenPermissions"], ["mcp.use"])
         self.assertEqual(metadata["query"], {"q": "batman"})
+        self.assertEqual(metadata["requestIp"], "8.8.8.8")
+        self.assertEqual(metadata["requestIpSource"], "remote_addr")
+
+    def test_public_request_ip_does_not_fall_back_to_docker_private_ip(self):
+        app = Flask(__name__)
+
+        with app.test_request_context(
+            "/api/next/mcp/catalog",
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            details = next_audit.request_ip_details()
+            selected = next_audit.public_request_ip()
+
+        self.assertEqual(selected, "")
+        self.assertEqual(details["ip"], "")
+        self.assertEqual(details["source"], "")
+        self.assertEqual(details["candidates"][0]["ip"], "172.26.0.5")
 
 
 if __name__ == "__main__":
