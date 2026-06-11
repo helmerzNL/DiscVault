@@ -11,6 +11,7 @@ surface (tests and older modules continue to import the same names from
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import ipaddress
 import re
 from typing import Any
 
@@ -104,6 +105,17 @@ def mcp_log_text(value: Any, *, maximum: int = 500) -> str:
     return text[:maximum]
 
 
+def mcp_public_ip_text(value: Any) -> str:
+    text = mcp_log_text(value, maximum=80)
+    if not text:
+        return ""
+    try:
+        parsed = ipaddress.ip_address(text)
+    except ValueError:
+        return ""
+    return str(parsed) if parsed.is_global else ""
+
+
 def mcp_redact_metadata_value(value: Any) -> Any:
     if isinstance(value, dict):
         redacted: dict[str, Any] = {}
@@ -171,21 +183,18 @@ def mcp_log_timestamp(row: dict[str, Any], metadata: dict[str, Any]) -> Any:
 
 
 def mcp_log_ip_address(row: dict[str, Any], metadata: dict[str, Any]) -> str:
-    direct = mcp_log_first(metadata, "requestIp", "request_ip", "remote_ip", "remoteIp", "ip_address", "host")
+    direct = mcp_public_ip_text(mcp_log_first(metadata, "requestIp", "request_ip", "remote_ip", "remoteIp", "ip_address", "host"))
     if direct:
         return direct
     candidates = metadata.get("requestIpCandidates")
     if isinstance(candidates, list):
-        for scope in ("public", "private"):
-            for item in candidates:
-                if not isinstance(item, dict):
-                    continue
-                if mcp_log_text(item.get("scope"), maximum=40).lower() != scope:
-                    continue
-                ip = mcp_log_text(item.get("ip"), maximum=80)
-                if ip:
-                    return ip
-    return mcp_log_text(row.get("request_ip") or "", maximum=80)
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            ip = mcp_public_ip_text(item.get("ip"))
+            if ip:
+                return ip
+    return mcp_public_ip_text(row.get("request_ip") or "")
 
 
 def mcp_log_status_code(metadata: dict[str, Any]) -> int | None:
@@ -278,6 +287,10 @@ def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
     user_agent = mcp_log_text(row.get("user_agent") or metadata.get("agent"), maximum=240)
     client = mcp_log_first(metadata, "client", "mcpClient", "apiTokenName", "agent")
     agent = mcp_log_first(metadata, "mcpClient", "client", "apiTokenName", "agent") or user_agent or "Custom MCP Client"
+    ip_address = mcp_log_ip_address(row, metadata)
+    safe_metadata = mcp_safe_metadata(metadata)
+    if ip_address and "ip_address" not in safe_metadata:
+        safe_metadata["ip_address"] = ip_address
     return {
         "id": str(row.get("id") or ""),
         "timestamp": mcp_log_timestamp(row, metadata),
@@ -288,11 +301,11 @@ def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
         "client": client,
         "agent": agent,
         "user_agent": user_agent,
-        "ip_address": mcp_log_ip_address(row, metadata),
+        "ip_address": ip_address,
         "tool_name": tool_name,
         "method": method,
         "path": path,
-        "metadata": mcp_safe_metadata(metadata),
+        "metadata": safe_metadata,
     }
 
 
