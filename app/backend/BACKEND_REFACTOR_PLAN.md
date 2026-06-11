@@ -44,7 +44,7 @@ unnecessarily risky.
   `register_next_audit_routes`, and `register_next_mcp_routes`; all three are
   called from `register_routes()` in `next_app.py` and re-exported for
   backward compatibility.
-- [ ] Step 5: Split people and native filmography.
+- [x] Step 5: Split people and native filmography into `next_people.py`.
 - [ ] Step 6: Split settings, preferences, notifications, and push/PWA.
 - [ ] Step 7: Split collection movies, containers, and media groups.
 - [ ] Step 8: Split import, migration, metadata, and plugin operations.
@@ -68,6 +68,9 @@ package layout below describes the logical grouping rather than a literal path:
   status).
 - `next_mcp_activity.py`: MCP tool catalog and API-token extraction for MCP
   requests.
+- `next_people.py`: person read models, biography/language fallbacks, TMDb and
+  local filmography merging, native iOS payload builders, and people route
+  registration.
 - `next/i18n.py`: locale catalog loading, supported locales, flags, and
   language normalization.
 - `next/security.py`: permission checks, visibility SQL, actor helpers, and
