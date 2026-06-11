@@ -17,12 +17,12 @@ from flask import Flask, Response, request
 import requests as http_requests
 
 try:  # pragma: no cover - exercised indirectly by both layouts
-    from .next_audit import api_audit_metadata, audit_event
+    from .next_audit import api_audit_metadata, audit_event, redact_sensitive_payload
     from .next_auth import next_auth_current_api_token_user
     from .next_common import parse_int_arg, response, table_exists
     from .next_import import clean_text
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
-    from next_audit import api_audit_metadata, audit_event
+    from next_audit import api_audit_metadata, audit_event, redact_sensitive_payload
     from next_auth import next_auth_current_api_token_user
     from next_common import parse_int_arg, response, table_exists
     from next_import import clean_text
@@ -41,6 +41,28 @@ MCP_TOOL_NAMES = (
     "get_groups",
 )
 MCP_IOS_CLIENT_PATTERNS = ("ios", "discvault-ios", "discvault/ios")
+MCP_LOG_SENSITIVE_KEYS = {
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "api-key",
+    "apikey",
+    "api_key",
+    "access-token",
+    "access_token",
+    "refreshtoken",
+    "refresh-token",
+    "refresh_token",
+    "session",
+    "sessionid",
+    "session-id",
+    "session_id",
+    "private-key",
+    "private_key",
+    "secret",
+    "token",
+    "password",
+}
 MCP_LOG_SENSITIVE_REPLACEMENTS = (
     (re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+"), "Bearer [REDACTED]"),
     (
@@ -81,6 +103,23 @@ def mcp_log_text(value: Any, *, maximum: int = 500) -> str:
     return text[:maximum]
 
 
+def mcp_redact_metadata_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key).strip().lower()
+            if normalized_key in MCP_LOG_SENSITIVE_KEYS:
+                redacted[str(key)] = "[REDACTED]" if item not in (None, "") else item
+            else:
+                redacted[str(key)] = mcp_redact_metadata_value(item)
+        return redacted
+    if isinstance(value, list):
+        return [mcp_redact_metadata_value(item) for item in value]
+    if isinstance(value, str):
+        return mcp_log_text(value, maximum=2000)
+    return value
+
+
 def mcp_log_first(metadata: dict[str, Any], *keys: str) -> str:
     for key in keys:
         value = metadata.get(key)
@@ -111,6 +150,86 @@ def mcp_log_level(row: dict[str, Any], metadata: dict[str, Any]) -> str:
     return "info"
 
 
+def mcp_log_status_code(metadata: dict[str, Any]) -> int | None:
+    try:
+        status_code = int(metadata.get("responseStatus") or metadata.get("status") or 0)
+    except (TypeError, ValueError):
+        return None
+    return status_code or None
+
+
+def mcp_log_event(row: dict[str, Any], metadata: dict[str, Any]) -> str:
+    explicit = mcp_log_first(metadata, "event", "eventName", "mcpEvent")
+    if explicit:
+        return explicit
+    event_type = mcp_log_text(row.get("event_type"), maximum=120).lower()
+    if "failed" in event_type or "error" in event_type:
+        return "tool_call.failed"
+    if event_type == "mcp.catalog_read":
+        return "catalog.read"
+    if event_type.startswith("mcp.request"):
+        status_code = mcp_log_status_code(metadata)
+        return "tool_call.failed" if status_code and status_code >= 400 else "tool_call.completed"
+    if event_type:
+        return event_type.replace("mcp.", "mcp.")
+    return "tool_call.completed"
+
+
+def mcp_safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    safe: dict[str, Any] = {}
+    request_id = mcp_log_first(metadata, "request_id", "requestId", "correlationId", "traceId")
+    if request_id:
+        safe["request_id"] = request_id
+    if metadata.get("mcpSessionId") or metadata.get("session_id") or metadata.get("sessionId"):
+        safe["session_id"] = "[REDACTED]"
+    duration_ms = metadata.get("duration_ms") or metadata.get("durationMs") or metadata.get("elapsed_ms")
+    if duration_ms is not None:
+        safe["duration_ms"] = duration_ms
+    status_code = mcp_log_status_code(metadata)
+    if status_code is not None:
+        safe["status_code"] = status_code
+    transport = mcp_log_first(metadata, "transport", "protocol")
+    safe["transport"] = transport or "http"
+    if "request" in metadata:
+        safe["input"] = mcp_redact_metadata_value(redact_sensitive_payload(metadata.get("request")))
+    result = metadata.get("result") or metadata.get("response")
+    if result is not None:
+        safe["result"] = mcp_redact_metadata_value(redact_sensitive_payload(result))
+    error = metadata.get("proxyError") or metadata.get("error")
+    if error:
+        safe["error"] = mcp_log_text(error, maximum=500)
+    server = metadata.get("server") or metadata.get("serverInfo")
+    if server is not None:
+        safe["server"] = mcp_redact_metadata_value(redact_sensitive_payload(server))
+    command = mcp_log_first(metadata, "command")
+    if command:
+        safe["command"] = command
+    methods = metadata.get("mcpMethods")
+    if isinstance(methods, list) and methods:
+        safe["methods"] = [mcp_log_text(item, maximum=160) for item in methods if mcp_log_text(item, maximum=160)]
+    tools = metadata.get("mcpTools")
+    if isinstance(tools, list) and tools:
+        safe["tools"] = [mcp_log_text(item, maximum=160) for item in tools if mcp_log_text(item, maximum=160)]
+    endpoint = mcp_log_first(metadata, "endpoint", "mcpPath", "path")
+    if endpoint:
+        safe["endpoint"] = endpoint
+    query = metadata.get("query")
+    if isinstance(query, dict) and query:
+        safe["query"] = mcp_redact_metadata_value(redact_sensitive_payload(query))
+    api_token_name = mcp_log_first(metadata, "apiTokenName")
+    if api_token_name:
+        safe["api_token_name"] = api_token_name
+    api_token_scopes = metadata.get("apiTokenScopes")
+    if isinstance(api_token_scopes, list) and api_token_scopes:
+        safe["api_token_scopes"] = [mcp_log_text(item, maximum=80) for item in api_token_scopes if mcp_log_text(item, maximum=80)]
+    api_token_permissions = metadata.get("apiTokenPermissions")
+    if isinstance(api_token_permissions, list) and api_token_permissions:
+        safe["api_token_permissions"] = [
+            mcp_log_text(item, maximum=120) for item in api_token_permissions if mcp_log_text(item, maximum=120)
+        ]
+    return mcp_redact_metadata_value(redact_sensitive_payload(safe))
+
+
 def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
     metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
     tool_name = mcp_log_first(metadata, "tool_name", "toolName", "mcpTools", "tool", "command")
@@ -118,17 +237,22 @@ def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
     path = mcp_log_first(metadata, "mcpPath", "path", "endpoint")
     user_agent = mcp_log_text(row.get("user_agent") or metadata.get("agent"), maximum=240)
     client = mcp_log_first(metadata, "client", "mcpClient", "apiTokenName", "agent")
+    agent = mcp_log_first(metadata, "agent", "mcpClient", "client", "apiTokenName") or user_agent or client
     return {
         "id": str(row.get("id") or ""),
         "timestamp": row.get("created_at"),
         "level": mcp_log_level(row, metadata),
+        "event": mcp_log_event(row, metadata),
         "message": mcp_log_text(row.get("summary") or metadata.get("message") or "MCP activity", maximum=500),
         "source": mcp_log_text(metadata.get("source") or row.get("category") or "mcp", maximum=80) or "mcp",
         "client": client,
+        "agent": agent,
         "user_agent": user_agent,
+        "ip_address": mcp_log_text(row.get("request_ip") or metadata.get("requestIp") or "", maximum=80),
         "tool_name": tool_name,
         "method": method,
         "path": path,
+        "metadata": mcp_safe_metadata(metadata),
     }
 
 
