@@ -35232,7 +35232,7 @@ def create_user_notification(
         )
         notification = cur.fetchone() or {}
     errors: list[str] = []
-    native_delivery: dict[str, Any] = {"status": "skipped", "sent": 0, "errors": []}
+    native_delivery: dict[str, Any] = {"status": "skipped", "attempted": 0, "sent": 0, "failed": 0, "errors": []}
     if send_push and notification_preference_map(conn, user_id).get(pref_key, True):
         errors = send_push_to_user(conn, user_id, title=title, body=body, url=url)
         native_delivery = send_native_push_to_user(
@@ -35366,13 +35366,18 @@ def native_push_config() -> dict[str, Any]:
 
 def native_push_device_token_suffix(device_token: Any) -> str:
     text = str(device_token or "").strip()
-    return text[-8:] if len(text) > 8 else text
+    return text[-6:] if len(text) > 6 else text
+
+
+def native_push_device_token_hash(device_token: Any) -> str:
+    return hashlib.sha256(str(device_token or "").strip().encode("utf-8")).hexdigest()
 
 
 def native_push_device_public(row: dict[str, Any] | None) -> dict[str, Any] | None:
     if not row:
         return None
     device_token = str(row.get("device_token") or "")
+    token_suffix = row.get("token_suffix") or native_push_device_token_suffix(device_token)
     return {
         "id": row.get("id"),
         "platform": row.get("platform") or "ios",
@@ -35380,8 +35385,7 @@ def native_push_device_public(row: dict[str, Any] | None) -> dict[str, Any] | No
         "bundleId": row.get("app_bundle_id"),
         "deviceLabel": row.get("device_label"),
         "appVersion": row.get("app_version"),
-        "tokenSuffix": native_push_device_token_suffix(device_token),
-        "tokenHash": hashlib.sha256(device_token.encode("utf-8")).hexdigest() if device_token else None,
+        "tokenSuffix": token_suffix,
         "lastSeenAt": row.get("last_seen_at"),
         "createdAt": row.get("created_at"),
         "updatedAt": row.get("updated_at"),
@@ -35395,7 +35399,8 @@ def native_push_device_rows(conn, user_id: UUID | str) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, platform, device_token, apns_environment, app_bundle_id, device_label,
+            SELECT id, platform, device_token, token_hash, token_suffix,
+                   apns_environment, app_bundle_id, device_label,
                    app_version, user_agent, metadata, last_seen_at, created_at, updated_at, revoked_at
             FROM native_push_devices
             WHERE user_id=%s
@@ -35438,6 +35443,8 @@ def normalize_native_push_registration(body: dict[str, Any]) -> dict[str, Any]:
     return {
         "platform": platform,
         "deviceToken": device_token,
+        "tokenHash": native_push_device_token_hash(device_token),
+        "tokenSuffix": native_push_device_token_suffix(device_token),
         "environment": environment,
         "bundleId": bundle_id,
         "deviceLabel": device_label,
@@ -35504,7 +35511,7 @@ def deliver_native_push_device(
         return {
             "status": "dependency_missing",
             "deviceId": device_id or None,
-            "tokenSuffix": native_push_device_token_suffix(device_token),
+            "tokenSuffix": device.get("token_suffix") or native_push_device_token_suffix(device_token),
             "error": f"httpx with HTTP/2 support is not available: {exc}",
             "permanent": False,
         }
@@ -35526,7 +35533,7 @@ def deliver_native_push_device(
         return {
             "status": "failed",
             "deviceId": device_id or None,
-            "tokenSuffix": native_push_device_token_suffix(device_token),
+            "tokenSuffix": device.get("token_suffix") or native_push_device_token_suffix(device_token),
             "error": f"APNS request failed: {exc}",
             "permanent": False,
         }
@@ -35539,7 +35546,7 @@ def deliver_native_push_device(
     result = {
         "status": "sent" if response.status_code == 200 else "failed",
         "deviceId": device_id or None,
-        "tokenSuffix": native_push_device_token_suffix(device_token),
+        "tokenSuffix": device.get("token_suffix") or native_push_device_token_suffix(device_token),
         "statusCode": response.status_code,
         "apnsId": response.headers.get("apns-id"),
     }
@@ -35564,15 +35571,18 @@ def send_native_push_to_user(
     topic: str = "app_updates",
     url: str = "/notifications",
     notification_id: UUID | str | None = None,
+    device_id: UUID | str | None = None,
 ) -> dict[str, Any]:
     if not table_exists(conn, "native_push_devices"):
-        return {"status": "unavailable", "sent": 0, "errors": ["Native push devices table is not available"]}
+        return {"status": "unavailable", "attempted": 0, "sent": 0, "failed": 0, "errors": ["Native push devices table is not available"]}
     config = native_push_apns_settings(include_private=True)
     if not config.get("configured"):
-        return {"status": "not_configured", "sent": 0, "errors": ["APNS is not configured"], "missing": config.get("missing") or []}
+        return {"status": "not_configured", "attempted": 0, "sent": 0, "failed": 0, "errors": ["APNS is not configured"], "missing": config.get("missing") or []}
     active_devices = [device for device in native_push_device_rows(conn, user_id) if device and not device.get("revoked_at")]
+    if device_id:
+        active_devices = [device for device in active_devices if str(device.get("id")) == str(device_id)]
     if not active_devices:
-        return {"status": "no_devices", "sent": 0, "errors": ["No native iOS device registered for this user"]}
+        return {"status": "no_devices", "attempted": 0, "sent": 0, "failed": 0, "errors": ["No native iOS device registered for this user"]}
     payload = native_push_payload(
         conn,
         title=title,
@@ -35600,6 +35610,7 @@ def send_native_push_to_user(
                     (device_id,),
                 )
     sent = len([result for result in results if result.get("status") == "sent"])
+    failed = len(results) - sent
     errors = [str(result.get("error") or result.get("reason") or "APNS delivery failed") for result in results if result.get("status") != "sent"]
     delivery_status = "sent" if sent == len(results) else "partial" if sent else "failed"
     if any(result.get("status") == "dependency_missing" for result in results):
@@ -35607,6 +35618,7 @@ def send_native_push_to_user(
     return {
         "status": delivery_status,
         "sent": sent,
+        "failed": failed,
         "attempted": len(results),
         "errors": errors,
         "results": results,
@@ -43717,38 +43729,80 @@ def register_routes(flask_app: Flask) -> None:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        INSERT INTO native_push_devices (
-                            user_id, platform, device_token, apns_environment, app_bundle_id,
-                            device_label, app_version, user_agent, metadata,
-                            last_seen_at, created_at, updated_at, revoked_at
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now(), now(), NULL)
-                        ON CONFLICT (platform, apns_environment, device_token) WHERE revoked_at IS NULL
-                        DO UPDATE SET
-                            user_id=EXCLUDED.user_id,
-                            app_bundle_id=EXCLUDED.app_bundle_id,
-                            device_label=EXCLUDED.device_label,
-                            app_version=EXCLUDED.app_version,
-                            user_agent=EXCLUDED.user_agent,
-                            metadata=EXCLUDED.metadata,
-                            last_seen_at=now(),
-                            updated_at=now()
-                        RETURNING id, platform, device_token, apns_environment, app_bundle_id,
-                                  device_label, app_version, user_agent, metadata,
-                                  last_seen_at, created_at, updated_at, revoked_at
+                        SELECT id
+                        FROM native_push_devices
+                        WHERE user_id=%s
+                          AND token_hash=%s
+                          AND apns_environment=%s
+                          AND COALESCE(app_bundle_id, '')=COALESCE(%s, '')
+                        ORDER BY revoked_at NULLS FIRST, updated_at DESC
+                        LIMIT 1
                         """,
-                        (
-                            user_id,
-                            registration["platform"],
-                            registration["deviceToken"],
-                            registration["environment"],
-                            registration["bundleId"],
-                            registration["deviceLabel"],
-                            registration["appVersion"],
-                            registration["userAgent"],
-                            Jsonb(json_ready(registration["metadata"])),
-                        ),
+                        (user_id, registration["tokenHash"], registration["environment"], registration["bundleId"]),
                     )
+                    existing = cur.fetchone()
+                    if existing:
+                        cur.execute(
+                            """
+                            UPDATE native_push_devices
+                            SET platform=%s,
+                                device_token=%s,
+                                token_hash=%s,
+                                token_suffix=%s,
+                                app_bundle_id=%s,
+                                device_label=%s,
+                                app_version=%s,
+                                user_agent=%s,
+                                metadata=%s,
+                                last_seen_at=now(),
+                                updated_at=now(),
+                                revoked_at=NULL
+                            WHERE id=%s AND user_id=%s
+                            RETURNING id, platform, device_token, token_hash, token_suffix,
+                                      apns_environment, app_bundle_id, device_label, app_version,
+                                      user_agent, metadata, last_seen_at, created_at, updated_at, revoked_at
+                            """,
+                            (
+                                registration["platform"],
+                                registration["deviceToken"],
+                                registration["tokenHash"],
+                                registration["tokenSuffix"],
+                                registration["bundleId"],
+                                registration["deviceLabel"],
+                                registration["appVersion"],
+                                registration["userAgent"],
+                                Jsonb(json_ready(registration["metadata"])),
+                                existing["id"],
+                                user_id,
+                            ),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO native_push_devices (
+                                user_id, platform, device_token, token_hash, token_suffix,
+                                apns_environment, app_bundle_id, device_label, app_version,
+                                user_agent, metadata, last_seen_at, created_at, updated_at, revoked_at
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now(), now(), NULL)
+                            RETURNING id, platform, device_token, token_hash, token_suffix,
+                                      apns_environment, app_bundle_id, device_label, app_version,
+                                      user_agent, metadata, last_seen_at, created_at, updated_at, revoked_at
+                            """,
+                            (
+                                user_id,
+                                registration["platform"],
+                                registration["deviceToken"],
+                                registration["tokenHash"],
+                                registration["tokenSuffix"],
+                                registration["environment"],
+                                registration["bundleId"],
+                                registration["deviceLabel"],
+                                registration["appVersion"],
+                                registration["userAgent"],
+                                Jsonb(json_ready(registration["metadata"])),
+                            ),
+                        )
                     device = cur.fetchone()
                 audit_event(
                     conn,
@@ -43764,7 +43818,7 @@ def register_routes(flask_app: Flask) -> None:
                         "bundleId": registration["bundleId"],
                         "deviceLabel": registration["deviceLabel"],
                         "appVersion": registration["appVersion"],
-                        "tokenSuffix": native_push_device_token_suffix(registration["deviceToken"]),
+                        "tokenSuffix": registration["tokenSuffix"],
                     },
                 )
             return response(
@@ -43786,6 +43840,7 @@ def register_routes(flask_app: Flask) -> None:
         device_id = str(body.get("deviceId", body.get("id")) or "").strip()
         device_token = str(body.get("deviceToken", body.get("device_token")) or "").strip()
         environment = native_push_environment(body.get("environment", body.get("apnsEnvironment")))
+        bundle_id = clean_text(body.get("bundleId", body.get("bundle_id"))) or native_push_config().get("bundleId")
         if not device_id and not device_token:
             raise NextApiError("deviceId or deviceToken is required", 400)
         with connect() as conn:
@@ -43801,8 +43856,8 @@ def register_routes(flask_app: Flask) -> None:
                 where_clause = "id=%s AND user_id=%s"
                 params = (parsed_device_id, user_id)
             else:
-                where_clause = "platform='ios' AND apns_environment=%s AND device_token=%s AND user_id=%s"
-                params = (environment, device_token, user_id)
+                where_clause = "platform='ios' AND apns_environment=%s AND token_hash=%s AND COALESCE(app_bundle_id, '')=COALESCE(%s, '') AND user_id=%s"
+                params = (environment, native_push_device_token_hash(device_token), bundle_id, user_id)
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -43810,7 +43865,8 @@ def register_routes(flask_app: Flask) -> None:
                         UPDATE native_push_devices
                         SET revoked_at=COALESCE(revoked_at, now()), updated_at=now()
                         WHERE {where_clause}
-                        RETURNING id, platform, device_token, apns_environment, app_bundle_id,
+                        RETURNING id, platform, device_token, token_hash, token_suffix,
+                                  apns_environment, app_bundle_id,
                                   device_label, app_version, user_agent, metadata,
                                   last_seen_at, created_at, updated_at, revoked_at
                         """,
@@ -43831,6 +43887,7 @@ def register_routes(flask_app: Flask) -> None:
                 {
                     "status": "deleted",
                     "deleted": bool(device),
+                    "revoked": bool(device),
                     "device": native_push_device_public(device),
                     "nativePush": native_push_status_payload(conn, user_id),
                     "counts": notification_counts(conn, user_id),
@@ -43839,6 +43896,11 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.post("/api/next/push/native/test")
     def next_native_push_test():
+        body = request.get_json(silent=True) or {}
+        if body and not isinstance(body, dict):
+            raise NextApiError("Native push test request body must be an object", 400)
+        requested_device_id = str(body.get("deviceId", body.get("id")) or "").strip() if isinstance(body, dict) else ""
+        parsed_device_id = parse_uuid(requested_device_id, "deviceId") if requested_device_id else None
         with connect() as conn:
             actor = require_next_authenticated_user(conn)
             user_id = actor.get("id")
@@ -43863,6 +43925,7 @@ def register_routes(flask_app: Flask) -> None:
                     topic="security",
                     url="/notifications",
                     notification_id=notification.get("id"),
+                    device_id=parsed_device_id,
                 )
                 audit_event(
                     conn,
@@ -44018,7 +44081,13 @@ def register_routes(flask_app: Flask) -> None:
                             """,
                             (user_id, key, enabled),
                         )
-            return response({"status": "ok", "preferences": notification_preference_map(conn, user_id)})
+            return response(
+                {
+                    "status": "ok",
+                    "preferences": notification_preference_map(conn, user_id),
+                    "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
+                }
+            )
 
     @flask_app.post("/api/next/push/test")
     def next_push_test():
