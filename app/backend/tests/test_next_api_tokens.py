@@ -224,7 +224,7 @@ class NextApiTokenPermissionTests(unittest.TestCase):
         self.assertEqual(details["ip"], "8.8.8.8")
         self.assertEqual(details["source"], "X-Forwarded-For[0]")
 
-    def test_public_request_ip_reports_remote_addr_when_no_proxy_header_exists(self):
+    def test_public_request_ip_ignores_private_remote_addr_when_no_proxy_header_exists(self):
         app = Flask(__name__)
 
         with app.test_request_context(
@@ -234,8 +234,9 @@ class NextApiTokenPermissionTests(unittest.TestCase):
             details = request_ip_details()
             selected = public_request_ip()
 
-        self.assertEqual(selected, "172.26.0.5")
-        self.assertEqual(details["source"], "remote_addr")
+        self.assertEqual(selected, "")
+        self.assertEqual(details["ip"], "")
+        self.assertEqual(details["source"], "")
         self.assertEqual(details["candidates"], [{"ip": "172.26.0.5", "source": "remote_addr", "scope": "private"}])
 
 

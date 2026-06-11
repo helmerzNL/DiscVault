@@ -19,12 +19,12 @@ from flask import Flask, Response, request
 import requests as http_requests
 
 try:  # pragma: no cover - exercised indirectly by both layouts
-    from .next_audit import api_audit_metadata, audit_event, redact_sensitive_payload
+    from .next_audit import api_audit_metadata, audit_event, redact_sensitive_payload, request_ip_details
     from .next_auth import next_auth_current_api_token_user
     from .next_common import parse_int_arg, response, table_exists
     from .next_import import clean_text
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
-    from next_audit import api_audit_metadata, audit_event, redact_sensitive_payload
+    from next_audit import api_audit_metadata, audit_event, redact_sensitive_payload, request_ip_details
     from next_auth import next_auth_current_api_token_user
     from next_common import parse_int_arg, response, table_exists
     from next_import import clean_text
@@ -74,6 +74,20 @@ MCP_LOG_SENSITIVE_REPLACEMENTS = (
         r"\1=[REDACTED]",
     ),
 )
+MCP_FORWARD_HEADER_NAMES = (
+    "X-DiscVault-Client-IP",
+    "CF-Connecting-IP",
+    "True-Client-IP",
+    "Fastly-Client-IP",
+    "Fly-Client-IP",
+    "X-Azure-ClientIP",
+    "X-Real-IP",
+    "X-Client-IP",
+    "X-Cluster-Client-IP",
+    "X-Forwarded-For",
+    "X-Original-Forwarded-For",
+    "Forwarded",
+)
 
 
 def _next_app():
@@ -114,6 +128,20 @@ def mcp_public_ip_text(value: Any) -> str:
     except ValueError:
         return ""
     return str(parsed) if parsed.is_global else ""
+
+
+def mcp_proxy_forward_headers() -> dict[str, str]:
+    forwarded: dict[str, str] = {}
+    for header in MCP_FORWARD_HEADER_NAMES:
+        value = mcp_log_text(request.headers.get(header), maximum=500)
+        if value:
+            forwarded[header] = value
+    public_ip = mcp_public_ip_text((request_ip_details() or {}).get("ip"))
+    if public_ip:
+        forwarded["X-DiscVault-Client-IP"] = public_ip
+        forwarded.setdefault("X-Real-IP", public_ip)
+        forwarded.setdefault("X-Forwarded-For", public_ip)
+    return forwarded
 
 
 def mcp_redact_metadata_value(value: Any) -> Any:
@@ -384,6 +412,7 @@ def register_next_mcp_routes(flask_app: Flask, *, connect) -> None:  # pragma: n
                 "mcp-session-id",
             }
         }
+        headers.update(mcp_proxy_forward_headers())
         try:
             proxied = http_requests.request(
                 request.method,

@@ -14,6 +14,8 @@ both the user role and the token-scoped permissions for each proxied request.
 """
 
 import argparse
+import contextvars
+import ipaddress
 import json
 import os
 import sys
@@ -25,10 +27,65 @@ import requests as http_requests
 API_BASE = os.environ.get("DISCVAULT_API", "http://localhost:5000")
 MCP_API_KEY = os.environ.get("MCP_API_KEY", "")
 SERVER_VERSION = os.environ.get("DISCVAULT_MCP_VERSION", "26.0.0")
+MCP_FORWARD_HEADER_NAMES = (
+    "X-DiscVault-Client-IP",
+    "CF-Connecting-IP",
+    "True-Client-IP",
+    "Fastly-Client-IP",
+    "Fly-Client-IP",
+    "X-Azure-ClientIP",
+    "X-Real-IP",
+    "X-Client-IP",
+    "X-Cluster-Client-IP",
+    "X-Forwarded-For",
+    "X-Original-Forwarded-For",
+    "Forwarded",
+)
+REQUEST_FORWARD_HEADERS: contextvars.ContextVar[dict[str, str]] = contextvars.ContextVar(
+    "REQUEST_FORWARD_HEADERS",
+    default={},
+)
+
+
+def _public_ip(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if "," in text:
+        text = text.split(",", 1)[0].strip()
+    if text.lower().startswith("for="):
+        text = text[4:].strip().strip('"').strip("'")
+    if ";" in text:
+        text = text.split(";", 1)[0].strip()
+    try:
+        parsed = ipaddress.ip_address(text)
+    except ValueError:
+        return ""
+    return str(parsed) if parsed.is_global else ""
+
+
+def _request_forward_headers(flask_request: Any) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for name in MCP_FORWARD_HEADER_NAMES:
+        value = str(flask_request.headers.get(name) or "").strip()
+        if value:
+            headers[name] = value[:500]
+    public_ip = ""
+    for name in MCP_FORWARD_HEADER_NAMES:
+        public_ip = _public_ip(headers.get(name))
+        if public_ip:
+            break
+    if not public_ip:
+        public_ip = _public_ip(getattr(flask_request, "remote_addr", ""))
+    if public_ip:
+        headers["X-DiscVault-Client-IP"] = public_ip
+        headers.setdefault("X-Real-IP", public_ip)
+        headers.setdefault("X-Forwarded-For", public_ip)
+    return headers
 
 
 def _headers(user_bearer: str | None = None) -> dict[str, str]:
-    headers: dict[str, str] = {}
+    headers: dict[str, str] = dict(REQUEST_FORWARD_HEADERS.get({}))
     if user_bearer:
         headers["Authorization"] = f"Bearer {user_bearer}"
     elif MCP_API_KEY:
@@ -380,51 +437,55 @@ def run_http(host: str, port: int) -> None:
 
     @app.route("/mcp", methods=["POST"])
     def mcp_post():
+        forward_token = REQUEST_FORWARD_HEADERS.set(_request_forward_headers(request))
         bearer = get_bearer()
-        if not bearer:
-            return jsonify(
-                {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": -32001, "message": "Unauthorized: Bearer token required"},
-                }
-            ), 401
+        try:
+            if not bearer:
+                return jsonify(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32001, "message": "Unauthorized: Bearer token required"},
+                    }
+                ), 401
 
-        session_id = request.headers.get("Mcp-Session-Id", "")
-        if not session_id:
-            session_id = uuid.uuid4().hex
-            sessions.add(session_id)
+            session_id = request.headers.get("Mcp-Session-Id", "")
+            if not session_id:
+                session_id = uuid.uuid4().hex
+                sessions.add(session_id)
 
-        body = request.get_json(force=True, silent=True)
-        if body is None:
-            return jsonify(
-                {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": -32700, "message": "Parse error"},
-                }
-            ), 400
+            body = request.get_json(force=True, silent=True)
+            if body is None:
+                return jsonify(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32700, "message": "Parse error"},
+                    }
+                ), 400
 
-        is_batch = isinstance(body, list)
-        messages = body if is_batch else [body]
-        responses = []
-        for msg in messages:
-            try:
-                response = handle_message(msg, bearer=bearer)
-            except Exception as exc:
-                response = {
-                    "jsonrpc": "2.0",
-                    "id": msg.get("id") if isinstance(msg, dict) else None,
-                    "error": {"code": -32603, "message": f"Internal error: {exc}"},
-                }
-            if response is not None:
-                responses.append(response)
+            is_batch = isinstance(body, list)
+            messages = body if is_batch else [body]
+            responses = []
+            for msg in messages:
+                try:
+                    response = handle_message(msg, bearer=bearer)
+                except Exception as exc:
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": msg.get("id") if isinstance(msg, dict) else None,
+                        "error": {"code": -32603, "message": f"Internal error: {exc}"},
+                    }
+                if response is not None:
+                    responses.append(response)
 
-        headers = {"Mcp-Session-Id": session_id}
-        if not responses:
-            return "", 202, headers
-        payload = responses if is_batch else responses[0]
-        return Response(json.dumps(payload), status=200, mimetype="application/json", headers=headers)
+            headers = {"Mcp-Session-Id": session_id}
+            if not responses:
+                return "", 202, headers
+            payload = responses if is_batch else responses[0]
+            return Response(json.dumps(payload), status=200, mimetype="application/json", headers=headers)
+        finally:
+            REQUEST_FORWARD_HEADERS.reset(forward_token)
 
     @app.route("/mcp", methods=["GET"])
     def mcp_get():
