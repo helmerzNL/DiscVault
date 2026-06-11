@@ -32,6 +32,7 @@ API_TOKEN_GRANTABLE_PERMISSION_KEYS = (
     "api.write",
     "api.tokens.manage",
     "mcp.use",
+    "mcp.logs.view",
     "collection.view",
     "collection.add",
     "collection.add_own",

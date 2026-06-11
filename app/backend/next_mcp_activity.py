@@ -10,6 +10,7 @@ surface (tests and older modules continue to import the same names from
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from flask import Flask, Response, request
@@ -18,12 +19,12 @@ import requests as http_requests
 try:  # pragma: no cover - exercised indirectly by both layouts
     from .next_audit import api_audit_metadata, audit_event
     from .next_auth import next_auth_current_api_token_user
-    from .next_common import response
+    from .next_common import parse_int_arg, response, table_exists
     from .next_import import clean_text
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_audit import api_audit_metadata, audit_event
     from next_auth import next_auth_current_api_token_user
-    from next_common import response
+    from next_common import parse_int_arg, response, table_exists
     from next_import import clean_text
 
 
@@ -39,6 +40,25 @@ MCP_TOOL_NAMES = (
     "get_watch_history",
     "get_groups",
 )
+MCP_IOS_CLIENT_PATTERNS = ("ios", "discvault-ios", "discvault/ios")
+MCP_LOG_SENSITIVE_REPLACEMENTS = (
+    (re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+"), "Bearer [REDACTED]"),
+    (
+        re.compile(
+            r"(?i)\b(authorization|cookie|api[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?id|private[_-]?key)\s*[:=]\s*[^,\s;}]+"
+        ),
+        r"\1=[REDACTED]",
+    ),
+)
+
+
+def _next_app():
+    """Return ``next_app`` lazily to keep MCP helpers importable in tests."""
+    try:  # pragma: no cover - import shape depends on runtime layout
+        from . import next_app
+    except ImportError:  # pragma: no cover - supports gunicorn next_app:app
+        import next_app
+    return next_app
 
 
 def mcp_request_api_token_value() -> str:
@@ -52,12 +72,120 @@ def mcp_request_api_token_value() -> str:
     return ""
 
 
+def mcp_log_text(value: Any, *, maximum: int = 500) -> str:
+    text = clean_text(value)
+    if not text:
+        return ""
+    for pattern, replacement in MCP_LOG_SENSITIVE_REPLACEMENTS:
+        text = pattern.sub(replacement, text)
+    return text[:maximum]
+
+
+def mcp_log_first(metadata: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = metadata.get(key)
+        if isinstance(value, list):
+            for item in value:
+                text = mcp_log_text(item, maximum=160)
+                if text:
+                    return text
+            continue
+        text = mcp_log_text(value, maximum=160)
+        if text:
+            return text
+    return ""
+
+
+def mcp_log_level(row: dict[str, Any], metadata: dict[str, Any]) -> str:
+    event_type = mcp_log_text(row.get("event_type"), maximum=120).lower()
+    if "failed" in event_type or "error" in event_type:
+        return "error"
+    try:
+        response_status = int(metadata.get("responseStatus") or metadata.get("status") or 0)
+    except (TypeError, ValueError):
+        response_status = 0
+    if response_status >= 500:
+        return "error"
+    if response_status >= 400:
+        return "warning"
+    return "info"
+
+
+def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    tool_name = mcp_log_first(metadata, "tool_name", "toolName", "mcpTools", "tool", "command")
+    method = mcp_log_first(metadata, "method", "mcpMethods")
+    path = mcp_log_first(metadata, "mcpPath", "path", "endpoint")
+    user_agent = mcp_log_text(row.get("user_agent") or metadata.get("agent"), maximum=240)
+    client = mcp_log_first(metadata, "client", "mcpClient", "apiTokenName", "agent")
+    return {
+        "id": str(row.get("id") or ""),
+        "timestamp": row.get("created_at"),
+        "level": mcp_log_level(row, metadata),
+        "message": mcp_log_text(row.get("summary") or metadata.get("message") or "MCP activity", maximum=500),
+        "source": mcp_log_text(metadata.get("source") or row.get("category") or "mcp", maximum=80) or "mcp",
+        "client": client,
+        "user_agent": user_agent,
+        "tool_name": tool_name,
+        "method": method,
+        "path": path,
+    }
+
+
+def mcp_activity_log_is_ios(entry: dict[str, Any]) -> bool:
+    haystack = " ".join(
+        str(entry.get(key) or "").lower()
+        for key in ("source", "client", "user_agent")
+    )
+    return any(pattern in haystack for pattern in MCP_IOS_CLIENT_PATTERNS)
+
+
 def register_next_mcp_routes(flask_app: Flask, *, connect) -> None:  # pragma: no cover - Flask integration
     """Register the MCP proxy routes on *flask_app*.
 
     ``connect`` must be a callable that returns a database connection context
     manager (i.e. the ``connect`` closure defined in ``next_app.py``).
     """
+
+    @flask_app.get("/api/next/mcp/logs")
+    def next_mcp_logs():
+        limit = parse_int_arg("limit", 50, minimum=1, maximum=100)
+        query_limit = min(limit * 3, 300)
+        with connect() as conn:
+            _next_app().require_any_next_permission(conn, ("mcp.logs.view", "admin.view_audit"))
+            if not table_exists(conn, "audit_events"):
+                return response({"logs": []})
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        event_type,
+                        category,
+                        summary,
+                        metadata,
+                        request_ip,
+                        user_agent,
+                        created_at
+                    FROM audit_events
+                    WHERE category = 'mcp'
+                       OR event_type LIKE 'mcp.%%'
+                       OR event_type LIKE 'api.mcp_%%'
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (query_limit,),
+                )
+                rows = cur.fetchall()
+        logs: list[dict[str, Any]] = []
+        for row in rows:
+            entry = mcp_activity_log_entry(row)
+            if mcp_activity_log_is_ios(entry):
+                continue
+            logs.append(entry)
+            if len(logs) >= limit:
+                break
+        return response({"logs": logs})
 
     def mcp_proxy_request(path: str = "/mcp"):
         target = f"http://127.0.0.1:6090{path}"
