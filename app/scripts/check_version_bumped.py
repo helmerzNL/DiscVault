@@ -83,17 +83,42 @@ def requires_version_bump(files: list[str]) -> bool:
     return False
 
 
+def changed_files_for_range(base: str, head: str) -> list[str]:
+    return [
+        line.strip().replace("\\", "/")
+        for line in git("diff", "--name-only", f"{base}...{head}").splitlines()
+        if line.strip()
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="HEAD~1")
     parser.add_argument("--head", default="HEAD")
+    parser.add_argument("--aggregate", action="store_true", default=False)
     args = parser.parse_args()
 
     failures: list[str] = []
-    for commit in commit_list(args.base, args.head):
-        files = changed_files_for_worktree(args.base) if commit == "WORKTREE" else changed_files_for_commit(commit)
+
+    if args.aggregate:
+        base = args.base
+        head = args.head
+        if not valid_commit(base):
+            if valid_commit(head):
+                files = changed_files_for_commit(head)
+            else:
+                print("DiscVault version guard ok.")
+                return 0
+        else:
+            files = changed_files_for_range(base, head)
         if requires_version_bump(files) and VERSION_FILE not in files:
-            failures.append(commit)
+            label = f"{base[:12]}...{head[:12]}"
+            failures.append(label)
+    else:
+        for commit in commit_list(args.base, args.head):
+            files = changed_files_for_worktree(args.base) if commit == "WORKTREE" else changed_files_for_commit(commit)
+            if requires_version_bump(files) and VERSION_FILE not in files:
+                failures.append(commit)
 
     if failures:
         print("DiscVault version guard failed.", file=sys.stderr)

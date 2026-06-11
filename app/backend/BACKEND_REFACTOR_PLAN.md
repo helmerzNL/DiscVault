@@ -30,9 +30,21 @@ unnecessarily risky.
   - `config.py`
   - `db.py`
   - `logging_utils.py`
-- [ ] Step 3: Extract shared infrastructure helpers.
-- [ ] Step 4: Split profile, API tokens, audit activity, and MCP activity.
-- [ ] Step 5: Split people and native filmography.
+- [x] Step 3: Extract shared infrastructure helpers into `next_common.py`
+  (`NextApiError`, `json_ready`, `response`, `parse_int_arg`, `parse_uuid`,
+  `parse_bool_value`, `parse_uuid_list`, `table_exists`, `count_table`).
+  `next_app.py` re-imports these names for backward compatibility.
+- [x] Step 4: Split profile, API tokens, audit activity, and MCP activity into
+  `next_profile.py`, `next_api_token.py`, `next_audit.py`, and
+  `next_mcp_activity.py`. `next_app.py` re-imports these names for backward
+  compatibility. Runtime dependencies that still live in `next_app.py`
+  (`permission_key_catalog`, `table_exists`, `media_asset_public_url`,
+  `next_user_primary_role`) are resolved lazily to avoid an import cycle.
+  Flask route handlers are registered via `register_next_profile_routes`,
+  `register_next_audit_routes`, and `register_next_mcp_routes`; all three are
+  called from `register_routes()` in `next_app.py` and re-exported for
+  backward compatibility.
+- [x] Step 5: Split people and native filmography into `next_people.py`.
 - [ ] Step 6: Split settings, preferences, notifications, and push/PWA.
 - [ ] Step 7: Split collection movies, containers, and media groups.
 - [ ] Step 8: Split import, migration, metadata, and plugin operations.
@@ -41,11 +53,24 @@ unnecessarily risky.
 
 ## Proposed Module Layout
 
-Use small domain packages under `app/backend/next/` while keeping the existing
-`next_*.py` modules until they can be folded in safely:
+The shared infrastructure helpers now live in the flat `app/backend/next_common.py`
+module (consistent with the existing `next_*.py`, `config.py`, and `db.py`
+siblings). Remaining domains may follow the same flat-module convention; the
+package layout below describes the logical grouping rather than a literal path:
 
-- `next/common.py`: `NextApiError`, `json_ready`, `response`, request parsing,
-  UUID/date helpers, and table helpers.
+- `next_common.py`: `NextApiError`, `json_ready`, `response`, request parsing,
+  UUID helpers, and table helpers.
+- `next_audit.py`: audit-event persistence, request-IP resolution, API/MCP audit
+  metadata, sensitive-payload redaction, and profile API audit filters.
+- `next_api_token.py`: API token permission catalogs, token payload helpers, and
+  the profile API access payload.
+- `next_profile.py`: profile account payloads (user details and recovery-code
+  status).
+- `next_mcp_activity.py`: MCP tool catalog and API-token extraction for MCP
+  requests.
+- `next_people.py`: person read models, biography/language fallbacks, TMDb and
+  local filmography merging, native iOS payload builders, and people route
+  registration.
 - `next/i18n.py`: locale catalog loading, supported locales, flags, and
   language normalization.
 - `next/security.py`: permission checks, visibility SQL, actor helpers, and
