@@ -56,11 +56,12 @@ class NextMcpActivityHelperTests(unittest.TestCase):
                 "event_type": "mcp.request",
                 "category": "mcp",
                 "summary": "MCP search_collection -> 200",
-                "request_ip": "203.0.113.42",
+                "request_ip": "8.8.8.8",
                 "metadata": {
                     "apiTokenName": "Hermes MCP",
                     "apiTokenScopes": ["read", "mcp"],
                     "agent": "python-requests/2.34.2",
+                    "requestIp": "8.8.8.8",
                     "mcpTools": ["search_collection"],
                     "method": "POST",
                     "mcpPath": "/mcp",
@@ -82,7 +83,7 @@ class NextMcpActivityHelperTests(unittest.TestCase):
         self.assertEqual(entry["client"], "Hermes MCP")
         self.assertEqual(entry["agent"], "Hermes MCP")
         self.assertEqual(entry["user_agent"], "python-requests/2.34.2")
-        self.assertEqual(entry["ip_address"], "203.0.113.42")
+        self.assertEqual(entry["ip_address"], "8.8.8.8")
         self.assertEqual(entry["tool_name"], "search_collection")
         self.assertEqual(entry["method"], "POST")
         self.assertEqual(entry["path"], "/mcp")
@@ -93,6 +94,7 @@ class NextMcpActivityHelperTests(unittest.TestCase):
         self.assertEqual(entry["metadata"]["input"]["params"]["arguments"]["query"], "Indiana Jones")
         self.assertEqual(entry["metadata"]["tools"], ["search_collection"])
         self.assertEqual(entry["metadata"]["api_token_name"], "Hermes MCP")
+        self.assertEqual(entry["metadata"]["ip_address"], "8.8.8.8")
 
     def test_activity_log_entry_uses_ip_candidates_and_empty_metadata_object(self):
         entry = next_mcp_activity.mcp_activity_log_entry(
@@ -104,7 +106,7 @@ class NextMcpActivityHelperTests(unittest.TestCase):
                 "metadata": {
                     "requestIpCandidates": [
                         {"ip": "172.26.0.5", "scope": "private", "source": "remote_addr"},
-                        {"ip": "203.0.113.42", "scope": "public", "source": "X-Forwarded-For"},
+                        {"ip": "8.8.8.8", "scope": "public", "source": "X-Forwarded-For"},
                     ]
                 },
                 "user_agent": "",
@@ -113,8 +115,9 @@ class NextMcpActivityHelperTests(unittest.TestCase):
         )
         self.assertEqual(entry["timestamp"], "")
         self.assertEqual(entry["agent"], "Custom MCP Client")
-        self.assertEqual(entry["ip_address"], "203.0.113.42")
+        self.assertEqual(entry["ip_address"], "8.8.8.8")
         self.assertIsInstance(entry["metadata"], dict)
+        self.assertEqual(entry["metadata"]["ip_address"], "8.8.8.8")
 
         empty_entry = next_mcp_activity.mcp_activity_log_entry(
             {
@@ -128,6 +131,22 @@ class NextMcpActivityHelperTests(unittest.TestCase):
             }
         )
         self.assertEqual(empty_entry["metadata"], {})
+
+    def test_activity_log_entry_does_not_expose_private_docker_ip(self):
+        entry = next_mcp_activity.mcp_activity_log_entry(
+            {
+                "id": "log_3",
+                "event_type": "mcp.request",
+                "category": "mcp",
+                "summary": "MCP request",
+                "request_ip": "172.26.0.5",
+                "metadata": {"requestIp": "172.26.0.5"},
+                "user_agent": "",
+                "created_at": None,
+            }
+        )
+        self.assertEqual(entry["ip_address"], "")
+        self.assertNotIn("ip_address", entry["metadata"])
 
     def test_activity_log_filter_recognizes_ios_clients(self):
         self.assertTrue(

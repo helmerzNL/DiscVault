@@ -180,9 +180,6 @@ def request_ip_details() -> dict[str, Any]:
             selected = item["ip"]
             selected_source = item["source"]
             break
-    if not selected and candidates:
-        selected = candidates[0]["ip"]
-        selected_source = candidates[0]["source"]
     return {
         "ip": selected,
         "source": selected_source,
@@ -197,6 +194,7 @@ def public_request_ip() -> str:
 def request_ip_audit_metadata() -> dict[str, Any]:
     details = request_ip_details()
     metadata: dict[str, Any] = {
+        "requestIp": details.get("ip") or "",
         "requestIpSource": details.get("source") or "",
     }
     candidates = details.get("candidates")
