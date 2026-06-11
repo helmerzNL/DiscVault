@@ -10,6 +10,7 @@ surface (tests and older modules continue to import the same names from
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import re
 from typing import Any
 
@@ -150,6 +151,43 @@ def mcp_log_level(row: dict[str, Any], metadata: dict[str, Any]) -> str:
     return "info"
 
 
+def mcp_log_timestamp(row: dict[str, Any], metadata: dict[str, Any]) -> Any:
+    value = (
+        row.get("created_at")
+        or metadata.get("timestamp")
+        or metadata.get("created_at")
+        or metadata.get("logged_at")
+        or metadata.get("occurred_at")
+        or metadata.get("time")
+        or metadata.get("date")
+    )
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    if isinstance(value, (int, float)):
+        return value
+    return mcp_log_text(value, maximum=80)
+
+
+def mcp_log_ip_address(row: dict[str, Any], metadata: dict[str, Any]) -> str:
+    direct = mcp_log_first(metadata, "requestIp", "request_ip", "remote_ip", "remoteIp", "ip_address", "host")
+    if direct:
+        return direct
+    candidates = metadata.get("requestIpCandidates")
+    if isinstance(candidates, list):
+        for scope in ("public", "private"):
+            for item in candidates:
+                if not isinstance(item, dict):
+                    continue
+                if mcp_log_text(item.get("scope"), maximum=40).lower() != scope:
+                    continue
+                ip = mcp_log_text(item.get("ip"), maximum=80)
+                if ip:
+                    return ip
+    return mcp_log_text(row.get("request_ip") or "", maximum=80)
+
+
 def mcp_log_status_code(metadata: dict[str, Any]) -> int | None:
     try:
         status_code = int(metadata.get("responseStatus") or metadata.get("status") or 0)
@@ -177,6 +215,8 @@ def mcp_log_event(row: dict[str, Any], metadata: dict[str, Any]) -> str:
 
 def mcp_safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     safe: dict[str, Any] = {}
+    if not metadata:
+        return safe
     request_id = mcp_log_first(metadata, "request_id", "requestId", "correlationId", "traceId")
     if request_id:
         safe["request_id"] = request_id
@@ -237,10 +277,10 @@ def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
     path = mcp_log_first(metadata, "mcpPath", "path", "endpoint")
     user_agent = mcp_log_text(row.get("user_agent") or metadata.get("agent"), maximum=240)
     client = mcp_log_first(metadata, "client", "mcpClient", "apiTokenName", "agent")
-    agent = mcp_log_first(metadata, "agent", "mcpClient", "client", "apiTokenName") or user_agent or client
+    agent = mcp_log_first(metadata, "mcpClient", "client", "apiTokenName", "agent") or user_agent or "Custom MCP Client"
     return {
         "id": str(row.get("id") or ""),
-        "timestamp": row.get("created_at"),
+        "timestamp": mcp_log_timestamp(row, metadata),
         "level": mcp_log_level(row, metadata),
         "event": mcp_log_event(row, metadata),
         "message": mcp_log_text(row.get("summary") or metadata.get("message") or "MCP activity", maximum=500),
@@ -248,7 +288,7 @@ def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
         "client": client,
         "agent": agent,
         "user_agent": user_agent,
-        "ip_address": mcp_log_text(row.get("request_ip") or metadata.get("requestIp") or "", maximum=80),
+        "ip_address": mcp_log_ip_address(row, metadata),
         "tool_name": tool_name,
         "method": method,
         "path": path,

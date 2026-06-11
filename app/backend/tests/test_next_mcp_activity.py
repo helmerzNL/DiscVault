@@ -75,12 +75,12 @@ class NextMcpActivityHelperTests(unittest.TestCase):
                 "created_at": created_at,
             }
         )
-        self.assertEqual(entry["timestamp"], created_at)
+        self.assertEqual(entry["timestamp"], "2026-06-11T09:12:33.000Z")
         self.assertEqual(entry["level"], "info")
         self.assertEqual(entry["event"], "tool_call.completed")
         self.assertEqual(entry["source"], "mcp")
         self.assertEqual(entry["client"], "Hermes MCP")
-        self.assertEqual(entry["agent"], "python-requests/2.34.2")
+        self.assertEqual(entry["agent"], "Hermes MCP")
         self.assertEqual(entry["user_agent"], "python-requests/2.34.2")
         self.assertEqual(entry["ip_address"], "203.0.113.42")
         self.assertEqual(entry["tool_name"], "search_collection")
@@ -93,6 +93,41 @@ class NextMcpActivityHelperTests(unittest.TestCase):
         self.assertEqual(entry["metadata"]["input"]["params"]["arguments"]["query"], "Indiana Jones")
         self.assertEqual(entry["metadata"]["tools"], ["search_collection"])
         self.assertEqual(entry["metadata"]["api_token_name"], "Hermes MCP")
+
+    def test_activity_log_entry_uses_ip_candidates_and_empty_metadata_object(self):
+        entry = next_mcp_activity.mcp_activity_log_entry(
+            {
+                "id": "log_1",
+                "event_type": "mcp.request",
+                "category": "mcp",
+                "summary": "MCP request",
+                "metadata": {
+                    "requestIpCandidates": [
+                        {"ip": "172.26.0.5", "scope": "private", "source": "remote_addr"},
+                        {"ip": "203.0.113.42", "scope": "public", "source": "X-Forwarded-For"},
+                    ]
+                },
+                "user_agent": "",
+                "created_at": None,
+            }
+        )
+        self.assertEqual(entry["timestamp"], "")
+        self.assertEqual(entry["agent"], "Custom MCP Client")
+        self.assertEqual(entry["ip_address"], "203.0.113.42")
+        self.assertIsInstance(entry["metadata"], dict)
+
+        empty_entry = next_mcp_activity.mcp_activity_log_entry(
+            {
+                "id": "log_2",
+                "event_type": "mcp.request",
+                "category": "mcp",
+                "summary": "MCP request",
+                "metadata": {},
+                "user_agent": "",
+                "created_at": None,
+            }
+        )
+        self.assertEqual(empty_entry["metadata"], {})
 
     def test_activity_log_filter_recognizes_ios_clients(self):
         self.assertTrue(
