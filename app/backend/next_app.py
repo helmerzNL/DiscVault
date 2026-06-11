@@ -22,6 +22,7 @@ import secrets
 import shutil
 import sqlite3
 import tempfile
+import time
 import uuid
 import zipfile
 from datetime import date, datetime, timezone
@@ -38,6 +39,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from werkzeug.exceptions import HTTPException
 from PIL import Image, ImageOps, UnidentifiedImageError
+import jwt
 
 try:
     from .next_database import discover_migrations
@@ -263,6 +265,7 @@ TEST_DATABASE_RESET_TABLES = (
     "watchlist_items",
     "watch_history",
     "push_subscriptions",
+    "native_push_devices",
     "notification_preferences",
     "user_notifications",
     "user_preferences",
@@ -34614,6 +34617,17 @@ def actor_can_delete_movie(actor: dict[str, Any], movie: dict[str, Any]) -> bool
     return bool(actor_id and owner_id and str(actor_id) == str(owner_id))
 
 
+def actor_has_effective_permission(actor: dict[str, Any], permission_key: str) -> bool:
+    permissions = {str(item) for item in actor.get("permissions") or []}
+    if actor.get("role") == "owner" or "*" in permissions or permission_key in permissions:
+        return actor_token_allows_permission(actor, permission_key)
+    return False
+
+
+def actor_has_any_effective_permission(actor: dict[str, Any], permission_keys: tuple[str, ...]) -> bool:
+    return any(actor_has_effective_permission(actor, permission_key) for permission_key in permission_keys)
+
+
 def delete_movie_records(conn, movie_id: UUID) -> tuple[dict[str, Any], dict[str, int]]:
     existing = movie_entity(conn, movie_id)
     if not existing:
@@ -35218,9 +35232,20 @@ def create_user_notification(
         )
         notification = cur.fetchone() or {}
     errors: list[str] = []
+    native_delivery: dict[str, Any] = {"status": "skipped", "sent": 0, "errors": []}
     if send_push and notification_preference_map(conn, user_id).get(pref_key, True):
         errors = send_push_to_user(conn, user_id, title=title, body=body, url=url)
+        native_delivery = send_native_push_to_user(
+            conn,
+            user_id,
+            title=title,
+            body=body,
+            topic=pref_key,
+            url=url,
+            notification_id=notification.get("id"),
+        )
     notification["pushErrors"] = errors
+    notification["nativePushDelivery"] = native_delivery
     return notification
 
 
@@ -35274,6 +35299,319 @@ def send_push_to_user(conn, user_id: UUID | str, *, title: str, body: str = "", 
         with conn.cursor() as cur:
             cur.execute("DELETE FROM push_subscriptions WHERE endpoint = ANY(%s)", (stale_endpoints,))
     return errors
+
+
+def native_push_environment(value: Any = None) -> str:
+    text = str(value or os.environ.get("APNS_ENVIRONMENT") or "production").strip().lower()
+    if text in {"dev", "development", "sandbox"}:
+        return "sandbox"
+    return "production"
+
+
+def native_push_private_key() -> str:
+    inline_key = str(os.environ.get("APNS_PRIVATE_KEY") or "").strip()
+    if inline_key:
+        return inline_key.replace("\\n", "\n")
+    private_key_file = str(os.environ.get("APNS_PRIVATE_KEY_FILE") or "").strip()
+    if private_key_file:
+        try:
+            return Path(private_key_file).read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+    return ""
+
+
+def native_push_apns_settings(*, include_private: bool = False) -> dict[str, Any]:
+    key_id = str(os.environ.get("APNS_KEY_ID") or "").strip()
+    team_id = str(os.environ.get("APNS_TEAM_ID") or "").strip()
+    bundle_id = str(os.environ.get("APNS_BUNDLE_ID") or "").strip()
+    private_key = native_push_private_key()
+    missing = [
+        key
+        for key, present in {
+            "APNS_KEY_ID": bool(key_id),
+            "APNS_TEAM_ID": bool(team_id),
+            "APNS_BUNDLE_ID": bool(bundle_id),
+            "APNS_PRIVATE_KEY": bool(private_key),
+        }.items()
+        if not present
+    ]
+    settings: dict[str, Any] = {
+        "provider": "apns",
+        "environment": native_push_environment(),
+        "bundleId": bundle_id or None,
+        "configured": not missing,
+        "missing": missing,
+    }
+    if include_private:
+        settings.update({"keyId": key_id, "teamId": team_id, "privateKey": private_key})
+    return settings
+
+
+def native_push_config() -> dict[str, Any]:
+    settings = native_push_apns_settings()
+    missing = settings.get("missing") or []
+    delivery_available = not missing
+    return {
+        "provider": "apns",
+        "available": delivery_available,
+        "deliveryAvailable": delivery_available,
+        "configured": settings.get("configured"),
+        "status": "available" if delivery_available else "not_configured",
+        "environment": settings.get("environment"),
+        "bundleId": settings.get("bundleId"),
+        "missing": missing,
+    }
+
+
+def native_push_device_token_suffix(device_token: Any) -> str:
+    text = str(device_token or "").strip()
+    return text[-8:] if len(text) > 8 else text
+
+
+def native_push_device_public(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    device_token = str(row.get("device_token") or "")
+    return {
+        "id": row.get("id"),
+        "platform": row.get("platform") or "ios",
+        "environment": row.get("apns_environment"),
+        "bundleId": row.get("app_bundle_id"),
+        "deviceLabel": row.get("device_label"),
+        "appVersion": row.get("app_version"),
+        "tokenSuffix": native_push_device_token_suffix(device_token),
+        "tokenHash": hashlib.sha256(device_token.encode("utf-8")).hexdigest() if device_token else None,
+        "lastSeenAt": row.get("last_seen_at"),
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
+        "revokedAt": row.get("revoked_at"),
+    }
+
+
+def native_push_device_rows(conn, user_id: UUID | str) -> list[dict[str, Any]]:
+    if not table_exists(conn, "native_push_devices"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, platform, device_token, apns_environment, app_bundle_id, device_label,
+                   app_version, user_agent, metadata, last_seen_at, created_at, updated_at, revoked_at
+            FROM native_push_devices
+            WHERE user_id=%s
+            ORDER BY revoked_at NULLS FIRST, updated_at DESC
+            """,
+            (user_id,),
+        )
+        return cur.fetchall()
+
+
+def native_push_status_payload(conn, user_id: UUID | str) -> dict[str, Any]:
+    config = native_push_config()
+    devices = [native_push_device_public(row) for row in native_push_device_rows(conn, user_id)]
+    active_devices = [device for device in devices if device and not device.get("revokedAt")]
+    return {
+        **config,
+        "registrationEndpoint": "/api/next/push/native/register",
+        "testEndpoint": "/api/next/push/native/test",
+        "devices": devices,
+        "activeDeviceCount": len(active_devices),
+        "tableAvailable": table_exists(conn, "native_push_devices"),
+    }
+
+
+def normalize_native_push_registration(body: dict[str, Any]) -> dict[str, Any]:
+    platform = str(body.get("platform") or "ios").strip().lower()
+    if platform != "ios":
+        raise NextApiError("Only ios native push devices are supported", 400)
+    device_token = str(body.get("deviceToken", body.get("device_token")) or "").strip()
+    if not device_token:
+        raise NextApiError("deviceToken is required", 400)
+    if len(device_token) > 512:
+        raise NextApiError("deviceToken is too long", 400)
+    environment = native_push_environment(body.get("environment", body.get("apnsEnvironment")))
+    bundle_id = clean_text(body.get("bundleId", body.get("bundle_id"))) or native_push_config().get("bundleId")
+    device_label = clean_text(body.get("deviceLabel", body.get("device_label"))) or "iOS device"
+    app_version = clean_text(body.get("appVersion", body.get("app_version"))) or None
+    user_agent = str(body.get("userAgent") or request.headers.get("User-Agent") or "")[:500]
+    metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+    return {
+        "platform": platform,
+        "deviceToken": device_token,
+        "environment": environment,
+        "bundleId": bundle_id,
+        "deviceLabel": device_label,
+        "appVersion": app_version,
+        "userAgent": user_agent,
+        "metadata": metadata,
+    }
+
+
+def native_push_apns_url(environment: str, device_token: str) -> str:
+    host = "api.sandbox.push.apple.com" if native_push_environment(environment) == "sandbox" else "api.push.apple.com"
+    return f"https://{host}/3/device/{quote(device_token, safe='')}"
+
+
+def native_push_apns_auth_token(config: dict[str, Any]) -> str:
+    token = jwt.encode(
+        {"iss": config.get("teamId"), "iat": int(time.time())},
+        config.get("privateKey") or "",
+        algorithm="ES256",
+        headers={"kid": config.get("keyId")},
+    )
+    return token.decode("utf-8") if isinstance(token, bytes) else str(token)
+
+
+def native_push_payload(
+    conn,
+    *,
+    title: str,
+    body: str = "",
+    topic: str = "app_updates",
+    url: str = "/notifications",
+    notification_id: UUID | str | None = None,
+    user_id: UUID | str | None = None,
+) -> dict[str, Any]:
+    counts = notification_counts(conn, user_id) if user_id else {}
+    unread = counts.get("unread") if isinstance(counts, dict) else 0
+    notification_text = str(notification_id) if notification_id else ""
+    deep_link = f"discvault://notifications/{notification_text}" if notification_text else "discvault://notifications"
+    return {
+        "aps": {
+            "alert": {"title": title, "body": body},
+            "badge": int(unread or 0),
+            "sound": "default",
+        },
+        "notificationId": notification_text or None,
+        "topic": topic,
+        "url": url,
+        "deepLink": deep_link,
+    }
+
+
+def deliver_native_push_device(
+    config: dict[str, Any],
+    device: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    device_token = str(device.get("device_token") or "").strip()
+    device_id = str(device.get("id") or "")
+    if not device_token:
+        return {"status": "failed", "deviceId": device_id or None, "error": "Device token is empty", "permanent": True}
+    try:
+        import httpx
+    except Exception as exc:
+        return {
+            "status": "dependency_missing",
+            "deviceId": device_id or None,
+            "tokenSuffix": native_push_device_token_suffix(device_token),
+            "error": f"httpx with HTTP/2 support is not available: {exc}",
+            "permanent": False,
+        }
+    try:
+        auth_token = native_push_apns_auth_token(config)
+        with httpx.Client(http2=True, timeout=10.0) as client:
+            response = client.post(
+                native_push_apns_url(str(device.get("apns_environment") or config.get("environment") or "production"), device_token),
+                headers={
+                    "authorization": f"bearer {auth_token}",
+                    "apns-topic": str(device.get("app_bundle_id") or config.get("bundleId") or ""),
+                    "apns-push-type": "alert",
+                    "apns-priority": "10",
+                    "apns-expiration": str(int(time.time()) + 86400),
+                },
+                json=payload,
+            )
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "deviceId": device_id or None,
+            "tokenSuffix": native_push_device_token_suffix(device_token),
+            "error": f"APNS request failed: {exc}",
+            "permanent": False,
+        }
+    reason = None
+    try:
+        response_body = response.json() if response.content else {}
+        reason = response_body.get("reason") if isinstance(response_body, dict) else None
+    except Exception:
+        reason = None
+    result = {
+        "status": "sent" if response.status_code == 200 else "failed",
+        "deviceId": device_id or None,
+        "tokenSuffix": native_push_device_token_suffix(device_token),
+        "statusCode": response.status_code,
+        "apnsId": response.headers.get("apns-id"),
+    }
+    if response.status_code != 200:
+        permanent_reasons = {"BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"}
+        result.update(
+            {
+                "reason": reason,
+                "error": f"APNS rejected device token ({response.status_code}{f': {reason}' if reason else ''})",
+                "permanent": response.status_code == 410 or reason in permanent_reasons,
+            }
+        )
+    return result
+
+
+def send_native_push_to_user(
+    conn,
+    user_id: UUID | str,
+    *,
+    title: str,
+    body: str = "",
+    topic: str = "app_updates",
+    url: str = "/notifications",
+    notification_id: UUID | str | None = None,
+) -> dict[str, Any]:
+    if not table_exists(conn, "native_push_devices"):
+        return {"status": "unavailable", "sent": 0, "errors": ["Native push devices table is not available"]}
+    config = native_push_apns_settings(include_private=True)
+    if not config.get("configured"):
+        return {"status": "not_configured", "sent": 0, "errors": ["APNS is not configured"], "missing": config.get("missing") or []}
+    active_devices = [device for device in native_push_device_rows(conn, user_id) if device and not device.get("revoked_at")]
+    if not active_devices:
+        return {"status": "no_devices", "sent": 0, "errors": ["No native iOS device registered for this user"]}
+    payload = native_push_payload(
+        conn,
+        title=title,
+        body=body,
+        topic=topic,
+        url=url,
+        notification_id=notification_id,
+        user_id=user_id,
+    )
+    results = [deliver_native_push_device(config, device, payload) for device in active_devices]
+    revoked_device_ids = [
+        result.get("deviceId")
+        for result in results
+        if result.get("deviceId") and result.get("permanent")
+    ]
+    if revoked_device_ids:
+        with conn.cursor() as cur:
+            for device_id in revoked_device_ids:
+                cur.execute(
+                    """
+                    UPDATE native_push_devices
+                    SET revoked_at=COALESCE(revoked_at, now()), updated_at=now()
+                    WHERE id=%s
+                    """,
+                    (device_id,),
+                )
+    sent = len([result for result in results if result.get("status") == "sent"])
+    errors = [str(result.get("error") or result.get("reason") or "APNS delivery failed") for result in results if result.get("status") != "sent"]
+    delivery_status = "sent" if sent == len(results) else "partial" if sent else "failed"
+    if any(result.get("status") == "dependency_missing" for result in results):
+        delivery_status = "dependency_missing"
+    return {
+        "status": delivery_status,
+        "sent": sent,
+        "attempted": len(results),
+        "errors": errors,
+        "results": results,
+        "revokedDeviceIds": revoked_device_ids,
+    }
 
 
 def normalized_app_preference_key(key: Any) -> str:
@@ -37098,6 +37436,98 @@ def movie_media_group_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
             (movie_id,),
         )
         return cur.fetchall()
+
+
+def movie_library_action_targets(conn, movie_id: UUID, actor: dict[str, Any]) -> dict[str, Any]:
+    require_existing_movie_ids(conn, [movie_id])
+    can_edit_containers = actor_has_effective_permission(actor, "containers.edit")
+    can_edit_collections = actor_has_any_effective_permission(actor, ("containers.edit", "collection.bulk_edit"))
+    can_view_groups = actor_has_effective_permission(actor, "groups.view")
+    can_manage_group_movies = actor_has_effective_permission(actor, "groups.invite")
+    container_links: set[UUID] = set()
+    collection_links: set[UUID] = set()
+    containers_by_type: dict[str, list[dict[str, Any]]] = {"boxSets": [], "vaults": [], "collections": []}
+
+    if table_exists(conn, "container_movies"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT container_id FROM container_movies WHERE movie_id=%s", (movie_id,))
+            container_links = {row["container_id"] for row in cur.fetchall()}
+    if table_exists(conn, "collection_items"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT collection_id
+                FROM collection_items
+                WHERE item_type='movie' AND item_id=%s
+                """,
+                (movie_id,),
+            )
+            collection_links = {row["collection_id"] for row in cur.fetchall()}
+    if table_exists(conn, "containers"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, public_id, container_type, title, barcode, badge_label, year,
+                       description, metadata, created_at, updated_at
+                FROM containers
+                WHERE container_type IN ('box_set', 'vault', 'collection')
+                ORDER BY container_type, lower(title), year NULLS LAST
+                """
+            )
+            containers = cur.fetchall()
+        for container in containers:
+            container_type = str(container.get("container_type") or "")
+            linked = container.get("id") in (collection_links if container_type == "collection" else container_links)
+            target = {
+                "id": container.get("id"),
+                "publicId": container.get("public_id"),
+                "containerType": container_type,
+                "title": container.get("title"),
+                "barcode": container.get("barcode"),
+                "badgeLabel": container.get("badge_label"),
+                "year": container.get("year"),
+                "description": container.get("description"),
+                "metadata": container.get("metadata") or {},
+                "linked": linked,
+                "canAdd": can_edit_collections if container_type == "collection" else can_edit_containers,
+                "canRemove": can_edit_collections if container_type == "collection" else can_edit_containers,
+                "createdAt": container.get("created_at"),
+                "updatedAt": container.get("updated_at"),
+            }
+            if container_type == "box_set":
+                containers_by_type["boxSets"].append(target)
+            elif container_type == "vault":
+                containers_by_type["vaults"].append(target)
+            elif container_type == "collection":
+                containers_by_type["collections"].append(target)
+
+    media_groups: list[dict[str, Any]] = []
+    linked_group_ids = {group.get("id") for group in movie_media_group_entities(conn, movie_id)}
+    if can_view_groups and table_exists(conn, "media_groups"):
+        for group in media_group_entities(conn, limit=1000):
+            can_manage = can_manage_group_movies and can_manage_media_group_members(conn, group.get("id"), actor)
+            media_groups.append(
+                {
+                    **group,
+                    "linked": group.get("id") in linked_group_ids,
+                    "canAdd": can_manage,
+                    "canRemove": can_manage,
+                }
+            )
+
+    return {
+        "movieId": movie_id,
+        "permissions": {
+            "canAddToBoxSet": can_edit_containers,
+            "canAddToVault": can_edit_containers,
+            "canAddToCollection": can_edit_collections,
+            "canAddToMediaGroup": can_manage_group_movies,
+            "canCreateContainer": can_edit_containers,
+            "canCreateMediaGroup": actor_has_effective_permission(actor, "groups.create"),
+        },
+        "containers": containers_by_type,
+        "mediaGroups": media_groups,
+    }
 
 
 def attach_digital_availability(conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -43206,6 +43636,93 @@ def register_routes(flask_app: Flask) -> None:
                 preferences = set_app_user_preferences(conn, user["id"], updates)
         return response({"status": "ok", "preferences": preferences, "userScoped": True, "updated": True})
 
+    @flask_app.get("/api/next/mobile/bootstrap")
+    def next_mobile_bootstrap():
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Mobile bootstrap requires a signed-in user", 401)
+            public_key, _ = get_or_create_push_vapid_keys(conn)
+            token_permissions = sorted(actor_api_token_permission_keys(actor) or [])
+            role_permissions = sorted(str(item) for item in (actor.get("permissions") or []))
+            effective_permissions = [
+                permission_key
+                for permission_key in role_permissions
+                if actor_has_effective_permission(actor, permission_key)
+            ]
+            if actor.get("role") == "owner" and not effective_permissions:
+                effective_permissions = ["*"]
+            capabilities = {
+                "collection": actor_has_effective_permission(actor, "collection.view"),
+                "import": actor_has_any_effective_permission(
+                    actor,
+                    ("collection.import", "collection.add", "collection.add_own", "metadata.search"),
+                ),
+                "metadata": actor_has_any_effective_permission(
+                    actor,
+                    ("metadata.search", "metadata.refresh_one", "metadata.refresh_bulk"),
+                ),
+                "containers": actor_has_any_effective_permission(actor, ("containers.view", "containers.edit")),
+                "groups": actor_has_any_effective_permission(actor, ("groups.view", "groups.invite")),
+                "personalLists": actor_has_any_effective_permission(actor, ("watchlist.manage", "collection.view")),
+                "api": actor_has_any_effective_permission(actor, ("api.read", "api.write", "api.tokens.manage")),
+                "mcp": actor_has_effective_permission(actor, "mcp.use"),
+                "offlineSync": actor_has_effective_permission(actor, "collection.view"),
+            }
+            return response(
+                {
+                    "status": "ok",
+                    "user": {
+                        "id": actor.get("id"),
+                        "username": actor.get("username"),
+                        "displayName": actor.get("display_name") or actor.get("displayName"),
+                        "firstName": actor.get("first_name") or actor.get("firstName"),
+                        "lastName": actor.get("last_name") or actor.get("lastName"),
+                        "role": actor.get("role"),
+                    },
+                    "auth": {
+                        "role": actor.get("role"),
+                        "tokenPermissionKeys": token_permissions,
+                        "effectivePermissionKeys": effective_permissions,
+                    },
+                    "capabilities": capabilities,
+                    "preferences": {
+                        "values": app_effective_preferences(conn, user_id),
+                        "defaults": APP_PREFERENCE_DEFAULTS,
+                        "sections": ["appearance", "library", "collectors"],
+                    },
+                    "notifications": {
+                        "counts": notification_counts(conn, user_id),
+                        "preferences": notification_preference_map(conn, user_id),
+                        "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
+                        "webPush": {
+                            "available": table_exists(conn, "push_subscriptions"),
+                            "publicKey": public_key,
+                            "subject": push_vapid_subject(),
+                            "status": "available" if table_exists(conn, "push_subscriptions") else "unavailable",
+                        },
+                        "nativePush": native_push_status_payload(conn, user_id),
+                    },
+                    "localization": {
+                        "locales": [
+                            {"code": "en-US", "displayName": "English", "flag": "US"},
+                            {"code": "nl-NL", "displayName": "Nederlands", "flag": "NL"},
+                        ]
+                    },
+                    "endpoints": {
+                        "syncBootstrap": "/api/next/sync/bootstrap",
+                        "notifications": "/api/next/notifications",
+                        "notificationPreferences": "/api/next/push/preferences",
+                        "pushStatus": "/api/next/push/status",
+                        "nativePushStatus": "/api/next/push/native/status",
+                        "nativePushRegister": "/api/next/push/native/register",
+                        "nativePushTest": "/api/next/push/native/test",
+                        "metadataLookup": "/api/next/metadata/lookup",
+                    },
+                }
+            )
+
     @flask_app.get("/api/next/push/status")
     def next_push_status():
         endpoint = str(request.args.get("endpoint") or "").strip()
@@ -43240,6 +43757,7 @@ def register_routes(flask_app: Flask) -> None:
                     "subject": push_vapid_subject(),
                     "preferences": notification_preference_map(conn, user_id),
                     "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
+                    "nativePush": native_push_status_payload(conn, user_id),
                     "subscriptions": [
                         {
                             "id": item.get("id"),
@@ -43253,6 +43771,206 @@ def register_routes(flask_app: Flask) -> None:
                         for item in subscriptions
                     ],
                     "currentSubscription": current_subscription,
+                    "counts": notification_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.get("/api/next/push/native/status")
+    def next_native_push_status():
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Native push requires a signed-in user", 401)
+            return response(
+                {
+                    "status": "ok",
+                    "nativePush": native_push_status_payload(conn, user_id),
+                    "preferences": notification_preference_map(conn, user_id),
+                    "counts": notification_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/push/native/register")
+    def next_native_push_register():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Native push registration request body must be an object", 400)
+        registration = normalize_native_push_registration(body)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Native push requires a signed-in user", 401)
+            if not table_exists(conn, "native_push_devices"):
+                raise NextApiError("Native push devices table is not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO native_push_devices (
+                            user_id, platform, device_token, apns_environment, app_bundle_id,
+                            device_label, app_version, user_agent, metadata,
+                            last_seen_at, created_at, updated_at, revoked_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now(), now(), NULL)
+                        ON CONFLICT (platform, apns_environment, device_token) WHERE revoked_at IS NULL
+                        DO UPDATE SET
+                            user_id=EXCLUDED.user_id,
+                            app_bundle_id=EXCLUDED.app_bundle_id,
+                            device_label=EXCLUDED.device_label,
+                            app_version=EXCLUDED.app_version,
+                            user_agent=EXCLUDED.user_agent,
+                            metadata=EXCLUDED.metadata,
+                            last_seen_at=now(),
+                            updated_at=now()
+                        RETURNING id, platform, device_token, apns_environment, app_bundle_id,
+                                  device_label, app_version, user_agent, metadata,
+                                  last_seen_at, created_at, updated_at, revoked_at
+                        """,
+                        (
+                            user_id,
+                            registration["platform"],
+                            registration["deviceToken"],
+                            registration["environment"],
+                            registration["bundleId"],
+                            registration["deviceLabel"],
+                            registration["appVersion"],
+                            registration["userAgent"],
+                            Jsonb(json_ready(registration["metadata"])),
+                        ),
+                    )
+                    device = cur.fetchone()
+                audit_event(
+                    conn,
+                    event_type="native_push.registered",
+                    category="personal",
+                    actor=actor,
+                    target_type="native_push_device",
+                    target_id=device.get("id") if device else None,
+                    summary="Registered native iOS push device",
+                    metadata={
+                        "platform": registration["platform"],
+                        "environment": registration["environment"],
+                        "bundleId": registration["bundleId"],
+                        "deviceLabel": registration["deviceLabel"],
+                        "appVersion": registration["appVersion"],
+                        "tokenSuffix": native_push_device_token_suffix(registration["deviceToken"]),
+                    },
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "device": native_push_device_public(device),
+                    "nativePush": native_push_status_payload(conn, user_id),
+                    "preferences": notification_preference_map(conn, user_id),
+                    "counts": notification_counts(conn, user_id),
+                },
+                201,
+            )
+
+    @flask_app.delete("/api/next/push/native/register")
+    def next_native_push_revoke():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Native push revoke request body must be an object", 400)
+        device_id = str(body.get("deviceId", body.get("id")) or "").strip()
+        device_token = str(body.get("deviceToken", body.get("device_token")) or "").strip()
+        environment = native_push_environment(body.get("environment", body.get("apnsEnvironment")))
+        if not device_id and not device_token:
+            raise NextApiError("deviceId or deviceToken is required", 400)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Native push requires a signed-in user", 401)
+            if not table_exists(conn, "native_push_devices"):
+                raise NextApiError("Native push devices table is not available", 503)
+            params: tuple[Any, ...]
+            if device_id:
+                parsed_device_id = parse_uuid(device_id, "deviceId")
+                where_clause = "id=%s AND user_id=%s"
+                params = (parsed_device_id, user_id)
+            else:
+                where_clause = "platform='ios' AND apns_environment=%s AND device_token=%s AND user_id=%s"
+                params = (environment, device_token, user_id)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""
+                        UPDATE native_push_devices
+                        SET revoked_at=COALESCE(revoked_at, now()), updated_at=now()
+                        WHERE {where_clause}
+                        RETURNING id, platform, device_token, apns_environment, app_bundle_id,
+                                  device_label, app_version, user_agent, metadata,
+                                  last_seen_at, created_at, updated_at, revoked_at
+                        """,
+                        params,
+                    )
+                    device = cur.fetchone()
+                audit_event(
+                    conn,
+                    event_type="native_push.revoked",
+                    category="personal",
+                    actor=actor,
+                    target_type="native_push_device",
+                    target_id=device.get("id") if device else None,
+                    summary="Revoked native iOS push device",
+                    metadata={"deleted": bool(device), "environment": environment},
+                )
+            return response(
+                {
+                    "status": "deleted",
+                    "deleted": bool(device),
+                    "device": native_push_device_public(device),
+                    "nativePush": native_push_status_payload(conn, user_id),
+                    "counts": notification_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/push/native/test")
+    def next_native_push_test():
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Native push test requires a signed-in user", 401)
+            with conn.transaction():
+                notification = create_user_notification(
+                    conn,
+                    user_id,
+                    title="DiscVault",
+                    body="Native iOS push notifications are working.",
+                    url="/notifications",
+                    pref_key="security",
+                    payload={"type": "native_push_test", "topic": "security"},
+                    send_push=False,
+                )
+                delivery = send_native_push_to_user(
+                    conn,
+                    user_id,
+                    title=notification.get("title") or "DiscVault",
+                    body=notification.get("body") or "",
+                    topic="security",
+                    url="/notifications",
+                    notification_id=notification.get("id"),
+                )
+                audit_event(
+                    conn,
+                    event_type="native_push.test",
+                    category="personal",
+                    actor=actor,
+                    target_type="user_notification",
+                    target_id=notification.get("id"),
+                    summary="Tested native iOS push delivery",
+                    metadata={"delivery": delivery},
+                )
+            return response(
+                {
+                    "status": "ok" if delivery.get("status") in {"sent", "no_devices"} else "degraded",
+                    "notification": notification,
+                    "delivery": delivery,
+                    "nativePush": native_push_status_payload(conn, user_id),
                     "counts": notification_counts(conn, user_id),
                 }
             )
@@ -44084,6 +44802,314 @@ def register_routes(flask_app: Flask) -> None:
                 "groupId": str(group_uuid),
             }
         )
+
+    @flask_app.get("/api/next/movies/<movie_id>/library-actions")
+    def movie_library_actions(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.view")
+            targets = movie_library_action_targets(conn, movie_uuid, actor)
+        return response({"status": "ok", "actions": targets})
+
+    @flask_app.post("/api/next/movies/<movie_id>/containers/<container_id>")
+    def add_movie_to_container(movie_id: str, container_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        container_uuid = parse_uuid(container_id, "containerId")
+        if not movie_uuid or not container_uuid:
+            raise NextApiError("movieId and containerId are required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not table_exists(conn, "container_movies"):
+                raise NextApiError("Container movie links are not available yet", 503)
+            require_existing_movie_ids(conn, [movie_uuid])
+            container_type = container_type_for_id(conn, container_uuid)
+            if container_type not in {"box_set", "vault"}:
+                raise NextApiError("Target container must be a box-set or vault", 400)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM container_movies WHERE container_id=%s",
+                        (container_uuid,),
+                    )
+                    sort_order = int(cur.fetchone()["max_sort"]) + 1
+                    cur.execute(
+                        """
+                        INSERT INTO container_movies (container_id, movie_id, sort_order, created_at)
+                        VALUES (%s, %s, %s, now())
+                        ON CONFLICT (container_id, movie_id) DO NOTHING
+                        """,
+                        (container_uuid, movie_uuid, sort_order),
+                    )
+                    changed = cur.rowcount
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+                audit_event(
+                    conn,
+                    event_type="container.movie_added",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary="Added movie to container",
+                    metadata={"movieId": str(movie_uuid), "containerType": container_type, "changed": changed},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "operation": "add",
+                    "changed": changed,
+                    "movieId": str(movie_uuid),
+                    "containerId": str(container_uuid),
+                    "containerType": container_type,
+                    "detail": container_detail_entity(conn, container_uuid),
+                    "actions": movie_library_action_targets(conn, movie_uuid, actor),
+                }
+            )
+
+    @flask_app.delete("/api/next/movies/<movie_id>/containers/<container_id>")
+    def remove_movie_from_container(movie_id: str, container_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        container_uuid = parse_uuid(container_id, "containerId")
+        if not movie_uuid or not container_uuid:
+            raise NextApiError("movieId and containerId are required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not table_exists(conn, "container_movies"):
+                raise NextApiError("Container movie links are not available yet", 503)
+            container_type = container_type_for_id(conn, container_uuid)
+            if container_type not in {"box_set", "vault"}:
+                raise NextApiError("Target container must be a box-set or vault", 400)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM container_movies WHERE container_id=%s AND movie_id=%s",
+                        (container_uuid, movie_uuid),
+                    )
+                    changed = cur.rowcount
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+                audit_event(
+                    conn,
+                    event_type="container.movie_removed",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary="Removed movie from container",
+                    metadata={"movieId": str(movie_uuid), "containerType": container_type, "changed": changed},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "operation": "remove",
+                    "changed": changed,
+                    "movieId": str(movie_uuid),
+                    "containerId": str(container_uuid),
+                    "containerType": container_type,
+                    "detail": container_detail_entity(conn, container_uuid),
+                    "actions": movie_library_action_targets(conn, movie_uuid, actor),
+                }
+            )
+
+    @flask_app.post("/api/next/movies/<movie_id>/collections/<collection_id>")
+    def add_movie_to_collection(movie_id: str, collection_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        collection_uuid = parse_uuid(collection_id, "collectionId")
+        if not movie_uuid or not collection_uuid:
+            raise NextApiError("movieId and collectionId are required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
+            if not table_exists(conn, "collection_items"):
+                raise NextApiError("Collection items are not available yet", 503)
+            require_existing_movie_ids(conn, [movie_uuid])
+            if container_type_for_id(conn, collection_uuid) != "collection":
+                raise NextApiError("Target container must be a collection", 400)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM collection_items WHERE collection_id=%s",
+                        (collection_uuid,),
+                    )
+                    sort_order = int(cur.fetchone()["max_sort"]) + 1
+                    cur.execute(
+                        """
+                        INSERT INTO collection_items (collection_id, item_type, item_id, sort_order, created_at)
+                        VALUES (%s, 'movie', %s, %s, now())
+                        ON CONFLICT (collection_id, item_type, item_id) DO NOTHING
+                        """,
+                        (collection_uuid, movie_uuid, sort_order),
+                    )
+                    changed = cur.rowcount
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_uuid,))
+                audit_event(
+                    conn,
+                    event_type="collection.movie_added",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=collection_uuid,
+                    summary="Added movie to collection",
+                    metadata={"movieId": str(movie_uuid), "changed": changed},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "operation": "add",
+                    "changed": changed,
+                    "movieId": str(movie_uuid),
+                    "collectionId": str(collection_uuid),
+                    "detail": container_detail_entity(conn, collection_uuid),
+                    "actions": movie_library_action_targets(conn, movie_uuid, actor),
+                }
+            )
+
+    @flask_app.delete("/api/next/movies/<movie_id>/collections/<collection_id>")
+    def remove_movie_from_collection(movie_id: str, collection_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        collection_uuid = parse_uuid(collection_id, "collectionId")
+        if not movie_uuid or not collection_uuid:
+            raise NextApiError("movieId and collectionId are required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
+            if not table_exists(conn, "collection_items"):
+                raise NextApiError("Collection items are not available yet", 503)
+            if container_type_for_id(conn, collection_uuid) != "collection":
+                raise NextApiError("Target container must be a collection", 400)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        DELETE FROM collection_items
+                        WHERE collection_id=%s AND item_type='movie' AND item_id=%s
+                        """,
+                        (collection_uuid, movie_uuid),
+                    )
+                    changed = cur.rowcount
+                    cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_uuid,))
+                audit_event(
+                    conn,
+                    event_type="collection.movie_removed",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=collection_uuid,
+                    summary="Removed movie from collection",
+                    metadata={"movieId": str(movie_uuid), "changed": changed},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "operation": "remove",
+                    "changed": changed,
+                    "movieId": str(movie_uuid),
+                    "collectionId": str(collection_uuid),
+                    "detail": container_detail_entity(conn, collection_uuid),
+                    "actions": movie_library_action_targets(conn, movie_uuid, actor),
+                }
+            )
+
+    @flask_app.post("/api/next/movies/<movie_id>/media-groups/<group_id>")
+    def add_movie_to_media_group(movie_id: str, group_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        group_uuid = parse_uuid(group_id, "groupId")
+        if not movie_uuid or not group_uuid:
+            raise NextApiError("movieId and groupId are required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.invite")
+            if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
+                if not cur.fetchone():
+                    raise NextApiError("Media group not found", 404)
+            if not can_manage_media_group_members(conn, group_uuid, actor):
+                raise NextApiError("Media group manager access required", 403)
+            require_existing_movie_ids(conn, [movie_uuid])
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO media_group_movies (group_id, movie_id, metadata, created_at, updated_at)
+                        VALUES (%s, %s, '{}'::jsonb, now(), now())
+                        ON CONFLICT (group_id, movie_id) DO NOTHING
+                        """,
+                        (group_uuid, movie_uuid),
+                    )
+                    changed = cur.rowcount
+                    cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
+                audit_event(
+                    conn,
+                    event_type="group.movie_added",
+                    category="admin",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary="Added movie to media group",
+                    metadata={"movieId": str(movie_uuid), "changed": changed},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "operation": "add",
+                    "changed": changed,
+                    "movieId": str(movie_uuid),
+                    "groupId": str(group_uuid),
+                    "group": media_group_detail_entity(conn, group_uuid),
+                    "actions": movie_library_action_targets(conn, movie_uuid, actor),
+                }
+            )
+
+    @flask_app.delete("/api/next/movies/<movie_id>/media-groups/<group_id>")
+    def remove_movie_from_media_group(movie_id: str, group_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        group_uuid = parse_uuid(group_id, "groupId")
+        if not movie_uuid or not group_uuid:
+            raise NextApiError("movieId and groupId are required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.invite")
+            if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
+                if not cur.fetchone():
+                    raise NextApiError("Media group not found", 404)
+            if not can_manage_media_group_members(conn, group_uuid, actor):
+                raise NextApiError("Media group manager access required", 403)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM media_group_movies WHERE group_id=%s AND movie_id=%s",
+                        (group_uuid, movie_uuid),
+                    )
+                    changed = cur.rowcount
+                    cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
+                audit_event(
+                    conn,
+                    event_type="group.movie_removed",
+                    category="admin",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary="Removed movie from media group",
+                    metadata={"movieId": str(movie_uuid), "changed": changed},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "operation": "remove",
+                    "changed": changed,
+                    "movieId": str(movie_uuid),
+                    "groupId": str(group_uuid),
+                    "group": media_group_detail_entity(conn, group_uuid),
+                    "actions": movie_library_action_targets(conn, movie_uuid, actor),
+                }
+            )
 
     @flask_app.post("/api/next/containers")
     def create_container():
