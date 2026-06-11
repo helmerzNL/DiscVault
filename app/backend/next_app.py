@@ -44323,11 +44323,7 @@ def register_routes(flask_app: Flask) -> None:
                             "publicKey": push_public_key,
                             "subject": push_subject,
                         },
-                        "nativePush": {
-                            "available": False,
-                            "provider": "apns",
-                            "status": "planned",
-                        },
+                        "nativePush": native_push_status_payload(conn, user_id),
                     },
                     "localization": {
                         "sourceLocale": NEXT_I18N_SOURCE_LOCALE,
@@ -44991,93 +44987,6 @@ def register_routes(flask_app: Flask) -> None:
             with conn.transaction():
                 preferences = set_app_user_preferences(conn, user["id"], updates)
         return response({"status": "ok", "preferences": preferences, "userScoped": True, "updated": True})
-
-    @flask_app.get("/api/next/mobile/bootstrap")
-    def next_mobile_bootstrap():
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Mobile bootstrap requires a signed-in user", 401)
-            public_key, _ = get_or_create_push_vapid_keys(conn)
-            token_permissions = sorted(actor_api_token_permission_keys(actor) or [])
-            role_permissions = sorted(str(item) for item in (actor.get("permissions") or []))
-            effective_permissions = [
-                permission_key
-                for permission_key in role_permissions
-                if actor_has_effective_permission(actor, permission_key)
-            ]
-            if actor.get("role") == "owner" and not effective_permissions:
-                effective_permissions = ["*"]
-            capabilities = {
-                "collection": actor_has_effective_permission(actor, "collection.view"),
-                "import": actor_has_any_effective_permission(
-                    actor,
-                    ("collection.import", "collection.add", "collection.add_own", "metadata.search"),
-                ),
-                "metadata": actor_has_any_effective_permission(
-                    actor,
-                    ("metadata.search", "metadata.refresh_one", "metadata.refresh_bulk"),
-                ),
-                "containers": actor_has_any_effective_permission(actor, ("containers.view", "containers.edit")),
-                "groups": actor_has_any_effective_permission(actor, ("groups.view", "groups.invite")),
-                "personalLists": actor_has_any_effective_permission(actor, ("watchlist.manage", "collection.view")),
-                "api": actor_has_any_effective_permission(actor, ("api.read", "api.write", "api.tokens.manage")),
-                "mcp": actor_has_effective_permission(actor, "mcp.use"),
-                "offlineSync": actor_has_effective_permission(actor, "collection.view"),
-            }
-            return response(
-                {
-                    "status": "ok",
-                    "user": {
-                        "id": actor.get("id"),
-                        "username": actor.get("username"),
-                        "displayName": actor.get("display_name") or actor.get("displayName"),
-                        "firstName": actor.get("first_name") or actor.get("firstName"),
-                        "lastName": actor.get("last_name") or actor.get("lastName"),
-                        "role": actor.get("role"),
-                    },
-                    "auth": {
-                        "role": actor.get("role"),
-                        "tokenPermissionKeys": token_permissions,
-                        "effectivePermissionKeys": effective_permissions,
-                    },
-                    "capabilities": capabilities,
-                    "preferences": {
-                        "values": app_effective_preferences(conn, user_id),
-                        "defaults": APP_PREFERENCE_DEFAULTS,
-                        "sections": ["appearance", "library", "collectors"],
-                    },
-                    "notifications": {
-                        "counts": notification_counts(conn, user_id),
-                        "preferences": notification_preference_map(conn, user_id),
-                        "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
-                        "webPush": {
-                            "available": table_exists(conn, "push_subscriptions"),
-                            "publicKey": public_key,
-                            "subject": push_vapid_subject(),
-                            "status": "available" if table_exists(conn, "push_subscriptions") else "unavailable",
-                        },
-                        "nativePush": native_push_status_payload(conn, user_id),
-                    },
-                    "localization": {
-                        "locales": [
-                            {"code": "en-US", "displayName": "English", "flag": "US"},
-                            {"code": "nl-NL", "displayName": "Nederlands", "flag": "NL"},
-                        ]
-                    },
-                    "endpoints": {
-                        "syncBootstrap": "/api/next/sync/bootstrap",
-                        "notifications": "/api/next/notifications",
-                        "notificationPreferences": "/api/next/push/preferences",
-                        "pushStatus": "/api/next/push/status",
-                        "nativePushStatus": "/api/next/push/native/status",
-                        "nativePushRegister": "/api/next/push/native/register",
-                        "nativePushTest": "/api/next/push/native/test",
-                        "metadataLookup": "/api/next/metadata/lookup",
-                    },
-                }
-            )
 
     @flask_app.get("/api/next/push/status")
     def next_push_status():
