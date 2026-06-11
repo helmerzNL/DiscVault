@@ -1,6 +1,8 @@
 import os
 import sys
 import unittest
+from datetime import datetime, timezone
+from uuid import uuid4
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -45,6 +47,55 @@ class NextMcpActivityHelperTests(unittest.TestCase):
         app = Flask(__name__)
         with app.test_request_context("/mcp"):
             self.assertEqual(next_mcp_activity.mcp_request_api_token_value(), "")
+
+    def test_activity_log_entry_maps_audit_metadata(self):
+        created_at = datetime(2026, 6, 11, 9, 12, 33, tzinfo=timezone.utc)
+        entry = next_mcp_activity.mcp_activity_log_entry(
+            {
+                "id": uuid4(),
+                "event_type": "mcp.request",
+                "category": "mcp",
+                "summary": "MCP search_collection -> 200",
+                "metadata": {
+                    "apiTokenName": "Hermes MCP",
+                    "agent": "python-requests/2.34.2",
+                    "mcpTools": ["search_collection"],
+                    "method": "POST",
+                    "mcpPath": "/mcp",
+                    "responseStatus": 200,
+                },
+                "user_agent": "python-requests/2.34.2",
+                "created_at": created_at,
+            }
+        )
+        self.assertEqual(entry["timestamp"], created_at)
+        self.assertEqual(entry["level"], "info")
+        self.assertEqual(entry["source"], "mcp")
+        self.assertEqual(entry["client"], "Hermes MCP")
+        self.assertEqual(entry["user_agent"], "python-requests/2.34.2")
+        self.assertEqual(entry["tool_name"], "search_collection")
+        self.assertEqual(entry["method"], "POST")
+        self.assertEqual(entry["path"], "/mcp")
+
+    def test_activity_log_filter_recognizes_ios_clients(self):
+        self.assertTrue(
+            next_mcp_activity.mcp_activity_log_is_ios(
+                {
+                    "source": "mcp",
+                    "client": "DiscVault iOS",
+                    "user_agent": "DiscVault/iOS 1.0",
+                }
+            )
+        )
+        self.assertFalse(
+            next_mcp_activity.mcp_activity_log_is_ios(
+                {
+                    "source": "mcp",
+                    "client": "Hermes MCP",
+                    "user_agent": "python-requests/2.34.2",
+                }
+            )
+        )
 
 
 if __name__ == "__main__":
