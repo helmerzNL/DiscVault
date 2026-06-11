@@ -105,6 +105,21 @@ class NextAuditHelperTests(unittest.TestCase):
         self.assertEqual(details["ip"], "8.8.8.8")
         self.assertEqual(details["source"], "X-Forwarded-For[0]")
 
+    def test_public_request_ip_prefers_discvault_forwarded_client_ip(self):
+        app = Flask(__name__)
+
+        with app.test_request_context(
+            "/api/next/mcp/catalog",
+            headers={"X-DiscVault-Client-IP": "8.8.4.4", "X-Forwarded-For": "8.8.8.8"},
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            details = next_audit.request_ip_details()
+            selected = next_audit.public_request_ip()
+
+        self.assertEqual(selected, "8.8.4.4")
+        self.assertEqual(details["ip"], "8.8.4.4")
+        self.assertEqual(details["source"], "X-DiscVault-Client-IP")
+
     def test_api_audit_metadata_includes_command_and_request_ip(self):
         app = Flask(__name__)
         actor = {"apiToken": {"id": "tok-1", "name": "MCP", "scopes": ["mcp"], "permissionKeys": ["mcp.use"]}}

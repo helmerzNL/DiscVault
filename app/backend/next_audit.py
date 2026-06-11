@@ -148,6 +148,7 @@ def request_ip_details() -> dict[str, Any]:
         )
 
     for header in (
+        "X-DiscVault-Client-IP",
         "CF-Connecting-IP",
         "True-Client-IP",
         "Fastly-Client-IP",
