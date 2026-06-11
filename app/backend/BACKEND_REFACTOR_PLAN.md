@@ -45,7 +45,11 @@ unnecessarily risky.
   called from `register_routes()` in `next_app.py` and re-exported for
   backward compatibility.
 - [x] Step 5: Split people and native filmography into `next_people.py`.
-- [ ] Step 6: Split settings, preferences, notifications, and push/PWA.
+- [x] Step 6: Split settings, preferences, notifications, and push/PWA into
+  `next_preferences.py`, `next_notifications.py`, and `next_push.py` with
+  compatibility re-exports in `next_app.py` and route registration via
+  `register_next_preferences_routes`, `register_next_notifications_routes`, and
+  `register_next_push_routes`.
 - [ ] Step 7: Split collection movies, containers, and media groups.
 - [ ] Step 8: Split import, migration, metadata, and plugin operations.
 - [ ] Step 9: Split server-rendered dashboard/detail HTML views.
@@ -80,9 +84,12 @@ package layout below describes the logical grouping rather than a literal path:
 - `next/mcp.py`: MCP proxy, MCP catalog audit helpers, and MCP diagnostics.
 - `next/people.py`: person detail, localizations, credits, biography,
   filmography hydration, and native people payloads.
-- `next/preferences.py`: app preferences, notification preferences, and mobile
-  capability contract payloads.
-- `next/notifications.py`: notification counts, rows, creation, and push send.
+- `next_preferences.py`: app preferences, mobile capability contract payloads,
+  and preferences/mobile route registration.
+- `next_notifications.py`: notification preference map, counts, rows, creation,
+  and notifications route registration.
+- `next_push.py`: push VAPID + subscription/native delivery helpers, PWA
+  manifest/head/asset helpers, and push/PWA route registration.
 - `next/collection.py`: movies, identifiers, credits, personal lists, digital
   availability, and collection snapshots.
 - `next/containers.py`: containers, memberships, aggregate members, receiver
