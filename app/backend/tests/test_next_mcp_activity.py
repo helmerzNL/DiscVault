@@ -56,13 +56,20 @@ class NextMcpActivityHelperTests(unittest.TestCase):
                 "event_type": "mcp.request",
                 "category": "mcp",
                 "summary": "MCP search_collection -> 200",
+                "request_ip": "203.0.113.42",
                 "metadata": {
                     "apiTokenName": "Hermes MCP",
+                    "apiTokenScopes": ["read", "mcp"],
                     "agent": "python-requests/2.34.2",
                     "mcpTools": ["search_collection"],
                     "method": "POST",
                     "mcpPath": "/mcp",
+                    "mcpSessionId": "session-secret",
                     "responseStatus": 200,
+                    "request": {
+                        "params": {"name": "search_collection", "arguments": {"query": "Indiana Jones"}},
+                        "headers": {"authorization": "Bearer secret"},
+                    },
                 },
                 "user_agent": "python-requests/2.34.2",
                 "created_at": created_at,
@@ -70,12 +77,22 @@ class NextMcpActivityHelperTests(unittest.TestCase):
         )
         self.assertEqual(entry["timestamp"], created_at)
         self.assertEqual(entry["level"], "info")
+        self.assertEqual(entry["event"], "tool_call.completed")
         self.assertEqual(entry["source"], "mcp")
         self.assertEqual(entry["client"], "Hermes MCP")
+        self.assertEqual(entry["agent"], "python-requests/2.34.2")
         self.assertEqual(entry["user_agent"], "python-requests/2.34.2")
+        self.assertEqual(entry["ip_address"], "203.0.113.42")
         self.assertEqual(entry["tool_name"], "search_collection")
         self.assertEqual(entry["method"], "POST")
         self.assertEqual(entry["path"], "/mcp")
+        self.assertEqual(entry["metadata"]["status_code"], 200)
+        self.assertEqual(entry["metadata"]["transport"], "http")
+        self.assertEqual(entry["metadata"]["session_id"], "[REDACTED]")
+        self.assertEqual(entry["metadata"]["input"]["headers"]["authorization"], "[REDACTED]")
+        self.assertEqual(entry["metadata"]["input"]["params"]["arguments"]["query"], "Indiana Jones")
+        self.assertEqual(entry["metadata"]["tools"], ["search_collection"])
+        self.assertEqual(entry["metadata"]["api_token_name"], "Hermes MCP")
 
     def test_activity_log_filter_recognizes_ios_clients(self):
         self.assertTrue(
