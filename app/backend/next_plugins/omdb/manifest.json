@@ -1,0 +1,31 @@
+{
+  "id": "omdb",
+  "name": "OMDb",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["metadata_source"],
+  "capabilities": [
+    "search_title",
+    "lookup_external_id",
+    "movie_details",
+    "ratings"
+  ],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "secrets": [
+      {
+        "name": "apiKey",
+        "label": "OMDb API key",
+        "type": "password",
+        "required": true,
+        "description": "OMDb API key used for ratings and external-id lookups."
+      }
+    ]
+  },
+  "orderIndex": 20,
+  "entitlements": {
+    "source_use": "metadata.source.omdb.use"
+  }
+}

@@ -593,5 +593,121 @@ class MovieVaultZeroConfigTests(unittest.TestCase):
         self.assertEqual(self.mv.get_movievault_api_token(), "mv_recovered_token")
 
 
+class MovieVaultNextConnectionRoutingTests(unittest.TestCase):
+    def setUp(self):
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        if importlib.util.find_spec("cryptography") is None:
+            raise unittest.SkipTest("cryptography dependency is not installed")
+        self.nvc = importlib.import_module("app.backend.next_movievault_connection")
+        self.originals = {}
+
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        private_key = Ed25519PrivateKey.generate()
+        private_key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("ascii")
+        self.private_key_pair = (private_key_pem, "public_test", "dvpk_local_test")
+
+    def tearDown(self):
+        for name, value in self.originals.items():
+            setattr(self.nvc, name, value)
+
+    def patch(self, name, value):
+        self.originals.setdefault(name, getattr(self.nvc, name))
+        setattr(self.nvc, name, value)
+
+    def response(self, status_code, payload):
+        return self.nvc._HttpJsonResponse(status_code, json.dumps(payload).encode("utf-8"))
+
+    def patch_common_connection_helpers(self, stored, settings):
+        self.patch("_instance_key_pair", lambda _conn: self.private_key_pair)
+        self.patch(
+            "_connection_payload",
+            lambda _conn: {
+                "instanceId": "dv_test",
+                "instanceName": "DiscVault Test",
+                "instanceVersion": "26-test",
+                "software": {"name": "DiscVault", "version": "26-test"},
+                "requestedScopes": ["search:read"],
+            },
+        )
+        self.patch("_ingest_url", lambda _conn: "https://movies.example.test")
+        self.patch("_delete_token", lambda _conn: settings.append(("delete_token", None)))
+        self.patch("_set_setting", lambda _conn, key, value, **_kwargs: settings.append((key, value)))
+
+        def fake_store(_conn, data, **kwargs):
+            stored.append((data, kwargs))
+            settings.append((self.nvc.LINK_STATUS_KEY, "active"))
+            return data
+
+        self.patch("_store_token_response", fake_store)
+
+    def test_next_recovery_falls_back_to_bootstrap_when_plugin_requires_bootstrap(self):
+        calls = []
+        stored = []
+        settings = []
+
+        def fake_post(url, raw_body, headers):
+            if url.endswith(self.nvc.HANDSHAKE_PATH):
+                calls.append("handshake")
+                return self.response(
+                    400,
+                    {"error": {"code": "validation_error", "message": "DiscVault instance is not linked; bootstrap is required"}},
+                )
+            if url.endswith(self.nvc.BOOTSTRAP_PATH):
+                calls.append("bootstrap")
+                return self.response(
+                    201,
+                    {"client": {"apiToken": "mv_bootstrap_token", "tokenPrefix": "mv_boot", "scopes": ["search:read"]}},
+                )
+            self.fail(f"unexpected url {url}")
+
+        self.patch_common_connection_helpers(stored, settings)
+        self.patch("_post_json", fake_post)
+
+        self.nvc._recover("conn", plugin_id=self.nvc.MOVIEVAULT_NEXT_PLUGIN_ID)
+
+        self.assertEqual(calls, ["handshake", "bootstrap"])
+        self.assertEqual(stored[0][0]["client"]["apiToken"], "mv_bootstrap_token")
+        self.assertEqual(stored[0][1]["source"], "bootstrap")
+        self.assertIn((self.nvc.LINK_STATUS_KEY, "active"), settings)
+
+    def test_next_bootstrap_falls_back_to_recovery_when_plugin_requires_recovery(self):
+        calls = []
+        stored = []
+        settings = []
+
+        def fake_post(url, raw_body, headers):
+            if url.endswith(self.nvc.BOOTSTRAP_PATH):
+                calls.append("bootstrap")
+                return self.response(
+                    400,
+                    {"error": {"code": "validation_error", "message": "DiscVault instance is already linked; use signed recovery"}},
+                )
+            if url.endswith(self.nvc.HANDSHAKE_PATH):
+                calls.append("handshake")
+                return self.response(
+                    201,
+                    {"client": {"apiToken": "mv_recovery_token", "tokenPrefix": "mv_rec", "scopes": ["search:read"]}},
+                )
+            self.fail(f"unexpected url {url}")
+
+        self.patch_common_connection_helpers(stored, settings)
+        self.patch("_post_json", fake_post)
+
+        self.nvc._bootstrap("conn", plugin_id=self.nvc.MOVIEVAULT_NEXT_PLUGIN_ID)
+
+        self.assertEqual(calls, ["bootstrap", "handshake"])
+        self.assertEqual(stored[0][0]["client"]["apiToken"], "mv_recovery_token")
+        self.assertEqual(stored[0][1]["source"], "handshake")
+        self.assertIn((self.nvc.LINK_STATUS_KEY, "active"), settings)
+
+
 if __name__ == "__main__":
     unittest.main()

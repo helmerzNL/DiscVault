@@ -1,0 +1,32 @@
+{
+  "id": "discvault_api",
+  "name": "DiscVault API Access",
+  "version": "1.1.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "kind": "api",
+  "categories": ["system", "api"],
+  "capabilities": [
+    "api_read",
+    "api_write",
+    "api_tokens",
+    "metadata_search",
+    "collection_add",
+    "collection_import"
+  ],
+  "defaultEnabled": true,
+  "orderIndex": 920,
+  "requiresSecrets": false,
+  "systemPlugin": true,
+  "deletable": false,
+  "entitlements": {
+    "read": "api.read",
+    "write": "api.write",
+    "tokens": "api.tokens.manage",
+    "metadataSearch": "metadata.search",
+    "collectionAdd": "collection.add",
+    "collectionImport": "collection.import"
+  },
+  "settingsSchema": {},
+  "settingsSchemaVersion": 1
+}
