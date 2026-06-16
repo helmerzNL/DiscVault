@@ -50,6 +50,8 @@ REVIEW_LOGIN_TOKEN_PERMISSIONS = (
     "containers.view",
     "groups.view",
     "metadata.search",
+    "metadata.refresh_one",
+    "metadata.refresh_bulk",
 )
 MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "api.read",
