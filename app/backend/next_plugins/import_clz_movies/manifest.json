@@ -1,0 +1,30 @@
+{
+  "id": "import_clz_movies",
+  "name": "CLZ Movies Web Import",
+  "version": "1.2.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["import_source"],
+  "capabilities": ["inspect_source", "plan_import", "import_source"],
+  "defaultEnabled": false,
+  "requiresSecrets": false,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "sourcePath",
+        "label": "CLZ Movies export path",
+        "type": "text",
+        "required": false,
+        "placeholder": "/data/import/clz_movies",
+        "description": "Directory or file containing CLZ Movies Web CSV, XML or JSON exports."
+      }
+    ],
+    "secrets": []
+  },
+  "orderIndex": 240,
+  "entitlements": {
+    "inspect": "import.source.clz_movies.inspect",
+    "import": "import.source.clz_movies.import"
+  }
+}

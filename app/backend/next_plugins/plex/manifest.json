@@ -1,0 +1,51 @@
+{
+  "id": "plex",
+  "name": "Plex",
+  "version": "1.0.1",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["digital_media_source", "personal_list_source"],
+  "capabilities": [
+    "discover_library",
+    "sync_library",
+    "playback_deeplink",
+    "sync_personal_lists"
+  ],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "baseUrl",
+        "label": "Server URL",
+        "type": "url",
+        "required": true,
+        "placeholder": "https://plex.example",
+        "description": "Plex server URL reachable by the DiscVault container."
+      },
+      {
+        "name": "libraryIds",
+        "label": "Library IDs",
+        "type": "array",
+        "required": false,
+        "placeholder": "1, 2",
+        "description": "Optional comma-separated Plex movie library section ids."
+      }
+    ],
+    "secrets": [
+      {
+        "name": "token",
+        "label": "Plex token",
+        "type": "password",
+        "required": true,
+        "description": "Plex token used for library discovery and sync."
+      }
+    ]
+  },
+  "orderIndex": 110,
+  "entitlements": {
+    "connect": "digital_source.plex.connect",
+    "sync": "digital_source.plex.sync",
+    "personal_sync": "personal_list.plex.sync"
+  }
+}

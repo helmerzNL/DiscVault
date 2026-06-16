@@ -1,0 +1,30 @@
+{
+  "id": "import_bluray_com",
+  "name": "Blu-ray.com Import",
+  "version": "1.2.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["import_source"],
+  "capabilities": ["inspect_source", "plan_import", "import_source"],
+  "defaultEnabled": false,
+  "requiresSecrets": false,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "sourcePath",
+        "label": "Blu-ray.com export path",
+        "type": "text",
+        "required": false,
+        "placeholder": "/data/import/bluray_com",
+        "description": "Directory or file containing Blu-ray.com collection CSV, TSV, XML or JSON exports."
+      }
+    ],
+    "secrets": []
+  },
+  "orderIndex": 230,
+  "entitlements": {
+    "inspect": "import.source.bluray_com.inspect",
+    "import": "import.source.bluray_com.import"
+  }
+}

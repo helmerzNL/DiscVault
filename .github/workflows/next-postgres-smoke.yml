@@ -1,0 +1,439 @@
+name: DiscVault Next PostgreSQL Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release/v26-dev
+      - release/v26-beta
+      - release/v26
+    paths:
+      - ".github/workflows/next-postgres-smoke.yml"
+      - "app/backend/next_database.py"
+      - "app/backend/next_import.py"
+      - "app/backend/next_app.py"
+      - "app/backend/next_auth.py"
+      - "app/backend/next_plugin_runtime.py"
+      - "app/backend/next_plugins/**"
+      - "app/backend/next_worker.py"
+      - "app/backend/migrations_next/**"
+      - "app/backend/requirements.txt"
+
+jobs:
+  postgres-smoke:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: discvault_next
+          POSTGRES_USER: discvault_next
+          POSTGRES_PASSWORD: discvault_next_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U discvault_next -d discvault_next"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://discvault_next:discvault_next_dev@localhost:5432/discvault_next
+
+    defaults:
+      run:
+        working-directory: app/backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install backend requirements
+        run: python -m pip install -r requirements.txt
+
+      - name: Compile Next tooling
+        run: python -m py_compile next_database.py next_import.py next_app.py next_auth.py next_plugin_runtime.py next_worker.py
+
+      - name: Apply Next migrations
+        run: python next_database.py migrate
+
+      - name: Show migration status
+        run: python next_database.py status
+
+      - name: Create minimal legacy SQLite fixture
+        run: |
+          python - <<'PY'
+          import os
+          import sqlite3
+          from pathlib import Path
+
+          fixture_dir = Path(os.environ["RUNNER_TEMP"]) / "discvault-import-fixture"
+          fixture_dir.mkdir(parents=True, exist_ok=True)
+          db_path = fixture_dir / "discvault.db"
+          conn = sqlite3.connect(db_path)
+          conn.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)")
+          conn.execute(
+              "INSERT INTO settings (key, value) VALUES (?, ?)",
+              ("tmdb_enabled", "true"),
+          )
+          conn.commit()
+          conn.close()
+          print(db_path)
+          PY
+
+      - name: Dry-run legacy import fixture
+        run: python next_import.py --db "$RUNNER_TEMP/discvault-import-fixture/discvault.db" --data-dir "$RUNNER_TEMP/discvault-import-fixture" --dry-run
+
+      - name: Import legacy fixture
+        run: python next_import.py --db "$RUNNER_TEMP/discvault-import-fixture/discvault.db" --data-dir "$RUNNER_TEMP/discvault-import-fixture" --skip-media
+
+      - name: Smoke Next API endpoints
+        run: |
+          python - <<'PY'
+          from next_app import app
+
+          client = app.test_client()
+          for path in (
+              "/api/next/health",
+              "/api/next/stats",
+              "/api/next/settings",
+              "/api/next/digital-sources",
+              "/api/next/digital-items",
+              "/api/next/plugins/registry",
+              "/api/next/metadata/plugins",
+              "/api/next/movies",
+              "/api/next/containers",
+              "/api/next/sync/state",
+              "/api/next/sync/bootstrap",
+              "/api/next/sync/delta?since=0",
+              "/api/next/jobs",
+          ):
+              response = client.get(path)
+              assert response.status_code == 200, (path, response.status_code, response.data[:500])
+              payload = response.get_json()
+              assert payload["status"] == "ok", (path, payload)
+              print(path, payload["status"])
+
+          app_shell = client.get("/api/next/app")
+          assert app_shell.status_code == 200, app_shell.data[:500]
+          app_html = app_shell.get_data(as_text=True)
+          for marker in (
+              "id=\"adminView\"",
+              "data-app-admin-tab=\"roles\"",
+              "id=\"appAdminRolesList\"",
+              "id=\"appAdminPluginsList\"",
+              "data-app-admin-rbac-mode=\"advanced\"",
+          ):
+              assert marker in app_html, marker
+          print("/api/next/app", "admin-ui-ok")
+
+          mutation = {
+              "clientId": "ci-pwa-install",
+              "baseRevision": 0,
+              "mutations": [
+                  {
+                      "clientMutationId": "ci-movie-1",
+                      "entityType": "movie",
+                      "operation": "upsert",
+                      "clientEntityId": "local-movie-1",
+                      "payload": {
+                          "title": "Offline Test Movie",
+                          "year": "2026",
+                          "format": "4K UHD"
+                      }
+                  }
+              ]
+          }
+          first = client.post("/api/next/sync/mutations", json=mutation)
+          assert first.status_code == 200, first.data[:500]
+          first_payload = first.get_json()
+          assert first_payload["results"][0]["status"] == "applied", first_payload
+
+          replay = client.post("/api/next/sync/mutations", json=mutation)
+          assert replay.status_code == 200, replay.data[:500]
+          replay_payload = replay.get_json()
+          assert replay_payload["results"][0]["replayed"] is True, replay_payload
+
+          delta = client.get("/api/next/sync/delta?since=0")
+          delta_payload = delta.get_json()
+          assert delta_payload["changes"], delta_payload
+          print("/api/next/sync/mutations", "ok")
+
+          job_response = client.post(
+              "/api/next/jobs",
+              json={
+                  "jobType": "sync.noop",
+                  "payload": {"message": "CI worker smoke"}
+              },
+          )
+          assert job_response.status_code == 201, job_response.data[:500]
+          job_payload = job_response.get_json()
+          assert job_payload["job"]["status"] == "pending", job_payload
+          print("/api/next/jobs", "created", job_payload["job"]["id"])
+          PY
+
+      - name: Run Next worker once
+        run: python next_worker.py run-once --worker-id ci-worker
+
+      - name: Verify worker completed job
+        run: |
+          python - <<'PY'
+          from next_app import app
+
+          client = app.test_client()
+          response = client.get("/api/next/jobs?status=completed")
+          assert response.status_code == 200, response.data[:500]
+          payload = response.get_json()
+          assert payload["jobs"], payload
+          assert payload["jobs"][0]["jobType"] == "sync.noop", payload
+          assert payload["jobs"][0]["result"]["workerId"] == "ci-worker", payload
+          print("/api/next/jobs?status=completed", "ok")
+          PY
+
+      - name: Smoke passkey session cookie auth
+        run: |
+          python - <<'PY'
+          from uuid import uuid4
+
+          from psycopg.types.json import Jsonb
+
+          from next_app import app, connect
+          from next_auth import SESSION_COOKIE_NAME, _create_token
+
+          user_id = uuid4()
+          with connect() as conn:
+              with conn.transaction():
+                  with conn.cursor() as cur:
+                      cur.execute(
+                          """
+                          INSERT INTO users (id, username, display_name, status)
+                          VALUES (%s, 'ci-cookie-owner', 'CI Cookie Owner', 'active')
+                          """,
+                          (user_id,),
+                      )
+                      cur.execute(
+                          """
+                          INSERT INTO user_roles (user_id, role_id, scope_type, scope_id)
+                          SELECT %s, id, 'global', ''
+                          FROM roles
+                          WHERE key='owner'
+                          """,
+                          (user_id,),
+                      )
+                      cur.execute(
+                          """
+                          INSERT INTO passkey_credentials (
+                              id,
+                              user_id,
+                              public_key,
+                              sign_count,
+                              credential_name,
+                              transports
+                          )
+                          VALUES ('ci-cookie-passkey', %s, %s, 0, 'CI cookie passkey', %s)
+                          """,
+                          (user_id, b"fake-public-key", Jsonb([])),
+                      )
+                      cur.execute(
+                          """
+                          INSERT INTO app_settings (key, value, is_secret)
+                          VALUES ('auth_enabled', 'true'::jsonb, false)
+                          ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value
+                          """
+                      )
+
+          client = app.test_client()
+          token = _create_token(str(user_id), "ci-cookie-owner")
+          client.set_cookie(SESSION_COOKIE_NAME, token)
+          response = client.get("/api/next/plugins/registry")
+          assert response.status_code == 200, response.data[:500]
+          payload = response.get_json()
+          assert payload["status"] == "ok", payload
+          assert any(plugin["id"] == "movievault_26" for plugin in payload["plugins"]), payload
+          print("/api/next/plugins/registry", "session-cookie-ok")
+
+          update = client.patch("/api/next/plugins/plex", json={"enabled": True, "orderIndex": 105})
+          assert update.status_code == 200, update.data[:500]
+          update_payload = update.get_json()
+          plex = update_payload["plugin"]
+          assert plex["id"] == "plex", update_payload
+          assert plex["enabled"] is True, update_payload
+          assert plex["orderIndex"] == 105, update_payload
+          print("/api/next/plugins/plex", "admin-update-ok")
+
+          config = client.patch(
+              "/api/next/plugins/plex/config",
+              json={
+                  "settings": {"baseUrl": "https://plex.example"},
+                  "secrets": {"token": "ci-secret-token"},
+              },
+          )
+          assert config.status_code == 200, config.data[:500]
+          config_payload = config.get_json()
+          assert config_payload["config"]["settings"]["baseUrl"] == "https://plex.example", config_payload
+          assert config_payload["config"]["secretsConfigured"] is True, config_payload
+          assert "token" in config_payload["config"]["secretNames"], config_payload
+          assert "ci-secret-token" not in config.get_data(as_text=True), config_payload
+          print("/api/next/plugins/plex/config", "admin-config-ok")
+
+          health = client.get("/api/next/plugins/plex/health")
+          assert health.status_code == 200, health.data[:500]
+          health_payload = health.get_json()
+          assert health_payload["health"]["state"] in {"available", "configured"}, health_payload
+          print("/api/next/plugins/plex/health", "admin-health-ok")
+
+          execute = client.post(
+              "/api/next/plugins/plex/execute",
+              json={"entrypoint": "discover_library", "payload": {"dryRun": True}},
+          )
+          assert execute.status_code == 200, execute.data[:500]
+          execute_payload = execute.get_json()
+          assert execute_payload["execution"]["status"] == "ok", execute_payload
+          assert execute_payload["execution"]["result"]["connector"] == "plex", execute_payload
+          print("/api/next/plugins/plex/execute", "admin-execute-ok")
+
+          queued = client.post(
+              "/api/next/plugins/plex/jobs",
+              json={"entrypoint": "sync_library", "payload": {"dryRun": True}},
+          )
+          assert queued.status_code == 201, queued.data[:500]
+          queued_payload = queued.get_json()
+          assert queued_payload["job"]["jobType"] == "plugin.execute", queued_payload
+          assert "ci-secret-token" not in queued.get_data(as_text=True), queued_payload
+          print("/api/next/plugins/plex/jobs", "admin-queue-ok")
+
+          from next_worker import run_once
+
+          assert run_once("ci-worker") == 0
+          digital_sources = client.get("/api/next/digital-sources")
+          assert digital_sources.status_code == 200, digital_sources.data[:500]
+          digital_payload = digital_sources.get_json()
+          plex_source = next((item for item in digital_payload["items"] if item["plugin_id"] == "plex"), None)
+          assert plex_source is not None, digital_payload
+          assert plex_source["last_status"] == "configured", digital_payload
+          print("/api/next/digital-sources", "worker-persistence-ok")
+
+          with connect() as conn:
+              with conn.transaction():
+                  with conn.cursor() as cur:
+                      cur.execute(
+                          """
+                          INSERT INTO movies (public_id, title, sort_title, year, metadata)
+                          VALUES ('ci-digital-duplicate-movie', 'CI Digital Duplicate', 'CI Digital Duplicate', '2026', '{}'::jsonb)
+                          ON CONFLICT (public_id) DO UPDATE SET title=EXCLUDED.title
+                          RETURNING id
+                          """
+                      )
+                      duplicate_movie_id = cur.fetchone()["id"]
+                      cur.execute("SELECT id FROM digital_media_sources WHERE plugin_id='plex'")
+                      source_id = cur.fetchone()["id"]
+                      cur.execute("DELETE FROM digital_media_items WHERE source_id=%s", (source_id,))
+                      for index in (1, 2):
+                          cur.execute(
+                              """
+                              INSERT INTO digital_media_items (
+                                  source_id,
+                                  external_id,
+                                  media_type,
+                                  title,
+                                  year,
+                                  playback_url,
+                                  matched_movie_id,
+                                  metadata
+                              )
+                              VALUES (%s, %s, 'movie', 'CI Digital Duplicate', '2026', %s, %s, '{}'::jsonb)
+                              """,
+                              (
+                                  source_id,
+                                  f"ci-digital-duplicate-{index}",
+                                  f"https://jellyfin.example/web/index.html#!/details?id=duplicate-{index}",
+                                  duplicate_movie_id,
+                              ),
+                          )
+          duplicate_detail = client.get(f"/api/next/movies/{duplicate_movie_id}")
+          assert duplicate_detail.status_code == 200, duplicate_detail.data[:500]
+          duplicate_payload = duplicate_detail.get_json()
+          digital_items = duplicate_payload["detail"]["digitalItems"]
+          assert len(digital_items) == 1, duplicate_payload
+          assert digital_items[0]["variant_count"] == 2, duplicate_payload
+          duplicate_movies = client.get("/api/next/movies?q=CI%20Digital%20Duplicate&limit=1")
+          assert duplicate_movies.status_code == 200, duplicate_movies.data[:500]
+          assert duplicate_movies.get_json()["items"][0]["digital_count"] == 1, duplicate_movies.get_json()
+          print("/api/next/movies/<id>", "digital-dedupe-ok")
+
+          rbac = client.get("/api/next/auth/rbac")
+          assert rbac.status_code == 200, rbac.data[:500]
+          rbac_payload = rbac.get_json()
+          assert rbac_payload["mode"] == "basic", rbac_payload
+          assert any(role["key"] == "media_viewer" for role in rbac_payload["assignableRoles"]), rbac_payload
+          assert any(permission["key"] == "roles.manage" for permission in rbac_payload["permissions"]), rbac_payload
+          print("/api/next/auth/rbac", "basic-ok")
+
+          mode = client.patch("/api/next/auth/rbac", json={"mode": "advanced"})
+          assert mode.status_code == 200, mode.data[:500]
+          mode_payload = mode.get_json()
+          assert mode_payload["mode"] == "advanced", mode_payload
+          print("/api/next/auth/rbac", "advanced-ok")
+
+          custom = client.post(
+              "/api/next/auth/roles",
+              json={
+                  "key": "ci_curator",
+                  "name": "CI Curator",
+                  "description": "CI custom role",
+                  "permissions": ["collection.view", "metadata.search"],
+              },
+          )
+          assert custom.status_code == 201, custom.data[:500]
+          custom_payload = custom.get_json()
+          assert custom_payload["role"]["key"] == "ci_curator", custom_payload
+          assert custom_payload["role"]["system"] is False, custom_payload
+          assert custom_payload["role"]["permissions"] == ["collection.view", "metadata.search"], custom_payload
+          print("/api/next/auth/roles", "custom-create-ok")
+
+          patched_role = client.patch(
+              "/api/next/auth/roles/ci_curator",
+              json={"permissions": ["collection.view", "metadata.search", "watchlist.manage"]},
+          )
+          assert patched_role.status_code == 200, patched_role.data[:500]
+          patched_payload = patched_role.get_json()
+          assert "watchlist.manage" in patched_payload["role"]["permissions"], patched_payload
+          print("/api/next/auth/roles/ci_curator", "custom-patch-ok")
+
+          second_user_id = uuid4()
+          with connect() as conn:
+              with conn.transaction():
+                  with conn.cursor() as cur:
+                      cur.execute(
+                          """
+                          INSERT INTO users (id, username, display_name, status)
+                          VALUES (%s, 'ci-rbac-user', 'CI RBAC User', 'active')
+                          """,
+                          (second_user_id,),
+                      )
+          assigned = client.patch(f"/api/next/auth/users/{second_user_id}/role", json={"role": "ci_curator"})
+          assert assigned.status_code == 200, assigned.data[:500]
+          assert assigned.get_json()["user"]["role"] == "ci_curator", assigned.get_json()
+          print("/api/next/auth/users/<id>/role", "custom-assign-ok")
+
+          multi = client.patch(
+              f"/api/next/auth/users/{second_user_id}/roles",
+              json={"roles": ["ci_curator", "media_viewer"]},
+          )
+          assert multi.status_code == 200, multi.data[:500]
+          multi_roles = {role["key"] for role in multi.get_json()["user"]["roles"]}
+          assert {"ci_curator", "media_viewer"}.issubset(multi_roles), multi.get_json()
+          print("/api/next/auth/users/<id>/roles", "multi-assign-ok")
+
+          reassigned = client.patch(f"/api/next/auth/users/{second_user_id}/role", json={"role": "media_viewer"})
+          assert reassigned.status_code == 200, reassigned.data[:500]
+          deleted = client.delete("/api/next/auth/roles/ci_curator")
+          assert deleted.status_code == 200, deleted.data[:500]
+          print("/api/next/auth/roles/ci_curator", "custom-delete-ok")
+          PY
