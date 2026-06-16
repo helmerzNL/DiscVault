@@ -19001,7 +19001,8 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({username, password})
         });
-        if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+        authToken = payload.token || "";
+        if (authToken) localStorage.setItem("dv_next_token", authToken);
         const passwordInput = document.getElementById("appReviewPassword");
         if (passwordInput) passwordInput.value = "";
         setLoginMessage("Signed in.", "good");
