@@ -1698,6 +1698,12 @@ def register_next_auth_routes(
         ):
             raise next_api_error("Invalid credentials", 401)
 
+        mobile_flow_raw = body.get("mobile_flow") or body.get("mobileFlow")
+        mobile_flow = _parse_uuid(mobile_flow_raw)
+        if mobile_flow_raw and not mobile_flow:
+            raise next_api_error("mobile_flow is invalid", 400)
+
+        review_callback_url: str | None = None
         with connect() as conn:
             if not table_exists(conn, "users"):
                 raise next_api_error("Auth tables are not available", 503)
@@ -1777,6 +1783,39 @@ def register_next_auth_routes(
                         "expiresAt": expires_at.isoformat() if expires_at else None,
                     },
                 )
+                if mobile_flow:
+                    mobile_code = create_mobile_auth_code(
+                        conn,
+                        mobile_flow_id=mobile_flow,
+                        user_id=reviewer["id"],
+                    )
+                    review_callback_url = mobile_code["callbackUrl"]
+                    audit_event(
+                        conn,
+                        event_type="auth.mobile_code_issued",
+                        category="security",
+                        actor={
+                            "id": reviewer["id"],
+                            "username": reviewer["username"],
+                            "role": reviewer_role,
+                        },
+                        target_type="user",
+                        target_id=reviewer["id"],
+                        summary=f"Issued mobile one-time code for {reviewer['username']} via review login",
+                        metadata={"mobileFlowId": str(mobile_flow), "reviewLogin": True},
+                    )
+
+        if review_callback_url:
+            return response(
+                {
+                    "status": "ok",
+                    "callback_url": review_callback_url,
+                    "callbackUrl": review_callback_url,
+                    "token": token_payload["token"],
+                    "username": reviewer["username"],
+                    "role": reviewer_role,
+                }
+            )
 
         return response(
             {
