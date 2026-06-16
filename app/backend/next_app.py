@@ -18996,11 +18996,18 @@ def ui_preview_html(
       if (button) button.disabled = true;
       setLoginMessage("Signing in with username/password...");
       try {
+        const reviewBody = {username, password};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
         const payload = await apiJson("/api/next/auth/review/login", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({username, password})
+          body: JSON.stringify(reviewBody)
         });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
         if (payload.token) {
           localStorage.setItem("dv_next_token", payload.token);
           currentAuthStatus = Object.assign(currentAuthStatus || {}, {
@@ -31545,10 +31552,17 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       button.disabled = true;
       setAuthStatus("Signing in with username/password...", "info");
       try {
+        const reviewBody = {username, password};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
         const payload = await authJson("/api/next/auth/review/login", {
           method: "POST",
-          body: JSON.stringify({username, password})
+          body: JSON.stringify(reviewBody)
         });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
         authToken = payload.token || "";
         if (authToken) localStorage.setItem("dv_next_token", authToken);
         const passwordInput = document.getElementById("authReviewPassword");
