@@ -81,7 +81,7 @@ docker compose down
 Build from `app/`:
 
 ```bash
-docker build -t ghcr.io/helmerzNL/DiscVault:dev --build-arg BUILD_VERSION=dev .
+docker build -t ghcr.io/helmerznl/discvault:dev --build-arg BUILD_VERSION=dev .
 ```
 
 Run:
@@ -95,7 +95,7 @@ docker run -d \
   -e RP_ID=localhost \
   -e RP_ORIGIN=http://localhost:6080 \
   -v /mnt/user/appdata/discvault:/data \
-  ghcr.io/helmerzNL/DiscVault:dev
+  ghcr.io/helmerznl/discvault:dev
 ```
 
 ## Release flow

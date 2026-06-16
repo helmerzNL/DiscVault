@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DiscVault - Physical Disc Collection Manager</title>
+    <title>DiscVault 26 - Physical Disc Collection Manager</title>
     <meta
       name="description"
-      content="DiscVault helps you manage your 4K UHD, Blu-ray, and DVD collection with barcode scanning, optional MovieVault metadata enrichment, backups, and MCP integration."
+      content="DiscVault 26 is available now: a self-hosted 4K UHD, Blu-ray, and DVD collection manager with a new app shell, PostgreSQL foundation, plugins, migration tools, and richer library views."
     />
-    <meta property="og:title" content="DiscVault" />
+    <meta property="og:title" content="DiscVault 26" />
     <meta
       property="og:description"
-      content="A self-hosted physical disc collection manager for 4K UHD, Blu-ray, and DVD."
+      content="DiscVault 26 is available now, with a new app shell, plugins, PostgreSQL, migration tools, and richer collection views."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://discvault.eu" />
@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -37,6 +37,9 @@
         <span></span><span></span><span></span>
       </button>
       <nav class="site-nav" aria-label="Primary">
+        <a href="#discvault26" data-i18n="nav.v26">DiscVault 26</a>
+        <a href="#migration" data-i18n="nav.migration">Migration</a>
+        <a href="#screenshots" data-i18n="nav.screenshots">Screenshots</a>
         <a href="#features" data-i18n="nav.features">Features</a>
         <a href="#install" data-i18n="nav.install">Install</a>
         <a href="#community" data-i18n="nav.community">Community</a>
@@ -46,15 +49,24 @@
           <select class="lang-select" aria-label="Language">
             <option value="da">🇩🇰 Dansk</option>
             <option value="de">🇩🇪 Deutsch</option>
+            <option value="el">🇬🇷 Ελληνικά</option>
             <option value="en">🇬🇧 English</option>
             <option value="es">🇪🇸 Español</option>
+            <option value="cs">🇨🇿 Čeština</option>
             <option value="fr">🇫🇷 Français</option>
+            <option value="hu">🇭🇺 Magyar</option>
             <option value="it">🇮🇹 Italiano</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="ko">🇰🇷 한국어</option>
             <option value="nl">🇳🇱 Nederlands</option>
             <option value="no">🇳🇴 Norsk</option>
+            <option value="pl">🇵🇱 Polski</option>
             <option value="pt">🇵🇹 Português</option>
             <option value="fi">🇫🇮 Suomi</option>
             <option value="sv">🇸🇪 Svenska</option>
+            <option value="tr">🇹🇷 Türkçe</option>
+            <option value="uk">🇺🇦 Українська</option>
+            <option value="zh">🇨🇳 中文</option>
           </select>
         </div>
       </nav>
@@ -74,262 +86,314 @@
     </script>
 
     <main id="top">
-      <section class="hero wrap">
-        <p class="eyebrow" data-i18n="hero.eyebrow">Self-hosted media tooling for collectors</p>
-        <h1>
-          <span data-i18n="hero.h1.line1">Your shelf is physical.</span>
-          <br>
-          <span class="accent" data-i18n="hero.h1.accent">Your catalog should be fast.</span>
-        </h1>
-        <p class="lead" data-i18n="hero.lead">
-          DiscVault is a modern collection manager for 4K UHD, Blu-ray, and DVD.
-          Scan barcodes, enrich metadata, browse beautifully, and integrate with MCP-enabled workflows.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-solid" href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="hero.btn.get">Get DiscVault</a>
-          <a class="btn btn-ghost" href="#install" data-i18n="hero.btn.deploy">How to deploy</a>
+      <section class="hero hero-v26 wrap">
+        <div class="hero-copy">
+          <p class="eyebrow" data-i18n="hero.eyebrow">DiscVault 26 is available now</p>
+          <h1>
+            <span data-i18n="hero.h1.line1">DiscVault 26 is here.</span>
+            <br>
+            <span class="accent" data-i18n="hero.h1.accent">Built for the next shelf.</span>
+          </h1>
+          <p class="lead" data-i18n="hero.lead">
+            DiscVault 26 can be installed and used today. It brings a new desktop-first library, richer detail pages, PostgreSQL foundations, plugins, migration tools, and better admin controls for collectors who want to keep their physical media catalog self-hosted.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-solid" href="#install" data-i18n="hero.btn.get">Install v26</a>
+            <a class="btn btn-ghost" href="#discvault26" data-i18n="hero.btn.deploy">See what is new</a>
+          </div>
+          <ul class="hero-points" aria-label="Highlights">
+            <li data-i18n="hero.point1">New DiscVault 26 app shell</li>
+            <li data-i18n="hero.point2">Poster, list, and detail library views</li>
+            <li data-i18n="hero.point3">PostgreSQL-backed v26 stack</li>
+            <li data-i18n="hero.point4">Plugin runtime and import sources</li>
+            <li data-i18n="hero.point5">RBAC, invite-only login, and admin tools</li>
+            <li data-i18n="hero.point6">Planned DiscVault 26 features remain on the roadmap</li>
+          </ul>
         </div>
-        <ul class="hero-points" aria-label="Highlights">
-          <li data-i18n="hero.point1">Barcode scanner + manual entry</li>
-          <li data-i18n="hero.point2">OMDb and TMDb metadata fallback</li>
-          <li data-i18n="hero.point3">Backup, restore, and logs</li>
-          <li data-i18n="hero.point4">Works offline as a PWA</li>
-          <li data-i18n="hero.point5">MCP endpoint for AI workflows</li>
-          <li data-i18n="hero.point6">Nine languages: English, Dutch, French, German, Spanish, Portuguese, Italian, Swedish, Norwegian, Finnish, and Danish</li>
-        </ul>
+        <figure class="hero-preview shot">
+          <img src="./images/v26-desktop/library-posters.png" alt="DiscVault 26 library poster view" loading="eager" />
+          <figcaption data-i18n="cap.v26.library">DiscVault 26 library</figcaption>
+        </figure>
+      </section>
+
+      <section id="discvault26" class="wrap section v26-section">
+        <div class="section-head section-head-wide">
+          <p class="eyebrow" data-i18n="v26.eyebrow">DiscVault 26</p>
+          <h2 data-i18n="v26.h2">A new generation of DiscVault, already usable while the roadmap keeps moving.</h2>
+          <p class="section-lead" data-i18n="v26.lead">DiscVault 26 is the next foundation for the project. It keeps the self-hosted collector focus, but modernizes the app shell, database model, admin area, plugin runtime, and migration path.</p>
+        </div>
+        <div class="v26-feature-grid">
+          <article class="card card-v26">
+            <span class="badge badge-beta" data-i18n="v26.badge.beta">Available now</span>
+            <h3 data-i18n="v26.f1.title">New library experience</h3>
+            <p data-i18n="v26.f1.body">Browse posters, switch to list or detail views, filter by format, jump into containers and box sets, and keep the interface fast on large collections.</p>
+          </article>
+          <article class="card card-v26">
+            <span class="badge badge-beta" data-i18n="v26.badge.beta">Available now</span>
+            <h3 data-i18n="v26.f2.title">Richer movie and container pages</h3>
+            <p data-i18n="v26.f2.body">Detail pages now make room for backdrops, posters, videos, metadata, collection membership, watched state, and box-set contents.</p>
+          </article>
+          <article class="card card-v26">
+            <span class="badge badge-beta" data-i18n="v26.badge.beta">Available now</span>
+            <h3 data-i18n="v26.f3.title">PostgreSQL and migration assistant</h3>
+            <p data-i18n="v26.f3.body">DiscVault 26 uses a PostgreSQL-backed model and includes a guided path to inspect and import existing DiscVault data while keeping media files in place.</p>
+          </article>
+          <article class="card card-v26">
+            <span class="badge badge-beta" data-i18n="v26.badge.beta">Available now</span>
+            <h3 data-i18n="v26.f4.title">Plugin-centered platform</h3>
+            <p data-i18n="v26.f4.body">Manage metadata sources, receivers, import sources, digital media sources, plugin packages, health checks, and background plugin jobs from the admin area.</p>
+          </article>
+          <article class="card card-v26">
+            <span class="badge badge-beta" data-i18n="v26.badge.beta">Available now</span>
+            <h3 data-i18n="v26.f5.title">Personal lists and watch history</h3>
+            <p data-i18n="v26.f5.body">Keep a personal watchlist and watched history that follows your account across devices, with poster, list, and detail layouts.</p>
+          </article>
+          <article class="card card-v26">
+            <span class="badge badge-beta" data-i18n="v26.badge.beta">Available now</span>
+            <h3 data-i18n="v26.f6.title">Admin, RBAC, API and MCP</h3>
+            <p data-i18n="v26.f6.body">DiscVault 26 adds invite-only flows, owner/admin tools, Basic and Advanced RBAC, role simulation, audit views, API access, and MCP-ready integrations.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="migration" class="wrap section migration-section">
+        <div class="section-head section-head-wide">
+          <p class="eyebrow" data-i18n="migration.eyebrow">DiscVault 26 migration</p>
+          <h2 data-i18n="migration.h2">Move to DiscVault 26 in a few guided steps</h2>
+          <p class="section-lead" data-i18n="migration.lead">The migration wizard checks your current install, helps you authenticate with your passkey, shows what will be moved, and keeps progress visible until DiscVault 26 is ready to launch.</p>
+        </div>
+        <div class="migration-steps">
+          <article class="migration-step">
+            <span>01</span>
+            <h3 data-i18n="migration.step1.title">Confirm your current install</h3>
+            <p data-i18n="migration.step1.body">Start from the existing DiscVault environment and let the wizard detect the source before anything changes.</p>
+          </article>
+          <article class="migration-step">
+            <span>02</span>
+            <h3 data-i18n="migration.step2.title">Review and start safely</h3>
+            <p data-i18n="migration.step2.body">Authenticate, choose the migration scope, and get a final ready screen before the migration begins.</p>
+          </article>
+          <article class="migration-step">
+            <span>03</span>
+            <h3 data-i18n="migration.step3.title">Follow every step</h3>
+            <p data-i18n="migration.step3.body">Progress, completion, and the DiscVault 26 launch screen make the upgrade path clear from start to finish.</p>
+          </article>
+        </div>
+        <div class="carousel carousel-v26 carousel-migration">
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/migration-start.png" alt="DiscVault 26 migration start" loading="lazy" />
+            <figcaption data-i18n="cap.migration.start">Start the migration from your existing DiscVault installation.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/authenticate-passkey.png" alt="DiscVault 26 authenticate with current passkey" loading="lazy" />
+            <figcaption data-i18n="cap.migration.passkey">Authenticate with your passkey before changes are made.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/wizard-review.png" alt="DiscVault 26 migration wizard review" loading="lazy" />
+            <figcaption data-i18n="cap.migration.review">Review what the wizard found in the current install.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/wizard-scope.png" alt="DiscVault 26 migration wizard scope" loading="lazy" />
+            <figcaption data-i18n="cap.migration.scope">Choose what DiscVault 26 should migrate.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/ready-to-start.png" alt="DiscVault 26 ready to start migration" loading="lazy" />
+            <figcaption data-i18n="cap.migration.ready">Confirm the final ready screen before starting.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/migration-progress.png" alt="DiscVault 26 migration in progress" loading="lazy" />
+            <figcaption data-i18n="cap.migration.progress">Watch progress while data and settings are moved.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/migration-finished.png" alt="DiscVault 26 migration finished" loading="lazy" />
+            <figcaption data-i18n="cap.migration.finished">See the completion screen when migration is done.</figcaption>
+          </figure>
+          <figure class="shot shot-desktop-v26">
+            <img src="./images/v26-migration/start-v26.png" alt="Start DiscVault 26 after migration" loading="lazy" />
+            <figcaption data-i18n="cap.migration.launch">Launch DiscVault 26 from the finished flow.</figcaption>
+          </figure>
+        </div>
       </section>
 
       <section id="screenshots" class="wrap section screenshots">
         <div class="section-head">
           <p class="eyebrow" data-i18n="screenshots.eyebrow">Screenshots</p>
-          <h2 data-i18n="screenshots.h2">See DiscVault in action — desktop and mobile.</h2>
+          <h2 data-i18n="screenshots.h2.v26mobile">Preview DiscVault 26 across desktop and mobile.</h2>
         </div>
 
-        <h2 class="platform-label" data-i18n="screenshots.label.desktop">Desktop</h2>
-
-        <!-- Group 1: Collection & Search -->
+        <h2 class="platform-label" data-i18n="screenshots.label.v26">DiscVault 26</h2>
         <div class="shot-group">
-          <h3 class="carousel-label group-label" data-i18n="screenshots.label.collection">Collection &amp; Search</h3>
-          <div class="carousel">
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_collection_collection.png" alt="DiscVault collection grid" loading="lazy" />
+          <h3 class="carousel-label group-label" data-i18n="screenshots.label.v26preview">New desktop experience</h3>
+          <div class="carousel carousel-v26">
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/library-posters.png" alt="DiscVault 26 library poster view" loading="lazy" />
+              <figcaption data-i18n="cap.v26.library">Library posters</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/library-list.png" alt="DiscVault 26 library list view" loading="lazy" />
+              <figcaption data-i18n="cap.v26.list">Library list</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/detail-hero.png" alt="DiscVault 26 detail page" loading="lazy" />
+              <figcaption data-i18n="cap.v26.detail">Detail page</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/watchlist-detailed.png" alt="DiscVault 26 watched list" loading="lazy" />
+              <figcaption data-i18n="cap.v26.lists">Personal lists</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/admin-rbac.png" alt="DiscVault 26 admin RBAC" loading="lazy" />
+              <figcaption data-i18n="cap.v26.rbac">RBAC roles</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/admin-plugins.png" alt="DiscVault 26 admin plugins" loading="lazy" />
+              <figcaption data-i18n="cap.v26.plugins">Plugin management</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/admin-operations.png" alt="DiscVault 26 admin operations" loading="lazy" />
+              <figcaption data-i18n="cap.v26.operations">Operations</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/detail-backdrops.png" alt="DiscVault 26 backdrop gallery" loading="lazy" />
+              <figcaption data-i18n="cap.v26.backdrops">Backdrops</figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <h2 class="platform-label" data-i18n="screenshots.label.v26desktop">DiscVault 26 desktop</h2>
+
+        <div class="shot-group">
+          <h3 class="carousel-label group-label" data-i18n="screenshots.label.v26desktopgallery">DiscVault 26 desktop gallery</h3>
+          <div class="carousel carousel-v26">
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/library-posters.png" alt="DiscVault 26 desktop library poster view" loading="lazy" />
+              <figcaption data-i18n="cap.v26.library">Library posters</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/library-list.png" alt="DiscVault 26 desktop library list view" loading="lazy" />
+              <figcaption data-i18n="cap.v26.list">Library list</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/detail-hero.png" alt="DiscVault 26 desktop detail page" loading="lazy" />
+              <figcaption data-i18n="cap.v26.detail">Detail page</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/detail-collection.png" alt="DiscVault 26 desktop collection detail" loading="lazy" />
               <figcaption data-i18n="cap.collection">Collection</figcaption>
             </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_search.png" alt="DiscVault search results" loading="lazy" />
-              <figcaption data-i18n="cap.search">Search</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_more_options.png" alt="DiscVault more options panel" loading="lazy" />
-              <figcaption data-i18n="cap.moreoptions">More options</figcaption>
-            </figure>
-          </div>
-        </div>
-
-        <!-- Group 2: Movie detail -->
-        <div class="shot-group">
-          <h3 class="carousel-label group-label" data-i18n="screenshots.label.moviedetail">Movie detail</h3>
-          <div class="carousel">
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_movie_detail_01.png" alt="DiscVault movie detail overview" loading="lazy" />
-              <figcaption data-i18n="cap.moviedetail">Movie detail</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_movie_detail_hdr_dolbyvision.png" alt="DiscVault HDR and Dolby Vision metadata" loading="lazy" />
-              <figcaption data-i18n="cap.hdrformats">HDR &amp; Dolby Vision</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_movie_detail_watch_history.png" alt="DiscVault movie detail with watch history" loading="lazy" />
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/detail-watched.png" alt="DiscVault 26 desktop watched detail" loading="lazy" />
               <figcaption data-i18n="cap.watchhistory">Watch history</figcaption>
             </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_movie_detail_02_en.png" alt="DiscVault movie plot in English" loading="lazy" />
-              <figcaption data-i18n="cap.plot.en">Plot — English</figcaption>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/detail-backdrops.png" alt="DiscVault 26 desktop backdrop gallery" loading="lazy" />
+              <figcaption data-i18n="cap.v26.backdrops">Backdrops</figcaption>
             </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_movie_detail_02_nl.png" alt="DiscVault filmplot in het Nederlands" loading="lazy" />
-              <figcaption data-i18n="cap.plot.nl">Plot — Dutch</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_movie_detail_02_de.png" alt="DiscVault Filmhandlung auf Deutsch" loading="lazy" />
-              <figcaption data-i18n="cap.plot.de">Plot — German</figcaption>
-            </figure>
-          </div>
-        </div>
-
-        <!-- Group 3: Add & Import -->
-        <div class="shot-group">
-          <h3 class="carousel-label group-label" data-i18n="screenshots.label.addimport">Add &amp; Import</h3>
-          <div class="carousel">
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_add_manual_01.png" alt="DiscVault add movie manually (step 1)" loading="lazy" />
-              <figcaption data-i18n="cap.addmovie">Add movie</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_add_manual_02.png" alt="DiscVault add movie manually (step 2)" loading="lazy" />
-              <figcaption data-i18n="cap.addmovie">Add movie</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_add_import_01.png" alt="DiscVault import collection (step 1)" loading="lazy" />
-              <figcaption data-i18n="cap.import">Import</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_add_import_02.png" alt="DiscVault import collection (step 2)" loading="lazy" />
-              <figcaption data-i18n="cap.import">Import</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_add_import_03.png" alt="DiscVault import collection (step 3)" loading="lazy" />
-              <figcaption data-i18n="cap.import">Import</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_collection_bulk_refreh.png" alt="DiscVault bulk metadata refresh" loading="lazy" />
-              <figcaption data-i18n="cap.bulkrefresh">Bulk refresh</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_collection_bulk_refreh2.png" alt="DiscVault bulk refresh in progress" loading="lazy" />
-              <figcaption data-i18n="cap.bulkrefresh">Bulk refresh</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_collection_bulk_refreh_finish.png" alt="DiscVault bulk refresh completed" loading="lazy" />
-              <figcaption data-i18n="cap.bulkrefresh">Bulk refresh</figcaption>
-            </figure>
-          </div>
-        </div>
-
-        <!-- Group 4: Watchlist & History -->
-        <div class="shot-group">
-          <h3 class="carousel-label group-label" data-i18n="screenshots.label.watchlisthistory">Watchlist &amp; History</h3>
-          <div class="carousel">
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_watchlist.png" alt="DiscVault watchlist" loading="lazy" />
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/watchlist-posters.png" alt="DiscVault 26 desktop watchlist posters" loading="lazy" />
               <figcaption data-i18n="cap.watchlist">Watchlist</figcaption>
             </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_watch_history.png" alt="DiscVault watch history" loading="lazy" />
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/watchlist-detailed.png" alt="DiscVault 26 desktop watchlist detailed view" loading="lazy" />
+              <figcaption data-i18n="cap.watchlist">Watchlist</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/watched-list.png" alt="DiscVault 26 desktop watched list" loading="lazy" />
               <figcaption data-i18n="cap.watchhistory">Watch history</figcaption>
             </figure>
-          </div>
-        </div>
-
-        <!-- Group 5: Profile -->
-        <div class="shot-group">
-          <h3 class="carousel-label group-label" data-i18n="screenshots.label.profile">Profile</h3>
-          <div class="carousel">
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_profile_general.png" alt="DiscVault profile — general" loading="lazy" />
-              <figcaption data-i18n="cap.profile">Profile</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_profile_preferences.png" alt="DiscVault profile — preferences" loading="lazy" />
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/preferences-01.png" alt="DiscVault 26 desktop preferences" loading="lazy" />
               <figcaption data-i18n="cap.profilepreferences">Preferences</figcaption>
             </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_profile_security.png" alt="DiscVault profile — security" loading="lazy" />
-              <figcaption data-i18n="cap.profilesecurity">Security</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_profile_api_keys.png" alt="DiscVault profile — API keys" loading="lazy" />
-              <figcaption data-i18n="cap.profileapikeys">API keys</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_profile_push_notifications.png" alt="DiscVault profile — push notifications" loading="lazy" />
-              <figcaption data-i18n="cap.profilepush">Push notifications</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_profile_mcp_activity.png" alt="DiscVault profile — MCP activity" loading="lazy" />
-              <figcaption data-i18n="cap.profilemcp">MCP activity</figcaption>
-            </figure>
-          </div>
-        </div>
-
-        <!-- Group 6: Admin -->
-        <div class="shot-group">
-          <h3 class="carousel-label group-label">
-            <span data-i18n="screenshots.label.admin">Admin</span>
-            <span class="badge-admin" data-i18n="screenshots.badge.adminonly">Admin only</span>
-          </h3>
-          <div class="carousel">
-            <figure class="shot shot-desktop">
-              <img src="./images/Admin_Desktop_security_user_mgmt.png" alt="DiscVault admin — user management" loading="lazy" />
-              <figcaption data-i18n="cap.usermgmt">User management</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Admin_Desktop_security_group_mgmt.png" alt="DiscVault admin — group management" loading="lazy" />
-              <figcaption data-i18n="cap.usergroupmgmt">User &amp; group management</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Admin_Desktop_security_invite_only.png" alt="DiscVault admin — invite-only registration" loading="lazy" />
-              <figcaption data-i18n="cap.inviteonly">Invite-only</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Admin_Desktop_backup.png" alt="DiscVault admin — backup and restore" loading="lazy" />
-              <figcaption data-i18n="cap.backup">Backup &amp; restore</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Admin_Desktop_logfiles.png" alt="DiscVault admin — log files" loading="lazy" />
-              <figcaption data-i18n="cap.logfiles">Logfiles</figcaption>
-            </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Desktop_settings_general.png" alt="DiscVault settings" loading="lazy" />
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/preferences-02.png" alt="DiscVault 26 desktop preferences and settings" loading="lazy" />
               <figcaption data-i18n="cap.settings">Settings</figcaption>
             </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Admin_Desktop_advanced.png" alt="DiscVault admin — advanced settings" loading="lazy" />
-              <figcaption data-i18n="cap.advancedmcp">Advanced &amp; MCP</figcaption>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/admin-rbac.png" alt="DiscVault 26 desktop RBAC roles" loading="lazy" />
+              <figcaption data-i18n="cap.v26.rbac">RBAC roles</figcaption>
             </figure>
-            <figure class="shot shot-desktop">
-              <img src="./images/Admin_Desktop_movie_detail_02_debug.png" alt="DiscVault movie detail debug view" loading="lazy" />
-              <figcaption data-i18n="cap.debug">Debug view</figcaption>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/admin-plugins.png" alt="DiscVault 26 desktop plugin management" loading="lazy" />
+              <figcaption data-i18n="cap.v26.plugins">Plugin management</figcaption>
+            </figure>
+            <figure class="shot shot-desktop-v26">
+              <img src="./images/v26-desktop/admin-operations.png" alt="DiscVault 26 desktop operations" loading="lazy" />
+              <figcaption data-i18n="cap.v26.operations">Operations</figcaption>
             </figure>
           </div>
         </div>
 
         <!-- Mobile -->
-        <h2 class="platform-label" data-i18n="screenshots.label.mobile">Mobile</h2>
+        <h2 class="platform-label" data-i18n="screenshots.label.v26mobile">DiscVault 26 mobile</h2>
         <div class="carousel carousel-mobile">
           <figure class="shot shot-mobile">
-            <img src="./images/mobile_02.png" alt="DiscVault mobile sign-in screen" loading="lazy" />
+            <img src="./images/v26-mobile/signin-01.png" alt="DiscVault 26 mobile sign-in screen" loading="lazy" />
             <figcaption data-i18n="cap.signin">Sign in</figcaption>
           </figure>
           <figure class="shot shot-mobile">
-            <img src="./images/mobile_01.png" alt="DiscVault mobile search" loading="lazy" />
-            <figcaption data-i18n="cap.search">Search</figcaption>
-          </figure>
-          <figure class="shot shot-mobile">
-            <img src="./images/mobile_04.png" alt="DiscVault mobile add movie" loading="lazy" />
-            <figcaption data-i18n="cap.addmovie">Add movie</figcaption>
-          </figure>
-          <figure class="shot shot-mobile">
-            <img src="./images/mobile_05.png" alt="DiscVault mobile profile page" loading="lazy" />
-            <figcaption data-i18n="cap.profile">Profile</figcaption>
-          </figure>
-          <figure class="shot shot-mobile">
-            <img src="./images/mobile_06.png" alt="DiscVault mobile metadata info" loading="lazy" />
-            <figcaption data-i18n="cap.metadata">Metadata info</figcaption>
-          </figure>
-          <figure class="shot shot-mobile">
-            <img src="./images/mobile_07.png" alt="DiscVault mobile authentication" loading="lazy" />
+            <img src="./images/v26-mobile/signin-01a.png" alt="DiscVault 26 mobile sign-in passkey screen" loading="lazy" />
             <figcaption data-i18n="cap.auth">Authentication</figcaption>
           </figure>
           <figure class="shot shot-mobile">
-            <img src="./images/mobile_08.png" alt="DiscVault mobile user and group management" loading="lazy" />
-            <figcaption data-i18n="cap.usergroupmgmt">User &amp; group management</figcaption>
+            <img src="./images/v26-mobile/signin-02.png" alt="DiscVault 26 mobile sign-in method screen" loading="lazy" />
+            <figcaption data-i18n="cap.signin">Sign in</figcaption>
           </figure>
           <figure class="shot shot-mobile">
-            <img src="./images/mobile_09.png" alt="DiscVault mobile backup and restore" loading="lazy" />
-            <figcaption data-i18n="cap.backup">Backup &amp; restore</figcaption>
+            <img src="./images/v26-mobile/signin-03.png" alt="DiscVault 26 mobile signed-in start screen" loading="lazy" />
+            <figcaption data-i18n="cap.auth">Authentication</figcaption>
           </figure>
           <figure class="shot shot-mobile">
-            <img src="./images/mobile_10.png" alt="DiscVault mobile logfiles" loading="lazy" />
-            <figcaption data-i18n="cap.logfiles">Logfiles</figcaption>
+            <img src="./images/v26-mobile/library.png" alt="DiscVault 26 mobile library" loading="lazy" />
+            <figcaption data-i18n="cap.v26.library">Library posters</figcaption>
           </figure>
           <figure class="shot shot-mobile">
-            <img src="./images/mobile_11.png" alt="DiscVault mobile advanced settings" loading="lazy" />
-            <figcaption data-i18n="cap.advanced">Advanced</figcaption>
+            <img src="./images/v26-mobile/movie-detail.png" alt="DiscVault 26 mobile movie detail" loading="lazy" />
+            <figcaption data-i18n="cap.moviedetail">Movie detail</figcaption>
           </figure>
           <figure class="shot shot-mobile">
-            <img src="./images/mobile_collection.jpeg" alt="DiscVault mobile collection view" loading="lazy" />
-            <figcaption data-i18n="cap.collection">Collection</figcaption>
+            <img src="./images/v26-mobile/links.png" alt="DiscVault 26 mobile movie links" loading="lazy" />
+            <figcaption data-i18n="cap.moreoptions">More options</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/person.png" alt="DiscVault 26 mobile person detail" loading="lazy" />
+            <figcaption data-i18n="cap.profile">Profile</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/watchlist-01.png" alt="DiscVault 26 mobile watchlist" loading="lazy" />
+            <figcaption data-i18n="cap.watchlist">Watchlist</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/watchlist-02.png" alt="DiscVault 26 mobile watchlist detail" loading="lazy" />
+            <figcaption data-i18n="cap.watchlist">Watchlist</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/watched-list.png" alt="DiscVault 26 mobile watched list" loading="lazy" />
+            <figcaption data-i18n="cap.watchhistory">Watch history</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/import.png" alt="DiscVault 26 mobile import" loading="lazy" />
+            <figcaption data-i18n="cap.import">Import</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/import-box-set.png" alt="DiscVault 26 mobile import box set" loading="lazy" />
+            <figcaption data-i18n="cap.import">Import</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/admin-about.png" alt="DiscVault 26 mobile admin about" loading="lazy" />
+            <figcaption data-i18n="cap.settings">Settings</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/rbac.png" alt="DiscVault 26 mobile RBAC roles" loading="lazy" />
+            <figcaption data-i18n="cap.v26.rbac">RBAC roles</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/plugins.png" alt="DiscVault 26 mobile plugin management" loading="lazy" />
+            <figcaption data-i18n="cap.v26.plugins">Plugin management</figcaption>
+          </figure>
+          <figure class="shot shot-mobile">
+            <img src="./images/v26-mobile/digital-sources.png" alt="DiscVault 26 mobile digital sources" loading="lazy" />
+            <figcaption data-i18n="cap.v26.plugins">Plugin management</figcaption>
           </figure>
         </div>
       </section>
@@ -467,43 +531,43 @@
 
       <section class="wrap section">
         <div class="section-head">
-          <p class="eyebrow" data-i18n="soon.eyebrow">Coming soon</p>
-          <h2 data-i18n="soon.h2">New features landing in the next release.</h2>
+          <p class="eyebrow" data-i18n="soon.eyebrow">Planned for DiscVault 26</p>
+          <h2 data-i18n="soon.h2">Previously announced features are still on the DiscVault 26 roadmap.</h2>
         </div>
 
         <div class="feature-category">
           <h4 class="category-label" data-i18n="cat1">Collection &amp; metadata</h4>
           <div class="coming-soon-grid">
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s1.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s1.badge">Planned for 26</span>
               <h3 data-i18n="s1.title">Import your existing collection</h3>
               <p data-i18n="s1.body">
                 Already tracking your discs in a spreadsheet or Letterboxd? Import a CSV or Letterboxd export and have your full collection in DiscVault without scanning everything from scratch.
               </p>
             </article>
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s2.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s2.badge">Planned for 26</span>
               <h3 data-i18n="s2.title">Collection statistics</h3>
               <p data-i18n="s2.body">
                 Get a dashboard overview of your collection — disc count by format, genre breakdown, total runtime, and growth over time.
               </p>
             </article>
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s3.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s3.badge">Planned for 26</span>
               <h3 data-i18n="s3.title">Custom tags &amp; lists</h3>
               <p data-i18n="s3.body">
                 Add freeform tags to any title — &ldquo;lent out&rdquo;, &ldquo;wishlist&rdquo;, &ldquo;gift&rdquo; — and build personal lists that go beyond automatic groups.
               </p>
             </article>
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s6.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s6.badge">Planned for 26</span>
               <h3 data-i18n="s6.title">Wishlist</h3>
               <p data-i18n="s6.body">
                 Keep track of discs you want to add to your collection — special editions you're hunting for, or titles you've ordered but haven't received yet. Move them to your collection with one tap once they arrive.
               </p>
             </article>
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s_region.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s_region.badge">Planned for 26</span>
               <h3 data-i18n="s_region.title">Region indicator</h3>
               <p data-i18n="s_region.body">
                 Log the region of any disc — A/B/C for Blu-ray, regions 1–6 for DVD. Useful for import collectors and anyone with multiple players.
@@ -516,21 +580,21 @@
           <h4 class="category-label" data-i18n="cat2">Discovery &amp; recommendations</h4>
           <div class="coming-soon-grid">
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s_picker.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s_picker.badge">Planned for 26</span>
               <h3 data-i18n="s_picker.title">&ldquo;What to watch tonight&rdquo; picker</h3>
               <p data-i18n="s_picker.body">
                 Set a few filters — genre, runtime, mood — and DiscVault picks a random title from your own shelf. Stop scrolling streaming services when the answer is already on your wall.
               </p>
             </article>
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s_rating.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s_rating.badge">Planned for 26</span>
               <h3 data-i18n="s_rating.title">Personal rating</h3>
               <p data-i18n="s_rating.body">
                 Give any title your own star rating or score, separate from the IMDb score. Filter and sort by what you think is great — not just what the crowd says.
               </p>
             </article>
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s_sort.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s_sort.badge">Planned for 26</span>
               <h3 data-i18n="s_sort.title">Sort by IMDb / TMDb score</h3>
               <p data-i18n="s_sort.body">
                 The metadata is already there — use it. Sort your collection by rating to instantly surface the best titles on your shelf.
@@ -543,7 +607,7 @@
           <h4 class="category-label" data-i18n="cat3">Loan &amp; wishlist management</h4>
           <div class="coming-soon-grid">
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s4.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s4.badge">Planned for 26</span>
               <h3 data-i18n="s4.title">Loan tracker</h3>
               <p data-i18n="s4.body">
                 Track which discs you've lent out and to whom. See all outstanding loans at a glance and add a return reminder so nothing goes missing.
@@ -556,14 +620,14 @@
           <h4 class="category-label" data-i18n="cat4">Social</h4>
           <div class="coming-soon-grid">
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s_public.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s_public.badge">Planned for 26</span>
               <h3 data-i18n="s_public.title">Public profile page</h3>
               <p data-i18n="s_public.body">
                 Optionally share a read-only view of your collection with anyone via a link — no account required on their end.
               </p>
             </article>
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s_watchreq.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s_watchreq.badge">Planned for 26</span>
               <h3 data-i18n="s_watchreq.title">Watchlist requests</h3>
               <p data-i18n="s_watchreq.body">
                 Friends in a shared group can flag a title they want to watch. The owner gets a notification and can make the disc available.
@@ -576,14 +640,14 @@
           <h4 class="category-label" data-i18n="cat5">Integrations</h4>
           <div class="coming-soon-grid">
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s5.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s5.badge">Planned for 26</span>
               <h3 data-i18n="s5.title">Webhooks &amp; notifications</h3>
               <p data-i18n="s5.body">
                 Send a webhook event when a disc is added, a backup completes, or a loan is overdue — ready to connect with Home Assistant, ntfy, or any automation tool.
               </p>
             </article>
             <article class="card card-upcoming">
-              <span class="badge badge-soon" data-i18n="s_letterboxd.badge">Coming soon</span>
+              <span class="badge badge-soon" data-i18n="s_letterboxd.badge">Planned for 26</span>
               <h3 data-i18n="s_letterboxd.title">Letterboxd sync</h3>
               <p data-i18n="s_letterboxd.body">
                 Automatically sync your watch history and ratings with Letterboxd, so your collection manager and film diary always stay in step.
@@ -596,24 +660,29 @@
 
       <section id="install" class="wrap section install">
         <div class="section-head">
-          <p class="eyebrow" data-i18n="install.eyebrow">Deployment</p>
-          <h2 data-i18n="install.h2">Deploy on Unraid or run it anywhere Docker runs.</h2>
+          <p class="eyebrow" data-i18n="install.eyebrow">Install DiscVault 26</p>
+          <h2 data-i18n="install.h2">Install DiscVault 26, or stay on the Legacy release.</h2>
         </div>
         <div class="install-grid">
           <article class="install-card">
-            <h3 data-i18n="install.stable.title">Stable</h3>
-            <p data-i18n="install.stable.body">Use the all-in-one container image:</p>
-            <pre><code>ghcr.io/helmerzNL/DiscVault:latest</code></pre>
+            <span class="badge badge-beta" data-i18n="install.beta.badge">DiscVault 26</span>
+            <h3 data-i18n="install.beta.title">v26 image</h3>
+            <p data-i18n="install.beta.body">Install DiscVault 26 with the v26 image. This is the current DiscVault 26 release.</p>
+            <pre><code>ghcr.io/helmerzNL/DiscVault:v26</code></pre>
           </article>
           <article class="install-card">
-            <h3 data-i18n="install.beta.title">Beta</h3>
-            <p data-i18n="install.beta.body">Try MovieVault enrichment and expanded language support early:</p>
-            <pre><code>ghcr.io/helmerzNL/DiscVault:beta</code></pre>
+            <h3 data-i18n="install.stable.title">DiscVault Legacy</h3>
+            <p data-i18n="install.stable.body">Stay on the old Legacy version with the legacy image:</p>
+            <pre><code>ghcr.io/helmerzNL/DiscVault:legacy</code></pre>
           </article>
           <article class="install-card">
             <h3 data-i18n="install.unraid.title">Unraid template</h3>
             <p data-i18n="install.unraid.body">Community Apps template repository:</p>
             <pre><code>https://github.com/helmerzNL/unraid-templates</code></pre>
+          </article>
+          <article class="install-card install-note">
+            <h3 data-i18n="install.note.title">Before updating</h3>
+            <p data-i18n="install.note.body">Create a backup first, keep your persistent data and volume mappings, and use the migration guide before moving an existing library to DiscVault 26.</p>
           </article>
         </div>
         <figure class="install-preview">
@@ -640,7 +709,8 @@
       <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="footer.github">Source on GitHub</a>
     </footer>
 
-    <script src="./translations.js?v=9"></script>
+    <script src="./translations.js?v=12"></script>
+    <script src="./translations-extra.js?v=3"></script>
     <script>
 
     function setLang(lang) {
