@@ -1505,6 +1505,7 @@ def register_next_auth_routes(
     @route("/api/next/auth/mobile/start", "/api/auth/mobile/start", methods=["GET"])
     def mobile_auth_start():
         params = validate_mobile_flow_start_params()
+        callback_url: str | None = None
         with connect() as conn:
             if not table_exists(conn, "mobile_auth_flows"):
                 raise next_api_error("Mobile auth tables are not available", 503)
@@ -1544,6 +1545,30 @@ def register_next_auth_routes(
                         "codeChallengeMethod": params["code_challenge_method"],
                     },
                 )
+                existing_user = current_user(conn)
+                if existing_user:
+                    mobile_code = create_mobile_auth_code(
+                        conn,
+                        mobile_flow_id=flow_id,
+                        user_id=existing_user["id"],
+                    )
+                    callback_url = mobile_code["callbackUrl"]
+                    audit_event(
+                        conn,
+                        event_type="auth.mobile_flow_completed",
+                        category="security",
+                        actor={
+                            "id": existing_user["id"],
+                            "username": existing_user["username"],
+                            "role": primary_role(conn, existing_user["id"]),
+                        },
+                        target_type="user",
+                        target_id=existing_user["id"],
+                        summary=f"Completed mobile auth flow using active session for {existing_user['username']}",
+                        metadata={"mobileFlowId": flow_id_str, "sessionShortCircuit": True},
+                    )
+        if callback_url:
+            return redirect(callback_url, code=302)
         target = f"/?{urlencode({'mobile_flow': flow_id_str})}"
         return redirect(target, code=302)
 
