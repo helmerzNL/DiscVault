@@ -44,7 +44,6 @@ RECOVERY_CODE_GROUP_LENGTH = 4
 MOBILE_AUTH_FLOW_TTL_SECONDS = 5 * 60
 MOBILE_AUTH_CODE_TTL_SECONDS = 60
 MOBILE_AUTH_ALLOWED_CALLBACK_SCHEMES = {"discvault"}
-IOS_WEBCREDENTIAL_BUNDLE_ID = "HelmerNL.DiscVault"
 MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "api.read",
     "metadata.search",
@@ -152,17 +151,6 @@ def _rp_origins() -> list[str]:
     if origins:
         return origins
     return [_request_origin()]
-
-
-def _ios_webcredential_app_ids() -> list[str]:
-    configured = os.environ.get("DISCVAULT_IOS_WEBCREDENTIAL_APPS", "")
-    values = [item.strip() for item in configured.split(",") if item.strip()]
-    if values:
-        return values
-    team_id = os.environ.get("APPLE_TEAM_ID", "").strip()
-    if not team_id:
-        return []
-    return [f"{team_id}.{IOS_WEBCREDENTIAL_BUNDLE_ID}"]
 
 
 def _create_token(user_id: str, username: str) -> str:
@@ -1266,13 +1254,6 @@ def register_next_auth_routes(
     @route("/.well-known/webauthn", methods=["GET"])
     def webauthn_well_known():
         return jsonify({"origins": _rp_origins()})
-
-    @route("/.well-known/apple-app-site-association", methods=["GET"])
-    def apple_app_site_association():
-        payload = {"webcredentials": {"apps": _ios_webcredential_app_ids()}}
-        result = make_response(json.dumps(payload))
-        result.headers["Content-Type"] = "application/json"
-        return result
 
     @route("/api/next/auth/status", "/api/auth/status", methods=["GET"])
     def auth_status():
