@@ -44,6 +44,7 @@ RECOVERY_CODE_GROUP_LENGTH = 4
 MOBILE_AUTH_FLOW_TTL_SECONDS = 5 * 60
 MOBILE_AUTH_CODE_TTL_SECONDS = 60
 MOBILE_AUTH_ALLOWED_CALLBACK_SCHEMES = {"discvault"}
+IOS_WEBCREDENTIAL_BUNDLE_ID = "HelmerNL.DiscVault"
 MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "api.read",
     "metadata.search",
@@ -151,6 +152,17 @@ def _rp_origins() -> list[str]:
     if origins:
         return origins
     return [_request_origin()]
+
+
+def _ios_webcredential_app_ids() -> list[str]:
+    configured = os.environ.get("DISCVAULT_IOS_WEBCREDENTIAL_APPS", "")
+    values = [item.strip() for item in configured.split(",") if item.strip()]
+    if values:
+        return values
+    team_id = os.environ.get("APPLE_TEAM_ID", "").strip()
+    if not team_id:
+        return []
+    return [f"{team_id}.{IOS_WEBCREDENTIAL_BUNDLE_ID}"]
 
 
 def _create_token(user_id: str, username: str) -> str:
@@ -587,6 +599,69 @@ def register_next_auth_routes(
             )
             token_row = cur.fetchone()
         return {"token": token_value, "tokenRow": token_row, "permissionKeys": permission_keys, "scopes": scopes}
+
+    def native_login_response(
+        conn,
+        *,
+        user_id: UUID | str,
+        username: str,
+        display_name: str | None,
+    ) -> dict[str, Any]:
+        token_payload = issue_mobile_api_token(conn, user_id=user_id, username=username)
+        role = primary_role(conn, user_id)
+        effective_permission_keys = sorted(user_permissions(conn, user_id))
+        token = token_payload["token"]
+        user_payload = {
+            "id": str(user_id),
+            "username": username,
+            "display_name": display_name,
+            "displayName": display_name,
+            "role": role,
+            "avatar_url": None,
+        }
+        api_token_payload = {
+            "id": str(token_payload["tokenRow"]["id"]),
+            "name": token_payload["tokenRow"]["name"],
+            "scopes": token_payload["tokenRow"]["scopes"] or [],
+            "permission_keys": token_payload["tokenRow"]["permission_keys"] or [],
+            "permissionKeys": token_payload["tokenRow"]["permission_keys"] or [],
+            "created_at": token_payload["tokenRow"]["created_at"].isoformat()
+            if token_payload["tokenRow"].get("created_at")
+            else None,
+            "expires_at": token_payload["tokenRow"]["expires_at"].isoformat()
+            if token_payload["tokenRow"].get("expires_at")
+            else None,
+            "revoked_at": None,
+        }
+        return {
+            "status": "ok",
+            "token": token,
+            "access_token": token,
+            "refresh_token": None,
+            "session": {
+                "access_token": token,
+                "refresh_token": None,
+            },
+            "username": username,
+            "role": role,
+            "tokenPermissionKeys": token_payload["permissionKeys"],
+            "effectivePermissionKeys": effective_permission_keys,
+            "api_token": api_token_payload,
+            "apiToken": api_token_payload,
+            "user": user_payload,
+            "currentUser": {
+                "id": str(user_id),
+                "username": username,
+                "displayName": display_name,
+                "role": role,
+            },
+            "profile": {
+                "id": str(user_id),
+                "username": username,
+                "display_name": display_name,
+                "role": role,
+            },
+        }
 
     def permission_keys_catalog(conn) -> set[str]:
         if not table_exists(conn, "permissions"):
@@ -1192,6 +1267,13 @@ def register_next_auth_routes(
     def webauthn_well_known():
         return jsonify({"origins": _rp_origins()})
 
+    @route("/.well-known/apple-app-site-association", methods=["GET"])
+    def apple_app_site_association():
+        payload = {"webcredentials": {"apps": _ios_webcredential_app_ids()}}
+        result = make_response(json.dumps(payload))
+        result.headers["Content-Type"] = "application/json"
+        return result
+
     @route("/api/next/auth/status", "/api/auth/status", methods=["GET"])
     def auth_status():
         with connect() as conn:
@@ -1484,14 +1566,44 @@ def register_next_auth_routes(
         target = f"/?{urlencode({'mobile_flow': flow_id_str})}"
         return redirect(target, code=302)
 
-    @route("/api/next/auth/login/options", "/api/auth/login/options", methods=["POST"])
+    @route(
+        "/api/next/auth/passkeys/login/options",
+        "/api/next/auth/passkey/login/options",
+        "/api/next/auth/login/options",
+        "/api/auth/login/options",
+        methods=["POST"],
+    )
     def login_options():
+        body = request.get_json(silent=True) or {}
+        client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
+        username_raw = body.get("username")
+        username = str(username_raw or "").strip()
+        if username:
+            try:
+                username = _normalize_username(username)
+            except ValueError as exc:
+                raise next_api_error(str(exc), 400) from exc
         with connect() as conn:
             if not table_exists(conn, "passkey_credentials"):
                 raise next_api_error("Auth tables are not available", 503)
             with conn.cursor() as cur:
-                cur.execute("SELECT id FROM passkey_credentials ORDER BY created_at")
-                credentials = cur.fetchall()
+                if username:
+                    cur.execute(
+                        """
+                        SELECT c.id
+                        FROM passkey_credentials c
+                        JOIN users u ON u.id = c.user_id
+                        WHERE u.username=%s
+                        ORDER BY c.created_at
+                        """,
+                        (username,),
+                    )
+                    credentials = cur.fetchall()
+                elif client_kind == "ios":
+                    credentials = []
+                else:
+                    cur.execute("SELECT id FROM passkey_credentials ORDER BY created_at")
+                    credentials = cur.fetchall()
             challenge = _make_challenge()
             with conn.transaction():
                 store_challenge(conn, "login", challenge)
@@ -1505,17 +1617,38 @@ def register_next_auth_routes(
             ],
             "userVerification": "preferred",
         }
-        return response({"status": "ok", "options": options})
+        return response(
+            {
+                "status": "ok",
+                "options": options,
+                "publicKey": options,
+                "public_key": {
+                    "challenge": options["challenge"],
+                    "rp_id": options["rpId"],
+                    "allow_credentials": [
+                        {"id": item["id"], "type": item["type"]}
+                        for item in options["allowCredentials"]
+                    ],
+                },
+            }
+        )
 
-    @route("/api/next/auth/login/verify", "/api/auth/login/verify", methods=["POST"])
+    @route(
+        "/api/next/auth/passkeys/login/verify",
+        "/api/next/auth/passkey/login/verify",
+        "/api/next/auth/login/verify",
+        "/api/auth/login/verify",
+        methods=["POST"],
+    )
     def login_verify():
         body = request.get_json(silent=True) or {}
         credential = body.get("credential") or {}
+        client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
         mobile_flow_raw = body.get("mobile_flow") or body.get("mobileFlow")
         mobile_flow = _parse_uuid(mobile_flow_raw)
         if mobile_flow_raw and not mobile_flow:
             raise next_api_error("mobile_flow is invalid", 400)
-        credential_id = str(credential.get("id") or "")
+        credential_id = str(credential.get("id") or credential.get("rawId") or "")
         if not credential_id:
             raise next_api_error("Credential id is required", 400)
 
@@ -1526,7 +1659,7 @@ def register_next_auth_routes(
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT c.*, u.username, u.status AS user_status
+                    SELECT c.*, u.username, u.display_name, u.status AS user_status
                     FROM passkey_credentials c
                     JOIN users u ON u.id = c.user_id
                     WHERE c.id=%s
@@ -1613,6 +1746,33 @@ def register_next_auth_routes(
                             "state": mobile_code.get("state"),
                         }
                     )
+                if client_kind == "ios":
+                    payload = native_login_response(
+                        conn,
+                        user_id=stored["user_id"],
+                        username=stored["username"],
+                        display_name=stored.get("display_name"),
+                    )
+                    audit_event(
+                        conn,
+                        event_type="auth.native_token_issued",
+                        category="security",
+                        actor={
+                            "id": stored["user_id"],
+                            "username": stored["username"],
+                            "role": primary_role(conn, stored["user_id"]),
+                        },
+                        target_type="api_access_token",
+                        target_id=payload["api_token"]["id"],
+                        summary=f"Issued native iOS token for {stored['username']}",
+                        metadata={
+                            "clientKind": "ios",
+                            "apiTokenId": payload["api_token"]["id"],
+                            "permissionKeys": payload["api_token"]["permission_keys"],
+                            "effectivePermissionKeys": payload["effectivePermissionKeys"],
+                        },
+                    )
+                    return response(payload)
 
         token = _create_token(str(stored["user_id"]), stored["username"])
         return cookie_response({"status": "ok", "token": token, "username": stored["username"]}, token)
