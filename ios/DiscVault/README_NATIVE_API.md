@@ -11,7 +11,23 @@ paths.
 
 ## Auth
 
-Use `ASWebAuthenticationSession` with PKCE:
+Native iOS passkey login can use WebAuthn assertion endpoints directly:
+
+- `POST /api/next/auth/passkeys/login/options`
+- `POST /api/next/auth/passkeys/login/verify`
+
+DiscVault also keeps fallback aliases for temporary client compatibility:
+
+- `POST /api/next/auth/passkey/login/options`
+- `POST /api/next/auth/login/options`
+- `POST /api/next/auth/passkey/login/verify`
+- `POST /api/next/auth/login/verify`
+
+The verify response returns a native-usable token payload (`token`,
+`api_token.permission_keys`, `user`) plus compatibility fields
+(`access_token`, `currentUser`, `session`, `profile`).
+
+Fallback browser flow remains available via `ASWebAuthenticationSession` + PKCE:
 
 1. Open `/api/next/auth/mobile/start` with `callback_scheme`, `state`,
    `code_challenge` and `code_challenge_method=S256`.

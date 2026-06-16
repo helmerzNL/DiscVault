@@ -167,6 +167,50 @@ try:
     from .next_people import normalize_person_refresh_job
     from .next_people import movie_metadata_person_refresh_skipped_people
     from .next_people import register_next_people_routes
+    from .next_preferences import APP_PREFERENCE_DEFAULTS
+    from .next_preferences import APP_BOOLEAN_PREFERENCES
+    from .next_preferences import APP_CHOICE_PREFERENCES
+    from .next_preferences import APP_PREFERENCE_ALIASES
+    from .next_preferences import APP_PREFERENCE_SECTIONS
+    from .next_preferences import actor_delete_container_members_enabled
+    from .next_preferences import app_effective_preferences
+    from .next_preferences import app_global_preferences
+    from .next_preferences import app_preference_sections_payload
+    from .next_preferences import app_user_preferences
+    from .next_preferences import mobile_endpoint_contract_payload
+    from .next_preferences import mobile_feature_capabilities
+    from .next_preferences import normalized_app_preference_key
+    from .next_preferences import register_next_preferences_routes
+    from .next_preferences import set_app_user_preferences
+    from .next_preferences import validate_app_preference
+    from .next_notifications import NOTIFICATION_PREF_DEFAULTS
+    from .next_notifications import create_user_notification
+    from .next_notifications import notification_counts
+    from .next_notifications import notification_preference_map
+    from .next_notifications import register_next_notifications_routes
+    from .next_notifications import user_notification_rows
+    from .next_push import PWA_ICON_ASSETS
+    from .next_push import deliver_native_push_device
+    from .next_push import get_or_create_push_vapid_keys
+    from .next_push import native_push_apns_auth_token
+    from .next_push import native_push_apns_settings
+    from .next_push import native_push_apns_url
+    from .next_push import native_push_config
+    from .next_push import native_push_device_public
+    from .next_push import native_push_device_rows
+    from .next_push import native_push_device_token_hash
+    from .next_push import native_push_device_token_suffix
+    from .next_push import native_push_environment
+    from .next_push import native_push_payload
+    from .next_push import native_push_private_key
+    from .next_push import native_push_status_payload
+    from .next_push import normalize_native_push_registration
+    from .next_push import pwa_head_tags
+    from .next_push import pwa_manifest_payload
+    from .next_push import push_vapid_subject
+    from .next_push import register_next_push_routes
+    from .next_push import send_native_push_to_user
+    from .next_push import send_push_to_user
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
@@ -293,6 +337,50 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_people import normalize_person_refresh_job
     from next_people import movie_metadata_person_refresh_skipped_people
     from next_people import register_next_people_routes
+    from next_preferences import APP_PREFERENCE_DEFAULTS
+    from next_preferences import APP_BOOLEAN_PREFERENCES
+    from next_preferences import APP_CHOICE_PREFERENCES
+    from next_preferences import APP_PREFERENCE_ALIASES
+    from next_preferences import APP_PREFERENCE_SECTIONS
+    from next_preferences import actor_delete_container_members_enabled
+    from next_preferences import app_effective_preferences
+    from next_preferences import app_global_preferences
+    from next_preferences import app_preference_sections_payload
+    from next_preferences import app_user_preferences
+    from next_preferences import mobile_endpoint_contract_payload
+    from next_preferences import mobile_feature_capabilities
+    from next_preferences import normalized_app_preference_key
+    from next_preferences import register_next_preferences_routes
+    from next_preferences import set_app_user_preferences
+    from next_preferences import validate_app_preference
+    from next_notifications import NOTIFICATION_PREF_DEFAULTS
+    from next_notifications import create_user_notification
+    from next_notifications import notification_counts
+    from next_notifications import notification_preference_map
+    from next_notifications import register_next_notifications_routes
+    from next_notifications import user_notification_rows
+    from next_push import PWA_ICON_ASSETS
+    from next_push import deliver_native_push_device
+    from next_push import get_or_create_push_vapid_keys
+    from next_push import native_push_apns_auth_token
+    from next_push import native_push_apns_settings
+    from next_push import native_push_apns_url
+    from next_push import native_push_config
+    from next_push import native_push_device_public
+    from next_push import native_push_device_rows
+    from next_push import native_push_device_token_hash
+    from next_push import native_push_device_token_suffix
+    from next_push import native_push_environment
+    from next_push import native_push_payload
+    from next_push import native_push_private_key
+    from next_push import native_push_status_payload
+    from next_push import normalize_native_push_registration
+    from next_push import pwa_head_tags
+    from next_push import pwa_manifest_payload
+    from next_push import push_vapid_subject
+    from next_push import register_next_push_routes
+    from next_push import send_native_push_to_user
+    from next_push import send_push_to_user
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
@@ -42273,6 +42361,63 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+try:  # pragma: no cover - compatibility re-exports for extracted Step 6 domains
+    from . import next_notifications as _next_notifications
+    from . import next_preferences as _next_preferences
+    from . import next_push as _next_push
+except ImportError:  # pragma: no cover - supports gunicorn next_app:app
+    import next_notifications as _next_notifications
+    import next_preferences as _next_preferences
+    import next_push as _next_push
+
+APP_PREFERENCE_DEFAULTS = _next_preferences.APP_PREFERENCE_DEFAULTS
+APP_BOOLEAN_PREFERENCES = _next_preferences.APP_BOOLEAN_PREFERENCES
+APP_CHOICE_PREFERENCES = _next_preferences.APP_CHOICE_PREFERENCES
+APP_PREFERENCE_ALIASES = _next_preferences.APP_PREFERENCE_ALIASES
+APP_PREFERENCE_SECTIONS = _next_preferences.APP_PREFERENCE_SECTIONS
+normalized_app_preference_key = _next_preferences.normalized_app_preference_key
+validate_app_preference = _next_preferences.validate_app_preference
+app_global_preferences = _next_preferences.app_global_preferences
+app_user_preferences = _next_preferences.app_user_preferences
+app_effective_preferences = _next_preferences.app_effective_preferences
+set_app_user_preferences = _next_preferences.set_app_user_preferences
+app_preference_sections_payload = _next_preferences.app_preference_sections_payload
+mobile_feature_capabilities = _next_preferences.mobile_feature_capabilities
+mobile_endpoint_contract_payload = _next_preferences.mobile_endpoint_contract_payload
+actor_delete_container_members_enabled = _next_preferences.actor_delete_container_members_enabled
+register_next_preferences_routes = _next_preferences.register_next_preferences_routes
+
+NOTIFICATION_PREF_DEFAULTS = _next_notifications.NOTIFICATION_PREF_DEFAULTS
+notification_preference_map = _next_notifications.notification_preference_map
+notification_counts = _next_notifications.notification_counts
+user_notification_rows = _next_notifications.user_notification_rows
+create_user_notification = _next_notifications.create_user_notification
+register_next_notifications_routes = _next_notifications.register_next_notifications_routes
+
+PWA_ICON_ASSETS = _next_push.PWA_ICON_ASSETS
+pwa_manifest_payload = _next_push.pwa_manifest_payload
+pwa_head_tags = _next_push.pwa_head_tags
+push_vapid_subject = _next_push.push_vapid_subject
+get_or_create_push_vapid_keys = _next_push.get_or_create_push_vapid_keys
+send_push_to_user = _next_push.send_push_to_user
+native_push_environment = _next_push.native_push_environment
+native_push_private_key = _next_push.native_push_private_key
+native_push_apns_settings = _next_push.native_push_apns_settings
+native_push_config = _next_push.native_push_config
+native_push_device_token_suffix = _next_push.native_push_device_token_suffix
+native_push_device_token_hash = _next_push.native_push_device_token_hash
+native_push_device_public = _next_push.native_push_device_public
+native_push_device_rows = _next_push.native_push_device_rows
+native_push_status_payload = _next_push.native_push_status_payload
+normalize_native_push_registration = _next_push.normalize_native_push_registration
+native_push_apns_url = _next_push.native_push_apns_url
+native_push_apns_auth_token = _next_push.native_push_apns_auth_token
+native_push_payload = _next_push.native_push_payload
+deliver_native_push_device = _next_push.deliver_native_push_device
+send_native_push_to_user = _next_push.send_native_push_to_user
+register_next_push_routes = _next_push.register_next_push_routes
+
+
 PUBLIC_NEXT_PATHS = {
     "/",
     "/app",
@@ -42333,6 +42478,9 @@ def register_routes(flask_app: Flask) -> None:
     register_next_profile_routes(flask_app, connect=connect)
     register_next_audit_routes(flask_app, connect=connect)
     register_next_people_routes(flask_app, connect=connect)
+    register_next_preferences_routes(flask_app, connect=connect)
+    register_next_notifications_routes(flask_app, connect=connect)
+    register_next_push_routes(flask_app, connect=connect)
 
     @flask_app.errorhandler(NextApiError)
     def handle_next_error(error: NextApiError):
@@ -42413,32 +42561,6 @@ def register_routes(flask_app: Flask) -> None:
             200 if is_ready else 503,
         )
 
-    @flask_app.get("/manifest.json")
-    @flask_app.get("/api/next/manifest.json")
-    def next_pwa_manifest():
-        result = jsonify(pwa_manifest_payload())
-        result.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        return result
-
-    @flask_app.get("/service-worker.js")
-    def next_service_worker():
-        path = next_frontend_dir() / "service-worker.js"
-        if not path.exists() or not path.is_file():
-            raise NextApiError("Service worker not found", 404)
-        result = send_file(path, mimetype="application/javascript")
-        result.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        return result
-
-    @flask_app.get("/api/next/assets/<path:asset_name>")
-    def next_frontend_asset(asset_name: str):
-        safe_name = Path(asset_name).name
-        if safe_name != asset_name or safe_name not in PWA_ICON_ASSETS:
-            raise NextApiError("Asset not found", 404)
-        path = next_frontend_dir() / safe_name
-        if not path.exists() or not path.is_file():
-            raise NextApiError("Asset not found", 404)
-        return send_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
-
     @flask_app.get("/api/next/flags/<path:flag_name>")
     def next_frontend_flag(flag_name: str):
         safe_name = Path(flag_name).name
@@ -42448,19 +42570,6 @@ def register_routes(flask_app: Flask) -> None:
         if not path.exists() or not path.is_file():
             raise NextApiError("Flag not found", 404)
         return send_file(path, mimetype="image/svg+xml")
-
-    @flask_app.get("/apple-touch-icon-152.png")
-    @flask_app.get("/apple-touch-icon-167.png")
-    @flask_app.get("/apple-touch-icon.png")
-    @flask_app.get("/favicon-32.png")
-    @flask_app.get("/favicon-192.png")
-    @flask_app.get("/favicon-512.png")
-    @flask_app.get("/pwa-icon-192.png")
-    @flask_app.get("/pwa-icon-512.png")
-    @flask_app.get("/pwa-maskable-192.png")
-    @flask_app.get("/pwa-maskable-512.png")
-    def next_root_pwa_asset():
-        return next_frontend_asset(request.path.rsplit("/", 1)[-1])
 
     @flask_app.get("/api/next/i18n")
     def next_i18n_manifest():
@@ -42501,669 +42610,6 @@ def register_routes(flask_app: Flask) -> None:
                 user["role"] = next_user_primary_role(conn, user["id"])
                 user["permissions"] = sorted(next_user_permission_keys(conn, user["id"]))
             return response({"status": "ok", "snapshot": collection_dashboard_snapshot(conn, user)})
-
-    @flask_app.get("/api/next/mobile/bootstrap")
-    def next_mobile_bootstrap():
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Mobile bootstrap requires a signed-in user", 401)
-            preferences = app_effective_preferences(conn, user_id)
-            token_permissions = actor_api_token_permission_keys(actor)
-            effective_permissions = sorted(actor_effective_permission_keys(conn, actor))
-            push_public_key = None
-            push_subject = None
-            if table_exists(conn, "push_subscriptions"):
-                push_public_key, _ = get_or_create_push_vapid_keys(conn)
-                push_subject = push_vapid_subject()
-            return response(
-                {
-                    "status": "ok",
-                    "mobile": {
-                        "contractVersion": "2026-06-09.1",
-                        "platform": "ios",
-                        "recommendedClient": {
-                            "offlineFirst": True,
-                            "authFlow": "ASWebAuthenticationSession + PKCE",
-                            "barcodeImport": "metadata lookup first, then import selected movie or box-set candidate",
-                        },
-                    },
-                    "app": {
-                        "name": "DiscVault",
-                        "productName": "DiscVault 26",
-                        "version": build_version(),
-                        "serverTime": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                    },
-                    "auth": {
-                        "authenticated": True,
-                        "role": actor.get("role"),
-                        "tokenPermissionKeys": sorted(token_permissions) if token_permissions is not None else [],
-                        "effectivePermissionKeys": effective_permissions,
-                    },
-                    "user": next_profile_user_payload(conn, actor),
-                    "capabilities": mobile_feature_capabilities(conn, actor),
-                    "preferences": {
-                        "values": preferences,
-                        "defaults": APP_PREFERENCE_DEFAULTS,
-                        "sections": app_preference_sections_payload(preferences),
-                        "ratingCountries": sorted(APP_CHOICE_PREFERENCES.get("rating_country", [])),
-                    },
-                    "notifications": {
-                        "counts": notification_counts(conn, user_id),
-                        "preferences": notification_preference_map(conn, user_id),
-                        "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
-                        "webPush": {
-                            "available": bool(push_public_key),
-                            "publicKey": push_public_key,
-                            "subject": push_subject,
-                        },
-                        "nativePush": native_push_status_payload(conn, user_id),
-                    },
-                    "localization": {
-                        "sourceLocale": NEXT_I18N_SOURCE_LOCALE,
-                        "defaultLocale": NEXT_I18N_DEFAULT_LOCALE,
-                        "locales": supported_next_locales(),
-                    },
-                    "apiAccess": profile_api_access_payload(conn, actor),
-                    "endpoints": mobile_endpoint_contract_payload(),
-                }
-            )
-
-
-    @flask_app.get("/api/next/preferences")
-    def get_app_preferences():
-        with connect() as conn:
-            user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
-            return response(
-                {
-                    "status": "ok",
-                    "preferences": app_effective_preferences(conn, user.get("id") if user else None),
-                    "defaults": APP_PREFERENCE_DEFAULTS,
-                    "userScoped": bool(user),
-                }
-            )
-
-    @flask_app.patch("/api/next/preferences")
-    def patch_app_preferences():
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body, dict):
-            raise NextApiError("Preferences request body must be an object", 400)
-        updates = body.get("preferences", body)
-        if not isinstance(updates, dict):
-            raise NextApiError("preferences must be an object", 400)
-        with connect() as conn:
-            user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
-            if next_auth_effective_enabled(conn, table_exists) and not user:
-                raise NextApiError("Unauthorized", 401)
-            if not user:
-                # In unauthenticated development setups we keep the endpoint readable but do
-                # not mutate global defaults from the app shell.
-                return response(
-                    {
-                        "status": "ok",
-                        "preferences": app_effective_preferences(conn),
-                        "userScoped": False,
-                        "updated": False,
-                    }
-                )
-            with conn.transaction():
-                preferences = set_app_user_preferences(conn, user["id"], updates)
-        return response({"status": "ok", "preferences": preferences, "userScoped": True, "updated": True})
-
-    @flask_app.get("/api/next/push/status")
-    def next_push_status():
-        endpoint = str(request.args.get("endpoint") or "").strip()
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Push requires a signed-in user", 401)
-            public_key, _ = get_or_create_push_vapid_keys(conn)
-            subscriptions: list[dict[str, Any]] = []
-            current_subscription = None
-            if table_exists(conn, "push_subscriptions"):
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        SELECT id, endpoint, device_label, user_agent, is_primary, created_at, updated_at
-                        FROM push_subscriptions
-                        WHERE user_id=%s
-                        ORDER BY is_primary DESC, updated_at DESC
-                        """,
-                        (user_id,),
-                    )
-                    subscriptions = cur.fetchall()
-                for subscription in subscriptions:
-                    if endpoint and subscription.get("endpoint") == endpoint:
-                        current_subscription = subscription
-                        break
-            return response(
-                {
-                    "status": "ok",
-                    "publicKey": public_key,
-                    "subject": push_vapid_subject(),
-                    "preferences": notification_preference_map(conn, user_id),
-                    "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
-                    "nativePush": native_push_status_payload(conn, user_id),
-                    "subscriptions": [
-                        {
-                            "id": item.get("id"),
-                            "deviceLabel": item.get("device_label"),
-                            "userAgent": item.get("user_agent"),
-                            "isPrimary": item.get("is_primary"),
-                            "createdAt": item.get("created_at"),
-                            "updatedAt": item.get("updated_at"),
-                            "current": endpoint and item.get("endpoint") == endpoint,
-                        }
-                        for item in subscriptions
-                    ],
-                    "currentSubscription": current_subscription,
-                    "counts": notification_counts(conn, user_id),
-                }
-            )
-
-    @flask_app.get("/api/next/push/native/status")
-    def next_native_push_status():
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Native push requires a signed-in user", 401)
-            return response(
-                {
-                    "status": "ok",
-                    "nativePush": native_push_status_payload(conn, user_id),
-                    "preferences": notification_preference_map(conn, user_id),
-                    "counts": notification_counts(conn, user_id),
-                }
-            )
-
-    @flask_app.post("/api/next/push/native/register")
-    def next_native_push_register():
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body, dict):
-            raise NextApiError("Native push registration request body must be an object", 400)
-        registration = normalize_native_push_registration(body)
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Native push requires a signed-in user", 401)
-            if not table_exists(conn, "native_push_devices"):
-                raise NextApiError("Native push devices table is not available", 503)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        SELECT id
-                        FROM native_push_devices
-                        WHERE user_id=%s
-                          AND token_hash=%s
-                          AND apns_environment=%s
-                          AND COALESCE(app_bundle_id, '')=COALESCE(%s, '')
-                        ORDER BY revoked_at NULLS FIRST, updated_at DESC
-                        LIMIT 1
-                        """,
-                        (user_id, registration["tokenHash"], registration["environment"], registration["bundleId"]),
-                    )
-                    existing = cur.fetchone()
-                    if existing:
-                        cur.execute(
-                            """
-                            UPDATE native_push_devices
-                            SET platform=%s,
-                                device_token=%s,
-                                token_hash=%s,
-                                token_suffix=%s,
-                                app_bundle_id=%s,
-                                device_label=%s,
-                                app_version=%s,
-                                user_agent=%s,
-                                metadata=%s,
-                                last_seen_at=now(),
-                                updated_at=now(),
-                                revoked_at=NULL
-                            WHERE id=%s AND user_id=%s
-                            RETURNING id, platform, device_token, token_hash, token_suffix,
-                                      apns_environment, app_bundle_id, device_label, app_version,
-                                      user_agent, metadata, last_seen_at, created_at, updated_at, revoked_at
-                            """,
-                            (
-                                registration["platform"],
-                                registration["deviceToken"],
-                                registration["tokenHash"],
-                                registration["tokenSuffix"],
-                                registration["bundleId"],
-                                registration["deviceLabel"],
-                                registration["appVersion"],
-                                registration["userAgent"],
-                                Jsonb(json_ready(registration["metadata"])),
-                                existing["id"],
-                                user_id,
-                            ),
-                        )
-                    else:
-                        cur.execute(
-                            """
-                            INSERT INTO native_push_devices (
-                                user_id, platform, device_token, token_hash, token_suffix,
-                                apns_environment, app_bundle_id, device_label, app_version,
-                                user_agent, metadata, last_seen_at, created_at, updated_at, revoked_at
-                            )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now(), now(), NULL)
-                            RETURNING id, platform, device_token, token_hash, token_suffix,
-                                      apns_environment, app_bundle_id, device_label, app_version,
-                                      user_agent, metadata, last_seen_at, created_at, updated_at, revoked_at
-                            """,
-                            (
-                                user_id,
-                                registration["platform"],
-                                registration["deviceToken"],
-                                registration["tokenHash"],
-                                registration["tokenSuffix"],
-                                registration["environment"],
-                                registration["bundleId"],
-                                registration["deviceLabel"],
-                                registration["appVersion"],
-                                registration["userAgent"],
-                                Jsonb(json_ready(registration["metadata"])),
-                            ),
-                        )
-                    device = cur.fetchone()
-                audit_event(
-                    conn,
-                    event_type="native_push.registered",
-                    category="personal",
-                    actor=actor,
-                    target_type="native_push_device",
-                    target_id=device.get("id") if device else None,
-                    summary="Registered native iOS push device",
-                    metadata={
-                        "platform": registration["platform"],
-                        "environment": registration["environment"],
-                        "bundleId": registration["bundleId"],
-                        "deviceLabel": registration["deviceLabel"],
-                        "appVersion": registration["appVersion"],
-                        "tokenSuffix": registration["tokenSuffix"],
-                    },
-                )
-            return response(
-                {
-                    "status": "ok",
-                    "device": native_push_device_public(device),
-                    "nativePush": native_push_status_payload(conn, user_id),
-                    "preferences": notification_preference_map(conn, user_id),
-                    "counts": notification_counts(conn, user_id),
-                },
-                201,
-            )
-
-    @flask_app.delete("/api/next/push/native/register")
-    def next_native_push_revoke():
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body, dict):
-            raise NextApiError("Native push revoke request body must be an object", 400)
-        device_id = str(body.get("deviceId", body.get("id")) or "").strip()
-        device_token = str(body.get("deviceToken", body.get("device_token")) or "").strip()
-        environment = native_push_environment(body.get("environment", body.get("apnsEnvironment")))
-        bundle_id = clean_text(body.get("bundleId", body.get("bundle_id"))) or native_push_config().get("bundleId")
-        if not device_id and not device_token:
-            raise NextApiError("deviceId or deviceToken is required", 400)
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Native push requires a signed-in user", 401)
-            if not table_exists(conn, "native_push_devices"):
-                raise NextApiError("Native push devices table is not available", 503)
-            params: tuple[Any, ...]
-            if device_id:
-                parsed_device_id = parse_uuid(device_id, "deviceId")
-                where_clause = "id=%s AND user_id=%s"
-                params = (parsed_device_id, user_id)
-            else:
-                where_clause = "platform='ios' AND apns_environment=%s AND token_hash=%s AND COALESCE(app_bundle_id, '')=COALESCE(%s, '') AND user_id=%s"
-                params = (environment, native_push_device_token_hash(device_token), bundle_id, user_id)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        f"""
-                        UPDATE native_push_devices
-                        SET revoked_at=COALESCE(revoked_at, now()), updated_at=now()
-                        WHERE {where_clause}
-                        RETURNING id, platform, device_token, token_hash, token_suffix,
-                                  apns_environment, app_bundle_id,
-                                  device_label, app_version, user_agent, metadata,
-                                  last_seen_at, created_at, updated_at, revoked_at
-                        """,
-                        params,
-                    )
-                    device = cur.fetchone()
-                audit_event(
-                    conn,
-                    event_type="native_push.revoked",
-                    category="personal",
-                    actor=actor,
-                    target_type="native_push_device",
-                    target_id=device.get("id") if device else None,
-                    summary="Revoked native iOS push device",
-                    metadata={"deleted": bool(device), "environment": environment},
-                )
-            return response(
-                {
-                    "status": "deleted",
-                    "deleted": bool(device),
-                    "revoked": bool(device),
-                    "device": native_push_device_public(device),
-                    "nativePush": native_push_status_payload(conn, user_id),
-                    "counts": notification_counts(conn, user_id),
-                }
-            )
-
-    @flask_app.post("/api/next/push/native/test")
-    def next_native_push_test():
-        body = request.get_json(silent=True) or {}
-        if body and not isinstance(body, dict):
-            raise NextApiError("Native push test request body must be an object", 400)
-        requested_device_id = str(body.get("deviceId", body.get("id")) or "").strip() if isinstance(body, dict) else ""
-        parsed_device_id = parse_uuid(requested_device_id, "deviceId") if requested_device_id else None
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Native push test requires a signed-in user", 401)
-            with conn.transaction():
-                notification = create_user_notification(
-                    conn,
-                    user_id,
-                    title="DiscVault",
-                    body="Native iOS push notifications are working.",
-                    url="/notifications",
-                    pref_key="security",
-                    payload={"type": "native_push_test", "topic": "security"},
-                    send_push=False,
-                )
-                delivery = send_native_push_to_user(
-                    conn,
-                    user_id,
-                    title=notification.get("title") or "DiscVault",
-                    body=notification.get("body") or "",
-                    topic="security",
-                    url="/notifications",
-                    notification_id=notification.get("id"),
-                    device_id=parsed_device_id,
-                )
-                audit_event(
-                    conn,
-                    event_type="native_push.test",
-                    category="personal",
-                    actor=actor,
-                    target_type="user_notification",
-                    target_id=notification.get("id"),
-                    summary="Tested native iOS push delivery",
-                    metadata={"delivery": delivery},
-                )
-            return response(
-                {
-                    "status": "ok" if delivery.get("status") in {"sent", "no_devices"} else "degraded",
-                    "notification": notification,
-                    "delivery": delivery,
-                    "nativePush": native_push_status_payload(conn, user_id),
-                    "counts": notification_counts(conn, user_id),
-                }
-            )
-
-    @flask_app.post("/api/next/push/subscribe")
-    def next_push_subscribe():
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body, dict):
-            raise NextApiError("Push subscription request body must be an object", 400)
-        subscription = body.get("subscription") if isinstance(body.get("subscription"), dict) else body
-        endpoint = str(subscription.get("endpoint") or "").strip()
-        keys = subscription.get("keys") if isinstance(subscription.get("keys"), dict) else {}
-        p256dh = str(keys.get("p256dh") or "").strip()
-        auth = str(keys.get("auth") or "").strip()
-        if not endpoint or not p256dh or not auth:
-            raise NextApiError("Push subscription endpoint and keys are required", 400)
-        device_label = clean_text(body.get("deviceLabel", body.get("device_label"))) or "DiscVault device"
-        user_agent = str(body.get("userAgent") or request.headers.get("User-Agent") or "")[:500]
-        requested_primary = parse_bool_value(body.get("isPrimary", body.get("is_primary")), default=False)
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Push requires a signed-in user", 401)
-            if not table_exists(conn, "push_subscriptions"):
-                raise NextApiError("Push subscriptions table is not available", 503)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute("SELECT COUNT(*)::int AS count FROM push_subscriptions WHERE user_id=%s", (user_id,))
-                    first_subscription = int((cur.fetchone() or {}).get("count") or 0) == 0
-                    is_primary = bool(requested_primary or first_subscription)
-                    if is_primary:
-                        cur.execute("UPDATE push_subscriptions SET is_primary=false WHERE user_id=%s", (user_id,))
-                    cur.execute(
-                        """
-                        INSERT INTO push_subscriptions (
-                            user_id, endpoint, p256dh, auth, user_agent, device_label, is_primary, created_at, updated_at
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, now(), now())
-                        ON CONFLICT (endpoint) DO UPDATE SET
-                            user_id=EXCLUDED.user_id,
-                            p256dh=EXCLUDED.p256dh,
-                            auth=EXCLUDED.auth,
-                            user_agent=EXCLUDED.user_agent,
-                            device_label=EXCLUDED.device_label,
-                            is_primary=EXCLUDED.is_primary,
-                            updated_at=now()
-                        RETURNING id, endpoint, device_label, user_agent, is_primary, created_at, updated_at
-                        """,
-                        (user_id, endpoint, p256dh, auth, user_agent, device_label, is_primary),
-                    )
-                    subscription_row = cur.fetchone()
-                audit_event(
-                    conn,
-                    event_type="push.subscribed",
-                    category="personal",
-                    actor=actor,
-                    target_type="push_subscription",
-                    target_id=subscription_row.get("id") if subscription_row else None,
-                    summary="Enabled push notifications",
-                    metadata={"isPrimary": is_primary},
-                )
-            return response(
-                {
-                    "status": "ok",
-                    "subscription": subscription_row,
-                    "preferences": notification_preference_map(conn, user_id),
-                    "counts": notification_counts(conn, user_id),
-                },
-                201,
-            )
-
-    @flask_app.delete("/api/next/push/subscribe")
-    def next_push_unsubscribe():
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body, dict):
-            raise NextApiError("Push unsubscribe request body must be an object", 400)
-        endpoint = str(body.get("endpoint") or "").strip()
-        if not endpoint:
-            raise NextApiError("endpoint is required", 400)
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Push requires a signed-in user", 401)
-            if not table_exists(conn, "push_subscriptions"):
-                raise NextApiError("Push subscriptions table is not available", 503)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "DELETE FROM push_subscriptions WHERE user_id=%s AND endpoint=%s RETURNING id",
-                        (user_id, endpoint),
-                    )
-                    deleted = cur.fetchone()
-                audit_event(
-                    conn,
-                    event_type="push.unsubscribed",
-                    category="personal",
-                    actor=actor,
-                    target_type="push_subscription",
-                    target_id=deleted.get("id") if deleted else None,
-                    summary="Disabled push notifications",
-                    metadata={},
-                )
-            return response({"status": "deleted", "deleted": bool(deleted), "counts": notification_counts(conn, user_id)})
-
-    @flask_app.patch("/api/next/push/preferences")
-    def patch_next_push_preferences():
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body, dict):
-            raise NextApiError("Push preferences request body must be an object", 400)
-        updates = body.get("preferences", body)
-        if not isinstance(updates, dict):
-            raise NextApiError("preferences must be an object", 400)
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Push preferences require a signed-in user", 401)
-            if not table_exists(conn, "notification_preferences"):
-                raise NextApiError("Notification preferences table is not available", 503)
-            normalized: dict[str, bool] = {}
-            for key, value in updates.items():
-                if key in NOTIFICATION_PREF_DEFAULTS:
-                    normalized[key] = parse_bool_value(value, default=NOTIFICATION_PREF_DEFAULTS[key])
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    for key, enabled in normalized.items():
-                        cur.execute(
-                            """
-                            INSERT INTO notification_preferences (user_id, pref_key, enabled, updated_at)
-                            VALUES (%s, %s, %s, now())
-                            ON CONFLICT (user_id, pref_key) DO UPDATE SET
-                                enabled=EXCLUDED.enabled,
-                                updated_at=now()
-                            """,
-                            (user_id, key, enabled),
-                        )
-            return response(
-                {
-                    "status": "ok",
-                    "preferences": notification_preference_map(conn, user_id),
-                    "preferenceDefaults": NOTIFICATION_PREF_DEFAULTS,
-                }
-            )
-
-    @flask_app.post("/api/next/push/test")
-    def next_push_test():
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Push test requires a signed-in user", 401)
-            with conn.transaction():
-                notification = create_user_notification(
-                    conn,
-                    user_id,
-                    title="DiscVault",
-                    body="Push notifications are working.",
-                    url="/notifications",
-                    pref_key="security",
-                    payload={"type": "push_test"},
-                    send_push=True,
-                )
-                audit_event(
-                    conn,
-                    event_type="push.test",
-                    category="personal",
-                    actor=actor,
-                    target_type="user_notification",
-                    target_id=notification.get("id"),
-                    summary="Sent push test notification",
-                    metadata={"pushErrors": notification.get("pushErrors") or []},
-                )
-            return response(
-                {
-                    "status": "ok" if not notification.get("pushErrors") else "degraded",
-                    "notification": notification,
-                    "counts": notification_counts(conn, user_id),
-                }
-            )
-
-    @flask_app.get("/api/next/notifications")
-    def next_notifications():
-        limit = min(max(int(request.args.get("limit", 100)), 1), 250)
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Notifications require a signed-in user", 401)
-            return response(
-                {
-                    "status": "ok",
-                    "notifications": user_notification_rows(conn, user_id, limit=limit),
-                    "counts": notification_counts(conn, user_id),
-                }
-            )
-
-    @flask_app.patch("/api/next/notifications/<notification_id>")
-    def patch_next_notification(notification_id: str):
-        notification_uuid = parse_uuid(notification_id, "notificationId")
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body, dict):
-            raise NextApiError("Notification request body must be an object", 400)
-        mark_read = parse_bool_value(body.get("read", True), default=True)
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Notifications require a signed-in user", 401)
-            if not table_exists(conn, "user_notifications"):
-                raise NextApiError("Notifications table is not available", 503)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE user_notifications
-                        SET read_at = CASE WHEN %s THEN COALESCE(read_at, now()) ELSE NULL END
-                        WHERE id=%s AND user_id=%s
-                        RETURNING id, event_id, title, body, payload, read_at, created_at
-                        """,
-                        (mark_read, notification_uuid, user_id),
-                    )
-                    notification = cur.fetchone()
-            if not notification:
-                raise NextApiError("Notification not found", 404)
-            return response({"status": "ok", "notification": notification, "counts": notification_counts(conn, user_id)})
-
-    @flask_app.post("/api/next/notifications/read-all")
-    def mark_all_next_notifications_read():
-        with connect() as conn:
-            actor = require_next_authenticated_user(conn)
-            user_id = actor.get("id")
-            if not user_id:
-                raise NextApiError("Notifications require a signed-in user", 401)
-            if not table_exists(conn, "user_notifications"):
-                raise NextApiError("Notifications table is not available", 503)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE user_notifications
-                        SET read_at=COALESCE(read_at, now())
-                        WHERE user_id=%s AND read_at IS NULL
-                        """,
-                        (user_id,),
-                    )
-            return response(
-                {
-                    "status": "ok",
-                    "notifications": user_notification_rows(conn, user_id, limit=100),
-                    "counts": notification_counts(conn, user_id),
-                }
-            )
 
     @flask_app.get("/api/next/stats")
     def stats():
