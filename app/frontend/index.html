@@ -36,6 +36,17 @@
 </head>
 <body>
 
+<div class="test-notification-banner" id="testNotificationBanner" role="status" aria-live="polite">
+  <span id="testNotificationBannerText">This is a test message</span>
+  <button
+    type="button"
+    class="test-notification-dismiss"
+    id="testNotificationDismiss"
+    aria-label="Melding sluiten"
+    onclick="dismissTestNotificationBanner()"
+  >×</button>
+</div>
+
 <header>
   <div class="logo">
     <svg viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg" style="width:36px; height:36px;">

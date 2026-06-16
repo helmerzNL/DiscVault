@@ -1,4 +1,40 @@
 // ── Init ──────────────────────────────────────────────────────────────────────
+function setTestNotificationBannerVisible(visible, message = 'This is a test message') {
+  const banner = document.getElementById('testNotificationBanner');
+  const text = document.getElementById('testNotificationBannerText');
+  const canDismiss = !authEnabled || currentUserRole === 'admin';
+  if (text) text.textContent = message || 'This is a test message';
+  document.body.classList.toggle('has-test-notification', !!visible);
+  document.body.classList.toggle('can-dismiss-test-notification', !!visible && canDismiss);
+  if (banner) banner.setAttribute('aria-hidden', visible ? 'false' : 'true');
+}
+
+async function loadTestNotificationBanner() {
+  try {
+    const r = await fetch(`${API}/settings/test-banner`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    setTestNotificationBannerVisible(d.visible !== false, d.message || 'This is a test message');
+  } catch(e) {
+    setTestNotificationBannerVisible(true, 'This is a test message');
+  }
+}
+
+async function dismissTestNotificationBanner() {
+  if (authEnabled && currentUserRole !== 'admin') return;
+  try {
+    const r = await fetch(`${API}/settings/test-banner`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible: false }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  } catch(e) {
+    return;
+  }
+  setTestNotificationBannerVisible(false);
+}
+
 async function init() {
   reorganizeToevoegenPanels();
   validateCriticalUiElements();
@@ -12,6 +48,7 @@ async function init() {
   if (!ok) return;
   // Load user preferences from server (overrides localStorage)
   await loadUserPrefsFromServer();
+  await loadTestNotificationBanner();
   loadAdminPanel();
   updateQueueIndicator();
   flushQueuedMutations();

@@ -588,6 +588,32 @@ def register_settings_routes(
             "show_auto_videos": val3,
         })
 
+    @app.route("/api/settings/test-banner", methods=["GET"])
+    def get_test_banner_settings():
+        dismissed = _bool_setting("test_notification_banner_dismissed", False)
+        return jsonify({
+            "visible": not dismissed,
+            "message": "This is a test message",
+        })
+
+    @app.route("/api/settings/test-banner", methods=["POST"])
+    def set_test_banner_settings():
+        err = require_admin()
+        if err:
+            return err
+        data = request.json or {}
+        visible = bool(data.get("visible", True))
+        _set_setting("test_notification_banner_dismissed", "false" if visible else "true")
+        add_log(
+            "settings",
+            "Test notificatiebanner zichtbaar gemaakt" if visible else "Test notificatiebanner gesloten",
+            level="info",
+        )
+        return jsonify({
+            "visible": visible,
+            "message": "This is a test message",
+        })
+
     @app.route("/api/settings/registration", methods=["GET"])
     def get_registration_settings():
         err = require_admin()

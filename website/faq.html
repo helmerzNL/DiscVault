@@ -24,7 +24,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -37,6 +37,9 @@
         <span></span><span></span><span></span>
       </button>
       <nav class="site-nav" aria-label="Primary">
+        <a href="./index.html#discvault26" data-i18n="nav.v26">DiscVault 26</a>
+        <a href="./index.html#migration" data-i18n="nav.migration">Migration</a>
+        <a href="./index.html#screenshots" data-i18n="nav.screenshots">Screenshots</a>
         <a href="./index.html#features" data-i18n="nav.features">Features</a>
         <a href="./index.html#install" data-i18n="nav.install">Install</a>
         <a href="./index.html#community" data-i18n="nav.community">Community</a>
@@ -46,15 +49,24 @@
           <select class="lang-select" aria-label="Language">
             <option value="da">🇩🇰 Dansk</option>
             <option value="de">🇩🇪 Deutsch</option>
+            <option value="el">🇬🇷 Ελληνικά</option>
             <option value="en">🇬🇧 English</option>
             <option value="es">🇪🇸 Español</option>
+            <option value="cs">🇨🇿 Čeština</option>
             <option value="fr">🇫🇷 Français</option>
+            <option value="hu">🇭🇺 Magyar</option>
             <option value="it">🇮🇹 Italiano</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="ko">🇰🇷 한국어</option>
             <option value="nl">🇳🇱 Nederlands</option>
             <option value="no">🇳🇴 Norsk</option>
+            <option value="pl">🇵🇱 Polski</option>
             <option value="pt">🇵🇹 Português</option>
             <option value="fi">🇫🇮 Suomi</option>
             <option value="sv">🇸🇪 Svenska</option>
+            <option value="tr">🇹🇷 Türkçe</option>
+            <option value="uk">🇺🇦 Українська</option>
+            <option value="zh">🇨🇳 中文</option>
           </select>
         </div>
       </nav>
@@ -90,7 +102,11 @@
             </summary>
             <div class="faq-answer">
               <p data-i18n="faq.install.p1">DiscVault is designed to run self-hosted. The easiest setup is the all-in-one Docker container, which includes the web app and backend in one image. On Unraid, use the Community Applications template and keep your database and uploaded assets on persistent storage.</p>
-              <p data-i18n="faq.install.p2">For stable use, choose the <code>latest</code> image tag. If you want to test new features early, choose the <code>beta</code> tag and expect occasional changes while features are still being refined.</p>
+              <p data-i18n="faq.install.p2">To install DiscVault 26, use the <code>v26</code> image tag. To stay on the old Legacy version, use the <code>legacy</code> tag instead of <code>latest</code>.</p>
+              <p class="faq-links">
+                <a href="https://github.com/helmerzNL/DiscVault/pkgs/container/discvault" target="_blank" rel="noreferrer">GitHub Container Registry</a>
+                <a href="https://github.com/helmerzNL/unraid-templates" target="_blank" rel="noreferrer">Unraid template</a>
+              </p>
               <h4 data-i18n="faq.install.before.title">Before you update</h4>
               <ul>
                 <li data-i18n="faq.install.before.1">Create a backup from the admin tools or copy the persistent data directory while the container is stopped.</li>
@@ -99,6 +115,24 @@
               </ul>
               <h4 data-i18n="faq.install.update.title">Updating</h4>
               <p data-i18n="faq.install.update.body">Pull the newer image, recreate the container with the same volumes and settings, then open DiscVault and confirm that your collection, users, passkeys, backups, and settings are still visible. If anything looks wrong, stop the container and restore the backup before continuing.</p>
+            </div>
+          </details>
+
+          <details class="card faq-article">
+            <summary class="faq-summary">
+              <span class="badge badge-new" data-i18n="faq.badge.published">FAQ</span>
+              <span class="faq-summary-title" data-i18n="faq.legacy.title">Staying on the old version</span>
+            </summary>
+            <div class="faq-answer">
+              <p data-i18n="faq.legacy.p1">If you are not ready to move to DiscVault 26 yet, you can stay on the previous DiscVault generation by using the <code>legacy</code> Docker image tag.</p>
+              <p data-i18n="faq.legacy.p2">Use <code>ghcr.io/helmerzNL/DiscVault:legacy</code> instead of <code>latest</code> or <code>beta</code> in your Docker, Docker Compose, or Unraid template configuration. Keep your existing volume mappings, environment variables, ports, and persistent data path unchanged.</p>
+              <h4 data-i18n="faq.legacy.steps.title">Recommended steps</h4>
+              <ul>
+                <li data-i18n="faq.legacy.steps.1">Create a backup before changing the image tag.</li>
+                <li data-i18n="faq.legacy.steps.2">Change only the image tag to <code>legacy</code>.</li>
+                <li data-i18n="faq.legacy.steps.3">Pull the image, recreate the container, and confirm that your collection opens normally.</li>
+              </ul>
+              <p data-i18n="faq.legacy.note">The legacy image is meant for people who want to keep running the old version. New DiscVault 26 features, migration improvements, and future interface updates are added to the v26 image instead.</p>
             </div>
           </details>
 
@@ -136,7 +170,8 @@
       <a href="https://github.com/helmerzNL/DiscVault" target="_blank" rel="noreferrer" data-i18n="footer.github">Source on GitHub</a>
     </footer>
 
-    <script src="./translations.js?v=11"></script>
+    <script src="./translations.js?v=12"></script>
+    <script src="./translations-extra.js?v=3"></script>
     <script>
       document.querySelector('.hamburger').addEventListener('click', function () {
         var open = this.getAttribute('aria-expanded') === 'true';
