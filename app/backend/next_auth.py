@@ -850,6 +850,9 @@ def register_next_auth_routes(
         payload = _current_user_payload()
         user_id = payload.get("sub") if payload else None
         if not user_id:
+            api_token = _bearer_api_token()
+            if api_token:
+                return next_auth_current_api_token_user(conn, api_token)
             return None
         with conn.cursor() as cur:
             cur.execute(
