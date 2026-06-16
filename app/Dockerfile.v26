@@ -1,0 +1,38 @@
+FROM python:3.12-slim
+
+ARG BUILD_VERSION=dev
+ARG BUILD_SHA=unknown
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    BUILD_VERSION=${BUILD_VERSION} \
+    BUILD_SHA=${BUILD_SHA} \
+    DISCVAULT_BACKEND_VERSION=${BUILD_VERSION} \
+    DISCVAULT_BUILD_SHA=${BUILD_SHA} \
+    TZ=Europe/Amsterdam
+
+WORKDIR /opt/discvault
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt /tmp/requirements-backend.txt
+COPY mcp-server/requirements.txt /tmp/requirements-mcp.txt
+RUN pip install -r /tmp/requirements-backend.txt \
+    && pip install -r /tmp/requirements-mcp.txt
+
+COPY VERSION /opt/discvault/VERSION
+COPY backend /opt/discvault/backend
+COPY mcp-server /opt/discvault/mcp-server
+COPY frontend /opt/discvault/frontend
+COPY deploy/v26/supervisord.conf /etc/supervisor/conf.d/discvault-v26.conf
+
+RUN mkdir -p /data/posters /data/profiles /data/backups /data/avatars
+
+VOLUME ["/data"]
+
+EXPOSE 5000 6090
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/discvault-v26.conf"]

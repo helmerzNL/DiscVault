@@ -1,0 +1,25 @@
+{
+  "id": "upcitemdb",
+  "name": "UPCItemDB",
+  "version": "1.0.2",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["metadata_source", "metadata_bootstrap"],
+  "capabilities": [
+    "search_barcode",
+    "title_hint",
+    "bootstrap_lookup"
+  ],
+  "bootstrap": {
+    "metadataSource": true,
+    "onlyWhen": "public_barcode_lookup",
+    "role": "barcode_title_hint"
+  },
+  "requiresSecrets": false,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {},
+  "orderIndex": 30,
+  "entitlements": {
+    "source_use": "metadata.source.upcitemdb.use"
+  }
+}

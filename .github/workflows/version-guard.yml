@@ -1,0 +1,30 @@
+name: DiscVault Version Guard
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - release/v26-dev
+      - release/v26-beta
+      - release/v26
+  pull_request:
+
+jobs:
+  version-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check app version bump
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python app/scripts/check_version_bumped.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --aggregate
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            python app/scripts/check_version_bumped.py --base "${{ github.event.before }}" --head "${{ github.sha }}" --aggregate
+          else
+            python app/scripts/check_version_bumped.py --base HEAD~1 --head HEAD
+          fi

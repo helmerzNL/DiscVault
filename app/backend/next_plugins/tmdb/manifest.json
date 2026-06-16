@@ -1,0 +1,46 @@
+{
+  "id": "tmdb",
+  "name": "TMDb",
+  "version": "1.0.2",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["metadata_source"],
+  "capabilities": [
+    "search_title",
+    "lookup_external_id",
+    "movie_details",
+    "people",
+    "person_details",
+    "person_filmography",
+    "images",
+    "videos"
+  ],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "language",
+        "label": "Language",
+        "type": "text",
+        "required": false,
+        "placeholder": "en-US",
+        "description": "TMDb locale used for titles, overview text, images and videos."
+      }
+    ],
+    "secrets": [
+      {
+        "name": "apiKey",
+        "label": "TMDb API key",
+        "type": "password",
+        "required": true,
+        "description": "TMDb v3 API key."
+      }
+    ]
+  },
+  "orderIndex": 10,
+  "entitlements": {
+    "source_use": "metadata.source.tmdb.use",
+    "source_bulk": "metadata.source.tmdb.bulk"
+  }
+}

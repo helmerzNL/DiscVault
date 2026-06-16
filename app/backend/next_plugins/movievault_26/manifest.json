@@ -1,0 +1,37 @@
+{
+  "id": "movievault_26",
+  "name": "MovieVault 26",
+  "version": "1.4.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["metadata_source", "metadata_receiver"],
+  "capabilities": [
+    "search_barcode",
+    "search_title",
+    "movie_details",
+    "box_set_candidates",
+    "connection_request",
+    "connection_recovery_action",
+    "receive_metadata",
+    "describe_payload",
+    "activity_summary",
+    "prepare_barcode_update",
+    "prepare_container_update",
+    "member_intelligence"
+  ],
+  "requiresSecrets": false,
+  "replacesPlugins": ["movievault"],
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [],
+    "secrets": []
+  },
+  "defaultEnabled": true,
+  "orderIndex": 51,
+  "premiumFeatureKey": "metadata.source.movievault.use",
+  "entitlements": {
+    "source_use": "metadata.source.movievault.use",
+    "source_bulk": "metadata.source.movievault.bulk",
+    "receiver_contribute": "metadata.receiver.movievault.contribute"
+  }
+}

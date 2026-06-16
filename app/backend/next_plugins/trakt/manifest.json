@@ -1,0 +1,69 @@
+{
+  "id": "trakt",
+  "name": "Trakt",
+  "version": "1.0.2",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["personal_list_source"],
+  "capabilities": [
+    "sync_personal_lists"
+  ],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "username",
+        "label": "Trakt username",
+        "type": "text",
+        "required": false,
+        "placeholder": "me",
+        "description": "Use \"me\" with an access token, or a public Trakt username for public lists."
+      },
+      {
+        "name": "syncWatchlist",
+        "label": "Sync watchlist",
+        "type": "text",
+        "required": false,
+        "placeholder": "true",
+        "description": "Set to false to skip watchlist sync."
+      },
+      {
+        "name": "syncWatched",
+        "label": "Sync watched history",
+        "type": "text",
+        "required": false,
+        "placeholder": "true",
+        "description": "Set to false to skip watched-history sync."
+      },
+      {
+        "name": "syncWatchedHistory",
+        "label": "Sync individual watched dates",
+        "type": "text",
+        "required": false,
+        "placeholder": "true",
+        "description": "Set to false to only use Trakt's watched summary instead of individual play history."
+      }
+    ],
+    "secrets": [
+      {
+        "name": "clientId",
+        "label": "Trakt client ID",
+        "type": "password",
+        "required": true,
+        "description": "Trakt API client id."
+      },
+      {
+        "name": "accessToken",
+        "label": "Trakt access token",
+        "type": "password",
+        "required": false,
+        "description": "OAuth access token. Required when username is me or when syncing private lists."
+      }
+    ]
+  },
+  "orderIndex": 130,
+  "entitlements": {
+    "sync": "personal_list.trakt.sync"
+  }
+}

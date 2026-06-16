@@ -1,0 +1,155 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - discvault-next
+
+  next-api:
+    image: ${DISCVAULT_NEXT_IMAGE}
+    restart: unless-stopped
+    working_dir: /opt/discvault/backend
+    command:
+      [
+        "sh",
+        "-c",
+        "python next_database.py migrate && exec gunicorn --bind 0.0.0.0:5000 --workers ${DISCVAULT_NEXT_API_WORKERS} --timeout ${DISCVAULT_NEXT_API_TIMEOUT} next_app:app"
+      ]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TZ: ${TZ}
+      BUILD_VERSION: ${BUILD_VERSION}
+      DISCVAULT_BACKEND_VERSION: ${BUILD_VERSION}
+      DISCVAULT_LEGACY_DATA_DIR: /data
+      JWT_SECRET: ${JWT_SECRET}
+      RP_ID: ${RP_ID}
+      RP_NAME: ${RP_NAME}
+      RP_ORIGINS: ${RP_ORIGINS}
+      DISCVAULT_NEXT_ENABLE_TEST_RESET: ${DISCVAULT_NEXT_ENABLE_TEST_RESET:-false}
+    volumes:
+      - ${DISCVAULT_DATA_DIR}:/data
+    ports:
+      - "${DISCVAULT_NEXT_API_PORT}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/next/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - discvault-next
+
+  next-worker:
+    image: ${DISCVAULT_NEXT_IMAGE}
+    restart: unless-stopped
+    working_dir: /opt/discvault/backend
+    command: ["python", "next_worker.py", "work"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TZ: ${TZ}
+      DISCVAULT_WORKER_ID: ${DISCVAULT_WORKER_ID}
+      DISCVAULT_WORKER_POLL_INTERVAL: ${DISCVAULT_WORKER_POLL_INTERVAL}
+      DISCVAULT_LEGACY_DATA_DIR: /data
+    volumes:
+      - ${DISCVAULT_DATA_DIR}:/data
+    depends_on:
+      next-api:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    networks:
+      - discvault-next
+
+  next-mcp:
+    image: ${DISCVAULT_NEXT_IMAGE}
+    restart: unless-stopped
+    working_dir: /opt/discvault/mcp-server
+    command:
+      [
+        "python",
+        "server.py",
+        "--http",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "6090"
+      ]
+    environment:
+      DISCVAULT_API: http://next-api:5000
+      DISCVAULT_MCP_VERSION: ${BUILD_VERSION}
+      TZ: ${TZ}
+    ports:
+      - "${DISCVAULT_NEXT_MCP_PORT:-6090}:6090"
+    depends_on:
+      next-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:6090/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - discvault-next
+
+  import-sqlite:
+    image: ${DISCVAULT_NEXT_IMAGE}
+    profiles: ["tools"]
+    restart: "no"
+    working_dir: /opt/discvault/backend
+    command:
+      [
+        "python",
+        "next_import.py",
+        "--db",
+        "/data/discvault.db",
+        "--data-dir",
+        "/data"
+      ]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TZ: ${TZ}
+    volumes:
+      - ${DISCVAULT_DATA_DIR}:/data:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - discvault-next
+
+volumes:
+  postgres-data:
+
+networks:
+  discvault-next:
