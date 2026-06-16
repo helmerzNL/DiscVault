@@ -1662,5 +1662,7 @@
   "groups.removeMember": "移除成員",
   "groups.removeConfirm": "要從群組移除此成員嗎？",
   "groups.removingMember": "正在移除成員...",
-  "groups.memberRemoved": "成員已移除。"
+  "groups.memberRemoved": "成員已移除。",
+  "auth.signInWithUsernamePassword": "使用使用者名稱/密碼登入",
+  "auth.password": "密碼"
 }

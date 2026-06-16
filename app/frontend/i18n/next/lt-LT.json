@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Pašalinti narį",
   "groups.removeConfirm": "Pašalinti šį narį iš grupės?",
   "groups.removingMember": "Šalinamas narys...",
-  "groups.memberRemoved": "Narys pašalintas."
+  "groups.memberRemoved": "Narys pašalintas.",
+  "auth.signInWithUsernamePassword": "Prisijunkite naudodami vartotojo vardą / slaptažodį",
+  "auth.password": "Slaptažodis"
 }

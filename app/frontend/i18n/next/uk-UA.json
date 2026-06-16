@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Вилучити учасника",
   "groups.removeConfirm": "Вилучити цього учасника з групи?",
   "groups.removingMember": "Вилучення учасника...",
-  "groups.memberRemoved": "Учасника вилучено."
+  "groups.memberRemoved": "Учасника вилучено.",
+  "auth.signInWithUsernamePassword": "Увійдіть за допомогою імені користувача/пароля",
+  "auth.password": "Пароль"
 }

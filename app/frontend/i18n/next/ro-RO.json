@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Elimină membrul",
   "groups.removeConfirm": "Elimini acest membru din grup?",
   "groups.removingMember": "Se elimină membrul...",
-  "groups.memberRemoved": "Membru eliminat."
+  "groups.memberRemoved": "Membru eliminat.",
+  "auth.signInWithUsernamePassword": "Conectați-vă cu numele de utilizator/parola",
+  "auth.password": "Parolă"
 }

@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Noņemt dalībnieku",
   "groups.removeConfirm": "Noņemt šo dalībnieku no grupas?",
   "groups.removingMember": "Dalībnieka noņemšana...",
-  "groups.memberRemoved": "Dalībnieks noņemts."
+  "groups.memberRemoved": "Dalībnieks noņemts.",
+  "auth.signInWithUsernamePassword": "Pierakstieties ar lietotājvārdu/paroli",
+  "auth.password": "Parole"
 }

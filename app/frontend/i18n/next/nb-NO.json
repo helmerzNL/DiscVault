@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Remove member",
   "groups.removeConfirm": "Remove this member from the group?",
   "groups.removingMember": "Removing member...",
-  "groups.memberRemoved": "Member removed."
+  "groups.memberRemoved": "Member removed.",
+  "auth.signInWithUsernamePassword": "Logg på med brukernavn/passord",
+  "auth.password": "Passord"
 }
