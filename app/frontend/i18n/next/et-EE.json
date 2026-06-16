@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Eemalda liige",
   "groups.removeConfirm": "Kas eemaldada see liige rühmast?",
   "groups.removingMember": "Liikme eemaldamine...",
-  "groups.memberRemoved": "Liige eemaldatud."
+  "groups.memberRemoved": "Liige eemaldatud.",
+  "auth.signInWithUsernamePassword": "Logige sisse kasutajanime/parooliga",
+  "auth.password": "Parool"
 }

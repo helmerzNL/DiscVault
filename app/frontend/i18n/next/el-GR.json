@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Αφαίρεση μέλους",
   "groups.removeConfirm": "Να αφαιρεθεί αυτό το μέλος από την ομάδα;",
   "groups.removingMember": "Αφαίρεση μέλους...",
-  "groups.memberRemoved": "Το μέλος αφαιρέθηκε."
+  "groups.memberRemoved": "Το μέλος αφαιρέθηκε.",
+  "auth.signInWithUsernamePassword": "Συνδεθείτε με όνομα χρήστη/κωδικό πρόσβασης",
+  "auth.password": "Σύνθημα"
 }

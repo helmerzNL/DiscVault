@@ -1700,5 +1700,7 @@
   "appAdmin.pluginKey": "Pluginsleutel",
   "movieDetail.openOnService": "Openen op {service}",
   "movieDetail.playWithService": "Afspelen met {service}",
-  "movieDetail.multipleDigitalItems": "{count} items"
+  "movieDetail.multipleDigitalItems": "{count} items",
+  "auth.signInWithUsernamePassword": "Log in met gebruikersnaam/wachtwoord",
+  "auth.password": "Wachtwoord"
 }

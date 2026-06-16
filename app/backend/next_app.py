@@ -13011,7 +13011,7 @@ def ui_preview_html(
       </div>
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
-        <button type="button" class="secondary-button hidden" id="appReviewToggleButton">Sign in with username/password</button>
+        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
@@ -13021,11 +13021,11 @@ def ui_preview_html(
           <input id="appReviewUsername" autocomplete="username">
         </label>
         <label for="appReviewPassword">
-          <span>Password</span>
+          <span data-next-i18n="auth.password">Password</span>
           <input id="appReviewPassword" type="password" autocomplete="current-password">
         </label>
         <div class="profile-form-actions">
-          <button type="submit" class="login-primary" id="appReviewLoginButton">Sign in with username/password</button>
+          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
         </div>
       </form>
       <form class="recovery-login-panel hidden" id="appInviteForm">
@@ -30546,14 +30546,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <label><span>Username</span>
             <input id="authReviewUsername" type="text" autocomplete="username">
           </label>
-          <label><span>Password</span>
+          <label><span data-next-i18n="auth.password">Password</span>
             <input id="authReviewPassword" type="password" autocomplete="current-password">
           </label>
         </div>
         <div class="actions">
           <button type="button" id="authSetupButton" data-auth-action="setup" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
           <button type="button" id="authJoinButton" data-auth-action="join" data-next-i18n="auth.createAccount">Create account</button>
-          <button type="button" id="authReviewButton" class="hidden">Sign in with username/password</button>
+          <button type="button" id="authReviewButton" class="hidden" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
           <button type="button" id="authLoginButton" data-auth-action="login" data-next-i18n="auth.signIn">Sign in</button>
           <button type="button" id="authLogoutButton" data-auth-action="logout" data-next-i18n="auth.signOut">Sign out</button>
         </div>

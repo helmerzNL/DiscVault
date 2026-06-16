@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Üyeyi kaldır",
   "groups.removeConfirm": "Bu üye gruptan kaldırılsın mı?",
   "groups.removingMember": "Üye kaldırılıyor...",
-  "groups.memberRemoved": "Üye kaldırıldı."
+  "groups.memberRemoved": "Üye kaldırıldı.",
+  "auth.signInWithUsernamePassword": "Kullanıcı adı/şifreyle oturum açın",
+  "auth.password": "Şifre"
 }
