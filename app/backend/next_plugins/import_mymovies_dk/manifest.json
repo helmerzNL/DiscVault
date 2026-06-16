@@ -1,0 +1,30 @@
+{
+  "id": "import_mymovies_dk",
+  "name": "My Movies.dk Import",
+  "version": "1.2.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["import_source"],
+  "capabilities": ["inspect_source", "plan_import", "import_source"],
+  "defaultEnabled": false,
+  "requiresSecrets": false,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "sourcePath",
+        "label": "My Movies export path",
+        "type": "text",
+        "required": false,
+        "placeholder": "/data/import/mymovies",
+        "description": "Directory or file containing My Movies.dk CSV, XML or JSON exports."
+      }
+    ],
+    "secrets": []
+  },
+  "orderIndex": 210,
+  "entitlements": {
+    "inspect": "import.source.mymovies_dk.inspect",
+    "import": "import.source.mymovies_dk.import"
+  }
+}

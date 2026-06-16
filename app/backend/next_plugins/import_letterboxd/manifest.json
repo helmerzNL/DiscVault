@@ -1,0 +1,30 @@
+{
+  "id": "import_letterboxd",
+  "name": "Letterboxd Import",
+  "version": "1.2.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["import_source"],
+  "capabilities": ["inspect_source", "plan_import", "import_source"],
+  "defaultEnabled": false,
+  "requiresSecrets": false,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "sourcePath",
+        "label": "Letterboxd export path",
+        "type": "text",
+        "required": false,
+        "placeholder": "/data/import/letterboxd",
+        "description": "Directory or CSV file from a Letterboxd export, such as watched.csv, ratings.csv or watchlist.csv."
+      }
+    ],
+    "secrets": []
+  },
+  "orderIndex": 220,
+  "entitlements": {
+    "inspect": "import.source.letterboxd.inspect",
+    "import": "import.source.letterboxd.import"
+  }
+}

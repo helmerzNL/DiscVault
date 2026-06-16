@@ -1,0 +1,51 @@
+{
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "version": "1.0.1",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["digital_media_source", "personal_list_source"],
+  "capabilities": [
+    "discover_library",
+    "sync_library",
+    "playback_deeplink",
+    "sync_personal_lists"
+  ],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "baseUrl",
+        "label": "Server URL",
+        "type": "url",
+        "required": true,
+        "placeholder": "https://jellyfin.example",
+        "description": "Jellyfin server URL reachable by the DiscVault container."
+      },
+      {
+        "name": "userId",
+        "label": "Jellyfin user ID",
+        "type": "text",
+        "required": false,
+        "placeholder": "optional",
+        "description": "Optional Jellyfin user id for watched history. If empty, DiscVault uses the first user visible to the API key."
+      }
+    ],
+    "secrets": [
+      {
+        "name": "token",
+        "label": "API key",
+        "type": "password",
+        "required": true,
+        "description": "Jellyfin API key used for library discovery and sync."
+      }
+    ]
+  },
+  "orderIndex": 120,
+  "entitlements": {
+    "connect": "digital_source.jellyfin.connect",
+    "sync": "digital_source.jellyfin.sync",
+    "personal_sync": "personal_list.jellyfin.sync"
+  }
+}
