@@ -13011,9 +13011,23 @@ def ui_preview_html(
       </div>
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
+        <button type="button" class="secondary-button hidden" id="appReviewToggleButton">Sign in with username/password</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
+      <form class="recovery-login-panel hidden" id="appReviewForm">
+        <label for="appReviewUsername">
+          <span>Username</span>
+          <input id="appReviewUsername" autocomplete="username">
+        </label>
+        <label for="appReviewPassword">
+          <span>Password</span>
+          <input id="appReviewPassword" type="password" autocomplete="current-password">
+        </label>
+        <div class="profile-form-actions">
+          <button type="submit" class="login-primary" id="appReviewLoginButton">Sign in with username/password</button>
+        </div>
+      </form>
       <form class="recovery-login-panel hidden" id="appInviteForm">
         <label for="appInviteUsername">
           <span data-next-i18n="auth.username">Username</span>
@@ -15564,15 +15578,20 @@ def ui_preview_html(
     function renderAppRegistrationMode(auth) {
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
+      const reviewLoginAvailable = !!currentAuthStatus.review_login_available;
       const toggleButton = document.getElementById("appInviteToggleButton");
+      const reviewToggleButton = document.getElementById("appReviewToggleButton");
       const codeLabel = document.getElementById("appInviteCodeLabel");
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
+      const reviewForm = document.getElementById("appReviewForm");
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
         toggleButton.dataset.nextI18n = key;
         toggleButton.textContent = tNext(key, publicRegistration ? "Create account" : "Invite-only access");
       }
+      if (reviewToggleButton) reviewToggleButton.classList.toggle("hidden", !reviewLoginAvailable);
+      if (!reviewLoginAvailable) reviewForm?.classList.add("hidden");
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
       if (codeInput) {
         codeInput.required = !publicRegistration;
@@ -18865,6 +18884,18 @@ def ui_preview_html(
     function toggleInviteLogin() {
       const panel = document.getElementById("appInviteForm");
       const recoveryPanel = document.getElementById("appRecoveryForm");
+      const reviewPanel = document.getElementById("appReviewForm");
+      recoveryPanel?.classList.add("hidden");
+      reviewPanel?.classList.add("hidden");
+      panel?.classList.toggle("hidden");
+      setLoginMessage("");
+    }
+    function toggleReviewLogin() {
+      const panel = document.getElementById("appReviewForm");
+      if (!currentAuthStatus.review_login_available) return;
+      const invitePanel = document.getElementById("appInviteForm");
+      const recoveryPanel = document.getElementById("appRecoveryForm");
+      invitePanel?.classList.add("hidden");
       recoveryPanel?.classList.add("hidden");
       panel?.classList.toggle("hidden");
       setLoginMessage("");
@@ -18943,9 +18974,43 @@ def ui_preview_html(
     function toggleRecoveryLogin() {
       const panel = document.getElementById("appRecoveryForm");
       const invitePanel = document.getElementById("appInviteForm");
+      const reviewPanel = document.getElementById("appReviewForm");
       invitePanel?.classList.add("hidden");
+      reviewPanel?.classList.add("hidden");
       panel?.classList.toggle("hidden");
       setLoginMessage("");
+    }
+    async function loginReviewPassword(event) {
+      if (event) event.preventDefault();
+      if (!currentAuthStatus.review_login_available) {
+        setLoginMessage("Username/password review login is not available.", "bad");
+        return;
+      }
+      const username = String(document.getElementById("appReviewUsername")?.value || "").trim();
+      const password = String(document.getElementById("appReviewPassword")?.value || "");
+      const button = document.getElementById("appReviewLoginButton");
+      if (!username || !password) {
+        setLoginMessage("Enter username and password.", "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      setLoginMessage("Signing in with username/password...");
+      try {
+        const payload = await apiJson("/api/next/auth/review/login", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({username, password})
+        });
+        if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+        const passwordInput = document.getElementById("appReviewPassword");
+        if (passwordInput) passwordInput.value = "";
+        setLoginMessage("Signed in.", "good");
+        await refreshAppFlow();
+      } catch (error) {
+        setLoginMessage(error.message || "Username/password sign-in failed.", "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
     }
     async function loginRecovery(event) {
       if (event) event.preventDefault();
@@ -28975,6 +29040,8 @@ def ui_preview_html(
         if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
       });
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
+      document.getElementById("appReviewToggleButton")?.addEventListener("click", () => toggleReviewLogin());
+      document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
       document.getElementById("appInviteToggleButton")?.addEventListener("click", () => toggleInviteLogin());
       document.getElementById("appInviteForm")?.addEventListener("submit", (event) => registerInviteAccount(event));
       document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());
@@ -30475,9 +30542,18 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <input id="authInviteCode" type="text" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX">
           </label>
         </div>
+        <div id="authReviewFields" class="hidden">
+          <label><span>Username</span>
+            <input id="authReviewUsername" type="text" autocomplete="username">
+          </label>
+          <label><span>Password</span>
+            <input id="authReviewPassword" type="password" autocomplete="current-password">
+          </label>
+        </div>
         <div class="actions">
           <button type="button" id="authSetupButton" data-auth-action="setup" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
           <button type="button" id="authJoinButton" data-auth-action="join" data-next-i18n="auth.createAccount">Create account</button>
+          <button type="button" id="authReviewButton" class="hidden">Sign in with username/password</button>
           <button type="button" id="authLoginButton" data-auth-action="login" data-next-i18n="auth.signIn">Sign in</button>
           <button type="button" id="authLogoutButton" data-auth-action="logout" data-next-i18n="auth.signOut">Sign out</button>
         </div>
@@ -31043,12 +31119,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const setupFields = document.getElementById("authSetupFields");
       const setupButton = document.getElementById("authSetupButton");
       const joinButton = document.getElementById("authJoinButton");
+      const reviewButton = document.getElementById("authReviewButton");
+      const reviewFields = document.getElementById("authReviewFields");
       const loginButton = document.getElementById("authLoginButton");
       const logoutButton = document.getElementById("authLogoutButton");
       const inviteLabel = document.getElementById("authInviteLabel");
       const unavailable = webauthnUnavailableReason();
       const setupRequired = !!authState.setup_required;
       const authenticated = !!authState.authenticated;
+      const reviewLoginAvailable = !!authState.review_login_available;
       const joinAllowed = !setupRequired && !authenticated && !!authState.auth_enabled;
       title.textContent = authenticated ? "Signed in" : setupRequired ? "First passkey" : "Passkeys";
       description.textContent = authenticated
@@ -31063,6 +31142,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       inviteLabel.classList.toggle("hidden", !joinAllowed || !!authState.registration_enabled);
       setupButton.classList.toggle("hidden", !setupRequired);
       joinButton.classList.toggle("hidden", !joinAllowed);
+      reviewButton.classList.toggle("hidden", setupRequired || authenticated || !reviewLoginAvailable);
+      reviewFields.classList.toggle("hidden", !reviewLoginAvailable || setupRequired || authenticated);
       loginButton.classList.toggle("hidden", setupRequired || authenticated);
       logoutButton.classList.toggle("hidden", !authenticated);
       setupButton.disabled = !!unavailable;
@@ -31437,6 +31518,38 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         button.disabled = false;
       }
     }
+    async function loginReviewPassword() {
+      if (!authState.review_login_available) {
+        setAuthStatus("Username/password review login is not available.", "bad");
+        return;
+      }
+      const username = String(document.getElementById("authReviewUsername")?.value || "").trim();
+      const password = String(document.getElementById("authReviewPassword")?.value || "");
+      if (!username || !password) {
+        setAuthStatus("Enter username and password.", "bad");
+        return;
+      }
+      const button = document.getElementById("authReviewButton");
+      button.disabled = true;
+      setAuthStatus("Signing in with username/password...", "info");
+      try {
+        const payload = await authJson("/api/next/auth/review/login", {
+          method: "POST",
+          body: JSON.stringify({username, password})
+        });
+        authToken = payload.token || "";
+        if (authToken) localStorage.setItem("dv_next_token", authToken);
+        const passwordInput = document.getElementById("authReviewPassword");
+        if (passwordInput) passwordInput.value = "";
+        setAuthStatus("Signed in.", "good");
+        await refreshAuthStatus();
+        await resumeStartupOrCollection();
+      } catch (error) {
+        setAuthStatus(error.message || "Username/password sign-in failed.", "bad");
+      } finally {
+        button.disabled = false;
+      }
+    }
     async function logoutPasskey() {
       try {
         await authJson("/api/next/auth/logout", {method: "POST", body: "{}"});
@@ -31466,6 +31579,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           if (action === "login") loginPasskey().catch(reportClientError);
           if (action === "logout") logoutPasskey().catch(reportClientError);
         });
+      });
+      document.getElementById("authReviewButton")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        loginReviewPassword().catch(reportClientError);
       });
     }
     function bindStartupActions() {
