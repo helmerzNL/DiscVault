@@ -31,12 +31,15 @@ Fallback browser flow remains available via `ASWebAuthenticationSession` + PKCE:
 
 1. Open `/api/next/auth/mobile/start` with `callback_scheme`, `state`,
    `code_challenge` and `code_challenge_method=S256`.
-2. The web session completes the passkey sign-in and redirects to the callback
-   URL with a one-time `code`.
-3. Exchange the code through `/api/next/auth/mobile/exchange` with the original
+2. If the user already has an active DiscVault web session (for example from the
+   PWA), the backend immediately redirects to the callback URL with a one-time
+   `code` (no extra login prompt).
+3. Otherwise, the web session completes the passkey sign-in and then redirects
+   to the callback URL with a one-time `code`.
+4. Exchange the code through `/api/next/auth/mobile/exchange` with the original
    `code_verifier`.
-4. Store the returned Bearer token in the Keychain.
-5. Send `Authorization: Bearer <token>` on every Next API request.
+5. Store the returned Bearer token in the Keychain.
+6. Send `Authorization: Bearer <token>` on every Next API request.
 
 The token response may include token-specific `permissionKeys`, but the backend
 authorizes requests against effective permissions: API token scopes OR the
