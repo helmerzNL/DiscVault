@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Odstrani člana",
   "groups.removeConfirm": "Odstraniti tega člana iz skupine?",
   "groups.removingMember": "Odstranjevanje člana...",
-  "groups.memberRemoved": "Član odstranjen."
+  "groups.memberRemoved": "Član odstranjen.",
+  "auth.signInWithUsernamePassword": "Prijavite se z uporabniškim imenom/geslom",
+  "auth.password": "Geslo"
 }

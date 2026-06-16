@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Usuń członka",
   "groups.removeConfirm": "Usunąć tego członka z grupy?",
   "groups.removingMember": "Usuwanie członka...",
-  "groups.memberRemoved": "Członek usunięty."
+  "groups.memberRemoved": "Członek usunięty.",
+  "auth.signInWithUsernamePassword": "Zaloguj się przy użyciu nazwy użytkownika/hasła",
+  "auth.password": "Hasło"
 }

@@ -1662,5 +1662,7 @@
   "groups.removeMember": "メンバーを削除",
   "groups.removeConfirm": "このメンバーをグループから削除しますか？",
   "groups.removingMember": "メンバーを削除中...",
-  "groups.memberRemoved": "メンバーを削除しました。"
+  "groups.memberRemoved": "メンバーを削除しました。",
+  "auth.signInWithUsernamePassword": "ユーザー名/パスワードを使用してサインインする",
+  "auth.password": "パスワード"
 }
