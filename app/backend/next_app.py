@@ -19013,7 +19013,11 @@ def ui_preview_html(
         const passwordInput = document.getElementById("appReviewPassword");
         if (passwordInput) passwordInput.value = "";
         setLoginMessage("Signed in.", "good");
-        await refreshAppFlow();
+        if (appMode) {
+          showLibraryPage();
+        } else {
+          await refreshAppFlow();
+        }
       } catch (error) {
         setLoginMessage(error.message || "Username/password sign-in failed.", "bad");
       } finally {
