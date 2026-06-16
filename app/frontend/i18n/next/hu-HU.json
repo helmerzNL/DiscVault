@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Tag eltávolítása",
   "groups.removeConfirm": "Eltávolítod ezt a tagot a csoportból?",
   "groups.removingMember": "Tag eltávolítása...",
-  "groups.memberRemoved": "Tag eltávolítva."
+  "groups.memberRemoved": "Tag eltávolítva.",
+  "auth.signInWithUsernamePassword": "Jelentkezzen be felhasználónévvel/jelszóval",
+  "auth.password": "Jelszó"
 }

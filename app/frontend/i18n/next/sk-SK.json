@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Odobrať člena",
   "groups.removeConfirm": "Odobrať tohto člena zo skupiny?",
   "groups.removingMember": "Odoberanie člena...",
-  "groups.memberRemoved": "Člen odobratý."
+  "groups.memberRemoved": "Člen odobratý.",
+  "auth.signInWithUsernamePassword": "Prihláste sa pomocou používateľského mena/hesla",
+  "auth.password": "heslo"
 }
