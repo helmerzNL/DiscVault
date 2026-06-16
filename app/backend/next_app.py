@@ -19007,6 +19007,9 @@ def ui_preview_html(
         if (passwordInput) passwordInput.value = "";
         setLoginMessage("Signed in.", "good");
         await refreshAppFlow();
+        if (appMode) {
+          showLibraryPage();
+        }
       } catch (error) {
         setLoginMessage(error.message || "Username/password sign-in failed.", "bad");
       } finally {
