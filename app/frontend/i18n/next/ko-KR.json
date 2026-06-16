@@ -1662,5 +1662,7 @@
   "groups.removeMember": "구성원 제거",
   "groups.removeConfirm": "이 구성원을 그룹에서 제거할까요?",
   "groups.removingMember": "구성원 제거 중...",
-  "groups.memberRemoved": "구성원이 제거되었습니다."
+  "groups.memberRemoved": "구성원이 제거되었습니다.",
+  "auth.signInWithUsernamePassword": "사용자 이름/비밀번호로 로그인",
+  "auth.password": "비밀번호"
 }

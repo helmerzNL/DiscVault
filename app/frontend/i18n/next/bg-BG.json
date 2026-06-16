@@ -1662,5 +1662,7 @@
   "groups.removeMember": "Премахване на член",
   "groups.removeConfirm": "Да се премахне ли този член от групата?",
   "groups.removingMember": "Премахване на член...",
-  "groups.memberRemoved": "Членът е премахнат."
+  "groups.memberRemoved": "Членът е премахнат.",
+  "auth.signInWithUsernamePassword": "Влезте с потребителско име/парола",
+  "auth.password": "Парола"
 }

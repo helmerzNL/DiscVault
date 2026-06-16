@@ -1511,7 +1511,6 @@
   "appAdmin.operationsNotLoaded": "Operations data has not been loaded yet.",
   "appAdmin.pendingJobs": "pending jobs",
   "appAdmin.failedJobs": "failed jobs",
-  "appAdmin.potentialIssues": "potential issues",
   "appAdmin.artworkCoverage": "Artwork coverage",
   "appAdmin.lockedArtwork": "locked artwork",
   "appAdmin.watchSync": "Watch sync",
@@ -1701,5 +1700,7 @@
   "appAdmin.pluginKey": "Plugin key",
   "movieDetail.openOnService": "Open on {service}",
   "movieDetail.playWithService": "Play with {service}",
-  "movieDetail.multipleDigitalItems": "{count} items"
+  "movieDetail.multipleDigitalItems": "{count} items",
+  "auth.signInWithUsernamePassword": "Sign in with username/password",
+  "auth.password": "Password"
 }
