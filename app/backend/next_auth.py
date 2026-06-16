@@ -1296,6 +1296,18 @@ def register_next_auth_routes(
         is_auth_ready = user_count > 0 and credential_count > 0
         user = current_user(conn)
         role = primary_role(conn, user["id"]) if user else None
+        review_expires_at: datetime | None = None
+        review_login_available = False
+        try:
+            review_expires_at = _review_login_expires_at()
+            review_login_available = bool(
+                _env_flag("REVIEW_LOGIN_ENABLED", default=False)
+                and str(os.environ.get("REVIEW_LOGIN_USERNAME") or "").strip()
+                and str(os.environ.get("REVIEW_LOGIN_PASSWORD") or "").strip()
+                and (review_expires_at is None or _utcnow() < review_expires_at)
+            )
+        except Exception:
+            review_login_available = False
         return {
             "auth_enabled": is_configured_auth_enabled and is_auth_ready,
             "configured_auth_enabled": is_configured_auth_enabled,
@@ -1315,6 +1327,8 @@ def register_next_auth_routes(
             "display_name": user.get("display_name") if user else None,
             "role": role,
             "rbac_mode": rbac_mode(conn),
+            "review_login_available": review_login_available,
+            "review_login_expires_at": review_expires_at.isoformat() if review_expires_at else None,
         }
 
     def route(*rules: str, methods: list[str] | None = None):
@@ -1684,6 +1698,8 @@ def register_next_auth_routes(
         with connect() as conn:
             if not table_exists(conn, "users"):
                 raise next_api_error("Auth tables are not available", 503)
+            if not role_exists(conn, "media_viewer"):
+                raise next_api_error("Review login requires the media_viewer role", 503)
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -1730,6 +1746,7 @@ def register_next_auth_routes(
                             """,
                             (reviewer["id"],),
                         )
+                assign_role(conn, reviewer["id"], "media_viewer")
                 token_payload = issue_review_api_token(
                     conn,
                     user_id=reviewer["id"],
