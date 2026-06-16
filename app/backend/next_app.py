@@ -19001,8 +19001,15 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({username, password})
         });
-        authToken = payload.token || "";
-        if (authToken) localStorage.setItem("dv_next_token", authToken);
+        if (payload.token) {
+          localStorage.setItem("dv_next_token", payload.token);
+          currentAuthStatus = Object.assign(currentAuthStatus || {}, {
+            authenticated: true,
+            username: payload.username,
+            role: payload.role,
+            display_name: payload.display_name
+          });
+        }
         const passwordInput = document.getElementById("appReviewPassword");
         if (passwordInput) passwordInput.value = "";
         setLoginMessage("Signed in.", "good");
