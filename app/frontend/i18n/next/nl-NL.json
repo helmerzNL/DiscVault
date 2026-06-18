@@ -1224,6 +1224,8 @@
   "notifications.pref.metadata_jobs": "Metadatataken",
   "notifications.pref.security": "Beveiliging",
   "notifications.itemTitle": "Notificatie",
+  "notifications.pluginsUnconfiguredTitle": "Plugins moeten worden geconfigureerd",
+  "notifications.pluginsUnconfiguredBody": "De volgende plugins zijn nog niet geconfigureerd: {plugins}",
   "notifications.pushTitle": "Pushnotificaties",
   "notifications.pushHelp": "Schakel native PWA-notificaties in op dit apparaat en kies welke berichten je wilt ontvangen.",
   "notifications.testPush": "Test versturen",

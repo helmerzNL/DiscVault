@@ -1000,6 +1000,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Varsel",
+  "notifications.pluginsUnconfiguredTitle": "Programtillegg må konfigureres",
+  "notifications.pluginsUnconfiguredBody": "Følgende programtillegg er ikke konfigurert ennå: {plugins}",
   "notifications.pushTitle": "Push-varsler",
   "notifications.pushHelp": "Aktiver native PWA-varsler paa denne enheten og velg hvilke meldinger du vil motta.",
   "notifications.testPush": "Send test",

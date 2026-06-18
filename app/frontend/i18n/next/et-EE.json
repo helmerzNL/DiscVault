@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Teavitus",
+  "notifications.pluginsUnconfiguredTitle": "Pluginad vajavad seadistamist",
+  "notifications.pluginsUnconfiguredBody": "Järgmised pluginad pole veel seadistatud: {plugins}",
   "notifications.pushTitle": "Tõuketeavitused",
   "notifications.pushHelp": "Luba selles seadmes natiivsed PWA teavitused ja vali, milliseid sõnumeid soovid saada.",
   "notifications.testPush": "Saada test",
