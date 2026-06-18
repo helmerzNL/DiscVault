@@ -64,6 +64,11 @@ PUSHED_EVENT = {
                 "resultStatus": "accepted",
                 "provider": "movievault_26",
                 "reason": None,
+                "acceptedFields": ["originalTitle", "title", "year"],
+                "droppedFields": [
+                    {"field": "audio_tracks", "reason": "not_in_template"},
+                    {"field": "runtime", "reason": "not_in_template"},
+                ],
             },
             {
                 "pluginId": "disabled_sink",
@@ -147,6 +152,21 @@ class MovieMetadataDebugEntityTest(unittest.TestCase):
         self.assertEqual(skipped["resultStatus"], "skipped")
         self.assertEqual(skipped["reason"], "needs_configuration")
         self.assertIn("error", skipped)
+
+    def test_contributed_exposes_excluded_fields_with_reasons(self):
+        result = self._run(FETCHED_EVENT, PUSHED_EVENT)
+        receiver = result["contributed"][0]
+        self.assertEqual(receiver["pluginId"], "movievault_26")
+        self.assertEqual(receiver["acceptedFields"], ["originalTitle", "title", "year"])
+        excluded = {item["field"]: item["reason"] for item in receiver["excludedFields"]}
+        self.assertEqual(excluded.get("audio_tracks"), "not_in_template")
+        self.assertEqual(excluded.get("runtime"), "not_in_template")
+
+    def test_contributed_excluded_fields_default_empty(self):
+        result = self._run(FETCHED_EVENT, PUSHED_EVENT)
+        skipped = result["contributed"][1]
+        self.assertEqual(skipped["excludedFields"], [])
+        self.assertEqual(skipped["acceptedFields"], [])
 
     def test_returns_none_when_no_events(self):
         self.assertIsNone(self._run(None, None))

@@ -2083,6 +2083,10 @@ def receiver_result_summary(
         "idempotencyPrefix": result.get("idempotencyPrefix"),
         "templateVersion": result.get("templateVersion"),
     }
+    if isinstance(result.get("acceptedFields"), list):
+        summary["acceptedFields"] = result.get("acceptedFields")
+    if isinstance(result.get("droppedFields"), list):
+        summary["droppedFields"] = result.get("droppedFields")
     if details:
         summary["details"] = details
     if activity:
