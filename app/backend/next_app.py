@@ -9963,6 +9963,35 @@ def ui_preview_html(
       color: var(--muted);
       font-style: italic;
     }
+    .debug-source-export-hint {
+      font-size: .82rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .debug-source-export-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .debug-source-export-btn {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      font: inherit;
+      font-size: .82rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .debug-source-export-btn:hover {
+      border-color: var(--accent);
+    }
+    .debug-source-export-feedback {
+      font-size: .8rem;
+      color: var(--accent);
+    }
     .country-picker {
       display: flex;
       flex-wrap: wrap;
@@ -15119,6 +15148,7 @@ def ui_preview_html(
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
+    let dvMissingContributionReportData = null;
     let movieMetadataRefreshPeople = localStorage.getItem("dv_next_movie_metadata_refresh_people") === "true";
     let activeContainerId = "";
     let activeContainerPayload = null;
@@ -15574,7 +15604,82 @@ def ui_preview_html(
           ${contributed.length ? `<div class="debug-source-grid">${contributedCards}</div>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesContributedEmpty", "Nothing contributed in the last refresh."))}</div>`}
         </section>
       `;
-      return fetchedSection + contributedSection;
+      const missingReport = metadataDebug && metadataDebug.missingContributionReport ? metadataDebug.missingContributionReport : null;
+      dvMissingContributionReportData = missingReport;
+      let exportSection = "";
+      if (missingReport && Array.isArray(missingReport.receivers) && missingReport.receivers.length) {
+        const missingCount = missingReport.receivers.reduce((sum, r) => sum + ((r && Array.isArray(r.missingFields)) ? r.missingFields.length : 0), 0);
+        exportSection = `
+          <section class="debug-source-section">
+            <h4>${escapeHtml(tNext("movieDetail.debugSourcesMissingTitle", "Missing in MovieVault"))}</h4>
+            <div class="debug-source-export-hint">${escapeHtml(tNext("movieDetail.debugSourcesMissingHint", "Fields fetched by DiscVault but not accepted by the receiver's contribution template."))} (${missingCount})</div>
+            <div class="debug-source-export-actions">
+              <button type="button" class="debug-source-export-btn" onclick="dvDownloadMissingContributionReport()">${escapeHtml(tNext("movieDetail.debugSourcesDownloadJson", "Download JSON"))}</button>
+              <button type="button" class="debug-source-export-btn" onclick="dvCopyMissingContributionReport()">${escapeHtml(tNext("movieDetail.debugSourcesCopyJson", "Copy"))}</button>
+              <span class="debug-source-export-feedback" id="debugSourcesExportFeedback" role="status" aria-live="polite"></span>
+            </div>
+          </section>
+        `;
+      }
+      return fetchedSection + contributedSection + exportSection;
+    }
+    function dvMissingContributionReportJson() {
+      return JSON.stringify(dvMissingContributionReportData || {}, null, 2);
+    }
+    function dvSetExportFeedback(message) {
+      const node = document.getElementById("debugSourcesExportFeedback");
+      if (!node) return;
+      node.textContent = message || "";
+      if (message) {
+        window.setTimeout(() => { if (node.textContent === message) node.textContent = ""; }, 2500);
+      }
+    }
+    function dvMissingContributionReportFilename() {
+      const report = dvMissingContributionReportData || {};
+      const id = String(report.movieId || "movie").replace(/[^a-z0-9_-]/gi, "").slice(0, 40) || "movie";
+      return `movievault-missing-fields-${id}.json`;
+    }
+    function dvDownloadMissingContributionReport() {
+      if (!dvMissingContributionReportData) return;
+      try {
+        const blob = new Blob([dvMissingContributionReportJson()], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = dvMissingContributionReportFilename();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesDownloadDone", "Downloaded"));
+      } catch (err) {
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyFailed", "Action failed"));
+      }
+    }
+    function dvCopyMissingContributionReport() {
+      if (!dvMissingContributionReportData) return;
+      const text = dvMissingContributionReportJson();
+      const done = () => dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyDone", "Copied"));
+      const fail = () => {
+        try {
+          const area = document.createElement("textarea");
+          area.value = text;
+          area.setAttribute("readonly", "");
+          area.style.position = "absolute";
+          area.style.left = "-9999px";
+          document.body.appendChild(area);
+          area.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(area);
+          if (ok) { done(); return; }
+        } catch (err) { /* ignore */ }
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyFailed", "Action failed"));
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(fail);
+      } else {
+        fail();
+      }
     }
     function renderAppDebugButton() {
       document.body.classList.toggle("debug-mode", appDebugMode);
@@ -21760,6 +21865,7 @@ def ui_preview_html(
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
       const debugSourcesEl = document.getElementById("movieDetailDebugSources");
       if (debugSourcesEl) debugSourcesEl.innerHTML = "";
+      dvMissingContributionReportData = null;
       document.getElementById("movieDetailLinks").innerHTML = "";
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
@@ -39228,6 +39334,87 @@ def movie_metadata_debug_latest_audit_event(
     return audit_event_row(row)
 
 
+def movie_metadata_missing_contribution_report(
+    *,
+    movie_id: UUID | str,
+    title: Any,
+    fetched: list[dict[str, Any]],
+    contributed: list[dict[str, Any]],
+    generated_at: Any,
+) -> dict[str, Any] | None:
+    """Build a self-describing report of fields fetched by DiscVault but not
+    accepted by a receiver's contribution template (e.g. MovieVault).
+
+    The list is derived from the real contribution filtering: each receiver's
+    ``excludedFields`` (incoming payload keys dropped by the template allow-list)
+    cross-referenced against the fetched field decisions for source + sample value.
+    """
+
+    def _norm(key: Any) -> str:
+        return "".join(ch for ch in str(key or "").lower() if ch.isalnum())
+
+    lookup: dict[str, dict[str, Any]] = {}
+    for plugin in fetched or []:
+        if not isinstance(plugin, dict):
+            continue
+        for field in plugin.get("fields") or []:
+            if not isinstance(field, dict):
+                continue
+            norm_key = _norm(field.get("field"))
+            if not norm_key or norm_key in lookup:
+                continue
+            lookup[norm_key] = {
+                "sourcePluginId": plugin.get("pluginId"),
+                "sourceLabel": plugin.get("sourceLabel"),
+                "sampleValue": field.get("value"),
+                "target": field.get("target"),
+            }
+
+    receivers_out: list[dict[str, Any]] = []
+    for receiver in contributed or []:
+        if not isinstance(receiver, dict):
+            continue
+        excluded = receiver.get("excludedFields") or []
+        missing: list[dict[str, Any]] = []
+        for item in excluded:
+            if not isinstance(item, dict) or not item.get("field"):
+                continue
+            info = lookup.get(_norm(item.get("field")), {})
+            missing.append(
+                {
+                    "field": item.get("field"),
+                    "target": info.get("target"),
+                    "sourcePluginId": info.get("sourcePluginId"),
+                    "sourceLabel": info.get("sourceLabel"),
+                    "sampleValue": info.get("sampleValue"),
+                    "reason": item.get("reason"),
+                }
+            )
+        if not missing:
+            continue
+        receivers_out.append(
+            {
+                "pluginId": receiver.get("pluginId"),
+                "name": receiver.get("name") or receiver.get("pluginId"),
+                "templateVersion": receiver.get("templateVersion"),
+                "missingFields": missing,
+            }
+        )
+
+    if not receivers_out:
+        return None
+
+    return {
+        "report": "discvault.metadata.missing_in_receiver",
+        "version": 1,
+        "note": "Fields fetched by DiscVault but not accepted by the receiver's contribution template.",
+        "generatedAt": generated_at,
+        "movieId": str(movie_id),
+        "title": title,
+        "receivers": receivers_out,
+    }
+
+
 def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | None:
     if not table_exists(conn, "audit_events"):
         return None
@@ -39319,6 +39506,7 @@ def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | 
                 "reason": receiver.get("reason"),
                 "provider": receiver.get("provider"),
                 "error": receiver.get("error"),
+                "templateVersion": receiver.get("templateVersion"),
                 "fields": payload_fields,
                 "acceptedFields": receiver.get("acceptedFields") if isinstance(receiver.get("acceptedFields"), list) else [],
                 "excludedFields": [
@@ -39337,10 +39525,20 @@ def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | 
     if hasattr(fetched_at, "isoformat"):
         fetched_at = fetched_at.isoformat()
 
+    movie_title = pushed_meta.get("title") or fetched_meta.get("title")
+    missing_report = movie_metadata_missing_contribution_report(
+        movie_id=movie_id,
+        title=movie_title,
+        fetched=fetched,
+        contributed=contributed,
+        generated_at=fetched_at,
+    )
+
     return {
         "fetchedAt": fetched_at,
         "fetched": fetched,
         "contributed": contributed,
+        "missingContributionReport": missing_report,
     }
 
 
