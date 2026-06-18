@@ -884,5 +884,38 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertNotIn("must-not-leak", str(result))
 
 
+class ContributionFieldDiagnosticsTest(unittest.TestCase):
+    def test_reports_dropped_fields_not_in_template(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "The Matrix",
+                "overview": "A hacker learns the truth.",
+                "audio_tracks": "DTS-HD MA 5.1",
+                "runtime": 136,
+                "empty_field": "",
+            },
+        }
+        template = {"allowedFields": ["title", "overview"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        accepted, dropped = movievault_26._contribution_field_diagnostics(
+            payload, template, contribution_payload
+        )
+        self.assertEqual(accepted, ["overview", "title"])
+        dropped_map = {item["field"]: item["reason"] for item in dropped}
+        self.assertEqual(dropped_map.get("audio_tracks"), "not_in_template")
+        self.assertEqual(dropped_map.get("runtime"), "not_in_template")
+        self.assertNotIn("empty_field", dropped_map)
+
+    def test_no_template_keeps_all_fields(self):
+        payload = {"entityType": "movie", "payload": {"title": "The Matrix", "audio_tracks": "DTS"}}
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        accepted, dropped = movievault_26._contribution_field_diagnostics(
+            payload, {}, contribution_payload
+        )
+        self.assertIn("title", accepted)
+        self.assertEqual(dropped, [])
+
+
 if __name__ == "__main__":
     unittest.main()
