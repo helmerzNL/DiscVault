@@ -1757,6 +1757,26 @@ def _contribution_payload(payload, template):
     return entity_type, safe_payload
 
 
+def _contribution_field_diagnostics(payload, template, contribution_payload):
+    entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
+    raw_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+    if not raw_payload:
+        raw_payload = {key: value for key, value in payload.items() if key not in {"entityType", "entity_type", "sourceReference", "source_reference", "force"}}
+    safe_incoming = _safe_contribution_value(raw_payload)
+    incoming_keys = {
+        _text(key)
+        for key, value in (safe_incoming.items() if isinstance(safe_incoming, dict) else [])
+        if _text(key) and value not in (None, "", [], {})
+    }
+    accepted_keys = {_text(key) for key in (contribution_payload or {}).keys() if _text(key)}
+    allowed = _allowed_fields(template, entity_type)
+    dropped = []
+    for key in sorted(incoming_keys - accepted_keys):
+        reason = "not_in_template" if allowed else "excluded"
+        dropped.append({"field": key, "reason": reason})
+    return sorted(accepted_keys), dropped
+
+
 def _validation_error(response_payload):
     return _text(response_payload.get("code") or response_payload.get("error")) == "validation_error"
 
@@ -1800,11 +1820,14 @@ def receive_metadata(payload, context=None):
             return {"status": "skipped", "provider": PROVIDER_ID, "reason": "empty_or_disallowed_payload"}
         envelope["payload"] = contribution_payload
         response_payload = _post_contribution(context, envelope)
+    accepted_fields, dropped_fields = _contribution_field_diagnostics(payload, template, contribution_payload)
     return {
         "status": "submitted",
         "provider": PROVIDER_ID,
         "entityType": entity_type,
         "idempotencyPrefix": envelope["idempotencyKey"][:24],
         "templateVersion": template_version,
+        "acceptedFields": accepted_fields,
+        "droppedFields": dropped_fields,
         "response": response_payload,
     }

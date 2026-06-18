@@ -9935,6 +9935,34 @@ def ui_preview_html(
       font-weight: 600;
       color: var(--text);
     }
+    .debug-source-excluded-details {
+      margin-top: 6px;
+    }
+    .debug-source-excluded-details > summary {
+      cursor: pointer;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .debug-source-excluded {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .debug-source-excluded-field {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px;
+      font-size: .8rem;
+    }
+    .debug-source-excluded-reason {
+      color: var(--muted);
+      font-style: italic;
+    }
     .country-picker {
       display: flex;
       flex-wrap: wrap;
@@ -15421,6 +15449,18 @@ def ui_preview_html(
       if (status === "ok" || result === "accepted" || result === "ok") return "ok";
       return "";
     }
+    function debugExcludedReasonLabel(reason) {
+      const key = String(reason || "").trim().toLowerCase();
+      const map = {
+        not_in_template: tNext("movieDetail.debugSourcesReasonNotInTemplate", "not in contribution template"),
+        excluded: tNext("movieDetail.debugSourcesReasonExcluded", "excluded by receiver"),
+        sharing_disabled: tNext("movieDetail.debugSourcesReasonSharingDisabled", "sharing disabled"),
+        missing_token: tNext("movieDetail.debugSourcesReasonMissingToken", "not connected"),
+        empty_or_disallowed_payload: tNext("movieDetail.debugSourcesReasonEmptyPayload", "no shareable fields")
+      };
+      if (!key) return "";
+      return map[key] || key.replace(/_/g, " ");
+    }
     function movieMetadataSourcesDebugHtml(metadataDebug) {
       const fetched = metadataDebug && Array.isArray(metadataDebug.fetched) ? metadataDebug.fetched : [];
       const contributed = metadataDebug && Array.isArray(metadataDebug.contributed) ? metadataDebug.contributed : [];
@@ -15490,6 +15530,25 @@ def ui_preview_html(
         const sourcesHtml = sources.length
           ? `<div class="debug-source-contrib-sources"><span class="debug-source-label">${escapeHtml(contributedToLabel)}:</span> ${escapeHtml(sources.join(", "))}</div>`
           : "";
+        const excluded = Array.isArray(receiver.excludedFields) ? receiver.excludedFields : [];
+        const excludedRows = excluded.map((item) => {
+          const fieldName = item && item.field ? String(item.field) : "";
+          const reasonName = debugExcludedReasonLabel(item && item.reason);
+          return `
+            <li class="debug-source-excluded-field">
+              <span class="debug-source-field-name">${escapeHtml(fieldName)}</span>
+              ${reasonName ? `<span class="debug-source-excluded-reason">${escapeHtml(reasonName)}</span>` : ""}
+            </li>
+          `;
+        }).join("");
+        const excludedHtml = excluded.length
+          ? `
+            <details class="debug-source-excluded-details"${excluded.length <= 6 ? " open" : ""}>
+              <summary>${escapeHtml(tNext("movieDetail.debugSourcesExcludedFields", "Excluded fields"))} (${excluded.length})</summary>
+              <ul class="debug-source-excluded">${excludedRows}</ul>
+            </details>
+          `
+          : "";
         return `
           <article class="debug-source-card">
             <header class="debug-source-card-head">
@@ -15499,6 +15558,7 @@ def ui_preview_html(
             ${reasonHtml}
             ${fieldsHtml}
             ${sourcesHtml}
+            ${excludedHtml}
           </article>
         `;
       }).join("");
@@ -39260,6 +39320,12 @@ def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | 
                 "provider": receiver.get("provider"),
                 "error": receiver.get("error"),
                 "fields": payload_fields,
+                "acceptedFields": receiver.get("acceptedFields") if isinstance(receiver.get("acceptedFields"), list) else [],
+                "excludedFields": [
+                    {"field": item.get("field"), "reason": item.get("reason")}
+                    for item in (receiver.get("droppedFields") or [])
+                    if isinstance(item, dict) and item.get("field")
+                ],
                 "sourceProviders": payload_sources,
             }
         )
