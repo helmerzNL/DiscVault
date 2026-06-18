@@ -9795,6 +9795,102 @@ def ui_preview_html(
       font-size: .84rem;
       line-height: 1.45;
     }
+    .debug-sources {
+      display: grid;
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .debug-source-section {
+      display: grid;
+      gap: 10px;
+    }
+    .debug-source-section h4 {
+      margin: 0;
+      font-size: .92rem;
+    }
+    .debug-source-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .debug-source-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--bg-solid);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .debug-source-card header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .debug-source-card strong {
+      margin: 0;
+    }
+    .debug-source-state {
+      font-size: .74rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .debug-source-ref {
+      font-size: .76rem;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .debug-source-fields {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+    }
+    .debug-source-field {
+      display: grid;
+      grid-template-columns: minmax(90px, auto) 1fr auto;
+      align-items: baseline;
+      gap: 8px;
+      font-size: .8rem;
+    }
+    .debug-source-field-name {
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .debug-source-field-value {
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .debug-source-marker {
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      border-radius: var(--radius-sm);
+      padding: 1px 6px;
+      white-space: nowrap;
+    }
+    .debug-source-marker.used {
+      background: color-mix(in srgb, var(--accent) 22%, transparent);
+      color: var(--accent);
+    }
+    .debug-source-marker.skipped {
+      background: color-mix(in srgb, var(--muted) 18%, transparent);
+      color: var(--muted);
+    }
+    .debug-source-contrib-fields,
+    .debug-source-contrib-sources,
+    .debug-source-contrib-reason {
+      font-size: .8rem;
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .debug-source-label {
+      font-weight: 600;
+      color: var(--text);
+    }
     .country-picker {
       display: flex;
       flex-wrap: wrap;
@@ -13768,6 +13864,7 @@ def ui_preview_html(
               <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
             </div>
             <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
+            <div class="debug-sources" id="movieDetailDebugSources"></div>
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.links">Links</h3>
@@ -15224,7 +15321,99 @@ def ui_preview_html(
       }
       return localizationHtml + remainingRatingsHtml;
     }
-    function renderAppDebugButton() {
+    function debugSourceValueText(value) {
+      if (value === null || value === undefined) return "";
+      let text;
+      if (typeof value === "string") {
+        text = value;
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        text = String(value);
+      } else {
+        try { text = JSON.stringify(value); } catch (error) { text = String(value); }
+      }
+      text = text.trim();
+      if (text.length > 280) text = text.slice(0, 277) + "\u2026";
+      return text;
+    }
+    function movieMetadataSourcesDebugHtml(metadataDebug) {
+      const fetched = metadataDebug && Array.isArray(metadataDebug.fetched) ? metadataDebug.fetched : [];
+      const contributed = metadataDebug && Array.isArray(metadataDebug.contributed) ? metadataDebug.contributed : [];
+      const usedLabel = tNext("movieDetail.debugSourcesUsed", "used");
+      const skippedLabel = tNext("movieDetail.debugSourcesSkipped", "not used");
+      const stateLabel = tNext("movieDetail.debugSourcesState", "State");
+      const fieldsLabel = tNext("movieDetail.debugSourcesFields", "Fields");
+      const contributedToLabel = tNext("movieDetail.debugSourcesContributedTo", "Sources");
+      const fetchedCards = fetched.map((plugin) => {
+        const fields = Array.isArray(plugin.fields) ? plugin.fields : [];
+        const fieldsHtml = fields.map((field) => {
+          const fieldName = field.target ? `${field.target}.${field.field}` : (field.field || "");
+          const marker = field.accepted
+            ? `<span class="debug-source-marker used">${escapeHtml(usedLabel)}</span>`
+            : `<span class="debug-source-marker skipped">${escapeHtml(skippedLabel)}</span>`;
+          return `
+            <li class="debug-source-field">
+              <span class="debug-source-field-name">${escapeHtml(fieldName)}</span>
+              <span class="debug-source-field-value">${escapeHtml(debugSourceValueText(field.value))}</span>
+              ${marker}
+            </li>
+          `;
+        }).join("");
+        const stateHtml = plugin.state
+          ? `<span class="debug-source-state">${escapeHtml(stateLabel)}: ${escapeHtml(String(plugin.state))}</span>`
+          : "";
+        const refHtml = plugin.sourceRef
+          ? `<span class="debug-source-ref">${escapeHtml(String(plugin.sourceRef))}</span>`
+          : "";
+        return `
+          <article class="debug-source-card">
+            <header>
+              <strong>${escapeHtml(pluginDisplayName(plugin.pluginId, plugin.sourceLabel || plugin.pluginId))}</strong>
+              ${stateHtml}
+            </header>
+            ${refHtml}
+            ${fields.length ? `<ul class="debug-source-fields">${fieldsHtml}</ul>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesEmpty", "No metadata refresh recorded yet."))}</div>`}
+          </article>
+        `;
+      }).join("");
+      const contributedCards = contributed.map((receiver) => {
+        const fields = Array.isArray(receiver.fields) ? receiver.fields : [];
+        const sources = Array.isArray(receiver.sourceProviders) ? receiver.sourceProviders : [];
+        const statusText = receiver.resultStatus || receiver.status || receiver.state || "";
+        const fieldsHtml = fields.length
+          ? `<div class="debug-source-contrib-fields"><span class="debug-source-label">${escapeHtml(fieldsLabel)}:</span> ${escapeHtml(fields.join(", "))}</div>`
+          : "";
+        const sourcesHtml = sources.length
+          ? `<div class="debug-source-contrib-sources"><span class="debug-source-label">${escapeHtml(contributedToLabel)}:</span> ${escapeHtml(sources.join(", "))}</div>`
+          : "";
+        const reasonHtml = receiver.reason
+          ? `<div class="debug-source-contrib-reason">${escapeHtml(String(receiver.reason))}</div>`
+          : "";
+        return `
+          <article class="debug-source-card">
+            <header>
+              <strong>${escapeHtml(pluginDisplayName(receiver.pluginId, receiver.name || receiver.pluginId))}</strong>
+              ${statusText ? `<span class="debug-source-state">${escapeHtml(String(statusText))}</span>` : ""}
+            </header>
+            ${fieldsHtml}
+            ${sourcesHtml}
+            ${reasonHtml}
+          </article>
+        `;
+      }).join("");
+      const fetchedSection = `
+        <section class="debug-source-section">
+          <h4>${escapeHtml(tNext("movieDetail.debugSourcesTitle", "Loaded metadata per source"))}</h4>
+          ${fetched.length ? `<div class="debug-source-grid">${fetchedCards}</div>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesEmpty", "No metadata refresh recorded yet."))}</div>`}
+        </section>
+      `;
+      const contributedSection = `
+        <section class="debug-source-section">
+          <h4>${escapeHtml(tNext("movieDetail.debugSourcesContributedTitle", "Contributed metadata per plugin"))}</h4>
+          ${contributed.length ? `<div class="debug-source-grid">${contributedCards}</div>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesContributedEmpty", "Nothing contributed in the last refresh."))}</div>`}
+        </section>
+      `;
+      return fetchedSection + contributedSection;
+    }
       document.body.classList.toggle("debug-mode", appDebugMode);
       const button = document.getElementById("appAdminDebugButton");
       if (!button) return;
@@ -21336,6 +21525,8 @@ def ui_preview_html(
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
       if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || [], movie, specs) : "";
+      const debugSources = document.getElementById("movieDetailDebugSources");
+      if (debugSources) debugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       const identifiers = (detail.identifiers || []).filter(Boolean).map((item) => {
         const service = movieIdentifierServiceLabel(item);
         return service === "IMDb" || service === "TMDb"
@@ -21404,6 +21595,8 @@ def ui_preview_html(
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
+      const debugSourcesEl = document.getElementById("movieDetailDebugSources");
+      if (debugSourcesEl) debugSourcesEl.innerHTML = "";
       document.getElementById("movieDetailLinks").innerHTML = "";
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
@@ -38837,10 +39030,159 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
     return rows
 
 
+def movie_metadata_debug_latest_audit_event(
+    conn, movie_id: UUID | str, event_type: str
+) -> dict[str, Any] | None:
+    if not table_exists(conn, "audit_events"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                event_type,
+                category,
+                actor_user_id,
+                actor_username,
+                actor_role,
+                target_type,
+                target_id,
+                summary,
+                metadata,
+                request_ip,
+                user_agent,
+                created_at
+            FROM audit_events
+            WHERE target_type='movie' AND target_id=%s AND event_type=%s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (str(movie_id), event_type),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return audit_event_row(row)
+
+
+def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | None:
+    if not table_exists(conn, "audit_events"):
+        return None
+    fetched_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.refresh_fetched")
+    pushed_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.receiver_pushed")
+    if not fetched_event and not pushed_event:
+        return None
+
+    fetched_meta = (fetched_event or {}).get("metadata") or {}
+    pushed_meta = (pushed_event or {}).get("metadata") or {}
+
+    source_states: dict[str, dict[str, Any]] = {}
+    for entry in fetched_meta.get("sourceSummary") or []:
+        if isinstance(entry, dict) and entry.get("pluginId"):
+            source_states[str(entry["pluginId"])] = entry
+
+    grouped: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+
+    def ensure_plugin(plugin_id: str, *, source_label: Any, source_ref: Any) -> dict[str, Any]:
+        if plugin_id not in grouped:
+            summary_entry = source_states.get(plugin_id) or {}
+            grouped[plugin_id] = {
+                "pluginId": plugin_id,
+                "sourceLabel": source_label or summary_entry.get("name") or plugin_id,
+                "state": summary_entry.get("state"),
+                "reason": summary_entry.get("reason"),
+                "sourceRef": source_ref or "",
+                "fields": [],
+            }
+            order.append(plugin_id)
+        return grouped[plugin_id]
+
+    for decision in fetched_meta.get("fieldDecisions") or []:
+        if not isinstance(decision, dict):
+            continue
+        target = decision.get("target")
+        field = decision.get("field")
+        for candidate in decision.get("candidates") or []:
+            if not isinstance(candidate, dict):
+                continue
+            plugin_id = str(candidate.get("pluginId") or "")
+            if not plugin_id:
+                continue
+            entry = ensure_plugin(
+                plugin_id,
+                source_label=candidate.get("sourceLabel"),
+                source_ref=candidate.get("sourceRef"),
+            )
+            if not entry.get("sourceRef") and candidate.get("sourceRef"):
+                entry["sourceRef"] = candidate.get("sourceRef")
+            entry["fields"].append(
+                {
+                    "target": target,
+                    "field": field,
+                    "value": candidate.get("value"),
+                    "accepted": bool(candidate.get("accepted") or candidate.get("winner")),
+                }
+            )
+
+    for result in fetched_meta.get("providerResults") or []:
+        if not isinstance(result, dict):
+            continue
+        plugin_id = str(result.get("pluginId") or "")
+        if not plugin_id or plugin_id in grouped:
+            continue
+        ensure_plugin(
+            plugin_id,
+            source_label=result.get("sourceLabel"),
+            source_ref=result.get("sourceRef"),
+        )
+
+    fetched = [grouped[plugin_id] for plugin_id in order]
+
+    payload_summary = pushed_meta.get("payloadSummary") or {}
+    payload_fields = payload_summary.get("fields") or []
+    payload_sources = payload_summary.get("sourceProviders") or []
+    contributed: list[dict[str, Any]] = []
+    for receiver in pushed_meta.get("receivers") or []:
+        if not isinstance(receiver, dict):
+            continue
+        contributed.append(
+            {
+                "pluginId": receiver.get("pluginId"),
+                "name": receiver.get("name") or receiver.get("pluginId"),
+                "status": receiver.get("status"),
+                "state": receiver.get("state"),
+                "resultStatus": receiver.get("resultStatus"),
+                "reason": receiver.get("reason"),
+                "provider": receiver.get("provider"),
+                "fields": payload_fields,
+                "sourceProviders": payload_sources,
+            }
+        )
+
+    if not fetched and not contributed:
+        return None
+
+    fetched_at = (fetched_event or {}).get("createdAt")
+    if hasattr(fetched_at, "isoformat"):
+        fetched_at = fetched_at.isoformat()
+
+    return {
+        "fetchedAt": fetched_at,
+        "fetched": fetched,
+        "contributed": contributed,
+    }
+
+
 def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     movie = movie_entity(conn, movie_id)
     if not movie:
         return None
+    metadata_debug = None
+    try:
+        metadata_debug = movie_metadata_debug_entity(conn, movie_id)
+    except Exception:  # pragma: no cover - debug info must never break detail load
+        metadata_debug = None
     return {
         "movie": movie,
         "identifiers": movie_identifier_entities(conn, movie_id),
@@ -38851,6 +39193,7 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "mediaGroups": movie_media_group_entities(conn, movie_id),
         "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
         "digitalItems": movie_digital_item_entities(conn, movie_id),
+        "metadataDebug": metadata_debug,
     }
 
 
