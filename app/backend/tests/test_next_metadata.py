@@ -841,6 +841,78 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertNotIn("watchHistory", str(payload))
         self.assertNotIn("privateNotes", str(payload))
 
+    def test_receiver_contribution_payload_includes_full_current_metadata(self):
+        movie = {
+            "id": "9f12",
+            "public_id": "legacy-movie-73",
+            "title": "A Star Is Born",
+            "original_title": "A Star Is Born",
+            "sort_title": "Star Is Born, A",
+            "year": "2018",
+            "barcode": "0883929598083",
+            "format": "4K UHD",
+            "edition": "Special Edition",
+            "country": "US",
+            "language": "en",
+            "runtime_minutes": 136,
+            "overview": "A musician helps a young singer find fame.",
+            "rating": "7.5",
+            "release_date": "2018-10-05",
+        }
+        preview = {
+            "proposal": {
+                "technicalUpdates": {"audio_tracks": ["English: Dolby Atmos"]},
+                "identifiers": {"tmdb": "332562", "imdb": "tt1517451"},
+                "provenance": [{"pluginId": "bluray_com", "field": "audio_tracks"}],
+            },
+            "results": [],
+        }
+        credits = [
+            {"name": "Bradley Cooper", "credit_type": "crew", "job": "Director", "character": ""},
+            {"name": "Lady Gaga", "credit_type": "actor", "job": "", "character": "Ally"},
+            {"name": "Bradley Cooper", "credit_type": "actor", "job": "", "character": "Jackson"},
+        ]
+
+        payload = receiver_contribution_payload(
+            movie_id="9f12",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+            credits=credits,
+        )
+
+        fields = payload["payload"]
+        self.assertEqual(fields["overview"], "A musician helps a young singer find fame.")
+        self.assertEqual(fields["releaseDate"], "2018-10-05")
+        self.assertEqual(fields["runtimeMinutes"], 136)
+        self.assertEqual(fields["country"], "US")
+        self.assertEqual(fields["language"], "en")
+        self.assertEqual(fields["rating"], "7.5")
+        self.assertEqual(fields["edition"], "Special Edition")
+        self.assertEqual(fields["director"], "Bradley Cooper")
+        self.assertIn("Lady Gaga", fields["actor"])
+        self.assertEqual(fields["audio_tracks"], ["English: Dolby Atmos"])
+        self.assertEqual(len(fields["credits"]), 3)
+
+    def test_receiver_contribution_payload_release_date_object_serialized(self):
+        from datetime import date
+
+        movie = {
+            "id": "aa01",
+            "public_id": "legacy-movie-12",
+            "title": "Dune",
+            "year": "2021",
+            "format": "4K UHD",
+            "release_date": date(2021, 10, 22),
+        }
+        payload = receiver_contribution_payload(
+            movie_id="aa01",
+            movie=movie,
+            preview={"proposal": {}, "results": []},
+            applied={"changed": True, "applied": {}},
+        )
+        self.assertEqual(payload["payload"]["releaseDate"], "2021-10-22")
+
 
 if __name__ == "__main__":
     unittest.main()

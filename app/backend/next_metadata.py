@@ -518,6 +518,24 @@ def movie_technical_specs(conn, movie_id: UUID) -> dict[str, Any]:
     return dict(row) if row else {}
 
 
+def movie_contribution_credits(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT mc.credit_type, mc.character, mc.job, mc.sort_order, p.name
+            FROM movie_credits mc
+            JOIN people p ON p.id = mc.person_id
+            WHERE mc.movie_id=%s
+            ORDER BY mc.sort_order, p.name
+            LIMIT %s
+            """,
+            (movie_id, limit),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
     with conn.cursor() as cur:
         cur.execute(
@@ -1984,6 +2002,7 @@ def receiver_contribution_payload(
     movie: dict[str, Any],
     preview: dict[str, Any],
     applied: dict[str, Any],
+    credits: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     proposal = preview.get("proposal") or {}
     applied_fields = applied.get("applied") or {}
@@ -2006,6 +2025,57 @@ def receiver_contribution_payload(
     metadata_payload.setdefault("year", movie.get("year"))
     metadata_payload.setdefault("barcode", movie.get("barcode"))
     metadata_payload.setdefault("format", movie.get("format"))
+    # Always include the movie's current public metadata so receivers get the
+    # actual content even when this refresh only changed a few fields (the
+    # proposal/applied payload only carries the changed delta).
+    metadata_payload.setdefault("sortTitle", movie.get("sort_title"))
+    metadata_payload.setdefault("overview", movie.get("overview"))
+    metadata_payload.setdefault("rating", movie.get("rating"))
+    metadata_payload.setdefault("runtimeMinutes", movie.get("runtime_minutes"))
+    metadata_payload.setdefault("edition", movie.get("edition"))
+    metadata_payload.setdefault("editionType", movie.get("edition_type"))
+    metadata_payload.setdefault("country", movie.get("country"))
+    metadata_payload.setdefault("language", movie.get("language"))
+    release_date = movie.get("release_date")
+    if hasattr(release_date, "isoformat"):
+        release_date = release_date.isoformat()
+    metadata_payload.setdefault("releaseDate", release_date)
+    movie_meta = movie.get("metadata") if isinstance(movie.get("metadata"), dict) else {}
+    for source_key, target_key in (
+        ("trailer_url", "trailerUrl"),
+        ("trailerUrl", "trailerUrl"),
+        ("videos", "videos"),
+    ):
+        if movie_meta.get(source_key) not in (None, "", [], {}):
+            metadata_payload.setdefault(target_key, movie_meta.get(source_key))
+    directors: list[str] = []
+    cast: list[str] = []
+    credit_entries: list[dict[str, Any]] = []
+    for credit in credits or []:
+        name = str(credit.get("name") or "").strip()
+        if not name:
+            continue
+        credit_type = str(credit.get("credit_type") or credit.get("creditType") or "").strip().lower()
+        job = str(credit.get("job") or "").strip()
+        character = str(credit.get("character") or "").strip()
+        entry = {"name": name}
+        if credit_type:
+            entry["creditType"] = credit_type
+        if job:
+            entry["job"] = job
+        if character:
+            entry["character"] = character
+        credit_entries.append(entry)
+        if "director" in job.lower():
+            directors.append(name)
+        if credit_type in {"actor", "cast", "performer", "acting"} or character:
+            cast.append(name)
+    if directors:
+        metadata_payload.setdefault("director", ", ".join(dict.fromkeys(directors)))
+    if cast:
+        metadata_payload.setdefault("actor", ", ".join(list(dict.fromkeys(cast))[:15]))
+    if credit_entries:
+        metadata_payload.setdefault("credits", credit_entries[:60])
     metadata_payload = {
         key: value
         for key, value in metadata_payload.items()
@@ -2135,6 +2205,7 @@ def push_metadata_to_receivers(
         movie=movie,
         preview=preview,
         applied=applied,
+        credits=movie_contribution_credits(conn, UUID(str(movie_id))),
     )
     return push_receiver_payload_to_receivers(conn, payload=payload, actor=actor)
 
