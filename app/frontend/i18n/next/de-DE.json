@@ -1000,6 +1000,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Benachrichtigung",
+  "notifications.pluginsUnconfiguredTitle": "Plugins müssen konfiguriert werden",
+  "notifications.pluginsUnconfiguredBody": "Die folgenden Plugins sind noch nicht konfiguriert: {plugins}",
   "notifications.pushTitle": "Push-Mitteilungen",
   "notifications.pushHelp": "Aktiviere native PWA-Mitteilungen auf diesem Geraet und waehle aus, welche Nachrichten du erhalten moechtest.",
   "notifications.testPush": "Test senden",

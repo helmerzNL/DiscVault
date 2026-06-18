@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Értesítés",
+  "notifications.pluginsUnconfiguredTitle": "A bővítményeket be kell állítani",
+  "notifications.pluginsUnconfiguredBody": "A következő bővítmények még nincsenek beállítva: {plugins}",
   "notifications.pushTitle": "Push értesítések",
   "notifications.pushHelp": "Engedélyezd a natív PWA-értesítéseket ezen az eszközön, és válaszd ki, mely üzeneteket szeretnéd megkapni.",
   "notifications.testPush": "Teszt küldése",

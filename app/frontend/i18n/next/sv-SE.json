@@ -1000,6 +1000,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Notis",
+  "notifications.pluginsUnconfiguredTitle": "Plugin-program behöver konfigureras",
+  "notifications.pluginsUnconfiguredBody": "Följande plugin-program är inte konfigurerade ännu: {plugins}",
   "notifications.pushTitle": "Pushnotiser",
   "notifications.pushHelp": "Aktivera inbyggda PWA-notiser pa den har enheten och valj vilka meddelanden du vill fa.",
   "notifications.testPush": "Skicka test",

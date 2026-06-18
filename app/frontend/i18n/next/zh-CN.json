@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "通知",
+  "notifications.pluginsUnconfiguredTitle": "插件需要配置",
+  "notifications.pluginsUnconfiguredBody": "以下插件尚未配置：{plugins}",
   "notifications.pushTitle": "推送通知",
   "notifications.pushHelp": "在此设备上启用原生 PWA 通知，并选择你想接收的消息。",
   "notifications.testPush": "发送测试",

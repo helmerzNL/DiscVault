@@ -1224,6 +1224,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Notification",
+  "notifications.pluginsUnconfiguredTitle": "Plugins need configuration",
+  "notifications.pluginsUnconfiguredBody": "The following plugins are not configured yet: {plugins}",
   "notifications.pushTitle": "Push notifications",
   "notifications.pushHelp": "Enable native PWA notifications on this device and choose which messages you want to receive.",
   "notifications.testPush": "Send test",

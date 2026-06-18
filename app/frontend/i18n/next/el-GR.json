@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Ειδοποίηση",
+  "notifications.pluginsUnconfiguredTitle": "Απαιτείται διαμόρφωση προσθέτων",
+  "notifications.pluginsUnconfiguredBody": "Τα παρακάτω πρόσθετα δεν έχουν διαμορφωθεί ακόμη: {plugins}",
   "notifications.pushTitle": "Ειδοποιήσεις push",
   "notifications.pushHelp": "Ενεργοποιήστε εγγενείς ειδοποιήσεις PWA σε αυτήν τη συσκευή και επιλέξτε ποια μηνύματα θέλετε να λαμβάνετε.",
   "notifications.testPush": "Αποστολή δοκιμής",
