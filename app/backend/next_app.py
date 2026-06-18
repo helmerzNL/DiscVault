@@ -15414,6 +15414,7 @@ def ui_preview_html(
       `;
       return fetchedSection + contributedSection;
     }
+    function renderAppDebugButton() {
       document.body.classList.toggle("debug-mode", appDebugMode);
       const button = document.getElementById("appAdminDebugButton");
       if (!button) return;
