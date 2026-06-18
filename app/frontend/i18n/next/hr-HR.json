@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Obavijest",
+  "notifications.pluginsUnconfiguredTitle": "Dodaci trebaju konfiguraciju",
+  "notifications.pluginsUnconfiguredBody": "Sljedeći dodaci još nisu konfigurirani: {plugins}",
   "notifications.pushTitle": "Push obavijesti",
   "notifications.pushHelp": "Omogućite izvorne PWA obavijesti na ovom uređaju i odaberite koje poruke želite primati.",
   "notifications.testPush": "Pošalji test",

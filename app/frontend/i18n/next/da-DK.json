@@ -1000,6 +1000,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Notifikation",
+  "notifications.pluginsUnconfiguredTitle": "Plugins skal konfigureres",
+  "notifications.pluginsUnconfiguredBody": "Følgende plugins er endnu ikke konfigureret: {plugins}",
   "notifications.pushTitle": "Notifikationer",
   "notifications.pushHelp": "Aktiver native PWA-notifikationer paa denne enhed og vaelg, hvilke beskeder du vil modtage.",
   "notifications.testPush": "Send test",

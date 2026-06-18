@@ -53,6 +53,7 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
+    from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import validate_manifest_compatibility
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
@@ -223,6 +224,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
+    from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import validate_manifest_compatibility
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
@@ -25728,6 +25730,21 @@ def ui_preview_html(
       const payload = notification?.payload || {};
       return String(payload.prefKey || payload.pref_key || payload.kind || "app_updates");
     }
+    function notificationDisplayTitle(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind === "metadata_plugins_unconfigured") {
+        return tNext("notifications.pluginsUnconfiguredTitle", "Plugins need configuration");
+      }
+      return notification.title || tNext("notifications.itemTitle", "Notification");
+    }
+    function notificationDisplayBody(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind === "metadata_plugins_unconfigured") {
+        const names = Array.isArray(payload.plugins) ? payload.plugins.join(", ") : "";
+        return tNext("notifications.pluginsUnconfiguredBody", "The following plugins are not configured yet: {plugins}").replace("{plugins}", names);
+      }
+      return notification.body || "";
+    }
     function notificationMatchesFilter(notification) {
       const filter = String(notificationFilter || "all");
       if (filter === "all") return true;
@@ -25738,11 +25755,13 @@ def ui_preview_html(
       const unread = !notification.read_at;
       const created = notification.created_at ? formatAppDate(notification.created_at) : "";
       const prefKey = notificationPrefKey(notification);
+      const cardTitle = notificationDisplayTitle(notification);
+      const cardBody = notificationDisplayBody(notification);
       return `
         <article class="notification-card ${unread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}" role="button" tabindex="0">
           <span>
-            <strong>${escapeHtml(notification.title || tNext("notifications.itemTitle", "Notification"))}</strong>
-            ${notification.body ? `<p>${escapeHtml(notification.body)}</p>` : ""}
+            <strong>${escapeHtml(cardTitle)}</strong>
+            ${cardBody ? `<p>${escapeHtml(cardBody)}</p>` : ""}
             <span class="notification-meta">${escapeHtml(created)}${prefKey ? ` / ${escapeHtml(tNext(`notifications.pref.${prefKey}`, prefKey.replaceAll("_", " ")))}` : ""}</span>
             ${notificationInviteActionsHtml(notification)}
           </span>
@@ -42537,6 +42556,69 @@ user_notification_rows = _next_notifications.user_notification_rows
 create_user_notification = _next_notifications.create_user_notification
 register_next_notifications_routes = _next_notifications.register_next_notifications_routes
 
+METADATA_PLUGINS_UNCONFIGURED_KIND = "metadata_plugins_unconfigured"
+
+
+def notify_unconfigured_metadata_plugins(conn, actor):
+    """After a metadata refresh, surface a notification listing metadata/
+    integration plugins (TMDb, Blu-ray.com, Plex, Jellyfin, Trakt) that are
+    still disabled or not configured (e.g. right after a version install).
+
+    The stored title/body are an English fallback used for push delivery; the
+    notification screen renders a localized version from the payload. Must be
+    called inside an open transaction. Never raises - a failure here must not
+    break the refresh flow.
+    """
+    try:
+        user_id = actor.get("id") if isinstance(actor, dict) else None
+        if not user_id or not table_exists(conn, "user_notifications"):
+            return None
+        plugins = unconfigured_integration_plugins(conn, table_exists, Jsonb)
+        if not plugins:
+            return None
+        names = [plugin["name"] for plugin in plugins]
+        payload = {
+            "kind": METADATA_PLUGINS_UNCONFIGURED_KIND,
+            "plugins": names,
+            "pluginIds": [plugin["id"] for plugin in plugins],
+            "url": "/notifications",
+            "prefKey": "metadata_jobs",
+        }
+        title = "Plugins need configuration"
+        body = "These plugins are still disabled or not configured: " + ", ".join(names)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id FROM user_notifications
+                WHERE user_id=%s AND read_at IS NULL AND payload->>'kind'=%s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id, METADATA_PLUGINS_UNCONFIGURED_KIND),
+            )
+            existing = cur.fetchone()
+            if existing:
+                cur.execute(
+                    """
+                    UPDATE user_notifications
+                    SET title=%s, body=%s, payload=%s, created_at=now()
+                    WHERE id=%s
+                    """,
+                    (title, body, Jsonb(json_ready(payload)), existing["id"]),
+                )
+                return None
+        return create_user_notification(
+            conn,
+            user_id,
+            title=title,
+            body=body,
+            url="/notifications",
+            pref_key="metadata_jobs",
+            payload=payload,
+        )
+    except Exception:
+        return None
+
 PWA_ICON_ASSETS = _next_push.PWA_ICON_ASSETS
 pwa_manifest_payload = _next_push.pwa_manifest_payload
 pwa_head_tags = _next_push.pwa_head_tags
@@ -48024,6 +48106,8 @@ def register_routes(flask_app: Flask) -> None:
                         "jobIds": [str(job.get("id")) for job in jobs],
                     },
                 )
+                if not dry_run:
+                    notify_unconfigured_metadata_plugins(conn, actor)
         return response({"status": "ok", "dryRun": dry_run, "refreshPeople": refresh_people, "personRefreshScope": person_refresh_scope, "queued": len(jobs), "jobs": jobs}, 201)
 
     @flask_app.post("/api/next/movies/<movie_id>/metadata/preview")
@@ -48072,6 +48156,8 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Refreshed movie metadata" if not dry_run else "Previewed movie metadata refresh",
                     metadata={"dryRun": dry_run, "result": result},
                 )
+                if not dry_run:
+                    notify_unconfigured_metadata_plugins(conn, actor)
         return response({"status": "ok", "metadata": result})
 
     @flask_app.get("/api/next/movies/<movie_id>/metadata/jobs")

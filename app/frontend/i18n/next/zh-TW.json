@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "通知",
+  "notifications.pluginsUnconfiguredTitle": "外掛程式需要設定",
+  "notifications.pluginsUnconfiguredBody": "以下外掛程式尚未設定：{plugins}",
   "notifications.pushTitle": "推播通知",
   "notifications.pushHelp": "在此裝置上啟用原生 PWA 通知，並選擇你想接收的訊息。",
   "notifications.testPush": "傳送測試",

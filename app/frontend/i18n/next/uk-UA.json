@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Сповіщення",
+  "notifications.pluginsUnconfiguredTitle": "Плагіни потребують налаштування",
+  "notifications.pluginsUnconfiguredBody": "Наведені плагіни ще не налаштовані: {plugins}",
   "notifications.pushTitle": "Push-сповіщення",
   "notifications.pushHelp": "Увімкніть нативні PWA-сповіщення на цьому пристрої та виберіть, які повідомлення хочете отримувати.",
   "notifications.testPush": "Надіслати тест",

@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Pranešimas",
+  "notifications.pluginsUnconfiguredTitle": "Reikia sukonfigūruoti papildinius",
+  "notifications.pluginsUnconfiguredBody": "Šie papildiniai dar nesukonfigūruoti: {plugins}",
   "notifications.pushTitle": "Push pranešimai",
   "notifications.pushHelp": "Įjunkite vietinius PWA pranešimus šiame įrenginyje ir pasirinkite, kuriuos pranešimus norite gauti.",
   "notifications.testPush": "Siųsti testą",
