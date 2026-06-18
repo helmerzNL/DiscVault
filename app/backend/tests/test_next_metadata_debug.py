@@ -47,6 +47,14 @@ FETCHED_EVENT = {
                     {"pluginId": "tmdb", "sourceLabel": "TMDb", "sourceRef": "tmdb:603", "accepted": True, "winner": True, "value": "A hacker learns the truth."},
                 ],
             },
+            {
+                "target": "technical",
+                "field": "audio_tracks",
+                "finalValue": "DTS-HD MA 5.1",
+                "candidates": [
+                    {"pluginId": "bluray_com", "sourceLabel": "Blu-ray.com", "sourceRef": "bluray:123", "accepted": True, "winner": True, "value": "DTS-HD MA 5.1"},
+                ],
+            },
         ],
     },
 }
@@ -64,6 +72,7 @@ PUSHED_EVENT = {
                 "resultStatus": "accepted",
                 "provider": "movievault_26",
                 "reason": None,
+                "templateVersion": "tpl-2026-06",
                 "acceptedFields": ["originalTitle", "title", "year"],
                 "droppedFields": [
                     {"field": "audio_tracks", "reason": "not_in_template"},
@@ -167,6 +176,33 @@ class MovieMetadataDebugEntityTest(unittest.TestCase):
         skipped = result["contributed"][1]
         self.assertEqual(skipped["excludedFields"], [])
         self.assertEqual(skipped["acceptedFields"], [])
+
+    def test_missing_contribution_report_shape(self):
+        result = self._run(FETCHED_EVENT, PUSHED_EVENT)
+        report = result["missingContributionReport"]
+        self.assertIsNotNone(report)
+        self.assertEqual(report["report"], "discvault.metadata.missing_in_receiver")
+        self.assertEqual(report["version"], 1)
+        self.assertIn("note", report)
+        self.assertEqual(report["movieId"], "movie-1")
+        self.assertEqual(report["generatedAt"], "2026-06-18T22:00:00+00:00")
+        self.assertEqual(len(report["receivers"]), 1)
+        receiver = report["receivers"][0]
+        self.assertEqual(receiver["pluginId"], "movievault_26")
+        self.assertEqual(receiver["templateVersion"], "tpl-2026-06")
+        missing = {item["field"]: item for item in receiver["missingFields"]}
+        self.assertIn("audio_tracks", missing)
+        self.assertEqual(missing["audio_tracks"]["reason"], "not_in_template")
+        self.assertEqual(missing["audio_tracks"]["sourcePluginId"], "bluray_com")
+        self.assertEqual(missing["audio_tracks"]["sampleValue"], "DTS-HD MA 5.1")
+        self.assertEqual(missing["audio_tracks"]["target"], "technical")
+        # runtime was dropped but never fetched -> present with null source
+        self.assertIn("runtime", missing)
+        self.assertIsNone(missing["runtime"]["sourcePluginId"])
+
+    def test_missing_contribution_report_none_when_nothing_excluded(self):
+        result = self._run(FETCHED_EVENT, None)
+        self.assertIsNone(result["missingContributionReport"])
 
     def test_returns_none_when_no_events(self):
         self.assertIsNone(self._run(None, None))
