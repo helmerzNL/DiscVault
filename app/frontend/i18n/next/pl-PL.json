@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Powiadomienie",
+  "notifications.pluginsUnconfiguredTitle": "Wtyczki wymagają konfiguracji",
+  "notifications.pluginsUnconfiguredBody": "Następujące wtyczki nie są jeszcze skonfigurowane: {plugins}",
   "notifications.pushTitle": "Powiadomienia push",
   "notifications.pushHelp": "Włącz natywne powiadomienia PWA na tym urządzeniu i wybierz, które wiadomości chcesz otrzymywać.",
   "notifications.testPush": "Wyślij test",

@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Notificare",
+  "notifications.pluginsUnconfiguredTitle": "Pluginurile necesită configurare",
+  "notifications.pluginsUnconfiguredBody": "Următoarele pluginuri nu sunt încă configurate: {plugins}",
   "notifications.pushTitle": "Notificări push",
   "notifications.pushHelp": "Activează notificările PWA native pe acest dispozitiv și alege ce mesaje vrei să primești.",
   "notifications.testPush": "Trimite test",

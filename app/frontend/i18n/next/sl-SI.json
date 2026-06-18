@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Obvestilo",
+  "notifications.pluginsUnconfiguredTitle": "Vtičnike je treba nastaviti",
+  "notifications.pluginsUnconfiguredBody": "Naslednji vtičniki še niso nastavljeni: {plugins}",
   "notifications.pushTitle": "Potisna obvestila",
   "notifications.pushHelp": "Omogočite izvorna PWA obvestila na tej napravi in izberite, katera sporočila želite prejemati.",
   "notifications.testPush": "Pošlji test",

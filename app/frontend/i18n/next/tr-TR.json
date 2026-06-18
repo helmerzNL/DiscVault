@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Bildirim",
+  "notifications.pluginsUnconfiguredTitle": "Eklentilerin yapılandırılması gerekiyor",
+  "notifications.pluginsUnconfiguredBody": "Aşağıdaki eklentiler henüz yapılandırılmadı: {plugins}",
   "notifications.pushTitle": "Anlık bildirimler",
   "notifications.pushHelp": "Bu cihazda yerel PWA bildirimlerini etkinleştirin ve hangi mesajları almak istediğinizi seçin.",
   "notifications.testPush": "Test gönder",
