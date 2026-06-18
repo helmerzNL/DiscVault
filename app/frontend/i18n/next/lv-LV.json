@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Paziņojums",
+  "notifications.pluginsUnconfiguredTitle": "Spraudņi jākonfigurē",
+  "notifications.pluginsUnconfiguredBody": "Šādi spraudņi vēl nav konfigurēti: {plugins}",
   "notifications.pushTitle": "Push paziņojumi",
   "notifications.pushHelp": "Iespējojiet vietējos PWA paziņojumus šajā ierīcē un izvēlieties, kurus ziņojumus vēlaties saņemt.",
   "notifications.testPush": "Nosūtīt testu",

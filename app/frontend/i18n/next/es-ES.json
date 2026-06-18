@@ -1000,6 +1000,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Notificacion",
+  "notifications.pluginsUnconfiguredTitle": "Hay complementos por configurar",
+  "notifications.pluginsUnconfiguredBody": "Los siguientes complementos aún no están configurados: {plugins}",
   "notifications.pushTitle": "Notificaciones push",
   "notifications.pushHelp": "Activa las notificaciones PWA nativas en este dispositivo y elige que mensajes recibir.",
   "notifications.testPush": "Enviar prueba",
