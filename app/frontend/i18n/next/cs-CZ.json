@@ -1195,6 +1195,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Oznámení",
+  "notifications.pluginsUnconfiguredTitle": "Pluginy je potřeba nastavit",
+  "notifications.pluginsUnconfiguredBody": "Následující pluginy ještě nejsou nakonfigurovány: {plugins}",
   "notifications.pushTitle": "Push oznámení",
   "notifications.pushHelp": "Povolte nativní PWA oznámení na tomto zařízení a vyberte, které zprávy chcete dostávat.",
   "notifications.testPush": "Odeslat test",

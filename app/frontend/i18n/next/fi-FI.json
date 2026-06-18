@@ -1000,6 +1000,8 @@
   "notifications.pref.metadata_jobs": "Metadata jobs",
   "notifications.pref.security": "Security",
   "notifications.itemTitle": "Ilmoitus",
+  "notifications.pluginsUnconfiguredTitle": "Laajennukset vaativat määrityksen",
+  "notifications.pluginsUnconfiguredBody": "Seuraavia laajennuksia ei ole vielä määritetty: {plugins}",
   "notifications.pushTitle": "Ilmoitukset",
   "notifications.pushHelp": "Ota natiivit PWA-ilmoitukset kayttoon talla laitteella ja valitse vastaanotettavat viestit.",
   "notifications.testPush": "Laheta testi",
