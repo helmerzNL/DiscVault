@@ -54,7 +54,7 @@ FETCHED_EVENT = {
 PUSHED_EVENT = {
     "createdAt": "2026-06-18T22:00:05+00:00",
     "metadata": {
-        "receiverCount": 1,
+        "receiverCount": 2,
         "receivers": [
             {
                 "pluginId": "movievault_26",
@@ -64,7 +64,17 @@ PUSHED_EVENT = {
                 "resultStatus": "accepted",
                 "provider": "movievault_26",
                 "reason": None,
-            }
+            },
+            {
+                "pluginId": "disabled_sink",
+                "name": "Disabled Sink",
+                "status": "skipped",
+                "state": "needs_configuration",
+                "resultStatus": "skipped",
+                "provider": "disabled_sink",
+                "reason": "needs_configuration",
+                "error": None,
+            },
         ],
         "payloadSummary": {
             "entityType": "movie",
@@ -120,13 +130,23 @@ class MovieMetadataDebugEntityTest(unittest.TestCase):
 
     def test_contributed_per_plugin_from_receiver_summary(self):
         result = self._run(FETCHED_EVENT, PUSHED_EVENT)
-        self.assertEqual(len(result["contributed"]), 1)
+        self.assertEqual(len(result["contributed"]), 2)
         receiver = result["contributed"][0]
         self.assertEqual(receiver["pluginId"], "movievault_26")
         self.assertEqual(receiver["name"], "MovieVault")
         self.assertEqual(receiver["resultStatus"], "accepted")
         self.assertEqual(receiver["fields"], ["originalTitle", "title", "year"])
         self.assertEqual(receiver["sourceProviders"], ["tmdb"])
+
+    def test_contributed_passes_status_state_reason(self):
+        result = self._run(FETCHED_EVENT, PUSHED_EVENT)
+        skipped = result["contributed"][1]
+        self.assertEqual(skipped["pluginId"], "disabled_sink")
+        self.assertEqual(skipped["status"], "skipped")
+        self.assertEqual(skipped["state"], "needs_configuration")
+        self.assertEqual(skipped["resultStatus"], "skipped")
+        self.assertEqual(skipped["reason"], "needs_configuration")
+        self.assertIn("error", skipped)
 
     def test_returns_none_when_no_events(self):
         self.assertIsNone(self._run(None, None))

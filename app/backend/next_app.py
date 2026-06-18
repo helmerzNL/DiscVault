@@ -9837,6 +9837,50 @@ def ui_preview_html(
       text-transform: uppercase;
       letter-spacing: .03em;
     }
+    .debug-source-card-head {
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      padding-bottom: 6px;
+    }
+    .debug-source-badge {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      border-radius: var(--radius-sm);
+      padding: 2px 8px;
+      white-space: nowrap;
+      background: color-mix(in srgb, var(--muted) 16%, transparent);
+      color: var(--muted);
+    }
+    .debug-source-badge.state-hit,
+    .debug-source-badge.contrib-ok {
+      background: color-mix(in srgb, var(--ok, #2e7d32) 20%, transparent);
+      color: var(--ok, #2e7d32);
+    }
+    .debug-source-badge.contrib-skipped {
+      background: color-mix(in srgb, var(--warn, #b26a00) 20%, transparent);
+      color: var(--warn, #b26a00);
+    }
+    .debug-source-badge.contrib-error,
+    .debug-source-badge.state-no_match,
+    .debug-source-badge.state-blocked_by_format_policy {
+      background: color-mix(in srgb, var(--danger, #c62828) 18%, transparent);
+      color: var(--danger, #c62828);
+    }
+    .debug-source-fields-details > summary {
+      cursor: pointer;
+      font-size: .76rem;
+      color: var(--muted);
+      list-style: revert;
+      user-select: none;
+    }
+    .debug-source-fields-details[open] > summary {
+      margin-bottom: 6px;
+    }
+    .debug-source-nofields {
+      font-size: .78rem;
+      color: var(--muted);
+      font-style: italic;
+    }
     .debug-source-ref {
       font-size: .76rem;
       color: var(--muted);
@@ -15335,43 +15379,96 @@ def ui_preview_html(
       if (text.length > 280) text = text.slice(0, 277) + "\u2026";
       return text;
     }
+    function debugSourceStateLabel(state) {
+      const key = String(state || "").trim();
+      if (!key) return "";
+      const map = {
+        hit: tNext("movieDetail.debugSourcesStateHit", "used"),
+        retained_existing: tNext("movieDetail.debugSourcesStateRetained", "retained existing"),
+        no_match: tNext("movieDetail.debugSourcesStateNoMatch", "no match"),
+        blocked_by_format_policy: tNext("movieDetail.debugSourcesStateBlocked", "blocked by format"),
+        needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "needs configuration")
+      };
+      return map[key] || key.replace(/_/g, " ");
+    }
+    function debugContributionReasonLabel(receiver) {
+      const reason = String(receiver && receiver.reason || "").trim().toLowerCase();
+      const status = String(receiver && receiver.status || "").trim().toLowerCase();
+      const state = String(receiver && receiver.state || "").trim().toLowerCase();
+      const reasonMap = {
+        disabled: tNext("movieDetail.debugSourcesReasonDisabled", "Contribution disabled"),
+        contribution_disabled: tNext("movieDetail.debugSourcesReasonDisabled", "Contribution disabled"),
+        needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
+        not_configured: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
+        no_match: tNext("movieDetail.debugSourcesReasonNoMatch", "No match"),
+        not_found: tNext("movieDetail.debugSourcesReasonNoMatch", "No match")
+      };
+      if (reason && reasonMap[reason]) return reasonMap[reason];
+      if (state && reasonMap[state]) return reasonMap[state];
+      if (status === "error") {
+        const errorText = receiver && (receiver.error || receiver.reason);
+        const errorLabel = tNext("movieDetail.debugSourcesReasonError", "Error");
+        return errorText ? `${errorLabel}: ${String(errorText)}` : errorLabel;
+      }
+      if (receiver && receiver.reason) return String(receiver.reason);
+      return "";
+    }
+    function debugContributionStatusClass(receiver) {
+      const status = String(receiver && receiver.status || "").trim().toLowerCase();
+      const result = String(receiver && receiver.resultStatus || "").trim().toLowerCase();
+      if (status === "error") return "error";
+      if (status === "skipped" || result === "skipped") return "skipped";
+      if (status === "ok" || result === "accepted" || result === "ok") return "ok";
+      return "";
+    }
     function movieMetadataSourcesDebugHtml(metadataDebug) {
       const fetched = metadataDebug && Array.isArray(metadataDebug.fetched) ? metadataDebug.fetched : [];
       const contributed = metadataDebug && Array.isArray(metadataDebug.contributed) ? metadataDebug.contributed : [];
       const usedLabel = tNext("movieDetail.debugSourcesUsed", "used");
       const skippedLabel = tNext("movieDetail.debugSourcesSkipped", "not used");
-      const stateLabel = tNext("movieDetail.debugSourcesState", "State");
       const fieldsLabel = tNext("movieDetail.debugSourcesFields", "Fields");
       const contributedToLabel = tNext("movieDetail.debugSourcesContributedTo", "Sources");
+      const reasonLabel = tNext("movieDetail.debugSourcesReasonLabel", "Reason");
       const fetchedCards = fetched.map((plugin) => {
         const fields = Array.isArray(plugin.fields) ? plugin.fields : [];
-        const fieldsHtml = fields.map((field) => {
+        const usedCount = fields.filter((field) => field.accepted).length;
+        const fieldRows = fields.map((field) => {
           const fieldName = field.target ? `${field.target}.${field.field}` : (field.field || "");
           const marker = field.accepted
             ? `<span class="debug-source-marker used">${escapeHtml(usedLabel)}</span>`
             : `<span class="debug-source-marker skipped">${escapeHtml(skippedLabel)}</span>`;
           return `
-            <li class="debug-source-field">
+            <li class="debug-source-field${field.accepted ? " is-used" : ""}">
               <span class="debug-source-field-name">${escapeHtml(fieldName)}</span>
               <span class="debug-source-field-value">${escapeHtml(debugSourceValueText(field.value))}</span>
               ${marker}
             </li>
           `;
         }).join("");
-        const stateHtml = plugin.state
-          ? `<span class="debug-source-state">${escapeHtml(stateLabel)}: ${escapeHtml(String(plugin.state))}</span>`
+        const stateText = debugSourceStateLabel(plugin.state);
+        const stateHtml = stateText
+          ? `<span class="debug-source-badge state-${escapeHtml(String(plugin.state || "").replace(/[^a-z0-9_-]/gi, ""))}">${escapeHtml(stateText)}</span>`
           : "";
         const refHtml = plugin.sourceRef
-          ? `<span class="debug-source-ref">${escapeHtml(String(plugin.sourceRef))}</span>`
+          ? `<div class="debug-source-ref">${escapeHtml(String(plugin.sourceRef))}</div>`
           : "";
+        const countText = `${usedCount}/${fields.length} ${escapeHtml(fieldsLabel)}`;
+        const body = fields.length
+          ? `
+            <details class="debug-source-fields-details"${fields.length <= 6 ? " open" : ""}>
+              <summary>${countText}</summary>
+              <ul class="debug-source-fields">${fieldRows}</ul>
+            </details>
+          `
+          : `<div class="debug-source-nofields">${escapeHtml(tNext("movieDetail.debugSourcesNoFields", "No fields loaded"))}</div>`;
         return `
           <article class="debug-source-card">
-            <header>
+            <header class="debug-source-card-head">
               <strong>${escapeHtml(pluginDisplayName(plugin.pluginId, plugin.sourceLabel || plugin.pluginId))}</strong>
               ${stateHtml}
             </header>
             ${refHtml}
-            ${fields.length ? `<ul class="debug-source-fields">${fieldsHtml}</ul>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesEmpty", "No metadata refresh recorded yet."))}</div>`}
+            ${body}
           </article>
         `;
       }).join("");
@@ -15379,24 +15476,29 @@ def ui_preview_html(
         const fields = Array.isArray(receiver.fields) ? receiver.fields : [];
         const sources = Array.isArray(receiver.sourceProviders) ? receiver.sourceProviders : [];
         const statusText = receiver.resultStatus || receiver.status || receiver.state || "";
+        const statusClass = debugContributionStatusClass(receiver);
+        const statusHtml = statusText
+          ? `<span class="debug-source-badge contrib-${statusClass || "neutral"}">${escapeHtml(String(statusText))}</span>`
+          : "";
+        const reasonText = debugContributionReasonLabel(receiver);
+        const reasonHtml = reasonText
+          ? `<div class="debug-source-contrib-reason"><span class="debug-source-label">${escapeHtml(reasonLabel)}:</span> ${escapeHtml(reasonText)}</div>`
+          : "";
         const fieldsHtml = fields.length
           ? `<div class="debug-source-contrib-fields"><span class="debug-source-label">${escapeHtml(fieldsLabel)}:</span> ${escapeHtml(fields.join(", "))}</div>`
           : "";
         const sourcesHtml = sources.length
           ? `<div class="debug-source-contrib-sources"><span class="debug-source-label">${escapeHtml(contributedToLabel)}:</span> ${escapeHtml(sources.join(", "))}</div>`
           : "";
-        const reasonHtml = receiver.reason
-          ? `<div class="debug-source-contrib-reason">${escapeHtml(String(receiver.reason))}</div>`
-          : "";
         return `
           <article class="debug-source-card">
-            <header>
+            <header class="debug-source-card-head">
               <strong>${escapeHtml(pluginDisplayName(receiver.pluginId, receiver.name || receiver.pluginId))}</strong>
-              ${statusText ? `<span class="debug-source-state">${escapeHtml(String(statusText))}</span>` : ""}
+              ${statusHtml}
             </header>
+            ${reasonHtml}
             ${fieldsHtml}
             ${sourcesHtml}
-            ${reasonHtml}
           </article>
         `;
       }).join("");
@@ -39156,6 +39258,7 @@ def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | 
                 "resultStatus": receiver.get("resultStatus"),
                 "reason": receiver.get("reason"),
                 "provider": receiver.get("provider"),
+                "error": receiver.get("error"),
                 "fields": payload_fields,
                 "sourceProviders": payload_sources,
             }
