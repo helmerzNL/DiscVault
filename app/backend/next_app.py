@@ -11732,6 +11732,160 @@ def ui_preview_html(
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 8px;
     }
+    .metadata-compare-hint {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: .8rem;
+      line-height: 1.4;
+    }
+    .metadata-compare-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .metadata-compare-summary {
+      margin: 0;
+      font-weight: 700;
+      font-size: .82rem;
+    }
+    .metadata-compare-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .metadata-compare-badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--field) 60%, transparent);
+      color: var(--muted);
+    }
+    .metadata-compare-badge.winner {
+      border-color: color-mix(in srgb, #1f9d55 60%, transparent);
+      background: color-mix(in srgb, #1f9d55 18%, transparent);
+      color: #1f9d55;
+    }
+    .metadata-compare-badge.change,
+    .metadata-compare-badge.conflict {
+      border-color: color-mix(in srgb, #d98a00 60%, transparent);
+      background: color-mix(in srgb, #d98a00 16%, transparent);
+      color: #c47d00;
+    }
+    .metadata-compare-badge.same {
+      border-color: color-mix(in srgb, var(--line) 70%, transparent);
+    }
+    .metadata-compare-badge.locked {
+      border-color: color-mix(in srgb, #7a5cff 60%, transparent);
+      background: color-mix(in srgb, #7a5cff 16%, transparent);
+      color: #6a4cf0;
+    }
+    .metadata-compare-table {
+      display: grid;
+      gap: 10px;
+    }
+    .metadata-compare-field {
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: color-mix(in srgb, var(--field) 50%, transparent);
+    }
+    .metadata-compare-field.changed {
+      border-color: color-mix(in srgb, #d98a00 55%, transparent);
+    }
+    .metadata-compare-field.locked {
+      border-color: color-mix(in srgb, #7a5cff 50%, transparent);
+    }
+    .metadata-compare-field-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .metadata-compare-field-head strong {
+      font-size: .92rem;
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-flags {
+      display: inline-flex;
+      gap: 6px;
+    }
+    .metadata-compare-current {
+      display: grid;
+      grid-template-columns: minmax(80px, 130px) 1fr;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+      margin-bottom: 6px;
+    }
+    .metadata-compare-current-label {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .metadata-compare-current-value {
+      overflow-wrap: anywhere;
+      font-weight: 600;
+    }
+    .metadata-compare-candidates {
+      display: grid;
+      gap: 6px;
+    }
+    .metadata-compare-candidate {
+      display: grid;
+      grid-template-columns: minmax(80px, 130px) 1fr auto;
+      gap: 8px;
+      align-items: start;
+      padding: 4px 6px;
+      border-radius: 10px;
+    }
+    .metadata-compare-candidate.winner {
+      background: color-mix(in srgb, #1f9d55 12%, transparent);
+    }
+    .metadata-compare-candidate.differs {
+      background: color-mix(in srgb, #d98a00 10%, transparent);
+    }
+    .metadata-compare-candidate.rejected {
+      opacity: .7;
+    }
+    .metadata-compare-provider {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-candidate-value {
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-marks {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    .metadata-compare-reason {
+      color: var(--muted);
+      font-size: .68rem;
+      font-style: italic;
+    }
+    @media (max-width: 640px) {
+      .metadata-compare-current,
+      .metadata-compare-candidate {
+        grid-template-columns: 1fr;
+      }
+      .metadata-compare-marks {
+        justify-content: flex-start;
+      }
+    }
     .app-admin-plugin-tab-panel {
       display: none;
       min-width: 0;
@@ -14126,7 +14280,10 @@ def ui_preview_html(
           <div class="detail-card full">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.metadataCompare">Metadata compare</h3>
-              <span class="tag blue" data-next-i18n="metadataJobs.providers">Providers</span>
+              <div class="button-row compact">
+                <button type="button" class="secondary-button hidden" id="movieMetadataCompareButton" data-next-i18n="movieDetail.compareProviders">Compare with providers</button>
+                <span class="tag blue" data-next-i18n="metadataJobs.providers">Providers</span>
+              </div>
             </div>
             <div class="metadata-compare-panel" id="movieMetadataComparePanel"></div>
           </div>
@@ -21554,9 +21711,64 @@ def ui_preview_html(
         </section>
       `;
     }
+    let movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
+    const MOVIE_COMPARE_FIELD_LABELS = {
+      "movie:title": ["movieDetail.title", "Title"],
+      "movie:original_title": ["movieDetail.originalTitle", "Original title"],
+      "movie:sort_title": ["movieDetail.fieldSortTitle", "Sort title"],
+      "movie:year": ["movieDetail.fieldYear", "Year"],
+      "movie:barcode": ["movieDetail.barcode", "Barcode"],
+      "movie:release_date": ["movieDetail.releaseDate", "Release date"],
+      "movie:format": ["movieDetail.format", "Format"],
+      "movie:edition": ["movieDetail.edition", "Edition"],
+      "movie:country": ["movieDetail.releaseCountry", "Release country"],
+      "movie:language": ["movieDetail.language", "Language"],
+      "movie:overview": ["movieDetail.fieldOverview", "Overview"],
+      "movie:rating": ["movieDetail.rating", "Rating"],
+      "movie:runtime_minutes": ["movieDetail.runtime", "Runtime"],
+      "metadata:director": ["movieDetail.director", "Director"],
+      "metadata:genre": ["movieDetail.genre", "Genre"],
+      "metadata:studios": ["movieDetail.studios", "Studios"],
+      "metadata:distributor": ["movieDetail.distributor", "Distributor"],
+      "metadata:packaging": ["movieDetail.packaging", "Packaging"],
+      "technical:hdr": ["", "HDR"],
+      "technical:screen_ratios": ["movieDetail.screenRatio", "Screen ratio"],
+      "technical:audio_tracks": ["movieDetail.audio", "Audio"],
+      "technical:subtitles": ["movieDetail.subtitles", "Subtitles"],
+      "technical:packaging": ["movieDetail.packaging", "Packaging"],
+      "media:poster": ["movieDetail.posters", "Posters"],
+      "media:backdrop": ["movieDetail.backdrops", "Backdrops"]
+    };
+    function metadataCompareFieldLabel(decision) {
+      const key = `${decision.target}:${decision.field}`;
+      const entry = MOVIE_COMPARE_FIELD_LABELS[key];
+      if (entry) return entry[0] ? tNext(entry[0], entry[1]) : entry[1];
+      return String(decision.field || "").replace(/_/g, " ");
+    }
+    function metadataCompareValueText(value) {
+      const text = valueText(value);
+      return text || tNext("movieDetail.compareEmpty", "(empty)");
+    }
     function renderMovieMetadataCompare(detail) {
       const node = document.getElementById("movieMetadataComparePanel");
       if (!node) return;
+      const button = document.getElementById("movieMetadataCompareButton");
+      if (button) {
+        const canCompare = hasPermission("metadata.refresh_one");
+        button.classList.toggle("hidden", !canCompare);
+        button.disabled = !!movieMetadataComparison.loading;
+        button.textContent = movieMetadataComparison.loading
+          ? tNext("movieDetail.comparing", "Comparing...")
+          : tNext("movieDetail.compareProviders", "Compare with providers");
+      }
+      if (movieMetadataComparison.movieId === activeDetailMovieId
+          && (movieMetadataComparison.decisions || movieMetadataComparison.error || movieMetadataComparison.loading)) {
+        node.innerHTML = movieMetadataCompareLiveHtml();
+        return;
+      }
+      node.innerHTML = movieMetadataCompareSnapshotHtml(detail);
+    }
+    function movieMetadataCompareSnapshotHtml(detail) {
       const movie = detail.movie || {};
       const metadata = movie.metadata || {};
       const identifiers = detail.identifiers || [];
@@ -21570,7 +21782,11 @@ def ui_preview_html(
       ].filter(([, value]) => value);
       const idText = identifiers.map((item) => `${item.provider_id || item.providerId}:${item.identifier}`).join(" / ");
       if (idText) rows.push([tNext("movieDetail.identifiers", "Identifiers"), idText, "providers"]);
-      node.innerHTML = rows.length ? `
+      const hint = `<p class="metadata-compare-hint">${escapeHtml(tNext("movieDetail.compareHint", "Showing the current stored values and their source. Use \u201cCompare with providers\u201d to see what each provider would propose."))}</p>`;
+      if (!rows.length) {
+        return hint + `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+      }
+      return hint + `
         <section class="metadata-compare-grid">
           ${rows.map(([label, value, source]) => `
             <div class="metadata-compare-row">
@@ -21580,7 +21796,111 @@ def ui_preview_html(
             </div>
           `).join("")}
         </section>
-      ` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+      `;
+    }
+    function movieMetadataCompareLiveHtml() {
+      if (movieMetadataComparison.loading) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.comparing", "Comparing..."))}</div>`;
+      }
+      if (movieMetadataComparison.error) {
+        return `<div class="preview-empty bad">${escapeHtml(movieMetadataComparison.error)}</div>`;
+      }
+      const decisions = (movieMetadataComparison.decisions || []).filter((decision) => {
+        return decision && Array.isArray(decision.candidates) && decision.candidates.length;
+      });
+      if (!decisions.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.compareNoProposals", "No providers returned any values to compare."))}</div>`;
+      }
+      const changed = decisions.filter((decision) => decision.changed).length;
+      const conflicts = decisions.filter((decision) => decision.conflict).length;
+      const locked = decisions.filter((decision) => metadataCompareDecisionLocked(decision)).length;
+      const summaryParts = [
+        `${decisions.length} ${tNext("movieDetail.compareFieldsCompared", "fields compared")}`,
+        `${changed} ${tNext("movieDetail.compareWouldChange", "would change")}`,
+        `${conflicts} ${tNext("movieDetail.compareConflicts", "conflicts")}`
+      ];
+      if (locked) summaryParts.push(`${locked} ${tNext("movieDetail.compareLocked", "locked")}`);
+      const legend = `
+        <div class="metadata-compare-toolbar">
+          <p class="metadata-compare-summary">${escapeHtml(summaryParts.join(" \u00b7 "))}</p>
+          <div class="metadata-compare-legend">
+            <span class="metadata-compare-badge winner">${escapeHtml(tNext("movieDetail.compareWinner", "Selected"))}</span>
+            <span class="metadata-compare-badge change">${escapeHtml(tNext("movieDetail.compareChange", "Differs"))}</span>
+            <span class="metadata-compare-badge same">${escapeHtml(tNext("movieDetail.compareSame", "Same"))}</span>
+            <span class="metadata-compare-badge locked">${escapeHtml(tNext("movieDetail.compareLocked", "locked"))}</span>
+          </div>
+        </div>`;
+      const rows = decisions.map(movieMetadataCompareRowHtml).join("");
+      return legend + `<div class="metadata-compare-table">${rows}</div>`;
+    }
+    function metadataCompareDecisionLocked(decision) {
+      return (decision.candidates || []).some((candidate) => String(candidate.reason || "").includes("locked by user"));
+    }
+    function movieMetadataCompareRowHtml(decision) {
+      const label = metadataCompareFieldLabel(decision);
+      const currentText = valueText(decision.initialValue);
+      const isLocked = metadataCompareDecisionLocked(decision);
+      const rowClasses = ["metadata-compare-field"];
+      if (decision.changed) rowClasses.push("changed");
+      if (decision.conflict) rowClasses.push("conflict");
+      if (isLocked) rowClasses.push("locked");
+      const flags = [];
+      if (isLocked) flags.push(`<span class="metadata-compare-badge locked">${escapeHtml(tNext("movieDetail.compareLocked", "locked"))}</span>`);
+      if (decision.conflict) flags.push(`<span class="metadata-compare-badge conflict">${escapeHtml(tNext("movieDetail.compareConflict", "conflict"))}</span>`);
+      const candidates = (decision.candidates || []).map((candidate) => {
+        const candidateText = valueText(candidate.value);
+        const same = candidateText === currentText;
+        const cls = ["metadata-compare-candidate"];
+        if (candidate.winner) cls.push("winner");
+        else if (same) cls.push("same");
+        else if (candidate.accepted === false && !same) cls.push("rejected");
+        if (!same && !candidate.winner) cls.push("differs");
+        const marks = [];
+        if (candidate.winner) marks.push(`<span class="metadata-compare-badge winner">${escapeHtml(tNext("movieDetail.compareWinner", "Selected"))}</span>`);
+        else if (same) marks.push(`<span class="metadata-compare-badge same">${escapeHtml(tNext("movieDetail.compareSame", "Same"))}</span>`);
+        else marks.push(`<span class="metadata-compare-badge change">${escapeHtml(tNext("movieDetail.compareChange", "Differs"))}</span>`);
+        const reason = candidate.accepted === false && candidate.reason
+          ? `<span class="metadata-compare-reason">${escapeHtml(candidate.reason)}</span>`
+          : "";
+        return `
+          <div class="${cls.join(" ")}">
+            <span class="metadata-compare-provider">${escapeHtml(candidate.sourceLabel || candidate.pluginId || "")}</span>
+            <span class="metadata-compare-candidate-value">${escapeHtml(metadataCompareValueText(candidate.value)).slice(0, 320)}</span>
+            <span class="metadata-compare-marks">${marks.join("")}${reason}</span>
+          </div>`;
+      }).join("");
+      return `
+        <div class="${rowClasses.join(" ")}">
+          <div class="metadata-compare-field-head">
+            <strong>${escapeHtml(label)}</strong>
+            <span class="metadata-compare-flags">${flags.join("")}</span>
+          </div>
+          <div class="metadata-compare-current">
+            <span class="metadata-compare-current-label">${escapeHtml(tNext("movieDetail.compareCurrent", "Current"))}</span>
+            <span class="metadata-compare-current-value">${escapeHtml(metadataCompareValueText(decision.initialValue)).slice(0, 320)}</span>
+          </div>
+          <div class="metadata-compare-candidates">${candidates}</div>
+        </div>`;
+    }
+    async function loadMovieMetadataComparison() {
+      if (!activeDetailMovieId || !hasPermission("metadata.refresh_one")) return;
+      const movieId = activeDetailMovieId;
+      movieMetadataComparison = {movieId, decisions: null, loading: true, error: ""};
+      if (activeDetailPayload) renderMovieMetadataCompare(activeDetailPayload);
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/preview`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        if (activeDetailMovieId !== movieId) return;
+        const decisions = (((payload.metadata || {}).proposal || {}).fieldDecisions) || [];
+        movieMetadataComparison = {movieId, decisions, loading: false, error: ""};
+      } catch (error) {
+        if (activeDetailMovieId !== movieId) return;
+        movieMetadataComparison = {movieId, decisions: null, loading: false, error: error.message || String(error)};
+      }
+      if (activeDetailPayload) renderMovieMetadataCompare(activeDetailPayload);
     }
     function movieVideoItems(movie, metadata) {
       const videos = [];
@@ -22222,6 +22542,7 @@ def ui_preview_html(
     function showMovieDetailLoading(movieId) {
       activeDetailMovieId = movieId || "";
       activeDetailPayload = null;
+      movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
       document.getElementById("movieDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("movieDetailOverview").textContent = "";
@@ -30139,6 +30460,7 @@ def ui_preview_html(
       document.getElementById("movieMetadataPeopleToggle")?.addEventListener("click", () => setMovieMetadataRefreshPeople(!movieMetadataRefreshPeople));
       setMovieMetadataRefreshPeople(movieMetadataRefreshPeople);
       document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
+      document.getElementById("movieMetadataCompareButton")?.addEventListener("click", () => loadMovieMetadataComparison());
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
         const items = libraryDisplayItems();
         if (!items.length) return;
