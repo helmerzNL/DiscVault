@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "音频和视频",
   "movieDetail.collectors": "收藏者",
   "movieDetail.runtime": "时长",
+  "movieDetail.lockField": "字段已解锁。点击可保护其不被元数据更新覆盖。",
+  "movieDetail.unlockField": "字段已锁定。点击可允许元数据更新。",
   "movieDetail.distributor": "发行商",
   "movieDetail.partOfCollection": "属于合集",
   "movieDetail.releaseCountry": "发行国家/地区",

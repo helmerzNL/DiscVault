@@ -388,6 +388,8 @@
   "movieDetail.audioVideo": "Audio & Video",
   "movieDetail.collectors": "Collectors",
   "movieDetail.runtime": "Runtime",
+  "movieDetail.lockField": "Field unlocked. Click to protect it from metadata updates.",
+  "movieDetail.unlockField": "Field locked. Click to allow metadata updates.",
   "movieDetail.distributor": "Distributor",
   "movieDetail.partOfCollection": "Part of collection",
   "movieDetail.releaseCountry": "Release country",
