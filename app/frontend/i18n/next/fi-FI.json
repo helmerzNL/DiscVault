@@ -1157,6 +1157,8 @@
   "movieDetail.audioVideo": "Ääni ja kuva",
   "movieDetail.collectors": "Keräilijät",
   "movieDetail.runtime": "Kesto",
+  "movieDetail.lockField": "Kenttä on lukitsematon. Suojaa se metatietopäivityksiltä napsauttamalla.",
+  "movieDetail.unlockField": "Kenttä on lukittu. Salli metatietopäivitykset napsauttamalla.",
   "movieDetail.distributor": "Levittäjä",
   "movieDetail.partOfCollection": "Osa kokoelmaa",
   "movieDetail.releaseCountry": "Julkaisumaa",

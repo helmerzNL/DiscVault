@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "音訊與影像",
   "movieDetail.collectors": "收藏者",
   "movieDetail.runtime": "片長",
+  "movieDetail.lockField": "欄位已解鎖。點擊以保護其不被中繼資料更新覆寫。",
+  "movieDetail.unlockField": "欄位已鎖定。點擊以允許中繼資料更新。",
   "movieDetail.distributor": "發行商",
   "movieDetail.partOfCollection": "屬於收藏",
   "movieDetail.releaseCountry": "發行國家/地區",

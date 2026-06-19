@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "오디오 및 비디오",
   "movieDetail.collectors": "수집가",
   "movieDetail.runtime": "재생 시간",
+  "movieDetail.lockField": "필드 잠금이 해제되었습니다. 클릭하여 메타데이터 업데이트로부터 보호합니다.",
+  "movieDetail.unlockField": "필드가 잠겨 있습니다. 클릭하여 메타데이터 업데이트를 허용합니다.",
   "movieDetail.distributor": "배급사",
   "movieDetail.partOfCollection": "컬렉션의 일부",
   "movieDetail.releaseCountry": "출시 국가",

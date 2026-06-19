@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Audio un video",
   "movieDetail.collectors": "Kolekcionāri",
   "movieDetail.runtime": "Ilgums",
+  "movieDetail.lockField": "Lauks ir atbloķēts. Noklikšķiniet, lai aizsargātu to no metadatu atjauninājumiem.",
+  "movieDetail.unlockField": "Lauks ir bloķēts. Noklikšķiniet, lai atļautu metadatu atjauninājumus.",
   "movieDetail.distributor": "Izplatītājs",
   "movieDetail.partOfCollection": "Daļa no kolekcijas",
   "movieDetail.releaseCountry": "Izdošanas valsts",

@@ -388,6 +388,8 @@
   "movieDetail.audioVideo": "Audio & Video",
   "movieDetail.collectors": "Verzamelaars",
   "movieDetail.runtime": "Speelduur",
+  "movieDetail.lockField": "Veld ontgrendeld. Klik om het te beschermen tegen metadata-updates.",
+  "movieDetail.unlockField": "Veld vergrendeld. Klik om metadata-updates toe te staan.",
   "movieDetail.distributor": "Distributeur",
   "movieDetail.partOfCollection": "Onderdeel van collectie",
   "movieDetail.releaseCountry": "Land van uitgave",

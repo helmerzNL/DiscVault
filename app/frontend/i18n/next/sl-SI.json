@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Zvok in slika",
   "movieDetail.collectors": "Zbiratelji",
   "movieDetail.runtime": "Trajanje",
+  "movieDetail.lockField": "Polje je odklenjeno. Kliknite, da ga zaščitite pred posodobitvami metapodatkov.",
+  "movieDetail.unlockField": "Polje je zaklenjeno. Kliknite, da dovolite posodobitve metapodatkov.",
   "movieDetail.distributor": "Distributer",
   "movieDetail.partOfCollection": "Del zbirke",
   "movieDetail.releaseCountry": "Država izdaje",

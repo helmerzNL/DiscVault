@@ -67,6 +67,10 @@ try:
     from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
+    from .next_metadata import normalize_movie_field_locks
+    from .next_metadata import movie_locked_fields
+    from .next_metadata import MOVIE_LOCKABLE_FIELDS
+    from .next_metadata import MOVIE_METADATA_LOCKS_KEY
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import backup_restore_plan
@@ -238,6 +242,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
+    from next_metadata import normalize_movie_field_locks
+    from next_metadata import movie_locked_fields
+    from next_metadata import MOVIE_LOCKABLE_FIELDS
+    from next_metadata import MOVIE_METADATA_LOCKS_KEY
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import backup_restore_plan
@@ -9583,6 +9591,33 @@ def ui_preview_html(
     .movie-edit-grid label.wide {
       grid-column: 1 / -1;
     }
+    .movie-edit-grid label > span:first-child {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .movie-edit-lock {
+      margin-left: auto;
+      border: 1px solid var(--line);
+      background: var(--surface, #fff);
+      border-radius: 6px;
+      width: 24px;
+      height: 22px;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      font-size: 12px;
+      opacity: 0.55;
+      transition: opacity .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .movie-edit-lock:hover {
+      opacity: 0.9;
+    }
+    .movie-edit-lock.locked {
+      opacity: 1;
+      border-color: var(--accent, #c8901f);
+      background: color-mix(in srgb, var(--accent, #c8901f) 16%, transparent);
+    }
     .movie-detail-page .movie-detail-hero {
       min-height: min(520px, 56vh);
       border: 1px solid var(--line);
@@ -13977,6 +14012,50 @@ def ui_preview_html(
                 <label for="movieEditLocation">
                   <span data-next-i18n="movieDetail.location">Location</span>
                   <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
+                </label>
+                <label for="movieEditRuntime">
+                  <span data-next-i18n="movieDetail.runtime">Runtime</span>
+                  <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
+                </label>
+                <label for="movieEditDirector">
+                  <span data-next-i18n="movieDetail.director">Director</span>
+                  <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
+                </label>
+                <label for="movieEditGenre">
+                  <span data-next-i18n="movieDetail.genre">Genre</span>
+                  <input id="movieEditGenre" name="genre" maxlength="300" autocomplete="off">
+                </label>
+                <label for="movieEditStudios">
+                  <span data-next-i18n="movieDetail.studios">Studios</span>
+                  <input id="movieEditStudios" name="studios" maxlength="300" autocomplete="off">
+                </label>
+                <label for="movieEditContentRating">
+                  <span data-next-i18n="movieDetail.contentRating">Content rating</span>
+                  <input id="movieEditContentRating" name="content_rating" maxlength="40" autocomplete="off">
+                </label>
+                <label for="movieEditHdr">
+                  <span>HDR</span>
+                  <input id="movieEditHdr" name="hdr" maxlength="80" autocomplete="off">
+                </label>
+                <label for="movieEditScreenRatio">
+                  <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
+                  <input id="movieEditScreenRatio" name="screen_ratios" maxlength="80" autocomplete="off">
+                </label>
+                <label for="movieEditAudioTracks">
+                  <span data-next-i18n="movieDetail.audio">Audio</span>
+                  <input id="movieEditAudioTracks" name="audio_tracks" maxlength="400" autocomplete="off">
+                </label>
+                <label for="movieEditSubtitles">
+                  <span data-next-i18n="movieDetail.subtitles">Subtitles</span>
+                  <input id="movieEditSubtitles" name="subtitles" maxlength="400" autocomplete="off">
+                </label>
+                <label for="movieEditPackaging">
+                  <span data-next-i18n="movieDetail.packaging">Packaging</span>
+                  <input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">
+                </label>
+                <label for="movieEditDistributor">
+                  <span data-next-i18n="movieDetail.distributor">Distributor</span>
+                  <input id="movieEditDistributor" name="distributor" maxlength="200" autocomplete="off">
                 </label>
                 <label for="movieEditOverview" class="wide">
                   <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
@@ -21747,9 +21826,75 @@ def ui_preview_html(
       }).join("");
       select.value = normalized;
     }
+    const MOVIE_EDIT_LOCK_FIELDS = {
+      movieEditTitle: "title",
+      movieEditOriginalTitle: "original_title",
+      movieEditSortTitle: "sort_title",
+      movieEditYear: "year",
+      movieEditBarcode: "barcode",
+      movieEditFormat: "format",
+      movieEditEdition: "edition",
+      movieEditReleaseDate: "release_date",
+      movieEditCountry: "country",
+      movieEditLanguage: "language",
+      movieEditLocation: "location",
+      movieEditOverview: "overview",
+      movieEditNotes: "notes",
+      movieEditRuntime: "runtime_minutes",
+      movieEditDirector: "director",
+      movieEditGenre: "genre",
+      movieEditStudios: "studios",
+      movieEditContentRating: "content_ratings",
+      movieEditHdr: "hdr",
+      movieEditScreenRatio: "screen_ratios",
+      movieEditAudioTracks: "audio_tracks",
+      movieEditSubtitles: "subtitles",
+      movieEditPackaging: "packaging",
+      movieEditDistributor: "distributor"
+    };
+    let movieEditLockedFields = new Set();
+    function reflectMovieEditLock(btn, field) {
+      const locked = movieEditLockedFields.has(field);
+      btn.classList.toggle("locked", locked);
+      btn.setAttribute("aria-pressed", locked ? "true" : "false");
+      btn.textContent = locked ? "🔒" : "🔓";
+      btn.title = locked
+        ? tNext("movieDetail.unlockField", "Field locked. Click to allow metadata updates.")
+        : tNext("movieDetail.lockField", "Field unlocked. Click to protect it from metadata updates.");
+      btn.setAttribute("aria-label", btn.title);
+    }
+    function toggleMovieEditLock(field, btn) {
+      if (movieEditLockedFields.has(field)) movieEditLockedFields.delete(field);
+      else movieEditLockedFields.add(field);
+      reflectMovieEditLock(btn, field);
+    }
+    function setupMovieEditLocks(lockedList) {
+      movieEditLockedFields = new Set(Array.isArray(lockedList) ? lockedList : []);
+      Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const label = input.closest("label");
+        if (!label) return;
+        let btn = label.querySelector(".movie-edit-lock");
+        if (!btn) {
+          btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "movie-edit-lock";
+          btn.dataset.lockField = field;
+          btn.addEventListener("click", () => toggleMovieEditLock(field, btn));
+          const head = label.querySelector("span");
+          if (head) head.appendChild(btn);
+          else label.insertBefore(btn, input);
+        }
+        reflectMovieEditLock(btn, field);
+      });
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
+      const metadata = movie.metadata || {};
+      const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
+      const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const fields = {
         movieEditTitle: movie.title || "",
         movieEditOriginalTitle: movie.original_title || "",
@@ -21761,6 +21906,17 @@ def ui_preview_html(
         movieEditCountry: movie.country || "",
         movieEditLanguage: movie.language || "",
         movieEditLocation: movie.location || "",
+        movieEditRuntime: movie.runtime_minutes || "",
+        movieEditDirector: valueText(metadata.director),
+        movieEditGenre: valueText(metadata.genre),
+        movieEditStudios: valueText(metadata.studios),
+        movieEditContentRating: contentRatingInfo.rating || "",
+        movieEditHdr: valueText(specs.hdr || metadata.hdr),
+        movieEditScreenRatio: valueText(specs.screen_ratios || metadata.screen_ratios),
+        movieEditAudioTracks: valueText(specs.audio_tracks || metadata.audio_tracks),
+        movieEditSubtitles: valueText(specs.subtitles || metadata.subtitles),
+        movieEditPackaging: valueText(specs.packaging || metadata.packaging || movie.edition_type),
+        movieEditDistributor: valueText(metadata.distributor),
         movieEditOverview: movie.overview || "",
         movieEditNotes: movie.notes || ""
       };
@@ -21768,6 +21924,11 @@ def ui_preview_html(
         const input = document.getElementById(id);
         if (input && document.activeElement !== input) input.value = value;
       });
+      setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
+    }
+    function movie_locked_fields_from_metadata(metadata) {
+      const raw = (metadata && (metadata.field_locks || metadata.fieldLocks)) || [];
+      return Array.isArray(raw) ? raw.map((item) => String(item || "").trim()).filter(Boolean) : [];
     }
     function renderMovieListState(detail) {
       const state = detail.userState || {};
@@ -27033,6 +27194,11 @@ def ui_preview_html(
         return;
       }
       setMovieDetailMessage(tNext("movieDetail.saving", "Saving movie..."));
+      const prevDetail = activeDetailPayload || {};
+      const prevMovie = prevDetail.movie || {};
+      const prevMetadata = prevMovie.metadata || {};
+      const prevSpecs = prevDetail.technicalSpecs || {};
+      const ratingCountry = normalizedRatingCountryCode((preferences && preferences.rating_country) || "NL") || "NL";
       const body = {
         title,
         originalTitle: formTextValue("movieEditOriginalTitle"),
@@ -27045,9 +27211,32 @@ def ui_preview_html(
         country: formTextValue("movieEditCountry"),
         language: formTextValue("movieEditLanguage"),
         location: formTextValue("movieEditLocation"),
+        runtimeMinutes: formTextValue("movieEditRuntime"),
+        director: formTextValue("movieEditDirector"),
+        genre: formTextValue("movieEditGenre"),
+        studios: formTextValue("movieEditStudios"),
+        contentRating: formTextValue("movieEditContentRating"),
+        ratingCountry,
+        hdr: formTextValue("movieEditHdr"),
+        screenRatio: formTextValue("movieEditScreenRatio"),
+        audioTracks: formTextValue("movieEditAudioTracks"),
+        subtitles: formTextValue("movieEditSubtitles"),
+        packaging: formTextValue("movieEditPackaging"),
+        distributor: formTextValue("movieEditDistributor"),
         overview: formTextValue("movieEditOverview"),
-        notes: formTextValue("movieEditNotes")
+        notes: formTextValue("movieEditNotes"),
+        fieldLocks: Array.from(movieEditLockedFields)
       };
+      let clearedUnlockedField = false;
+      Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
+        if (movieEditLockedFields.has(field)) return;
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const newValue = (input.value || "").trim();
+        if (newValue) return;
+        const previous = previousMovieEditFieldValue(field, prevMovie, prevMetadata, prevSpecs);
+        if (previous) clearedUnlockedField = true;
+      });
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {
           method: "PATCH",
@@ -27058,8 +27247,27 @@ def ui_preview_html(
         await loadAppSnapshot();
         setMovieEditPanelVisible(false);
         setMovieDetailMessage(tNext("movieDetail.saved", "Movie saved."), "good");
+        if (clearedUnlockedField && hasPermission("metadata.refresh_one")) {
+          await refreshActiveMovieMetadata(false);
+        }
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function previousMovieEditFieldValue(field, movie, metadata, specs) {
+      switch (field) {
+        case "runtime_minutes": return valueText(movie.runtime_minutes);
+        case "director": return valueText(metadata.director);
+        case "genre": return valueText(metadata.genre);
+        case "studios": return valueText(metadata.studios);
+        case "distributor": return valueText(metadata.distributor);
+        case "hdr": return valueText(specs.hdr || metadata.hdr);
+        case "screen_ratios": return valueText(specs.screen_ratios || metadata.screen_ratios);
+        case "audio_tracks": return valueText(specs.audio_tracks || metadata.audio_tracks);
+        case "subtitles": return valueText(specs.subtitles || metadata.subtitles);
+        case "packaging": return valueText(specs.packaging || metadata.packaging || movie.edition_type);
+        case "content_ratings": return valueText(preferredContentRatingInfo(movie, specs).rating);
+        default: return valueText(movie[field]);
       }
     }
     async function refreshActiveMovieMetadata(dryRun, personRefreshScope = "all", forceRefreshPeople = false) {
@@ -38124,6 +38332,183 @@ def storage_optional_date(value: Any) -> date | None:
         return None
 
 
+def _movie_edit_csv_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        items = list(value)
+    else:
+        items = str(value).split(",")
+    result: list[str] = []
+    for item in items:
+        text = clean_text(item)
+        if text:
+            result.append(text)
+    return result
+
+
+def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int | None:
+    keys = ("runtimeMinutes", "runtime_minutes", "runtime")
+    if not any(key in body for key in keys):
+        return existing.get("runtime_minutes")
+    raw = next(body[key] for key in keys if key in body)
+    text = clean_text(raw)
+    if not text:
+        return None
+    digits = re.sub(r"[^0-9]", "", str(text))
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
+        return None
+
+
+def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
+    aliases = {
+        "director": ("director",),
+        "genre": ("genre",),
+        "studios": ("studios", "studio"),
+        "distributor": ("distributor",),
+    }
+    edits: dict[str, Any] = {}
+    for field, keys in aliases.items():
+        if any(key in body for key in keys):
+            raw = next(body[key] for key in keys if key in body)
+            edits[field] = clean_text(raw)
+    return edits
+
+
+def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
+    edits: dict[str, Any] = {}
+    if "hdr" in body:
+        edits["hdr"] = clean_text(body.get("hdr"))
+    if "packaging" in body:
+        edits["packaging"] = clean_text(body.get("packaging"))
+    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios")
+    if any(key in body for key in ratio_keys):
+        raw = next(body[key] for key in ratio_keys if key in body)
+        edits["screen_ratios"] = clean_text(raw)
+    audio_keys = ("audioTracks", "audio_tracks")
+    if any(key in body for key in audio_keys):
+        raw = next(body[key] for key in audio_keys if key in body)
+        edits["audio_tracks"] = _movie_edit_csv_list(raw)
+    if "subtitles" in body:
+        edits["subtitles"] = _movie_edit_csv_list(body.get("subtitles"))
+    if "contentRating" in body or "content_rating" in body:
+        rating = clean_text(body.get("contentRating", body.get("content_rating")))
+        country = (clean_text(body.get("ratingCountry") or body.get("rating_country")) or "NL").upper()
+        if rating:
+            edits["content_ratings"] = {country: rating}
+    return edits
+
+
+def movie_effective_field_locks(body: dict[str, Any], existing: dict[str, Any]) -> list[str] | None:
+    if "fieldLocks" not in body and "field_locks" not in body:
+        return None
+    return normalize_movie_field_locks(body.get("fieldLocks", body.get("field_locks")))
+
+
+def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -> None:
+    if not edits:
+        return
+    cur.execute(
+        "INSERT INTO movie_technical_specs (movie_id, updated_at) VALUES (%s, now()) ON CONFLICT (movie_id) DO NOTHING",
+        (movie_uuid,),
+    )
+    assignments: list[str] = []
+    values: list[Any] = []
+    for col in ("hdr", "packaging", "screen_ratios"):
+        if col in edits:
+            assignments.append(f"{col}=%s")
+            values.append(edits[col])
+    for col in ("audio_tracks", "subtitles"):
+        if col in edits:
+            assignments.append(f"{col}=%s")
+            values.append(Jsonb(json_ready(edits[col] or [])))
+    if "content_ratings" in edits:
+        assignments.append("content_ratings = COALESCE(content_ratings, '{}'::jsonb) || %s")
+        values.append(Jsonb(json_ready(edits["content_ratings"] or {})))
+    if not assignments:
+        return
+    assignments.append("updated_at=now()")
+    values.append(movie_uuid)
+    cur.execute(
+        f"UPDATE movie_technical_specs SET {', '.join(assignments)} WHERE movie_id=%s",
+        values,
+    )
+
+
+def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> None:
+    """Persist movie columns, runtime, editable metadata fields and field locks."""
+    metadata_patch: dict[str, Any] = dict(payload.get("metadata_edits") or {})
+    field_locks = payload.get("field_locks")
+    if field_locks is not None:
+        metadata_patch[MOVIE_METADATA_LOCKS_KEY] = field_locks
+    cur.execute(
+        """
+        UPDATE movies
+        SET title=%s,
+            sort_title=%s,
+            original_title=%s,
+            year=%s,
+            barcode=%s,
+            release_date=%s,
+            format=%s,
+            edition=%s,
+            country=%s,
+            language=%s,
+            overview=%s,
+            notes=%s,
+            location=%s,
+            runtime_minutes=%s,
+            metadata = COALESCE(metadata, '{}'::jsonb) || %s,
+            updated_at=now()
+        WHERE id=%s
+        """,
+        (
+            payload["title"],
+            payload["sort_title"],
+            payload["original_title"],
+            payload["year"],
+            payload["barcode"],
+            payload["release_date"],
+            payload["format"],
+            payload["edition"],
+            payload["country"],
+            payload["language"],
+            payload["overview"],
+            payload["notes"],
+            payload["location"],
+            payload.get("runtime_minutes"),
+            Jsonb(json_ready(metadata_patch)),
+            movie_uuid,
+        ),
+    )
+    upsert_movie_technical_edits(cur, movie_uuid, payload.get("technical_edits") or {})
+
+
+def set_movie_field_locks(movie_uuid: UUID, body: dict[str, Any], *, permission: str) -> list[str]:
+    """Persist the set of locked field names for a movie and return the stored list."""
+    locks = normalize_movie_field_locks(body.get("fieldLocks", body.get("field_locks")))
+    with connect() as conn:
+        actor = require_next_permission(conn, permission)
+        if not table_exists(conn, "movies"):
+            raise NextApiError("Movie table is not available", 503)
+        existing = movie_entity(conn, movie_uuid)
+        if not existing:
+            raise NextApiError("Movie not found", 404)
+        if not actor_can_edit_visible_movie(conn, actor, existing):
+            raise NextApiError("Permission required: collection.edit_all", 403)
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE movies SET metadata = COALESCE(metadata, '{}'::jsonb) || %s, updated_at=now() WHERE id=%s",
+                    (Jsonb(json_ready({MOVIE_METADATA_LOCKS_KEY: locks})), movie_uuid),
+                )
+    return locks
+
+
 def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> dict[str, Any]:
     def pick_text(column: str, *aliases: str) -> str | None:
         keys = (column, *aliases)
@@ -38159,10 +38544,20 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "overview": pick_text("overview"),
         "notes": pick_text("notes"),
         "location": pick_text("location"),
+        "runtime_minutes": movie_runtime_value(body, existing),
+        "metadata_edits": movie_metadata_edits(body),
+        "technical_edits": movie_technical_edits(body),
+        "field_locks": movie_effective_field_locks(body, existing),
     }
 
 
-def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+def movie_edit_receiver_proposal(
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    locked_fields: set[str] | None = None,
+) -> dict[str, Any]:
+    locked = locked_fields or set()
     public_fields = (
         "title",
         "original_title",
@@ -38184,6 +38579,8 @@ def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, An
     movie_updates: dict[str, Any] = {}
     metadata_updates: dict[str, Any] = {}
     for field in public_fields:
+        if field in locked:
+            continue
         old_value = comparable(existing.get(field))
         new_value = comparable(payload.get(field))
         if old_value == new_value:
@@ -45506,46 +45903,16 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
             payload = movie_update_payload(body, existing=existing)
-            receiver_proposal = movie_edit_receiver_proposal(existing, payload)
+            effective_locks = (
+                set(payload["field_locks"])
+                if payload.get("field_locks") is not None
+                else movie_locked_fields(existing.get("metadata"))
+            )
+            receiver_proposal = movie_edit_receiver_proposal(existing, payload, locked_fields=effective_locks)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE movies
-                        SET title=%s,
-                            sort_title=%s,
-                            original_title=%s,
-                            year=%s,
-                            barcode=%s,
-                            release_date=%s,
-                            format=%s,
-                            edition=%s,
-                            country=%s,
-                            language=%s,
-                            overview=%s,
-                            notes=%s,
-                            location=%s,
-                            updated_at=now()
-                        WHERE id=%s
-                        """,
-                        (
-                            payload["title"],
-                            payload["sort_title"],
-                            payload["original_title"],
-                            payload["year"],
-                            payload["barcode"],
-                            payload["release_date"],
-                            payload["format"],
-                            payload["edition"],
-                            payload["country"],
-                            payload["language"],
-                            payload["overview"],
-                            payload["notes"],
-                            payload["location"],
-                            movie_uuid,
-                        ),
-                    )
+                    write_movie_edit_record(cur, movie_uuid, payload)
                 audit_api_interaction(
                     conn,
                     actor,
@@ -45559,6 +45926,35 @@ def register_routes(flask_app: Flask) -> None:
                 )
             detail = movie_detail_entity(conn, movie_uuid)
         return response({"status": "ok", "detail": detail})
+
+    @flask_app.get("/api/next/api/v1/movies/<movie_id>/field-locks")
+    def public_api_movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_movie_details"))
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            locks = sorted(movie_locked_fields(existing.get("metadata")))
+        return response(
+            {
+                "status": "ok",
+                "movieId": str(movie_uuid),
+                "fieldLocks": locks,
+                "lockableFields": sorted(MOVIE_LOCKABLE_FIELDS),
+            }
+        )
+
+    @flask_app.put("/api/next/api/v1/movies/<movie_id>/field-locks")
+    def public_api_set_movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Field-lock request body must be an object", 400)
+        locks = set_movie_field_locks(movie_uuid, body, permission="api.write")
+        return response({"status": "ok", "movieId": str(movie_uuid), "fieldLocks": locks})
 
     @flask_app.delete("/api/next/api/v1/movies/<movie_id>")
     def public_api_delete_movie(movie_id: str):
@@ -46731,48 +47127,18 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
             payload = movie_update_payload(body, existing=existing)
-            receiver_proposal = movie_edit_receiver_proposal(existing, payload)
+            effective_locks = (
+                set(payload["field_locks"])
+                if payload.get("field_locks") is not None
+                else movie_locked_fields(existing.get("metadata"))
+            )
+            receiver_proposal = movie_edit_receiver_proposal(existing, payload, locked_fields=effective_locks)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
             revision = 0
             entity = existing
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE movies
-                        SET title=%s,
-                            sort_title=%s,
-                            original_title=%s,
-                            year=%s,
-                            barcode=%s,
-                            release_date=%s,
-                            format=%s,
-                            edition=%s,
-                            country=%s,
-                            language=%s,
-                            overview=%s,
-                            notes=%s,
-                            location=%s,
-                            updated_at=now()
-                        WHERE id=%s
-                        """,
-                        (
-                            payload["title"],
-                            payload["sort_title"],
-                            payload["original_title"],
-                            payload["year"],
-                            payload["barcode"],
-                            payload["release_date"],
-                            payload["format"],
-                            payload["edition"],
-                            payload["country"],
-                            payload["language"],
-                            payload["overview"],
-                            payload["notes"],
-                            payload["location"],
-                            movie_uuid,
-                        ),
-                    )
+                    write_movie_edit_record(cur, movie_uuid, payload)
                     revision = next_revision(conn) if table_exists(conn, "sync_state") else 0
                     entity = movie_entity(conn, movie_uuid) or {}
                     if revision and table_exists(conn, "sync_changes"):
@@ -46845,6 +47211,42 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
+
+    @flask_app.get("/api/next/movies/<movie_id>/field-locks")
+    def movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            locks = sorted(movie_locked_fields(existing.get("metadata")))
+        return response(
+            {
+                "status": "ok",
+                "movieId": str(movie_uuid),
+                "fieldLocks": locks,
+                "lockableFields": sorted(MOVIE_LOCKABLE_FIELDS),
+            }
+        )
+
+    @flask_app.put("/api/next/movies/<movie_id>/field-locks")
+    def set_movie_field_locks_route(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Field-lock request body must be an object", 400)
+        locks = set_movie_field_locks(movie_uuid, body, permission="collection.edit_all")
+        return response({"status": "ok", "movieId": str(movie_uuid), "fieldLocks": locks})
 
     @flask_app.delete("/api/next/movies/<movie_id>")
     def delete_movie(movie_id: str):

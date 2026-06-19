@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Zvuk a obraz",
   "movieDetail.collectors": "Zberatelia",
   "movieDetail.runtime": "Dĺžka",
+  "movieDetail.lockField": "Pole odomknuté. Kliknutím ho ochránite pred aktualizáciami metadát.",
+  "movieDetail.unlockField": "Pole uzamknuté. Kliknutím povolíte aktualizácie metadát.",
   "movieDetail.distributor": "Distribútor",
   "movieDetail.partOfCollection": "Súčasť zbierky",
   "movieDetail.releaseCountry": "Krajina vydania",

@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Ses ve Görüntü",
   "movieDetail.collectors": "Koleksiyoncular",
   "movieDetail.runtime": "Süre",
+  "movieDetail.lockField": "Alan kilidi açık. Meta veri güncellemelerinden korumak için tıklayın.",
+  "movieDetail.unlockField": "Alan kilitli. Meta veri güncellemelerine izin vermek için tıklayın.",
   "movieDetail.distributor": "Dağıtımcı",
   "movieDetail.partOfCollection": "Koleksiyonun parçası",
   "movieDetail.releaseCountry": "Çıkış ülkesi",

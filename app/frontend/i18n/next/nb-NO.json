@@ -1157,6 +1157,8 @@
   "movieDetail.audioVideo": "Lyd og video",
   "movieDetail.collectors": "Samlere",
   "movieDetail.runtime": "Spilletid",
+  "movieDetail.lockField": "Feltet er låst opp. Klikk for å beskytte det mot metadataoppdateringer.",
+  "movieDetail.unlockField": "Feltet er låst. Klikk for å tillate metadataoppdateringer.",
   "movieDetail.distributor": "Distributør",
   "movieDetail.partOfCollection": "Del av samlingen",
   "movieDetail.releaseCountry": "Utgivelsesland",

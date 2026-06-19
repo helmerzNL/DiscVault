@@ -1157,6 +1157,8 @@
   "movieDetail.audioVideo": "Audio et vidéo",
   "movieDetail.collectors": "Collectionneurs",
   "movieDetail.runtime": "Durée",
+  "movieDetail.lockField": "Champ déverrouillé. Cliquez pour le protéger des mises à jour de métadonnées.",
+  "movieDetail.unlockField": "Champ verrouillé. Cliquez pour autoriser les mises à jour de métadonnées.",
   "movieDetail.distributor": "Distributeur",
   "movieDetail.partOfCollection": "Fait partie de la collection",
   "movieDetail.releaseCountry": "Pays de sortie",

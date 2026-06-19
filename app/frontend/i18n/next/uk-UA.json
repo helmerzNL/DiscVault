@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Аудіо та відео",
   "movieDetail.collectors": "Колекціонери",
   "movieDetail.runtime": "Тривалість",
+  "movieDetail.lockField": "Поле розблоковано. Натисніть, щоб захистити його від оновлень метаданих.",
+  "movieDetail.unlockField": "Поле заблоковано. Натисніть, щоб дозволити оновлення метаданих.",
   "movieDetail.distributor": "Дистриб'ютор",
   "movieDetail.partOfCollection": "Частина колекції",
   "movieDetail.releaseCountry": "Країна випуску",
