@@ -692,6 +692,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Plugin kræver konfiguration",
   "movieDetail.debugSourcesReasonNoMatch": "Intet match",
   "movieDetail.debugSourcesExcludedFields": "Ekskluderede felter",
+  "movieDetail.debugSourcesAcceptedFields": "Accepterede felter",
+  "movieDetail.debugSourcesNotAcceptedFields": "Ikke accepteret",
   "movieDetail.debugSourcesMissingTitle": "Mangler i MovieVault",
   "movieDetail.debugSourcesMissingHint": "Felter hentet af DiscVault, men ikke accepteret af modtagerens bidragsskabelon.",
   "movieDetail.debugSourcesDownloadJson": "Download JSON",

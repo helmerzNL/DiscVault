@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "外掛程式需要設定",
   "movieDetail.debugSourcesReasonNoMatch": "無相符",
   "movieDetail.debugSourcesExcludedFields": "已排除的欄位",
+  "movieDetail.debugSourcesAcceptedFields": "已接受的欄位",
+  "movieDetail.debugSourcesNotAcceptedFields": "未接受",
   "movieDetail.debugSourcesMissingTitle": "MovieVault 中缺少",
   "movieDetail.debugSourcesMissingHint": "DiscVault 已擷取但接收方貢獻範本未接受的欄位。",
   "movieDetail.debugSourcesDownloadJson": "下載 JSON",

@@ -692,6 +692,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Le plug-in doit être configuré",
   "movieDetail.debugSourcesReasonNoMatch": "Aucune correspondance",
   "movieDetail.debugSourcesExcludedFields": "Champs exclus",
+  "movieDetail.debugSourcesAcceptedFields": "Champs acceptés",
+  "movieDetail.debugSourcesNotAcceptedFields": "Non acceptés",
   "movieDetail.debugSourcesMissingTitle": "Manquant dans MovieVault",
   "movieDetail.debugSourcesMissingHint": "Champs récupérés par DiscVault mais non acceptés par le modèle de contribution du destinataire.",
   "movieDetail.debugSourcesDownloadJson": "Télécharger le JSON",

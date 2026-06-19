@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Το πρόσθετο χρειάζεται διαμόρφωση",
   "movieDetail.debugSourcesReasonNoMatch": "Καμία αντιστοίχιση",
   "movieDetail.debugSourcesExcludedFields": "Εξαιρούμενα πεδία",
+  "movieDetail.debugSourcesAcceptedFields": "Αποδεκτά πεδία",
+  "movieDetail.debugSourcesNotAcceptedFields": "Μη αποδεκτά",
   "movieDetail.debugSourcesMissingTitle": "Λείπει από το MovieVault",
   "movieDetail.debugSourcesMissingHint": "Πεδία που ανακτήθηκαν από το DiscVault αλλά δεν έγιναν δεκτά από το πρότυπο συνεισφοράς του παραλήπτη.",
   "movieDetail.debugSourcesDownloadJson": "Λήψη JSON",

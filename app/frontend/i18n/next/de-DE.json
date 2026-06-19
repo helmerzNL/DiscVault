@@ -692,6 +692,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Plugin muss konfiguriert werden",
   "movieDetail.debugSourcesReasonNoMatch": "Kein Treffer",
   "movieDetail.debugSourcesExcludedFields": "Ausgeschlossene Felder",
+  "movieDetail.debugSourcesAcceptedFields": "Akzeptierte Felder",
+  "movieDetail.debugSourcesNotAcceptedFields": "Nicht akzeptiert",
   "movieDetail.debugSourcesMissingTitle": "Fehlt in MovieVault",
   "movieDetail.debugSourcesMissingHint": "Von DiscVault abgerufene Felder, die von der Beitragsvorlage des Empfängers nicht akzeptiert wurden.",
   "movieDetail.debugSourcesDownloadJson": "JSON herunterladen",

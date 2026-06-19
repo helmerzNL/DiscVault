@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Wtyczka wymaga konfiguracji",
   "movieDetail.debugSourcesReasonNoMatch": "Brak dopasowania",
   "movieDetail.debugSourcesExcludedFields": "Wykluczone pola",
+  "movieDetail.debugSourcesAcceptedFields": "Zaakceptowane pola",
+  "movieDetail.debugSourcesNotAcceptedFields": "Nie zaakceptowano",
   "movieDetail.debugSourcesMissingTitle": "Brak w MovieVault",
   "movieDetail.debugSourcesMissingHint": "Pola pobrane przez DiscVault, ale nieprzyjęte przez szablon wkładu odbiorcy.",
   "movieDetail.debugSourcesDownloadJson": "Pobierz JSON",

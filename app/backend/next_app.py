@@ -10070,6 +10070,40 @@ def ui_preview_html(
       color: var(--muted);
       font-style: italic;
     }
+    .debug-field-group {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .debug-field-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .debug-field-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: .74rem;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    .debug-field-chip.accepted {
+      background: color-mix(in srgb, #1f9d55 16%, transparent);
+      color: #1f9d55;
+    }
+    .debug-field-chip.rejected {
+      background: color-mix(in srgb, #d64545 16%, transparent);
+      color: #d64545;
+    }
+    .debug-field-chip-reason {
+      font-weight: 400;
+      font-style: italic;
+      opacity: .85;
+    }
     .debug-source-export-hint {
       font-size: .82rem;
       color: var(--muted);
@@ -15905,8 +15939,13 @@ def ui_preview_html(
           </article>
         `;
       }).join("");
+      const acceptedLabel = tNext("movieDetail.debugSourcesAcceptedFields", "Accepted fields");
+      const notAcceptedLabel = tNext("movieDetail.debugSourcesNotAcceptedFields", "Not accepted");
       const contributedCards = contributed.map((receiver) => {
-        const fields = Array.isArray(receiver.fields) ? receiver.fields : [];
+        const acceptedRaw = (Array.isArray(receiver.acceptedFields) && receiver.acceptedFields.length)
+          ? receiver.acceptedFields
+          : (Array.isArray(receiver.fields) ? receiver.fields : []);
+        const accepted = acceptedRaw.map((field) => String(field)).filter(Boolean);
         const sources = Array.isArray(receiver.sourceProviders) ? receiver.sourceProviders : [];
         const statusText = receiver.resultStatus || receiver.status || receiver.state || "";
         const statusClass = debugContributionStatusClass(receiver);
@@ -15917,30 +15956,27 @@ def ui_preview_html(
         const reasonHtml = reasonText
           ? `<div class="debug-source-contrib-reason"><span class="debug-source-label">${escapeHtml(reasonLabel)}:</span> ${escapeHtml(reasonText)}</div>`
           : "";
-        const fieldsHtml = fields.length
-          ? `<div class="debug-source-contrib-fields"><span class="debug-source-label">${escapeHtml(fieldsLabel)}:</span> ${escapeHtml(fields.join(", "))}</div>`
+        const acceptedChips = accepted
+          .map((field) => `<span class="debug-field-chip accepted">${escapeHtml(field)}</span>`)
+          .join("");
+        const acceptedHtml = accepted.length
+          ? `<div class="debug-field-group"><span class="debug-source-label">${escapeHtml(acceptedLabel)} (${accepted.length}):</span><div class="debug-field-chips">${acceptedChips}</div></div>`
+          : "";
+        const excluded = Array.isArray(receiver.excludedFields) ? receiver.excludedFields : [];
+        const rejectedChips = excluded.map((item) => {
+          const fieldName = item && item.field ? String(item.field) : "";
+          const reasonName = debugExcludedReasonLabel(item && item.reason);
+          const reasonChip = reasonName
+            ? ` <span class="debug-field-chip-reason">${escapeHtml(reasonName)}</span>`
+            : "";
+          const titleAttr = reasonName ? ` title="${escapeHtml(reasonName)}"` : "";
+          return `<span class="debug-field-chip rejected"${titleAttr}>${escapeHtml(fieldName)}${reasonChip}</span>`;
+        }).join("");
+        const rejectedHtml = excluded.length
+          ? `<div class="debug-field-group"><span class="debug-source-label">${escapeHtml(notAcceptedLabel)} (${excluded.length}):</span><div class="debug-field-chips">${rejectedChips}</div></div>`
           : "";
         const sourcesHtml = sources.length
           ? `<div class="debug-source-contrib-sources"><span class="debug-source-label">${escapeHtml(contributedToLabel)}:</span> ${escapeHtml(sources.join(", "))}</div>`
-          : "";
-        const excluded = Array.isArray(receiver.excludedFields) ? receiver.excludedFields : [];
-        const excludedRows = excluded.map((item) => {
-          const fieldName = item && item.field ? String(item.field) : "";
-          const reasonName = debugExcludedReasonLabel(item && item.reason);
-          return `
-            <li class="debug-source-excluded-field">
-              <span class="debug-source-field-name">${escapeHtml(fieldName)}</span>
-              ${reasonName ? `<span class="debug-source-excluded-reason">${escapeHtml(reasonName)}</span>` : ""}
-            </li>
-          `;
-        }).join("");
-        const excludedHtml = excluded.length
-          ? `
-            <details class="debug-source-excluded-details"${excluded.length <= 6 ? " open" : ""}>
-              <summary>${escapeHtml(tNext("movieDetail.debugSourcesExcludedFields", "Excluded fields"))} (${excluded.length})</summary>
-              <ul class="debug-source-excluded">${excludedRows}</ul>
-            </details>
-          `
           : "";
         return `
           <article class="debug-source-card">
@@ -15949,9 +15985,9 @@ def ui_preview_html(
               ${statusHtml}
             </header>
             ${reasonHtml}
-            ${fieldsHtml}
+            ${acceptedHtml}
+            ${rejectedHtml}
             ${sourcesHtml}
-            ${excludedHtml}
           </article>
         `;
       }).join("");

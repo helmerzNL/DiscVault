@@ -692,6 +692,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "O plug-in precisa de configuração",
   "movieDetail.debugSourcesReasonNoMatch": "Sem correspondência",
   "movieDetail.debugSourcesExcludedFields": "Campos excluídos",
+  "movieDetail.debugSourcesAcceptedFields": "Campos aceites",
+  "movieDetail.debugSourcesNotAcceptedFields": "Não aceite",
   "movieDetail.debugSourcesMissingTitle": "Em falta no MovieVault",
   "movieDetail.debugSourcesMissingHint": "Campos obtidos pelo DiscVault mas não aceites pelo modelo de contribuição do recetor.",
   "movieDetail.debugSourcesDownloadJson": "Transferir JSON",
