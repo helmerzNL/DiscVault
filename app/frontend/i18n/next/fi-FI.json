@@ -1185,6 +1185,7 @@
   "movieDetail.links": "Linkit",
   "movieDetail.relationships": "Suhteet",
   "containerDetail.metadata": "Sailion metatiedot",
+  "containerDetail.debugSources": "Virheenkorjaustiedot: metadatalähteet",
   "preferences.title": "Asetukset",
   "preferences.description": "Saada omaa DiscVault-kokemustasi.",
   "movieDetail.noOverview": "Kuvausta ei ole saatavilla.",

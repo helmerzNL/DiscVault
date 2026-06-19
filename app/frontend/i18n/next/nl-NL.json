@@ -627,6 +627,7 @@
   "containerDetail.reordering": "Volgorde bijwerken...",
   "containerDetail.reordered": "Volgorde bijgewerkt.",
   "containerDetail.metadata": "Metadata",
+  "containerDetail.debugSources": "Debug-info: metadatabronnen",
   "containerDetail.fromMovie": "Van",
   "containerDetail.aggregateMovieCount": "Films in scope",
   "containerDetail.aggregateYearRange": "Jaarbereik",

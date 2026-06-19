@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Posodabljanje vrstnega reda...",
   "containerDetail.reordered": "Vrstni red posodobljen.",
   "containerDetail.metadata": "Metapodatki",
+  "containerDetail.debugSources": "Razhroščevalne informacije: viri metapodatkov",
   "containerDetail.fromMovie": "Iz filma",
   "containerDetail.aggregateMovieCount": "Filmi v obsegu",
   "containerDetail.aggregateYearRange": "Razpon let",

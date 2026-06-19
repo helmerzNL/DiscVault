@@ -605,6 +605,7 @@
   "containerDetail.reordering": "順序を更新しています...",
   "containerDetail.reordered": "順序を更新しました。",
   "containerDetail.metadata": "メタデータ",
+  "containerDetail.debugSources": "デバッグ情報: メタデータソース",
   "containerDetail.fromMovie": "映画から",
   "containerDetail.aggregateMovieCount": "対象内の映画",
   "containerDetail.aggregateYearRange": "年の範囲",

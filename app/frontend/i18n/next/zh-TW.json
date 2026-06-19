@@ -605,6 +605,7 @@
   "containerDetail.reordering": "正在更新順序...",
   "containerDetail.reordered": "順序已更新。",
   "containerDetail.metadata": "中繼資料",
+  "containerDetail.debugSources": "偵錯資訊：中繼資料來源",
   "containerDetail.fromMovie": "來自電影",
   "containerDetail.aggregateMovieCount": "範圍內的電影",
   "containerDetail.aggregateYearRange": "年份範圍",

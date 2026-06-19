@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Aktualizace pořadí...",
   "containerDetail.reordered": "Pořadí aktualizováno.",
   "containerDetail.metadata": "Metaúdaje",
+  "containerDetail.debugSources": "Ladicí informace: zdroje metadat",
   "containerDetail.fromMovie": "Z filmu",
   "containerDetail.aggregateMovieCount": "Filmy v rozsahu",
   "containerDetail.aggregateYearRange": "Rozsah let",

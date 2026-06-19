@@ -1185,6 +1185,7 @@
   "movieDetail.links": "Ligacoes",
   "movieDetail.relationships": "Relacoes",
   "containerDetail.metadata": "Metadados do contentor",
+  "containerDetail.debugSources": "Informação de depuração: fontes de metadados",
   "preferences.title": "Preferencias",
   "preferences.description": "Ajusta a tua experiencia pessoal no DiscVault.",
   "movieDetail.noOverview": "Sem sinopse disponivel.",

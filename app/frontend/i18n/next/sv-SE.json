@@ -1185,6 +1185,7 @@
   "movieDetail.links": "Lankar",
   "movieDetail.relationships": "Relationer",
   "containerDetail.metadata": "Container-metadata",
+  "containerDetail.debugSources": "Felsökningsinfo: metadatakällor",
   "preferences.title": "Installningar",
   "preferences.description": "Anpassa din personliga DiscVault-upplevelse.",
   "movieDetail.noOverview": "Ingen beskrivning tillganglig.",
