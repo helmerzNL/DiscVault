@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Spraudnim nepieciešama konfigurācija",
   "movieDetail.debugSourcesReasonNoMatch": "Nav atbilstības",
   "movieDetail.debugSourcesExcludedFields": "Izslēgtie lauki",
+  "movieDetail.debugSourcesAcceptedFields": "Pieņemtie lauki",
+  "movieDetail.debugSourcesNotAcceptedFields": "Nav pieņemts",
   "movieDetail.debugSourcesMissingTitle": "Trūkst MovieVault",
   "movieDetail.debugSourcesMissingHint": "Lauki, ko DiscVault ieguva, bet saņēmēja ieguldījuma veidne nepieņēma.",
   "movieDetail.debugSourcesDownloadJson": "Lejupielādēt JSON",

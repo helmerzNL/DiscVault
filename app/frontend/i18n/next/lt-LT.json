@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Papildinį reikia sukonfigūruoti",
   "movieDetail.debugSourcesReasonNoMatch": "Nėra atitikmens",
   "movieDetail.debugSourcesExcludedFields": "Neįtraukti laukai",
+  "movieDetail.debugSourcesAcceptedFields": "Priimti laukai",
+  "movieDetail.debugSourcesNotAcceptedFields": "Nepriimta",
   "movieDetail.debugSourcesMissingTitle": "Nėra MovieVault",
   "movieDetail.debugSourcesMissingHint": "DiscVault gauti laukai, kurių gavėjo įnašo šablonas nepriėmė.",
   "movieDetail.debugSourcesDownloadJson": "Atsisiųsti JSON",

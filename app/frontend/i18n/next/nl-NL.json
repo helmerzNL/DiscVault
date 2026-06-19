@@ -964,6 +964,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Plug-in vereist configuratie",
   "movieDetail.debugSourcesReasonNoMatch": "Geen match",
   "movieDetail.debugSourcesExcludedFields": "Uitgesloten velden",
+  "movieDetail.debugSourcesAcceptedFields": "Geaccepteerde velden",
+  "movieDetail.debugSourcesNotAcceptedFields": "Niet geaccepteerd",
   "movieDetail.debugSourcesMissingTitle": "Ontbreekt in MovieVault",
   "movieDetail.debugSourcesMissingHint": "Velden die DiscVault heeft opgehaald maar die niet zijn geaccepteerd door het bijdrage-sjabloon van de ontvanger.",
   "movieDetail.debugSourcesDownloadJson": "JSON downloaden",

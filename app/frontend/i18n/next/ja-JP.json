@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "プラグインの設定が必要です",
   "movieDetail.debugSourcesReasonNoMatch": "一致なし",
   "movieDetail.debugSourcesExcludedFields": "除外されたフィールド",
+  "movieDetail.debugSourcesAcceptedFields": "受け入れられたフィールド",
+  "movieDetail.debugSourcesNotAcceptedFields": "受け入れ不可",
   "movieDetail.debugSourcesMissingTitle": "MovieVault に未登録",
   "movieDetail.debugSourcesMissingHint": "DiscVault が取得したが、受信側の投稿テンプレートで受け入れられなかったフィールド。",
   "movieDetail.debugSourcesDownloadJson": "JSON をダウンロード",

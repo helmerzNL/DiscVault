@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Eklenti yapılandırma gerektiriyor",
   "movieDetail.debugSourcesReasonNoMatch": "Eşleşme yok",
   "movieDetail.debugSourcesExcludedFields": "Hariç tutulan alanlar",
+  "movieDetail.debugSourcesAcceptedFields": "Kabul edilen alanlar",
+  "movieDetail.debugSourcesNotAcceptedFields": "Kabul edilmedi",
   "movieDetail.debugSourcesMissingTitle": "MovieVault'ta eksik",
   "movieDetail.debugSourcesMissingHint": "DiscVault tarafından alınan ancak alıcının katkı şablonu tarafından kabul edilmeyen alanlar.",
   "movieDetail.debugSourcesDownloadJson": "JSON indir",

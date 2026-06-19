@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "A bővítmény beállítást igényel",
   "movieDetail.debugSourcesReasonNoMatch": "Nincs találat",
   "movieDetail.debugSourcesExcludedFields": "Kizárt mezők",
+  "movieDetail.debugSourcesAcceptedFields": "Elfogadott mezők",
+  "movieDetail.debugSourcesNotAcceptedFields": "Nem elfogadott",
   "movieDetail.debugSourcesMissingTitle": "Hiányzik a MovieVaultból",
   "movieDetail.debugSourcesMissingHint": "A DiscVault által lekért mezők, amelyeket a fogadó hozzájárulási sablonja nem fogadott el.",
   "movieDetail.debugSourcesDownloadJson": "JSON letöltése",

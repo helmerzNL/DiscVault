@@ -692,6 +692,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Tillägget behöver konfigureras",
   "movieDetail.debugSourcesReasonNoMatch": "Ingen träff",
   "movieDetail.debugSourcesExcludedFields": "Uteslutna fält",
+  "movieDetail.debugSourcesAcceptedFields": "Accepterade fält",
+  "movieDetail.debugSourcesNotAcceptedFields": "Ej accepterat",
   "movieDetail.debugSourcesMissingTitle": "Saknas i MovieVault",
   "movieDetail.debugSourcesMissingHint": "Fält som hämtats av DiscVault men inte accepterats av mottagarens bidragsmall.",
   "movieDetail.debugSourcesDownloadJson": "Ladda ner JSON",

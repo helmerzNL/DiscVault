@@ -692,6 +692,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "El complemento necesita configuración",
   "movieDetail.debugSourcesReasonNoMatch": "Sin coincidencia",
   "movieDetail.debugSourcesExcludedFields": "Campos excluidos",
+  "movieDetail.debugSourcesAcceptedFields": "Campos aceptados",
+  "movieDetail.debugSourcesNotAcceptedFields": "No aceptado",
   "movieDetail.debugSourcesMissingTitle": "Falta en MovieVault",
   "movieDetail.debugSourcesMissingHint": "Campos obtenidos por DiscVault pero no aceptados por la plantilla de contribución del receptor.",
   "movieDetail.debugSourcesDownloadJson": "Descargar JSON",
