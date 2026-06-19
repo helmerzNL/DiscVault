@@ -1168,11 +1168,63 @@ def _box_set_proposal_key(proposal):
     )
 
 
+def _ingest_localizations(item):
+    if not isinstance(item, dict):
+        return []
+    raw = (
+        item.get("localizations")
+        or item.get("localisations")
+        or item.get("translations")
+    )
+    if isinstance(raw, dict):
+        expanded = []
+        for lang_key, value in raw.items():
+            if isinstance(value, dict):
+                entry = dict(value)
+                entry.setdefault("lang", lang_key)
+                expanded.append(entry)
+        raw = expanded
+    if not isinstance(raw, list):
+        return []
+    rows = []
+    seen = set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        lang = _localized_language_code(
+            entry.get("lang")
+            or entry.get("language")
+            or entry.get("locale")
+            or entry.get("iso_639_1")
+        )
+        if not lang or lang in seen:
+            continue
+        if not (lang.isalpha() and len(lang) in (2, 3)):
+            continue
+        title = _text(entry.get("title") or entry.get("name"))
+        original_title = _text(entry.get("originalTitle") or entry.get("original_title"))
+        overview = _text(entry.get("overview") or entry.get("plot") or entry.get("description"))
+        edition = _text(entry.get("edition"))
+        if not (title or original_title or overview or edition):
+            continue
+        seen.add(lang)
+        row = {"lang": lang, "source": "movievault_26"}
+        if title:
+            row["title"] = title
+        if original_title:
+            row["originalTitle"] = original_title
+        if overview:
+            row["overview"] = overview
+        if edition:
+            row["edition"] = edition
+        rows.append(row)
+    return rows
+
+
 def _normalize_result(payload, *, source_ref=""):
     sources = _normalization_sources(payload)
     if not sources:
         return {"status": "miss", "provider": "movievault_26"}
-
     candidates = []
     seen_candidates = set()
     proposals = []
@@ -1222,6 +1274,11 @@ def _normalize_result(payload, *, source_ref=""):
         return {"status": "miss", "provider": "movievault_26"}
 
     source_item = first_item or (sources[0] if sources else {})
+    localizations = []
+    for candidate_source in ([source_item] + list(sources)):
+        localizations = _ingest_localizations(candidate_source)
+        if localizations:
+            break
     result = {
         "status": "hit",
         "provider": "movievault_26",
@@ -1234,6 +1291,8 @@ def _normalize_result(payload, *, source_ref=""):
         "items": candidates,
         "candidates": candidates,
     }
+    if localizations:
+        result["localizations"] = localizations
     if proposals:
         result["boxSetProposal"] = proposals[0]
         result["boxSetProposals"] = proposals

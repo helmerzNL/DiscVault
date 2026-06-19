@@ -972,5 +972,56 @@ class ContributionLocalizedFieldsTest(unittest.TestCase):
         self.assertNotIn("localizations", dropped_fields)
 
 
+class ReadBackLocalizationsTest(unittest.TestCase):
+    def test_ingest_localizations_normalizes_and_dedupes(self):
+        rows = movievault_26._ingest_localizations(
+            {
+                "localizations": [
+                    {"language": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                    {"language": "de-DE", "title": "Chihiros Reise"},
+                    {"language": "FR", "title": "Duplicate"},
+                    {"language": "xx"},
+                    {"language": "123", "title": "Bad lang"},
+                ]
+            }
+        )
+        by_lang = {row["lang"]: row for row in rows}
+        self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
+        self.assertEqual(by_lang["fr"]["overview"], "Une fille...")
+        self.assertEqual(by_lang["de"]["title"], "Chihiros Reise")
+        self.assertEqual(by_lang["fr"]["source"], "movievault_26")
+        self.assertNotIn("xx", by_lang)
+        self.assertNotIn("123", by_lang)
+
+    def test_barcode_lookup_exposes_localizations(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                return {
+                    "status": "ok",
+                    "data": {
+                        "id": "mv_movie_1",
+                        "title": "Spirited Away",
+                        "year": "2001",
+                        "format": "4K UHD",
+                        "localizations": [
+                            {"language": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                            {"language": "ja", "title": "千と千尋の神隠し"},
+                        ],
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode({"barcode": "8712626068546"}, {"movievault": {"enabled": True}})
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        localizations = result["localizations"]
+        by_lang = {row["lang"]: row for row in localizations}
+        self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
+        self.assertEqual(by_lang["ja"]["title"], "千と千尋の神隠し")
+
+
 if __name__ == "__main__":
     unittest.main()
