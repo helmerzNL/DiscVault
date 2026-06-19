@@ -4724,9 +4724,32 @@ def migration_dashboard_html() -> str:
       if (intro && show) intro.classList.add("hidden");
       if (workspace && show) workspace.classList.add("hidden");
     }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq.html"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
+    }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return tNext("auth.passkeyUnavailable", "This browser does not support passkeys.");
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return tNext("auth.passkeyHttpsRequired", "Open this app over HTTPS to use passkeys.");
@@ -4842,7 +4865,7 @@ def migration_dashboard_html() -> str:
         showMigrationAuthGate(false);
         await loadReport();
       } catch (error) {
-        setMigrationAuthMessage(error.name === "NotAllowedError" ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : error.message, "bad");
+        setMigrationAuthMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -15777,9 +15800,32 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `startup-message ${tone || ""}`.trim();
     }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq.html"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
+    }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return tNext("auth.passkeyUnavailable", "This browser does not support passkeys.");
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return tNext("auth.passkeyHttpsRequired", "Open this app over HTTPS to use passkeys.");
@@ -19276,8 +19322,7 @@ def ui_preview_html(
         setLoginMessage(tNext("auth.signedIn", "Signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : String(error.message || error), "bad");
+        setLoginMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -19334,8 +19379,7 @@ def ui_preview_html(
         setStartupGateMessage(tNext("auth.passkeyCreated", "Passkey created. You are signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setStartupGateMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : (error.message || tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
+        setStartupGateMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -19424,8 +19468,7 @@ def ui_preview_html(
         setLoginMessage(tNext("auth.inviteCreated", "Account created. You are signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : (error.message || tNext("auth.inviteFailed", "Invite sign-up failed.")), "bad");
+        setLoginMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled."), tNext("auth.inviteFailed", "Invite sign-up failed.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -28553,7 +28596,7 @@ def ui_preview_html(
         await loadProfileDetails();
         setProfileSecurityMessage(tNext("profile.passkeyAdded", "Passkey added."), "good");
       } catch (error) {
-        setProfileSecurityMessage(error.message || tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), "bad");
+        setProfileSecurityMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -31582,9 +31625,32 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const message = error && error.message ? error.message : String(error || "Unknown browser error");
       setAuthStatus(message, "bad");
     }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq.html"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
+    }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return "This browser does not support passkeys.";
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return "Open this app over HTTPS to use passkeys.";
@@ -31890,8 +31956,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
-        setStartupMessage(error.name === "NotAllowedError" ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Owner passkey could not be created."), "bad");
+        setStartupMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -31957,7 +32023,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Invite sign-up failed."), "bad");
       } finally {
         button.disabled = false;
       }
@@ -32013,7 +32079,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Sign-in with passkey failed."), "bad");
       } finally {
         button.disabled = false;
       }
