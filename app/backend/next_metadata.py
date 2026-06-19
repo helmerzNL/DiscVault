@@ -151,6 +151,44 @@ def movie_locked_fields(metadata: Any) -> set[str]:
     return set(normalize_movie_field_locks(raw))
 
 
+# Maps a canonical lockable field name to the receiver-payload keys that carry
+# its value, so locked fields can be stripped before pushing to receivers.
+MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
+    "title": ("title",),
+    "sort_title": ("sortTitle",),
+    "original_title": ("originalTitle",),
+    "year": ("year",),
+    "barcode": ("barcode",),
+    "release_date": ("releaseDate",),
+    "format": ("format",),
+    "edition": ("edition", "editionType"),
+    "country": ("country",),
+    "language": ("language",),
+    "location": ("location",),
+    "overview": ("overview",),
+    "notes": ("notes",),
+    "runtime_minutes": ("runtimeMinutes",),
+    "director": ("director",),
+    "genre": ("genre",),
+    "studios": ("studios", "studio"),
+    "distributor": ("distributor",),
+    "hdr": ("hdr",),
+    "packaging": ("packaging",),
+    "screen_ratios": ("screenRatios", "screen_ratios"),
+    "audio_tracks": ("audioTracks", "audio_tracks"),
+    "subtitles": ("subtitles",),
+    "content_ratings": ("contentRatings", "content_ratings"),
+}
+
+
+def locked_receiver_payload_keys(metadata: Any) -> set[str]:
+    """Return the set of receiver-payload keys to drop for a movie's locked fields."""
+    drop: set[str] = set()
+    for field in movie_locked_fields(metadata):
+        drop.update(MOVIE_LOCK_RECEIVER_KEYS.get(field, ()))
+    return drop
+
+
 METADATA_LIST_FIELDS = {
     "audio_tracks",
     "subtitles",
@@ -2143,6 +2181,14 @@ def receiver_contribution_payload(
         for key, value in metadata_payload.items()
         if value not in (None, "", [], {})
     }
+    # Never push fields the user has locked to metadata receivers.
+    locked_payload_keys = locked_receiver_payload_keys(movie.get("metadata"))
+    if locked_payload_keys:
+        metadata_payload = {
+            key: value
+            for key, value in metadata_payload.items()
+            if key not in locked_payload_keys
+        }
     source_providers = sorted(
         {
             str(item.get("pluginId"))

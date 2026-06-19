@@ -914,5 +914,45 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(payload["payload"]["releaseDate"], "2021-10-22")
 
 
+    def test_receiver_contribution_payload_excludes_locked_fields(self):
+        movie = {
+            "id": "cc05",
+            "public_id": "legacy-movie-44",
+            "title": "Heat",
+            "original_title": "Heat",
+            "year": "1995",
+            "barcode": "0883929000000",
+            "format": "4K UHD",
+            "overview": "Hand-curated synopsis kept by the collector.",
+            "country": "US",
+            "language": "en",
+            "metadata": {
+                "director": "Michael Mann",
+                "distributor": "Warner",
+                "field_locks": ["overview", "director", "country"],
+            },
+        }
+        preview = {
+            "proposal": {
+                "metadataUpdates": {"director": "Provider Director", "genre": "Crime"},
+                "provenance": [{"pluginId": "tmdb", "field": "genre"}],
+            },
+            "results": [],
+        }
+        payload = receiver_contribution_payload(
+            movie_id="cc05",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+        )
+        sent = payload["payload"]
+        self.assertNotIn("overview", sent)
+        self.assertNotIn("director", sent)
+        self.assertNotIn("country", sent)
+        self.assertEqual(sent.get("genre"), "Crime")
+        self.assertEqual(sent.get("title"), "Heat")
+        self.assertEqual(sent.get("language"), "en")
+
+
 if __name__ == "__main__":
     unittest.main()
