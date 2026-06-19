@@ -9866,6 +9866,36 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
       background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
     }
+    .debug-card-details > summary.debug-card-summary {
+      cursor: pointer;
+      list-style: none;
+      justify-content: flex-start;
+      margin-bottom: 0;
+      user-select: none;
+    }
+    .debug-card-details > summary.debug-card-summary::-webkit-details-marker {
+      display: none;
+    }
+    .debug-card-details > summary.debug-card-summary::after {
+      content: "\25BE";
+      margin-left: auto;
+      color: var(--muted);
+      font-size: .9rem;
+      transition: transform .15s ease;
+    }
+    .debug-card-details:not([open]) > summary.debug-card-summary::after {
+      transform: rotate(-90deg);
+    }
+    .debug-card-details[open] > summary.debug-card-summary {
+      margin-bottom: 12px;
+    }
+    .debug-field-details > summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+      list-style: revert;
+      user-select: none;
+    }
     .debug-localization-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -14357,12 +14387,22 @@ def ui_preview_html(
             <div class="metadata-compare-panel" id="movieMetadataComparePanel"></div>
           </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugLocalizationsCard">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
-              <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
-            </div>
-            <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
-            <div class="debug-sources" id="movieDetailDebugSources"></div>
+            <details class="debug-card-details" open>
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
+            </details>
+          </div>
+          <div class="detail-card full debug-card hidden" id="movieDetailDebugMetadataCard">
+            <details class="debug-card-details" open>
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugMetadataPanelTitle">Metadata debug</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-sources" id="movieDetailDebugSources"></div>
+            </details>
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.links">Links</h3>
@@ -15967,7 +16007,7 @@ def ui_preview_html(
           .map((field) => `<span class="debug-field-chip accepted">${escapeHtml(field)}</span>`)
           .join("");
         const acceptedHtml = accepted.length
-          ? `<div class="debug-field-group"><span class="debug-source-label">${escapeHtml(acceptedLabel)} (${accepted.length}):</span><div class="debug-field-chips">${acceptedChips}</div></div>`
+          ? `<div class="debug-field-group"><details class="debug-field-details"${accepted.length <= 8 ? " open" : ""}><summary class="debug-source-label">${escapeHtml(acceptedLabel)} (${accepted.length}):</summary><div class="debug-field-chips">${acceptedChips}</div></details></div>`
           : "";
         const excluded = Array.isArray(receiver.excludedFields) ? receiver.excludedFields : [];
         const rejectedChips = excluded.map((item) => {
@@ -22574,6 +22614,8 @@ def ui_preview_html(
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
       if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || [], movie, specs) : "";
+      const debugMetadataCard = document.getElementById("movieDetailDebugMetadataCard");
+      if (debugMetadataCard) debugMetadataCard.classList.toggle("hidden", !appDebugMode);
       const debugSources = document.getElementById("movieDetailDebugSources");
       if (debugSources) debugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       const identifiers = (detail.identifiers || []).filter(Boolean).map((item) => {
@@ -22645,6 +22687,7 @@ def ui_preview_html(
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
+      document.getElementById("movieDetailDebugMetadataCard")?.classList.add("hidden");
       const debugSourcesEl = document.getElementById("movieDetailDebugSources");
       if (debugSourcesEl) debugSourcesEl.innerHTML = "";
       dvMissingContributionReportData = null;
