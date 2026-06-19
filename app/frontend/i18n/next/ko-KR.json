@@ -605,6 +605,7 @@
   "containerDetail.reordering": "순서를 업데이트하는 중...",
   "containerDetail.reordered": "순서가 업데이트되었습니다.",
   "containerDetail.metadata": "메타데이터",
+  "containerDetail.debugSources": "디버그 정보: 메타데이터 소스",
   "containerDetail.fromMovie": "영화에서",
   "containerDetail.aggregateMovieCount": "범위 내 영화",
   "containerDetail.aggregateYearRange": "연도 범위",

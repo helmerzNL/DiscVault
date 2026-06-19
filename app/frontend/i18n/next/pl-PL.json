@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Aktualizowanie kolejności...",
   "containerDetail.reordered": "Kolejność zaktualizowana.",
   "containerDetail.metadata": "Metadane",
+  "containerDetail.debugSources": "Informacje debugowania: źródła metadanych",
   "containerDetail.fromMovie": "Z filmu",
   "containerDetail.aggregateMovieCount": "Filmy w zakresie",
   "containerDetail.aggregateYearRange": "Zakres lat",

@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Atnaujinama tvarka...",
   "containerDetail.reordered": "Tvarka atnaujinta.",
   "containerDetail.metadata": "Metaduomenys",
+  "containerDetail.debugSources": "Derinimo informacija: metaduomenų šaltiniai",
   "containerDetail.fromMovie": "Iš filmo",
   "containerDetail.aggregateMovieCount": "Filmai apimtyje",
   "containerDetail.aggregateYearRange": "Metų intervalas",

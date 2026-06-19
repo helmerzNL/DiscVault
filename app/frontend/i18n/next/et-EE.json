@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Järjestuse uuendamine...",
   "containerDetail.reordered": "Järjestus uuendatud.",
   "containerDetail.metadata": "Metaandmed",
+  "containerDetail.debugSources": "Silumisteave: metaandmete allikad",
   "containerDetail.fromMovie": "Filmist",
   "containerDetail.aggregateMovieCount": "Filmid ulatuses",
   "containerDetail.aggregateYearRange": "Aastate vahemik",

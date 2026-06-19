@@ -1185,6 +1185,7 @@
   "movieDetail.links": "Enlaces",
   "movieDetail.relationships": "Relaciones",
   "containerDetail.metadata": "Metadatos del contenedor",
+  "containerDetail.debugSources": "Información de depuración: fuentes de metadatos",
   "preferences.title": "Preferencias",
   "preferences.description": "Ajusta tu experiencia personal de DiscVault.",
   "movieDetail.noOverview": "No hay resumen disponible.",

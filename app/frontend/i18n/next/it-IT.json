@@ -1185,6 +1185,7 @@
   "movieDetail.links": "Link",
   "movieDetail.relationships": "Relazioni",
   "containerDetail.metadata": "Metadati contenitore",
+  "containerDetail.debugSources": "Info di debug: origini metadati",
   "preferences.title": "Preferenze",
   "preferences.description": "Personalizza la tua esperienza DiscVault.",
   "movieDetail.noOverview": "Nessuna trama disponibile.",

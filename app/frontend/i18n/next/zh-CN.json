@@ -605,6 +605,7 @@
   "containerDetail.reordering": "正在更新顺序...",
   "containerDetail.reordered": "顺序已更新。",
   "containerDetail.metadata": "元数据",
+  "containerDetail.debugSources": "调试信息：元数据来源",
   "containerDetail.fromMovie": "来自电影",
   "containerDetail.aggregateMovieCount": "范围内的电影",
   "containerDetail.aggregateYearRange": "年份范围",

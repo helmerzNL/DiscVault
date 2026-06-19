@@ -627,6 +627,7 @@
   "containerDetail.reordering": "Updating order...",
   "containerDetail.reordered": "Order updated.",
   "containerDetail.metadata": "Metadata",
+  "containerDetail.debugSources": "Debug info: metadata sources",
   "containerDetail.fromMovie": "From",
   "containerDetail.aggregateMovieCount": "Movies in scope",
   "containerDetail.aggregateYearRange": "Year range",

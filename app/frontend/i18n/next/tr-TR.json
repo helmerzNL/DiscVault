@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Sıra güncelleniyor...",
   "containerDetail.reordered": "Sıra güncellendi.",
   "containerDetail.metadata": "Meta veriler",
+  "containerDetail.debugSources": "Hata ayıklama bilgileri: meta veri kaynakları",
   "containerDetail.fromMovie": "Filmden",
   "containerDetail.aggregateMovieCount": "Kapsamdaki filmler",
   "containerDetail.aggregateYearRange": "Yıl aralığı",

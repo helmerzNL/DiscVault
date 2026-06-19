@@ -1185,6 +1185,7 @@
   "movieDetail.links": "Links",
   "movieDetail.relationships": "Beziehungen",
   "containerDetail.metadata": "Container-Metadaten",
+  "containerDetail.debugSources": "Debug-Infos: Metadatenquellen",
   "preferences.title": "Einstellungen",
   "preferences.description": "Passe dein persoenliches DiscVault-Erlebnis an.",
   "movieDetail.noOverview": "Keine Beschreibung verfuegbar.",

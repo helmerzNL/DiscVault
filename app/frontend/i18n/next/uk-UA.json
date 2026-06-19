@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Оновлення порядку...",
   "containerDetail.reordered": "Порядок оновлено.",
   "containerDetail.metadata": "Метадані",
+  "containerDetail.debugSources": "Інформація для налагодження: джерела метаданих",
   "containerDetail.fromMovie": "З фільму",
   "containerDetail.aggregateMovieCount": "Фільми в області",
   "containerDetail.aggregateYearRange": "Діапазон років",
