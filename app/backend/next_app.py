@@ -20825,6 +20825,36 @@ def ui_preview_html(
       const hhmm = `${hours}:${String(mins).padStart(2, "0")}`;
       return `${hhmm} (${total} ${tNext("movieDetail.minutesShort", "min")})`;
     }
+    function movieVaultExternalIds(movie, metadata) {
+      const meta = metadata || {};
+      const movieId = String(
+        meta.movievault_movie_id || meta.movievaultMovieId
+        || meta.movievault_id || meta.movieVaultId || meta.movievaultId
+        || meta.remoteRef || meta.remote_ref || ""
+      ).trim();
+      const releaseId = String(
+        meta.movievault_release_id || meta.movievaultReleaseId
+        || meta.movievault_release || meta.releaseRef || meta.release_ref || ""
+      ).trim();
+      return { movieId, releaseId };
+    }
+    function containerLinksHtml(containers) {
+      return (containers || [])
+        .filter((container) => container && container.title)
+        .map((container) => `<a href="/api/next/app/containers/${encodeURIComponent(container.id || "")}" data-app-container-link="${escapeHtml(String(container.id || ""))}">${escapeHtml(container.title)}</a>`)
+        .join(", ");
+    }
+    function bindContainerDetailLinks(elementId) {
+      const root = document.getElementById(elementId);
+      if (!root) return;
+      root.querySelectorAll("a[data-app-container-link]").forEach((anchor) => {
+        anchor.addEventListener("click", (event) => {
+          event.preventDefault();
+          const id = event.currentTarget.getAttribute("data-app-container-link") || "";
+          if (id) openAppContainerDetail(id);
+        });
+      });
+    }
     function mediaAssetUrl(asset) {
       return usableImage(asset?.url || asset?.source_url || "");
     }
@@ -21906,25 +21936,28 @@ def ui_preview_html(
       ]);
       fillMovieEditForm(detail);
       renderMovieListState(detail);
+      const mvIds = movieVaultExternalIds(movie, metadata);
+      const releaseContainers = (detail.containers || []).filter((container) => container && container.title);
+      const releaseContainerText = releaseContainers.map((container) => container.title).join(", ");
+      const releaseContainerHtml = containerLinksHtml(releaseContainers);
+      const releasePackaging = specs.packaging || metadata.packaging || movie.edition_type || movie.edition;
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
         [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
         [tNext("movieDetail.format", "Format"), movie.format],
-        [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
         [tNext("movieDetail.location", "Location"), movie.location],
+        [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
+        [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.director", "Director"), metadata.director],
         [tNext("movieDetail.genre", "Genre"), metadata.genre],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
         [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
-        ...(appDebugMode && movie.id ? [[tNext("movieDetail.movieId", "Movie ID"), movie.id]] : [])
+        ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
       ]);
-      const containerNames = (detail.containers || [])
-        .map((container) => container.title)
-        .filter(Boolean)
-        .join(", ");
+      bindContainerDetailLinks("movieDetailRelease");
       const audioVideoSubsection = detailFieldSubsection(tNext("movieDetail.audioVideo", "Audio & Video"), [
         ["HDR", specs.hdr || metadata.hdr],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
@@ -21935,12 +21968,8 @@ def ui_preview_html(
       ]);
       const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
-        [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
-        [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
-        [tNext("movieDetail.partOfCollection", "Part of collection"), containerNames],
-        [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
-        ...(appDebugMode && (movie.public_id || movie.id) ? [[tNext("movieDetail.releaseId", "Release ID"), movie.public_id || movie.id]] : [])
+        ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
       ]);
       document.getElementById("movieDetailTechnical").innerHTML = (audioVideoSubsection + collectorsSubsection)
         || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
