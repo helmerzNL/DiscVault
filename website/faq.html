@@ -161,6 +161,30 @@
               <p data-i18n="faq.passkeys.recovery">Tip: register more than one passkey where possible, for example your phone and your desktop device. That gives you a recovery path if one device is replaced or lost.</p>
             </div>
           </details>
+
+          <details class="card faq-article">
+            <summary class="faq-summary">
+              <span class="badge badge-new" data-i18n="faq.badge.published">FAQ</span>
+              <span class="faq-summary-title" data-i18n="faq.upn.title">Why passkeys need a domain name (FQDN)</span>
+            </summary>
+            <div class="faq-answer">
+              <p data-i18n="faq.upn.p1">Passkeys use the WebAuthn standard, which binds each passkey to the exact web address where it was created. That address must be a real domain name &mdash; a fully qualified domain name (FQDN) such as <code>discvault.example.com</code> &mdash; served over HTTPS. A bare IP address like <code>http://192.168.1.50:6080</code> does not work for passkeys.</p>
+              <p data-i18n="faq.upn.p2">When you open DiscVault, the browser ties every passkey to the relying party ID (<code>RP_ID</code>), which is the hostname shown in the address bar. The browser only offers a passkey when that hostname matches, and it refuses to create or use passkeys on a bare IP address or over plain HTTP. If you reach DiscVault by IP, the passkey step fails or never appears.</p>
+              <h4 data-i18n="faq.upn.why.title">Why a domain name is required</h4>
+              <ul>
+                <li data-i18n="faq.upn.why.1">Phishing protection: WebAuthn locks each passkey to one domain name, and an IP address cannot be validated as a domain, so browsers refuse to use it.</li>
+                <li data-i18n="faq.upn.why.2">Secure context: browsers only allow passkeys over HTTPS or on localhost, and a trusted HTTPS certificate is issued for a domain name, not for an internal IP.</li>
+                <li data-i18n="faq.upn.why.3">Stable identity: if your server IP changes, passkeys bound to that IP would break, while a domain name keeps working.</li>
+              </ul>
+              <h4 data-i18n="faq.upn.setup.title">How to set it up</h4>
+              <ul>
+                <li data-i18n="faq.upn.setup.1">Point a domain or subdomain such as <code>discvault.yourdomain.com</code> at your server and put it behind HTTPS, usually through a reverse proxy.</li>
+                <li data-i18n="faq.upn.setup.2">Set <code>RP_ID</code> to that hostname without scheme or port, and set <code>RP_ORIGINS</code> to the full HTTPS URL, for example <code>https://discvault.yourdomain.com</code>.</li>
+                <li data-i18n="faq.upn.setup.3">Open DiscVault through the domain name from now on, then create your passkey. The localhost address still works on the server itself for first-time setup.</li>
+              </ul>
+              <p data-i18n="faq.upn.note">Tip: choose the domain name before creating passkeys. Passkeys are tied to the hostname, so changing it later means registering your passkeys again.</p>
+            </div>
+          </details>
         </div>
       </section>
     </main>
@@ -171,7 +195,7 @@
     </footer>
 
     <script src="./translations.js?v=12"></script>
-    <script src="./translations-extra.js?v=3"></script>
+    <script src="./translations-extra.js?v=4"></script>
     <script>
       document.querySelector('.hamburger').addEventListener('click', function () {
         var open = this.getAttribute('aria-expanded') === 'true';
