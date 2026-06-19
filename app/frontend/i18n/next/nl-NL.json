@@ -38,6 +38,8 @@
   "auth.passkeyCancelled": "Inloggen met passkey is geannuleerd.",
   "auth.passkeyHttpsRequired": "Open deze app via HTTPS om passkeys te gebruiken.",
   "auth.passkeyUnavailable": "Deze browser ondersteunt geen passkeys.",
+  "auth.passkeyUpnRequired": "Passkeys kunnen niet worden aangemaakt op een URL met alleen een IP-adres. Stel een UPN/hostnaam in voor DiscVault Next en open de app via die hostnaam over HTTPS. Hulp: https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "Passkeys worden geblokkeerd omdat de ingestelde Relying Party ID niet overeenkomt met het adres dat je gebruikt. Open DiscVault Next op exact de UPN/hostnaam die overeenkomt met de passkey-configuratie (geen IP-adres), via HTTPS. Hulp: https://discvault.eu/faq",
   "auth.passkeyName": "Passkeynaam",
   "auth.passkeys": "Passkeys",
   "auth.recovery": "Herstel",

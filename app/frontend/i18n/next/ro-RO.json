@@ -38,6 +38,8 @@
   "auth.passkeyCancelled": "Autentificarea cu passkey a fost anulată.",
   "auth.passkeyHttpsRequired": "Deschide aplicația prin HTTPS pentru a folosi passkeys.",
   "auth.passkeyUnavailable": "Acest browser nu acceptă passkeys.",
+  "auth.passkeyUpnRequired": "Cheile passkey nu pot fi create pe un URL care folosește doar o adresă IP. Configurați un UPN/nume de gazdă pentru DiscVault Next și deschideți aplicația cu acel nume de gazdă prin HTTPS. Ajutor: https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "Cheile passkey sunt blocate deoarece ID-ul Relying Party configurat nu corespunde adresei pe care o folosiți. Deschideți DiscVault Next exact cu UPN-ul/numele de gazdă care corespunde configurației passkey (nu o adresă IP), prin HTTPS. Ajutor: https://discvault.eu/faq",
   "auth.passkeyName": "Nume passkey",
   "auth.passkeys": "Chei de acces",
   "auth.recovery": "Recuperare",

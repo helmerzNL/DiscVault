@@ -29,6 +29,8 @@
   "auth.passkeyCancelled": "O pedido de passkey foi cancelado.",
   "auth.passkeyHttpsRequired": "Abra esta app por HTTPS para usar passkeys.",
   "auth.passkeyUnavailable": "Este navegador não suporta passkeys.",
+  "auth.passkeyUpnRequired": "Não é possível criar passkeys num URL que use apenas um endereço IP. Configura um UPN/nome de anfitrião para o DiscVault Next e abre a aplicação com esse nome de anfitrião através de HTTPS. Ajuda: https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "As passkeys estão bloqueadas porque o Relying Party ID configurado não corresponde ao endereço que estás a usar. Abre o DiscVault Next exatamente com o UPN/nome de anfitrião que corresponde à configuração das passkeys (não um endereço IP), através de HTTPS. Ajuda: https://discvault.eu/faq",
   "auth.passkeyName": "Nome da passkey",
   "auth.passkeys": "Passkeys",
   "auth.recovery": "Recuperação",

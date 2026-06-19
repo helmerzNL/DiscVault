@@ -38,6 +38,8 @@
   "auth.passkeyCancelled": "Přihlášení pomocí passkey bylo zrušeno.",
   "auth.passkeyHttpsRequired": "Pro použití passkeys otevřete aplikaci přes HTTPS.",
   "auth.passkeyUnavailable": "Tento prohlížeč nepodporuje passkeys.",
+  "auth.passkeyUpnRequired": "Klíče passkey nelze vytvořit na adrese URL používající pouze IP adresu. Nastavte pro DiscVault Next UPN/název hostitele a otevřete aplikaci pomocí tohoto názvu hostitele přes HTTPS. Nápověda: https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "Klíče passkey jsou blokovány, protože nakonfigurované Relying Party ID neodpovídá adrese, kterou používáte. Otevřete DiscVault Next přesně na tom UPN/názvu hostitele, který odpovídá konfiguraci passkey (ne IP adrese), přes HTTPS. Nápověda: https://discvault.eu/faq",
   "auth.passkeyName": "Název passkey",
   "auth.passkeys": "Přístupové klíče",
   "auth.recovery": "Obnovení",
