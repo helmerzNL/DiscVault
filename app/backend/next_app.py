@@ -4710,7 +4710,7 @@ def migration_dashboard_html() -> str:
     function setMigrationAuthMessage(message, tone) {
       const node = document.getElementById("migrationAuthMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `auth-message ${tone || ""}`.trim();
     }
     function showMigrationAuthGate(show) {
@@ -4729,6 +4729,29 @@ def migration_dashboard_html() -> str:
       if (!host || host === "localhost") return false;
       if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
       return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
     }
     function passkeyUpnSetupMessage() {
       return tNext(
@@ -15800,13 +15823,13 @@ def ui_preview_html(
     function setLoginMessage(message, tone) {
       const node = document.getElementById("appLoginMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     function setStartupGateMessage(message, tone) {
       const node = document.getElementById("startupMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `startup-message ${tone || ""}`.trim();
     }
     function isLikelyIpHost(hostname) {
@@ -15814,6 +15837,29 @@ def ui_preview_html(
       if (!host || host === "localhost") return false;
       if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
       return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
     }
     function passkeyUpnSetupMessage() {
       return tNext(
@@ -28168,7 +28214,7 @@ def ui_preview_html(
     function setProfileSecurityMessage(message, tone) {
       const node = document.getElementById("profileSecurityMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     function renderProfilePasskeys() {
@@ -31636,7 +31682,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function setAuthStatus(message, tone) {
       const node = document.getElementById("authStatusLine");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `auth-status ${tone || ""}`.trim();
     }
     function reportClientError(error) {
@@ -31648,6 +31694,29 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!host || host === "localhost") return false;
       if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
       return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
     }
     function passkeyUpnSetupMessage() {
       return tNext(
@@ -31926,7 +31995,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function setStartupMessage(message, tone) {
       const node = document.getElementById("startupMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     async function registerOwnerPasskey(triggerButton = null) {
