@@ -945,6 +945,7 @@
   "appAdmin.debugMode": "Debug",
   "appAdmin.debugOn": "Debug aan",
   "movieDetail.debugLocalizations": "Debug-info: lokale titels en plots",
+  "movieDetail.debugMetadataPanelTitle": "Metadata debug",
   "movieDetail.debugNoLocalizations": "Geen lokale titel- of plotregels gevonden.",
   "movieDetail.debugSourcesTitle": "Geladen metadata per bron",
   "movieDetail.debugSourcesContributedTitle": "Bijgedragen metadata per plug-in",
