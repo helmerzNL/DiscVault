@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Плагін потребує налаштування",
   "movieDetail.debugSourcesReasonNoMatch": "Немає збігу",
   "movieDetail.debugSourcesExcludedFields": "Виключені поля",
+  "movieDetail.debugSourcesAcceptedFields": "Прийняті поля",
+  "movieDetail.debugSourcesNotAcceptedFields": "Не прийнято",
   "movieDetail.debugSourcesMissingTitle": "Відсутнє в MovieVault",
   "movieDetail.debugSourcesMissingHint": "Поля, отримані DiscVault, але не прийняті шаблоном внеску отримувача.",
   "movieDetail.debugSourcesDownloadJson": "Завантажити JSON",

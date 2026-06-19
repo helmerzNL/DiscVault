@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "플러그인 구성이 필요함",
   "movieDetail.debugSourcesReasonNoMatch": "일치 없음",
   "movieDetail.debugSourcesExcludedFields": "제외된 필드",
+  "movieDetail.debugSourcesAcceptedFields": "수락된 필드",
+  "movieDetail.debugSourcesNotAcceptedFields": "수락되지 않음",
   "movieDetail.debugSourcesMissingTitle": "MovieVault에 없음",
   "movieDetail.debugSourcesMissingHint": "DiscVault가 가져왔지만 수신자의 기여 템플릿에서 수락하지 않은 필드입니다.",
   "movieDetail.debugSourcesDownloadJson": "JSON 다운로드",

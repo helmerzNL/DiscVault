@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Vtičnik potrebuje konfiguracijo",
   "movieDetail.debugSourcesReasonNoMatch": "Ni ujemanja",
   "movieDetail.debugSourcesExcludedFields": "Izključena polja",
+  "movieDetail.debugSourcesAcceptedFields": "Sprejeta polja",
+  "movieDetail.debugSourcesNotAcceptedFields": "Ni sprejeto",
   "movieDetail.debugSourcesMissingTitle": "Manjka v MovieVault",
   "movieDetail.debugSourcesMissingHint": "Polja, ki jih je DiscVault pridobil, a jih predloga prispevka prejemnika ni sprejela.",
   "movieDetail.debugSourcesDownloadJson": "Prenesi JSON",

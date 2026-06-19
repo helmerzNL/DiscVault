@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Plugin vyžaduje konfiguraci",
   "movieDetail.debugSourcesReasonNoMatch": "Žádná shoda",
   "movieDetail.debugSourcesExcludedFields": "Vyloučená pole",
+  "movieDetail.debugSourcesAcceptedFields": "Přijatá pole",
+  "movieDetail.debugSourcesNotAcceptedFields": "Nepřijato",
   "movieDetail.debugSourcesMissingTitle": "Chybí v MovieVault",
   "movieDetail.debugSourcesMissingHint": "Pole načtená DiscVaultem, ale nepřijatá šablonou příspěvku příjemce.",
   "movieDetail.debugSourcesDownloadJson": "Stáhnout JSON",

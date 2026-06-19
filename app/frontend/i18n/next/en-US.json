@@ -964,6 +964,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Plugin needs configuration",
   "movieDetail.debugSourcesReasonNoMatch": "No match",
   "movieDetail.debugSourcesExcludedFields": "Excluded fields",
+  "movieDetail.debugSourcesAcceptedFields": "Accepted fields",
+  "movieDetail.debugSourcesNotAcceptedFields": "Not accepted",
   "movieDetail.debugSourcesMissingTitle": "Missing in MovieVault",
   "movieDetail.debugSourcesMissingHint": "Fields fetched by DiscVault but not accepted by the receiver's contribution template.",
   "movieDetail.debugSourcesDownloadJson": "Download JSON",

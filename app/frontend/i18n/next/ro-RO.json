@@ -942,6 +942,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Pluginul necesită configurare",
   "movieDetail.debugSourcesReasonNoMatch": "Nicio potrivire",
   "movieDetail.debugSourcesExcludedFields": "Câmpuri excluse",
+  "movieDetail.debugSourcesAcceptedFields": "Câmpuri acceptate",
+  "movieDetail.debugSourcesNotAcceptedFields": "Neacceptat",
   "movieDetail.debugSourcesMissingTitle": "Lipsește în MovieVault",
   "movieDetail.debugSourcesMissingHint": "Câmpuri preluate de DiscVault, dar neacceptate de șablonul de contribuție al destinatarului.",
   "movieDetail.debugSourcesDownloadJson": "Descarcă JSON",

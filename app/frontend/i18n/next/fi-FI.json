@@ -692,6 +692,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Laajennus vaatii määrityksen",
   "movieDetail.debugSourcesReasonNoMatch": "Ei osumaa",
   "movieDetail.debugSourcesExcludedFields": "Pois jätetyt kentät",
+  "movieDetail.debugSourcesAcceptedFields": "Hyväksytyt kentät",
+  "movieDetail.debugSourcesNotAcceptedFields": "Ei hyväksytty",
   "movieDetail.debugSourcesMissingTitle": "Puuttuu MovieVaultista",
   "movieDetail.debugSourcesMissingHint": "DiscVaultin hakemat kentät, joita vastaanottajan osallistumismalli ei hyväksynyt.",
   "movieDetail.debugSourcesDownloadJson": "Lataa JSON",

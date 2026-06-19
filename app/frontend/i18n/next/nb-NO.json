@@ -692,6 +692,8 @@
   "movieDetail.debugSourcesReasonNeedsConfig": "Programtillegg krever konfigurasjon",
   "movieDetail.debugSourcesReasonNoMatch": "Ingen treff",
   "movieDetail.debugSourcesExcludedFields": "Ekskluderte felt",
+  "movieDetail.debugSourcesAcceptedFields": "Aksepterte felter",
+  "movieDetail.debugSourcesNotAcceptedFields": "Ikke akseptert",
   "movieDetail.debugSourcesMissingTitle": "Mangler i MovieVault",
   "movieDetail.debugSourcesMissingHint": "Felt hentet av DiscVault, men ikke godtatt av mottakerens bidragsmal.",
   "movieDetail.debugSourcesDownloadJson": "Last ned JSON",
