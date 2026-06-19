@@ -4733,13 +4733,13 @@ def migration_dashboard_html() -> str:
     function passkeyUpnSetupMessage() {
       return tNext(
         "auth.passkeyUpnRequired",
-        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq.html"
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
       );
     }
     function passkeyRpMismatchMessage() {
       return tNext(
         "auth.passkeyRpMismatch",
-        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault Next on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq.html"
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault Next on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
       );
     }
     function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
@@ -15818,13 +15818,13 @@ def ui_preview_html(
     function passkeyUpnSetupMessage() {
       return tNext(
         "auth.passkeyUpnRequired",
-        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq.html"
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
       );
     }
     function passkeyRpMismatchMessage() {
       return tNext(
         "auth.passkeyRpMismatch",
-        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault Next on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq.html"
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault Next on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
       );
     }
     function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
@@ -31652,13 +31652,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function passkeyUpnSetupMessage() {
       return tNext(
         "auth.passkeyUpnRequired",
-        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq.html"
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault Next and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
       );
     }
     function passkeyRpMismatchMessage() {
       return tNext(
         "auth.passkeyRpMismatch",
-        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault Next on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq.html"
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault Next on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
       );
     }
     function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
