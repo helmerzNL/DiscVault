@@ -953,6 +953,69 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(sent.get("title"), "Heat")
         self.assertEqual(sent.get("language"), "en")
 
+    def test_receiver_contribution_payload_includes_localizations(self):
+        movie = {
+            "id": "dd07",
+            "public_id": "legacy-movie-77",
+            "title": "Spirited Away",
+            "year": "2001",
+            "format": "4K UHD",
+        }
+        preview = {
+            "proposal": {
+                "localizations": [
+                    {"lang": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                    {"lang": "de-DE", "title": "Chihiros Reise", "overview": "Ein Maedchen..."},
+                    {"lang": "pt", "overview": ""},
+                ],
+            },
+            "results": [],
+        }
+        payload = receiver_contribution_payload(
+            movie_id="dd07",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+        )
+        localizations = payload["payload"]["localizations"]
+        self.assertEqual(len(localizations), 2)
+        by_lang = {item["lang"]: item for item in localizations}
+        self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
+        self.assertEqual(by_lang["fr"]["overview"], "Une fille...")
+        self.assertEqual(by_lang["de-DE"]["title"], "Chihiros Reise")
+        self.assertNotIn("pt", by_lang)
+
+    def test_receiver_contribution_payload_localizations_respect_locks(self):
+        movie = {
+            "id": "ee08",
+            "public_id": "legacy-movie-78",
+            "title": "Heat",
+            "year": "1995",
+            "format": "4K UHD",
+            "metadata": {"field_locks": ["overview"]},
+        }
+        preview = {
+            "proposal": {
+                "localizations": [
+                    {"lang": "fr", "title": "Heat FR", "overview": "Synopsis FR"},
+                    {"lang": "es", "overview": "Sinopsis ES"},
+                ],
+            },
+            "results": [],
+        }
+        payload = receiver_contribution_payload(
+            movie_id="ee08",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+        )
+        localizations = payload["payload"]["localizations"]
+        by_lang = {item["lang"]: item for item in localizations}
+        self.assertIn("fr", by_lang)
+        self.assertEqual(by_lang["fr"].get("title"), "Heat FR")
+        self.assertNotIn("overview", by_lang["fr"])
+        self.assertNotIn("es", by_lang)
+
 
 if __name__ == "__main__":
     unittest.main()
