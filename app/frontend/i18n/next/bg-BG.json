@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Обновяване на реда...",
   "containerDetail.reordered": "Редът е обновен.",
   "containerDetail.metadata": "Метаданни",
+  "containerDetail.debugSources": "Информация за отстраняване на грешки: източници на метаданни",
   "containerDetail.fromMovie": "От филм",
   "containerDetail.aggregateMovieCount": "Филми в обхвата",
   "containerDetail.aggregateYearRange": "Диапазон от години",

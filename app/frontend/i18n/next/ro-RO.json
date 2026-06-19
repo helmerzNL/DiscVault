@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Se actualizează ordinea...",
   "containerDetail.reordered": "Ordine actualizată.",
   "containerDetail.metadata": "Metadate",
+  "containerDetail.debugSources": "Informații de depanare: surse de metadate",
   "containerDetail.fromMovie": "Din film",
   "containerDetail.aggregateMovieCount": "Filme în domeniu",
   "containerDetail.aggregateYearRange": "Interval de ani",

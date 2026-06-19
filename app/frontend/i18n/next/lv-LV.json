@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Secības atjaunināšana...",
   "containerDetail.reordered": "Secība atjaunināta.",
   "containerDetail.metadata": "Metadati",
+  "containerDetail.debugSources": "Atkļūdošanas informācija: metadatu avoti",
   "containerDetail.fromMovie": "No filmas",
   "containerDetail.aggregateMovieCount": "Filmas tvērumā",
   "containerDetail.aggregateYearRange": "Gadu diapazons",

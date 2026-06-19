@@ -1185,6 +1185,7 @@
   "movieDetail.links": "Lenker",
   "movieDetail.relationships": "Relasjoner",
   "containerDetail.metadata": "Container-metadata",
+  "containerDetail.debugSources": "Feilsøkingsinfo: metadatakilder",
   "preferences.title": "Innstillinger",
   "preferences.description": "Tilpass din personlige DiscVault-opplevelse.",
   "movieDetail.noOverview": "Ingen beskrivelse tilgjengelig.",

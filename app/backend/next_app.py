@@ -14598,6 +14598,13 @@ def ui_preview_html(
               <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
               <div class="detail-fields" id="containerDetailMetadataDetails"></div>
             </div>
+            <div class="detail-card full debug-card hidden" id="containerDetailDebugCard">
+              <div class="detail-card-head">
+                <h3 data-next-i18n="containerDetail.debugSources">Debug info: metadata sources</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </div>
+              <div class="debug-sources" id="containerDetailDebugSources"></div>
+            </div>
           </div>
         </section>
       </section>
@@ -16035,7 +16042,7 @@ def ui_preview_html(
     }
     function dvMissingContributionReportFilename() {
       const report = dvMissingContributionReportData || {};
-      const id = String(report.movieId || "movie").replace(/[^a-z0-9_-]/gi, "").slice(0, 40) || "movie";
+      const id = String(report.movieId || report.containerId || "entity").replace(/[^a-z0-9_-]/gi, "").slice(0, 40) || "entity";
       return `movievault-missing-fields-${id}.json`;
     }
     function dvDownloadMissingContributionReport() {
@@ -22962,6 +22969,10 @@ def ui_preview_html(
         [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
       ]);
       document.getElementById("containerDetailMetadataDetails").innerHTML = document.getElementById("containerDetailMetadata").innerHTML;
+      const containerDebugCard = document.getElementById("containerDetailDebugCard");
+      const containerDebugSources = document.getElementById("containerDetailDebugSources");
+      if (containerDebugCard) containerDebugCard.classList.toggle("hidden", !appDebugMode);
+      if (containerDebugSources) containerDebugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
@@ -40464,6 +40475,7 @@ def movie_metadata_missing_contribution_report(
     fetched: list[dict[str, Any]],
     contributed: list[dict[str, Any]],
     generated_at: Any,
+    entity_kind: str = "movie",
 ) -> dict[str, Any] | None:
     """Build a self-describing report of fields fetched by DiscVault but not
     accepted by a receiver's contribution template (e.g. MovieVault).
@@ -40532,7 +40544,7 @@ def movie_metadata_missing_contribution_report(
         "version": 1,
         "note": "Fields fetched by DiscVault but not accepted by the receiver's contribution template.",
         "generatedAt": generated_at,
-        "movieId": str(movie_id),
+        f"{entity_kind}Id": str(movie_id),
         "title": title,
         "receivers": receivers_out,
     }
@@ -42678,6 +42690,127 @@ def refresh_container_metadata(
     return {"dryRun": False, "changed": True, "revision": revision, "applied": proposal, "summary": summary}
 
 
+def container_metadata_debug_entity(conn, container_id: UUID | str) -> dict[str, Any] | None:
+    """Build the metadata debug payload for a container/box-set.
+
+    Containers don't fetch metadata per source the way movies do; instead a
+    container refresh contributes the box-set to receiver plugins (e.g.
+    MovieVault) via asynchronous ``plugin.execute``/``receive_metadata`` jobs.
+    We reconstruct the "contributed metadata per plugin" view (with
+    accepted/rejected fields) from the latest completed receiver jobs for this
+    container, matched via the receiver payload's embedded ``containerId``.
+    """
+
+    if not table_exists(conn, "background_jobs"):
+        return None
+
+    name_map: dict[str, str] = {}
+    try:
+        for plugin in metadata_receiver_plugins(conn):
+            if isinstance(plugin, dict) and plugin.get("id"):
+                name_map[str(plugin["id"])] = str(plugin.get("name") or plugin["id"])
+    except Exception:  # pragma: no cover - plugin registry must never break debug
+        name_map = {}
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                job_type,
+                status,
+                payload,
+                result,
+                error,
+                created_at,
+                finished_at
+            FROM background_jobs
+            WHERE job_type = %s
+              AND payload->>'entrypoint' = 'receive_metadata'
+              AND payload->'payload'->'metadata'->>'containerId' = %s
+            ORDER BY created_at DESC
+            LIMIT 40
+            """,
+            (PLUGIN_EXECUTION_JOB_TYPE, str(container_id)),
+        )
+        rows = cur.fetchall()
+
+    if not rows:
+        return None
+
+    contributed: list[dict[str, Any]] = []
+    seen_plugins: set[str] = set()
+    fetched_at: Any = None
+    container_title: Any = None
+
+    for row in rows:
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        receiver_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+        plugin_id = str(payload.get("pluginId") or "")
+        if not plugin_id or plugin_id in seen_plugins:
+            continue
+        seen_plugins.add(plugin_id)
+
+        if fetched_at is None:
+            created = row.get("created_at")
+            fetched_at = created.isoformat() if hasattr(created, "isoformat") else created
+        if container_title is None:
+            container_title = (receiver_payload.get("payload") or {}).get("title") if isinstance(receiver_payload.get("payload"), dict) else None
+
+        contribution_fields = receiver_payload.get("payload") if isinstance(receiver_payload.get("payload"), dict) else {}
+        payload_metadata = receiver_payload.get("metadata") if isinstance(receiver_payload.get("metadata"), dict) else {}
+        source_providers = payload_metadata.get("sourceProviders") if isinstance(payload_metadata.get("sourceProviders"), list) else []
+
+        result = row.get("result") if isinstance(row.get("result"), dict) else {}
+        execution = result.get("execution") if isinstance(result.get("execution"), dict) else {}
+        exec_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+
+        status = row.get("status")
+        accepted_fields = exec_result.get("acceptedFields") if isinstance(exec_result.get("acceptedFields"), list) else []
+        excluded_fields = [
+            {"field": item.get("field"), "reason": item.get("reason")}
+            for item in (exec_result.get("droppedFields") or [])
+            if isinstance(item, dict) and item.get("field")
+        ]
+
+        contributed.append(
+            {
+                "pluginId": plugin_id,
+                "name": name_map.get(plugin_id) or exec_result.get("provider") or plugin_id,
+                "status": execution.get("status") or status,
+                "state": execution.get("state") or status,
+                "resultStatus": exec_result.get("status") or (status if status in {"pending", "running", "failed"} else None),
+                "reason": exec_result.get("reason") or clean_text(row.get("error")) or None,
+                "provider": exec_result.get("provider"),
+                "error": execution.get("error") or clean_text(row.get("error")) or None,
+                "templateVersion": exec_result.get("templateVersion"),
+                "fields": sorted(str(key) for key in contribution_fields.keys()) if isinstance(contribution_fields, dict) else [],
+                "acceptedFields": [str(field) for field in accepted_fields],
+                "excludedFields": excluded_fields,
+                "sourceProviders": source_providers,
+            }
+        )
+
+    if not contributed:
+        return None
+
+    missing_report = movie_metadata_missing_contribution_report(
+        movie_id=container_id,
+        title=container_title,
+        fetched=[],
+        contributed=contributed,
+        generated_at=fetched_at,
+        entity_kind="container",
+    )
+
+    return {
+        "fetchedAt": fetched_at,
+        "fetched": [],
+        "contributed": contributed,
+        "missingContributionReport": missing_report,
+    }
+
+
 def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     container = container_entity(conn, container_id)
     if not container:
@@ -42685,6 +42818,11 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
     aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
     aggregate_videos = container_aggregate_video_entities(aggregate_movies)
+    metadata_debug = None
+    try:
+        metadata_debug = container_metadata_debug_entity(conn, container_id)
+    except Exception:  # pragma: no cover - debug info must never break detail load
+        metadata_debug = None
     return {
         "container": container,
         "identifiers": container_identifier_entities(conn, container_id),
@@ -42695,6 +42833,7 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         "aggregateMediaAssets": aggregate_assets,
         "aggregateVideos": aggregate_videos,
         "aggregateSummary": container_aggregate_summary(aggregate_movies, aggregate_assets, aggregate_videos),
+        "metadataDebug": metadata_debug,
     }
 
 

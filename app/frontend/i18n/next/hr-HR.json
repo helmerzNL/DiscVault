@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Ažuriranje redoslijeda...",
   "containerDetail.reordered": "Redoslijed ažuriran.",
   "containerDetail.metadata": "Metapodaci",
+  "containerDetail.debugSources": "Informacije za ispravljanje pogrešaka: izvori metapodataka",
   "containerDetail.fromMovie": "Iz filma",
   "containerDetail.aggregateMovieCount": "Filmovi u opsegu",
   "containerDetail.aggregateYearRange": "Raspon godina",

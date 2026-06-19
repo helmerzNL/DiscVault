@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Sorrend frissítése...",
   "containerDetail.reordered": "Sorrend frissítve.",
   "containerDetail.metadata": "Metaadatok",
+  "containerDetail.debugSources": "Hibakeresési információ: metaadat-források",
   "containerDetail.fromMovie": "Filmből",
   "containerDetail.aggregateMovieCount": "Filmek a hatókörben",
   "containerDetail.aggregateYearRange": "Évtartomány",

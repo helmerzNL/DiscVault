@@ -605,6 +605,7 @@
   "containerDetail.reordering": "Ενημέρωση σειράς...",
   "containerDetail.reordered": "Η σειρά ενημερώθηκε.",
   "containerDetail.metadata": "Μεταδεδομένα",
+  "containerDetail.debugSources": "Πληροφορίες εντοπισμού σφαλμάτων: πηγές μεταδεδομένων",
   "containerDetail.fromMovie": "Από ταινία",
   "containerDetail.aggregateMovieCount": "Ταινίες στο εύρος",
   "containerDetail.aggregateYearRange": "Εύρος ετών",
