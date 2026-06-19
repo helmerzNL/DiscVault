@@ -38,6 +38,8 @@
   "auth.passkeyCancelled": "Passkey ile oturum açma iptal edildi.",
   "auth.passkeyHttpsRequired": "Passkeys kullanmak için bu uygulamayı HTTPS üzerinden açın.",
   "auth.passkeyUnavailable": "Bu tarayıcı passkeys desteklemiyor.",
+  "auth.passkeyUpnRequired": "Parola anahtarları (passkey) yalnızca IP adresi kullanan bir URL'de oluşturulamaz. DiscVault Next için bir UPN/ana bilgisayar adı yapılandırın ve uygulamayı bu ana bilgisayar adıyla HTTPS üzerinden açın. Yardım: https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "Parola anahtarları (passkey), yapılandırılan Relying Party ID kullandığınız adresle eşleşmediği için engellendi. DiscVault Next'i tam olarak passkey yapılandırmasıyla eşleşen UPN/ana bilgisayar adıyla (IP adresi değil), HTTPS üzerinden açın. Yardım: https://discvault.eu/faq",
   "auth.passkeyName": "Passkey adı",
   "auth.passkeys": "Geçiş anahtarları",
   "auth.recovery": "Kurtarma",

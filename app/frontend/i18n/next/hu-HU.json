@@ -38,6 +38,8 @@
   "auth.passkeyCancelled": "A passkey bejelentkezés megszakadt.",
   "auth.passkeyHttpsRequired": "A passkey használatához nyissa meg az alkalmazást HTTPS-en.",
   "auth.passkeyUnavailable": "Ez a böngésző nem támogatja a passkey-ket.",
+  "auth.passkeyUpnRequired": "A passkey-k nem hozhatók létre csak IP-címet használó URL-en. Állíts be egy UPN-t/gazdagépnevet a DiscVault Nexthez, és nyisd meg az alkalmazást ezzel a gazdagépnévvel HTTPS-en keresztül. Súgó: https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "A passkey-k le vannak tiltva, mert a beállított Relying Party ID nem egyezik a használt címmel. Nyisd meg a DiscVault Nextet pontosan azzal az UPN-nel/gazdagépnévvel, amely megfelel a passkey-konfigurációnak (nem IP-címmel), HTTPS-en keresztül. Súgó: https://discvault.eu/faq",
   "auth.passkeyName": "Passkey neve",
   "auth.passkeys": "Passkey-k",
   "auth.recovery": "Helyreállítás",

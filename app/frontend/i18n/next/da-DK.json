@@ -29,6 +29,8 @@
   "auth.passkeyCancelled": "Passkey-prompten blev annulleret.",
   "auth.passkeyHttpsRequired": "Åbn appen via HTTPS for at bruge passkeys.",
   "auth.passkeyUnavailable": "Denne browser understøtter ikke passkeys.",
+  "auth.passkeyUpnRequired": "Passkeys kan ikke oprettes på en URL, der kun bruger en IP-adresse. Konfigurer et UPN/værtsnavn til DiscVault Next, og åbn appen med det værtsnavn via HTTPS. Hjælp: https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "Passkeys er blokeret, fordi det konfigurerede Relying Party ID ikke matcher den adresse, du bruger. Åbn DiscVault Next med præcis det UPN/værtsnavn, der matcher passkey-konfigurationen (ikke en IP-adresse), via HTTPS. Hjælp: https://discvault.eu/faq",
   "auth.passkeyName": "Passkey-navn",
   "auth.passkeys": "Passkeys",
   "auth.recovery": "Gendannelse",

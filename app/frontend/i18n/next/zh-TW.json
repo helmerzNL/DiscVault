@@ -38,6 +38,8 @@
   "auth.passkeyCancelled": "Passkey 登入已取消。",
   "auth.passkeyHttpsRequired": "請透過 HTTPS 開啟此應用程式以使用 passkeys。",
   "auth.passkeyUnavailable": "此瀏覽器不支援 passkeys。",
+  "auth.passkeyUpnRequired": "無法在僅使用 IP 位址的網址上建立通行金鑰。請為 DiscVault Next 設定 UPN/主機名稱，並透過 HTTPS 使用該主機名稱開啟應用程式。說明：https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "由於設定的信賴方 ID（Relying Party ID）與你正在使用的位址不符，通行金鑰已被封鎖。請透過 HTTPS，使用與通行金鑰設定完全相符的 UPN/主機名稱（而非 IP 位址）開啟 DiscVault Next。說明：https://discvault.eu/faq",
   "auth.passkeyName": "Passkey 名稱",
   "auth.passkeys": "通行密鑰",
   "auth.recovery": "復原",
