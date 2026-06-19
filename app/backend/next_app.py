@@ -40550,16 +40550,9 @@ def movie_metadata_missing_contribution_report(
     }
 
 
-def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | None:
-    if not table_exists(conn, "audit_events"):
-        return None
-    fetched_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.refresh_fetched")
-    pushed_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.receiver_pushed")
-    if not fetched_event and not pushed_event:
-        return None
-
-    fetched_meta = (fetched_event or {}).get("metadata") or {}
-    pushed_meta = (pushed_event or {}).get("metadata") or {}
+def metadata_debug_fetched_sources(fetched_meta: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Build the per-source "loaded metadata" cards from a refresh_fetched event's metadata."""
+    fetched_meta = fetched_meta if isinstance(fetched_meta, dict) else {}
 
     source_states: dict[str, dict[str, Any]] = {}
     for entry in fetched_meta.get("sourceSummary") or []:
@@ -40622,7 +40615,21 @@ def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | 
             source_ref=result.get("sourceRef"),
         )
 
-    fetched = [grouped[plugin_id] for plugin_id in order]
+    return [grouped[plugin_id] for plugin_id in order]
+
+
+def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | None:
+    if not table_exists(conn, "audit_events"):
+        return None
+    fetched_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.refresh_fetched")
+    pushed_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.receiver_pushed")
+    if not fetched_event and not pushed_event:
+        return None
+
+    fetched_meta = (fetched_event or {}).get("metadata") or {}
+    pushed_meta = (pushed_event or {}).get("metadata") or {}
+
+    fetched = metadata_debug_fetched_sources(fetched_meta)
 
     payload_summary = pushed_meta.get("payloadSummary") or {}
     payload_fields = payload_summary.get("fields") or []
@@ -42699,10 +42706,11 @@ def container_metadata_debug_entity(conn, container_id: UUID | str) -> dict[str,
     We reconstruct the "contributed metadata per plugin" view (with
     accepted/rejected fields) from the latest completed receiver jobs for this
     container, matched via the receiver payload's embedded ``containerId``.
-    """
 
-    if not table_exists(conn, "background_jobs"):
-        return None
+    The "loaded metadata per source" view is aggregated from the box-set's
+    member movies (each film's latest source-load), attributed per film, since
+    a container has no source fetch of its own.
+    """
 
     name_map: dict[str, str] = {}
     try:
@@ -42712,31 +42720,30 @@ def container_metadata_debug_entity(conn, container_id: UUID | str) -> dict[str,
     except Exception:  # pragma: no cover - plugin registry must never break debug
         name_map = {}
 
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                id,
-                job_type,
-                status,
-                payload,
-                result,
-                error,
-                created_at,
-                finished_at
-            FROM background_jobs
-            WHERE job_type = %s
-              AND payload->>'entrypoint' = 'receive_metadata'
-              AND payload->'payload'->'metadata'->>'containerId' = %s
-            ORDER BY created_at DESC
-            LIMIT 40
-            """,
-            (PLUGIN_EXECUTION_JOB_TYPE, str(container_id)),
-        )
-        rows = cur.fetchall()
-
-    if not rows:
-        return None
+    rows: list[dict[str, Any]] = []
+    if table_exists(conn, "background_jobs"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    job_type,
+                    status,
+                    payload,
+                    result,
+                    error,
+                    created_at,
+                    finished_at
+                FROM background_jobs
+                WHERE job_type = %s
+                  AND payload->>'entrypoint' = 'receive_metadata'
+                  AND payload->'payload'->'metadata'->>'containerId' = %s
+                ORDER BY created_at DESC
+                LIMIT 40
+                """,
+                (PLUGIN_EXECUTION_JOB_TYPE, str(container_id)),
+            )
+            rows = cur.fetchall()
 
     contributed: list[dict[str, Any]] = []
     seen_plugins: set[str] = set()
@@ -42791,13 +42798,41 @@ def container_metadata_debug_entity(conn, container_id: UUID | str) -> dict[str,
             }
         )
 
-    if not contributed:
+    # "Loaded metadata per source" is aggregated from the box-set's member
+    # movies (a container doesn't fetch from sources itself). Each member's
+    # latest source-load is attributed to the film via sourceRef.
+    fetched: list[dict[str, Any]] = []
+    if table_exists(conn, "audit_events"):
+        try:
+            members = container_member_movie_entities(conn, container_id)
+        except Exception:  # pragma: no cover - membership lookup must never break debug
+            members = []
+        for member in members[:60]:
+            member_id = member.get("id")
+            if not member_id:
+                continue
+            member_event = movie_metadata_debug_latest_audit_event(conn, member_id, "metadata.refresh_fetched")
+            if not member_event:
+                continue
+            groups = metadata_debug_fetched_sources(member_event.get("metadata") or {})
+            if not groups:
+                continue
+            member_title = clean_text(member.get("title")) or str(member_id)
+            for group in groups:
+                base_ref = clean_text(group.get("sourceRef"))
+                group["sourceRef"] = f"{member_title} · {base_ref}" if base_ref else member_title
+                fetched.append(group)
+            if fetched_at is None:
+                created = member_event.get("createdAt")
+                fetched_at = created.isoformat() if hasattr(created, "isoformat") else created
+
+    if not contributed and not fetched:
         return None
 
     missing_report = movie_metadata_missing_contribution_report(
         movie_id=container_id,
         title=container_title,
-        fetched=[],
+        fetched=fetched,
         contributed=contributed,
         generated_at=fetched_at,
         entity_kind="container",
@@ -42805,7 +42840,7 @@ def container_metadata_debug_entity(conn, container_id: UUID | str) -> dict[str,
 
     return {
         "fetchedAt": fetched_at,
-        "fetched": [],
+        "fetched": fetched,
         "contributed": contributed,
         "missingContributionReport": missing_report,
     }
