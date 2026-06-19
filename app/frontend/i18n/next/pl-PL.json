@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Audio i wideo",
   "movieDetail.collectors": "Kolekcjonerzy",
   "movieDetail.runtime": "Czas trwania",
+  "movieDetail.lockField": "Pole odblokowane. Kliknij, aby chronić je przed aktualizacjami metadanych.",
+  "movieDetail.unlockField": "Pole zablokowane. Kliknij, aby zezwolić na aktualizacje metadanych.",
   "movieDetail.distributor": "Dystrybutor",
   "movieDetail.partOfCollection": "Część kolekcji",
   "movieDetail.releaseCountry": "Kraj wydania",

@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Hang és kép",
   "movieDetail.collectors": "Gyűjtők",
   "movieDetail.runtime": "Játékidő",
+  "movieDetail.lockField": "A mező feloldva. Kattintson, hogy megvédje a metaadat-frissítésektől.",
+  "movieDetail.unlockField": "A mező zárolva. Kattintson a metaadat-frissítések engedélyezéséhez.",
   "movieDetail.distributor": "Forgalmazó",
   "movieDetail.partOfCollection": "A gyűjtemény része",
   "movieDetail.releaseCountry": "Kiadás országa",

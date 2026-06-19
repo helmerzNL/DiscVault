@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Аудио и видео",
   "movieDetail.collectors": "Колекционери",
   "movieDetail.runtime": "Времетраене",
+  "movieDetail.lockField": "Полето е отключено. Щракнете, за да го защитите от актуализации на метаданните.",
+  "movieDetail.unlockField": "Полето е заключено. Щракнете, за да разрешите актуализации на метаданните.",
   "movieDetail.distributor": "Дистрибутор",
   "movieDetail.partOfCollection": "Част от колекцията",
   "movieDetail.releaseCountry": "Държава на издаване",

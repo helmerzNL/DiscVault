@@ -1157,6 +1157,8 @@
   "movieDetail.audioVideo": "Audio & Video",
   "movieDetail.collectors": "Sammler",
   "movieDetail.runtime": "Laufzeit",
+  "movieDetail.lockField": "Feld entsperrt. Klicken, um es vor Metadaten-Updates zu schützen.",
+  "movieDetail.unlockField": "Feld gesperrt. Klicken, um Metadaten-Updates zuzulassen.",
   "movieDetail.distributor": "Vertrieb",
   "movieDetail.partOfCollection": "Teil der Sammlung",
   "movieDetail.releaseCountry": "Veröffentlichungsland",

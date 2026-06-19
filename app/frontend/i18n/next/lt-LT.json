@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Garsas ir vaizdas",
   "movieDetail.collectors": "Kolekcininkai",
   "movieDetail.runtime": "Trukmė",
+  "movieDetail.lockField": "Laukas atrakintas. Spustelėkite, kad apsaugotumėte jį nuo metaduomenų atnaujinimų.",
+  "movieDetail.unlockField": "Laukas užrakintas. Spustelėkite, kad leistumėte metaduomenų atnaujinimus.",
   "movieDetail.distributor": "Platintojas",
   "movieDetail.partOfCollection": "Kolekcijos dalis",
   "movieDetail.releaseCountry": "Išleidimo šalis",

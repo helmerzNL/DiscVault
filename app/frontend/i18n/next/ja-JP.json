@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "オーディオと映像",
   "movieDetail.collectors": "コレクター",
   "movieDetail.runtime": "再生時間",
+  "movieDetail.lockField": "フィールドのロックが解除されています。クリックしてメタデータの更新から保護します。",
+  "movieDetail.unlockField": "フィールドがロックされています。クリックしてメタデータの更新を許可します。",
   "movieDetail.distributor": "配給",
   "movieDetail.partOfCollection": "コレクションの一部",
   "movieDetail.releaseCountry": "発売国",

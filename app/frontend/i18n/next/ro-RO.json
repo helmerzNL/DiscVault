@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Audio și video",
   "movieDetail.collectors": "Colecționari",
   "movieDetail.runtime": "Durată",
+  "movieDetail.lockField": "Câmp deblocat. Faceți clic pentru a-l proteja de actualizările de metadate.",
+  "movieDetail.unlockField": "Câmp blocat. Faceți clic pentru a permite actualizările de metadate.",
   "movieDetail.distributor": "Distribuitor",
   "movieDetail.partOfCollection": "Parte din colecție",
   "movieDetail.releaseCountry": "Țara lansării",

@@ -367,6 +367,8 @@
   "movieDetail.audioVideo": "Heli ja video",
   "movieDetail.collectors": "Kogujad",
   "movieDetail.runtime": "Kestus",
+  "movieDetail.lockField": "Väli on avatud. Klõpsa, et kaitsta seda metaandmete uuenduste eest.",
+  "movieDetail.unlockField": "Väli on lukustatud. Klõpsa, et lubada metaandmete uuendused.",
   "movieDetail.distributor": "Levitaja",
   "movieDetail.partOfCollection": "Osa kogust",
   "movieDetail.releaseCountry": "Väljaandmisriik",

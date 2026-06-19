@@ -93,6 +93,64 @@ METADATA_TECHNICAL_FIELDS = {
     "content_ratings",
 }
 
+MOVIE_METADATA_LOCKS_KEY = "field_locks"
+
+MOVIE_LOCKABLE_FIELDS = {
+    "title",
+    "sort_title",
+    "original_title",
+    "year",
+    "barcode",
+    "release_date",
+    "format",
+    "edition",
+    "country",
+    "language",
+    "location",
+    "overview",
+    "notes",
+    "runtime_minutes",
+    "director",
+    "genre",
+    "studios",
+    "distributor",
+    "hdr",
+    "packaging",
+    "screen_ratios",
+    "audio_tracks",
+    "subtitles",
+    "content_ratings",
+}
+
+
+def normalize_movie_field_locks(value: Any) -> list[str]:
+    """Return a sorted, de-duplicated list of recognised lockable field names."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, (list, tuple, set)):
+        items = list(value)
+    else:
+        return []
+    result: set[str] = set()
+    for item in items:
+        name = str(item or "").strip()
+        if name in MOVIE_LOCKABLE_FIELDS:
+            result.add(name)
+    return sorted(result)
+
+
+def movie_locked_fields(metadata: Any) -> set[str]:
+    """Read the set of locked field names stored on a movie's metadata."""
+    if not isinstance(metadata, dict):
+        return set()
+    raw = metadata.get(MOVIE_METADATA_LOCKS_KEY)
+    if raw is None:
+        raw = metadata.get("fieldLocks")
+    return set(normalize_movie_field_locks(raw))
+
+
 METADATA_LIST_FIELDS = {
     "audio_tracks",
     "subtitles",
@@ -1468,6 +1526,7 @@ def merge_metadata_results(
     working_movie = dict(current)
     working_metadata = dict(current.get("metadata") or {})
     working_technical = dict(technical_current)
+    locked_fields = movie_locked_fields(working_metadata)
 
     def decision_for(target: str, field: str) -> dict[str, Any]:
         key = (target, field)
@@ -1546,6 +1605,9 @@ def merge_metadata_results(
             if decision_key in selected_field_keys:
                 allowed = False
                 reason = "higher-priority provider already selected this field"
+            elif field in locked_fields:
+                allowed = False
+                reason = "field is locked by user"
             else:
                 allowed, reason = should_apply_field(
                     field=field,
