@@ -38,6 +38,8 @@
   "auth.passkeyCancelled": "Pierakstīšanās ar passkey tika atcelta.",
   "auth.passkeyHttpsRequired": "Atveriet lietotni ar HTTPS, lai izmantotu passkeys.",
   "auth.passkeyUnavailable": "Šī pārlūkprogramma neatbalsta passkeys.",
+  "auth.passkeyUpnRequired": "Piekļuves atslēgas (passkey) nevar izveidot URL adresē, kas izmanto tikai IP adresi. Konfigurējiet DiscVault Next UPN/resursdatora nosaukumu un atveriet lietotni ar šo resursdatora nosaukumu, izmantojot HTTPS. Palīdzība: https://discvault.eu/faq",
+  "auth.passkeyRpMismatch": "Piekļuves atslēgas (passkey) ir bloķētas, jo konfigurētais Relying Party ID neatbilst izmantotajai adresei. Atveriet DiscVault Next tieši ar to UPN/resursdatora nosaukumu, kas atbilst passkey konfigurācijai (nevis IP adresi), izmantojot HTTPS. Palīdzība: https://discvault.eu/faq",
   "auth.passkeyName": "Passkey nosaukums",
   "auth.passkeys": "Piekļuves atslēgas",
   "auth.recovery": "Atkopšana",
