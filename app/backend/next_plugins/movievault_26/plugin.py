@@ -1741,6 +1741,97 @@ def activity_summary(payload, context=None):
     return result
 
 
+_DEFAULT_LOCALIZED_FIELDS = ("title", "originalTitle", "overview", "edition", "description", "biography")
+_DEFAULT_LOCALIZED_FIELD_PATTERN = "<field>_<iso-639-1-language>"
+
+
+def _localized_language_code(value):
+    code = _text(value).strip().lower()
+    if not code:
+        return ""
+    for sep in ("-", "_"):
+        if sep in code:
+            code = code.split(sep, 1)[0]
+    return code.strip()
+
+
+def _iter_template_field_defs(template, entity_type):
+    candidates = []
+    fields = template.get("fields")
+    if isinstance(fields, dict):
+        candidates.append(fields)
+    for container_key in ("templates", "entities", "entityTypes"):
+        container = template.get(container_key)
+        if isinstance(container, dict):
+            entity_def = container.get(entity_type)
+            if isinstance(entity_def, dict) and isinstance(entity_def.get("fields"), dict):
+                candidates.append(entity_def["fields"])
+    for mapping in candidates:
+        for name, spec in mapping.items():
+            yield _text(name), spec
+
+
+def _localized_field_settings(template, entity_type):
+    pattern = _DEFAULT_LOCALIZED_FIELD_PATTERN
+    fields = set()
+    if isinstance(template, dict):
+        pattern = _text(template.get("localizedFieldPattern")) or pattern
+        explicit = template.get("localizedFields")
+        if isinstance(explicit, list):
+            fields = {_text(item) for item in explicit if _text(item)}
+        if not fields:
+            for name, spec in _iter_template_field_defs(template, entity_type):
+                if name and isinstance(spec, dict) and spec.get("localized"):
+                    fields.add(name)
+    if not fields:
+        fields = set(_DEFAULT_LOCALIZED_FIELDS)
+    return pattern, fields
+
+
+def _format_localized_key(pattern, base, lang):
+    key = pattern or _DEFAULT_LOCALIZED_FIELD_PATTERN
+    replacements = (
+        ("<field>", base),
+        ("<iso-639-1-language>", lang),
+        ("<iso-639-1>", lang),
+        ("<language>", lang),
+        ("<lang>", lang),
+    )
+    for token, value in replacements:
+        key = key.replace(token, value)
+    return _text(key)
+
+
+def _expand_localized_fields(entity_type, safe_payload, localizations, allowed, template):
+    if not isinstance(safe_payload, dict):
+        return safe_payload
+    if entity_type not in {"movie", "release", "box_set", "person"}:
+        return safe_payload
+    if not isinstance(localizations, list) or not localizations:
+        return safe_payload
+    pattern, localized_fields = _localized_field_settings(template, entity_type)
+    enriched = dict(safe_payload)
+    for entry in localizations:
+        if not isinstance(entry, dict):
+            continue
+        lang = _localized_language_code(
+            entry.get("lang") or entry.get("language") or entry.get("locale")
+        )
+        if not lang:
+            continue
+        for base in localized_fields:
+            if allowed and base not in allowed:
+                continue
+            value = _safe_contribution_value(entry.get(base))
+            if value in (None, "", [], {}):
+                continue
+            key = _format_localized_key(pattern, base, lang)
+            if not key or key in enriched:
+                continue
+            enriched[key] = value
+    return enriched
+
+
 def _contribution_payload(payload, template):
     entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
     if entity_type not in {"movie", "release", "box_set", "person"}:
@@ -1751,8 +1842,10 @@ def _contribution_payload(payload, template):
     safe_payload = _safe_contribution_value(raw_payload)
     allowed = _allowed_fields(template, entity_type)
     safe_payload = _with_box_set_member_aliases(entity_type, safe_payload, allowed)
+    localizations = safe_payload.pop("localizations", None) if isinstance(safe_payload, dict) else None
     if allowed:
         safe_payload = {key: value for key, value in safe_payload.items() if key in allowed}
+    safe_payload = _expand_localized_fields(entity_type, safe_payload, localizations, allowed, template)
     safe_payload = _with_provider_title_hints(entity_type, safe_payload, payload, allowed)
     return entity_type, safe_payload
 
@@ -1766,7 +1859,7 @@ def _contribution_field_diagnostics(payload, template, contribution_payload):
     incoming_keys = {
         _text(key)
         for key, value in (safe_incoming.items() if isinstance(safe_incoming, dict) else [])
-        if _text(key) and value not in (None, "", [], {})
+        if _text(key) and _text(key) != "localizations" and value not in (None, "", [], {})
     }
     accepted_keys = {_text(key) for key in (contribution_payload or {}).keys() if _text(key)}
     allowed = _allowed_fields(template, entity_type)

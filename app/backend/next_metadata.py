@@ -2189,6 +2189,46 @@ def receiver_contribution_payload(
             for key, value in metadata_payload.items()
             if key not in locked_payload_keys
         }
+    # Forward per-language localizations (e.g. TMDB translations) so receivers
+    # that support localized fields can store them. Locked base fields are
+    # stripped so locked values never leave DiscVault.
+    localization_field_map = (
+        ("title", "title"),
+        ("originalTitle", "originalTitle"),
+        ("overview", "overview"),
+        ("edition", "edition"),
+    )
+    localized_entries: list[dict[str, Any]] = []
+    seen_localization_langs: set[str] = set()
+    for localization in proposal.get("localizations") or []:
+        if not isinstance(localization, dict):
+            continue
+        lang = str(
+            localization.get("lang")
+            or localization.get("language")
+            or localization.get("locale")
+            or ""
+        ).strip()
+        if not lang:
+            continue
+        entry: dict[str, Any] = {"lang": lang}
+        for source_key, payload_key in localization_field_map:
+            if payload_key in locked_payload_keys:
+                continue
+            value = localization.get(source_key)
+            if isinstance(value, str):
+                value = value.strip()
+            if value:
+                entry[payload_key] = value
+        if len(entry) <= 1:
+            continue
+        key = lang.lower()
+        if key in seen_localization_langs:
+            continue
+        seen_localization_langs.add(key)
+        localized_entries.append(entry)
+    if localized_entries:
+        metadata_payload["localizations"] = localized_entries
     source_providers = sorted(
         {
             str(item.get("pluginId"))
