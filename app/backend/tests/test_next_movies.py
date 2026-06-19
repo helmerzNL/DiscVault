@@ -106,6 +106,66 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertEqual(proposal["metadataUpdates"], {"barcode": "456"})
         self.assertEqual(proposal["provenance"][0]["pluginId"], "discvault_local_edit")
 
+    def test_movie_edit_receiver_proposal_includes_metadata_and_technical_supplements(self):
+        proposal = movie_edit_receiver_proposal(
+            {
+                "title": "Existing",
+                "metadata": {"director": "Old Director"},
+                "runtime_minutes": 100,
+            },
+            {
+                "title": "Existing",
+                "runtime_minutes": 142,
+                "metadata_edits": {
+                    "director": "New Director",
+                    "genre": "Sci-Fi",
+                    "studios": "",
+                },
+                "technical_edits": {
+                    "hdr": "Dolby Vision",
+                    "audio_tracks": ["English: Dolby Atmos"],
+                    "subtitles": [],
+                },
+            },
+        )
+
+        self.assertEqual(proposal["metadataUpdates"]["director"], "New Director")
+        self.assertEqual(proposal["metadataUpdates"]["genre"], "Sci-Fi")
+        self.assertNotIn("studios", proposal["metadataUpdates"])
+        self.assertEqual(proposal["metadataUpdates"]["runtimeMinutes"], 142)
+        self.assertEqual(proposal["movieUpdates"]["runtime_minutes"], 142)
+        self.assertEqual(proposal["technicalUpdates"]["hdr"], "Dolby Vision")
+        self.assertEqual(
+            proposal["technicalUpdates"]["audioTracks"], ["English: Dolby Atmos"]
+        )
+        self.assertNotIn("subtitles", proposal["technicalUpdates"])
+
+    def test_movie_edit_receiver_proposal_skips_locked_supplements(self):
+        proposal = movie_edit_receiver_proposal(
+            {"title": "Existing"},
+            {
+                "title": "Existing",
+                "metadata_edits": {"director": "New Director"},
+                "technical_edits": {"hdr": "HDR10"},
+                "runtime_minutes": 142,
+            },
+            locked_fields={"director", "hdr", "runtime_minutes"},
+        )
+
+        self.assertEqual(proposal, {})
+
+    def test_movie_edit_receiver_proposal_skips_unchanged_technical(self):
+        proposal = movie_edit_receiver_proposal(
+            {"title": "Existing"},
+            {
+                "title": "Existing",
+                "technical_edits": {"screen_ratios": "2.39:1"},
+            },
+            existing_technical={"screen_ratios": "2.39:1"},
+        )
+
+        self.assertEqual(proposal, {})
+
     def test_movie_payload_fields_drops_year_only_release_date(self):
         payload = movie_payload_fields(
             {
