@@ -875,6 +875,7 @@ def _normalize_box_set_proposal(payload, context=None):
         "format": selected_format or _text(_first_value(item, "format", "mediaType", "media_type")),
         "poster": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
         "poster_url": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
+        "posterUrl": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
         "backdrop": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
         "backdrop_url": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
         "backdrop_urls": item.get("backdrop_urls") or item.get("backdropUrls") or [],

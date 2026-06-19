@@ -517,6 +517,26 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(proposal["movies"][0]["discNumber"], "1")
         self.assertEqual(proposal["movies"][1]["disc_number"], "2")
 
+    def test_box_set_proposal_exposes_camel_case_poster_url(self):
+        proposal = movievault_26._normalize_box_set_proposal(
+            {
+                "items": [
+                    {
+                        "title": "Example Trilogy",
+                        "posterUrl": "https://img.example/box.jpg",
+                        "movies": [
+                            {"title": "Example One", "posterUrl": "https://img.example/one.jpg"},
+                            {"title": "Example Two", "posterUrl": "https://img.example/two.jpg"},
+                        ],
+                    }
+                ]
+            },
+            {"format": "Blu-ray"},
+        )
+
+        self.assertEqual(proposal["posterUrl"], "https://img.example/box.jpg")
+        self.assertEqual(proposal["poster_url"], "https://img.example/box.jpg")
+
     def test_unauthorized_request_recovers_token_once_and_retries(self):
         seen_auth = []
 
