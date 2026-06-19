@@ -38897,11 +38897,24 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
     }
 
 
+# Maps a canonical technical-spec column to the receiver payload key the
+# MovieVault contribution template expects (camelCase contract).
+MOVIE_TECHNICAL_RECEIVER_KEYS: dict[str, str] = {
+    "hdr": "hdr",
+    "packaging": "packaging",
+    "screen_ratios": "screenRatios",
+    "audio_tracks": "audioTracks",
+    "subtitles": "subtitles",
+    "content_ratings": "contentRatings",
+}
+
+
 def movie_edit_receiver_proposal(
     existing: dict[str, Any],
     payload: dict[str, Any],
     *,
     locked_fields: set[str] | None = None,
+    existing_technical: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     locked = locked_fields or set()
     public_fields = (
@@ -38922,8 +38935,14 @@ def movie_edit_receiver_proposal(
             return value.isoformat()
         return clean_text(value)
 
+    def technical_comparable(value: Any) -> Any:
+        if isinstance(value, (list, dict)):
+            return value
+        return clean_text(value)
+
     movie_updates: dict[str, Any] = {}
     metadata_updates: dict[str, Any] = {}
+    technical_updates: dict[str, Any] = {}
     for field in public_fields:
         if field in locked:
             continue
@@ -38940,19 +38959,58 @@ def movie_edit_receiver_proposal(
             metadata_updates["releaseDate"] = new_value
         else:
             metadata_updates[field] = new_value
-    if not movie_updates and not metadata_updates:
+
+    # Editable metadata fields stored on movies.metadata (director, genre,
+    # studios, distributor). A non-empty supplement/change becomes a
+    # contribution; locked fields are never forwarded.
+    existing_meta = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
+    metadata_edits = payload.get("metadata_edits") or {}
+    for field in ("director", "genre", "studios", "distributor"):
+        if field not in metadata_edits or field in locked:
+            continue
+        new_value = comparable(metadata_edits.get(field))
+        if not new_value:
+            continue
+        if comparable(existing_meta.get(field)) == new_value:
+            continue
+        metadata_updates[field] = new_value
+
+    # Runtime change.
+    if "runtime_minutes" not in locked:
+        new_runtime = payload.get("runtime_minutes")
+        if new_runtime not in (None, "") and new_runtime != existing.get("runtime_minutes"):
+            movie_updates["runtime_minutes"] = new_runtime
+            metadata_updates["runtimeMinutes"] = new_runtime
+
+    # Technical specs stored on movie_technical_specs (hdr, packaging,
+    # screen_ratios, audio_tracks, subtitles, content_ratings).
+    existing_tech = existing_technical if isinstance(existing_technical, dict) else {}
+    technical_edits = payload.get("technical_edits") or {}
+    for col, receiver_key in MOVIE_TECHNICAL_RECEIVER_KEYS.items():
+        if col not in technical_edits or col in locked:
+            continue
+        new_value = technical_edits.get(col)
+        if new_value in (None, "", [], {}):
+            continue
+        if technical_comparable(existing_tech.get(col)) == technical_comparable(new_value):
+            continue
+        technical_updates[receiver_key] = new_value
+
+    if not movie_updates and not metadata_updates and not technical_updates:
         return {}
     return {
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
-        "technicalUpdates": {},
+        "technicalUpdates": technical_updates,
         "mediaUpdates": {},
         "identifiers": {},
         "provenance": [
             {
                 "pluginId": "discvault_local_edit",
                 "sourceLabel": "DiscVault local edit",
-                "fields": sorted(set(movie_updates) | set(metadata_updates)),
+                "fields": sorted(
+                    set(movie_updates) | set(metadata_updates) | set(technical_updates)
+                ),
             }
         ],
     }
@@ -46254,11 +46312,18 @@ def register_routes(flask_app: Flask) -> None:
                 if payload.get("field_locks") is not None
                 else movie_locked_fields(existing.get("metadata"))
             )
-            receiver_proposal = movie_edit_receiver_proposal(existing, payload, locked_fields=effective_locks)
+            receiver_proposal = movie_edit_receiver_proposal(
+                existing,
+                payload,
+                locked_fields=effective_locks,
+                existing_technical=movie_technical_spec_entity(conn, movie_uuid),
+            )
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
+            entity = existing
             with conn.transaction():
                 with conn.cursor() as cur:
                     write_movie_edit_record(cur, movie_uuid, payload)
+                    entity = movie_entity(conn, movie_uuid) or {}
                 audit_api_interaction(
                     conn,
                     actor,
@@ -46270,8 +46335,35 @@ def register_routes(flask_app: Flask) -> None:
                     request_payload={"title": payload["title"], "barcode": payload["barcode"], "format": payload["format"]},
                     metadata={"barcode": payload["barcode"]},
                 )
+            if receiver_proposal:
+                try:
+                    receiver_summary = push_metadata_to_receivers(
+                        conn,
+                        movie_id=movie_uuid,
+                        movie=entity or movie_entity(conn, movie_uuid) or {},
+                        preview={
+                            "movie": entity or {},
+                            "proposal": receiver_proposal,
+                            "results": [],
+                        },
+                        applied={
+                            "changed": True,
+                            "revision": 0,
+                            "applied": {
+                                "movieUpdates": receiver_proposal.get("movieUpdates") or {},
+                                "metadataUpdates": receiver_proposal.get("metadataUpdates") or {},
+                                "technicalUpdates": receiver_proposal.get("technicalUpdates") or {},
+                                "mediaUpdates": {},
+                                "identifiers": {},
+                                "provenance": len(receiver_proposal.get("provenance") or []),
+                            },
+                        },
+                        actor=actor,
+                    )
+                except Exception as exc:
+                    receiver_summary = {"status": "error", "error": str(exc)}
             detail = movie_detail_entity(conn, movie_uuid)
-        return response({"status": "ok", "detail": detail})
+        return response({"status": "ok", "detail": detail, "receivers": receiver_summary})
 
     @flask_app.get("/api/next/api/v1/movies/<movie_id>/field-locks")
     def public_api_movie_field_locks(movie_id: str):
@@ -47478,7 +47570,12 @@ def register_routes(flask_app: Flask) -> None:
                 if payload.get("field_locks") is not None
                 else movie_locked_fields(existing.get("metadata"))
             )
-            receiver_proposal = movie_edit_receiver_proposal(existing, payload, locked_fields=effective_locks)
+            receiver_proposal = movie_edit_receiver_proposal(
+                existing,
+                payload,
+                locked_fields=effective_locks,
+                existing_technical=movie_technical_spec_entity(conn, movie_uuid),
+            )
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
             revision = 0
             entity = existing
@@ -47519,7 +47616,7 @@ def register_routes(flask_app: Flask) -> None:
                             "applied": {
                                 "movieUpdates": receiver_proposal.get("movieUpdates") or {},
                                 "metadataUpdates": receiver_proposal.get("metadataUpdates") or {},
-                                "technicalUpdates": {},
+                                "technicalUpdates": receiver_proposal.get("technicalUpdates") or {},
                                 "mediaUpdates": {},
                                 "identifiers": {},
                                 "provenance": len(receiver_proposal.get("provenance") or []),
