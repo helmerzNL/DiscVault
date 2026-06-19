@@ -9583,6 +9583,10 @@ def ui_preview_html(
         width: 100%;
       }
     }
+    .movie-edit-sections {
+      display: grid;
+      gap: 0;
+    }
     .movie-edit-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -13968,103 +13972,123 @@ def ui_preview_html(
               <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
             </div>
             <form class="profile-form" id="movieEditForm">
-              <div class="movie-edit-grid">
-                <label for="movieEditTitle">
-                  <span data-next-i18n="movieDetail.fieldTitle">Title</span>
-                  <input id="movieEditTitle" name="title" maxlength="300" autocomplete="off" required>
-                </label>
-                <label for="movieEditOriginalTitle">
-                  <span data-next-i18n="movieDetail.originalTitle">Original title</span>
-                  <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditSortTitle">
-                  <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
-                  <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditYear">
-                  <span data-next-i18n="movieDetail.fieldYear">Year</span>
-                  <input id="movieEditYear" name="year" maxlength="40" autocomplete="off">
-                </label>
-                <label for="movieEditBarcode">
-                  <span data-next-i18n="movieDetail.barcode">Barcode</span>
-                  <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditFormat">
-                  <span data-next-i18n="movieDetail.format">Format</span>
-                  <select id="movieEditFormat" name="format"></select>
-                </label>
-                <label for="movieEditEdition">
-                  <span data-next-i18n="movieDetail.edition">Edition</span>
-                  <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditReleaseDate">
-                  <span data-next-i18n="movieDetail.releaseDate">Release date</span>
-                  <input id="movieEditReleaseDate" name="release_date" autocomplete="off" placeholder="YYYY-MM-DD">
-                </label>
-                <label for="movieEditCountry">
-                  <span data-next-i18n="movieDetail.country">Country</span>
-                  <input id="movieEditCountry" name="country" maxlength="80" autocomplete="off">
-                </label>
-                <label for="movieEditLanguage">
-                  <span data-next-i18n="movieDetail.language">Language</span>
-                  <input id="movieEditLanguage" name="language" maxlength="80" autocomplete="off">
-                </label>
-                <label for="movieEditLocation">
-                  <span data-next-i18n="movieDetail.location">Location</span>
-                  <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditRuntime">
-                  <span data-next-i18n="movieDetail.runtime">Runtime</span>
-                  <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
-                </label>
-                <label for="movieEditDirector">
-                  <span data-next-i18n="movieDetail.director">Director</span>
-                  <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditGenre">
-                  <span data-next-i18n="movieDetail.genre">Genre</span>
-                  <input id="movieEditGenre" name="genre" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditStudios">
-                  <span data-next-i18n="movieDetail.studios">Studios</span>
-                  <input id="movieEditStudios" name="studios" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditContentRating">
-                  <span data-next-i18n="movieDetail.contentRating">Content rating</span>
-                  <input id="movieEditContentRating" name="content_rating" maxlength="40" autocomplete="off">
-                </label>
-                <label for="movieEditHdr">
-                  <span>HDR</span>
-                  <input id="movieEditHdr" name="hdr" maxlength="80" autocomplete="off">
-                </label>
-                <label for="movieEditScreenRatio">
-                  <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
-                  <input id="movieEditScreenRatio" name="screen_ratios" maxlength="80" autocomplete="off">
-                </label>
-                <label for="movieEditAudioTracks">
-                  <span data-next-i18n="movieDetail.audio">Audio</span>
-                  <input id="movieEditAudioTracks" name="audio_tracks" maxlength="400" autocomplete="off">
-                </label>
-                <label for="movieEditSubtitles">
-                  <span data-next-i18n="movieDetail.subtitles">Subtitles</span>
-                  <input id="movieEditSubtitles" name="subtitles" maxlength="400" autocomplete="off">
-                </label>
-                <label for="movieEditPackaging">
-                  <span data-next-i18n="movieDetail.packaging">Packaging</span>
-                  <input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditDistributor">
-                  <span data-next-i18n="movieDetail.distributor">Distributor</span>
-                  <input id="movieEditDistributor" name="distributor" maxlength="200" autocomplete="off">
-                </label>
-                <label for="movieEditOverview" class="wide">
-                  <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
-                  <textarea id="movieEditOverview" name="overview" maxlength="5000"></textarea>
-                </label>
-                <label for="movieEditNotes" class="wide">
-                  <span data-next-i18n="movieDetail.fieldNotes">Notes</span>
-                  <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
-                </label>
+              <div class="movie-edit-sections">
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.release">Release</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditTitle">
+                      <span data-next-i18n="movieDetail.fieldTitle">Title</span>
+                      <input id="movieEditTitle" name="title" maxlength="300" autocomplete="off" required>
+                    </label>
+                    <label for="movieEditOriginalTitle">
+                      <span data-next-i18n="movieDetail.originalTitle">Original title</span>
+                      <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditSortTitle">
+                      <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
+                      <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditYear">
+                      <span data-next-i18n="movieDetail.fieldYear">Year</span>
+                      <input id="movieEditYear" name="year" maxlength="40" autocomplete="off">
+                    </label>
+                    <label for="movieEditBarcode">
+                      <span data-next-i18n="movieDetail.barcode">Barcode</span>
+                      <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditFormat">
+                      <span data-next-i18n="movieDetail.format">Format</span>
+                      <select id="movieEditFormat" name="format"></select>
+                    </label>
+                    <label for="movieEditReleaseDate">
+                      <span data-next-i18n="movieDetail.releaseDate">Release date</span>
+                      <input id="movieEditReleaseDate" name="release_date" autocomplete="off" placeholder="YYYY-MM-DD">
+                    </label>
+                    <label for="movieEditCountry">
+                      <span data-next-i18n="movieDetail.releaseCountry">Release country</span>
+                      <input id="movieEditCountry" name="country" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditLanguage">
+                      <span data-next-i18n="movieDetail.language">Language</span>
+                      <input id="movieEditLanguage" name="language" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditLocation">
+                      <span data-next-i18n="movieDetail.location">Location</span>
+                      <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditDirector">
+                      <span data-next-i18n="movieDetail.director">Director</span>
+                      <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditGenre">
+                      <span data-next-i18n="movieDetail.genre">Genre</span>
+                      <input id="movieEditGenre" name="genre" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditStudios">
+                      <span data-next-i18n="movieDetail.studios">Studios</span>
+                      <input id="movieEditStudios" name="studios" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditContentRating">
+                      <span data-next-i18n="movieDetail.contentRating">Content rating</span>
+                      <input id="movieEditContentRating" name="content_rating" maxlength="40" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditHdr">
+                      <span>HDR</span>
+                      <input id="movieEditHdr" name="hdr" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditScreenRatio">
+                      <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
+                      <input id="movieEditScreenRatio" name="screen_ratios" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditRuntime">
+                      <span data-next-i18n="movieDetail.runtime">Runtime</span>
+                      <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
+                    </label>
+                    <label for="movieEditAudioTracks">
+                      <span data-next-i18n="movieDetail.audio">Audio</span>
+                      <input id="movieEditAudioTracks" name="audio_tracks" maxlength="400" autocomplete="off">
+                    </label>
+                    <label for="movieEditSubtitles">
+                      <span data-next-i18n="movieDetail.subtitles">Subtitles</span>
+                      <input id="movieEditSubtitles" name="subtitles" maxlength="400" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.collectors">Collectors</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditEdition">
+                      <span data-next-i18n="movieDetail.edition">Edition</span>
+                      <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditPackaging">
+                      <span data-next-i18n="movieDetail.packaging">Packaging</span>
+                      <input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditDistributor">
+                      <span data-next-i18n="movieDetail.distributor">Distributor</span>
+                      <input id="movieEditDistributor" name="distributor" maxlength="200" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.fieldOverview">Overview</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditOverview" class="wide">
+                      <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
+                      <textarea id="movieEditOverview" name="overview" maxlength="5000"></textarea>
+                    </label>
+                    <label for="movieEditNotes" class="wide">
+                      <span data-next-i18n="movieDetail.fieldNotes">Notes</span>
+                      <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
+                    </label>
+                  </div>
+                </div>
               </div>
             </form>
           </div>
