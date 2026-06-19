@@ -917,5 +917,60 @@ class ContributionFieldDiagnosticsTest(unittest.TestCase):
         self.assertEqual(dropped, [])
 
 
+class ContributionLocalizedFieldsTest(unittest.TestCase):
+    def test_expands_localizations_into_localized_field_keys(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Spirited Away",
+                "localizations": [
+                    {"lang": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                    {"lang": "de-DE", "title": "Chihiros Reise"},
+                ],
+            },
+        }
+        template = {
+            "allowedFields": ["title", "overview"],
+            "localizedFieldPattern": "<field>_<iso-639-1-language>",
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        self.assertEqual(contribution_payload["title"], "Spirited Away")
+        self.assertEqual(contribution_payload["title_fr"], "Le Voyage de Chihiro")
+        self.assertEqual(contribution_payload["overview_fr"], "Une fille...")
+        self.assertEqual(contribution_payload["title_de"], "Chihiros Reise")
+        self.assertNotIn("localizations", contribution_payload)
+
+    def test_localized_fields_respect_allowed_base_fields(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Heat",
+                "localizations": [
+                    {"lang": "fr", "title": "Heat FR", "edition": "Edition FR"},
+                ],
+            },
+        }
+        template = {"allowedFields": ["title"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        self.assertEqual(contribution_payload["title_fr"], "Heat FR")
+        self.assertNotIn("edition_fr", contribution_payload)
+
+    def test_localizations_not_reported_as_dropped(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Heat",
+                "localizations": [{"lang": "fr", "title": "Heat FR"}],
+            },
+        }
+        template = {"allowedFields": ["title"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        _, dropped = movievault_26._contribution_field_diagnostics(
+            payload, template, contribution_payload
+        )
+        dropped_fields = {item["field"] for item in dropped}
+        self.assertNotIn("localizations", dropped_fields)
+
+
 if __name__ == "__main__":
     unittest.main()
