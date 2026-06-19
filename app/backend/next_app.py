@@ -11746,6 +11746,41 @@ def ui_preview_html(
       gap: 8px;
       margin-bottom: 10px;
     }
+    .metadata-compare-details {
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--field) 40%, transparent);
+      overflow: hidden;
+    }
+    .metadata-compare-summary-toggle {
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .metadata-compare-summary-toggle::-webkit-details-marker {
+      display: none;
+    }
+    .metadata-compare-summary-toggle::before {
+      content: "\u25B8";
+      color: var(--muted);
+      font-size: .8rem;
+      transition: transform .15s ease;
+    }
+    .metadata-compare-details[open] > .metadata-compare-summary-toggle::before {
+      transform: rotate(90deg);
+    }
+    .metadata-compare-details[open] > .metadata-compare-summary-toggle {
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+    }
+    .metadata-compare-body {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
     .metadata-compare-summary {
       margin: 0;
       font-weight: 700;
@@ -21711,7 +21746,7 @@ def ui_preview_html(
         </section>
       `;
     }
-    let movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
+    let movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: "", collapsed: false};
     const MOVIE_COMPARE_FIELD_LABELS = {
       "movie:title": ["movieDetail.title", "Title"],
       "movie:original_title": ["movieDetail.originalTitle", "Original title"],
@@ -21764,6 +21799,12 @@ def ui_preview_html(
       if (movieMetadataComparison.movieId === activeDetailMovieId
           && (movieMetadataComparison.decisions || movieMetadataComparison.error || movieMetadataComparison.loading)) {
         node.innerHTML = movieMetadataCompareLiveHtml();
+        const details = document.getElementById("movieMetadataCompareDetails");
+        if (details) {
+          details.addEventListener("toggle", () => {
+            movieMetadataComparison.collapsed = !details.open;
+          });
+        }
         return;
       }
       node.innerHTML = movieMetadataCompareSnapshotHtml(detail);
@@ -21821,17 +21862,24 @@ def ui_preview_html(
       ];
       if (locked) summaryParts.push(`${locked} ${tNext("movieDetail.compareLocked", "locked")}`);
       const legend = `
-        <div class="metadata-compare-toolbar">
-          <p class="metadata-compare-summary">${escapeHtml(summaryParts.join(" \u00b7 "))}</p>
-          <div class="metadata-compare-legend">
-            <span class="metadata-compare-badge winner">${escapeHtml(tNext("movieDetail.compareWinner", "Selected"))}</span>
-            <span class="metadata-compare-badge change">${escapeHtml(tNext("movieDetail.compareChange", "Differs"))}</span>
-            <span class="metadata-compare-badge same">${escapeHtml(tNext("movieDetail.compareSame", "Same"))}</span>
-            <span class="metadata-compare-badge locked">${escapeHtml(tNext("movieDetail.compareLocked", "locked"))}</span>
-          </div>
+        <div class="metadata-compare-legend">
+          <span class="metadata-compare-badge winner">${escapeHtml(tNext("movieDetail.compareWinner", "Selected"))}</span>
+          <span class="metadata-compare-badge change">${escapeHtml(tNext("movieDetail.compareChange", "Differs"))}</span>
+          <span class="metadata-compare-badge same">${escapeHtml(tNext("movieDetail.compareSame", "Same"))}</span>
+          <span class="metadata-compare-badge locked">${escapeHtml(tNext("movieDetail.compareLocked", "locked"))}</span>
         </div>`;
       const rows = decisions.map(movieMetadataCompareRowHtml).join("");
-      return legend + `<div class="metadata-compare-table">${rows}</div>`;
+      const openAttr = movieMetadataComparison.collapsed ? "" : " open";
+      return `
+        <details class="metadata-compare-details"${openAttr} id="movieMetadataCompareDetails">
+          <summary class="metadata-compare-summary-toggle">
+            <span class="metadata-compare-summary">${escapeHtml(summaryParts.join(" \u00b7 "))}</span>
+          </summary>
+          <div class="metadata-compare-body">
+            ${legend}
+            <div class="metadata-compare-table">${rows}</div>
+          </div>
+        </details>`;
     }
     function metadataCompareDecisionLocked(decision) {
       return (decision.candidates || []).some((candidate) => String(candidate.reason || "").includes("locked by user"));
@@ -27633,18 +27681,16 @@ def ui_preview_html(
           body: JSON.stringify({dryRun, refreshPeople, personRefreshScope: scope})
         });
         const personRefresh = (payload.metadata || {}).personRefresh || null;
-        setMovieDetailMessage(
-          (refreshingCrewOnly
-            ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
-            : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
-            + movieMetadataPeopleRefreshMessage(personRefresh),
-          "good"
-        );
+        const successMessage = (refreshingCrewOnly
+          ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
+          : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
+          + movieMetadataPeopleRefreshMessage(personRefresh);
         if (!dryRun) {
           const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
           renderMovieDetail(refreshed.detail || {});
           await loadAppSnapshot();
         }
+        setMovieDetailMessage(successMessage, "good");
         console.log("metadata refresh", payload);
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
