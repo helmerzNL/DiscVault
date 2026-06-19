@@ -9778,6 +9778,19 @@ def ui_preview_html(
     .detail-subpanel {
       min-width: 0;
     }
+    .detail-subsection + .detail-subsection {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .detail-subsection-title {
+      margin: 0 0 10px;
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
     .detail-fields {
       display: grid;
       gap: 9px;
@@ -14005,7 +14018,7 @@ def ui_preview_html(
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.technical">Technical</h3>
-            <div class="detail-fields" id="movieDetailTechnical"></div>
+            <div class="detail-subsections" id="movieDetailTechnical"></div>
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
@@ -20773,8 +20786,8 @@ def ui_preview_html(
       if (typeof value === "object") return JSON.stringify(value);
       return String(value);
     }
-    function detailFieldRows(entries) {
-      const rows = entries
+    function detailFieldRowsHtml(entries) {
+      return entries
         .map(([label, value]) => {
           if (value && typeof value === "object" && !Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, "html")) {
             return [label, valueText(value.text), value.html || ""];
@@ -20782,15 +20795,35 @@ def ui_preview_html(
           const text = valueText(value);
           return [label, text, escapeHtml(text)];
         })
-        .filter(([, value]) => value);
-      return rows.length
-        ? rows.map(([label, value, html]) => `
+        .filter(([, value]) => value)
+        .map(([label, value, html]) => `
             <div class="detail-field">
               <span>${escapeHtml(label)}</span>
               <strong>${html}</strong>
             </div>
-          `).join("")
-        : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+          `).join("");
+    }
+    function detailFieldRows(entries) {
+      return detailFieldRowsHtml(entries)
+        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+    }
+    function detailFieldSubsection(title, entries) {
+      const rows = detailFieldRowsHtml(entries);
+      if (!rows) return "";
+      return `
+        <div class="detail-subsection">
+          <h4 class="detail-subsection-title">${escapeHtml(title)}</h4>
+          <div class="detail-fields">${rows}</div>
+        </div>
+      `;
+    }
+    function formatRuntimeDetail(minutes) {
+      const total = Math.round(Number(minutes));
+      if (!total || !isFinite(total) || total <= 0) return "";
+      const hours = Math.floor(total / 60);
+      const mins = total % 60;
+      const hhmm = `${hours}:${String(mins).padStart(2, "0")}`;
+      return `${hhmm} (${total} ${tNext("movieDetail.minutesShort", "min")})`;
     }
     function mediaAssetUrl(asset) {
       return usableImage(asset?.url || asset?.source_url || "");
@@ -21879,22 +21912,38 @@ def ui_preview_html(
         [tNext("movieDetail.format", "Format"), movie.format],
         [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
-        [tNext("movieDetail.country", "Country"), movie.country],
+        [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
         [tNext("movieDetail.location", "Location"), movie.location],
         [tNext("movieDetail.director", "Director"), metadata.director],
         [tNext("movieDetail.genre", "Genre"), metadata.genre],
-        [tNext("movieDetail.studios", "Studios"), metadata.studios]
+        [tNext("movieDetail.studios", "Studios"), metadata.studios],
+        [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
+        ...(appDebugMode && movie.id ? [[tNext("movieDetail.movieId", "Movie ID"), movie.id]] : [])
       ]);
-      document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows([
+      const containerNames = (detail.containers || [])
+        .map((container) => container.title)
+        .filter(Boolean)
+        .join(", ");
+      const audioVideoSubsection = detailFieldSubsection(tNext("movieDetail.audioVideo", "Audio & Video"), [
         ["HDR", specs.hdr || metadata.hdr],
-        [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
-        [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles],
-        [tNext("movieDetail.regions", "Regions"), specs.regions || metadata.regions],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
-        [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
-        [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}]
+        [tNext("movieDetail.format", "Format"), movie.format || specs.format || metadata.format],
+        [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
+        [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
+        [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles]
       ]);
+      const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
+        [tNext("movieDetail.edition", "Edition"), movie.edition],
+        [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
+        [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
+        [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
+        [tNext("movieDetail.partOfCollection", "Part of collection"), containerNames],
+        [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
+        ...(appDebugMode && (movie.public_id || movie.id) ? [[tNext("movieDetail.releaseId", "Release ID"), movie.public_id || movie.id]] : [])
+      ]);
+      document.getElementById("movieDetailTechnical").innerHTML = (audioVideoSubsection + collectorsSubsection)
+        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
       renderMovieMetadataCompare(detail);
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
