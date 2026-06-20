@@ -904,6 +904,137 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertNotIn("must-not-leak", str(result))
 
 
+class MovieVault26ClientVersionGateTests(unittest.TestCase):
+    def test_bootstrap_request_body_advertises_client_version(self):
+        result = movievault_26.connection_request(
+            {
+                "phase": "bootstrap",
+                "body": {
+                    "instanceId": "dv_test",
+                    "instanceVersion": "26.2.9",
+                    "software": {"name": "DiscVault", "version": "26.2.9", "backendVersion": "26.2.9"},
+                },
+                "publicKey": "public_key_test",
+            },
+            {},
+        )
+
+        self.assertEqual(result["body"]["clientVersion"], "26.2.9")
+
+    def test_handshake_request_body_advertises_client_version(self):
+        result = movievault_26.connection_request(
+            {
+                "phase": "recovery",
+                "body": {
+                    "instanceId": "dv_test",
+                    "instanceVersion": "26.2.9",
+                    "software": {"name": "DiscVault", "version": "26.2.9"},
+                },
+                "timestamp": "2026-06-09T12:00:00Z",
+                "nonce": "nonce-test",
+                "publicKeyId": "dvpk_test",
+                "signature": "signature-test",
+            },
+            {},
+        )
+
+        self.assertEqual(result["path"], "/api/v1/internal/discvault/handshake")
+        self.assertEqual(result["body"]["clientVersion"], "26.2.9")
+
+    def test_client_version_falls_back_to_context_source_version(self):
+        result = movievault_26.connection_request(
+            {"phase": "bootstrap", "body": {"instanceId": "dv_test"}, "publicKey": "pk"},
+            {"movievault": {"sourceVersion": "26.3.0"}},
+        )
+
+        self.assertEqual(result["body"]["clientVersion"], "26.3.0")
+
+    def test_connection_recovery_action_treats_426_as_terminal(self):
+        for payload in (
+            {
+                "phase": "bootstrap",
+                "statusCode": 426,
+                "response": {
+                    "error": {
+                        "code": "client_version_unsupported",
+                        "message": "Upgrade required",
+                        "minVersion": "26.1.0",
+                        "detectedVersion": "25.9.9",
+                    }
+                },
+            },
+            {
+                "phase": "recovery",
+                "statusCode": 400,
+                "response": {"error": {"code": "client_version_unsupported", "minVersion": "26.1.0"}},
+            },
+        ):
+            action = movievault_26.connection_recovery_action(payload, {})
+            self.assertEqual(action["action"], "")
+            self.assertEqual(action["reason"], "client_version_unsupported")
+            self.assertTrue(action["terminal"])
+            self.assertIn("26.1.0", action["message"])
+
+    def test_request_raises_terminal_error_on_426_without_retry_loop(self):
+        calls = []
+
+        def fake_request(method, url, **kwargs):
+            calls.append((method, url))
+            return FakeResponse(
+                426,
+                {
+                    "error": {
+                        "code": "client_version_unsupported",
+                        "message": "Upgrade required",
+                        "minVersion": "26.1.0",
+                        "detectedVersion": "25.9.9",
+                    }
+                },
+            )
+
+        original_requests = movievault_26.requests
+        recover_calls = []
+        try:
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            context = {
+                "secrets": {"token": "mv_old"},
+                "movievaultRecoverToken": lambda: recover_calls.append(1) or "mv_new",
+            }
+            with self.assertRaises(movievault_26.MovieVaultClientVersionUnsupported) as ctx:
+                movievault_26._get(context, "/api/v1/movies", q="Alien")
+        finally:
+            movievault_26.requests = original_requests
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(recover_calls, [])
+        message = str(ctx.exception)
+        self.assertIn("26.1.0", message)
+        self.assertIn("25.9.9", message)
+        self.assertEqual(ctx.exception.min_version, "26.1.0")
+        self.assertEqual(ctx.exception.detected_version, "25.9.9")
+
+    def test_describe_payload_surfaces_cached_min_client_version(self):
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            context = {"movievault": {"sourceVersion": "26.2.9"}}
+            key = movievault_26._template_cache_key(context)
+            movievault_26._TEMPLATE_CACHE[key] = {
+                "fetchedAt": 9_999_999_999,
+                "template": {"minClientVersion": "26.1.0"},
+            }
+            result = movievault_26.describe_payload(
+                {"entityType": "movie", "payload": {"title": "Alien"}},
+                context,
+            )
+        finally:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+        self.assertEqual(result["destination"]["minClientVersion"], "26.1.0")
+        self.assertEqual(result["destination"]["clientVersion"], "26.2.9")
+
+
 class ContributionFieldDiagnosticsTest(unittest.TestCase):
     def test_reports_dropped_fields_not_in_template(self):
         payload = {
