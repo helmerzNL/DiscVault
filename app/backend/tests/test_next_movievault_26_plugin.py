@@ -517,6 +517,26 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(proposal["movies"][0]["discNumber"], "1")
         self.assertEqual(proposal["movies"][1]["disc_number"], "2")
 
+    def test_box_set_proposal_exposes_camel_case_poster_url(self):
+        proposal = movievault_26._normalize_box_set_proposal(
+            {
+                "items": [
+                    {
+                        "title": "Example Trilogy",
+                        "posterUrl": "https://img.example/box.jpg",
+                        "movies": [
+                            {"title": "Example One", "posterUrl": "https://img.example/one.jpg"},
+                            {"title": "Example Two", "posterUrl": "https://img.example/two.jpg"},
+                        ],
+                    }
+                ]
+            },
+            {"format": "Blu-ray"},
+        )
+
+        self.assertEqual(proposal["posterUrl"], "https://img.example/box.jpg")
+        self.assertEqual(proposal["poster_url"], "https://img.example/box.jpg")
+
     def test_unauthorized_request_recovers_token_once_and_retries(self):
         seen_auth = []
 
@@ -1013,6 +1033,145 @@ class MovieVault26ClientVersionGateTests(unittest.TestCase):
 
         self.assertEqual(result["destination"]["minClientVersion"], "26.1.0")
         self.assertEqual(result["destination"]["clientVersion"], "26.2.9")
+
+
+class ContributionFieldDiagnosticsTest(unittest.TestCase):
+    def test_reports_dropped_fields_not_in_template(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "The Matrix",
+                "overview": "A hacker learns the truth.",
+                "audio_tracks": "DTS-HD MA 5.1",
+                "runtime": 136,
+                "empty_field": "",
+            },
+        }
+        template = {"allowedFields": ["title", "overview"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        accepted, dropped = movievault_26._contribution_field_diagnostics(
+            payload, template, contribution_payload
+        )
+        self.assertEqual(accepted, ["overview", "title"])
+        dropped_map = {item["field"]: item["reason"] for item in dropped}
+        self.assertEqual(dropped_map.get("audio_tracks"), "not_in_template")
+        self.assertEqual(dropped_map.get("runtime"), "not_in_template")
+        self.assertNotIn("empty_field", dropped_map)
+
+    def test_no_template_keeps_all_fields(self):
+        payload = {"entityType": "movie", "payload": {"title": "The Matrix", "audio_tracks": "DTS"}}
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        accepted, dropped = movievault_26._contribution_field_diagnostics(
+            payload, {}, contribution_payload
+        )
+        self.assertIn("title", accepted)
+        self.assertEqual(dropped, [])
+
+
+class ContributionLocalizedFieldsTest(unittest.TestCase):
+    def test_expands_localizations_into_localized_field_keys(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Spirited Away",
+                "localizations": [
+                    {"lang": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                    {"lang": "de-DE", "title": "Chihiros Reise"},
+                ],
+            },
+        }
+        template = {
+            "allowedFields": ["title", "overview"],
+            "localizedFieldPattern": "<field>_<iso-639-1-language>",
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        self.assertEqual(contribution_payload["title"], "Spirited Away")
+        self.assertEqual(contribution_payload["title_fr"], "Le Voyage de Chihiro")
+        self.assertEqual(contribution_payload["overview_fr"], "Une fille...")
+        self.assertEqual(contribution_payload["title_de"], "Chihiros Reise")
+        self.assertNotIn("localizations", contribution_payload)
+
+    def test_localized_fields_respect_allowed_base_fields(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Heat",
+                "localizations": [
+                    {"lang": "fr", "title": "Heat FR", "edition": "Edition FR"},
+                ],
+            },
+        }
+        template = {"allowedFields": ["title"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        self.assertEqual(contribution_payload["title_fr"], "Heat FR")
+        self.assertNotIn("edition_fr", contribution_payload)
+
+    def test_localizations_not_reported_as_dropped(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Heat",
+                "localizations": [{"lang": "fr", "title": "Heat FR"}],
+            },
+        }
+        template = {"allowedFields": ["title"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        _, dropped = movievault_26._contribution_field_diagnostics(
+            payload, template, contribution_payload
+        )
+        dropped_fields = {item["field"] for item in dropped}
+        self.assertNotIn("localizations", dropped_fields)
+
+
+class ReadBackLocalizationsTest(unittest.TestCase):
+    def test_ingest_localizations_normalizes_and_dedupes(self):
+        rows = movievault_26._ingest_localizations(
+            {
+                "localizations": [
+                    {"language": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                    {"language": "de-DE", "title": "Chihiros Reise"},
+                    {"language": "FR", "title": "Duplicate"},
+                    {"language": "xx"},
+                    {"language": "123", "title": "Bad lang"},
+                ]
+            }
+        )
+        by_lang = {row["lang"]: row for row in rows}
+        self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
+        self.assertEqual(by_lang["fr"]["overview"], "Une fille...")
+        self.assertEqual(by_lang["de"]["title"], "Chihiros Reise")
+        self.assertEqual(by_lang["fr"]["source"], "movievault_26")
+        self.assertNotIn("xx", by_lang)
+        self.assertNotIn("123", by_lang)
+
+    def test_barcode_lookup_exposes_localizations(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                return {
+                    "status": "ok",
+                    "data": {
+                        "id": "mv_movie_1",
+                        "title": "Spirited Away",
+                        "year": "2001",
+                        "format": "4K UHD",
+                        "localizations": [
+                            {"language": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                            {"language": "ja", "title": "千と千尋の神隠し"},
+                        ],
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode({"barcode": "8712626068546"}, {"movievault": {"enabled": True}})
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        localizations = result["localizations"]
+        by_lang = {row["lang"]: row for row in localizations}
+        self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
+        self.assertEqual(by_lang["ja"]["title"], "千と千尋の神隠し")
 
 
 if __name__ == "__main__":

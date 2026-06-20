@@ -970,6 +970,7 @@ def _normalize_box_set_proposal(payload, context=None):
         "format": selected_format or _text(_first_value(item, "format", "mediaType", "media_type")),
         "poster": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
         "poster_url": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
+        "posterUrl": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
         "backdrop": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
         "backdrop_url": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
         "backdrop_urls": item.get("backdrop_urls") or item.get("backdropUrls") or [],
@@ -1263,11 +1264,63 @@ def _box_set_proposal_key(proposal):
     )
 
 
+def _ingest_localizations(item):
+    if not isinstance(item, dict):
+        return []
+    raw = (
+        item.get("localizations")
+        or item.get("localisations")
+        or item.get("translations")
+    )
+    if isinstance(raw, dict):
+        expanded = []
+        for lang_key, value in raw.items():
+            if isinstance(value, dict):
+                entry = dict(value)
+                entry.setdefault("lang", lang_key)
+                expanded.append(entry)
+        raw = expanded
+    if not isinstance(raw, list):
+        return []
+    rows = []
+    seen = set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        lang = _localized_language_code(
+            entry.get("lang")
+            or entry.get("language")
+            or entry.get("locale")
+            or entry.get("iso_639_1")
+        )
+        if not lang or lang in seen:
+            continue
+        if not (lang.isalpha() and len(lang) in (2, 3)):
+            continue
+        title = _text(entry.get("title") or entry.get("name"))
+        original_title = _text(entry.get("originalTitle") or entry.get("original_title"))
+        overview = _text(entry.get("overview") or entry.get("plot") or entry.get("description"))
+        edition = _text(entry.get("edition"))
+        if not (title or original_title or overview or edition):
+            continue
+        seen.add(lang)
+        row = {"lang": lang, "source": "movievault_26"}
+        if title:
+            row["title"] = title
+        if original_title:
+            row["originalTitle"] = original_title
+        if overview:
+            row["overview"] = overview
+        if edition:
+            row["edition"] = edition
+        rows.append(row)
+    return rows
+
+
 def _normalize_result(payload, *, source_ref=""):
     sources = _normalization_sources(payload)
     if not sources:
         return {"status": "miss", "provider": "movievault_26"}
-
     candidates = []
     seen_candidates = set()
     proposals = []
@@ -1317,6 +1370,11 @@ def _normalize_result(payload, *, source_ref=""):
         return {"status": "miss", "provider": "movievault_26"}
 
     source_item = first_item or (sources[0] if sources else {})
+    localizations = []
+    for candidate_source in ([source_item] + list(sources)):
+        localizations = _ingest_localizations(candidate_source)
+        if localizations:
+            break
     result = {
         "status": "hit",
         "provider": "movievault_26",
@@ -1329,6 +1387,8 @@ def _normalize_result(payload, *, source_ref=""):
         "items": candidates,
         "candidates": candidates,
     }
+    if localizations:
+        result["localizations"] = localizations
     if proposals:
         result["boxSetProposal"] = proposals[0]
         result["boxSetProposals"] = proposals
@@ -1845,6 +1905,97 @@ def activity_summary(payload, context=None):
     return result
 
 
+_DEFAULT_LOCALIZED_FIELDS = ("title", "originalTitle", "overview", "edition", "description", "biography")
+_DEFAULT_LOCALIZED_FIELD_PATTERN = "<field>_<iso-639-1-language>"
+
+
+def _localized_language_code(value):
+    code = _text(value).strip().lower()
+    if not code:
+        return ""
+    for sep in ("-", "_"):
+        if sep in code:
+            code = code.split(sep, 1)[0]
+    return code.strip()
+
+
+def _iter_template_field_defs(template, entity_type):
+    candidates = []
+    fields = template.get("fields")
+    if isinstance(fields, dict):
+        candidates.append(fields)
+    for container_key in ("templates", "entities", "entityTypes"):
+        container = template.get(container_key)
+        if isinstance(container, dict):
+            entity_def = container.get(entity_type)
+            if isinstance(entity_def, dict) and isinstance(entity_def.get("fields"), dict):
+                candidates.append(entity_def["fields"])
+    for mapping in candidates:
+        for name, spec in mapping.items():
+            yield _text(name), spec
+
+
+def _localized_field_settings(template, entity_type):
+    pattern = _DEFAULT_LOCALIZED_FIELD_PATTERN
+    fields = set()
+    if isinstance(template, dict):
+        pattern = _text(template.get("localizedFieldPattern")) or pattern
+        explicit = template.get("localizedFields")
+        if isinstance(explicit, list):
+            fields = {_text(item) for item in explicit if _text(item)}
+        if not fields:
+            for name, spec in _iter_template_field_defs(template, entity_type):
+                if name and isinstance(spec, dict) and spec.get("localized"):
+                    fields.add(name)
+    if not fields:
+        fields = set(_DEFAULT_LOCALIZED_FIELDS)
+    return pattern, fields
+
+
+def _format_localized_key(pattern, base, lang):
+    key = pattern or _DEFAULT_LOCALIZED_FIELD_PATTERN
+    replacements = (
+        ("<field>", base),
+        ("<iso-639-1-language>", lang),
+        ("<iso-639-1>", lang),
+        ("<language>", lang),
+        ("<lang>", lang),
+    )
+    for token, value in replacements:
+        key = key.replace(token, value)
+    return _text(key)
+
+
+def _expand_localized_fields(entity_type, safe_payload, localizations, allowed, template):
+    if not isinstance(safe_payload, dict):
+        return safe_payload
+    if entity_type not in {"movie", "release", "box_set", "person"}:
+        return safe_payload
+    if not isinstance(localizations, list) or not localizations:
+        return safe_payload
+    pattern, localized_fields = _localized_field_settings(template, entity_type)
+    enriched = dict(safe_payload)
+    for entry in localizations:
+        if not isinstance(entry, dict):
+            continue
+        lang = _localized_language_code(
+            entry.get("lang") or entry.get("language") or entry.get("locale")
+        )
+        if not lang:
+            continue
+        for base in localized_fields:
+            if allowed and base not in allowed:
+                continue
+            value = _safe_contribution_value(entry.get(base))
+            if value in (None, "", [], {}):
+                continue
+            key = _format_localized_key(pattern, base, lang)
+            if not key or key in enriched:
+                continue
+            enriched[key] = value
+    return enriched
+
+
 def _contribution_payload(payload, template):
     entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
     if entity_type not in {"movie", "release", "box_set", "person"}:
@@ -1855,10 +2006,32 @@ def _contribution_payload(payload, template):
     safe_payload = _safe_contribution_value(raw_payload)
     allowed = _allowed_fields(template, entity_type)
     safe_payload = _with_box_set_member_aliases(entity_type, safe_payload, allowed)
+    localizations = safe_payload.pop("localizations", None) if isinstance(safe_payload, dict) else None
     if allowed:
         safe_payload = {key: value for key, value in safe_payload.items() if key in allowed}
+    safe_payload = _expand_localized_fields(entity_type, safe_payload, localizations, allowed, template)
     safe_payload = _with_provider_title_hints(entity_type, safe_payload, payload, allowed)
     return entity_type, safe_payload
+
+
+def _contribution_field_diagnostics(payload, template, contribution_payload):
+    entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
+    raw_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+    if not raw_payload:
+        raw_payload = {key: value for key, value in payload.items() if key not in {"entityType", "entity_type", "sourceReference", "source_reference", "force"}}
+    safe_incoming = _safe_contribution_value(raw_payload)
+    incoming_keys = {
+        _text(key)
+        for key, value in (safe_incoming.items() if isinstance(safe_incoming, dict) else [])
+        if _text(key) and _text(key) != "localizations" and value not in (None, "", [], {})
+    }
+    accepted_keys = {_text(key) for key in (contribution_payload or {}).keys() if _text(key)}
+    allowed = _allowed_fields(template, entity_type)
+    dropped = []
+    for key in sorted(incoming_keys - accepted_keys):
+        reason = "not_in_template" if allowed else "excluded"
+        dropped.append({"field": key, "reason": reason})
+    return sorted(accepted_keys), dropped
 
 
 def _validation_error(response_payload):
@@ -1904,11 +2077,14 @@ def receive_metadata(payload, context=None):
             return {"status": "skipped", "provider": PROVIDER_ID, "reason": "empty_or_disallowed_payload"}
         envelope["payload"] = contribution_payload
         response_payload = _post_contribution(context, envelope)
+    accepted_fields, dropped_fields = _contribution_field_diagnostics(payload, template, contribution_payload)
     return {
         "status": "submitted",
         "provider": PROVIDER_ID,
         "entityType": entity_type,
         "idempotencyPrefix": envelope["idempotencyKey"][:24],
         "templateVersion": template_version,
+        "acceptedFields": accepted_fields,
+        "droppedFields": dropped_fields,
         "response": response_payload,
     }
