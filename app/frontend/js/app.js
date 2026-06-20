@@ -4,12 +4,10 @@ function setTestNotificationBannerVisible(visible) {
   const title = document.getElementById('testNotificationBannerTitle');
   const prefix = document.getElementById('testNotificationBannerPrefix');
   const link = document.getElementById('testNotificationBannerLink');
-  const suffix = document.getElementById('testNotificationBannerSuffix');
   const canDismiss = !authEnabled || currentUserRole === 'admin';
   if (title) title.textContent = t('settings.updatePopupTitle');
   if (prefix) prefix.textContent = t('settings.updatePopupPrefix');
   if (link) link.textContent = t('settings.updatePopupLink');
-  if (suffix) suffix.textContent = t('settings.updatePopupSuffix');
   document.body.classList.toggle('has-test-notification', !!visible);
   document.body.classList.toggle('can-dismiss-test-notification', !!visible && canDismiss);
   if (banner) banner.setAttribute('aria-hidden', visible ? 'false' : 'true');
