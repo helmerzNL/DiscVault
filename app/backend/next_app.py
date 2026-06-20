@@ -7304,6 +7304,51 @@ def ui_preview_html(
       background: rgba(255,255,255,0.15);
       border: 1px solid rgba(255,255,255,0.18);
     }
+    .movie-detail-action-strip .action,
+    .movie-detail-action-strip .secondary-button {
+      min-height: 38px;
+      border-radius: 10px;
+      padding: 0 16px;
+      font-weight: 650;
+      color: var(--text);
+      border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+      background: color-mix(in srgb, var(--bg-solid) 55%, transparent);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent);
+      transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+    }
+    .movie-detail-action-strip .action:hover,
+    .movie-detail-action-strip .secondary-button:hover {
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      border-color: color-mix(in srgb, var(--text) 26%, transparent);
+    }
+    .movie-detail-action-strip .action:active,
+    .movie-detail-action-strip .secondary-button:active {
+      transform: scale(0.97);
+    }
+    .movie-detail-action-strip #movieMetadataApplyButton,
+    .movie-detail-action-strip #containerMetadataApplyButton {
+      font-weight: 750;
+      color: color-mix(in srgb, var(--accent) 72%, var(--text));
+      border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+      background: color-mix(in srgb, var(--accent) 20%, var(--bg-solid));
+      box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 26%, transparent), inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .movie-detail-action-strip #movieMetadataApplyButton:hover,
+    .movie-detail-action-strip #containerMetadataApplyButton:hover {
+      background: color-mix(in srgb, var(--accent) 30%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+    }
+    .movie-detail-action-strip .action.danger {
+      color: var(--red);
+      border-color: color-mix(in srgb, var(--red) 42%, transparent);
+      background: color-mix(in srgb, var(--red) 14%, var(--bg-solid));
+    }
+    .movie-detail-action-strip .action.danger:hover {
+      background: color-mix(in srgb, var(--red) 22%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--red) 58%, transparent);
+    }
     .hero-poster {
       justify-self: end;
       width: min(100%, 238px);
@@ -9877,14 +9922,14 @@ def ui_preview_html(
       display: none;
     }
     .debug-card-details > summary.debug-card-summary::after {
-      content: "\25BE";
+      content: "\u25B8";
       margin-left: auto;
       color: var(--muted);
-      font-size: .9rem;
+      font-size: .82rem;
       transition: transform .15s ease;
     }
-    .debug-card-details:not([open]) > summary.debug-card-summary::after {
-      transform: rotate(-90deg);
+    .debug-card-details[open] > summary.debug-card-summary::after {
+      transform: rotate(90deg);
     }
     .debug-card-details[open] > summary.debug-card-summary {
       margin-bottom: 12px;
