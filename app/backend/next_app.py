@@ -7304,6 +7304,51 @@ def ui_preview_html(
       background: rgba(255,255,255,0.15);
       border: 1px solid rgba(255,255,255,0.18);
     }
+    .movie-detail-action-strip .action,
+    .movie-detail-action-strip .secondary-button {
+      min-height: 38px;
+      border-radius: 10px;
+      padding: 0 16px;
+      font-weight: 650;
+      color: var(--text);
+      border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+      background: color-mix(in srgb, var(--bg-solid) 55%, transparent);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent);
+      transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+    }
+    .movie-detail-action-strip .action:hover,
+    .movie-detail-action-strip .secondary-button:hover {
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      border-color: color-mix(in srgb, var(--text) 26%, transparent);
+    }
+    .movie-detail-action-strip .action:active,
+    .movie-detail-action-strip .secondary-button:active {
+      transform: scale(0.97);
+    }
+    .movie-detail-action-strip #movieMetadataApplyButton,
+    .movie-detail-action-strip #containerMetadataApplyButton {
+      font-weight: 750;
+      color: color-mix(in srgb, var(--accent) 72%, var(--text));
+      border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+      background: color-mix(in srgb, var(--accent) 20%, var(--bg-solid));
+      box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 26%, transparent), inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .movie-detail-action-strip #movieMetadataApplyButton:hover,
+    .movie-detail-action-strip #containerMetadataApplyButton:hover {
+      background: color-mix(in srgb, var(--accent) 30%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+    }
+    .movie-detail-action-strip .action.danger {
+      color: var(--red);
+      border-color: color-mix(in srgb, var(--red) 42%, transparent);
+      background: color-mix(in srgb, var(--red) 14%, var(--bg-solid));
+    }
+    .movie-detail-action-strip .action.danger:hover {
+      background: color-mix(in srgb, var(--red) 22%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--red) 58%, transparent);
+    }
     .hero-poster {
       justify-self: end;
       width: min(100%, 238px);
@@ -9865,6 +9910,36 @@ def ui_preview_html(
     .debug-card {
       border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
       background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
+    }
+    .debug-card-details > summary.debug-card-summary {
+      cursor: pointer;
+      list-style: none;
+      justify-content: flex-start;
+      margin-bottom: 0;
+      user-select: none;
+    }
+    .debug-card-details > summary.debug-card-summary::-webkit-details-marker {
+      display: none;
+    }
+    .debug-card-details > summary.debug-card-summary::after {
+      content: "\u25B8";
+      margin-left: auto;
+      color: var(--muted);
+      font-size: .82rem;
+      transition: transform .15s ease;
+    }
+    .debug-card-details[open] > summary.debug-card-summary::after {
+      transform: rotate(90deg);
+    }
+    .debug-card-details[open] > summary.debug-card-summary {
+      margin-bottom: 12px;
+    }
+    .debug-field-details > summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+      list-style: revert;
+      user-select: none;
     }
     .debug-localization-grid {
       display: grid;
@@ -14357,12 +14432,22 @@ def ui_preview_html(
             <div class="metadata-compare-panel" id="movieMetadataComparePanel"></div>
           </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugLocalizationsCard">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
-              <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
-            </div>
-            <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
-            <div class="debug-sources" id="movieDetailDebugSources"></div>
+            <details class="debug-card-details" open>
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
+            </details>
+          </div>
+          <div class="detail-card full debug-card hidden" id="movieDetailDebugMetadataCard">
+            <details class="debug-card-details" open>
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugMetadataPanelTitle">Metadata debug</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-sources" id="movieDetailDebugSources"></div>
+            </details>
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.links">Links</h3>
@@ -15967,7 +16052,7 @@ def ui_preview_html(
           .map((field) => `<span class="debug-field-chip accepted">${escapeHtml(field)}</span>`)
           .join("");
         const acceptedHtml = accepted.length
-          ? `<div class="debug-field-group"><span class="debug-source-label">${escapeHtml(acceptedLabel)} (${accepted.length}):</span><div class="debug-field-chips">${acceptedChips}</div></div>`
+          ? `<div class="debug-field-group"><details class="debug-field-details"${accepted.length <= 8 ? " open" : ""}><summary class="debug-source-label">${escapeHtml(acceptedLabel)} (${accepted.length}):</summary><div class="debug-field-chips">${acceptedChips}</div></details></div>`
           : "";
         const excluded = Array.isArray(receiver.excludedFields) ? receiver.excludedFields : [];
         const rejectedChips = excluded.map((item) => {
@@ -22574,6 +22659,8 @@ def ui_preview_html(
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
       if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || [], movie, specs) : "";
+      const debugMetadataCard = document.getElementById("movieDetailDebugMetadataCard");
+      if (debugMetadataCard) debugMetadataCard.classList.toggle("hidden", !appDebugMode);
       const debugSources = document.getElementById("movieDetailDebugSources");
       if (debugSources) debugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       const identifiers = (detail.identifiers || []).filter(Boolean).map((item) => {
@@ -22645,6 +22732,7 @@ def ui_preview_html(
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
+      document.getElementById("movieDetailDebugMetadataCard")?.classList.add("hidden");
       const debugSourcesEl = document.getElementById("movieDetailDebugSources");
       if (debugSourcesEl) debugSourcesEl.innerHTML = "";
       dvMissingContributionReportData = null;
