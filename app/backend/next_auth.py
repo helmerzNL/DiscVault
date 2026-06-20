@@ -44,6 +44,15 @@ RECOVERY_CODE_GROUP_LENGTH = 4
 MOBILE_AUTH_FLOW_TTL_SECONDS = 5 * 60
 MOBILE_AUTH_CODE_TTL_SECONDS = 60
 MOBILE_AUTH_ALLOWED_CALLBACK_SCHEMES = {"discvault"}
+REVIEW_LOGIN_TOKEN_PERMISSIONS = (
+    "api.read",
+    "collection.view",
+    "containers.view",
+    "groups.view",
+    "metadata.search",
+    "metadata.refresh_one",
+    "metadata.refresh_bulk",
+)
 MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "api.read",
     "metadata.search",
@@ -143,6 +152,30 @@ def _request_origin() -> str:
     scheme = request.headers.get("X-Forwarded-Proto") or request.scheme or "http"
     host = request.headers.get("X-Forwarded-Host") or request.host
     return f"{scheme}://{host}".rstrip("/")
+
+
+def _env_flag(name: str, *, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_review_login_expires_at(raw: Any) -> datetime | None:
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    normalized = value
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    expires_at = datetime.fromisoformat(normalized)
+    if expires_at.tzinfo is None:
+        return expires_at.replace(tzinfo=timezone.utc)
+    return expires_at.astimezone(timezone.utc)
+
+
+def _review_login_expires_at() -> datetime | None:
+    return _parse_review_login_expires_at(os.environ.get("REVIEW_LOGIN_EXPIRES_AT"))
 
 
 def _rp_origins() -> list[str]:
@@ -588,6 +621,50 @@ def register_next_auth_routes(
             token_row = cur.fetchone()
         return {"token": token_value, "tokenRow": token_row, "permissionKeys": permission_keys, "scopes": scopes}
 
+    def issue_review_api_token(
+        conn,
+        *,
+        user_id: UUID | str,
+        username: str,
+        expires_at: datetime | None,
+    ) -> dict[str, Any]:
+        if not table_exists(conn, "api_access_tokens"):
+            raise next_api_error("API token table is not available", 503)
+        known_permissions = permission_keys_catalog(conn)
+        permission_keys = [
+            key for key in REVIEW_LOGIN_TOKEN_PERMISSIONS if key in known_permissions
+        ]
+        scopes = sorted({key.split(".", 1)[0] for key in permission_keys})
+        token_value = next_create_api_token_value()
+        token_name = "App Store Review"
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO api_access_tokens (
+                    user_id,
+                    name,
+                    token_hash,
+                    scopes,
+                    permission_keys,
+                    created_by,
+                    expires_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
+                """,
+                (
+                    user_id,
+                    token_name,
+                    next_api_token_hash(token_value),
+                    Jsonb(scopes),
+                    Jsonb(permission_keys),
+                    user_id,
+                    expires_at,
+                ),
+            )
+            token_row = cur.fetchone()
+        return {"token": token_value, "tokenRow": token_row, "permissionKeys": permission_keys, "scopes": scopes}
+
     def native_login_response(
         conn,
         *,
@@ -775,6 +852,9 @@ def register_next_auth_routes(
         payload = _current_user_payload()
         user_id = payload.get("sub") if payload else None
         if not user_id:
+            api_token = _bearer_api_token()
+            if api_token:
+                return next_auth_current_api_token_user(conn, api_token)
             return None
         with conn.cursor() as cur:
             cur.execute(
@@ -1221,6 +1301,18 @@ def register_next_auth_routes(
         is_auth_ready = user_count > 0 and credential_count > 0
         user = current_user(conn)
         role = primary_role(conn, user["id"]) if user else None
+        review_expires_at: datetime | None = None
+        review_login_available = False
+        try:
+            review_expires_at = _review_login_expires_at()
+            review_login_available = bool(
+                _env_flag("REVIEW_LOGIN_ENABLED", default=False)
+                and str(os.environ.get("REVIEW_LOGIN_USERNAME") or "").strip()
+                and str(os.environ.get("REVIEW_LOGIN_PASSWORD") or "").strip()
+                and (review_expires_at is None or _utcnow() < review_expires_at)
+            )
+        except Exception:
+            review_login_available = False
         return {
             "auth_enabled": is_configured_auth_enabled and is_auth_ready,
             "configured_auth_enabled": is_configured_auth_enabled,
@@ -1240,6 +1332,8 @@ def register_next_auth_routes(
             "display_name": user.get("display_name") if user else None,
             "role": role,
             "rbac_mode": rbac_mode(conn),
+            "review_login_available": review_login_available,
+            "review_login_expires_at": review_expires_at.isoformat() if review_expires_at else None,
         }
 
     def route(*rules: str, methods: list[str] | None = None):
@@ -1571,6 +1665,186 @@ def register_next_auth_routes(
             return redirect(callback_url, code=302)
         target = f"/?{urlencode({'mobile_flow': flow_id_str})}"
         return redirect(target, code=302)
+
+    @route("/api/next/auth/review/login", "/api/auth/review/login", methods=["POST"])
+    def review_login():
+        if not _env_flag("REVIEW_LOGIN_ENABLED", default=False):
+            raise next_api_error("Review login is disabled", 404)
+
+        configured_username = str(os.environ.get("REVIEW_LOGIN_USERNAME") or "").strip()
+        configured_password = str(os.environ.get("REVIEW_LOGIN_PASSWORD") or "").strip()
+        reviewer_username_raw = str(
+            os.environ.get("REVIEW_LOGIN_USER") or configured_username or "appstore-reviewer"
+        ).strip()
+        if not configured_username or not configured_password:
+            raise next_api_error("Review login is not configured", 503)
+
+        try:
+            configured_username = _normalize_username(configured_username)
+            reviewer_username = _normalize_username(reviewer_username_raw)
+        except ValueError as exc:
+            raise next_api_error(str(exc), 400) from exc
+
+        expires_at = _review_login_expires_at()
+        if expires_at and _utcnow() >= expires_at:
+            raise next_api_error("Review login is expired", 403)
+
+        body = request.get_json(silent=True) or {}
+        username = str(body.get("username") or "").strip()
+        password = str(body.get("password") or "")
+        if not username or not password:
+            raise next_api_error("username and password are required", 400)
+        if not (
+            secrets.compare_digest(username, configured_username)
+            and secrets.compare_digest(password, configured_password)
+        ):
+            raise next_api_error("Invalid credentials", 401)
+
+        mobile_flow_raw = body.get("mobile_flow") or body.get("mobileFlow")
+        mobile_flow = _parse_uuid(mobile_flow_raw)
+        if mobile_flow_raw and not mobile_flow:
+            raise next_api_error("mobile_flow is invalid", 400)
+
+        review_callback_url: str | None = None
+        with connect() as conn:
+            if not table_exists(conn, "users"):
+                raise next_api_error("Auth tables are not available", 503)
+            if not role_exists(conn, "media_viewer"):
+                raise next_api_error("Review login requires the media_viewer role", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, username, display_name, status
+                        FROM users
+                        WHERE username=%s
+                        FOR UPDATE
+                        """,
+                        (reviewer_username,),
+                    )
+                    reviewer = cur.fetchone()
+                    if not reviewer:
+                        reviewer_id = uuid4()
+                        cur.execute(
+                            """
+                            INSERT INTO users (id, username, display_name, status, created_at, updated_at)
+                            VALUES (%s, %s, %s, 'active', now(), now())
+                            RETURNING id, username, display_name, status
+                            """,
+                            (reviewer_id, reviewer_username, "App Store Reviewer"),
+                        )
+                        reviewer = cur.fetchone()
+                    elif reviewer.get("status") != "active":
+                        cur.execute(
+                            """
+                            UPDATE users
+                            SET status='active', updated_at=now()
+                            WHERE id=%s
+                            RETURNING id, username, display_name, status
+                            """,
+                            (reviewer["id"],),
+                        )
+                        reviewer = cur.fetchone()
+                    else:
+                        cur.execute("UPDATE users SET updated_at=now() WHERE id=%s", (reviewer["id"],))
+                    if table_exists(conn, "user_roles"):
+                        cur.execute(
+                            """
+                            DELETE FROM user_roles
+                            WHERE user_id=%s
+                              AND scope_type='global'
+                              AND scope_id=''
+                            """,
+                            (reviewer["id"],),
+                        )
+                assign_role(conn, reviewer["id"], "media_viewer")
+                token_payload = issue_review_api_token(
+                    conn,
+                    user_id=reviewer["id"],
+                    username=reviewer["username"],
+                    expires_at=expires_at,
+                )
+                reviewer_role = primary_role(conn, reviewer["id"])
+                effective_permission_keys = sorted(user_permissions(conn, reviewer["id"]))
+                audit_event(
+                    conn,
+                    event_type="auth.review_login",
+                    category="security",
+                    actor={
+                        "id": reviewer["id"],
+                        "username": reviewer["username"],
+                        "role": reviewer_role,
+                    },
+                    target_type="api_access_token",
+                    target_id=token_payload["tokenRow"]["id"],
+                    summary=f"Issued review login token for {reviewer['username']}",
+                    metadata={
+                        "reviewLogin": True,
+                        "tokenPermissionKeys": token_payload["permissionKeys"],
+                        "effectivePermissionKeys": effective_permission_keys,
+                        "expiresAt": expires_at.isoformat() if expires_at else None,
+                    },
+                )
+                if mobile_flow:
+                    mobile_code = create_mobile_auth_code(
+                        conn,
+                        mobile_flow_id=mobile_flow,
+                        user_id=reviewer["id"],
+                    )
+                    review_callback_url = mobile_code["callbackUrl"]
+                    audit_event(
+                        conn,
+                        event_type="auth.mobile_code_issued",
+                        category="security",
+                        actor={
+                            "id": reviewer["id"],
+                            "username": reviewer["username"],
+                            "role": reviewer_role,
+                        },
+                        target_type="user",
+                        target_id=reviewer["id"],
+                        summary=f"Issued mobile one-time code for {reviewer['username']} via review login",
+                        metadata={"mobileFlowId": str(mobile_flow), "reviewLogin": True},
+                    )
+
+        if review_callback_url:
+            return response(
+                {
+                    "status": "ok",
+                    "callback_url": review_callback_url,
+                    "callbackUrl": review_callback_url,
+                    "token": token_payload["token"],
+                    "username": reviewer["username"],
+                    "role": reviewer_role,
+                }
+            )
+
+        return response(
+            {
+                "status": "ok",
+                "token": token_payload["token"],
+                "username": reviewer["username"],
+                "role": reviewer_role,
+                "tokenPermissionKeys": token_payload["permissionKeys"],
+                "effectivePermissionKeys": effective_permission_keys,
+                "apiToken": {
+                    "id": str(token_payload["tokenRow"]["id"]),
+                    "name": token_payload["tokenRow"]["name"],
+                    "scopes": token_payload["tokenRow"]["scopes"] or [],
+                    "permissionKeys": token_payload["tokenRow"]["permission_keys"] or [],
+                    "createdAt": token_payload["tokenRow"]["created_at"].isoformat()
+                    if token_payload["tokenRow"].get("created_at")
+                    else None,
+                    "expiresAt": token_payload["tokenRow"]["expires_at"].isoformat()
+                    if token_payload["tokenRow"].get("expires_at")
+                    else None,
+                    "revokedAt": None,
+                },
+                "review": {
+                    "expiresAt": expires_at.isoformat() if expires_at else None,
+                },
+            }
+        )
 
     @route(
         "/api/next/auth/passkeys/login/options",

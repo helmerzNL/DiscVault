@@ -738,9 +738,13 @@ def movievault_connection_status(conn, plugin_id: str | None = None) -> dict[str
     public_key_id = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, ""))
     public_key = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_KEY, ""))
     sharing_mode = _text(_setting_value(conn, SHARING_MODE_KEY, "") or os.environ.get("MOVIEVAULT_SHARING_MODE") or "opt_in")
+    link_status = _text(_setting_value(conn, LINK_STATUS_KEY, "unlinked"), "unlinked")
+    # When MovieVault is active (enabled, linked and authenticated) contributing is
+    # allowed by default. An owner can still explicitly opt out via the stored setting.
+    movievault_active = movievault_enabled(conn) and link_status == "active" and bool(token)
     return {
         "authMethod": _text(_setting_value(conn, AUTH_METHOD_KEY, "")) or ("hmac_handshake" if _handshake_secret(conn) else "bootstrap_signed"),
-        "contributionEnabled": _bool_setting(conn, CONTRIBUTION_ENABLED_KEY, False),
+        "contributionEnabled": _bool_setting(conn, CONTRIBUTION_ENABLED_KEY, movievault_active),
         "contributionUrl": _contribution_url(conn),
         "enabled": movievault_enabled(conn),
         "ingestUrl": _ingest_url(conn),
@@ -749,7 +753,7 @@ def movievault_connection_status(conn, plugin_id: str | None = None) -> dict[str
         "keyId": public_key_id,
         "lastBootstrapAt": _text(_setting_value(conn, LAST_BOOTSTRAP_AT_KEY, "")),
         "lastHandshakeAt": _text(_setting_value(conn, LAST_HANDSHAKE_AT_KEY, "")),
-        "linkStatus": _text(_setting_value(conn, LINK_STATUS_KEY, "unlinked"), "unlinked"),
+        "linkStatus": link_status,
         "privateKeySet": private_key_set,
         "requiresReset": bool((public_key or public_key_id) and not private_key_set),
         "scopes": _scopes(conn),

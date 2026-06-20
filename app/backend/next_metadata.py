@@ -93,6 +93,102 @@ METADATA_TECHNICAL_FIELDS = {
     "content_ratings",
 }
 
+MOVIE_METADATA_LOCKS_KEY = "field_locks"
+
+MOVIE_LOCKABLE_FIELDS = {
+    "title",
+    "sort_title",
+    "original_title",
+    "year",
+    "barcode",
+    "release_date",
+    "format",
+    "edition",
+    "country",
+    "language",
+    "location",
+    "overview",
+    "notes",
+    "runtime_minutes",
+    "director",
+    "genre",
+    "studios",
+    "distributor",
+    "hdr",
+    "packaging",
+    "screen_ratios",
+    "audio_tracks",
+    "subtitles",
+    "content_ratings",
+}
+
+
+def normalize_movie_field_locks(value: Any) -> list[str]:
+    """Return a sorted, de-duplicated list of recognised lockable field names."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, (list, tuple, set)):
+        items = list(value)
+    else:
+        return []
+    result: set[str] = set()
+    for item in items:
+        name = str(item or "").strip()
+        if name in MOVIE_LOCKABLE_FIELDS:
+            result.add(name)
+    return sorted(result)
+
+
+def movie_locked_fields(metadata: Any) -> set[str]:
+    """Read the set of locked field names stored on a movie's metadata."""
+    if not isinstance(metadata, dict):
+        return set()
+    raw = metadata.get(MOVIE_METADATA_LOCKS_KEY)
+    if raw is None:
+        raw = metadata.get("fieldLocks")
+    return set(normalize_movie_field_locks(raw))
+
+
+# Maps a canonical lockable field name to the receiver-payload keys that carry
+# its value, so locked fields can be stripped before pushing to receivers.
+MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
+    "title": ("title",),
+    "sort_title": ("sortTitle",),
+    "original_title": ("originalTitle",),
+    "year": ("year",),
+    "barcode": ("barcode",),
+    "release_date": ("releaseDate",),
+    "format": ("format",),
+    "edition": ("edition", "editionType"),
+    "country": ("country",),
+    "language": ("language",),
+    "location": ("location",),
+    "overview": ("overview",),
+    "notes": ("notes",),
+    "runtime_minutes": ("runtimeMinutes",),
+    "director": ("director",),
+    "genre": ("genre",),
+    "studios": ("studios", "studio"),
+    "distributor": ("distributor",),
+    "hdr": ("hdr",),
+    "packaging": ("packaging",),
+    "screen_ratios": ("screenRatios", "screen_ratios"),
+    "audio_tracks": ("audioTracks", "audio_tracks"),
+    "subtitles": ("subtitles",),
+    "content_ratings": ("contentRatings", "content_ratings"),
+}
+
+
+def locked_receiver_payload_keys(metadata: Any) -> set[str]:
+    """Return the set of receiver-payload keys to drop for a movie's locked fields."""
+    drop: set[str] = set()
+    for field in movie_locked_fields(metadata):
+        drop.update(MOVIE_LOCK_RECEIVER_KEYS.get(field, ()))
+    return drop
+
+
 METADATA_LIST_FIELDS = {
     "audio_tracks",
     "subtitles",
@@ -516,6 +612,24 @@ def movie_technical_specs(conn, movie_id: UUID) -> dict[str, Any]:
         )
         row = cur.fetchone()
     return dict(row) if row else {}
+
+
+def movie_contribution_credits(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
+    if not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT mc.credit_type, mc.character, mc.job, mc.sort_order, p.name
+            FROM movie_credits mc
+            JOIN people p ON p.id = mc.person_id
+            WHERE mc.movie_id=%s
+            ORDER BY mc.sort_order, p.name
+            LIMIT %s
+            """,
+            (movie_id, limit),
+        )
+        return [dict(row) for row in cur.fetchall()]
 
 
 def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
@@ -1450,6 +1564,7 @@ def merge_metadata_results(
     working_movie = dict(current)
     working_metadata = dict(current.get("metadata") or {})
     working_technical = dict(technical_current)
+    locked_fields = movie_locked_fields(working_metadata)
 
     def decision_for(target: str, field: str) -> dict[str, Any]:
         key = (target, field)
@@ -1528,6 +1643,9 @@ def merge_metadata_results(
             if decision_key in selected_field_keys:
                 allowed = False
                 reason = "higher-priority provider already selected this field"
+            elif field in locked_fields:
+                allowed = False
+                reason = "field is locked by user"
             else:
                 allowed, reason = should_apply_field(
                     field=field,
@@ -1984,6 +2102,7 @@ def receiver_contribution_payload(
     movie: dict[str, Any],
     preview: dict[str, Any],
     applied: dict[str, Any],
+    credits: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     proposal = preview.get("proposal") or {}
     applied_fields = applied.get("applied") or {}
@@ -2006,11 +2125,110 @@ def receiver_contribution_payload(
     metadata_payload.setdefault("year", movie.get("year"))
     metadata_payload.setdefault("barcode", movie.get("barcode"))
     metadata_payload.setdefault("format", movie.get("format"))
+    # Always include the movie's current public metadata so receivers get the
+    # actual content even when this refresh only changed a few fields (the
+    # proposal/applied payload only carries the changed delta).
+    metadata_payload.setdefault("sortTitle", movie.get("sort_title"))
+    metadata_payload.setdefault("overview", movie.get("overview"))
+    metadata_payload.setdefault("rating", movie.get("rating"))
+    metadata_payload.setdefault("runtimeMinutes", movie.get("runtime_minutes"))
+    metadata_payload.setdefault("edition", movie.get("edition"))
+    metadata_payload.setdefault("editionType", movie.get("edition_type"))
+    metadata_payload.setdefault("country", movie.get("country"))
+    metadata_payload.setdefault("language", movie.get("language"))
+    release_date = movie.get("release_date")
+    if hasattr(release_date, "isoformat"):
+        release_date = release_date.isoformat()
+    metadata_payload.setdefault("releaseDate", release_date)
+    movie_meta = movie.get("metadata") if isinstance(movie.get("metadata"), dict) else {}
+    for source_key, target_key in (
+        ("trailer_url", "trailerUrl"),
+        ("trailerUrl", "trailerUrl"),
+        ("videos", "videos"),
+    ):
+        if movie_meta.get(source_key) not in (None, "", [], {}):
+            metadata_payload.setdefault(target_key, movie_meta.get(source_key))
+    directors: list[str] = []
+    cast: list[str] = []
+    credit_entries: list[dict[str, Any]] = []
+    for credit in credits or []:
+        name = str(credit.get("name") or "").strip()
+        if not name:
+            continue
+        credit_type = str(credit.get("credit_type") or credit.get("creditType") or "").strip().lower()
+        job = str(credit.get("job") or "").strip()
+        character = str(credit.get("character") or "").strip()
+        entry = {"name": name}
+        if credit_type:
+            entry["creditType"] = credit_type
+        if job:
+            entry["job"] = job
+        if character:
+            entry["character"] = character
+        credit_entries.append(entry)
+        if "director" in job.lower():
+            directors.append(name)
+        if credit_type in {"actor", "cast", "performer", "acting"} or character:
+            cast.append(name)
+    if directors:
+        metadata_payload.setdefault("director", ", ".join(dict.fromkeys(directors)))
+    if cast:
+        metadata_payload.setdefault("actor", ", ".join(list(dict.fromkeys(cast))[:15]))
+    if credit_entries:
+        metadata_payload.setdefault("credits", credit_entries[:60])
     metadata_payload = {
         key: value
         for key, value in metadata_payload.items()
         if value not in (None, "", [], {})
     }
+    # Never push fields the user has locked to metadata receivers.
+    locked_payload_keys = locked_receiver_payload_keys(movie.get("metadata"))
+    if locked_payload_keys:
+        metadata_payload = {
+            key: value
+            for key, value in metadata_payload.items()
+            if key not in locked_payload_keys
+        }
+    # Forward per-language localizations (e.g. TMDB translations) so receivers
+    # that support localized fields can store them. Locked base fields are
+    # stripped so locked values never leave DiscVault.
+    localization_field_map = (
+        ("title", "title"),
+        ("originalTitle", "originalTitle"),
+        ("overview", "overview"),
+        ("edition", "edition"),
+    )
+    localized_entries: list[dict[str, Any]] = []
+    seen_localization_langs: set[str] = set()
+    for localization in proposal.get("localizations") or []:
+        if not isinstance(localization, dict):
+            continue
+        lang = str(
+            localization.get("lang")
+            or localization.get("language")
+            or localization.get("locale")
+            or ""
+        ).strip()
+        if not lang:
+            continue
+        entry: dict[str, Any] = {"lang": lang}
+        for source_key, payload_key in localization_field_map:
+            if payload_key in locked_payload_keys:
+                continue
+            value = localization.get(source_key)
+            if isinstance(value, str):
+                value = value.strip()
+            if value:
+                entry[payload_key] = value
+        if len(entry) <= 1:
+            continue
+        key = lang.lower()
+        if key in seen_localization_langs:
+            continue
+        seen_localization_langs.add(key)
+        localized_entries.append(entry)
+    if localized_entries:
+        metadata_payload["localizations"] = localized_entries
     source_providers = sorted(
         {
             str(item.get("pluginId"))
@@ -2083,6 +2301,10 @@ def receiver_result_summary(
         "idempotencyPrefix": result.get("idempotencyPrefix"),
         "templateVersion": result.get("templateVersion"),
     }
+    if isinstance(result.get("acceptedFields"), list):
+        summary["acceptedFields"] = result.get("acceptedFields")
+    if isinstance(result.get("droppedFields"), list):
+        summary["droppedFields"] = result.get("droppedFields")
     if details:
         summary["details"] = details
     if activity:
@@ -2131,6 +2353,7 @@ def push_metadata_to_receivers(
         movie=movie,
         preview=preview,
         applied=applied,
+        credits=movie_contribution_credits(conn, UUID(str(movie_id))),
     )
     return push_receiver_payload_to_receivers(conn, payload=payload, actor=actor)
 
