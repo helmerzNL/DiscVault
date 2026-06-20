@@ -485,6 +485,42 @@ def _box_set_payload_marker(item):
     return type_key in {"box_set", "boxset"} or "box_set" in type_key or "boxset" in type_key
 
 
+def _explicit_box_set_marker(item):
+    """Deliberate box-set signals only.
+
+    Unlike :func:`_box_set_payload_marker`, this excludes weak hints (memberCount,
+    memberConfidence/source, boxSetTitle/collectionTitle) that a regular single-movie
+    payload can legitimately carry. A genuine box-set must declare itself through a
+    nested box-set object, an ``isBoxSet`` flag, ``detectedWithoutMembers`` or an
+    explicit box-set type/category.
+    """
+    if not isinstance(item, dict):
+        return False
+    if any(isinstance(item.get(key), dict) for key in _BOX_SET_DIRECT_KEYS):
+        return True
+    if item.get("isBoxSet") is True or item.get("is_box_set") is True:
+        return True
+    if item.get("detectedWithoutMembers") is True or item.get("detected_without_members") is True:
+        return True
+    type_text = _text(
+        _first_value(
+            item,
+            "entityType",
+            "entity_type",
+            "containerType",
+            "container_type",
+            "entityKind",
+            "entity_kind",
+            "releaseType",
+            "release_type",
+            "category",
+            "kind",
+            "type",
+        )
+    ).casefold().replace("-", "_").replace(" ", "_")
+    return "box_set" in type_text or "boxset" in type_text
+
+
 def _member_list(payload):
     if isinstance(payload, list):
         return payload
@@ -952,6 +988,9 @@ def _normalize_box_set_proposal(payload, context=None):
         if keys:
             seen.update(keys)
         members.append(member)
+
+    if len(members) < 2 and not _explicit_box_set_marker(item):
+        return {}
 
     if not title and members:
         title = _text(item.get("boxSetTitle") or item.get("collectionTitle") or item.get("name"))
