@@ -71,6 +71,15 @@ class MovieVaultInstanceRevoked(MovieVaultConnectionError):
     """Raised when MovieVault has revoked this DiscVault instance."""
 
 
+class MovieVaultClientVersionUnsupported(MovieVaultConnectionError):
+    """Raised when MovieVault rejects this DiscVault build as too old (HTTP 426)."""
+
+    def __init__(self, message: str, *, min_version: str = "", detected_version: str = "") -> None:
+        super().__init__(message)
+        self.min_version = min_version
+        self.detected_version = detected_version
+
+
 def _table_exists(conn, table_name: str) -> bool:
     with conn.cursor() as cur:
         cur.execute("SELECT to_regclass(%s) IS NOT NULL AS exists", (table_name,))
@@ -395,6 +404,43 @@ def _response_error_code(response: _HttpJsonResponse) -> str:
     return code
 
 
+def _client_version_error_fields(response: _HttpJsonResponse) -> tuple[str, str]:
+    try:
+        data = response.json()
+    except Exception:
+        return "", ""
+    if not isinstance(data, dict):
+        return "", ""
+    error = data.get("error") if isinstance(data.get("error"), dict) else data
+    min_version = _text(error.get("minVersion") or error.get("min_version") or data.get("minVersion"))
+    detected = _text(error.get("detectedVersion") or error.get("detected_version") or data.get("detectedVersion"))
+    return min_version, detected
+
+
+def _is_client_version_unsupported(response: _HttpJsonResponse) -> bool:
+    if int(getattr(response, "status_code", 0) or 0) == 426:
+        return True
+    return _response_error_code(response) == "client_version_unsupported"
+
+
+def _raise_client_version_unsupported(conn, response: _HttpJsonResponse) -> None:
+    min_version, detected = _client_version_error_fields(response)
+    if min_version:
+        message = (
+            f"This MovieVault server requires DiscVault version {min_version} or newer. "
+            "Please update DiscVault to keep syncing."
+        )
+    else:
+        message = (
+            "This MovieVault server requires a newer DiscVault version. "
+            "Please update DiscVault to keep syncing."
+        )
+    if detected:
+        message += f" (current version: {detected})"
+    _set_setting(conn, LINK_STATUS_KEY, "error")
+    raise MovieVaultClientVersionUnsupported(message, min_version=min_version, detected_version=detected)
+
+
 def _plugin_connection_action(plugin_id: str | None, phase: str, response: _HttpJsonResponse) -> str:
     plugin = plugin_id if is_movievault_plugin(plugin_id) else MOVIEVAULT_PLUGIN_ID
     try:
@@ -522,6 +568,8 @@ def _bootstrap(
     if response.status_code == 403 and code == "instance_revoked":
         _mark_revoked(conn)
         raise MovieVaultInstanceRevoked("MovieVault instance is revoked")
+    if _is_client_version_unsupported(response):
+        _raise_client_version_unsupported(conn, response)
     if allow_recovery_fallback and (
         (response.status_code == 409 and code == "instance_already_registered")
         or action == "recover"
@@ -575,6 +623,8 @@ def _recover(
     if response.status_code == 403 and code == "instance_revoked":
         _mark_revoked(conn)
         raise MovieVaultInstanceRevoked("MovieVault instance is revoked")
+    if _is_client_version_unsupported(response):
+        _raise_client_version_unsupported(conn, response)
     if allow_bootstrap_fallback and action == "bootstrap":
         _delete_token(conn)
         _set_setting(conn, LINK_STATUS_KEY, "connecting")
@@ -614,6 +664,8 @@ def _hmac_handshake(conn, *, plugin_id: str | None = None, actor_id: Any = None)
     if response.status_code == 403 and code == "instance_revoked":
         _mark_revoked(conn)
         raise MovieVaultInstanceRevoked("MovieVault instance is revoked")
+    if _is_client_version_unsupported(response):
+        _raise_client_version_unsupported(conn, response)
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise MovieVaultConnectionError(f"MovieVault HMAC handshake failed: {code or response.status_code}")

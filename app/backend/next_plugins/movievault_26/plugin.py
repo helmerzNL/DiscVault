@@ -41,6 +41,17 @@ FORBIDDEN_CONTRIBUTION_KEYS = {
 }
 _TEMPLATE_CACHE = {}
 
+CLIENT_VERSION_UNSUPPORTED_CODE = "client_version_unsupported"
+
+
+class MovieVaultClientVersionUnsupported(RuntimeError):
+    """Raised when MovieVault rejects DiscVault with HTTP 426 / client_version_unsupported."""
+
+    def __init__(self, message, *, min_version="", detected_version=""):
+        super().__init__(message)
+        self.min_version = min_version
+        self.detected_version = detected_version
+
 
 def _settings(context):
     return (context or {}).get("settings") or {}
@@ -106,6 +117,72 @@ def _response_error(payload):
     return _text(payload.get("code") or payload.get("error")), _text(payload.get("message"))
 
 
+def _error_object(payload):
+    if not isinstance(payload, dict):
+        return {}
+    error = payload.get("error")
+    return error if isinstance(error, dict) else payload
+
+
+def _version_fields(payload):
+    error = _error_object(payload)
+    min_version = _text(error.get("minVersion") or error.get("min_version") or payload.get("minVersion"))
+    detected = _text(error.get("detectedVersion") or error.get("detected_version") or payload.get("detectedVersion"))
+    return min_version, detected
+
+
+def _is_client_version_unsupported(status_code, payload):
+    if int(status_code or 0) == 426:
+        return True
+    code, _message = _response_error(payload)
+    return code == CLIENT_VERSION_UNSUPPORTED_CODE
+
+
+def _client_version_unsupported_message(payload):
+    min_version, detected = _version_fields(payload)
+    if min_version:
+        message = (
+            f"This MovieVault server requires DiscVault version {min_version} or newer. "
+            "Please update DiscVault to keep syncing."
+        )
+    else:
+        message = (
+            "This MovieVault server requires a newer DiscVault version. "
+            "Please update DiscVault to keep syncing."
+        )
+    if detected:
+        message += f" (current version: {detected})"
+    return message
+
+
+def _body_client_version(body):
+    if not isinstance(body, dict):
+        return ""
+    software = body.get("software") if isinstance(body.get("software"), dict) else {}
+    for value in (
+        body.get("clientVersion"),
+        software.get("version"),
+        software.get("backendVersion"),
+        body.get("sourceVersion"),
+        body.get("instanceVersion"),
+    ):
+        text = _text(value)
+        if text:
+            return text
+    return ""
+
+
+def _ensure_client_version(body, context):
+    if not isinstance(body, dict):
+        return body
+    if _text(body.get("clientVersion")):
+        return body
+    version = _body_client_version(body) or _source_version(context)
+    if version:
+        body["clientVersion"] = version
+    return body
+
+
 def _error_code(response):
     payload = _json(response)
     code, _message = _response_error(payload)
@@ -116,8 +193,16 @@ def connection_recovery_action(payload, context=None):
     payload = payload or {}
     phase = _text(payload.get("phase")).lower()
     status_code = int(payload.get("statusCode") or payload.get("status_code") or 0)
-    code, message = _response_error(payload.get("response") or {})
+    response = payload.get("response") or {}
+    code, message = _response_error(response)
     lowered = message.lower()
+    if _is_client_version_unsupported(status_code, response):
+        return {
+            "action": "",
+            "reason": CLIENT_VERSION_UNSUPPORTED_CODE,
+            "terminal": True,
+            "message": _client_version_unsupported_message(response),
+        }
     if status_code == 400 and phase == "recovery" and code == "validation_error" and "bootstrap is required" in lowered:
         return {"action": "bootstrap", "reason": "server_requires_bootstrap"}
     if status_code == 400 and phase == "bootstrap" and code == "validation_error":
@@ -136,6 +221,7 @@ def connection_request(payload, context=None):
         request_body = dict(body)
         if public_key:
             request_body["publicKey"] = public_key
+        _ensure_client_version(request_body, context)
         return {
             "status": "ok",
             "provider": PROVIDER_ID,
@@ -160,6 +246,7 @@ def connection_request(payload, context=None):
             headers["X-DiscVault-Key-Id"] = key_id
         if signature:
             headers["X-DiscVault-Signature"] = signature if signature.startswith("key-v1=") else f"key-v1={signature}"
+        recovery_body = _ensure_client_version(dict(body), context)
         return {
             "status": "ok",
             "provider": PROVIDER_ID,
@@ -167,7 +254,7 @@ def connection_request(payload, context=None):
             "method": "POST",
             "path": HANDSHAKE_PATH,
             "headers": headers,
-            "body": dict(body),
+            "body": recovery_body,
             "auth": "signed_recovery",
             "requestedScopes": list(REQUESTED_SCOPES),
         }
@@ -206,6 +293,14 @@ def _request(method, url, *, context=None, params=None, json_payload=None, retry
         mark_revoked = (context or {}).get("movievaultMarkRevoked")
         if callable(mark_revoked):
             mark_revoked()
+    if _is_client_version_unsupported(status_code, _json(response)):
+        payload = _json(response)
+        min_version, detected = _version_fields(payload)
+        raise MovieVaultClientVersionUnsupported(
+            _client_version_unsupported_message(payload),
+            min_version=min_version,
+            detected_version=detected,
+        )
     if status_code == 404 or (allow_validation_error and status_code == 400 and _error_code(response) == "validation_error"):
         return response
     response.raise_for_status()
@@ -1417,6 +1512,12 @@ def _contribution_template(context, *, force_refresh=False):
     return template
 
 
+def _cached_min_client_version(context):
+    cached = _TEMPLATE_CACHE.get(_template_cache_key(context))
+    template = (cached or {}).get("template") if isinstance(cached, dict) else {}
+    return _text((template or {}).get("minClientVersion"))
+
+
 def _allowed_fields(template, entity_type):
     if not isinstance(template, dict):
         return set()
@@ -1639,7 +1740,7 @@ def _public_reference(reference):
 
 def _connection_details(context):
     connection = _movievault_context(context)
-    return {
+    details = {
         "name": PROVIDER_LABEL,
         "baseUrl": _base_url(context),
         "contributionUrl": _contribution_url(context),
@@ -1651,7 +1752,10 @@ def _connection_details(context):
         "sharingMode": _sharing_mode(context),
         "tokenPrefix": connection.get("tokenPrefix"),
         "tokenSet": bool(connection.get("tokenSet") or _token(context)),
+        "clientVersion": _source_version(context) or None,
+        "minClientVersion": _cached_min_client_version(context) or None,
     }
+    return details
 
 
 def _payload_identity(payload, contribution_payload):
