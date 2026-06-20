@@ -945,6 +945,7 @@
   "appAdmin.debugMode": "Debug",
   "appAdmin.debugOn": "Debug on",
   "movieDetail.debugLocalizations": "Debug info: local titles and plots",
+  "movieDetail.debugMetadataPanelTitle": "Metadata debug",
   "movieDetail.debugNoLocalizations": "No localized title or plot rows found.",
   "movieDetail.debugSourcesTitle": "Loaded metadata per source",
   "movieDetail.debugSourcesContributedTitle": "Contributed metadata per plugin",
