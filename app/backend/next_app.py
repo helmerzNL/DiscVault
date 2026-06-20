@@ -49646,6 +49646,7 @@ def register_routes(flask_app: Flask) -> None:
         elif wants_movie_import:
             provided_box_set_body = None
         has_provided_box_set = isinstance(provided_box_set_body, dict)
+        explicit_box_set_import = import_mode in {"box-set", "boxset"} or selected_candidate_is_box_set
         if not wants_movie_import and not wants_box_set_import:
             wants_box_set_import = has_provided_box_set or bool(body.get("detectBoxSets") or body.get("detect_box_sets"))
 
@@ -49740,7 +49741,11 @@ def register_routes(flask_app: Flask) -> None:
                 if wants_box_set_import and not box_set_proposal:
                     box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
                 if wants_box_set_import and not box_set_proposal:
-                    raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                    if explicit_box_set_import:
+                        raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                    # Box-set import was only inferred (e.g. a collection was detected while
+                    # adding a single film); fall back to importing the movie instead of failing.
+                    wants_box_set_import = False
                 if wants_box_set_import and box_set_proposal:
                     body_members = normalized_box_set_members_from_body(body)
                     explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
