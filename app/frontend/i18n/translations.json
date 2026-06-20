@@ -873,8 +873,7 @@
     "edit.noImages": "Geen afbeeldingen gevonden.",
     "edit.confirmRemoveImage": "Deze afbeelding verwijderen?",
     "settings.updatePopupPrefix": "Ondersteuning voor deze versie van DiscVault stopt op 1 juli 2026. Upgrade nu, kijk op",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "en": {
     "nav.collection": "Collection",
@@ -1745,8 +1744,7 @@
     "edit.noImages": "No images found.",
     "edit.confirmRemoveImage": "Remove this image?",
     "settings.updatePopupPrefix": "Support for this version of DiscVault ends on 1 July 2026. Upgrade now, visit",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "fr": {
     "nav.collection": "Collection",
@@ -2619,8 +2617,7 @@
     "edit.noImages": "Aucune image trouvée.",
     "edit.confirmRemoveImage": "Supprimer cette image ?",
     "settings.updatePopupPrefix": "La prise en charge de cette version de DiscVault prend fin le 1er juillet 2026. Mettez à niveau dès maintenant, rendez-vous sur",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "de": {
     "nav.collection": "Sammlung",
@@ -3492,8 +3489,7 @@
     "edit.noImages": "Keine Bilder gefunden.",
     "edit.confirmRemoveImage": "Dieses Bild entfernen?",
     "settings.updatePopupPrefix": "Der Support für diese Version von DiscVault endet am 1. Juli 2026. Aktualisiere jetzt, besuche",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "es": {
     "nav.collection": "Colección",
@@ -4365,8 +4361,7 @@
     "edit.noImages": "No se encontraron imágenes.",
     "edit.confirmRemoveImage": "¿Eliminar esta imagen?",
     "settings.updatePopupPrefix": "El soporte para esta versión de DiscVault finaliza el 1 de julio de 2026. Actualiza ahora, visita",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "pt": {
     "nav.collection": "Coleção",
@@ -5239,8 +5234,7 @@
     "edit.noImages": "Nenhuma imagem encontrada.",
     "edit.confirmRemoveImage": "Remover esta imagem?",
     "settings.updatePopupPrefix": "O suporte para esta versão do DiscVault termina a 1 de julho de 2026. Atualiza agora, acede a",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "it": {
     "nav.collection": "Collezione",
@@ -6113,8 +6107,7 @@
     "edit.noImages": "Nessuna immagine trovata.",
     "edit.confirmRemoveImage": "Rimuovere questa immagine?",
     "settings.updatePopupPrefix": "Il supporto per questa versione di DiscVault termina il 1° luglio 2026. Aggiorna ora, visita",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "sv": {
     "nav.collection": "Samling",
@@ -6985,8 +6978,7 @@
     "edit.noImages": "Inga bilder hittades.",
     "edit.confirmRemoveImage": "Ta bort den här bilden?",
     "settings.updatePopupPrefix": "Stödet för den här versionen av DiscVault upphör den 1 juli 2026. Uppgradera nu, besök",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "da": {
     "nav.collection": "Samling",
@@ -7857,8 +7849,7 @@
     "edit.noImages": "Ingen billeder fundet.",
     "edit.confirmRemoveImage": "Fjern dette billede?",
     "settings.updatePopupPrefix": "Understøttelsen af denne version af DiscVault ophører den 1. juli 2026. Opgrader nu, besøg",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "no": {
     "nav.collection": "Samling",
@@ -8729,8 +8720,7 @@
     "edit.noImages": "Ingen bilder funnet.",
     "edit.confirmRemoveImage": "Fjerne dette bildet?",
     "settings.updatePopupPrefix": "Støtten for denne versjonen av DiscVault opphører 1. juli 2026. Oppgrader nå, besøk",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   },
   "fi": {
     "nav.collection": "Kokoelma",
@@ -9601,7 +9591,6 @@
     "edit.noImages": "Kuvia ei löytynyt.",
     "edit.confirmRemoveImage": "Poistetaanko tämä kuva?",
     "settings.updatePopupPrefix": "Tämän DiscVault-version tuki päättyy 1. heinäkuuta 2026. Päivitä nyt, käy osoitteessa",
-    "settings.updatePopupLink": "https://discvault.eu",
-    "settings.updatePopupSuffix": ""
+    "settings.updatePopupLink": "https://discvault.eu"
   }
 }
