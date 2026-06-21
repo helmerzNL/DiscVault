@@ -235,7 +235,66 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
         self.assertEqual(proposal, {})
 
-    def test_barcode_lookup_exposes_box_set_payload_without_movie_wrapper(self):
+    def test_single_film_with_release_list_does_not_become_box_set_proposal(self):
+        # Regression for the iOS HTTP 422 on regular films (barcode 3344428071189).
+        # MovieVault returns a single movie carrying its own physical structure
+        # (releases/discs/contents). Those are NOT box-set members, so the lookup
+        # must surface a normal movie candidate and never a 1-member box-set.
+        original_get = movievault_26._get
+        shapes = {
+            "releases": [{"format": "4K UHD", "barcode": "3344428071189"}],
+            "releases_two_editions": [
+                {"title": "The Greatest Showman", "format": "4K UHD"},
+                {"title": "The Greatest Showman", "format": "Blu-ray"},
+            ],
+            "discs": [{"discNumber": 1, "format": "4K UHD"}],
+            "contents": [{"title": "The Greatest Showman"}],
+        }
+        try:
+            for key, value in shapes.items():
+                def fake_get(_context, path, **_params):
+                    self.assertEqual(path, "/api/v1/barcodes/3344428071189")
+                    return {
+                        "status": "ok",
+                        "data": {
+                            "id": "mv_tgs",
+                            "title": "The Greatest Showman",
+                            "year": "2017",
+                            "format": "4K UHD",
+                            "posterUrl": "https://img.example/tgs.jpg",
+                            "tmdbId": 316029,
+                            ("discItems" if key == "discs" else key): value,
+                        },
+                    }
+
+                movievault_26._get = fake_get
+                result = movievault_26.search_barcode(
+                    {"barcode": "3344428071189"}, {"movievault": {"enabled": True}}
+                )
+                self.assertEqual(result["status"], "hit", key)
+                self.assertNotIn("boxSetProposal", result, key)
+                self.assertNotIn("boxSetProposals", result, key)
+                self.assertEqual(result["movie"]["title"], "The Greatest Showman", key)
+                self.assertEqual(len(result["candidates"]), 1, key)
+        finally:
+            movievault_26._get = original_get
+
+    def test_single_film_payload_with_single_member_is_dropped(self):
+        proposal = movievault_26._normalize_box_set_proposal(
+            {
+                "data": {
+                    "id": "mv_tgs",
+                    "title": "The Greatest Showman",
+                    "year": "2017",
+                    "format": "4K UHD",
+                    "contents": [{"title": "The Greatest Showman"}],
+                }
+            },
+            {},
+        )
+
+        self.assertEqual(proposal, {})
+
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
