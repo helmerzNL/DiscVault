@@ -16,6 +16,7 @@ try:
     from app.backend.next_app import person_biography_value
     from app.backend.next_app import person_filmography_entries_from_metadata
     from app.backend.next_app import person_local_filmography_entries
+    from app.backend.next_app import sanitize_profile_urls
     from app.backend.next_app import select_movie_metadata_person_refresh_credits
     from app.backend.next_plugins.tmdb import plugin as tmdb_plugin
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit web/database deps.
@@ -28,6 +29,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit w
     person_biography_value = None
     person_filmography_entries_from_metadata = None
     person_local_filmography_entries = None
+    sanitize_profile_urls = None
     select_movie_metadata_person_refresh_credits = None
     tmdb_plugin = None
 
@@ -236,6 +238,54 @@ class NextPeoplePolicyTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "miss")
         self.assertEqual(result["provider"], "wikidata")
+
+    def test_tmdb_person_awards_entrypoint_miss_returns_empty_awards(self):
+        original_import = tmdb_plugin._import_wikidata_awards
+        fake_module = types.SimpleNamespace(
+            fetch_person_awards=lambda **_kwargs: {"wikidataId": "", "awards": []},
+            group_awards=lambda value: [],
+        )
+
+        try:
+            tmdb_plugin._import_wikidata_awards = lambda: fake_module
+            result = tmdb_plugin.person_awards({"tmdbId": "585"}, {"settings": {}})
+        finally:
+            tmdb_plugin._import_wikidata_awards = original_import
+
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(result["awards"], [])
+        self.assertEqual(result["awardGroups"], [])
+        self.assertEqual(result["counts"]["awards"], 0)
+
+    def test_sanitize_profile_urls_https_only_dedup_and_capped(self):
+        urls = sanitize_profile_urls(
+            [
+                "https://image.tmdb.org/t/p/original/a.jpg",
+                "  https://image.tmdb.org/t/p/original/a.jpg  ",
+                "http://image.tmdb.org/t/p/original/insecure.jpg",
+                "/relative/local.jpg",
+                "",
+                None,
+                "https://image.tmdb.org/t/p/original/b.jpg",
+            ]
+        )
+
+        self.assertEqual(
+            urls,
+            [
+                "https://image.tmdb.org/t/p/original/a.jpg",
+                "https://image.tmdb.org/t/p/original/b.jpg",
+            ],
+        )
+
+    def test_sanitize_profile_urls_respects_cap(self):
+        candidates = [f"https://cdn.example.test/p/{index}.jpg" for index in range(20)]
+
+        capped = sanitize_profile_urls(candidates, cap=12)
+
+        self.assertEqual(len(capped), 12)
+        self.assertEqual(capped[0], "https://cdn.example.test/p/0.jpg")
+        self.assertEqual(capped[-1], "https://cdn.example.test/p/11.jpg")
 
     def test_native_person_detail_payload_flattens_ios_contract(self):
         detail = {

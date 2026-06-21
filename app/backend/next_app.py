@@ -23328,6 +23328,7 @@ def ui_preview_html(
           isPrimary: !!asset.is_primary,
           sortOrder: asset.sort_order,
           kind: asset.kind || "profile",
+          preview: !!asset.preview,
         }))
         .filter((item) => item.url);
     }
@@ -23340,7 +23341,7 @@ def ui_preview_html(
           const badge = item.isPrimary
             ? `<span class="person-media-badge">${escapeHtml(tNext("personDetail.primaryImage", "Primary"))}</span>`
             : "";
-          const button = (canEdit && !item.isPrimary && item.id)
+          const button = (canEdit && !item.isPrimary && item.id && !item.preview)
             ? `<button type="button" class="secondary-button person-media-set-primary" data-person-media-primary="${escapeHtml(item.id)}">${escapeHtml(tNext("personDetail.setPrimaryImage", "Set as primary"))}</button>`
             : "";
           return `<figure class="${cls}"><img src="${escapeHtml(usableImage(item.url) || item.url)}" alt="" loading="lazy">${badge}${button}</figure>`;
@@ -41151,6 +41152,25 @@ def refresh_movie_person_metadata_cascade(
     return summary
 
 
+def sanitize_profile_urls(values: Any, *, cap: int = 12) -> list[str]:
+    """Return public https profile URLs: trimmed, deduped (order-preserving), capped.
+
+    Only ``https://`` URLs are accepted (no http, local, relative or signed paths)
+    so MovieVault/clients receive distributable public assets. The cap mirrors the
+    TMDb plugin ``_profile_urls`` limit.
+    """
+    urls: list[str] = []
+    for raw in values or []:
+        value = clean_text(raw) or ""
+        if not value.startswith("https://"):
+            continue
+        if value not in urls:
+            urls.append(value)
+        if len(urls) >= cap:
+            break
+    return urls
+
+
 def sync_person_profile_media(
     conn,
     person_id: UUID,
@@ -41168,12 +41188,7 @@ def sync_person_profile_media(
     """
     if not table_exists(conn, "people") or not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
         return None
-    urls: list[str] = []
-    for raw in profile_urls or []:
-        value = clean_text(raw)
-        if value.startswith(("http://", "https://")) and value not in urls:
-            urls.append(value)
-    urls = urls[:30]
+    urls = sanitize_profile_urls(profile_urls)
     if not urls:
         return None
 
@@ -41288,23 +41303,39 @@ def refresh_person_metadata(
     }
     aliases = [clean_text(a) for a in (result.get("alsoKnownAs") or result.get("also_known_as") or []) if clean_text(a)][:50]
     imdb_id = clean_text(result.get("imdbId") or result.get("imdb_id"))
-    profile_urls: list[str] = []
-    for raw_url in result.get("profiles") or []:
-        value = clean_text(raw_url)
-        if value and value not in profile_urls:
-            profile_urls.append(value)
-    if updates["profile_url"] and updates["profile_url"] not in profile_urls:
-        profile_urls.insert(0, updates["profile_url"])
+    profile_candidates = list(result.get("profiles") or [])
+    if updates["profile_url"]:
+        profile_candidates.insert(0, updates["profile_url"])
+    profile_urls = sanitize_profile_urls(profile_candidates)
 
-    awards_execution = run_plugin_entrypoint(
-        str(plugin["id"]),
-        "person_awards",
-        {"tmdbId": tmdb_id, "imdbId": imdb_id},
-        context,
-    )
-    awards_result = awards_execution.get("result") or {} if awards_execution.get("status") == "ok" else {}
-    awards = awards_result.get("awards") or []
-    award_groups = awards_result.get("awardGroups") or []
+    # Awards run as an independent best-effort sub-step: a slow/flaky Wikidata
+    # provider must never fail the TMDb mapping, and a transient empty/miss must
+    # not wipe awards that were previously stored.
+    awards_status = "skipped"
+    awards_state = None
+    awards_hit = False
+    awards: list[Any] = []
+    award_groups: list[Any] = []
+    awards_result: dict[str, Any] = {}
+    try:
+        awards_execution = run_plugin_entrypoint(
+            str(plugin["id"]),
+            "person_awards",
+            {"tmdbId": tmdb_id, "imdbId": imdb_id},
+            context,
+        )
+        awards_status = awards_execution.get("status")
+        awards_state = awards_execution.get("state")
+        if awards_execution.get("status") == "ok":
+            awards_result = awards_execution.get("result") or {}
+            awards = awards_result.get("awards") or []
+            award_groups = awards_result.get("awardGroups") or []
+            awards_hit = bool(awards)
+    except Exception:
+        current_app.logger.warning(
+            "Person awards lookup failed for %s; keeping existing awards", person_id, exc_info=True
+        )
+        awards_status = "error"
 
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
@@ -41325,7 +41356,7 @@ def refresh_person_metadata(
         preview_metadata["imdbId"] = imdb_id
     if profile_urls:
         preview_metadata["profiles"] = profile_urls
-    if awards_result:
+    if awards_hit:
         preview_metadata["awards"] = awards
         preview_metadata["awardGroups"] = award_groups
         preview_metadata["awards_source"] = clean_text(awards_result.get("provider")) or "wikidata"
@@ -41375,9 +41406,26 @@ def refresh_person_metadata(
         try:
             sync_person_profile_media(conn, person_id, profile_urls, provider_id=updates["source"])
         except Exception:
-            pass
+            current_app.logger.warning(
+                "Person profile media sync failed for %s", person_id, exc_info=True
+            )
         detail = person_detail_entity(conn, person_id) or preview_detail
     else:
+        if profile_urls:
+            existing_media = preview_detail.get("personMedia") if isinstance(preview_detail.get("personMedia"), list) else []
+            has_primary = any(isinstance(asset, dict) and asset.get("is_primary") for asset in existing_media)
+            preview_detail["personMedia"] = [
+                {
+                    "id": f"preview-{index}",
+                    "url": url,
+                    "source_url": url,
+                    "kind": "profile",
+                    "is_primary": (index == 0 and not has_primary),
+                    "sort_order": index,
+                    "preview": True,
+                }
+                for index, url in enumerate(profile_urls)
+            ]
         detail = preview_detail
 
     return {
@@ -41393,8 +41441,9 @@ def refresh_person_metadata(
             "entrypoint": execution.get("entrypoint"),
         },
         "awards": {
-            "status": awards_execution.get("status"),
-            "state": awards_execution.get("state"),
+            "status": awards_status,
+            "state": awards_state,
+            "applied": awards_hit,
             "count": len(awards),
             "groups": len(award_groups),
         },
