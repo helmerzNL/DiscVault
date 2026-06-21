@@ -133,6 +133,29 @@ def _localizations(data):
     return rows
 
 
+def _person_localizations(data):
+    rows = []
+    seen = set()
+    for item in ((data.get("translations") or {}).get("translations") or []):
+        payload = item.get("data") or {}
+        biography = (payload.get("biography") or "").strip()
+        lang = _locale_key(item.get("iso_639_1"), item.get("iso_3166_1"))
+        if not lang or not biography:
+            continue
+        key = lang.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            {
+                "lang": lang,
+                "biography": biography,
+                "source": "tmdb",
+            }
+        )
+    return rows
+
+
 def _normalize_details(data):
     genres = [item.get("name") for item in data.get("genres") or [] if item.get("name")]
     studios = [item.get("name") for item in data.get("production_companies") or [] if item.get("name")]
@@ -310,10 +333,27 @@ def person_details(payload, context=None):
     tmdb_id = str((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id") or "").strip()
     if not tmdb_id:
         return {"status": "miss", "provider": "tmdb", "reason": "tmdbId is required"}
-    data = _request(context or {}, f"/person/{tmdb_id}", language=_language(context))
+    language = _language(context)
+    data = _request(
+        context or {},
+        f"/person/{tmdb_id}",
+        language=language,
+        append_to_response="translations",
+    )
     aliases = data.get("also_known_as") or [] if data else []
     name = (data.get("name") if data else "") or (aliases[0] if aliases else "")
     profile_url = _image(data.get("profile_path")) if data.get("profile_path") else ""
+    localizations = _person_localizations(data)
+    biography = (data.get("biography") or "").strip()
+    if not biography and localizations:
+        configured = str(language or "").strip().lower()
+        biography = next(
+            (row["biography"] for row in localizations if row["lang"].lower() == configured),
+            "",
+        ) or next(
+            (row["biography"] for row in localizations if row["lang"].lower().split("-")[0] == configured.split("-")[0]),
+            "",
+        ) or localizations[0]["biography"]
     return {
         "status": "hit" if name else "miss",
         "provider": "tmdb",
@@ -321,14 +361,15 @@ def person_details(payload, context=None):
         "sourceRef": f"tmdb:person:{tmdb_id}",
         "tmdbId": tmdb_id,
         "name": name,
-        "biography": data.get("biography") or "",
+        "biography": biography,
         "birthday": data.get("birthday") or "",
         "deathday": data.get("deathday") or "",
         "placeOfBirth": data.get("place_of_birth") or "",
         "knownFor": data.get("known_for_department") or "",
         "profileUrl": profile_url,
         "profilePath": data.get("profile_path") or "",
-        "language": _language(context),
+        "localizations": localizations,
+        "language": language,
     }
 
 
