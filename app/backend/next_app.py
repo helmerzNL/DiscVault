@@ -23311,10 +23311,16 @@ def ui_preview_html(
       const source = (direct && direct.length) ? direct : (metadata.alsoKnownAs || metadata.also_known_as || []);
       return (Array.isArray(source) ? source : []).map((value) => String(value || "").trim()).filter(Boolean);
     }
-    function personMentionsCount(detail, counts) {
-      const direct = Number(detail.mentions);
-      if (Number.isFinite(direct) && direct > 0) return direct;
-      return Math.max(Number(counts.filmography) || 0, Number(counts.collection) || 0);
+    function personMentions(detail, counts) {
+      const numeric = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) && num >= 0 ? num : null;
+      };
+      let inVault = numeric(detail.mentionsInVault);
+      let total = numeric(detail.mentionsTotal);
+      if (inVault === null) inVault = (Number(counts.collection) || 0) + (Number(counts.digital) || 0);
+      if (total === null) total = Number(counts.filmography) || 0;
+      return {inVault, total};
     }
     function personMediaItems(detail) {
       if (Array.isArray(detail.media) && detail.media.length) {
@@ -23423,12 +23429,15 @@ def ui_preview_html(
       const birthdayDisplay = personBirthdayDisplay(detail, person);
       const deathdayDisplay = formatPersonLongDate(detail.deathday || person.death_date);
       const alsoKnownAs = personAlsoKnownAs(detail, metadata);
-      const mentions = personMentionsCount(detail, counts);
+      const mentions = personMentions(detail, counts);
+      const mentionsText = `${mentions.inVault} / ${mentions.total}`;
+      const mentionsCaption = `${tNext("personDetail.mentionsInVault", "in collection")} / ${tNext("personDetail.mentionsTotal", "total")}`;
+      const hasMentions = (mentions.inVault > 0 || mentions.total > 0);
       document.getElementById("personDetailTags").innerHTML = detailTagHtml([
         knownForLabel,
         birthdayDisplay,
         deathdayDisplay ? `${tNext("personDetail.died", "Died")} ${deathdayDisplay}` : "",
-        mentions ? `${mentions} ${tNext("personDetail.mentions", "mentions")}` : "",
+        hasMentions ? `${mentionsText} ${tNext("personDetail.mentions", "mentions")}` : "",
         extendedPeople && digitalCredits.length ? `${digitalCredits.length} ${tNext("personDetail.digitalCollection", "Digital").toLowerCase()}` : "",
         extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : "",
         appDebugMode && person.id ? `Person ID ${person.id}` : ""
@@ -23439,7 +23448,7 @@ def ui_preview_html(
         [tNext("personDetail.deathDate", "Death date"), deathdayDisplay],
         [tNext("personDetail.placeOfBirth", "Place of birth"), person.place_of_birth],
         [tNext("personDetail.alsoKnownAs", "Also known as"), alsoKnownAs.join(", ")],
-        [tNext("personDetail.mentions", "Mentions"), mentions ? String(mentions) : ""],
+        [tNext("personDetail.mentions", "Mentions"), hasMentions ? `${mentionsText} (${mentionsCaption})` : ""],
         [tNext("personDetail.publicId", "Public ID"), person.public_id],
         [appDebugMode ? tNext("personDetail.metadataProvenance", "Metadata provenance") : "", appDebugMode ? [metadata.person_metadata_source, metadata.person_metadata_source_ref, metadata.filmography_source_ref].filter(Boolean).join(" / ") : ""]
       ]);

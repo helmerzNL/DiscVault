@@ -944,12 +944,15 @@ def native_person_detail_payload(detail: dict[str, Any], *, language: str = "") 
             url = clean_text(value)
             if url and url not in profile_urls:
                 profile_urls.append(url)
-    mentions = 0
-    for key in ("filmography", "collection"):
+    def _count_value(key: str) -> int:
         try:
-            mentions = max(mentions, int(counts.get(key) or 0))
+            return int(counts.get(key) or 0)
         except (TypeError, ValueError):
-            continue
+            return 0
+
+    mentions_in_vault = _count_value("collection") + _count_value("digital")
+    mentions_total = _count_value("filmography")
+    mentions = max(mentions_in_vault, mentions_total)
     payload: dict[str, Any] = {
         "id": str(person.get("id") or ""),
         "publicId": clean_text(person.get("public_id")),
@@ -969,6 +972,8 @@ def native_person_detail_payload(detail: dict[str, Any], *, language: str = "") 
         "media": media_items,
         "profiles": profile_urls,
         "mentions": mentions,
+        "mentionsInVault": mentions_in_vault,
+        "mentionsTotal": mentions_total,
         "counts": counts,
     }
     payload.update(biography_fields)

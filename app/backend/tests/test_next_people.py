@@ -355,7 +355,7 @@ class NextPeoplePolicyTests(unittest.TestCase):
                 },
             },
             "localizations": [],
-            "counts": {"filmography": 12, "collection": 4},
+            "counts": {"filmography": 12, "collection": 4, "digital": 3},
             "personMedia": [
                 {
                     "id": "media-1",
@@ -379,6 +379,8 @@ class NextPeoplePolicyTests(unittest.TestCase):
         self.assertEqual(payload["imdbId"], "nm0000442")
         self.assertEqual(payload["alsoKnownAs"], ["Rutger Oelsen Hauer"])
         self.assertEqual(payload["mentions"], 12)
+        self.assertEqual(payload["mentionsInVault"], 7)
+        self.assertEqual(payload["mentionsTotal"], 12)
         self.assertEqual(payload["awards"][0]["award"], "Saturn Award")
         self.assertEqual(payload["awardGroups"][0]["items"][0]["result"], "won")
         self.assertEqual(len(payload["media"]), 2)
@@ -407,6 +409,20 @@ class NextPeoplePolicyTests(unittest.TestCase):
         self.assertEqual(payload["media"], [])
         self.assertEqual(payload["profiles"], ["https://image.tmdb.org/t/p/original/only.jpg"])
         self.assertEqual(payload["mentions"], 0)
+        self.assertEqual(payload["mentionsInVault"], 0)
+        self.assertEqual(payload["mentionsTotal"], 0)
+
+    def test_native_person_detail_payload_splits_mentions_in_vault_and_total(self):
+        detail = {
+            "person": {"id": "person-uuid", "name": "Example Person", "metadata": {}},
+            "localizations": [],
+            "counts": {"collection": 3, "digital": 2, "filmography": 142},
+        }
+
+        payload = native_person_detail_payload(detail)
+
+        self.assertEqual(payload["mentionsInVault"], 5)
+        self.assertEqual(payload["mentionsTotal"], 142)
 
     def test_local_person_filmography_entries_expose_collection_and_digital_state(self):
         entries = person_local_filmography_entries(
