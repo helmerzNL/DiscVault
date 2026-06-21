@@ -347,6 +347,35 @@ def _instance_key_pair(conn) -> tuple[str, str, str]:
     return private_key_pem, public_key, public_key_id
 
 
+def _sign_request_body(conn, raw_body: Any) -> dict[str, str]:
+    """Sign the exact contribution body bytes with the bootstrap-registered Ed25519 key.
+
+    Returns the signing headers ({keyId, timestamp, nonce, signature}) or {} when no
+    instance key is registered yet. The signed input is
+    ``timestamp.encode() + b"." + nonce.encode() + b"." + raw_body`` so MovieVault can
+    verify against the identical bytes DiscVault transmits. Reuses the same private key
+    and key_id registered at bootstrap (the recovery-handshake signer key).
+    """
+    private_key_pem = _text(_setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True))
+    public_key_id = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, ""))
+    if not private_key_pem or not public_key_id:
+        return {}
+    body_bytes = raw_body.encode("utf-8") if isinstance(raw_body, str) else bytes(raw_body or b"")
+    timestamp = _timestamp()
+    nonce = secrets.token_urlsafe(32)
+    signature_input = f"{timestamp}.{nonce}.".encode("utf-8") + body_bytes
+    from cryptography.hazmat.primitives import serialization
+
+    private_key = serialization.load_pem_private_key(private_key_pem.encode("ascii"), password=None)
+    signature = _b64url(private_key.sign(signature_input))
+    return {
+        "keyId": public_key_id,
+        "timestamp": timestamp,
+        "nonce": nonce,
+        "signature": f"key-v1={signature}",
+    }
+
+
 def _connection_payload(conn) -> dict[str, Any]:
     return {
         "instanceId": _instance_id(conn),
@@ -798,6 +827,9 @@ def movievault_plugin_context(
     def mark_revoked() -> None:
         _mark_revoked(conn)
 
+    def sign_request(raw_body: Any) -> dict[str, str]:
+        return _sign_request_body(conn, raw_body)
+
     safe_context.update(
         {
             "settings": settings,
@@ -810,6 +842,7 @@ def movievault_plugin_context(
             },
             "movievaultMarkRevoked": mark_revoked,
             "movievaultRecoverToken": recover_token_once,
+            "movievaultSignRequest": sign_request,
         }
     )
     return safe_context

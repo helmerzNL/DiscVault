@@ -963,6 +963,135 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertNotIn("must-not-leak", str(result))
 
 
+class MovieVault26SignedContributionTests(unittest.TestCase):
+    def _run_contribution(self, context, fake_request):
+        original_requests = movievault_26.requests
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            return movievault_26.receive_metadata(
+                {
+                    "entityType": "movie",
+                    "identity": "tt0078748",
+                    "payload": {"title": "Alien", "overview": "A public synopsis."},
+                },
+                context,
+            )
+        finally:
+            movievault_26.requests = original_requests
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+    def test_contribution_is_signed_and_transmits_exact_signed_bytes(self):
+        signer_inputs = []
+        posts = []
+
+        def signer(raw_body):
+            signer_inputs.append(raw_body)
+            return {
+                "keyId": "dvpk_registered",
+                "timestamp": "2026-06-21T12:00:00Z",
+                "nonce": f"nonce-{len(signer_inputs)}",
+                "signature": "key-v1=sig-value",
+            }
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-1", "allowedFields": ["title", "overview"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posts.append(kwargs)
+                return FakeResponse(200, {"id": "contrib_signed"})
+            return FakeResponse(404, {})
+
+        context = {
+            "secrets": {"token": "mv_live_test"},
+            "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+            "movievaultSignRequest": signer,
+        }
+        result = self._run_contribution(context, fake_request)
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertEqual(len(posts), 1)
+        post = posts[0]
+        # Signed requests must use data= (raw bytes), never json= (which would re-serialize).
+        self.assertIsNone(post.get("json"))
+        sent_bytes = post["data"]
+        self.assertIsInstance(sent_bytes, bytes)
+        # The bytes signed must be exactly the bytes transmitted.
+        self.assertEqual(sent_bytes.decode("utf-8"), signer_inputs[0])
+        headers = post["headers"]
+        self.assertEqual(headers["X-DiscVault-Key-Id"], "dvpk_registered")
+        self.assertEqual(headers["X-DiscVault-Timestamp"], "2026-06-21T12:00:00Z")
+        self.assertEqual(headers["X-DiscVault-Nonce"], "nonce-1")
+        self.assertEqual(headers["X-DiscVault-Signature"], "key-v1=sig-value")
+        self.assertEqual(headers["Content-Type"], "application/json")
+        self.assertEqual(headers["Authorization"], "Bearer mv_live_test")
+
+    def test_unsigned_contribution_uses_json_when_no_signer(self):
+        posts = []
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-1", "allowedFields": ["title", "overview"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posts.append(kwargs)
+                return FakeResponse(200, {"id": "contrib_plain"})
+            return FakeResponse(404, {})
+
+        context = {
+            "secrets": {"token": "mv_live_test"},
+            "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+        }
+        result = self._run_contribution(context, fake_request)
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertIsNone(posts[0].get("data"))
+        self.assertIsNotNone(posts[0].get("json"))
+        self.assertNotIn("X-DiscVault-Signature", posts[0]["headers"])
+
+    def test_signed_contribution_resigns_with_fresh_nonce_on_token_recovery_retry(self):
+        nonces = []
+        posts = []
+
+        def signer(raw_body):
+            nonces.append(f"nonce-{len(nonces) + 1}")
+            return {
+                "keyId": "dvpk_registered",
+                "timestamp": "2026-06-21T12:00:00Z",
+                "nonce": nonces[-1],
+                "signature": f"key-v1=sig-{len(nonces)}",
+            }
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-1", "allowedFields": ["title", "overview"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posts.append(kwargs)
+                if len(posts) == 1:
+                    return FakeResponse(401, {"error": "unauthorized"})
+                return FakeResponse(200, {"id": "contrib_retry"})
+            return FakeResponse(404, {})
+
+        context = {
+            "secrets": {"token": "mv_old"},
+            "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+            "movievaultRecoverToken": lambda: "mv_new",
+            "movievaultSignRequest": signer,
+        }
+        result = self._run_contribution(context, fake_request)
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertEqual(len(posts), 2)
+        # Each attempt re-signs with a unique nonce so the server never sees a replay.
+        first_nonce = posts[0]["headers"]["X-DiscVault-Nonce"]
+        second_nonce = posts[1]["headers"]["X-DiscVault-Nonce"]
+        self.assertNotEqual(first_nonce, second_nonce)
+        self.assertEqual(posts[0]["headers"]["Authorization"], "Bearer mv_old")
+        self.assertEqual(posts[1]["headers"]["Authorization"], "Bearer mv_new")
+        # Both attempts sign-then-send identical bytes.
+        self.assertEqual(posts[0]["data"], posts[1]["data"])
+
 class MovieVault26ClientVersionGateTests(unittest.TestCase):
     def test_bootstrap_request_body_advertises_client_version(self):
         result = movievault_26.connection_request(
@@ -1231,7 +1360,6 @@ class ReadBackLocalizationsTest(unittest.TestCase):
         by_lang = {row["lang"]: row for row in localizations}
         self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
         self.assertEqual(by_lang["ja"]["title"], "千と千尋の神隠し")
-
 
 if __name__ == "__main__":
     unittest.main()
