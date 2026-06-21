@@ -42739,10 +42739,18 @@ def refresh_container_metadata(
     if assets:
         primary_poster = next((asset for asset in assets if asset.get("kind") == "poster"), None)
         primary_backdrop = next((asset for asset in assets if asset.get("kind") == "backdrop"), None)
-        if primary_poster and not metadata.get("poster_locked"):
+        # Only derive artwork from member movies when the container has no cover of
+        # its own. A box-set keeps its own poster/backdrop (e.g. from MovieVault) in
+        # metadata; member artwork must never overwrite it. Artwork previously
+        # aggregated from members is tagged so it can keep tracking member changes.
+        has_own_poster = bool(clean_text(metadata.get("poster_url"))) and not metadata.get("poster_from_members")
+        has_own_backdrop = bool(clean_text(metadata.get("backdrop_url"))) and not metadata.get("backdrop_from_members")
+        if primary_poster and not metadata.get("poster_locked") and not has_own_poster:
             metadata_updates["poster_url"] = primary_poster.get("url")
-        if primary_backdrop and not metadata.get("backdrop_locked"):
+            metadata_updates["poster_from_members"] = True
+        if primary_backdrop and not metadata.get("backdrop_locked") and not has_own_backdrop:
             metadata_updates["backdrop_url"] = primary_backdrop.get("url")
+            metadata_updates["backdrop_from_members"] = True
 
     proposal = {
         "containerId": str(container_id),
