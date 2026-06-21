@@ -14531,14 +14531,14 @@ def ui_preview_html(
         </div>
         <section class="movie-detail-body">
           <nav class="detail-submenu container-detail-submenu" aria-label="Container sections" data-next-i18n-aria="containerDetail.sections">
-            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
-            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
           </nav>
-          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
             <div class="container-overview-grid">
               <div class="detail-card">
                 <h3 data-next-i18n="containerDetail.overview">Overview</h3>
@@ -14618,7 +14618,7 @@ def ui_preview_html(
               </div>
             </div>
           </div>
-          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
+          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
             <div class="detail-card full container-content-card">
               <div class="detail-card-head">
                 <div>
@@ -21598,8 +21598,8 @@ def ui_preview_html(
       const container = detail.container || {};
       const metadata = container.metadata || {};
       return mediaAssetImage(detail.mediaAssets, kind)
-        || mediaAssetImage(detail.aggregateMediaAssets, kind)
-        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
+        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind])
+        || mediaAssetImage(detail.aggregateMediaAssets, kind);
     }
     function containerAggregateMovieMap(detail) {
       return new Map((detail.aggregateMovies || []).map((movie) => [String(movie.id || ""), movie]));
@@ -22981,7 +22981,7 @@ def ui_preview_html(
       ).join("");
     }
     function renderContainerDetail(detail) {
-      const activePanelId = activeDetailPanel("containerDetail", "containerDetailOverviewPanel");
+      const activePanelId = activeDetailPanel("containerDetail", "containerDetailFilmsPanel");
       activeContainerPayload = detail;
       const container = detail.container || {};
       activeContainerId = container.id || activeContainerId || "";
@@ -23064,7 +23064,7 @@ def ui_preview_html(
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
-      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailFilmsPanel");
       syncContainerViewModeControls();
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
@@ -23091,7 +23091,7 @@ def ui_preview_html(
       document.getElementById("containerDetailVideos").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
       document.getElementById("containerDetailBackdrop").src = "";
-      activateDetailTab("containerDetail", "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", "containerDetailFilmsPanel");
       setContainerDetailMessage("");
     }
     function renderContainerEditSummary(detail) {
@@ -49646,6 +49646,7 @@ def register_routes(flask_app: Flask) -> None:
         elif wants_movie_import:
             provided_box_set_body = None
         has_provided_box_set = isinstance(provided_box_set_body, dict)
+        explicit_box_set_import = import_mode in {"box-set", "boxset"} or selected_candidate_is_box_set
         if not wants_movie_import and not wants_box_set_import:
             wants_box_set_import = has_provided_box_set or bool(body.get("detectBoxSets") or body.get("detect_box_sets"))
 
@@ -49740,7 +49741,11 @@ def register_routes(flask_app: Flask) -> None:
                 if wants_box_set_import and not box_set_proposal:
                     box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
                 if wants_box_set_import and not box_set_proposal:
-                    raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                    if explicit_box_set_import:
+                        raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                    # Box-set import was only inferred (e.g. a collection was detected while
+                    # adding a single film); fall back to importing the movie instead of failing.
+                    wants_box_set_import = False
                 if wants_box_set_import and box_set_proposal:
                     body_members = normalized_box_set_members_from_body(body)
                     explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
