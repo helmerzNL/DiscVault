@@ -910,11 +910,51 @@ def native_person_detail_payload(detail: dict[str, Any], *, language: str = "") 
     person = detail.get("person") if isinstance(detail.get("person"), dict) else {}
     metadata = person.get("metadata") if isinstance(person.get("metadata"), dict) else {}
     localizations = detail.get("localizations") if isinstance(detail.get("localizations"), list) else []
+    counts = detail.get("counts") if isinstance(detail.get("counts"), dict) else {}
     biography_fields, biography_by_language = native_person_biography_fields(localizations, metadata)
+    also_known_as = [
+        clean_text(value)
+        for value in (metadata.get("alsoKnownAs") or metadata.get("also_known_as") or [])
+        if clean_text(value)
+    ]
+    awards = metadata.get("awards") if isinstance(metadata.get("awards"), list) else []
+    award_groups = metadata.get("awardGroups") if isinstance(metadata.get("awardGroups"), list) else []
+    person_media = detail.get("personMedia") if isinstance(detail.get("personMedia"), list) else []
+    media_items: list[dict[str, Any]] = []
+    profile_urls: list[str] = []
+    for asset in person_media:
+        if not isinstance(asset, dict):
+            continue
+        url = clean_text(asset.get("url") or asset.get("source_url"))
+        if not url or url in profile_urls:
+            continue
+        media_items.append(
+            {
+                "id": str(asset.get("id") or ""),
+                "url": url,
+                "kind": clean_text(asset.get("kind")) or "profile",
+                "isPrimary": bool(asset.get("is_primary")),
+                "sortOrder": asset.get("sort_order"),
+                "provider": clean_text(asset.get("provider_id")),
+            }
+        )
+        profile_urls.append(url)
+    if not profile_urls:
+        for value in metadata.get("profiles") or []:
+            url = clean_text(value)
+            if url and url not in profile_urls:
+                profile_urls.append(url)
+    mentions = 0
+    for key in ("filmography", "collection"):
+        try:
+            mentions = max(mentions, int(counts.get(key) or 0))
+        except (TypeError, ValueError):
+            continue
     payload: dict[str, Any] = {
         "id": str(person.get("id") or ""),
         "publicId": clean_text(person.get("public_id")),
         "tmdbId": clean_text(detail.get("tmdbId") or person_tmdb_identifier(person, detail.get("identifiers") or [])),
+        "imdbId": clean_text(metadata.get("imdbId") or metadata.get("imdb_id")),
         "name": clean_text(person.get("name")),
         "profileUrl": clean_text(person.get("profile_url") or metadata.get("profileUrl") or metadata.get("profile_url")),
         "birthday": native_date_value(person.get("birth_date") or metadata.get("birthday") or metadata.get("birthDate")),
@@ -923,6 +963,13 @@ def native_person_detail_payload(detail: dict[str, Any], *, language: str = "") 
         "biography": person_biography_value_for_language(localizations, metadata, language),
         "knownFor": clean_text(person.get("known_for") or metadata.get("knownFor") or metadata.get("known_for")),
         "biographyByLanguage": biography_by_language,
+        "alsoKnownAs": also_known_as,
+        "awards": awards,
+        "awardGroups": award_groups,
+        "media": media_items,
+        "profiles": profile_urls,
+        "mentions": mentions,
+        "counts": counts,
     }
     payload.update(biography_fields)
     return payload
@@ -1008,6 +1055,12 @@ def person_detail_entity(conn, person_id: UUID, actor: dict[str, Any] | None = N
     external_filmography = person_filmography_entities(conn, person.get("metadata"))
     local_filmography = person_local_filmography_entries(collection_credits, digital_credits)
     filmography = merge_person_filmography_entries(external_filmography, local_filmography)
+    person_media: list[dict[str, Any]] = []
+    if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+        try:
+            person_media = _next_app().entity_media_asset_entities(conn, "person", person_id)
+        except Exception:
+            person_media = []
     return {
         "person": person,
         "identifiers": identifiers,
@@ -1022,6 +1075,7 @@ def person_detail_entity(conn, person_id: UUID, actor: dict[str, Any] | None = N
         "filmography": filmography,
         "externalFilmography": external_filmography,
         "localFilmography": local_filmography,
+        "personMedia": person_media,
         "counts": {
             "collection": len(collection_credits),
             "acting": len(acting_credits),

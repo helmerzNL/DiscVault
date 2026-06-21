@@ -57,7 +57,7 @@ try:
     from .next_plugin_runtime import validate_manifest_compatibility
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
-    from .next_metadata import lookup_metadata_sources
+    from .next_metadata import ensure_remote_media_asset
     from .next_metadata import metadata_result_summary
     from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
@@ -232,7 +232,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import validate_manifest_compatibility
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
-    from next_metadata import lookup_metadata_sources
+    from next_metadata import ensure_remote_media_asset
     from next_metadata import metadata_result_summary
     from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
@@ -9810,6 +9810,101 @@ def ui_preview_html(
     .detail-card.full {
       grid-column: 1 / -1;
     }
+    .person-media-gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    .person-media-tile {
+      position: relative;
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .person-media-tile.is-primary {
+      border-color: var(--accent, #6ea8fe);
+      box-shadow: 0 0 0 2px var(--accent, #6ea8fe);
+    }
+    .person-media-tile img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      object-fit: cover;
+    }
+    .person-media-badge {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: .72rem;
+      background: var(--accent, #6ea8fe);
+      color: #08111f;
+    }
+    .person-media-set-primary {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      right: 6px;
+      font-size: .74rem;
+    }
+    .person-awards {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .person-award-group {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: var(--bg);
+    }
+    .person-award-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .person-award-summary {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .person-award-items {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .person-award-items li {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      font-size: .86rem;
+    }
+    .person-award-result {
+      flex: 0 0 auto;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .person-award-result.won {
+      background: rgba(120, 200, 120, 0.18);
+      color: #57c777;
+    }
+    .person-award-result.nominated {
+      background: rgba(160, 170, 190, 0.18);
+      color: var(--muted);
+    }
+    .person-award-detail {
+      color: var(--text);
+    }
     .detail-card h3 {
       margin: 0 0 12px;
       font-size: 1rem;
@@ -14715,6 +14810,14 @@ def ui_preview_html(
           <div class="detail-card">
             <h3 data-next-i18n="personDetail.identifiers">Identifiers</h3>
             <div class="detail-grid" id="personDetailIdentifiers"></div>
+          </div>
+          <div class="detail-card full hidden" id="personDetailMediaCard">
+            <h3 data-next-i18n="personDetail.media">Profile images</h3>
+            <div class="person-media-gallery" id="personDetailMedia"></div>
+          </div>
+          <div class="detail-card full hidden" id="personDetailAwardsCard">
+            <h3 data-next-i18n="personDetail.awards">Awards</h3>
+            <div class="person-awards" id="personDetailAwards"></div>
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
@@ -23160,6 +23263,137 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `detail-message ${tone || ""}`.trim();
     }
+    function isIsoDateValue(value) {
+      return /^\\d{4}-\\d{2}-\\d{2}$/.test(String(value || "").slice(0, 10));
+    }
+    function formatPersonLongDate(value) {
+      if (!value) return "";
+      const text = String(value).slice(0, 10);
+      if (!isIsoDateValue(text)) return text;
+      try {
+        return new Intl.DateTimeFormat(localeState.locale || "en-US", {day: "numeric", month: "long", year: "numeric"}).format(new Date(`${text}T12:00:00`));
+      } catch (error) {
+        return text;
+      }
+    }
+    function personAgeYears(birthday, deathday) {
+      const birthText = String(birthday || "").slice(0, 10);
+      if (!isIsoDateValue(birthText)) return null;
+      const birth = new Date(`${birthText}T12:00:00`);
+      if (Number.isNaN(birth.getTime())) return null;
+      const deathText = String(deathday || "").slice(0, 10);
+      const end = isIsoDateValue(deathText) ? new Date(`${deathText}T12:00:00`) : new Date();
+      if (Number.isNaN(end.getTime())) return null;
+      let age = end.getFullYear() - birth.getFullYear();
+      const monthDiff = end.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && end.getDate() < birth.getDate())) age -= 1;
+      return age >= 0 && age < 200 ? age : null;
+    }
+    function personKnownForLabel(value) {
+      const key = String(value || "").trim();
+      if (!key) return "";
+      return tNext(`personDetail.department.${key.toLowerCase()}`, key);
+    }
+    function personBirthdayDisplay(detail, person) {
+      const birthday = detail.birthday || person.birth_date || "";
+      if (!birthday) return "";
+      const formatted = formatPersonLongDate(birthday);
+      const age = personAgeYears(birthday, detail.deathday || person.death_date);
+      if (age === null) return formatted;
+      const deceased = !!(detail.deathday || person.death_date);
+      const label = deceased
+        ? tNext("personDetail.ageAtDeath", "age at death {age}").replace("{age}", String(age))
+        : tNext("personDetail.ageYears", "{age} years").replace("{age}", String(age));
+      return `${formatted} (${label})`;
+    }
+    function personAlsoKnownAs(detail, metadata) {
+      const direct = Array.isArray(detail.alsoKnownAs) ? detail.alsoKnownAs : null;
+      const source = (direct && direct.length) ? direct : (metadata.alsoKnownAs || metadata.also_known_as || []);
+      return (Array.isArray(source) ? source : []).map((value) => String(value || "").trim()).filter(Boolean);
+    }
+    function personMentionsCount(detail, counts) {
+      const direct = Number(detail.mentions);
+      if (Number.isFinite(direct) && direct > 0) return direct;
+      return Math.max(Number(counts.filmography) || 0, Number(counts.collection) || 0);
+    }
+    function personMediaItems(detail) {
+      if (Array.isArray(detail.media) && detail.media.length) {
+        return detail.media.filter((item) => item && item.url);
+      }
+      const raw = Array.isArray(detail.personMedia) ? detail.personMedia : [];
+      return raw
+        .map((asset) => ({
+          id: asset.id || "",
+          url: asset.url || asset.source_url || "",
+          isPrimary: !!asset.is_primary,
+          sortOrder: asset.sort_order,
+          kind: asset.kind || "profile",
+        }))
+        .filter((item) => item.url);
+    }
+    function personMediaGalleryHtml(media, options = {}) {
+      if (!media.length) return "";
+      const canEdit = !!options.canEdit;
+      return media
+        .map((item) => {
+          const cls = item.isPrimary ? "person-media-tile is-primary" : "person-media-tile";
+          const badge = item.isPrimary
+            ? `<span class="person-media-badge">${escapeHtml(tNext("personDetail.primaryImage", "Primary"))}</span>`
+            : "";
+          const button = (canEdit && !item.isPrimary && item.id)
+            ? `<button type="button" class="secondary-button person-media-set-primary" data-person-media-primary="${escapeHtml(item.id)}">${escapeHtml(tNext("personDetail.setPrimaryImage", "Set as primary"))}</button>`
+            : "";
+          return `<figure class="${cls}"><img src="${escapeHtml(usableImage(item.url) || item.url)}" alt="" loading="lazy">${badge}${button}</figure>`;
+        })
+        .join("");
+    }
+    function personAwardGroupsList(detail) {
+      const groups = Array.isArray(detail.awardGroups) ? detail.awardGroups : [];
+      if (groups.length) return groups;
+      const metadata = (detail.person || {}).metadata || {};
+      return Array.isArray(metadata.awardGroups) ? metadata.awardGroups : [];
+    }
+    function personAwardsHtml(groups) {
+      if (!groups.length) return "";
+      return groups
+        .map((group) => {
+          const items = (Array.isArray(group.items) ? group.items.slice() : [])
+            .sort((a, b) => (Number(b.year) || 0) - (Number(a.year) || 0));
+          const wins = Number(group.wins) || 0;
+          const nominations = Number(group.nominations) || 0;
+          const summary = [];
+          if (wins) summary.push(`${wins} ${tNext("personDetail.awardWins", "wins")}`);
+          if (nominations) summary.push(`${nominations} ${tNext("personDetail.awardNominations", "nominations")}`);
+          const rows = items
+            .map((item) => {
+              const won = String(item.result || "") === "won";
+              const resultClass = won ? "person-award-result won" : "person-award-result nominated";
+              const resultLabel = won ? tNext("personDetail.awardWon", "Won") : tNext("personDetail.awardNominated", "Nominated");
+              const detailParts = [item.year ? String(item.year) : "", item.category || "", item.work || ""].filter(Boolean).map((part) => escapeHtml(part));
+              return `<li><span class="${resultClass}">${escapeHtml(resultLabel)}</span><span class="person-award-detail">${detailParts.join(" — ")}</span></li>`;
+            })
+            .join("");
+          return `<div class="person-award-group"><div class="person-award-head"><strong>${escapeHtml(group.award || "")}</strong><span class="person-award-summary">${escapeHtml(summary.join(" · "))}</span></div><ul class="person-award-items">${rows}</ul></div>`;
+        })
+        .join("");
+    }
+    async function setPrimaryPersonMedia(mediaId) {
+      if (!activePersonId || !mediaId) return;
+      setPersonDetailMessage(tNext("personDetail.updatingPrimaryImage", "Updating primary image..."), "info");
+      try {
+        await authApiJson(`/api/next/people/${encodeURIComponent(activePersonId)}/media/primary`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({mediaId})
+        });
+        const payload = await authApiJson(`/api/next/people/${encodeURIComponent(activePersonId)}`);
+        renderPersonDetail(payload.detail || {});
+        setPersonDetailMessage(tNext("personDetail.primaryImageUpdated", "Primary image updated."), "good");
+        peopleState.loaded = false;
+      } catch (error) {
+        setPersonDetailMessage(error.message || String(error), "bad");
+      }
+    }
     function renderPersonDetail(detail) {
       activePersonPayload = detail;
       const person = detail.person || {};
@@ -23183,23 +23417,40 @@ def ui_preview_html(
       }
       document.getElementById("personDetailTitle").textContent = name;
       document.getElementById("personDetailBiography").textContent = person.biography || tNext("personDetail.noBiography", "No biography imported yet.");
+      const knownForValue = person.known_for || metadata.knownFor || metadata.known_for || "";
+      const knownForLabel = personKnownForLabel(knownForValue);
+      const birthdayDisplay = personBirthdayDisplay(detail, person);
+      const deathdayDisplay = formatPersonLongDate(detail.deathday || person.death_date);
+      const alsoKnownAs = personAlsoKnownAs(detail, metadata);
+      const mentions = personMentionsCount(detail, counts);
       document.getElementById("personDetailTags").innerHTML = detailTagHtml([
-        person.known_for,
-        person.birth_date,
-        person.death_date ? `${tNext("personDetail.died", "Died")} ${person.death_date}` : "",
-        (counts.collection || collectionCredits.length) ? `${counts.collection || collectionCredits.length} ${tNext("personDetail.credits", "credits")}` : "",
+        knownForLabel,
+        birthdayDisplay,
+        deathdayDisplay ? `${tNext("personDetail.died", "Died")} ${deathdayDisplay}` : "",
+        mentions ? `${mentions} ${tNext("personDetail.mentions", "mentions")}` : "",
         extendedPeople && digitalCredits.length ? `${digitalCredits.length} ${tNext("personDetail.digitalCollection", "Digital").toLowerCase()}` : "",
         extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : "",
         appDebugMode && person.id ? `Person ID ${person.id}` : ""
       ]);
       document.getElementById("personDetailFields").innerHTML = detailFieldRows([
-        [tNext("personDetail.knownFor", "Known for"), person.known_for],
-        [tNext("personDetail.birthDate", "Birth date"), person.birth_date],
-        [tNext("personDetail.deathDate", "Death date"), person.death_date],
+        [tNext("personDetail.knownFor", "Known for"), knownForLabel],
+        [tNext("personDetail.birthDate", "Birth date"), birthdayDisplay],
+        [tNext("personDetail.deathDate", "Death date"), deathdayDisplay],
         [tNext("personDetail.placeOfBirth", "Place of birth"), person.place_of_birth],
+        [tNext("personDetail.alsoKnownAs", "Also known as"), alsoKnownAs.join(", ")],
+        [tNext("personDetail.mentions", "Mentions"), mentions ? String(mentions) : ""],
         [tNext("personDetail.publicId", "Public ID"), person.public_id],
         [appDebugMode ? tNext("personDetail.metadataProvenance", "Metadata provenance") : "", appDebugMode ? [metadata.person_metadata_source, metadata.person_metadata_source_ref, metadata.filmography_source_ref].filter(Boolean).join(" / ") : ""]
       ]);
+      const personMedia = personMediaItems(detail);
+      const canEditPersonMedia = hasPermission("metadata.refresh_one");
+      const mediaNode = document.getElementById("personDetailMedia");
+      if (mediaNode) mediaNode.innerHTML = personMediaGalleryHtml(personMedia, {canEdit: canEditPersonMedia});
+      document.getElementById("personDetailMediaCard")?.classList.toggle("hidden", personMedia.length === 0);
+      const awardGroups = personAwardGroupsList(detail);
+      const awardsNode = document.getElementById("personDetailAwards");
+      if (awardsNode) awardsNode.innerHTML = personAwardsHtml(awardGroups);
+      document.getElementById("personDetailAwardsCard")?.classList.toggle("hidden", awardGroups.length === 0);
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
         `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
         item.identifier
@@ -30590,6 +30841,12 @@ def ui_preview_html(
       });
       document.getElementById("personDetailBackButton")?.addEventListener("click", () => closeAppPersonDetail());
       document.getElementById("personDetailPage")?.addEventListener("click", (event) => {
+        const primaryButton = event.target.closest("[data-person-media-primary]");
+        if (primaryButton) {
+          event.preventDefault();
+          setPrimaryPersonMedia(primaryButton.dataset.personMediaPrimary);
+          return;
+        }
         const movieLink = event.target.closest("[data-open-movie]");
         if (!movieLink) return;
         event.preventDefault();
@@ -40894,6 +41151,101 @@ def refresh_movie_person_metadata_cascade(
     return summary
 
 
+def sync_person_profile_media(
+    conn,
+    person_id: UUID,
+    profile_urls: list[Any] | None,
+    *,
+    provider_id: str = "tmdb",
+) -> dict[str, Any] | None:
+    """Persist a person's profile image URLs as remote media assets.
+
+    Each unique https URL is upserted into ``media_assets`` (kind ``profile``)
+    and linked via ``entity_media`` (entity_type ``person``, role ``profile``).
+    The first asset is marked primary and stored on ``people.profile_asset_id``
+    unless the person already has a primary profile selected (which is left
+    untouched so a manual selection is not overwritten).
+    """
+    if not table_exists(conn, "people") or not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
+        return None
+    urls: list[str] = []
+    for raw in profile_urls or []:
+        value = clean_text(raw)
+        if value.startswith(("http://", "https://")) and value not in urls:
+            urls.append(value)
+    urls = urls[:30]
+    if not urls:
+        return None
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT profile_asset_id FROM people WHERE id=%s", (person_id,))
+        row = cur.fetchone()
+        existing_primary = (row.get("profile_asset_id") if isinstance(row, dict) else (row[0] if row else None)) if row else None
+
+    assign_primary = existing_primary is None
+    primary_media_id = existing_primary
+    linked: list[str] = []
+    for index, url in enumerate(urls):
+        media_id = ensure_remote_media_asset(conn, kind="profile", source_url=url, provider_id=provider_id)
+        if not media_id:
+            continue
+        make_primary = assign_primary and primary_media_id is None
+        if make_primary:
+            primary_media_id = media_id
+        with conn.cursor() as cur:
+            if make_primary:
+                cur.execute(
+                    """
+                    UPDATE entity_media em
+                    SET is_primary=false,
+                        sort_order=GREATEST(em.sort_order, 1)
+                    FROM media_assets ma
+                    WHERE ma.id = em.media_id
+                      AND em.entity_type='person'
+                      AND em.entity_id=%s
+                      AND ma.kind='profile'
+                      AND em.is_primary=true
+                      AND em.media_id<>%s
+                    """,
+                    (person_id, media_id),
+                )
+            cur.execute(
+                """
+                INSERT INTO entity_media (
+                    entity_type,
+                    entity_id,
+                    media_id,
+                    role,
+                    is_primary,
+                    sort_order
+                )
+                VALUES ('person', %s, %s, 'profile', %s, %s)
+                ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                    is_primary=GREATEST(entity_media.is_primary::int, EXCLUDED.is_primary::int)::boolean,
+                    sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order),
+                    deleted_at=NULL,
+                    deleted_by=NULL,
+                    purge_after=NULL,
+                    restore_metadata='{}'::jsonb
+                """,
+                (person_id, media_id, make_primary, 0 if make_primary else index + 1),
+            )
+        linked.append(str(media_id))
+
+    if assign_primary and primary_media_id is not None:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE people SET profile_asset_id=%s, updated_at=now() WHERE id=%s",
+                (primary_media_id, person_id),
+            )
+
+    return {
+        "primaryMediaId": str(primary_media_id) if primary_media_id else None,
+        "linked": linked,
+        "count": len(linked),
+    }
+
+
 def refresh_person_metadata(
     conn,
     person_id: UUID,
@@ -40934,6 +41286,26 @@ def refresh_person_metadata(
         "source": clean_text(result.get("provider")) or plugin.get("id"),
         "source_ref": clean_text(result.get("sourceRef")) or f"tmdb:person:{tmdb_id}",
     }
+    aliases = [clean_text(a) for a in (result.get("alsoKnownAs") or result.get("also_known_as") or []) if clean_text(a)][:50]
+    imdb_id = clean_text(result.get("imdbId") or result.get("imdb_id"))
+    profile_urls: list[str] = []
+    for raw_url in result.get("profiles") or []:
+        value = clean_text(raw_url)
+        if value and value not in profile_urls:
+            profile_urls.append(value)
+    if updates["profile_url"] and updates["profile_url"] not in profile_urls:
+        profile_urls.insert(0, updates["profile_url"])
+
+    awards_execution = run_plugin_entrypoint(
+        str(plugin["id"]),
+        "person_awards",
+        {"tmdbId": tmdb_id, "imdbId": imdb_id},
+        context,
+    )
+    awards_result = awards_execution.get("result") or {} if awards_execution.get("status") == "ok" else {}
+    awards = awards_result.get("awards") or []
+    award_groups = awards_result.get("awardGroups") or []
+
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
     preview_metadata = preview_person.get("metadata") if isinstance(preview_person.get("metadata"), dict) else {}
@@ -40947,6 +41319,18 @@ def refresh_person_metadata(
     if updates["biography"]:
         preview_person["biography"] = updates["biography"]
         preview_metadata["biography"] = updates["biography"]
+    if aliases:
+        preview_metadata["alsoKnownAs"] = aliases
+    if imdb_id:
+        preview_metadata["imdbId"] = imdb_id
+    if profile_urls:
+        preview_metadata["profiles"] = profile_urls
+    if awards_result:
+        preview_metadata["awards"] = awards
+        preview_metadata["awardGroups"] = award_groups
+        preview_metadata["awards_source"] = clean_text(awards_result.get("provider")) or "wikidata"
+        preview_metadata["awards_source_ref"] = clean_text(awards_result.get("sourceRef"))
+        preview_metadata["awards_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     preview_metadata["person_metadata_source"] = updates["source"]
     preview_metadata["person_metadata_source_ref"] = updates["source_ref"]
     preview_metadata["person_metadata_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -40988,6 +41372,10 @@ def refresh_person_metadata(
                     """,
                     (person_id, updates["language"], updates["biography"]),
                 )
+        try:
+            sync_person_profile_media(conn, person_id, profile_urls, provider_id=updates["source"])
+        except Exception:
+            pass
         detail = person_detail_entity(conn, person_id) or preview_detail
     else:
         detail = preview_detail
@@ -41003,6 +41391,12 @@ def refresh_person_metadata(
             "state": execution.get("state"),
             "elapsedMs": execution.get("elapsedMs"),
             "entrypoint": execution.get("entrypoint"),
+        },
+        "awards": {
+            "status": awards_execution.get("status"),
+            "state": awards_execution.get("state"),
+            "count": len(awards),
+            "groups": len(award_groups),
         },
         "result": result,
         "detail": detail,
@@ -41198,6 +41592,101 @@ def set_primary_movie_media_asset(
     media["sort_order"] = 0
     media["url"] = media_asset_public_url(media)
     return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
+
+
+def set_primary_person_media_asset(
+    conn,
+    *,
+    person_id: UUID,
+    media_id: UUID,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not table_exists(conn, "people") or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM people WHERE id=%s", (person_id,))
+        if not cur.fetchone():
+            raise NextApiError("Person not found", 404)
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='person'
+              AND em.entity_id=%s
+              AND em.media_id=%s
+              AND em.deleted_at IS NULL
+              AND ma.kind='profile'
+            """,
+            (person_id, media_id),
+        )
+        media = cur.fetchone()
+        if not media:
+            raise NextApiError("Media asset is not linked to this person", 404)
+        cur.execute(
+            """
+            UPDATE entity_media em
+            SET is_primary=false,
+                sort_order=GREATEST(em.sort_order, 1)
+            FROM media_assets ma
+            WHERE ma.id = em.media_id
+              AND em.entity_type='person'
+              AND em.entity_id=%s
+              AND em.deleted_at IS NULL
+              AND ma.kind='profile'
+              AND em.is_primary=true
+            """,
+            (person_id,),
+        )
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET is_primary=true,
+                sort_order=0
+            WHERE entity_type='person'
+              AND entity_id=%s
+              AND media_id=%s
+              AND deleted_at IS NULL
+            """,
+            (person_id, media_id),
+        )
+        media_metadata = media.get("metadata") if isinstance(media, dict) else {}
+        media_metadata = media_metadata if isinstance(media_metadata, dict) else {}
+        media_metadata.update(
+            {
+                "lockedPrimary": True,
+                "userSelectedPrimary": True,
+                "source": media_metadata.get("source") or "manual_selection",
+                "selectedBy": actor_job_payload(actor or {}) if actor else None,
+            }
+        )
+        cur.execute("UPDATE media_assets SET metadata=%s WHERE id=%s", (Jsonb(json_ready(media_metadata)), media_id))
+        cur.execute(
+            "UPDATE people SET profile_asset_id=%s, updated_at=now() WHERE id=%s",
+            (media_id, person_id),
+        )
+
+    media["is_primary"] = True
+    media["sort_order"] = 0
+    media["url"] = media_asset_public_url(media)
+    return {"personId": str(person_id), "kind": "profile", "media": media}
 
 
 def uploaded_artwork_file() -> tuple[Any, str | None]:
@@ -48332,6 +48821,40 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={"dryRun": dry_run, "result": result},
                 )
         return response({"status": "ok", "filmography": result})
+
+    @flask_app.post("/api/next/people/<person_id>/media/primary")
+    def person_media_primary(person_id: str):
+        person_uuid = parse_uuid(person_id, "personId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media selection body must be an object", 400)
+        media_uuid = parse_uuid(body.get("mediaId") or body.get("media_id") or body.get("mediaAssetId"), "mediaId")
+        if not media_uuid:
+            raise NextApiError("mediaId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            if not actor_can_view_person(conn, actor, person_uuid):
+                raise NextApiError("Person not found", 404)
+            with conn.transaction():
+                result = set_primary_person_media_asset(
+                    conn,
+                    person_id=person_uuid,
+                    media_id=media_uuid,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="person.media_primary_changed",
+                    category="admin",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_uuid,
+                    summary="Changed primary person profile image",
+                    metadata={"mediaId": str(media_uuid), "result": result},
+                )
+        return response({"status": "ok", **result})
 
     @flask_app.post("/api/next/movies/<movie_id>/media/primary")
     def movie_media_primary(movie_id: str):

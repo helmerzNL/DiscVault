@@ -1,5 +1,6 @@
 import os
 import sys
+import types
 import unittest
 
 
@@ -155,6 +156,87 @@ class NextPeoplePolicyTests(unittest.TestCase):
         self.assertEqual(result["combinedCredits"]["cast"][0]["posterUrl"], "https://image.tmdb.org/t/p/original/actor.jpg")
         self.assertEqual(result["combinedCredits"]["crew"][0]["job"], "Director")
 
+    def test_tmdb_person_details_entrypoint_enriches_aliases_imdb_and_profiles(self):
+        original_request = tmdb_plugin._request
+
+        def fake_request(context, path, **params):
+            self.assertEqual(path, "/person/585")
+            self.assertEqual(params["append_to_response"], "images,external_ids")
+            return {
+                "name": "Rutger Hauer",
+                "biography": "Dutch actor",
+                "birthday": "1944-01-23",
+                "deathday": "2019-07-19",
+                "place_of_birth": "Breukelen, Netherlands",
+                "known_for_department": "Acting",
+                "profile_path": "/primary.jpg",
+                "also_known_as": ["Rutger Oelsen Hauer", ""],
+                "external_ids": {"imdb_id": "nm0000442"},
+                "images": {
+                    "profiles": [
+                        {"file_path": "/secondary.jpg", "vote_average": 5.1},
+                        {"file_path": "/tertiary.jpg", "vote_average": 9.4},
+                    ]
+                },
+            }
+
+        try:
+            tmdb_plugin._request = fake_request
+            result = tmdb_plugin.person_details({"tmdbId": "585"}, {"settings": {"language": "nl-NL"}})
+        finally:
+            tmdb_plugin._request = original_request
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["imdbId"], "nm0000442")
+        self.assertEqual(result["alsoKnownAs"], ["Rutger Oelsen Hauer"])
+        self.assertEqual(result["profileUrl"], "https://image.tmdb.org/t/p/original/primary.jpg")
+        self.assertEqual(result["profiles"][0], "https://image.tmdb.org/t/p/original/primary.jpg")
+        self.assertIn("https://image.tmdb.org/t/p/original/tertiary.jpg", result["profiles"])
+        self.assertLess(
+            result["profiles"].index("https://image.tmdb.org/t/p/original/tertiary.jpg"),
+            result["profiles"].index("https://image.tmdb.org/t/p/original/secondary.jpg"),
+        )
+
+    def test_tmdb_person_awards_entrypoint_groups_wikidata_results(self):
+        original_import = tmdb_plugin._import_wikidata_awards
+        awards = [
+            {"award": "Saturn Award", "category": "Best Actor", "year": 1983, "result": "won"},
+            {"award": "Saturn Award", "category": "Best Actor", "year": 1986, "result": "nominated"},
+        ]
+        grouped = [{"award": "Saturn Award", "wins": 1, "nominations": 1, "items": awards}]
+        captured = {}
+
+        def fake_fetch(tmdb_id=None, imdb_id=None, wikidata_id=None, language=None):
+            captured["args"] = (tmdb_id, imdb_id, wikidata_id, language)
+            return {"wikidataId": "Q44519", "awards": awards}
+
+        fake_module = types.SimpleNamespace(
+            fetch_person_awards=fake_fetch,
+            group_awards=lambda value: grouped,
+        )
+
+        try:
+            tmdb_plugin._import_wikidata_awards = lambda: fake_module
+            result = tmdb_plugin.person_awards(
+                {"tmdbId": "585", "imdbId": "nm0000442"},
+                {"settings": {"language": "nl-NL"}},
+            )
+        finally:
+            tmdb_plugin._import_wikidata_awards = original_import
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["provider"], "wikidata")
+        self.assertEqual(result["wikidataId"], "Q44519")
+        self.assertEqual(result["awardGroups"], grouped)
+        self.assertEqual(result["counts"]["awards"], 2)
+        self.assertEqual(captured["args"], ("585", "nm0000442", None, "nl"))
+
+    def test_tmdb_person_awards_entrypoint_requires_identifier(self):
+        result = tmdb_plugin.person_awards({}, {"settings": {}})
+
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(result["provider"], "wikidata")
+
     def test_native_person_detail_payload_flattens_ios_contract(self):
         detail = {
             "person": {
@@ -201,6 +283,80 @@ class NextPeoplePolicyTests(unittest.TestCase):
 
         self.assertEqual(payload["id"], "person-uuid")
         self.assertEqual(payload["biography"], "Fallback biography")
+
+    def test_native_person_detail_payload_exposes_awards_aliases_mentions_media(self):
+        detail = {
+            "person": {
+                "id": "person-uuid",
+                "name": "Rutger Hauer",
+                "metadata": {
+                    "imdbId": "nm0000442",
+                    "alsoKnownAs": ["Rutger Oelsen Hauer", "  "],
+                    "awards": [{"award": "Saturn Award", "result": "won", "year": 1983}],
+                    "awardGroups": [
+                        {
+                            "award": "Saturn Award",
+                            "wins": 1,
+                            "nominations": 0,
+                            "items": [{"result": "won", "year": 1983, "category": "Best Actor"}],
+                        }
+                    ],
+                    "profiles": ["https://image.tmdb.org/t/p/original/fallback.jpg"],
+                },
+            },
+            "localizations": [],
+            "counts": {"filmography": 12, "collection": 4},
+            "personMedia": [
+                {
+                    "id": "media-1",
+                    "url": "https://image.tmdb.org/t/p/original/primary.jpg",
+                    "kind": "profile",
+                    "is_primary": True,
+                    "sort_order": 0,
+                    "provider_id": "tmdb",
+                },
+                {
+                    "id": "media-2",
+                    "source_url": "https://image.tmdb.org/t/p/original/secondary.jpg",
+                    "is_primary": False,
+                    "sort_order": 1,
+                },
+            ],
+        }
+
+        payload = native_person_detail_payload(detail)
+
+        self.assertEqual(payload["imdbId"], "nm0000442")
+        self.assertEqual(payload["alsoKnownAs"], ["Rutger Oelsen Hauer"])
+        self.assertEqual(payload["mentions"], 12)
+        self.assertEqual(payload["awards"][0]["award"], "Saturn Award")
+        self.assertEqual(payload["awardGroups"][0]["items"][0]["result"], "won")
+        self.assertEqual(len(payload["media"]), 2)
+        self.assertTrue(payload["media"][0]["isPrimary"])
+        self.assertEqual(payload["media"][0]["id"], "media-1")
+        self.assertEqual(
+            payload["profiles"],
+            [
+                "https://image.tmdb.org/t/p/original/primary.jpg",
+                "https://image.tmdb.org/t/p/original/secondary.jpg",
+            ],
+        )
+
+    def test_native_person_detail_payload_uses_metadata_profiles_without_media(self):
+        detail = {
+            "person": {
+                "id": "person-uuid",
+                "name": "Example Person",
+                "metadata": {"profiles": ["https://image.tmdb.org/t/p/original/only.jpg"]},
+            },
+            "localizations": [],
+        }
+
+        payload = native_person_detail_payload(detail)
+
+        self.assertEqual(payload["media"], [])
+        self.assertEqual(payload["profiles"], ["https://image.tmdb.org/t/p/original/only.jpg"])
+        self.assertEqual(payload["mentions"], 0)
 
     def test_local_person_filmography_entries_expose_collection_and_digital_state(self):
         entries = person_local_filmography_entries(
