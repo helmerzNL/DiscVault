@@ -2760,7 +2760,7 @@ def media_asset_uuid(storage_key: str) -> uuid.UUID:
 
 
 def ensure_remote_media_asset(conn, *, kind: str, source_url: str, provider_id: str) -> UUID | None:
-    if kind not in {"poster", "backdrop"}:
+    if kind not in {"poster", "backdrop", "profile"}:
         return None
     source_url = clean_text(source_url) or ""
     if not source_url.startswith(("http://", "https://")):

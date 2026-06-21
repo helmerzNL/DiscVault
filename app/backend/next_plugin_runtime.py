@@ -43,6 +43,7 @@ PLUGIN_ENTRYPOINTS = (
     "people_for_movie",
     "person_details",
     "person_filmography",
+    "person_awards",
     "images_for_movie",
     "videos_for_movie",
     "technical_specs",

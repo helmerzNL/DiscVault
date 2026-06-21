@@ -458,6 +458,15 @@ class NextPluginRuntimeTests(unittest.TestCase):
                 self.assertIn("personal_list_source", plugin.manifest["categories"])
                 self.assertIn("sync_personal_lists", plugin.runtime["entrypoints"])
 
+    def test_tmdb_exposes_person_awards_capability_and_entrypoint(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        plugin = plugins["tmdb"]
+        self.assertIn("person_awards", plugin.manifest["capabilities"])
+        self.assertIn("person_awards", plugin.runtime["entrypoints"])
+        self.assertIn("person_details", plugin.runtime["entrypoints"])
+
     def test_upcitemdb_is_tagged_as_bootstrap_metadata_source(self):
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
