@@ -38693,30 +38693,59 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
 
 
 
-def person_metadata_plugin(conn) -> dict[str, Any] | None:
+def person_metadata_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Person metadata sources in the shared provider priority order.
+
+    Mirrors ``metadata_source_plugins`` for movies/containers: installed
+    ``metadata_source`` plugins that expose a ``person_details`` entrypoint,
+    ordered by ``order_index`` so the highest-priority provider wins on conflicts.
+    """
     if not table_exists(conn, "plugins"):
-        return None
+        return []
     sync_metadata_plugin_registry(conn)
     registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins: list[dict[str, Any]] = []
     for plugin in registry.get("plugins") or []:
-        runtime = plugin.get("runtime") or {}
-        entrypoints = runtime.get("entrypoints") or []
-        if plugin.get("id") == "tmdb" and "person_details" in entrypoints:
-            return plugin
-    return None
+        if not plugin.get("installed"):
+            continue
+        if not include_disabled and not plugin.get("enabled"):
+            continue
+        if "metadata_source" not in plugin_categories(plugin):
+            continue
+        if "person_details" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def person_filmography_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Filmography sources in the shared provider priority order."""
+    if not table_exists(conn, "plugins"):
+        return []
+    sync_metadata_plugin_registry(conn)
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins: list[dict[str, Any]] = []
+    for plugin in registry.get("plugins") or []:
+        if not plugin.get("installed"):
+            continue
+        if not include_disabled and not plugin.get("enabled"):
+            continue
+        if "metadata_source" not in plugin_categories(plugin):
+            continue
+        if "person_filmography" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def person_metadata_plugin(conn) -> dict[str, Any] | None:
+    candidates = person_metadata_source_plugins(conn, include_disabled=True)
+    return candidates[0] if candidates else None
 
 
 def person_filmography_plugin(conn) -> dict[str, Any] | None:
-    if not table_exists(conn, "plugins"):
-        return None
-    sync_metadata_plugin_registry(conn)
-    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-    for plugin in registry.get("plugins") or []:
-        runtime = plugin.get("runtime") or {}
-        entrypoints = runtime.get("entrypoints") or []
-        if plugin.get("id") == "tmdb" and "person_filmography" in entrypoints:
-            return plugin
-    return None
+    candidates = person_filmography_source_plugins(conn, include_disabled=True)
+    return candidates[0] if candidates else None
 
 
 
@@ -38791,6 +38820,58 @@ def refresh_movie_person_metadata_cascade(
     return summary
 
 
+def person_receiver_contribution_payload(
+    *,
+    person_id: UUID | str,
+    person: dict[str, Any],
+    tmdb_id: str,
+    updates: dict[str, Any],
+    localizations: list[dict[str, Any]],
+    source_providers: list[str],
+) -> dict[str, Any]:
+    """Build a person contribution envelope mirroring the movie receiver payload."""
+    tmdb_text = str(tmdb_id) if tmdb_id else ""
+    public: dict[str, Any] = {
+        "name": updates.get("name") or clean_text(person.get("name")),
+        "tmdbId": tmdb_text,
+        "biography": updates.get("biography"),
+        "birthday": updates.get("birth_date"),
+        "deathday": updates.get("death_date"),
+        "placeOfBirth": updates.get("place_of_birth"),
+        "knownFor": updates.get("known_for"),
+        "profileUrl": updates.get("profile_url"),
+        "photoUrl": updates.get("profile_url"),
+    }
+    for localization in localizations or []:
+        lang = clean_text(localization.get("lang"))
+        biography = clean_text(localization.get("biography"))
+        if not lang or not biography:
+            continue
+        public[f"biography_{lang.lower()}"] = biography
+        short = lang.lower().split("-")[0]
+        if short:
+            public.setdefault(f"biography_{short}", biography)
+    public = {key: value for key, value in public.items() if value not in (None, "", [], {})}
+    identity = str(person.get("public_id") or person_id)
+    return {
+        "entityType": "person",
+        "identity": identity,
+        "sourceRef": identity,
+        "sourceReference": {
+            "type": "discvault_person",
+            "key": str(person_id),
+            "publicId": person.get("public_id"),
+            "tmdbId": tmdb_text,
+        },
+        "payload": public,
+        "metadata": {
+            "personId": str(person_id),
+            "sourceProviders": sorted({str(item) for item in (source_providers or []) if item}),
+            "tmdbId": tmdb_text,
+        },
+    }
+
+
 def refresh_person_metadata(
     conn,
     person_id: UUID,
@@ -38804,33 +38885,100 @@ def refresh_person_metadata(
     tmdb_id = detail.get("tmdbId") or ""
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
-    plugin = person_metadata_plugin(conn)
-    if not plugin:
+
+    candidates = person_metadata_source_plugins(conn, include_disabled=True)
+    if not candidates:
         raise NextApiError("No enabled person metadata plugin is available", 503)
-    if not plugin.get("enabled"):
-        raise NextApiError("TMDb plugin must be enabled before refreshing person metadata", 409)
-    config = plugin_config_from_db(conn, str(plugin["id"]))
-    if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
-        raise NextApiError("TMDb plugin configuration is incomplete", 409)
+    enabled_candidates = [plugin for plugin in candidates if plugin.get("enabled")]
+    if not enabled_candidates:
+        raise NextApiError("Person metadata plugin must be enabled before refreshing person metadata", 409)
+    top_config = plugin_config_from_db(conn, str(enabled_candidates[0]["id"]))
+    if plugin_requires_config_for_entrypoint(enabled_candidates[0], top_config, "person_details"):
+        raise NextApiError("Person metadata plugin configuration is incomplete", 409)
 
-    context = plugin_execution_context(conn, plugin, config, actor)
-    execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
-    result = execution.get("result") or {}
-    if execution.get("status") != "ok":
-        raise NextApiError(execution.get("error") or "Person metadata plugin execution failed", 422)
+    merged: dict[str, Any] = {}
+    localizations_by_lang: dict[str, dict[str, str]] = {}
+    source_providers: list[str] = []
+    primary_plugin: dict[str, Any] | None = None
+    primary_execution: dict[str, Any] = {}
+    primary_result: dict[str, Any] = {}
+    primary_language = ""
+    last_error = ""
 
+    def _accept(key: str, value: Any) -> None:
+        if value in (None, "", [], {}):
+            return
+        if merged.get(key) in (None, "", [], {}):
+            merged[key] = value
+
+    for plugin in enabled_candidates:
+        config = plugin_config_from_db(conn, str(plugin["id"]))
+        if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
+            continue
+        context = plugin_execution_context(conn, plugin, config, actor)
+        execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
+        if execution.get("status") != "ok":
+            last_error = execution.get("error") or last_error
+            continue
+        result = execution.get("result") or {}
+        normalized = {
+            "name": clean_text(result.get("name")),
+            "birth_date": clean_text(result.get("birthday") or result.get("birthDate")),
+            "death_date": clean_text(result.get("deathday") or result.get("deathDate")),
+            "place_of_birth": clean_text(result.get("placeOfBirth") or result.get("place_of_birth")),
+            "known_for": clean_text(result.get("knownFor") or result.get("known_for")),
+            "biography": clean_text(result.get("biography")),
+            "profile_url": first_usable_image(
+                result.get("profileUrl"),
+                result.get("profile_url"),
+                result.get("photoUrl"),
+                result.get("photo_url"),
+            ),
+        }
+        if not any(normalized.values()):
+            continue
+        if primary_plugin is None:
+            primary_plugin = plugin
+            primary_execution = execution
+            primary_result = result
+            primary_language = clean_text(result.get("language")) or "en-US"
+        if str(plugin["id"]) not in source_providers:
+            source_providers.append(str(plugin["id"]))
+        for key, value in normalized.items():
+            _accept(key, value)
+        provider_language = clean_text(result.get("language")) or primary_language or "en-US"
+        for localization in result.get("localizations") or []:
+            lang = clean_text(localization.get("lang"))
+            biography = clean_text(localization.get("biography"))
+            if not lang or not biography:
+                continue
+            localizations_by_lang.setdefault(lang.lower(), {"lang": lang, "biography": biography})
+        if normalized["biography"]:
+            localizations_by_lang.setdefault(
+                provider_language.lower(),
+                {"lang": provider_language, "biography": normalized["biography"]},
+            )
+
+    if primary_plugin is None:
+        raise NextApiError(last_error or "Person metadata plugin returned no usable data", 422)
+
+    language = primary_language or "en-US"
     updates = {
-        "name": clean_text(result.get("name")),
-        "birth_date": clean_text(result.get("birthday") or result.get("birthDate")),
-        "death_date": clean_text(result.get("deathday") or result.get("deathDate")),
-        "place_of_birth": clean_text(result.get("placeOfBirth") or result.get("place_of_birth")),
-        "known_for": clean_text(result.get("knownFor") or result.get("known_for")),
-        "biography": clean_text(result.get("biography")),
-        "profile_url": first_usable_image(result.get("profileUrl"), result.get("profile_url"), result.get("photoUrl"), result.get("photo_url")),
-        "language": clean_text(result.get("language")) or "en-US",
-        "source": clean_text(result.get("provider")) or plugin.get("id"),
-        "source_ref": clean_text(result.get("sourceRef")) or f"tmdb:person:{tmdb_id}",
+        "name": merged.get("name") or "",
+        "birth_date": merged.get("birth_date") or "",
+        "death_date": merged.get("death_date") or "",
+        "place_of_birth": merged.get("place_of_birth") or "",
+        "known_for": merged.get("known_for") or "",
+        "biography": merged.get("biography") or "",
+        "profile_url": merged.get("profile_url") or "",
+        "language": language,
+        "source": clean_text(primary_result.get("provider")) or primary_plugin.get("id"),
+        "source_ref": clean_text(primary_result.get("sourceRef")) or f"tmdb:person:{tmdb_id}",
     }
+    if updates["biography"]:
+        localizations_by_lang.setdefault(language.lower(), {"lang": language, "biography": updates["biography"]})
+    localizations = list(localizations_by_lang.values())
+
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
     preview_metadata = preview_person.get("metadata") if isinstance(preview_person.get("metadata"), dict) else {}
@@ -38846,10 +38994,14 @@ def refresh_person_metadata(
         preview_metadata["biography"] = updates["biography"]
     preview_metadata["person_metadata_source"] = updates["source"]
     preview_metadata["person_metadata_source_ref"] = updates["source_ref"]
+    preview_metadata["person_metadata_sources"] = sorted({str(item) for item in source_providers if item})
     preview_metadata["person_metadata_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     preview_person["metadata"] = preview_metadata
     preview_detail["person"] = preview_person
+    if localizations:
+        preview_detail["localizations"] = [dict(item) for item in localizations]
 
+    receiver_summary: dict[str, Any] | None = None
     if not dry_run:
         with conn.cursor() as cur:
             cur.execute(
@@ -38875,35 +39027,74 @@ def refresh_person_metadata(
                     person_id,
                 ),
             )
-            if updates["biography"] and table_exists(conn, "person_localizations"):
-                cur.execute(
-                    """
-                    INSERT INTO person_localizations (person_id, lang, biography, updated_at)
-                    VALUES (%s, %s, %s, now())
-                    ON CONFLICT (person_id, lang) DO UPDATE
-                    SET biography=EXCLUDED.biography, updated_at=now()
-                    """,
-                    (person_id, updates["language"], updates["biography"]),
-                )
+            if localizations and table_exists(conn, "person_localizations"):
+                for localization in localizations:
+                    lang = clean_text(localization.get("lang"))
+                    biography = clean_text(localization.get("biography"))
+                    if not lang or not biography:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO person_localizations (person_id, lang, biography, updated_at)
+                        VALUES (%s, %s, %s, now())
+                        ON CONFLICT (person_id, lang) DO UPDATE
+                        SET biography=EXCLUDED.biography, updated_at=now()
+                        """,
+                        (person_id, lang, biography),
+                    )
         detail = person_detail_entity(conn, person_id) or preview_detail
+        if source_providers:
+            receiver_payload = person_receiver_contribution_payload(
+                person_id=person_id,
+                person=detail.get("person") if isinstance(detail.get("person"), dict) else {},
+                tmdb_id=tmdb_id,
+                updates=updates,
+                localizations=localizations,
+                source_providers=source_providers,
+            )
+            if receiver_payload.get("payload"):
+                try:
+                    receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
+                except Exception as exc:  # noqa: BLE001 - contribution must never break the refresh
+                    receiver_summary = {"status": "error", "error": str(exc)}
+                audit_event(
+                    conn,
+                    event_type="metadata.receiver_pushed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_id,
+                    summary=f"Pushed person metadata to receiver plugins for {updates.get('name') or tmdb_id}",
+                    metadata={
+                        "personId": str(person_id),
+                        "tmdbId": str(tmdb_id),
+                        "sourceProviders": sorted({str(item) for item in source_providers if item}),
+                        "fields": sorted((receiver_payload.get("payload") or {}).keys()),
+                        "receiverSummary": receiver_summary,
+                    },
+                )
     else:
         detail = preview_detail
 
     return {
         "dryRun": dry_run,
         "plugin": {
-            "id": plugin.get("id"),
-            "name": plugin.get("name"),
+            "id": primary_plugin.get("id"),
+            "name": primary_plugin.get("name"),
         },
+        "sourceProviders": sorted({str(item) for item in source_providers if item}),
         "execution": {
-            "status": execution.get("status"),
-            "state": execution.get("state"),
-            "elapsedMs": execution.get("elapsedMs"),
-            "entrypoint": execution.get("entrypoint"),
+            "status": primary_execution.get("status"),
+            "state": primary_execution.get("state"),
+            "elapsedMs": primary_execution.get("elapsedMs"),
+            "entrypoint": primary_execution.get("entrypoint"),
         },
-        "result": result,
+        "result": primary_result,
+        "receivers": receiver_summary,
         "detail": detail,
     }
+
+
 
 
 def refresh_person_filmography(
@@ -38919,14 +39110,15 @@ def refresh_person_filmography(
     tmdb_id = detail.get("tmdbId") or ""
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
-    plugin = person_filmography_plugin(conn)
-    if not plugin:
+    candidates = person_filmography_source_plugins(conn, include_disabled=True)
+    if not candidates:
         raise NextApiError("No enabled filmography plugin is available", 503)
-    if not plugin.get("enabled"):
-        raise NextApiError("TMDb plugin must be enabled before refreshing filmography", 409)
+    plugin = next((candidate for candidate in candidates if candidate.get("enabled")), None)
+    if plugin is None:
+        raise NextApiError("Filmography plugin must be enabled before refreshing filmography", 409)
     config = plugin_config_from_db(conn, str(plugin["id"]))
     if plugin_requires_config_for_entrypoint(plugin, config, "person_filmography"):
-        raise NextApiError("TMDb plugin configuration is incomplete", 409)
+        raise NextApiError("Filmography plugin configuration is incomplete", 409)
 
     context = plugin_execution_context(conn, plugin, config, actor)
     execution = run_plugin_entrypoint(str(plugin["id"]), "person_filmography", {"tmdbId": tmdb_id}, context)
