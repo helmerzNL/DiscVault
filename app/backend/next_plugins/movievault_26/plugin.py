@@ -174,15 +174,55 @@ def connection_request(payload, context=None):
     return {"status": "skipped", "provider": PROVIDER_ID, "reason": "unknown_connection_phase"}
 
 
-def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False):
+def _canonical_contribution_body(payload):
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def _contribution_signature_headers(signer, raw_body):
+    if not callable(signer):
+        return {}
+    try:
+        result = signer(raw_body) or {}
+    except Exception:
+        return {}
+    if not isinstance(result, dict):
+        return {}
+    key_id = _text(result.get("keyId") or result.get("key_id"))
+    timestamp = _text(result.get("timestamp"))
+    nonce = _text(result.get("nonce"))
+    signature = _text(result.get("signature"))
+    if not (key_id and timestamp and nonce and signature):
+        return {}
+    return {
+        "X-DiscVault-Key-Id": key_id,
+        "X-DiscVault-Timestamp": timestamp,
+        "X-DiscVault-Nonce": nonce,
+        "X-DiscVault-Signature": signature if signature.startswith("key-v1=") else f"key-v1={signature}",
+    }
+
+
+def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False, sign_body=False):
     headers = _headers(context)
+    data = None
     if json_payload is not None:
         headers["Content-Type"] = "application/json"
+        if sign_body:
+            signer = (context or {}).get("movievaultSignRequest")
+            raw_body = _canonical_contribution_body(json_payload)
+            signature_headers = _contribution_signature_headers(signer, raw_body)
+            if signature_headers:
+                data = raw_body.encode("utf-8")
+                headers.update(signature_headers)
     request_func = getattr(requests, "request", None)
     if callable(request_func):
-        response = request_func(method, url, params=params, json=json_payload, headers=headers, timeout=10)
+        if data is not None:
+            response = request_func(method, url, params=params, data=data, headers=headers, timeout=10)
+        else:
+            response = request_func(method, url, params=params, json=json_payload, headers=headers, timeout=10)
     elif method.upper() == "GET":
         response = requests.get(url, params=params, headers=headers, timeout=10)
+    elif data is not None:
+        response = requests.post(url, data=data, headers=headers, timeout=10)
     else:
         response = requests.post(url, json=json_payload, headers=headers, timeout=10)
 
@@ -201,6 +241,7 @@ def _request(method, url, *, context=None, params=None, json_payload=None, retry
                     json_payload=json_payload,
                     retry_recovery=False,
                     allow_validation_error=allow_validation_error,
+                    sign_body=sign_body,
                 )
     if status_code == 403 and _error_code(response) == "instance_revoked":
         mark_revoked = (context or {}).get("movievaultMarkRevoked")
@@ -225,6 +266,7 @@ def _post_contribution(context, envelope):
             context=context,
             json_payload=envelope,
             allow_validation_error=True,
+            sign_body=True,
         )
     )
 
