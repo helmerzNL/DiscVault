@@ -21598,8 +21598,8 @@ def ui_preview_html(
       const container = detail.container || {};
       const metadata = container.metadata || {};
       return mediaAssetImage(detail.mediaAssets, kind)
-        || mediaAssetImage(detail.aggregateMediaAssets, kind)
-        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
+        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind])
+        || mediaAssetImage(detail.aggregateMediaAssets, kind);
     }
     function containerAggregateMovieMap(detail) {
       return new Map((detail.aggregateMovies || []).map((movie) => [String(movie.id || ""), movie]));
