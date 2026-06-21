@@ -53,6 +53,7 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
+    from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import validate_manifest_compatibility
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
@@ -66,6 +67,10 @@ try:
     from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
+    from .next_metadata import normalize_movie_field_locks
+    from .next_metadata import movie_locked_fields
+    from .next_metadata import MOVIE_LOCKABLE_FIELDS
+    from .next_metadata import MOVIE_METADATA_LOCKS_KEY
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import backup_restore_plan
@@ -223,6 +228,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
+    from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import validate_manifest_compatibility
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
@@ -236,6 +242,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
+    from next_metadata import normalize_movie_field_locks
+    from next_metadata import movie_locked_fields
+    from next_metadata import MOVIE_LOCKABLE_FIELDS
+    from next_metadata import MOVIE_METADATA_LOCKS_KEY
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import backup_restore_plan
@@ -4708,7 +4718,7 @@ def migration_dashboard_html() -> str:
     function setMigrationAuthMessage(message, tone) {
       const node = document.getElementById("migrationAuthMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `auth-message ${tone || ""}`.trim();
     }
     function showMigrationAuthGate(show) {
@@ -4722,9 +4732,64 @@ def migration_dashboard_html() -> str:
       if (intro && show) intro.classList.add("hidden");
       if (workspace && show) workspace.classList.add("hidden");
     }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyRpMismatchMessage() {
+      return tNext(
+        "auth.passkeyRpMismatch",
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if (/registrable domain suffix|not equal to the current domain|relying party id/i.test(rawMessage)) {
+        return passkeyRpMismatchMessage();
+      }
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
+    }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return tNext("auth.passkeyUnavailable", "This browser does not support passkeys.");
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return tNext("auth.passkeyHttpsRequired", "Open this app over HTTPS to use passkeys.");
@@ -4840,7 +4905,7 @@ def migration_dashboard_html() -> str:
         showMigrationAuthGate(false);
         await loadReport();
       } catch (error) {
-        setMigrationAuthMessage(error.name === "NotAllowedError" ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : error.message, "bad");
+        setMigrationAuthMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -7239,6 +7304,51 @@ def ui_preview_html(
       background: rgba(255,255,255,0.15);
       border: 1px solid rgba(255,255,255,0.18);
     }
+    .movie-detail-action-strip .action,
+    .movie-detail-action-strip .secondary-button {
+      min-height: 38px;
+      border-radius: 10px;
+      padding: 0 16px;
+      font-weight: 650;
+      color: var(--text);
+      border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+      background: color-mix(in srgb, var(--bg-solid) 55%, transparent);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent);
+      transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+    }
+    .movie-detail-action-strip .action:hover,
+    .movie-detail-action-strip .secondary-button:hover {
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      border-color: color-mix(in srgb, var(--text) 26%, transparent);
+    }
+    .movie-detail-action-strip .action:active,
+    .movie-detail-action-strip .secondary-button:active {
+      transform: scale(0.97);
+    }
+    .movie-detail-action-strip #movieMetadataApplyButton,
+    .movie-detail-action-strip #containerMetadataApplyButton {
+      font-weight: 750;
+      color: color-mix(in srgb, var(--accent) 72%, var(--text));
+      border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+      background: color-mix(in srgb, var(--accent) 20%, var(--bg-solid));
+      box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 26%, transparent), inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .movie-detail-action-strip #movieMetadataApplyButton:hover,
+    .movie-detail-action-strip #containerMetadataApplyButton:hover {
+      background: color-mix(in srgb, var(--accent) 30%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+    }
+    .movie-detail-action-strip .action.danger {
+      color: var(--red);
+      border-color: color-mix(in srgb, var(--red) 42%, transparent);
+      background: color-mix(in srgb, var(--red) 14%, var(--bg-solid));
+    }
+    .movie-detail-action-strip .action.danger:hover {
+      background: color-mix(in srgb, var(--red) 22%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--red) 58%, transparent);
+    }
     .hero-poster {
       justify-self: end;
       width: min(100%, 238px);
@@ -9518,6 +9628,10 @@ def ui_preview_html(
         width: 100%;
       }
     }
+    .movie-edit-sections {
+      display: grid;
+      gap: 0;
+    }
     .movie-edit-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -9525,6 +9639,33 @@ def ui_preview_html(
     }
     .movie-edit-grid label.wide {
       grid-column: 1 / -1;
+    }
+    .movie-edit-grid label > span:first-child {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .movie-edit-lock {
+      margin-left: auto;
+      border: 1px solid var(--line);
+      background: var(--surface, #fff);
+      border-radius: 6px;
+      width: 24px;
+      height: 22px;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      font-size: 12px;
+      opacity: 0.55;
+      transition: opacity .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .movie-edit-lock:hover {
+      opacity: 0.9;
+    }
+    .movie-edit-lock.locked {
+      opacity: 1;
+      border-color: var(--accent, #c8901f);
+      background: color-mix(in srgb, var(--accent, #c8901f) 16%, transparent);
     }
     .movie-detail-page .movie-detail-hero {
       min-height: min(520px, 56vh);
@@ -9721,6 +9862,19 @@ def ui_preview_html(
     .detail-subpanel {
       min-width: 0;
     }
+    .detail-subsection + .detail-subsection {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .detail-subsection-title {
+      margin: 0 0 10px;
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
     .detail-fields {
       display: grid;
       gap: 9px;
@@ -9757,6 +9911,36 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
       background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
     }
+    .debug-card-details > summary.debug-card-summary {
+      cursor: pointer;
+      list-style: none;
+      justify-content: flex-start;
+      margin-bottom: 0;
+      user-select: none;
+    }
+    .debug-card-details > summary.debug-card-summary::-webkit-details-marker {
+      display: none;
+    }
+    .debug-card-details > summary.debug-card-summary::after {
+      content: "\u25B8";
+      margin-left: auto;
+      color: var(--muted);
+      font-size: .82rem;
+      transition: transform .15s ease;
+    }
+    .debug-card-details[open] > summary.debug-card-summary::after {
+      transform: rotate(90deg);
+    }
+    .debug-card-details[open] > summary.debug-card-summary {
+      margin-bottom: 12px;
+    }
+    .debug-field-details > summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+      list-style: revert;
+      user-select: none;
+    }
     .debug-localization-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -9792,6 +9976,237 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .84rem;
       line-height: 1.45;
+    }
+    .debug-sources {
+      display: grid;
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .debug-source-section {
+      display: grid;
+      gap: 10px;
+    }
+    .debug-source-section h4 {
+      margin: 0;
+      font-size: .92rem;
+    }
+    .debug-source-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .debug-source-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--bg-solid);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .debug-source-card header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .debug-source-card strong {
+      margin: 0;
+    }
+    .debug-source-state {
+      font-size: .74rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .debug-source-card-head {
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      padding-bottom: 6px;
+    }
+    .debug-source-badge {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      border-radius: var(--radius-sm);
+      padding: 2px 8px;
+      white-space: nowrap;
+      background: color-mix(in srgb, var(--muted) 16%, transparent);
+      color: var(--muted);
+    }
+    .debug-source-badge.state-hit,
+    .debug-source-badge.contrib-ok {
+      background: color-mix(in srgb, var(--ok, #2e7d32) 20%, transparent);
+      color: var(--ok, #2e7d32);
+    }
+    .debug-source-badge.contrib-skipped {
+      background: color-mix(in srgb, var(--warn, #b26a00) 20%, transparent);
+      color: var(--warn, #b26a00);
+    }
+    .debug-source-badge.contrib-error,
+    .debug-source-badge.state-no_match,
+    .debug-source-badge.state-blocked_by_format_policy {
+      background: color-mix(in srgb, var(--danger, #c62828) 18%, transparent);
+      color: var(--danger, #c62828);
+    }
+    .debug-source-fields-details > summary {
+      cursor: pointer;
+      font-size: .76rem;
+      color: var(--muted);
+      list-style: revert;
+      user-select: none;
+    }
+    .debug-source-fields-details[open] > summary {
+      margin-bottom: 6px;
+    }
+    .debug-source-nofields {
+      font-size: .78rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .debug-source-ref {
+      font-size: .76rem;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .debug-source-fields {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+    }
+    .debug-source-field {
+      display: grid;
+      grid-template-columns: minmax(90px, auto) 1fr auto;
+      align-items: baseline;
+      gap: 8px;
+      font-size: .8rem;
+    }
+    .debug-source-field-name {
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .debug-source-field-value {
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .debug-source-marker {
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      border-radius: var(--radius-sm);
+      padding: 1px 6px;
+      white-space: nowrap;
+    }
+    .debug-source-marker.used {
+      background: color-mix(in srgb, var(--accent) 22%, transparent);
+      color: var(--accent);
+    }
+    .debug-source-marker.skipped {
+      background: color-mix(in srgb, var(--muted) 18%, transparent);
+      color: var(--muted);
+    }
+    .debug-source-contrib-fields,
+    .debug-source-contrib-sources,
+    .debug-source-contrib-reason {
+      font-size: .8rem;
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .debug-source-label {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .debug-source-excluded-details {
+      margin-top: 6px;
+    }
+    .debug-source-excluded-details > summary {
+      cursor: pointer;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .debug-source-excluded {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .debug-source-excluded-field {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px;
+      font-size: .8rem;
+    }
+    .debug-source-excluded-reason {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .debug-field-group {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .debug-field-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .debug-field-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: .74rem;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    .debug-field-chip.accepted {
+      background: color-mix(in srgb, #1f9d55 16%, transparent);
+      color: #1f9d55;
+    }
+    .debug-field-chip.rejected {
+      background: color-mix(in srgb, #d64545 16%, transparent);
+      color: #d64545;
+    }
+    .debug-field-chip-reason {
+      font-weight: 400;
+      font-style: italic;
+      opacity: .85;
+    }
+    .debug-source-export-hint {
+      font-size: .82rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .debug-source-export-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .debug-source-export-btn {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      font: inherit;
+      font-size: .82rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .debug-source-export-btn:hover {
+      border-color: var(--accent);
+    }
+    .debug-source-export-feedback {
+      font-size: .8rem;
+      color: var(--accent);
     }
     .country-picker {
       display: flex;
@@ -11426,6 +11841,195 @@ def ui_preview_html(
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 8px;
     }
+    .metadata-compare-hint {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: .8rem;
+      line-height: 1.4;
+    }
+    .metadata-compare-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .metadata-compare-details {
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--field) 40%, transparent);
+      overflow: hidden;
+    }
+    .metadata-compare-summary-toggle {
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .metadata-compare-summary-toggle::-webkit-details-marker {
+      display: none;
+    }
+    .metadata-compare-summary-toggle::before {
+      content: "\u25B8";
+      color: var(--muted);
+      font-size: .8rem;
+      transition: transform .15s ease;
+    }
+    .metadata-compare-details[open] > .metadata-compare-summary-toggle::before {
+      transform: rotate(90deg);
+    }
+    .metadata-compare-details[open] > .metadata-compare-summary-toggle {
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+    }
+    .metadata-compare-body {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    .metadata-compare-summary {
+      margin: 0;
+      font-weight: 700;
+      font-size: .82rem;
+    }
+    .metadata-compare-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .metadata-compare-badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--field) 60%, transparent);
+      color: var(--muted);
+    }
+    .metadata-compare-badge.winner {
+      border-color: color-mix(in srgb, #1f9d55 60%, transparent);
+      background: color-mix(in srgb, #1f9d55 18%, transparent);
+      color: #1f9d55;
+    }
+    .metadata-compare-badge.change,
+    .metadata-compare-badge.conflict {
+      border-color: color-mix(in srgb, #d98a00 60%, transparent);
+      background: color-mix(in srgb, #d98a00 16%, transparent);
+      color: #c47d00;
+    }
+    .metadata-compare-badge.same {
+      border-color: color-mix(in srgb, var(--line) 70%, transparent);
+    }
+    .metadata-compare-badge.locked {
+      border-color: color-mix(in srgb, #7a5cff 60%, transparent);
+      background: color-mix(in srgb, #7a5cff 16%, transparent);
+      color: #6a4cf0;
+    }
+    .metadata-compare-table {
+      display: grid;
+      gap: 10px;
+    }
+    .metadata-compare-field {
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: color-mix(in srgb, var(--field) 50%, transparent);
+    }
+    .metadata-compare-field.changed {
+      border-color: color-mix(in srgb, #d98a00 55%, transparent);
+    }
+    .metadata-compare-field.locked {
+      border-color: color-mix(in srgb, #7a5cff 50%, transparent);
+    }
+    .metadata-compare-field-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .metadata-compare-field-head strong {
+      font-size: .92rem;
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-flags {
+      display: inline-flex;
+      gap: 6px;
+    }
+    .metadata-compare-current {
+      display: grid;
+      grid-template-columns: minmax(80px, 130px) 1fr;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+      margin-bottom: 6px;
+    }
+    .metadata-compare-current-label {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .metadata-compare-current-value {
+      overflow-wrap: anywhere;
+      font-weight: 600;
+    }
+    .metadata-compare-candidates {
+      display: grid;
+      gap: 6px;
+    }
+    .metadata-compare-candidate {
+      display: grid;
+      grid-template-columns: minmax(80px, 130px) 1fr auto;
+      gap: 8px;
+      align-items: start;
+      padding: 4px 6px;
+      border-radius: 10px;
+    }
+    .metadata-compare-candidate.winner {
+      background: color-mix(in srgb, #1f9d55 12%, transparent);
+    }
+    .metadata-compare-candidate.differs {
+      background: color-mix(in srgb, #d98a00 10%, transparent);
+    }
+    .metadata-compare-candidate.rejected {
+      opacity: .7;
+    }
+    .metadata-compare-provider {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-candidate-value {
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-marks {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    .metadata-compare-reason {
+      color: var(--muted);
+      font-size: .68rem;
+      font-style: italic;
+    }
+    @media (max-width: 640px) {
+      .metadata-compare-current,
+      .metadata-compare-candidate {
+        grid-template-columns: 1fr;
+      }
+      .metadata-compare-marks {
+        justify-content: flex-start;
+      }
+    }
     .app-admin-plugin-tab-panel {
       display: none;
       min-width: 0;
@@ -13011,9 +13615,23 @@ def ui_preview_html(
       </div>
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
+        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
+      <form class="recovery-login-panel hidden" id="appReviewForm">
+        <label for="appReviewUsername">
+          <span>Username</span>
+          <input id="appReviewUsername" autocomplete="username">
+        </label>
+        <label for="appReviewPassword">
+          <span data-next-i18n="auth.password">Password</span>
+          <input id="appReviewPassword" type="password" autocomplete="current-password">
+        </label>
+        <div class="profile-form-actions">
+          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
+        </div>
+      </form>
       <form class="recovery-login-panel hidden" id="appInviteForm">
         <label for="appInviteUsername">
           <span data-next-i18n="auth.username">Username</span>
@@ -13652,59 +14270,123 @@ def ui_preview_html(
               <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
             </div>
             <form class="profile-form" id="movieEditForm">
-              <div class="movie-edit-grid">
-                <label for="movieEditTitle">
-                  <span data-next-i18n="movieDetail.fieldTitle">Title</span>
-                  <input id="movieEditTitle" name="title" maxlength="300" autocomplete="off" required>
-                </label>
-                <label for="movieEditOriginalTitle">
-                  <span data-next-i18n="movieDetail.originalTitle">Original title</span>
-                  <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditSortTitle">
-                  <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
-                  <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditYear">
-                  <span data-next-i18n="movieDetail.fieldYear">Year</span>
-                  <input id="movieEditYear" name="year" maxlength="40" autocomplete="off">
-                </label>
-                <label for="movieEditBarcode">
-                  <span data-next-i18n="movieDetail.barcode">Barcode</span>
-                  <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditFormat">
-                  <span data-next-i18n="movieDetail.format">Format</span>
-                  <select id="movieEditFormat" name="format"></select>
-                </label>
-                <label for="movieEditEdition">
-                  <span data-next-i18n="movieDetail.edition">Edition</span>
-                  <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditReleaseDate">
-                  <span data-next-i18n="movieDetail.releaseDate">Release date</span>
-                  <input id="movieEditReleaseDate" name="release_date" autocomplete="off" placeholder="YYYY-MM-DD">
-                </label>
-                <label for="movieEditCountry">
-                  <span data-next-i18n="movieDetail.country">Country</span>
-                  <input id="movieEditCountry" name="country" maxlength="80" autocomplete="off">
-                </label>
-                <label for="movieEditLanguage">
-                  <span data-next-i18n="movieDetail.language">Language</span>
-                  <input id="movieEditLanguage" name="language" maxlength="80" autocomplete="off">
-                </label>
-                <label for="movieEditLocation">
-                  <span data-next-i18n="movieDetail.location">Location</span>
-                  <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditOverview" class="wide">
-                  <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
-                  <textarea id="movieEditOverview" name="overview" maxlength="5000"></textarea>
-                </label>
-                <label for="movieEditNotes" class="wide">
-                  <span data-next-i18n="movieDetail.fieldNotes">Notes</span>
-                  <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
-                </label>
+              <div class="movie-edit-sections">
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.release">Release</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditTitle">
+                      <span data-next-i18n="movieDetail.fieldTitle">Title</span>
+                      <input id="movieEditTitle" name="title" maxlength="300" autocomplete="off" required>
+                    </label>
+                    <label for="movieEditOriginalTitle">
+                      <span data-next-i18n="movieDetail.originalTitle">Original title</span>
+                      <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditSortTitle">
+                      <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
+                      <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditYear">
+                      <span data-next-i18n="movieDetail.fieldYear">Year</span>
+                      <input id="movieEditYear" name="year" maxlength="40" autocomplete="off">
+                    </label>
+                    <label for="movieEditBarcode">
+                      <span data-next-i18n="movieDetail.barcode">Barcode</span>
+                      <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditFormat">
+                      <span data-next-i18n="movieDetail.format">Format</span>
+                      <select id="movieEditFormat" name="format"></select>
+                    </label>
+                    <label for="movieEditReleaseDate">
+                      <span data-next-i18n="movieDetail.releaseDate">Release date</span>
+                      <input id="movieEditReleaseDate" name="release_date" autocomplete="off" placeholder="YYYY-MM-DD">
+                    </label>
+                    <label for="movieEditCountry">
+                      <span data-next-i18n="movieDetail.releaseCountry">Release country</span>
+                      <input id="movieEditCountry" name="country" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditLanguage">
+                      <span data-next-i18n="movieDetail.language">Language</span>
+                      <input id="movieEditLanguage" name="language" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditLocation">
+                      <span data-next-i18n="movieDetail.location">Location</span>
+                      <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditDirector">
+                      <span data-next-i18n="movieDetail.director">Director</span>
+                      <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditGenre">
+                      <span data-next-i18n="movieDetail.genre">Genre</span>
+                      <input id="movieEditGenre" name="genre" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditStudios">
+                      <span data-next-i18n="movieDetail.studios">Studios</span>
+                      <input id="movieEditStudios" name="studios" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditContentRating">
+                      <span data-next-i18n="movieDetail.contentRating">Content rating</span>
+                      <input id="movieEditContentRating" name="content_rating" maxlength="40" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditHdr">
+                      <span>HDR</span>
+                      <input id="movieEditHdr" name="hdr" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditScreenRatio">
+                      <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
+                      <input id="movieEditScreenRatio" name="screen_ratios" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditRuntime">
+                      <span data-next-i18n="movieDetail.runtime">Runtime</span>
+                      <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
+                    </label>
+                    <label for="movieEditAudioTracks">
+                      <span data-next-i18n="movieDetail.audio">Audio</span>
+                      <input id="movieEditAudioTracks" name="audio_tracks" maxlength="400" autocomplete="off">
+                    </label>
+                    <label for="movieEditSubtitles">
+                      <span data-next-i18n="movieDetail.subtitles">Subtitles</span>
+                      <input id="movieEditSubtitles" name="subtitles" maxlength="400" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.collectors">Collectors</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditEdition">
+                      <span data-next-i18n="movieDetail.edition">Edition</span>
+                      <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditPackaging">
+                      <span data-next-i18n="movieDetail.packaging">Packaging</span>
+                      <input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditDistributor">
+                      <span data-next-i18n="movieDetail.distributor">Distributor</span>
+                      <input id="movieEditDistributor" name="distributor" maxlength="200" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.fieldOverview">Overview</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditOverview" class="wide">
+                      <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
+                      <textarea id="movieEditOverview" name="overview" maxlength="5000"></textarea>
+                    </label>
+                    <label for="movieEditNotes" class="wide">
+                      <span data-next-i18n="movieDetail.fieldNotes">Notes</span>
+                      <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
+                    </label>
+                  </div>
+                </div>
               </div>
             </form>
           </div>
@@ -13737,21 +14419,35 @@ def ui_preview_html(
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.technical">Technical</h3>
-            <div class="detail-fields" id="movieDetailTechnical"></div>
+            <div class="detail-subsections" id="movieDetailTechnical"></div>
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.metadataCompare">Metadata compare</h3>
-              <span class="tag blue" data-next-i18n="metadataJobs.providers">Providers</span>
+              <div class="button-row compact">
+                <button type="button" class="secondary-button hidden" id="movieMetadataCompareButton" data-next-i18n="movieDetail.compareProviders">Compare with providers</button>
+                <span class="tag blue" data-next-i18n="metadataJobs.providers">Providers</span>
+              </div>
             </div>
             <div class="metadata-compare-panel" id="movieMetadataComparePanel"></div>
           </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugLocalizationsCard">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
-              <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
-            </div>
-            <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
+            <details class="debug-card-details" open>
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
+            </details>
+          </div>
+          <div class="detail-card full debug-card hidden" id="movieDetailDebugMetadataCard">
+            <details class="debug-card-details" open>
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugMetadataPanelTitle">Metadata debug</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-sources" id="movieDetailDebugSources"></div>
+            </details>
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.links">Links</h3>
@@ -13835,14 +14531,14 @@ def ui_preview_html(
         </div>
         <section class="movie-detail-body">
           <nav class="detail-submenu container-detail-submenu" aria-label="Container sections" data-next-i18n-aria="containerDetail.sections">
-            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
-            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
           </nav>
-          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
             <div class="container-overview-grid">
               <div class="detail-card">
                 <h3 data-next-i18n="containerDetail.overview">Overview</h3>
@@ -13922,7 +14618,7 @@ def ui_preview_html(
               </div>
             </div>
           </div>
-          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
+          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
             <div class="detail-card full container-content-card">
               <div class="detail-card-head">
                 <div>
@@ -13986,6 +14682,13 @@ def ui_preview_html(
             <div class="detail-card">
               <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
               <div class="detail-fields" id="containerDetailMetadataDetails"></div>
+            </div>
+            <div class="detail-card full debug-card hidden" id="containerDetailDebugCard">
+              <div class="detail-card-head">
+                <h3 data-next-i18n="containerDetail.debugSources">Debug info: metadata sources</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </div>
+              <div class="debug-sources" id="containerDetailDebugSources"></div>
             </div>
           </div>
         </section>
@@ -14934,6 +15637,7 @@ def ui_preview_html(
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
+    let dvMissingContributionReportData = null;
     let movieMetadataRefreshPeople = localStorage.getItem("dv_next_movie_metadata_refresh_people") === "true";
     let activeContainerId = "";
     let activeContainerPayload = null;
@@ -15208,6 +15912,266 @@ def ui_preview_html(
       }
       return localizationHtml + remainingRatingsHtml;
     }
+    function debugSourceValueText(value) {
+      if (value === null || value === undefined) return "";
+      let text;
+      if (typeof value === "string") {
+        text = value;
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        text = String(value);
+      } else {
+        try { text = JSON.stringify(value); } catch (error) { text = String(value); }
+      }
+      text = text.trim();
+      if (text.length > 280) text = text.slice(0, 277) + "\u2026";
+      return text;
+    }
+    function debugSourceStateLabel(state) {
+      const key = String(state || "").trim();
+      if (!key) return "";
+      const map = {
+        hit: tNext("movieDetail.debugSourcesStateHit", "used"),
+        retained_existing: tNext("movieDetail.debugSourcesStateRetained", "retained existing"),
+        no_match: tNext("movieDetail.debugSourcesStateNoMatch", "no match"),
+        blocked_by_format_policy: tNext("movieDetail.debugSourcesStateBlocked", "blocked by format"),
+        needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "needs configuration")
+      };
+      return map[key] || key.replace(/_/g, " ");
+    }
+    function debugContributionReasonLabel(receiver) {
+      const reason = String(receiver && receiver.reason || "").trim().toLowerCase();
+      const status = String(receiver && receiver.status || "").trim().toLowerCase();
+      const state = String(receiver && receiver.state || "").trim().toLowerCase();
+      const reasonMap = {
+        disabled: tNext("movieDetail.debugSourcesReasonDisabled", "Contribution disabled"),
+        contribution_disabled: tNext("movieDetail.debugSourcesReasonDisabled", "Contribution disabled"),
+        needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
+        not_configured: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
+        no_match: tNext("movieDetail.debugSourcesReasonNoMatch", "No match"),
+        not_found: tNext("movieDetail.debugSourcesReasonNoMatch", "No match")
+      };
+      if (reason && reasonMap[reason]) return reasonMap[reason];
+      if (state && reasonMap[state]) return reasonMap[state];
+      if (status === "error") {
+        const errorText = receiver && (receiver.error || receiver.reason);
+        const errorLabel = tNext("movieDetail.debugSourcesReasonError", "Error");
+        return errorText ? `${errorLabel}: ${String(errorText)}` : errorLabel;
+      }
+      if (receiver && receiver.reason) return String(receiver.reason);
+      return "";
+    }
+    function debugContributionStatusClass(receiver) {
+      const status = String(receiver && receiver.status || "").trim().toLowerCase();
+      const result = String(receiver && receiver.resultStatus || "").trim().toLowerCase();
+      if (status === "error") return "error";
+      if (status === "skipped" || result === "skipped") return "skipped";
+      if (status === "ok" || result === "accepted" || result === "ok") return "ok";
+      return "";
+    }
+    function debugExcludedReasonLabel(reason) {
+      const key = String(reason || "").trim().toLowerCase();
+      const map = {
+        not_in_template: tNext("movieDetail.debugSourcesReasonNotInTemplate", "not in contribution template"),
+        excluded: tNext("movieDetail.debugSourcesReasonExcluded", "excluded by receiver"),
+        sharing_disabled: tNext("movieDetail.debugSourcesReasonSharingDisabled", "sharing disabled"),
+        missing_token: tNext("movieDetail.debugSourcesReasonMissingToken", "not connected"),
+        empty_or_disallowed_payload: tNext("movieDetail.debugSourcesReasonEmptyPayload", "no shareable fields")
+      };
+      if (!key) return "";
+      return map[key] || key.replace(/_/g, " ");
+    }
+    function movieMetadataSourcesDebugHtml(metadataDebug) {
+      const fetched = metadataDebug && Array.isArray(metadataDebug.fetched) ? metadataDebug.fetched : [];
+      const contributed = metadataDebug && Array.isArray(metadataDebug.contributed) ? metadataDebug.contributed : [];
+      const usedLabel = tNext("movieDetail.debugSourcesUsed", "used");
+      const skippedLabel = tNext("movieDetail.debugSourcesSkipped", "not used");
+      const fieldsLabel = tNext("movieDetail.debugSourcesFields", "Fields");
+      const contributedToLabel = tNext("movieDetail.debugSourcesContributedTo", "Sources");
+      const reasonLabel = tNext("movieDetail.debugSourcesReasonLabel", "Reason");
+      const fetchedCards = fetched.map((plugin) => {
+        const fields = Array.isArray(plugin.fields) ? plugin.fields : [];
+        const usedCount = fields.filter((field) => field.accepted).length;
+        const fieldRows = fields.map((field) => {
+          const fieldName = field.target ? `${field.target}.${field.field}` : (field.field || "");
+          const marker = field.accepted
+            ? `<span class="debug-source-marker used">${escapeHtml(usedLabel)}</span>`
+            : `<span class="debug-source-marker skipped">${escapeHtml(skippedLabel)}</span>`;
+          return `
+            <li class="debug-source-field${field.accepted ? " is-used" : ""}">
+              <span class="debug-source-field-name">${escapeHtml(fieldName)}</span>
+              <span class="debug-source-field-value">${escapeHtml(debugSourceValueText(field.value))}</span>
+              ${marker}
+            </li>
+          `;
+        }).join("");
+        const stateText = debugSourceStateLabel(plugin.state);
+        const stateHtml = stateText
+          ? `<span class="debug-source-badge state-${escapeHtml(String(plugin.state || "").replace(/[^a-z0-9_-]/gi, ""))}">${escapeHtml(stateText)}</span>`
+          : "";
+        const refHtml = plugin.sourceRef
+          ? `<div class="debug-source-ref">${escapeHtml(String(plugin.sourceRef))}</div>`
+          : "";
+        const countText = `${usedCount}/${fields.length} ${escapeHtml(fieldsLabel)}`;
+        const body = fields.length
+          ? `
+            <details class="debug-source-fields-details"${fields.length <= 6 ? " open" : ""}>
+              <summary>${countText}</summary>
+              <ul class="debug-source-fields">${fieldRows}</ul>
+            </details>
+          `
+          : `<div class="debug-source-nofields">${escapeHtml(tNext("movieDetail.debugSourcesNoFields", "No fields loaded"))}</div>`;
+        return `
+          <article class="debug-source-card">
+            <header class="debug-source-card-head">
+              <strong>${escapeHtml(pluginDisplayName(plugin.pluginId, plugin.sourceLabel || plugin.pluginId))}</strong>
+              ${stateHtml}
+            </header>
+            ${refHtml}
+            ${body}
+          </article>
+        `;
+      }).join("");
+      const acceptedLabel = tNext("movieDetail.debugSourcesAcceptedFields", "Accepted fields");
+      const notAcceptedLabel = tNext("movieDetail.debugSourcesNotAcceptedFields", "Not accepted");
+      const contributedCards = contributed.map((receiver) => {
+        const acceptedRaw = (Array.isArray(receiver.acceptedFields) && receiver.acceptedFields.length)
+          ? receiver.acceptedFields
+          : (Array.isArray(receiver.fields) ? receiver.fields : []);
+        const accepted = acceptedRaw.map((field) => String(field)).filter(Boolean);
+        const sources = Array.isArray(receiver.sourceProviders) ? receiver.sourceProviders : [];
+        const statusText = receiver.resultStatus || receiver.status || receiver.state || "";
+        const statusClass = debugContributionStatusClass(receiver);
+        const statusHtml = statusText
+          ? `<span class="debug-source-badge contrib-${statusClass || "neutral"}">${escapeHtml(String(statusText))}</span>`
+          : "";
+        const reasonText = debugContributionReasonLabel(receiver);
+        const reasonHtml = reasonText
+          ? `<div class="debug-source-contrib-reason"><span class="debug-source-label">${escapeHtml(reasonLabel)}:</span> ${escapeHtml(reasonText)}</div>`
+          : "";
+        const acceptedChips = accepted
+          .map((field) => `<span class="debug-field-chip accepted">${escapeHtml(field)}</span>`)
+          .join("");
+        const acceptedHtml = accepted.length
+          ? `<div class="debug-field-group"><details class="debug-field-details"${accepted.length <= 8 ? " open" : ""}><summary class="debug-source-label">${escapeHtml(acceptedLabel)} (${accepted.length}):</summary><div class="debug-field-chips">${acceptedChips}</div></details></div>`
+          : "";
+        const excluded = Array.isArray(receiver.excludedFields) ? receiver.excludedFields : [];
+        const rejectedChips = excluded.map((item) => {
+          const fieldName = item && item.field ? String(item.field) : "";
+          const reasonName = debugExcludedReasonLabel(item && item.reason);
+          const reasonChip = reasonName
+            ? ` <span class="debug-field-chip-reason">${escapeHtml(reasonName)}</span>`
+            : "";
+          const titleAttr = reasonName ? ` title="${escapeHtml(reasonName)}"` : "";
+          return `<span class="debug-field-chip rejected"${titleAttr}>${escapeHtml(fieldName)}${reasonChip}</span>`;
+        }).join("");
+        const rejectedHtml = excluded.length
+          ? `<div class="debug-field-group"><span class="debug-source-label">${escapeHtml(notAcceptedLabel)} (${excluded.length}):</span><div class="debug-field-chips">${rejectedChips}</div></div>`
+          : "";
+        const sourcesHtml = sources.length
+          ? `<div class="debug-source-contrib-sources"><span class="debug-source-label">${escapeHtml(contributedToLabel)}:</span> ${escapeHtml(sources.join(", "))}</div>`
+          : "";
+        return `
+          <article class="debug-source-card">
+            <header class="debug-source-card-head">
+              <strong>${escapeHtml(pluginDisplayName(receiver.pluginId, receiver.name || receiver.pluginId))}</strong>
+              ${statusHtml}
+            </header>
+            ${reasonHtml}
+            ${acceptedHtml}
+            ${rejectedHtml}
+            ${sourcesHtml}
+          </article>
+        `;
+      }).join("");
+      const fetchedSection = `
+        <section class="debug-source-section">
+          <h4>${escapeHtml(tNext("movieDetail.debugSourcesTitle", "Loaded metadata per source"))}</h4>
+          ${fetched.length ? `<div class="debug-source-grid">${fetchedCards}</div>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesEmpty", "No metadata refresh recorded yet."))}</div>`}
+        </section>
+      `;
+      const contributedSection = `
+        <section class="debug-source-section">
+          <h4>${escapeHtml(tNext("movieDetail.debugSourcesContributedTitle", "Contributed metadata per plugin"))}</h4>
+          ${contributed.length ? `<div class="debug-source-grid">${contributedCards}</div>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesContributedEmpty", "Nothing contributed in the last refresh."))}</div>`}
+        </section>
+      `;
+      const missingReport = metadataDebug && metadataDebug.missingContributionReport ? metadataDebug.missingContributionReport : null;
+      dvMissingContributionReportData = missingReport;
+      let exportSection = "";
+      if (missingReport && Array.isArray(missingReport.receivers) && missingReport.receivers.length) {
+        const missingCount = missingReport.receivers.reduce((sum, r) => sum + ((r && Array.isArray(r.missingFields)) ? r.missingFields.length : 0), 0);
+        exportSection = `
+          <section class="debug-source-section">
+            <h4>${escapeHtml(tNext("movieDetail.debugSourcesMissingTitle", "Missing in MovieVault"))}</h4>
+            <div class="debug-source-export-hint">${escapeHtml(tNext("movieDetail.debugSourcesMissingHint", "Fields fetched by DiscVault but not accepted by the receiver's contribution template."))} (${missingCount})</div>
+            <div class="debug-source-export-actions">
+              <button type="button" class="debug-source-export-btn" onclick="dvDownloadMissingContributionReport()">${escapeHtml(tNext("movieDetail.debugSourcesDownloadJson", "Download JSON"))}</button>
+              <button type="button" class="debug-source-export-btn" onclick="dvCopyMissingContributionReport()">${escapeHtml(tNext("movieDetail.debugSourcesCopyJson", "Copy"))}</button>
+              <span class="debug-source-export-feedback" id="debugSourcesExportFeedback" role="status" aria-live="polite"></span>
+            </div>
+          </section>
+        `;
+      }
+      return fetchedSection + contributedSection + exportSection;
+    }
+    function dvMissingContributionReportJson() {
+      return JSON.stringify(dvMissingContributionReportData || {}, null, 2);
+    }
+    function dvSetExportFeedback(message) {
+      const node = document.getElementById("debugSourcesExportFeedback");
+      if (!node) return;
+      node.textContent = message || "";
+      if (message) {
+        window.setTimeout(() => { if (node.textContent === message) node.textContent = ""; }, 2500);
+      }
+    }
+    function dvMissingContributionReportFilename() {
+      const report = dvMissingContributionReportData || {};
+      const id = String(report.movieId || report.containerId || "entity").replace(/[^a-z0-9_-]/gi, "").slice(0, 40) || "entity";
+      return `movievault-missing-fields-${id}.json`;
+    }
+    function dvDownloadMissingContributionReport() {
+      if (!dvMissingContributionReportData) return;
+      try {
+        const blob = new Blob([dvMissingContributionReportJson()], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = dvMissingContributionReportFilename();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesDownloadDone", "Downloaded"));
+      } catch (err) {
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyFailed", "Action failed"));
+      }
+    }
+    function dvCopyMissingContributionReport() {
+      if (!dvMissingContributionReportData) return;
+      const text = dvMissingContributionReportJson();
+      const done = () => dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyDone", "Copied"));
+      const fail = () => {
+        try {
+          const area = document.createElement("textarea");
+          area.value = text;
+          area.setAttribute("readonly", "");
+          area.style.position = "absolute";
+          area.style.left = "-9999px";
+          document.body.appendChild(area);
+          area.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(area);
+          if (ok) { done(); return; }
+        } catch (err) { /* ignore */ }
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyFailed", "Action failed"));
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(fail);
+      } else {
+        fail();
+      }
+    }
     function renderAppDebugButton() {
       document.body.classList.toggle("debug-mode", appDebugMode);
       const button = document.getElementById("appAdminDebugButton");
@@ -15295,18 +16259,73 @@ def ui_preview_html(
     function setLoginMessage(message, tone) {
       const node = document.getElementById("appLoginMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     function setStartupGateMessage(message, tone) {
       const node = document.getElementById("startupMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `startup-message ${tone || ""}`.trim();
+    }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyRpMismatchMessage() {
+      return tNext(
+        "auth.passkeyRpMismatch",
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if (/registrable domain suffix|not equal to the current domain|relying party id/i.test(rawMessage)) {
+        return passkeyRpMismatchMessage();
+      }
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
     }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return tNext("auth.passkeyUnavailable", "This browser does not support passkeys.");
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return tNext("auth.passkeyHttpsRequired", "Open this app over HTTPS to use passkeys.");
@@ -15564,15 +16583,20 @@ def ui_preview_html(
     function renderAppRegistrationMode(auth) {
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
+      const reviewLoginAvailable = !!currentAuthStatus.review_login_available;
       const toggleButton = document.getElementById("appInviteToggleButton");
+      const reviewToggleButton = document.getElementById("appReviewToggleButton");
       const codeLabel = document.getElementById("appInviteCodeLabel");
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
+      const reviewForm = document.getElementById("appReviewForm");
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
         toggleButton.dataset.nextI18n = key;
         toggleButton.textContent = tNext(key, publicRegistration ? "Create account" : "Invite-only access");
       }
+      if (reviewToggleButton) reviewToggleButton.classList.toggle("hidden", !reviewLoginAvailable);
+      if (!reviewLoginAvailable) reviewForm?.classList.add("hidden");
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
       if (codeInput) {
         codeInput.required = !publicRegistration;
@@ -18798,8 +19822,7 @@ def ui_preview_html(
         setLoginMessage(tNext("auth.signedIn", "Signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : String(error.message || error), "bad");
+        setLoginMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -18856,8 +19879,7 @@ def ui_preview_html(
         setStartupGateMessage(tNext("auth.passkeyCreated", "Passkey created. You are signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setStartupGateMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : (error.message || tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
+        setStartupGateMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -18865,6 +19887,18 @@ def ui_preview_html(
     function toggleInviteLogin() {
       const panel = document.getElementById("appInviteForm");
       const recoveryPanel = document.getElementById("appRecoveryForm");
+      const reviewPanel = document.getElementById("appReviewForm");
+      recoveryPanel?.classList.add("hidden");
+      reviewPanel?.classList.add("hidden");
+      panel?.classList.toggle("hidden");
+      setLoginMessage("");
+    }
+    function toggleReviewLogin() {
+      const panel = document.getElementById("appReviewForm");
+      if (!currentAuthStatus.review_login_available) return;
+      const invitePanel = document.getElementById("appInviteForm");
+      const recoveryPanel = document.getElementById("appRecoveryForm");
+      invitePanel?.classList.add("hidden");
       recoveryPanel?.classList.add("hidden");
       panel?.classList.toggle("hidden");
       setLoginMessage("");
@@ -18934,8 +19968,7 @@ def ui_preview_html(
         setLoginMessage(tNext("auth.inviteCreated", "Account created. You are signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : (error.message || tNext("auth.inviteFailed", "Invite sign-up failed.")), "bad");
+        setLoginMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled."), tNext("auth.inviteFailed", "Invite sign-up failed.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -18943,9 +19976,62 @@ def ui_preview_html(
     function toggleRecoveryLogin() {
       const panel = document.getElementById("appRecoveryForm");
       const invitePanel = document.getElementById("appInviteForm");
+      const reviewPanel = document.getElementById("appReviewForm");
       invitePanel?.classList.add("hidden");
+      reviewPanel?.classList.add("hidden");
       panel?.classList.toggle("hidden");
       setLoginMessage("");
+    }
+    async function loginReviewPassword(event) {
+      if (event) event.preventDefault();
+      if (!currentAuthStatus.review_login_available) {
+        setLoginMessage("Username/password review login is not available.", "bad");
+        return;
+      }
+      const username = String(document.getElementById("appReviewUsername")?.value || "").trim();
+      const password = String(document.getElementById("appReviewPassword")?.value || "");
+      const button = document.getElementById("appReviewLoginButton");
+      if (!username || !password) {
+        setLoginMessage("Enter username and password.", "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      setLoginMessage("Signing in with username/password...");
+      try {
+        const reviewBody = {username, password};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
+        const payload = await apiJson("/api/next/auth/review/login", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(reviewBody)
+        });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
+        if (payload.token) {
+          localStorage.setItem("dv_next_token", payload.token);
+          currentAuthStatus = Object.assign(currentAuthStatus || {}, {
+            authenticated: true,
+            username: payload.username,
+            role: payload.role,
+            display_name: payload.display_name
+          });
+        }
+        const passwordInput = document.getElementById("appReviewPassword");
+        if (passwordInput) passwordInput.value = "";
+        setLoginMessage("Signed in.", "good");
+        if (appMode) {
+          showLibraryPage();
+        } else {
+          await refreshAppFlow();
+        }
+      } catch (error) {
+        setLoginMessage(error.message || "Username/password sign-in failed.", "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
     }
     async function loginRecovery(event) {
       if (event) event.preventDefault();
@@ -20123,8 +21209,8 @@ def ui_preview_html(
       if (typeof value === "object") return JSON.stringify(value);
       return String(value);
     }
-    function detailFieldRows(entries) {
-      const rows = entries
+    function detailFieldRowsHtml(entries) {
+      return entries
         .map(([label, value]) => {
           if (value && typeof value === "object" && !Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, "html")) {
             return [label, valueText(value.text), value.html || ""];
@@ -20132,15 +21218,65 @@ def ui_preview_html(
           const text = valueText(value);
           return [label, text, escapeHtml(text)];
         })
-        .filter(([, value]) => value);
-      return rows.length
-        ? rows.map(([label, value, html]) => `
+        .filter(([, value]) => value)
+        .map(([label, value, html]) => `
             <div class="detail-field">
               <span>${escapeHtml(label)}</span>
               <strong>${html}</strong>
             </div>
-          `).join("")
-        : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+          `).join("");
+    }
+    function detailFieldRows(entries) {
+      return detailFieldRowsHtml(entries)
+        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+    }
+    function detailFieldSubsection(title, entries) {
+      const rows = detailFieldRowsHtml(entries);
+      if (!rows) return "";
+      return `
+        <div class="detail-subsection">
+          <h4 class="detail-subsection-title">${escapeHtml(title)}</h4>
+          <div class="detail-fields">${rows}</div>
+        </div>
+      `;
+    }
+    function formatRuntimeDetail(minutes) {
+      const total = Math.round(Number(minutes));
+      if (!total || !isFinite(total) || total <= 0) return "";
+      const hours = Math.floor(total / 60);
+      const mins = total % 60;
+      const hhmm = `${hours}:${String(mins).padStart(2, "0")}`;
+      return `${hhmm} (${total} ${tNext("movieDetail.minutesShort", "min")})`;
+    }
+    function movieVaultExternalIds(movie, metadata) {
+      const meta = metadata || {};
+      const movieId = String(
+        meta.movievault_movie_id || meta.movievaultMovieId
+        || meta.movievault_id || meta.movieVaultId || meta.movievaultId
+        || meta.remoteRef || meta.remote_ref || ""
+      ).trim();
+      const releaseId = String(
+        meta.movievault_release_id || meta.movievaultReleaseId
+        || meta.movievault_release || meta.releaseRef || meta.release_ref || ""
+      ).trim();
+      return { movieId, releaseId };
+    }
+    function containerLinksHtml(containers) {
+      return (containers || [])
+        .filter((container) => container && container.title)
+        .map((container) => `<a href="/api/next/app/containers/${encodeURIComponent(container.id || "")}" data-app-container-link="${escapeHtml(String(container.id || ""))}">${escapeHtml(container.title)}</a>`)
+        .join(", ");
+    }
+    function bindContainerDetailLinks(elementId) {
+      const root = document.getElementById(elementId);
+      if (!root) return;
+      root.querySelectorAll("a[data-app-container-link]").forEach((anchor) => {
+        anchor.addEventListener("click", (event) => {
+          event.preventDefault();
+          const id = event.currentTarget.getAttribute("data-app-container-link") || "";
+          if (id) openAppContainerDetail(id);
+        });
+      });
     }
     function mediaAssetUrl(asset) {
       return usableImage(asset?.url || asset?.source_url || "");
@@ -20462,8 +21598,8 @@ def ui_preview_html(
       const container = detail.container || {};
       const metadata = container.metadata || {};
       return mediaAssetImage(detail.mediaAssets, kind)
-        || mediaAssetImage(detail.aggregateMediaAssets, kind)
-        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
+        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind])
+        || mediaAssetImage(detail.aggregateMediaAssets, kind);
     }
     function containerAggregateMovieMap(detail) {
       return new Map((detail.aggregateMovies || []).map((movie) => [String(movie.id || ""), movie]));
@@ -20738,9 +21874,70 @@ def ui_preview_html(
         </section>
       `;
     }
+    let movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: "", collapsed: false};
+    const MOVIE_COMPARE_FIELD_LABELS = {
+      "movie:title": ["movieDetail.title", "Title"],
+      "movie:original_title": ["movieDetail.originalTitle", "Original title"],
+      "movie:sort_title": ["movieDetail.fieldSortTitle", "Sort title"],
+      "movie:year": ["movieDetail.fieldYear", "Year"],
+      "movie:barcode": ["movieDetail.barcode", "Barcode"],
+      "movie:release_date": ["movieDetail.releaseDate", "Release date"],
+      "movie:format": ["movieDetail.format", "Format"],
+      "movie:edition": ["movieDetail.edition", "Edition"],
+      "movie:country": ["movieDetail.releaseCountry", "Release country"],
+      "movie:language": ["movieDetail.language", "Language"],
+      "movie:overview": ["movieDetail.fieldOverview", "Overview"],
+      "movie:rating": ["movieDetail.rating", "Rating"],
+      "movie:runtime_minutes": ["movieDetail.runtime", "Runtime"],
+      "metadata:director": ["movieDetail.director", "Director"],
+      "metadata:genre": ["movieDetail.genre", "Genre"],
+      "metadata:studios": ["movieDetail.studios", "Studios"],
+      "metadata:distributor": ["movieDetail.distributor", "Distributor"],
+      "metadata:packaging": ["movieDetail.packaging", "Packaging"],
+      "technical:hdr": ["", "HDR"],
+      "technical:screen_ratios": ["movieDetail.screenRatio", "Screen ratio"],
+      "technical:audio_tracks": ["movieDetail.audio", "Audio"],
+      "technical:subtitles": ["movieDetail.subtitles", "Subtitles"],
+      "technical:packaging": ["movieDetail.packaging", "Packaging"],
+      "media:poster": ["movieDetail.posters", "Posters"],
+      "media:backdrop": ["movieDetail.backdrops", "Backdrops"]
+    };
+    function metadataCompareFieldLabel(decision) {
+      const key = `${decision.target}:${decision.field}`;
+      const entry = MOVIE_COMPARE_FIELD_LABELS[key];
+      if (entry) return entry[0] ? tNext(entry[0], entry[1]) : entry[1];
+      return String(decision.field || "").replace(/_/g, " ");
+    }
+    function metadataCompareValueText(value) {
+      const text = valueText(value);
+      return text || tNext("movieDetail.compareEmpty", "(empty)");
+    }
     function renderMovieMetadataCompare(detail) {
       const node = document.getElementById("movieMetadataComparePanel");
       if (!node) return;
+      const button = document.getElementById("movieMetadataCompareButton");
+      if (button) {
+        const canCompare = hasPermission("metadata.refresh_one");
+        button.classList.toggle("hidden", !canCompare);
+        button.disabled = !!movieMetadataComparison.loading;
+        button.textContent = movieMetadataComparison.loading
+          ? tNext("movieDetail.comparing", "Comparing...")
+          : tNext("movieDetail.compareProviders", "Compare with providers");
+      }
+      if (movieMetadataComparison.movieId === activeDetailMovieId
+          && (movieMetadataComparison.decisions || movieMetadataComparison.error || movieMetadataComparison.loading)) {
+        node.innerHTML = movieMetadataCompareLiveHtml();
+        const details = document.getElementById("movieMetadataCompareDetails");
+        if (details) {
+          details.addEventListener("toggle", () => {
+            movieMetadataComparison.collapsed = !details.open;
+          });
+        }
+        return;
+      }
+      node.innerHTML = movieMetadataCompareSnapshotHtml(detail);
+    }
+    function movieMetadataCompareSnapshotHtml(detail) {
       const movie = detail.movie || {};
       const metadata = movie.metadata || {};
       const identifiers = detail.identifiers || [];
@@ -20754,7 +21951,11 @@ def ui_preview_html(
       ].filter(([, value]) => value);
       const idText = identifiers.map((item) => `${item.provider_id || item.providerId}:${item.identifier}`).join(" / ");
       if (idText) rows.push([tNext("movieDetail.identifiers", "Identifiers"), idText, "providers"]);
-      node.innerHTML = rows.length ? `
+      const hint = `<p class="metadata-compare-hint">${escapeHtml(tNext("movieDetail.compareHint", "Showing the current stored values and their source. Use \u201cCompare with providers\u201d to see what each provider would propose."))}</p>`;
+      if (!rows.length) {
+        return hint + `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+      }
+      return hint + `
         <section class="metadata-compare-grid">
           ${rows.map(([label, value, source]) => `
             <div class="metadata-compare-row">
@@ -20764,7 +21965,118 @@ def ui_preview_html(
             </div>
           `).join("")}
         </section>
-      ` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+      `;
+    }
+    function movieMetadataCompareLiveHtml() {
+      if (movieMetadataComparison.loading) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.comparing", "Comparing..."))}</div>`;
+      }
+      if (movieMetadataComparison.error) {
+        return `<div class="preview-empty bad">${escapeHtml(movieMetadataComparison.error)}</div>`;
+      }
+      const decisions = (movieMetadataComparison.decisions || []).filter((decision) => {
+        return decision && Array.isArray(decision.candidates) && decision.candidates.length;
+      });
+      if (!decisions.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.compareNoProposals", "No providers returned any values to compare."))}</div>`;
+      }
+      const changed = decisions.filter((decision) => decision.changed).length;
+      const conflicts = decisions.filter((decision) => decision.conflict).length;
+      const locked = decisions.filter((decision) => metadataCompareDecisionLocked(decision)).length;
+      const summaryParts = [
+        `${decisions.length} ${tNext("movieDetail.compareFieldsCompared", "fields compared")}`,
+        `${changed} ${tNext("movieDetail.compareWouldChange", "would change")}`,
+        `${conflicts} ${tNext("movieDetail.compareConflicts", "conflicts")}`
+      ];
+      if (locked) summaryParts.push(`${locked} ${tNext("movieDetail.compareLocked", "locked")}`);
+      const legend = `
+        <div class="metadata-compare-legend">
+          <span class="metadata-compare-badge winner">${escapeHtml(tNext("movieDetail.compareWinner", "Selected"))}</span>
+          <span class="metadata-compare-badge change">${escapeHtml(tNext("movieDetail.compareChange", "Differs"))}</span>
+          <span class="metadata-compare-badge same">${escapeHtml(tNext("movieDetail.compareSame", "Same"))}</span>
+          <span class="metadata-compare-badge locked">${escapeHtml(tNext("movieDetail.compareLocked", "locked"))}</span>
+        </div>`;
+      const rows = decisions.map(movieMetadataCompareRowHtml).join("");
+      const openAttr = movieMetadataComparison.collapsed ? "" : " open";
+      return `
+        <details class="metadata-compare-details"${openAttr} id="movieMetadataCompareDetails">
+          <summary class="metadata-compare-summary-toggle">
+            <span class="metadata-compare-summary">${escapeHtml(summaryParts.join(" \u00b7 "))}</span>
+          </summary>
+          <div class="metadata-compare-body">
+            ${legend}
+            <div class="metadata-compare-table">${rows}</div>
+          </div>
+        </details>`;
+    }
+    function metadataCompareDecisionLocked(decision) {
+      return (decision.candidates || []).some((candidate) => String(candidate.reason || "").includes("locked by user"));
+    }
+    function movieMetadataCompareRowHtml(decision) {
+      const label = metadataCompareFieldLabel(decision);
+      const currentText = valueText(decision.initialValue);
+      const isLocked = metadataCompareDecisionLocked(decision);
+      const rowClasses = ["metadata-compare-field"];
+      if (decision.changed) rowClasses.push("changed");
+      if (decision.conflict) rowClasses.push("conflict");
+      if (isLocked) rowClasses.push("locked");
+      const flags = [];
+      if (isLocked) flags.push(`<span class="metadata-compare-badge locked">${escapeHtml(tNext("movieDetail.compareLocked", "locked"))}</span>`);
+      if (decision.conflict) flags.push(`<span class="metadata-compare-badge conflict">${escapeHtml(tNext("movieDetail.compareConflict", "conflict"))}</span>`);
+      const candidates = (decision.candidates || []).map((candidate) => {
+        const candidateText = valueText(candidate.value);
+        const same = candidateText === currentText;
+        const cls = ["metadata-compare-candidate"];
+        if (candidate.winner) cls.push("winner");
+        else if (same) cls.push("same");
+        else if (candidate.accepted === false && !same) cls.push("rejected");
+        if (!same && !candidate.winner) cls.push("differs");
+        const marks = [];
+        if (candidate.winner) marks.push(`<span class="metadata-compare-badge winner">${escapeHtml(tNext("movieDetail.compareWinner", "Selected"))}</span>`);
+        else if (same) marks.push(`<span class="metadata-compare-badge same">${escapeHtml(tNext("movieDetail.compareSame", "Same"))}</span>`);
+        else marks.push(`<span class="metadata-compare-badge change">${escapeHtml(tNext("movieDetail.compareChange", "Differs"))}</span>`);
+        const reason = candidate.accepted === false && candidate.reason
+          ? `<span class="metadata-compare-reason">${escapeHtml(candidate.reason)}</span>`
+          : "";
+        return `
+          <div class="${cls.join(" ")}">
+            <span class="metadata-compare-provider">${escapeHtml(candidate.sourceLabel || candidate.pluginId || "")}</span>
+            <span class="metadata-compare-candidate-value">${escapeHtml(metadataCompareValueText(candidate.value)).slice(0, 320)}</span>
+            <span class="metadata-compare-marks">${marks.join("")}${reason}</span>
+          </div>`;
+      }).join("");
+      return `
+        <div class="${rowClasses.join(" ")}">
+          <div class="metadata-compare-field-head">
+            <strong>${escapeHtml(label)}</strong>
+            <span class="metadata-compare-flags">${flags.join("")}</span>
+          </div>
+          <div class="metadata-compare-current">
+            <span class="metadata-compare-current-label">${escapeHtml(tNext("movieDetail.compareCurrent", "Current"))}</span>
+            <span class="metadata-compare-current-value">${escapeHtml(metadataCompareValueText(decision.initialValue)).slice(0, 320)}</span>
+          </div>
+          <div class="metadata-compare-candidates">${candidates}</div>
+        </div>`;
+    }
+    async function loadMovieMetadataComparison() {
+      if (!activeDetailMovieId || !hasPermission("metadata.refresh_one")) return;
+      const movieId = activeDetailMovieId;
+      movieMetadataComparison = {movieId, decisions: null, loading: true, error: ""};
+      if (activeDetailPayload) renderMovieMetadataCompare(activeDetailPayload);
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/preview`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        if (activeDetailMovieId !== movieId) return;
+        const decisions = (((payload.metadata || {}).proposal || {}).fieldDecisions) || [];
+        movieMetadataComparison = {movieId, decisions, loading: false, error: ""};
+      } catch (error) {
+        if (activeDetailMovieId !== movieId) return;
+        movieMetadataComparison = {movieId, decisions: null, loading: false, error: error.message || String(error)};
+      }
+      if (activeDetailPayload) renderMovieMetadataCompare(activeDetailPayload);
     }
     function movieVideoItems(movie, metadata) {
       const videos = [];
@@ -21034,9 +22346,75 @@ def ui_preview_html(
       }).join("");
       select.value = normalized;
     }
+    const MOVIE_EDIT_LOCK_FIELDS = {
+      movieEditTitle: "title",
+      movieEditOriginalTitle: "original_title",
+      movieEditSortTitle: "sort_title",
+      movieEditYear: "year",
+      movieEditBarcode: "barcode",
+      movieEditFormat: "format",
+      movieEditEdition: "edition",
+      movieEditReleaseDate: "release_date",
+      movieEditCountry: "country",
+      movieEditLanguage: "language",
+      movieEditLocation: "location",
+      movieEditOverview: "overview",
+      movieEditNotes: "notes",
+      movieEditRuntime: "runtime_minutes",
+      movieEditDirector: "director",
+      movieEditGenre: "genre",
+      movieEditStudios: "studios",
+      movieEditContentRating: "content_ratings",
+      movieEditHdr: "hdr",
+      movieEditScreenRatio: "screen_ratios",
+      movieEditAudioTracks: "audio_tracks",
+      movieEditSubtitles: "subtitles",
+      movieEditPackaging: "packaging",
+      movieEditDistributor: "distributor"
+    };
+    let movieEditLockedFields = new Set();
+    function reflectMovieEditLock(btn, field) {
+      const locked = movieEditLockedFields.has(field);
+      btn.classList.toggle("locked", locked);
+      btn.setAttribute("aria-pressed", locked ? "true" : "false");
+      btn.textContent = locked ? "🔒" : "🔓";
+      btn.title = locked
+        ? tNext("movieDetail.unlockField", "Field locked. Click to allow metadata updates.")
+        : tNext("movieDetail.lockField", "Field unlocked. Click to protect it from metadata updates.");
+      btn.setAttribute("aria-label", btn.title);
+    }
+    function toggleMovieEditLock(field, btn) {
+      if (movieEditLockedFields.has(field)) movieEditLockedFields.delete(field);
+      else movieEditLockedFields.add(field);
+      reflectMovieEditLock(btn, field);
+    }
+    function setupMovieEditLocks(lockedList) {
+      movieEditLockedFields = new Set(Array.isArray(lockedList) ? lockedList : []);
+      Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const label = input.closest("label");
+        if (!label) return;
+        let btn = label.querySelector(".movie-edit-lock");
+        if (!btn) {
+          btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "movie-edit-lock";
+          btn.dataset.lockField = field;
+          btn.addEventListener("click", () => toggleMovieEditLock(field, btn));
+          const head = label.querySelector("span");
+          if (head) head.appendChild(btn);
+          else label.insertBefore(btn, input);
+        }
+        reflectMovieEditLock(btn, field);
+      });
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
+      const metadata = movie.metadata || {};
+      const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
+      const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const fields = {
         movieEditTitle: movie.title || "",
         movieEditOriginalTitle: movie.original_title || "",
@@ -21048,6 +22426,17 @@ def ui_preview_html(
         movieEditCountry: movie.country || "",
         movieEditLanguage: movie.language || "",
         movieEditLocation: movie.location || "",
+        movieEditRuntime: movie.runtime_minutes || "",
+        movieEditDirector: valueText(metadata.director),
+        movieEditGenre: valueText(metadata.genre),
+        movieEditStudios: valueText(metadata.studios),
+        movieEditContentRating: contentRatingInfo.rating || "",
+        movieEditHdr: valueText(specs.hdr || metadata.hdr),
+        movieEditScreenRatio: valueText(specs.screen_ratios || metadata.screen_ratios),
+        movieEditAudioTracks: valueText(specs.audio_tracks || metadata.audio_tracks),
+        movieEditSubtitles: valueText(specs.subtitles || metadata.subtitles),
+        movieEditPackaging: valueText(specs.packaging || metadata.packaging || movie.edition_type),
+        movieEditDistributor: valueText(metadata.distributor),
         movieEditOverview: movie.overview || "",
         movieEditNotes: movie.notes || ""
       };
@@ -21055,6 +22444,11 @@ def ui_preview_html(
         const input = document.getElementById(id);
         if (input && document.activeElement !== input) input.value = value;
       });
+      setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
+    }
+    function movie_locked_fields_from_metadata(metadata) {
+      const raw = (metadata && (metadata.field_locks || metadata.fieldLocks)) || [];
+      return Array.isArray(raw) ? raw.map((item) => String(item || "").trim()).filter(Boolean) : [];
     }
     function renderMovieListState(detail) {
       const state = detail.userState || {};
@@ -21223,33 +22617,52 @@ def ui_preview_html(
       ]);
       fillMovieEditForm(detail);
       renderMovieListState(detail);
+      const mvIds = movieVaultExternalIds(movie, metadata);
+      const releaseContainers = (detail.containers || []).filter((container) => container && container.title);
+      const releaseContainerText = releaseContainers.map((container) => container.title).join(", ");
+      const releaseContainerHtml = containerLinksHtml(releaseContainers);
+      const releasePackaging = specs.packaging || metadata.packaging || movie.edition_type || movie.edition;
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
         [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
         [tNext("movieDetail.format", "Format"), movie.format],
-        [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
-        [tNext("movieDetail.country", "Country"), movie.country],
+        [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
         [tNext("movieDetail.location", "Location"), movie.location],
         [tNext("movieDetail.director", "Director"), metadata.director],
         [tNext("movieDetail.genre", "Genre"), metadata.genre],
-        [tNext("movieDetail.studios", "Studios"), metadata.studios]
+        [tNext("movieDetail.studios", "Studios"), metadata.studios],
+        [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
+        ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
       ]);
-      document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows([
+      const audioVideoSubsection = detailFieldSubsection(tNext("movieDetail.audioVideo", "Audio & Video"), [
         ["HDR", specs.hdr || metadata.hdr],
-        [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
-        [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles],
-        [tNext("movieDetail.regions", "Regions"), specs.regions || metadata.regions],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
-        [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
-        [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}]
+        [tNext("movieDetail.format", "Format"), movie.format || specs.format || metadata.format],
+        [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
+        [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
+        [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles]
       ]);
+      const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
+        [tNext("movieDetail.edition", "Edition"), movie.edition],
+        [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
+        [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
+        [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
+        ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
+      ]);
+      document.getElementById("movieDetailTechnical").innerHTML = (audioVideoSubsection + collectorsSubsection)
+        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+      bindContainerDetailLinks("movieDetailTechnical");
       renderMovieMetadataCompare(detail);
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
       if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || [], movie, specs) : "";
+      const debugMetadataCard = document.getElementById("movieDetailDebugMetadataCard");
+      if (debugMetadataCard) debugMetadataCard.classList.toggle("hidden", !appDebugMode);
+      const debugSources = document.getElementById("movieDetailDebugSources");
+      if (debugSources) debugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       const identifiers = (detail.identifiers || []).filter(Boolean).map((item) => {
         const service = movieIdentifierServiceLabel(item);
         return service === "IMDb" || service === "TMDb"
@@ -21307,6 +22720,7 @@ def ui_preview_html(
     function showMovieDetailLoading(movieId) {
       activeDetailMovieId = movieId || "";
       activeDetailPayload = null;
+      movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
       document.getElementById("movieDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("movieDetailOverview").textContent = "";
@@ -21318,6 +22732,10 @@ def ui_preview_html(
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
+      document.getElementById("movieDetailDebugMetadataCard")?.classList.add("hidden");
+      const debugSourcesEl = document.getElementById("movieDetailDebugSources");
+      if (debugSourcesEl) debugSourcesEl.innerHTML = "";
+      dvMissingContributionReportData = null;
       document.getElementById("movieDetailLinks").innerHTML = "";
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
@@ -21563,7 +22981,7 @@ def ui_preview_html(
       ).join("");
     }
     function renderContainerDetail(detail) {
-      const activePanelId = activeDetailPanel("containerDetail", "containerDetailOverviewPanel");
+      const activePanelId = activeDetailPanel("containerDetail", "containerDetailFilmsPanel");
       activeContainerPayload = detail;
       const container = detail.container || {};
       activeContainerId = container.id || activeContainerId || "";
@@ -21639,10 +23057,14 @@ def ui_preview_html(
         [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
       ]);
       document.getElementById("containerDetailMetadataDetails").innerHTML = document.getElementById("containerDetailMetadata").innerHTML;
+      const containerDebugCard = document.getElementById("containerDetailDebugCard");
+      const containerDebugSources = document.getElementById("containerDetailDebugSources");
+      if (containerDebugCard) containerDebugCard.classList.toggle("hidden", !appDebugMode);
+      if (containerDebugSources) containerDebugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
-      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailFilmsPanel");
       syncContainerViewModeControls();
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
@@ -21669,7 +23091,7 @@ def ui_preview_html(
       document.getElementById("containerDetailVideos").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
       document.getElementById("containerDetailBackdrop").src = "";
-      activateDetailTab("containerDetail", "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", "containerDetailFilmsPanel");
       setContainerDetailMessage("");
     }
     function renderContainerEditSummary(detail) {
@@ -25644,6 +27066,21 @@ def ui_preview_html(
       const payload = notification?.payload || {};
       return String(payload.prefKey || payload.pref_key || payload.kind || "app_updates");
     }
+    function notificationDisplayTitle(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind === "metadata_plugins_unconfigured") {
+        return tNext("notifications.pluginsUnconfiguredTitle", "Plugins need configuration");
+      }
+      return notification.title || tNext("notifications.itemTitle", "Notification");
+    }
+    function notificationDisplayBody(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind === "metadata_plugins_unconfigured") {
+        const names = Array.isArray(payload.plugins) ? payload.plugins.join(", ") : "";
+        return tNext("notifications.pluginsUnconfiguredBody", "The following plugins are not configured yet: {plugins}").replace("{plugins}", names);
+      }
+      return notification.body || "";
+    }
     function notificationMatchesFilter(notification) {
       const filter = String(notificationFilter || "all");
       if (filter === "all") return true;
@@ -25654,11 +27091,13 @@ def ui_preview_html(
       const unread = !notification.read_at;
       const created = notification.created_at ? formatAppDate(notification.created_at) : "";
       const prefKey = notificationPrefKey(notification);
+      const cardTitle = notificationDisplayTitle(notification);
+      const cardBody = notificationDisplayBody(notification);
       return `
         <article class="notification-card ${unread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}" role="button" tabindex="0">
           <span>
-            <strong>${escapeHtml(notification.title || tNext("notifications.itemTitle", "Notification"))}</strong>
-            ${notification.body ? `<p>${escapeHtml(notification.body)}</p>` : ""}
+            <strong>${escapeHtml(cardTitle)}</strong>
+            ${cardBody ? `<p>${escapeHtml(cardBody)}</p>` : ""}
             <span class="notification-meta">${escapeHtml(created)}${prefKey ? ` / ${escapeHtml(tNext(`notifications.pref.${prefKey}`, prefKey.replaceAll("_", " ")))}` : ""}</span>
             ${notificationInviteActionsHtml(notification)}
           </span>
@@ -26283,6 +27722,11 @@ def ui_preview_html(
         return;
       }
       setMovieDetailMessage(tNext("movieDetail.saving", "Saving movie..."));
+      const prevDetail = activeDetailPayload || {};
+      const prevMovie = prevDetail.movie || {};
+      const prevMetadata = prevMovie.metadata || {};
+      const prevSpecs = prevDetail.technicalSpecs || {};
+      const ratingCountry = normalizedRatingCountryCode((preferences && preferences.rating_country) || "NL") || "NL";
       const body = {
         title,
         originalTitle: formTextValue("movieEditOriginalTitle"),
@@ -26295,9 +27739,32 @@ def ui_preview_html(
         country: formTextValue("movieEditCountry"),
         language: formTextValue("movieEditLanguage"),
         location: formTextValue("movieEditLocation"),
+        runtimeMinutes: formTextValue("movieEditRuntime"),
+        director: formTextValue("movieEditDirector"),
+        genre: formTextValue("movieEditGenre"),
+        studios: formTextValue("movieEditStudios"),
+        contentRating: formTextValue("movieEditContentRating"),
+        ratingCountry,
+        hdr: formTextValue("movieEditHdr"),
+        screenRatio: formTextValue("movieEditScreenRatio"),
+        audioTracks: formTextValue("movieEditAudioTracks"),
+        subtitles: formTextValue("movieEditSubtitles"),
+        packaging: formTextValue("movieEditPackaging"),
+        distributor: formTextValue("movieEditDistributor"),
         overview: formTextValue("movieEditOverview"),
-        notes: formTextValue("movieEditNotes")
+        notes: formTextValue("movieEditNotes"),
+        fieldLocks: Array.from(movieEditLockedFields)
       };
+      let clearedUnlockedField = false;
+      Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
+        if (movieEditLockedFields.has(field)) return;
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const newValue = (input.value || "").trim();
+        if (newValue) return;
+        const previous = previousMovieEditFieldValue(field, prevMovie, prevMetadata, prevSpecs);
+        if (previous) clearedUnlockedField = true;
+      });
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {
           method: "PATCH",
@@ -26308,8 +27775,27 @@ def ui_preview_html(
         await loadAppSnapshot();
         setMovieEditPanelVisible(false);
         setMovieDetailMessage(tNext("movieDetail.saved", "Movie saved."), "good");
+        if (clearedUnlockedField && hasPermission("metadata.refresh_one")) {
+          await refreshActiveMovieMetadata(false);
+        }
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function previousMovieEditFieldValue(field, movie, metadata, specs) {
+      switch (field) {
+        case "runtime_minutes": return valueText(movie.runtime_minutes);
+        case "director": return valueText(metadata.director);
+        case "genre": return valueText(metadata.genre);
+        case "studios": return valueText(metadata.studios);
+        case "distributor": return valueText(metadata.distributor);
+        case "hdr": return valueText(specs.hdr || metadata.hdr);
+        case "screen_ratios": return valueText(specs.screen_ratios || metadata.screen_ratios);
+        case "audio_tracks": return valueText(specs.audio_tracks || metadata.audio_tracks);
+        case "subtitles": return valueText(specs.subtitles || metadata.subtitles);
+        case "packaging": return valueText(specs.packaging || metadata.packaging || movie.edition_type);
+        case "content_ratings": return valueText(preferredContentRatingInfo(movie, specs).rating);
+        default: return valueText(movie[field]);
       }
     }
     async function refreshActiveMovieMetadata(dryRun, personRefreshScope = "all", forceRefreshPeople = false) {
@@ -26330,18 +27816,16 @@ def ui_preview_html(
           body: JSON.stringify({dryRun, refreshPeople, personRefreshScope: scope})
         });
         const personRefresh = (payload.metadata || {}).personRefresh || null;
-        setMovieDetailMessage(
-          (refreshingCrewOnly
-            ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
-            : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
-            + movieMetadataPeopleRefreshMessage(personRefresh),
-          "good"
-        );
+        const successMessage = (refreshingCrewOnly
+          ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
+          : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
+          + movieMetadataPeopleRefreshMessage(personRefresh);
         if (!dryRun) {
           const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
           renderMovieDetail(refreshed.detail || {});
           await loadAppSnapshot();
         }
+        setMovieDetailMessage(successMessage, "good");
         console.log("metadata refresh", payload);
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
@@ -27542,7 +29026,7 @@ def ui_preview_html(
     function setProfileSecurityMessage(message, tone) {
       const node = document.getElementById("profileSecurityMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     function renderProfilePasskeys() {
@@ -27988,7 +29472,7 @@ def ui_preview_html(
         await loadProfileDetails();
         setProfileSecurityMessage(tNext("profile.passkeyAdded", "Passkey added."), "good");
       } catch (error) {
-        setProfileSecurityMessage(error.message || tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), "bad");
+        setProfileSecurityMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -28975,6 +30459,8 @@ def ui_preview_html(
         if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
       });
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
+      document.getElementById("appReviewToggleButton")?.addEventListener("click", () => toggleReviewLogin());
+      document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
       document.getElementById("appInviteToggleButton")?.addEventListener("click", () => toggleInviteLogin());
       document.getElementById("appInviteForm")?.addEventListener("submit", (event) => registerInviteAccount(event));
       document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());
@@ -29155,6 +30641,7 @@ def ui_preview_html(
       document.getElementById("movieMetadataPeopleToggle")?.addEventListener("click", () => setMovieMetadataRefreshPeople(!movieMetadataRefreshPeople));
       setMovieMetadataRefreshPeople(movieMetadataRefreshPeople);
       document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
+      document.getElementById("movieMetadataCompareButton")?.addEventListener("click", () => loadMovieMetadataComparison());
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
         const items = libraryDisplayItems();
         if (!items.length) return;
@@ -30475,9 +31962,18 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <input id="authInviteCode" type="text" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX">
           </label>
         </div>
+        <div id="authReviewFields" class="hidden">
+          <label><span>Username</span>
+            <input id="authReviewUsername" type="text" autocomplete="username">
+          </label>
+          <label><span data-next-i18n="auth.password">Password</span>
+            <input id="authReviewPassword" type="password" autocomplete="current-password">
+          </label>
+        </div>
         <div class="actions">
           <button type="button" id="authSetupButton" data-auth-action="setup" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
           <button type="button" id="authJoinButton" data-auth-action="join" data-next-i18n="auth.createAccount">Create account</button>
+          <button type="button" id="authReviewButton" class="hidden" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
           <button type="button" id="authLoginButton" data-auth-action="login" data-next-i18n="auth.signIn">Sign in</button>
           <button type="button" id="authLogoutButton" data-auth-action="logout" data-next-i18n="auth.signOut">Sign out</button>
         </div>
@@ -30999,16 +32495,71 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function setAuthStatus(message, tone) {
       const node = document.getElementById("authStatusLine");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `auth-status ${tone || ""}`.trim();
     }
     function reportClientError(error) {
       const message = error && error.message ? error.message : String(error || "Unknown browser error");
       setAuthStatus(message, "bad");
     }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyRpMismatchMessage() {
+      return tNext(
+        "auth.passkeyRpMismatch",
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if (/registrable domain suffix|not equal to the current domain|relying party id/i.test(rawMessage)) {
+        return passkeyRpMismatchMessage();
+      }
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
+    }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return "This browser does not support passkeys.";
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return "Open this app over HTTPS to use passkeys.";
@@ -31043,12 +32594,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const setupFields = document.getElementById("authSetupFields");
       const setupButton = document.getElementById("authSetupButton");
       const joinButton = document.getElementById("authJoinButton");
+      const reviewButton = document.getElementById("authReviewButton");
+      const reviewFields = document.getElementById("authReviewFields");
       const loginButton = document.getElementById("authLoginButton");
       const logoutButton = document.getElementById("authLogoutButton");
       const inviteLabel = document.getElementById("authInviteLabel");
       const unavailable = webauthnUnavailableReason();
       const setupRequired = !!authState.setup_required;
       const authenticated = !!authState.authenticated;
+      const reviewLoginAvailable = !!authState.review_login_available;
       const joinAllowed = !setupRequired && !authenticated && !!authState.auth_enabled;
       title.textContent = authenticated ? "Signed in" : setupRequired ? "First passkey" : "Passkeys";
       description.textContent = authenticated
@@ -31063,6 +32617,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       inviteLabel.classList.toggle("hidden", !joinAllowed || !!authState.registration_enabled);
       setupButton.classList.toggle("hidden", !setupRequired);
       joinButton.classList.toggle("hidden", !joinAllowed);
+      reviewButton.classList.toggle("hidden", setupRequired || authenticated || !reviewLoginAvailable);
+      reviewFields.classList.toggle("hidden", !reviewLoginAvailable || setupRequired || authenticated);
       loginButton.classList.toggle("hidden", setupRequired || authenticated);
       logoutButton.classList.toggle("hidden", !authenticated);
       setupButton.disabled = !!unavailable;
@@ -31252,7 +32808,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function setStartupMessage(message, tone) {
       const node = document.getElementById("startupMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     async function registerOwnerPasskey(triggerButton = null) {
@@ -31309,8 +32865,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
-        setStartupMessage(error.name === "NotAllowedError" ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Owner passkey could not be created."), "bad");
+        setStartupMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -31376,7 +32932,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Invite sign-up failed."), "bad");
       } finally {
         button.disabled = false;
       }
@@ -31432,7 +32988,46 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Sign-in with passkey failed."), "bad");
+      } finally {
+        button.disabled = false;
+      }
+    }
+    async function loginReviewPassword() {
+      if (!authState.review_login_available) {
+        setAuthStatus("Username/password review login is not available.", "bad");
+        return;
+      }
+      const username = String(document.getElementById("authReviewUsername")?.value || "").trim();
+      const password = String(document.getElementById("authReviewPassword")?.value || "");
+      if (!username || !password) {
+        setAuthStatus("Enter username and password.", "bad");
+        return;
+      }
+      const button = document.getElementById("authReviewButton");
+      button.disabled = true;
+      setAuthStatus("Signing in with username/password...", "info");
+      try {
+        const reviewBody = {username, password};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
+        const payload = await authJson("/api/next/auth/review/login", {
+          method: "POST",
+          body: JSON.stringify(reviewBody)
+        });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
+        authToken = payload.token || "";
+        if (authToken) localStorage.setItem("dv_next_token", authToken);
+        const passwordInput = document.getElementById("authReviewPassword");
+        if (passwordInput) passwordInput.value = "";
+        setAuthStatus("Signed in.", "good");
+        await refreshAuthStatus();
+        await resumeStartupOrCollection();
+      } catch (error) {
+        setAuthStatus(error.message || "Username/password sign-in failed.", "bad");
       } finally {
         button.disabled = false;
       }
@@ -31466,6 +33061,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           if (action === "login") loginPasskey().catch(reportClientError);
           if (action === "logout") logoutPasskey().catch(reportClientError);
         });
+      });
+      document.getElementById("authReviewButton")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        loginReviewPassword().catch(reportClientError);
       });
     }
     function bindStartupActions() {
@@ -37260,6 +38859,183 @@ def storage_optional_date(value: Any) -> date | None:
         return None
 
 
+def _movie_edit_csv_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        items = list(value)
+    else:
+        items = str(value).split(",")
+    result: list[str] = []
+    for item in items:
+        text = clean_text(item)
+        if text:
+            result.append(text)
+    return result
+
+
+def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int | None:
+    keys = ("runtimeMinutes", "runtime_minutes", "runtime")
+    if not any(key in body for key in keys):
+        return existing.get("runtime_minutes")
+    raw = next(body[key] for key in keys if key in body)
+    text = clean_text(raw)
+    if not text:
+        return None
+    digits = re.sub(r"[^0-9]", "", str(text))
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
+        return None
+
+
+def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
+    aliases = {
+        "director": ("director",),
+        "genre": ("genre",),
+        "studios": ("studios", "studio"),
+        "distributor": ("distributor",),
+    }
+    edits: dict[str, Any] = {}
+    for field, keys in aliases.items():
+        if any(key in body for key in keys):
+            raw = next(body[key] for key in keys if key in body)
+            edits[field] = clean_text(raw)
+    return edits
+
+
+def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
+    edits: dict[str, Any] = {}
+    if "hdr" in body:
+        edits["hdr"] = clean_text(body.get("hdr"))
+    if "packaging" in body:
+        edits["packaging"] = clean_text(body.get("packaging"))
+    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios")
+    if any(key in body for key in ratio_keys):
+        raw = next(body[key] for key in ratio_keys if key in body)
+        edits["screen_ratios"] = clean_text(raw)
+    audio_keys = ("audioTracks", "audio_tracks")
+    if any(key in body for key in audio_keys):
+        raw = next(body[key] for key in audio_keys if key in body)
+        edits["audio_tracks"] = _movie_edit_csv_list(raw)
+    if "subtitles" in body:
+        edits["subtitles"] = _movie_edit_csv_list(body.get("subtitles"))
+    if "contentRating" in body or "content_rating" in body:
+        rating = clean_text(body.get("contentRating", body.get("content_rating")))
+        country = (clean_text(body.get("ratingCountry") or body.get("rating_country")) or "NL").upper()
+        if rating:
+            edits["content_ratings"] = {country: rating}
+    return edits
+
+
+def movie_effective_field_locks(body: dict[str, Any], existing: dict[str, Any]) -> list[str] | None:
+    if "fieldLocks" not in body and "field_locks" not in body:
+        return None
+    return normalize_movie_field_locks(body.get("fieldLocks", body.get("field_locks")))
+
+
+def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -> None:
+    if not edits:
+        return
+    cur.execute(
+        "INSERT INTO movie_technical_specs (movie_id, updated_at) VALUES (%s, now()) ON CONFLICT (movie_id) DO NOTHING",
+        (movie_uuid,),
+    )
+    assignments: list[str] = []
+    values: list[Any] = []
+    for col in ("hdr", "packaging", "screen_ratios"):
+        if col in edits:
+            assignments.append(f"{col}=%s")
+            values.append(edits[col])
+    for col in ("audio_tracks", "subtitles"):
+        if col in edits:
+            assignments.append(f"{col}=%s")
+            values.append(Jsonb(json_ready(edits[col] or [])))
+    if "content_ratings" in edits:
+        assignments.append("content_ratings = COALESCE(content_ratings, '{}'::jsonb) || %s")
+        values.append(Jsonb(json_ready(edits["content_ratings"] or {})))
+    if not assignments:
+        return
+    assignments.append("updated_at=now()")
+    values.append(movie_uuid)
+    cur.execute(
+        f"UPDATE movie_technical_specs SET {', '.join(assignments)} WHERE movie_id=%s",
+        values,
+    )
+
+
+def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> None:
+    """Persist movie columns, runtime, editable metadata fields and field locks."""
+    metadata_patch: dict[str, Any] = dict(payload.get("metadata_edits") or {})
+    field_locks = payload.get("field_locks")
+    if field_locks is not None:
+        metadata_patch[MOVIE_METADATA_LOCKS_KEY] = field_locks
+    cur.execute(
+        """
+        UPDATE movies
+        SET title=%s,
+            sort_title=%s,
+            original_title=%s,
+            year=%s,
+            barcode=%s,
+            release_date=%s,
+            format=%s,
+            edition=%s,
+            country=%s,
+            language=%s,
+            overview=%s,
+            notes=%s,
+            location=%s,
+            runtime_minutes=%s,
+            metadata = COALESCE(metadata, '{}'::jsonb) || %s,
+            updated_at=now()
+        WHERE id=%s
+        """,
+        (
+            payload["title"],
+            payload["sort_title"],
+            payload["original_title"],
+            payload["year"],
+            payload["barcode"],
+            payload["release_date"],
+            payload["format"],
+            payload["edition"],
+            payload["country"],
+            payload["language"],
+            payload["overview"],
+            payload["notes"],
+            payload["location"],
+            payload.get("runtime_minutes"),
+            Jsonb(json_ready(metadata_patch)),
+            movie_uuid,
+        ),
+    )
+    upsert_movie_technical_edits(cur, movie_uuid, payload.get("technical_edits") or {})
+
+
+def set_movie_field_locks(movie_uuid: UUID, body: dict[str, Any], *, permission: str) -> list[str]:
+    """Persist the set of locked field names for a movie and return the stored list."""
+    locks = normalize_movie_field_locks(body.get("fieldLocks", body.get("field_locks")))
+    with connect() as conn:
+        actor = require_next_permission(conn, permission)
+        if not table_exists(conn, "movies"):
+            raise NextApiError("Movie table is not available", 503)
+        existing = movie_entity(conn, movie_uuid)
+        if not existing:
+            raise NextApiError("Movie not found", 404)
+        if not actor_can_edit_visible_movie(conn, actor, existing):
+            raise NextApiError("Permission required: collection.edit_all", 403)
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE movies SET metadata = COALESCE(metadata, '{}'::jsonb) || %s, updated_at=now() WHERE id=%s",
+                    (Jsonb(json_ready({MOVIE_METADATA_LOCKS_KEY: locks})), movie_uuid),
+                )
+    return locks
+
+
 def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> dict[str, Any]:
     def pick_text(column: str, *aliases: str) -> str | None:
         keys = (column, *aliases)
@@ -37295,10 +39071,33 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "overview": pick_text("overview"),
         "notes": pick_text("notes"),
         "location": pick_text("location"),
+        "runtime_minutes": movie_runtime_value(body, existing),
+        "metadata_edits": movie_metadata_edits(body),
+        "technical_edits": movie_technical_edits(body),
+        "field_locks": movie_effective_field_locks(body, existing),
     }
 
 
-def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+# Maps a canonical technical-spec column to the receiver payload key the
+# MovieVault contribution template expects (camelCase contract).
+MOVIE_TECHNICAL_RECEIVER_KEYS: dict[str, str] = {
+    "hdr": "hdr",
+    "packaging": "packaging",
+    "screen_ratios": "screenRatios",
+    "audio_tracks": "audioTracks",
+    "subtitles": "subtitles",
+    "content_ratings": "contentRatings",
+}
+
+
+def movie_edit_receiver_proposal(
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    locked_fields: set[str] | None = None,
+    existing_technical: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    locked = locked_fields or set()
     public_fields = (
         "title",
         "original_title",
@@ -37317,9 +39116,17 @@ def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, An
             return value.isoformat()
         return clean_text(value)
 
+    def technical_comparable(value: Any) -> Any:
+        if isinstance(value, (list, dict)):
+            return value
+        return clean_text(value)
+
     movie_updates: dict[str, Any] = {}
     metadata_updates: dict[str, Any] = {}
+    technical_updates: dict[str, Any] = {}
     for field in public_fields:
+        if field in locked:
+            continue
         old_value = comparable(existing.get(field))
         new_value = comparable(payload.get(field))
         if old_value == new_value:
@@ -37333,19 +39140,58 @@ def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, An
             metadata_updates["releaseDate"] = new_value
         else:
             metadata_updates[field] = new_value
-    if not movie_updates and not metadata_updates:
+
+    # Editable metadata fields stored on movies.metadata (director, genre,
+    # studios, distributor). A non-empty supplement/change becomes a
+    # contribution; locked fields are never forwarded.
+    existing_meta = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
+    metadata_edits = payload.get("metadata_edits") or {}
+    for field in ("director", "genre", "studios", "distributor"):
+        if field not in metadata_edits or field in locked:
+            continue
+        new_value = comparable(metadata_edits.get(field))
+        if not new_value:
+            continue
+        if comparable(existing_meta.get(field)) == new_value:
+            continue
+        metadata_updates[field] = new_value
+
+    # Runtime change.
+    if "runtime_minutes" not in locked:
+        new_runtime = payload.get("runtime_minutes")
+        if new_runtime not in (None, "") and new_runtime != existing.get("runtime_minutes"):
+            movie_updates["runtime_minutes"] = new_runtime
+            metadata_updates["runtimeMinutes"] = new_runtime
+
+    # Technical specs stored on movie_technical_specs (hdr, packaging,
+    # screen_ratios, audio_tracks, subtitles, content_ratings).
+    existing_tech = existing_technical if isinstance(existing_technical, dict) else {}
+    technical_edits = payload.get("technical_edits") or {}
+    for col, receiver_key in MOVIE_TECHNICAL_RECEIVER_KEYS.items():
+        if col not in technical_edits or col in locked:
+            continue
+        new_value = technical_edits.get(col)
+        if new_value in (None, "", [], {}):
+            continue
+        if technical_comparable(existing_tech.get(col)) == technical_comparable(new_value):
+            continue
+        technical_updates[receiver_key] = new_value
+
+    if not movie_updates and not metadata_updates and not technical_updates:
         return {}
     return {
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
-        "technicalUpdates": {},
+        "technicalUpdates": technical_updates,
         "mediaUpdates": {},
         "identifiers": {},
         "provenance": [
             {
                 "pluginId": "discvault_local_edit",
                 "sourceLabel": "DiscVault local edit",
-                "fields": sorted(set(movie_updates) | set(metadata_updates)),
+                "fields": sorted(
+                    set(movie_updates) | set(metadata_updates) | set(technical_updates)
+                ),
             }
         ],
     }
@@ -38675,10 +40521,266 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
     return rows
 
 
+def movie_metadata_debug_latest_audit_event(
+    conn, movie_id: UUID | str, event_type: str
+) -> dict[str, Any] | None:
+    if not table_exists(conn, "audit_events"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                event_type,
+                category,
+                actor_user_id,
+                actor_username,
+                actor_role,
+                target_type,
+                target_id,
+                summary,
+                metadata,
+                request_ip,
+                user_agent,
+                created_at
+            FROM audit_events
+            WHERE target_type='movie' AND target_id=%s AND event_type=%s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (str(movie_id), event_type),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return audit_event_row(row)
+
+
+def movie_metadata_missing_contribution_report(
+    *,
+    movie_id: UUID | str,
+    title: Any,
+    fetched: list[dict[str, Any]],
+    contributed: list[dict[str, Any]],
+    generated_at: Any,
+    entity_kind: str = "movie",
+) -> dict[str, Any] | None:
+    """Build a self-describing report of fields fetched by DiscVault but not
+    accepted by a receiver's contribution template (e.g. MovieVault).
+
+    The list is derived from the real contribution filtering: each receiver's
+    ``excludedFields`` (incoming payload keys dropped by the template allow-list)
+    cross-referenced against the fetched field decisions for source + sample value.
+    """
+
+    def _norm(key: Any) -> str:
+        return "".join(ch for ch in str(key or "").lower() if ch.isalnum())
+
+    lookup: dict[str, dict[str, Any]] = {}
+    for plugin in fetched or []:
+        if not isinstance(plugin, dict):
+            continue
+        for field in plugin.get("fields") or []:
+            if not isinstance(field, dict):
+                continue
+            norm_key = _norm(field.get("field"))
+            if not norm_key or norm_key in lookup:
+                continue
+            lookup[norm_key] = {
+                "sourcePluginId": plugin.get("pluginId"),
+                "sourceLabel": plugin.get("sourceLabel"),
+                "sampleValue": field.get("value"),
+                "target": field.get("target"),
+            }
+
+    receivers_out: list[dict[str, Any]] = []
+    for receiver in contributed or []:
+        if not isinstance(receiver, dict):
+            continue
+        excluded = receiver.get("excludedFields") or []
+        missing: list[dict[str, Any]] = []
+        for item in excluded:
+            if not isinstance(item, dict) or not item.get("field"):
+                continue
+            info = lookup.get(_norm(item.get("field")), {})
+            missing.append(
+                {
+                    "field": item.get("field"),
+                    "target": info.get("target"),
+                    "sourcePluginId": info.get("sourcePluginId"),
+                    "sourceLabel": info.get("sourceLabel"),
+                    "sampleValue": info.get("sampleValue"),
+                    "reason": item.get("reason"),
+                }
+            )
+        if not missing:
+            continue
+        receivers_out.append(
+            {
+                "pluginId": receiver.get("pluginId"),
+                "name": receiver.get("name") or receiver.get("pluginId"),
+                "templateVersion": receiver.get("templateVersion"),
+                "missingFields": missing,
+            }
+        )
+
+    if not receivers_out:
+        return None
+
+    return {
+        "report": "discvault.metadata.missing_in_receiver",
+        "version": 1,
+        "note": "Fields fetched by DiscVault but not accepted by the receiver's contribution template.",
+        "generatedAt": generated_at,
+        f"{entity_kind}Id": str(movie_id),
+        "title": title,
+        "receivers": receivers_out,
+    }
+
+
+def metadata_debug_fetched_sources(fetched_meta: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Build the per-source "loaded metadata" cards from a refresh_fetched event's metadata."""
+    fetched_meta = fetched_meta if isinstance(fetched_meta, dict) else {}
+
+    source_states: dict[str, dict[str, Any]] = {}
+    for entry in fetched_meta.get("sourceSummary") or []:
+        if isinstance(entry, dict) and entry.get("pluginId"):
+            source_states[str(entry["pluginId"])] = entry
+
+    grouped: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+
+    def ensure_plugin(plugin_id: str, *, source_label: Any, source_ref: Any) -> dict[str, Any]:
+        if plugin_id not in grouped:
+            summary_entry = source_states.get(plugin_id) or {}
+            grouped[plugin_id] = {
+                "pluginId": plugin_id,
+                "sourceLabel": source_label or summary_entry.get("name") or plugin_id,
+                "state": summary_entry.get("state"),
+                "reason": summary_entry.get("reason"),
+                "sourceRef": source_ref or "",
+                "fields": [],
+            }
+            order.append(plugin_id)
+        return grouped[plugin_id]
+
+    for decision in fetched_meta.get("fieldDecisions") or []:
+        if not isinstance(decision, dict):
+            continue
+        target = decision.get("target")
+        field = decision.get("field")
+        for candidate in decision.get("candidates") or []:
+            if not isinstance(candidate, dict):
+                continue
+            plugin_id = str(candidate.get("pluginId") or "")
+            if not plugin_id:
+                continue
+            entry = ensure_plugin(
+                plugin_id,
+                source_label=candidate.get("sourceLabel"),
+                source_ref=candidate.get("sourceRef"),
+            )
+            if not entry.get("sourceRef") and candidate.get("sourceRef"):
+                entry["sourceRef"] = candidate.get("sourceRef")
+            entry["fields"].append(
+                {
+                    "target": target,
+                    "field": field,
+                    "value": candidate.get("value"),
+                    "accepted": bool(candidate.get("accepted") or candidate.get("winner")),
+                }
+            )
+
+    for result in fetched_meta.get("providerResults") or []:
+        if not isinstance(result, dict):
+            continue
+        plugin_id = str(result.get("pluginId") or "")
+        if not plugin_id or plugin_id in grouped:
+            continue
+        ensure_plugin(
+            plugin_id,
+            source_label=result.get("sourceLabel"),
+            source_ref=result.get("sourceRef"),
+        )
+
+    return [grouped[plugin_id] for plugin_id in order]
+
+
+def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | None:
+    if not table_exists(conn, "audit_events"):
+        return None
+    fetched_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.refresh_fetched")
+    pushed_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.receiver_pushed")
+    if not fetched_event and not pushed_event:
+        return None
+
+    fetched_meta = (fetched_event or {}).get("metadata") or {}
+    pushed_meta = (pushed_event or {}).get("metadata") or {}
+
+    fetched = metadata_debug_fetched_sources(fetched_meta)
+
+    payload_summary = pushed_meta.get("payloadSummary") or {}
+    payload_fields = payload_summary.get("fields") or []
+    payload_sources = payload_summary.get("sourceProviders") or []
+    contributed: list[dict[str, Any]] = []
+    for receiver in pushed_meta.get("receivers") or []:
+        if not isinstance(receiver, dict):
+            continue
+        contributed.append(
+            {
+                "pluginId": receiver.get("pluginId"),
+                "name": receiver.get("name") or receiver.get("pluginId"),
+                "status": receiver.get("status"),
+                "state": receiver.get("state"),
+                "resultStatus": receiver.get("resultStatus"),
+                "reason": receiver.get("reason"),
+                "provider": receiver.get("provider"),
+                "error": receiver.get("error"),
+                "templateVersion": receiver.get("templateVersion"),
+                "fields": payload_fields,
+                "acceptedFields": receiver.get("acceptedFields") if isinstance(receiver.get("acceptedFields"), list) else [],
+                "excludedFields": [
+                    {"field": item.get("field"), "reason": item.get("reason")}
+                    for item in (receiver.get("droppedFields") or [])
+                    if isinstance(item, dict) and item.get("field")
+                ],
+                "sourceProviders": payload_sources,
+            }
+        )
+
+    if not fetched and not contributed:
+        return None
+
+    fetched_at = (fetched_event or {}).get("createdAt")
+    if hasattr(fetched_at, "isoformat"):
+        fetched_at = fetched_at.isoformat()
+
+    movie_title = pushed_meta.get("title") or fetched_meta.get("title")
+    missing_report = movie_metadata_missing_contribution_report(
+        movie_id=movie_id,
+        title=movie_title,
+        fetched=fetched,
+        contributed=contributed,
+        generated_at=fetched_at,
+    )
+
+    return {
+        "fetchedAt": fetched_at,
+        "fetched": fetched,
+        "contributed": contributed,
+        "missingContributionReport": missing_report,
+    }
+
+
 def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     movie = movie_entity(conn, movie_id)
     if not movie:
         return None
+    metadata_debug = None
+    try:
+        metadata_debug = movie_metadata_debug_entity(conn, movie_id)
+    except Exception:  # pragma: no cover - debug info must never break detail load
+        metadata_debug = None
     return {
         "movie": movie,
         "identifiers": movie_identifier_entities(conn, movie_id),
@@ -38689,6 +40791,7 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "mediaGroups": movie_media_group_entities(conn, movie_id),
         "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
         "digitalItems": movie_digital_item_entities(conn, movie_id),
+        "metadataDebug": metadata_debug,
     }
 
 
@@ -40636,10 +42739,18 @@ def refresh_container_metadata(
     if assets:
         primary_poster = next((asset for asset in assets if asset.get("kind") == "poster"), None)
         primary_backdrop = next((asset for asset in assets if asset.get("kind") == "backdrop"), None)
-        if primary_poster and not metadata.get("poster_locked"):
+        # Only derive artwork from member movies when the container has no cover of
+        # its own. A box-set keeps its own poster/backdrop (e.g. from MovieVault) in
+        # metadata; member artwork must never overwrite it. Artwork previously
+        # aggregated from members is tagged so it can keep tracking member changes.
+        has_own_poster = bool(clean_text(metadata.get("poster_url"))) and not metadata.get("poster_from_members")
+        has_own_backdrop = bool(clean_text(metadata.get("backdrop_url"))) and not metadata.get("backdrop_from_members")
+        if primary_poster and not metadata.get("poster_locked") and not has_own_poster:
             metadata_updates["poster_url"] = primary_poster.get("url")
-        if primary_backdrop and not metadata.get("backdrop_locked"):
+            metadata_updates["poster_from_members"] = True
+        if primary_backdrop and not metadata.get("backdrop_locked") and not has_own_backdrop:
             metadata_updates["backdrop_url"] = primary_backdrop.get("url")
+            metadata_updates["backdrop_from_members"] = True
 
     proposal = {
         "containerId": str(container_id),
@@ -40682,6 +42793,155 @@ def refresh_container_metadata(
     return {"dryRun": False, "changed": True, "revision": revision, "applied": proposal, "summary": summary}
 
 
+def container_metadata_debug_entity(conn, container_id: UUID | str) -> dict[str, Any] | None:
+    """Build the metadata debug payload for a container/box-set.
+
+    Containers don't fetch metadata per source the way movies do; instead a
+    container refresh contributes the box-set to receiver plugins (e.g.
+    MovieVault) via asynchronous ``plugin.execute``/``receive_metadata`` jobs.
+    We reconstruct the "contributed metadata per plugin" view (with
+    accepted/rejected fields) from the latest completed receiver jobs for this
+    container, matched via the receiver payload's embedded ``containerId``.
+
+    The "loaded metadata per source" view is aggregated from the box-set's
+    member movies (each film's latest source-load), attributed per film, since
+    a container has no source fetch of its own.
+    """
+
+    name_map: dict[str, str] = {}
+    try:
+        for plugin in metadata_receiver_plugins(conn):
+            if isinstance(plugin, dict) and plugin.get("id"):
+                name_map[str(plugin["id"])] = str(plugin.get("name") or plugin["id"])
+    except Exception:  # pragma: no cover - plugin registry must never break debug
+        name_map = {}
+
+    rows: list[dict[str, Any]] = []
+    if table_exists(conn, "background_jobs"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    job_type,
+                    status,
+                    payload,
+                    result,
+                    error,
+                    created_at,
+                    finished_at
+                FROM background_jobs
+                WHERE job_type = %s
+                  AND payload->>'entrypoint' = 'receive_metadata'
+                  AND payload->'payload'->'metadata'->>'containerId' = %s
+                ORDER BY created_at DESC
+                LIMIT 40
+                """,
+                (PLUGIN_EXECUTION_JOB_TYPE, str(container_id)),
+            )
+            rows = cur.fetchall()
+
+    contributed: list[dict[str, Any]] = []
+    seen_plugins: set[str] = set()
+    fetched_at: Any = None
+    container_title: Any = None
+
+    for row in rows:
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        receiver_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+        plugin_id = str(payload.get("pluginId") or "")
+        if not plugin_id or plugin_id in seen_plugins:
+            continue
+        seen_plugins.add(plugin_id)
+
+        if fetched_at is None:
+            created = row.get("created_at")
+            fetched_at = created.isoformat() if hasattr(created, "isoformat") else created
+        if container_title is None:
+            container_title = (receiver_payload.get("payload") or {}).get("title") if isinstance(receiver_payload.get("payload"), dict) else None
+
+        contribution_fields = receiver_payload.get("payload") if isinstance(receiver_payload.get("payload"), dict) else {}
+        payload_metadata = receiver_payload.get("metadata") if isinstance(receiver_payload.get("metadata"), dict) else {}
+        source_providers = payload_metadata.get("sourceProviders") if isinstance(payload_metadata.get("sourceProviders"), list) else []
+
+        result = row.get("result") if isinstance(row.get("result"), dict) else {}
+        execution = result.get("execution") if isinstance(result.get("execution"), dict) else {}
+        exec_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+
+        status = row.get("status")
+        accepted_fields = exec_result.get("acceptedFields") if isinstance(exec_result.get("acceptedFields"), list) else []
+        excluded_fields = [
+            {"field": item.get("field"), "reason": item.get("reason")}
+            for item in (exec_result.get("droppedFields") or [])
+            if isinstance(item, dict) and item.get("field")
+        ]
+
+        contributed.append(
+            {
+                "pluginId": plugin_id,
+                "name": name_map.get(plugin_id) or exec_result.get("provider") or plugin_id,
+                "status": execution.get("status") or status,
+                "state": execution.get("state") or status,
+                "resultStatus": exec_result.get("status") or (status if status in {"pending", "running", "failed"} else None),
+                "reason": exec_result.get("reason") or clean_text(row.get("error")) or None,
+                "provider": exec_result.get("provider"),
+                "error": execution.get("error") or clean_text(row.get("error")) or None,
+                "templateVersion": exec_result.get("templateVersion"),
+                "fields": sorted(str(key) for key in contribution_fields.keys()) if isinstance(contribution_fields, dict) else [],
+                "acceptedFields": [str(field) for field in accepted_fields],
+                "excludedFields": excluded_fields,
+                "sourceProviders": source_providers,
+            }
+        )
+
+    # "Loaded metadata per source" is aggregated from the box-set's member
+    # movies (a container doesn't fetch from sources itself). Each member's
+    # latest source-load is attributed to the film via sourceRef.
+    fetched: list[dict[str, Any]] = []
+    if table_exists(conn, "audit_events"):
+        try:
+            members = container_member_movie_entities(conn, container_id)
+        except Exception:  # pragma: no cover - membership lookup must never break debug
+            members = []
+        for member in members[:60]:
+            member_id = member.get("id")
+            if not member_id:
+                continue
+            member_event = movie_metadata_debug_latest_audit_event(conn, member_id, "metadata.refresh_fetched")
+            if not member_event:
+                continue
+            groups = metadata_debug_fetched_sources(member_event.get("metadata") or {})
+            if not groups:
+                continue
+            member_title = clean_text(member.get("title")) or str(member_id)
+            for group in groups:
+                base_ref = clean_text(group.get("sourceRef"))
+                group["sourceRef"] = f"{member_title} · {base_ref}" if base_ref else member_title
+                fetched.append(group)
+            if fetched_at is None:
+                created = member_event.get("createdAt")
+                fetched_at = created.isoformat() if hasattr(created, "isoformat") else created
+
+    if not contributed and not fetched:
+        return None
+
+    missing_report = movie_metadata_missing_contribution_report(
+        movie_id=container_id,
+        title=container_title,
+        fetched=fetched,
+        contributed=contributed,
+        generated_at=fetched_at,
+        entity_kind="container",
+    )
+
+    return {
+        "fetchedAt": fetched_at,
+        "fetched": fetched,
+        "contributed": contributed,
+        "missingContributionReport": missing_report,
+    }
+
+
 def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     container = container_entity(conn, container_id)
     if not container:
@@ -40689,6 +42949,11 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
     aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
     aggregate_videos = container_aggregate_video_entities(aggregate_movies)
+    metadata_debug = None
+    try:
+        metadata_debug = container_metadata_debug_entity(conn, container_id)
+    except Exception:  # pragma: no cover - debug info must never break detail load
+        metadata_debug = None
     return {
         "container": container,
         "identifiers": container_identifier_entities(conn, container_id),
@@ -40699,6 +42964,7 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         "aggregateMediaAssets": aggregate_assets,
         "aggregateVideos": aggregate_videos,
         "aggregateSummary": container_aggregate_summary(aggregate_movies, aggregate_assets, aggregate_videos),
+        "metadataDebug": metadata_debug,
     }
 
 
@@ -42393,6 +44659,69 @@ notification_counts = _next_notifications.notification_counts
 user_notification_rows = _next_notifications.user_notification_rows
 create_user_notification = _next_notifications.create_user_notification
 register_next_notifications_routes = _next_notifications.register_next_notifications_routes
+
+METADATA_PLUGINS_UNCONFIGURED_KIND = "metadata_plugins_unconfigured"
+
+
+def notify_unconfigured_metadata_plugins(conn, actor):
+    """After a metadata refresh, surface a notification listing metadata/
+    integration plugins (TMDb, Blu-ray.com, Plex, Jellyfin, Trakt) that are
+    still disabled or not configured (e.g. right after a version install).
+
+    The stored title/body are an English fallback used for push delivery; the
+    notification screen renders a localized version from the payload. Must be
+    called inside an open transaction. Never raises - a failure here must not
+    break the refresh flow.
+    """
+    try:
+        user_id = actor.get("id") if isinstance(actor, dict) else None
+        if not user_id or not table_exists(conn, "user_notifications"):
+            return None
+        plugins = unconfigured_integration_plugins(conn, table_exists, Jsonb)
+        if not plugins:
+            return None
+        names = [plugin["name"] for plugin in plugins]
+        payload = {
+            "kind": METADATA_PLUGINS_UNCONFIGURED_KIND,
+            "plugins": names,
+            "pluginIds": [plugin["id"] for plugin in plugins],
+            "url": "/notifications",
+            "prefKey": "metadata_jobs",
+        }
+        title = "Plugins need configuration"
+        body = "These plugins are still disabled or not configured: " + ", ".join(names)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id FROM user_notifications
+                WHERE user_id=%s AND read_at IS NULL AND payload->>'kind'=%s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id, METADATA_PLUGINS_UNCONFIGURED_KIND),
+            )
+            existing = cur.fetchone()
+            if existing:
+                cur.execute(
+                    """
+                    UPDATE user_notifications
+                    SET title=%s, body=%s, payload=%s, created_at=now()
+                    WHERE id=%s
+                    """,
+                    (title, body, Jsonb(json_ready(payload)), existing["id"]),
+                )
+                return None
+        return create_user_notification(
+            conn,
+            user_id,
+            title=title,
+            body=body,
+            url="/notifications",
+            pref_key="metadata_jobs",
+            payload=payload,
+        )
+    except Exception:
+        return None
 
 PWA_ICON_ASSETS = _next_push.PWA_ICON_ASSETS
 pwa_manifest_payload = _next_push.pwa_manifest_payload
@@ -44330,46 +46659,23 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
             payload = movie_update_payload(body, existing=existing)
-            receiver_proposal = movie_edit_receiver_proposal(existing, payload)
+            effective_locks = (
+                set(payload["field_locks"])
+                if payload.get("field_locks") is not None
+                else movie_locked_fields(existing.get("metadata"))
+            )
+            receiver_proposal = movie_edit_receiver_proposal(
+                existing,
+                payload,
+                locked_fields=effective_locks,
+                existing_technical=movie_technical_spec_entity(conn, movie_uuid),
+            )
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
+            entity = existing
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE movies
-                        SET title=%s,
-                            sort_title=%s,
-                            original_title=%s,
-                            year=%s,
-                            barcode=%s,
-                            release_date=%s,
-                            format=%s,
-                            edition=%s,
-                            country=%s,
-                            language=%s,
-                            overview=%s,
-                            notes=%s,
-                            location=%s,
-                            updated_at=now()
-                        WHERE id=%s
-                        """,
-                        (
-                            payload["title"],
-                            payload["sort_title"],
-                            payload["original_title"],
-                            payload["year"],
-                            payload["barcode"],
-                            payload["release_date"],
-                            payload["format"],
-                            payload["edition"],
-                            payload["country"],
-                            payload["language"],
-                            payload["overview"],
-                            payload["notes"],
-                            payload["location"],
-                            movie_uuid,
-                        ),
-                    )
+                    write_movie_edit_record(cur, movie_uuid, payload)
+                    entity = movie_entity(conn, movie_uuid) or {}
                 audit_api_interaction(
                     conn,
                     actor,
@@ -44381,8 +46687,64 @@ def register_routes(flask_app: Flask) -> None:
                     request_payload={"title": payload["title"], "barcode": payload["barcode"], "format": payload["format"]},
                     metadata={"barcode": payload["barcode"]},
                 )
+            if receiver_proposal:
+                try:
+                    receiver_summary = push_metadata_to_receivers(
+                        conn,
+                        movie_id=movie_uuid,
+                        movie=entity or movie_entity(conn, movie_uuid) or {},
+                        preview={
+                            "movie": entity or {},
+                            "proposal": receiver_proposal,
+                            "results": [],
+                        },
+                        applied={
+                            "changed": True,
+                            "revision": 0,
+                            "applied": {
+                                "movieUpdates": receiver_proposal.get("movieUpdates") or {},
+                                "metadataUpdates": receiver_proposal.get("metadataUpdates") or {},
+                                "technicalUpdates": receiver_proposal.get("technicalUpdates") or {},
+                                "mediaUpdates": {},
+                                "identifiers": {},
+                                "provenance": len(receiver_proposal.get("provenance") or []),
+                            },
+                        },
+                        actor=actor,
+                    )
+                except Exception as exc:
+                    receiver_summary = {"status": "error", "error": str(exc)}
             detail = movie_detail_entity(conn, movie_uuid)
-        return response({"status": "ok", "detail": detail})
+        return response({"status": "ok", "detail": detail, "receivers": receiver_summary})
+
+    @flask_app.get("/api/next/api/v1/movies/<movie_id>/field-locks")
+    def public_api_movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_movie_details"))
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            locks = sorted(movie_locked_fields(existing.get("metadata")))
+        return response(
+            {
+                "status": "ok",
+                "movieId": str(movie_uuid),
+                "fieldLocks": locks,
+                "lockableFields": sorted(MOVIE_LOCKABLE_FIELDS),
+            }
+        )
+
+    @flask_app.put("/api/next/api/v1/movies/<movie_id>/field-locks")
+    def public_api_set_movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Field-lock request body must be an object", 400)
+        locks = set_movie_field_locks(movie_uuid, body, permission="api.write")
+        return response({"status": "ok", "movieId": str(movie_uuid), "fieldLocks": locks})
 
     @flask_app.delete("/api/next/api/v1/movies/<movie_id>")
     def public_api_delete_movie(movie_id: str):
@@ -45555,48 +47917,23 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
             payload = movie_update_payload(body, existing=existing)
-            receiver_proposal = movie_edit_receiver_proposal(existing, payload)
+            effective_locks = (
+                set(payload["field_locks"])
+                if payload.get("field_locks") is not None
+                else movie_locked_fields(existing.get("metadata"))
+            )
+            receiver_proposal = movie_edit_receiver_proposal(
+                existing,
+                payload,
+                locked_fields=effective_locks,
+                existing_technical=movie_technical_spec_entity(conn, movie_uuid),
+            )
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
             revision = 0
             entity = existing
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE movies
-                        SET title=%s,
-                            sort_title=%s,
-                            original_title=%s,
-                            year=%s,
-                            barcode=%s,
-                            release_date=%s,
-                            format=%s,
-                            edition=%s,
-                            country=%s,
-                            language=%s,
-                            overview=%s,
-                            notes=%s,
-                            location=%s,
-                            updated_at=now()
-                        WHERE id=%s
-                        """,
-                        (
-                            payload["title"],
-                            payload["sort_title"],
-                            payload["original_title"],
-                            payload["year"],
-                            payload["barcode"],
-                            payload["release_date"],
-                            payload["format"],
-                            payload["edition"],
-                            payload["country"],
-                            payload["language"],
-                            payload["overview"],
-                            payload["notes"],
-                            payload["location"],
-                            movie_uuid,
-                        ),
-                    )
+                    write_movie_edit_record(cur, movie_uuid, payload)
                     revision = next_revision(conn) if table_exists(conn, "sync_state") else 0
                     entity = movie_entity(conn, movie_uuid) or {}
                     if revision and table_exists(conn, "sync_changes"):
@@ -45631,7 +47968,7 @@ def register_routes(flask_app: Flask) -> None:
                             "applied": {
                                 "movieUpdates": receiver_proposal.get("movieUpdates") or {},
                                 "metadataUpdates": receiver_proposal.get("metadataUpdates") or {},
-                                "technicalUpdates": {},
+                                "technicalUpdates": receiver_proposal.get("technicalUpdates") or {},
                                 "mediaUpdates": {},
                                 "identifiers": {},
                                 "provenance": len(receiver_proposal.get("provenance") or []),
@@ -45669,6 +48006,42 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
+
+    @flask_app.get("/api/next/movies/<movie_id>/field-locks")
+    def movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            locks = sorted(movie_locked_fields(existing.get("metadata")))
+        return response(
+            {
+                "status": "ok",
+                "movieId": str(movie_uuid),
+                "fieldLocks": locks,
+                "lockableFields": sorted(MOVIE_LOCKABLE_FIELDS),
+            }
+        )
+
+    @flask_app.put("/api/next/movies/<movie_id>/field-locks")
+    def set_movie_field_locks_route(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Field-lock request body must be an object", 400)
+        locks = set_movie_field_locks(movie_uuid, body, permission="collection.edit_all")
+        return response({"status": "ok", "movieId": str(movie_uuid), "fieldLocks": locks})
 
     @flask_app.delete("/api/next/movies/<movie_id>")
     def delete_movie(movie_id: str):
@@ -47281,6 +49654,7 @@ def register_routes(flask_app: Flask) -> None:
         elif wants_movie_import:
             provided_box_set_body = None
         has_provided_box_set = isinstance(provided_box_set_body, dict)
+        explicit_box_set_import = import_mode in {"box-set", "boxset"} or selected_candidate_is_box_set
         if not wants_movie_import and not wants_box_set_import:
             wants_box_set_import = has_provided_box_set or bool(body.get("detectBoxSets") or body.get("detect_box_sets"))
 
@@ -47375,7 +49749,11 @@ def register_routes(flask_app: Flask) -> None:
                 if wants_box_set_import and not box_set_proposal:
                     box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
                 if wants_box_set_import and not box_set_proposal:
-                    raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                    if explicit_box_set_import:
+                        raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                    # Box-set import was only inferred (e.g. a collection was detected while
+                    # adding a single film); fall back to importing the movie instead of failing.
+                    wants_box_set_import = False
                 if wants_box_set_import and box_set_proposal:
                     body_members = normalized_box_set_members_from_body(body)
                     explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
@@ -47881,6 +50259,8 @@ def register_routes(flask_app: Flask) -> None:
                         "jobIds": [str(job.get("id")) for job in jobs],
                     },
                 )
+                if not dry_run:
+                    notify_unconfigured_metadata_plugins(conn, actor)
         return response({"status": "ok", "dryRun": dry_run, "refreshPeople": refresh_people, "personRefreshScope": person_refresh_scope, "queued": len(jobs), "jobs": jobs}, 201)
 
     @flask_app.post("/api/next/movies/<movie_id>/metadata/preview")
@@ -47929,6 +50309,8 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Refreshed movie metadata" if not dry_run else "Previewed movie metadata refresh",
                     metadata={"dryRun": dry_run, "result": result},
                 )
+                if not dry_run:
+                    notify_unconfigured_metadata_plugins(conn, actor)
         return response({"status": "ok", "metadata": result})
 
     @flask_app.get("/api/next/movies/<movie_id>/metadata/jobs")

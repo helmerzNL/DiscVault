@@ -41,6 +41,17 @@ FORBIDDEN_CONTRIBUTION_KEYS = {
 }
 _TEMPLATE_CACHE = {}
 
+CLIENT_VERSION_UNSUPPORTED_CODE = "client_version_unsupported"
+
+
+class MovieVaultClientVersionUnsupported(RuntimeError):
+    """Raised when MovieVault rejects DiscVault with HTTP 426 / client_version_unsupported."""
+
+    def __init__(self, message, *, min_version="", detected_version=""):
+        super().__init__(message)
+        self.min_version = min_version
+        self.detected_version = detected_version
+
 
 def _settings(context):
     return (context or {}).get("settings") or {}
@@ -106,6 +117,72 @@ def _response_error(payload):
     return _text(payload.get("code") or payload.get("error")), _text(payload.get("message"))
 
 
+def _error_object(payload):
+    if not isinstance(payload, dict):
+        return {}
+    error = payload.get("error")
+    return error if isinstance(error, dict) else payload
+
+
+def _version_fields(payload):
+    error = _error_object(payload)
+    min_version = _text(error.get("minVersion") or error.get("min_version") or payload.get("minVersion"))
+    detected = _text(error.get("detectedVersion") or error.get("detected_version") or payload.get("detectedVersion"))
+    return min_version, detected
+
+
+def _is_client_version_unsupported(status_code, payload):
+    if int(status_code or 0) == 426:
+        return True
+    code, _message = _response_error(payload)
+    return code == CLIENT_VERSION_UNSUPPORTED_CODE
+
+
+def _client_version_unsupported_message(payload):
+    min_version, detected = _version_fields(payload)
+    if min_version:
+        message = (
+            f"This MovieVault server requires DiscVault version {min_version} or newer. "
+            "Please update DiscVault to keep syncing."
+        )
+    else:
+        message = (
+            "This MovieVault server requires a newer DiscVault version. "
+            "Please update DiscVault to keep syncing."
+        )
+    if detected:
+        message += f" (current version: {detected})"
+    return message
+
+
+def _body_client_version(body):
+    if not isinstance(body, dict):
+        return ""
+    software = body.get("software") if isinstance(body.get("software"), dict) else {}
+    for value in (
+        body.get("clientVersion"),
+        software.get("version"),
+        software.get("backendVersion"),
+        body.get("sourceVersion"),
+        body.get("instanceVersion"),
+    ):
+        text = _text(value)
+        if text:
+            return text
+    return ""
+
+
+def _ensure_client_version(body, context):
+    if not isinstance(body, dict):
+        return body
+    if _text(body.get("clientVersion")):
+        return body
+    version = _body_client_version(body) or _source_version(context)
+    if version:
+        body["clientVersion"] = version
+    return body
+
+
 def _error_code(response):
     payload = _json(response)
     code, _message = _response_error(payload)
@@ -116,8 +193,16 @@ def connection_recovery_action(payload, context=None):
     payload = payload or {}
     phase = _text(payload.get("phase")).lower()
     status_code = int(payload.get("statusCode") or payload.get("status_code") or 0)
-    code, message = _response_error(payload.get("response") or {})
+    response = payload.get("response") or {}
+    code, message = _response_error(response)
     lowered = message.lower()
+    if _is_client_version_unsupported(status_code, response):
+        return {
+            "action": "",
+            "reason": CLIENT_VERSION_UNSUPPORTED_CODE,
+            "terminal": True,
+            "message": _client_version_unsupported_message(response),
+        }
     if status_code == 400 and phase == "recovery" and code == "validation_error" and "bootstrap is required" in lowered:
         return {"action": "bootstrap", "reason": "server_requires_bootstrap"}
     if status_code == 400 and phase == "bootstrap" and code == "validation_error":
@@ -136,6 +221,7 @@ def connection_request(payload, context=None):
         request_body = dict(body)
         if public_key:
             request_body["publicKey"] = public_key
+        _ensure_client_version(request_body, context)
         return {
             "status": "ok",
             "provider": PROVIDER_ID,
@@ -160,6 +246,7 @@ def connection_request(payload, context=None):
             headers["X-DiscVault-Key-Id"] = key_id
         if signature:
             headers["X-DiscVault-Signature"] = signature if signature.startswith("key-v1=") else f"key-v1={signature}"
+        recovery_body = _ensure_client_version(dict(body), context)
         return {
             "status": "ok",
             "provider": PROVIDER_ID,
@@ -167,7 +254,7 @@ def connection_request(payload, context=None):
             "method": "POST",
             "path": HANDSHAKE_PATH,
             "headers": headers,
-            "body": dict(body),
+            "body": recovery_body,
             "auth": "signed_recovery",
             "requestedScopes": list(REQUESTED_SCOPES),
         }
@@ -247,6 +334,14 @@ def _request(method, url, *, context=None, params=None, json_payload=None, retry
         mark_revoked = (context or {}).get("movievaultMarkRevoked")
         if callable(mark_revoked):
             mark_revoked()
+    if _is_client_version_unsupported(status_code, _json(response)):
+        payload = _json(response)
+        min_version, detected = _version_fields(payload)
+        raise MovieVaultClientVersionUnsupported(
+            _client_version_unsupported_message(payload),
+            min_version=min_version,
+            detected_version=detected,
+        )
     if status_code == 404 or (allow_validation_error and status_code == 400 and _error_code(response) == "validation_error"):
         return response
     response.raise_for_status()
@@ -430,6 +525,42 @@ def _box_set_payload_marker(item):
     ).casefold()
     type_key = type_text.replace("-", "_").replace(" ", "_")
     return type_key in {"box_set", "boxset"} or "box_set" in type_key or "boxset" in type_key
+
+
+def _explicit_box_set_marker(item):
+    """Deliberate box-set signals only.
+
+    Unlike :func:`_box_set_payload_marker`, this excludes weak hints (memberCount,
+    memberConfidence/source, boxSetTitle/collectionTitle) that a regular single-movie
+    payload can legitimately carry. A genuine box-set must declare itself through a
+    nested box-set object, an ``isBoxSet`` flag, ``detectedWithoutMembers`` or an
+    explicit box-set type/category.
+    """
+    if not isinstance(item, dict):
+        return False
+    if any(isinstance(item.get(key), dict) for key in _BOX_SET_DIRECT_KEYS):
+        return True
+    if item.get("isBoxSet") is True or item.get("is_box_set") is True:
+        return True
+    if item.get("detectedWithoutMembers") is True or item.get("detected_without_members") is True:
+        return True
+    type_text = _text(
+        _first_value(
+            item,
+            "entityType",
+            "entity_type",
+            "containerType",
+            "container_type",
+            "entityKind",
+            "entity_kind",
+            "releaseType",
+            "release_type",
+            "category",
+            "kind",
+            "type",
+        )
+    ).casefold().replace("-", "_").replace(" ", "_")
+    return "box_set" in type_text or "boxset" in type_text
 
 
 def _member_list(payload):
@@ -900,6 +1031,9 @@ def _normalize_box_set_proposal(payload, context=None):
             seen.update(keys)
         members.append(member)
 
+    if len(members) < 2 and not _explicit_box_set_marker(item):
+        return {}
+
     if not title and members:
         title = _text(item.get("boxSetTitle") or item.get("collectionTitle") or item.get("name"))
     if not title:
@@ -917,6 +1051,7 @@ def _normalize_box_set_proposal(payload, context=None):
         "format": selected_format or _text(_first_value(item, "format", "mediaType", "media_type")),
         "poster": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
         "poster_url": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
+        "posterUrl": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
         "backdrop": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
         "backdrop_url": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
         "backdrop_urls": item.get("backdrop_urls") or item.get("backdropUrls") or [],
@@ -1210,11 +1345,63 @@ def _box_set_proposal_key(proposal):
     )
 
 
+def _ingest_localizations(item):
+    if not isinstance(item, dict):
+        return []
+    raw = (
+        item.get("localizations")
+        or item.get("localisations")
+        or item.get("translations")
+    )
+    if isinstance(raw, dict):
+        expanded = []
+        for lang_key, value in raw.items():
+            if isinstance(value, dict):
+                entry = dict(value)
+                entry.setdefault("lang", lang_key)
+                expanded.append(entry)
+        raw = expanded
+    if not isinstance(raw, list):
+        return []
+    rows = []
+    seen = set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        lang = _localized_language_code(
+            entry.get("lang")
+            or entry.get("language")
+            or entry.get("locale")
+            or entry.get("iso_639_1")
+        )
+        if not lang or lang in seen:
+            continue
+        if not (lang.isalpha() and len(lang) in (2, 3)):
+            continue
+        title = _text(entry.get("title") or entry.get("name"))
+        original_title = _text(entry.get("originalTitle") or entry.get("original_title"))
+        overview = _text(entry.get("overview") or entry.get("plot") or entry.get("description"))
+        edition = _text(entry.get("edition"))
+        if not (title or original_title or overview or edition):
+            continue
+        seen.add(lang)
+        row = {"lang": lang, "source": "movievault_26"}
+        if title:
+            row["title"] = title
+        if original_title:
+            row["originalTitle"] = original_title
+        if overview:
+            row["overview"] = overview
+        if edition:
+            row["edition"] = edition
+        rows.append(row)
+    return rows
+
+
 def _normalize_result(payload, *, source_ref=""):
     sources = _normalization_sources(payload)
     if not sources:
         return {"status": "miss", "provider": "movievault_26"}
-
     candidates = []
     seen_candidates = set()
     proposals = []
@@ -1264,6 +1451,11 @@ def _normalize_result(payload, *, source_ref=""):
         return {"status": "miss", "provider": "movievault_26"}
 
     source_item = first_item or (sources[0] if sources else {})
+    localizations = []
+    for candidate_source in ([source_item] + list(sources)):
+        localizations = _ingest_localizations(candidate_source)
+        if localizations:
+            break
     result = {
         "status": "hit",
         "provider": "movievault_26",
@@ -1276,6 +1468,8 @@ def _normalize_result(payload, *, source_ref=""):
         "items": candidates,
         "candidates": candidates,
     }
+    if localizations:
+        result["localizations"] = localizations
     if proposals:
         result["boxSetProposal"] = proposals[0]
         result["boxSetProposals"] = proposals
@@ -1457,6 +1651,12 @@ def _contribution_template(context, *, force_refresh=False):
     template = _json(_request("GET", key, context=context))
     _TEMPLATE_CACHE[key] = {"fetchedAt": now, "template": template}
     return template
+
+
+def _cached_min_client_version(context):
+    cached = _TEMPLATE_CACHE.get(_template_cache_key(context))
+    template = (cached or {}).get("template") if isinstance(cached, dict) else {}
+    return _text((template or {}).get("minClientVersion"))
 
 
 def _allowed_fields(template, entity_type):
@@ -1681,7 +1881,7 @@ def _public_reference(reference):
 
 def _connection_details(context):
     connection = _movievault_context(context)
-    return {
+    details = {
         "name": PROVIDER_LABEL,
         "baseUrl": _base_url(context),
         "contributionUrl": _contribution_url(context),
@@ -1693,7 +1893,10 @@ def _connection_details(context):
         "sharingMode": _sharing_mode(context),
         "tokenPrefix": connection.get("tokenPrefix"),
         "tokenSet": bool(connection.get("tokenSet") or _token(context)),
+        "clientVersion": _source_version(context) or None,
+        "minClientVersion": _cached_min_client_version(context) or None,
     }
+    return details
 
 
 def _payload_identity(payload, contribution_payload):
@@ -1783,6 +1986,97 @@ def activity_summary(payload, context=None):
     return result
 
 
+_DEFAULT_LOCALIZED_FIELDS = ("title", "originalTitle", "overview", "edition", "description", "biography")
+_DEFAULT_LOCALIZED_FIELD_PATTERN = "<field>_<iso-639-1-language>"
+
+
+def _localized_language_code(value):
+    code = _text(value).strip().lower()
+    if not code:
+        return ""
+    for sep in ("-", "_"):
+        if sep in code:
+            code = code.split(sep, 1)[0]
+    return code.strip()
+
+
+def _iter_template_field_defs(template, entity_type):
+    candidates = []
+    fields = template.get("fields")
+    if isinstance(fields, dict):
+        candidates.append(fields)
+    for container_key in ("templates", "entities", "entityTypes"):
+        container = template.get(container_key)
+        if isinstance(container, dict):
+            entity_def = container.get(entity_type)
+            if isinstance(entity_def, dict) and isinstance(entity_def.get("fields"), dict):
+                candidates.append(entity_def["fields"])
+    for mapping in candidates:
+        for name, spec in mapping.items():
+            yield _text(name), spec
+
+
+def _localized_field_settings(template, entity_type):
+    pattern = _DEFAULT_LOCALIZED_FIELD_PATTERN
+    fields = set()
+    if isinstance(template, dict):
+        pattern = _text(template.get("localizedFieldPattern")) or pattern
+        explicit = template.get("localizedFields")
+        if isinstance(explicit, list):
+            fields = {_text(item) for item in explicit if _text(item)}
+        if not fields:
+            for name, spec in _iter_template_field_defs(template, entity_type):
+                if name and isinstance(spec, dict) and spec.get("localized"):
+                    fields.add(name)
+    if not fields:
+        fields = set(_DEFAULT_LOCALIZED_FIELDS)
+    return pattern, fields
+
+
+def _format_localized_key(pattern, base, lang):
+    key = pattern or _DEFAULT_LOCALIZED_FIELD_PATTERN
+    replacements = (
+        ("<field>", base),
+        ("<iso-639-1-language>", lang),
+        ("<iso-639-1>", lang),
+        ("<language>", lang),
+        ("<lang>", lang),
+    )
+    for token, value in replacements:
+        key = key.replace(token, value)
+    return _text(key)
+
+
+def _expand_localized_fields(entity_type, safe_payload, localizations, allowed, template):
+    if not isinstance(safe_payload, dict):
+        return safe_payload
+    if entity_type not in {"movie", "release", "box_set", "person"}:
+        return safe_payload
+    if not isinstance(localizations, list) or not localizations:
+        return safe_payload
+    pattern, localized_fields = _localized_field_settings(template, entity_type)
+    enriched = dict(safe_payload)
+    for entry in localizations:
+        if not isinstance(entry, dict):
+            continue
+        lang = _localized_language_code(
+            entry.get("lang") or entry.get("language") or entry.get("locale")
+        )
+        if not lang:
+            continue
+        for base in localized_fields:
+            if allowed and base not in allowed:
+                continue
+            value = _safe_contribution_value(entry.get(base))
+            if value in (None, "", [], {}):
+                continue
+            key = _format_localized_key(pattern, base, lang)
+            if not key or key in enriched:
+                continue
+            enriched[key] = value
+    return enriched
+
+
 def _contribution_payload(payload, template):
     entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
     if entity_type not in {"movie", "release", "box_set", "person"}:
@@ -1793,10 +2087,32 @@ def _contribution_payload(payload, template):
     safe_payload = _safe_contribution_value(raw_payload)
     allowed = _allowed_fields(template, entity_type)
     safe_payload = _with_box_set_member_aliases(entity_type, safe_payload, allowed)
+    localizations = safe_payload.pop("localizations", None) if isinstance(safe_payload, dict) else None
     if allowed:
         safe_payload = {key: value for key, value in safe_payload.items() if key in allowed}
+    safe_payload = _expand_localized_fields(entity_type, safe_payload, localizations, allowed, template)
     safe_payload = _with_provider_title_hints(entity_type, safe_payload, payload, allowed)
     return entity_type, safe_payload
+
+
+def _contribution_field_diagnostics(payload, template, contribution_payload):
+    entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
+    raw_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+    if not raw_payload:
+        raw_payload = {key: value for key, value in payload.items() if key not in {"entityType", "entity_type", "sourceReference", "source_reference", "force"}}
+    safe_incoming = _safe_contribution_value(raw_payload)
+    incoming_keys = {
+        _text(key)
+        for key, value in (safe_incoming.items() if isinstance(safe_incoming, dict) else [])
+        if _text(key) and _text(key) != "localizations" and value not in (None, "", [], {})
+    }
+    accepted_keys = {_text(key) for key in (contribution_payload or {}).keys() if _text(key)}
+    allowed = _allowed_fields(template, entity_type)
+    dropped = []
+    for key in sorted(incoming_keys - accepted_keys):
+        reason = "not_in_template" if allowed else "excluded"
+        dropped.append({"field": key, "reason": reason})
+    return sorted(accepted_keys), dropped
 
 
 def _validation_error(response_payload):
@@ -1842,11 +2158,14 @@ def receive_metadata(payload, context=None):
             return {"status": "skipped", "provider": PROVIDER_ID, "reason": "empty_or_disallowed_payload"}
         envelope["payload"] = contribution_payload
         response_payload = _post_contribution(context, envelope)
+    accepted_fields, dropped_fields = _contribution_field_diagnostics(payload, template, contribution_payload)
     return {
         "status": "submitted",
         "provider": PROVIDER_ID,
         "entityType": entity_type,
         "idempotencyPrefix": envelope["idempotencyKey"][:24],
         "templateVersion": template_version,
+        "acceptedFields": accepted_fields,
+        "droppedFields": dropped_fields,
         "response": response_payload,
     }
