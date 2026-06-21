@@ -14531,14 +14531,14 @@ def ui_preview_html(
         </div>
         <section class="movie-detail-body">
           <nav class="detail-submenu container-detail-submenu" aria-label="Container sections" data-next-i18n-aria="containerDetail.sections">
-            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
-            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
           </nav>
-          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
             <div class="container-overview-grid">
               <div class="detail-card">
                 <h3 data-next-i18n="containerDetail.overview">Overview</h3>
@@ -14618,7 +14618,7 @@ def ui_preview_html(
               </div>
             </div>
           </div>
-          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
+          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
             <div class="detail-card full container-content-card">
               <div class="detail-card-head">
                 <div>
@@ -22981,7 +22981,7 @@ def ui_preview_html(
       ).join("");
     }
     function renderContainerDetail(detail) {
-      const activePanelId = activeDetailPanel("containerDetail", "containerDetailOverviewPanel");
+      const activePanelId = activeDetailPanel("containerDetail", "containerDetailFilmsPanel");
       activeContainerPayload = detail;
       const container = detail.container || {};
       activeContainerId = container.id || activeContainerId || "";
@@ -23064,7 +23064,7 @@ def ui_preview_html(
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
-      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailFilmsPanel");
       syncContainerViewModeControls();
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
@@ -23091,7 +23091,7 @@ def ui_preview_html(
       document.getElementById("containerDetailVideos").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
       document.getElementById("containerDetailBackdrop").src = "";
-      activateDetailTab("containerDetail", "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", "containerDetailFilmsPanel");
       setContainerDetailMessage("");
     }
     function renderContainerEditSummary(detail) {
