@@ -57,6 +57,7 @@ try:
     from .next_plugin_runtime import validate_manifest_compatibility
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
+    from .next_metadata import lookup_metadata_sources
     from .next_metadata import ensure_remote_media_asset
     from .next_metadata import metadata_result_summary
     from .next_metadata import apply_metadata_proposal
@@ -232,6 +233,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import validate_manifest_compatibility
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
+    from next_metadata import lookup_metadata_sources
     from next_metadata import ensure_remote_media_asset
     from next_metadata import metadata_result_summary
     from next_metadata import apply_metadata_proposal
