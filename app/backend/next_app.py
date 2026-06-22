@@ -41063,30 +41063,59 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
 
 
 
-def person_metadata_plugin(conn) -> dict[str, Any] | None:
+def person_metadata_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Person metadata sources in the shared provider priority order.
+
+    Mirrors ``metadata_source_plugins`` for movies/containers: installed
+    ``metadata_source`` plugins that expose a ``person_details`` entrypoint,
+    ordered by ``order_index`` so the highest-priority provider wins on conflicts.
+    """
     if not table_exists(conn, "plugins"):
-        return None
+        return []
     sync_metadata_plugin_registry(conn)
     registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins: list[dict[str, Any]] = []
     for plugin in registry.get("plugins") or []:
-        runtime = plugin.get("runtime") or {}
-        entrypoints = runtime.get("entrypoints") or []
-        if plugin.get("id") == "tmdb" and "person_details" in entrypoints:
-            return plugin
-    return None
+        if not plugin.get("installed"):
+            continue
+        if not include_disabled and not plugin.get("enabled"):
+            continue
+        if "metadata_source" not in plugin_categories(plugin):
+            continue
+        if "person_details" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def person_filmography_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Filmography sources in the shared provider priority order."""
+    if not table_exists(conn, "plugins"):
+        return []
+    sync_metadata_plugin_registry(conn)
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins: list[dict[str, Any]] = []
+    for plugin in registry.get("plugins") or []:
+        if not plugin.get("installed"):
+            continue
+        if not include_disabled and not plugin.get("enabled"):
+            continue
+        if "metadata_source" not in plugin_categories(plugin):
+            continue
+        if "person_filmography" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def person_metadata_plugin(conn) -> dict[str, Any] | None:
+    candidates = person_metadata_source_plugins(conn, include_disabled=True)
+    return candidates[0] if candidates else None
 
 
 def person_filmography_plugin(conn) -> dict[str, Any] | None:
-    if not table_exists(conn, "plugins"):
-        return None
-    sync_metadata_plugin_registry(conn)
-    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-    for plugin in registry.get("plugins") or []:
-        runtime = plugin.get("runtime") or {}
-        entrypoints = runtime.get("entrypoints") or []
-        if plugin.get("id") == "tmdb" and "person_filmography" in entrypoints:
-            return plugin
-    return None
+    candidates = person_filmography_source_plugins(conn, include_disabled=True)
+    return candidates[0] if candidates else None
 
 
 
@@ -41270,6 +41299,128 @@ def sync_person_profile_media(
     }
 
 
+def merge_person_awards(*award_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge award lists from multiple providers with the shared dedupe rules.
+
+    De-duplicates on ``(awardWikidataId or award, year, workWikidataId or work)``
+    and collapses a nomination into a win when both share that key. Earlier lists
+    take precedence on otherwise-identical (same-result) duplicates.
+    """
+    deduped: dict[tuple, dict[str, Any]] = {}
+    order: list[tuple] = []
+    for awards in award_lists:
+        for entry in awards or []:
+            if not isinstance(entry, dict):
+                continue
+            award = clean_text(entry.get("award"))
+            award_qid = clean_text(entry.get("awardWikidataId"))
+            if not award and not award_qid:
+                continue
+            work = clean_text(entry.get("work"))
+            work_qid = clean_text(entry.get("workWikidataId"))
+            year = entry.get("year")
+            result = clean_text(entry.get("result")).lower()
+            result = "won" if result == "won" else "nominated"
+            normalized = {
+                "award": award or award_qid,
+                "awardWikidataId": award_qid,
+                "category": clean_text(entry.get("category")),
+                "year": year,
+                "work": work,
+                "workWikidataId": work_qid,
+                "workTmdbId": entry.get("workTmdbId"),
+                "result": result,
+                "source": clean_text(entry.get("source")),
+                "sourceRef": clean_text(entry.get("sourceRef")),
+            }
+            key = (award_qid or award, year, work_qid or work)
+            existing = deduped.get(key)
+            if existing is None:
+                deduped[key] = normalized
+                order.append(key)
+            elif existing.get("result") == "nominated" and result == "won":
+                deduped[key] = normalized
+    return [deduped[key] for key in order]
+
+
+def group_person_awards(awards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group a flat award list by award name for display (mirrors wikidata_awards)."""
+    groups: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for award in awards or []:
+        key = clean_text(award.get("awardWikidataId")) or clean_text(award.get("award"))
+        if not key:
+            continue
+        if key not in groups:
+            groups[key] = {
+                "award": award.get("award") or "",
+                "awardWikidataId": award.get("awardWikidataId") or "",
+                "items": [],
+            }
+            order.append(key)
+        groups[key]["items"].append(award)
+    result = []
+    for key in order:
+        group = groups[key]
+        group["items"].sort(key=lambda item: -(item.get("year") or 0))
+        group["wins"] = sum(1 for item in group["items"] if item.get("result") == "won")
+        group["nominations"] = sum(1 for item in group["items"] if item.get("result") == "nominated")
+        result.append(group)
+    return result
+
+
+def person_receiver_contribution_payload(
+    *,
+    person_id: UUID | str,
+    person: dict[str, Any],
+    tmdb_id: str,
+    updates: dict[str, Any],
+    localizations: list[dict[str, Any]],
+    source_providers: list[str],
+) -> dict[str, Any]:
+    """Build a person contribution envelope mirroring the movie receiver payload."""
+    tmdb_text = str(tmdb_id) if tmdb_id else ""
+    public: dict[str, Any] = {
+        "name": updates.get("name") or clean_text(person.get("name")),
+        "tmdbId": tmdb_text,
+        "biography": updates.get("biography"),
+        "birthday": updates.get("birth_date"),
+        "deathday": updates.get("death_date"),
+        "placeOfBirth": updates.get("place_of_birth"),
+        "knownFor": updates.get("known_for"),
+        "profileUrl": updates.get("profile_url"),
+        "photoUrl": updates.get("profile_url"),
+    }
+    for localization in localizations or []:
+        lang = clean_text(localization.get("lang"))
+        biography = clean_text(localization.get("biography"))
+        if not lang or not biography:
+            continue
+        public[f"biography_{lang.lower()}"] = biography
+        short = lang.lower().split("-")[0]
+        if short:
+            public.setdefault(f"biography_{short}", biography)
+    public = {key: value for key, value in public.items() if value not in (None, "", [], {})}
+    identity = str(person.get("public_id") or person_id)
+    return {
+        "entityType": "person",
+        "identity": identity,
+        "sourceRef": identity,
+        "sourceReference": {
+            "type": "discvault_person",
+            "key": str(person_id),
+            "publicId": person.get("public_id"),
+            "tmdbId": tmdb_text,
+        },
+        "payload": public,
+        "metadata": {
+            "personId": str(person_id),
+            "sourceProviders": sorted({str(item) for item in (source_providers or []) if item}),
+            "tmdbId": tmdb_text,
+        },
+    }
+
+
 def refresh_person_metadata(
     conn,
     person_id: UUID,
@@ -41283,43 +41434,138 @@ def refresh_person_metadata(
     tmdb_id = detail.get("tmdbId") or ""
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
-    plugin = person_metadata_plugin(conn)
-    if not plugin:
+
+    candidates = person_metadata_source_plugins(conn, include_disabled=True)
+    if not candidates:
         raise NextApiError("No enabled person metadata plugin is available", 503)
-    if not plugin.get("enabled"):
-        raise NextApiError("TMDb plugin must be enabled before refreshing person metadata", 409)
-    config = plugin_config_from_db(conn, str(plugin["id"]))
-    if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
-        raise NextApiError("TMDb plugin configuration is incomplete", 409)
+    enabled_candidates = [plugin for plugin in candidates if plugin.get("enabled")]
+    if not enabled_candidates:
+        raise NextApiError("Person metadata plugin must be enabled before refreshing person metadata", 409)
+    top_config = plugin_config_from_db(conn, str(enabled_candidates[0]["id"]))
+    if plugin_requires_config_for_entrypoint(enabled_candidates[0], top_config, "person_details"):
+        raise NextApiError("Person metadata plugin configuration is incomplete", 409)
 
-    context = plugin_execution_context(conn, plugin, config, actor)
-    execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
-    result = execution.get("result") or {}
-    if execution.get("status") != "ok":
-        raise NextApiError(execution.get("error") or "Person metadata plugin execution failed", 422)
+    merged: dict[str, Any] = {}
+    localizations_by_lang: dict[str, dict[str, str]] = {}
+    source_providers: list[str] = []
+    merged_aliases: list[str] = []
+    merged_imdb = ""
+    merged_profiles: list[Any] = []
+    provider_source_awards: list[dict[str, Any]] = []
+    primary_plugin: dict[str, Any] | None = None
+    primary_execution: dict[str, Any] = {}
+    primary_result: dict[str, Any] = {}
+    primary_context: dict[str, Any] | None = None
+    primary_language = ""
+    last_error = ""
 
+    def _accept(key: str, value: Any) -> None:
+        if value in (None, "", [], {}):
+            return
+        if merged.get(key) in (None, "", [], {}):
+            merged[key] = value
+
+    for plugin in enabled_candidates:
+        config = plugin_config_from_db(conn, str(plugin["id"]))
+        if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
+            continue
+        context = plugin_execution_context(conn, plugin, config, actor)
+        execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
+        if execution.get("status") != "ok":
+            last_error = execution.get("error") or last_error
+            continue
+        result = execution.get("result") or {}
+        normalized = {
+            "name": clean_text(result.get("name")),
+            "birth_date": clean_text(result.get("birthday") or result.get("birthDate")),
+            "death_date": clean_text(result.get("deathday") or result.get("deathDate")),
+            "place_of_birth": clean_text(result.get("placeOfBirth") or result.get("place_of_birth")),
+            "known_for": clean_text(result.get("knownFor") or result.get("known_for")),
+            "biography": clean_text(result.get("biography")),
+            "profile_url": first_usable_image(
+                result.get("profileUrl"),
+                result.get("profile_url"),
+                result.get("photoUrl"),
+                result.get("photo_url"),
+            ),
+        }
+        provider_aliases = [
+            clean_text(a) for a in (result.get("alsoKnownAs") or result.get("also_known_as") or []) if clean_text(a)
+        ]
+        provider_imdb = clean_text(result.get("imdbId") or result.get("imdb_id"))
+        provider_profiles = list(result.get("profiles") or [])
+        provider_localizations = result.get("localizations") or []
+        provider_awards = [item for item in (result.get("awards") or []) if isinstance(item, dict)]
+        if not (
+            any(normalized.values())
+            or provider_aliases
+            or provider_imdb
+            or provider_profiles
+            or provider_localizations
+            or provider_awards
+        ):
+            continue
+        if primary_plugin is None:
+            primary_plugin = plugin
+            primary_execution = execution
+            primary_result = result
+            primary_context = context
+            primary_language = clean_text(result.get("language")) or "en-US"
+        if str(plugin["id"]) not in source_providers:
+            source_providers.append(str(plugin["id"]))
+        for key, value in normalized.items():
+            _accept(key, value)
+        if not merged_aliases and provider_aliases:
+            merged_aliases = provider_aliases
+        if not merged_imdb and provider_imdb:
+            merged_imdb = provider_imdb
+        if not merged_profiles and provider_profiles:
+            merged_profiles = provider_profiles
+        if provider_awards:
+            provider_source_awards.extend(provider_awards)
+        provider_language = clean_text(result.get("language")) or primary_language or "en-US"
+        for localization in provider_localizations:
+            lang = clean_text(localization.get("lang"))
+            biography = clean_text(localization.get("biography"))
+            if not lang or not biography:
+                continue
+            localizations_by_lang.setdefault(lang.lower(), {"lang": lang, "biography": biography})
+        if normalized["biography"]:
+            localizations_by_lang.setdefault(
+                provider_language.lower(),
+                {"lang": provider_language, "biography": normalized["biography"]},
+            )
+
+    if primary_plugin is None:
+        raise NextApiError(last_error or "Person metadata plugin returned no usable data", 422)
+
+    language = primary_language or "en-US"
     updates = {
-        "name": clean_text(result.get("name")),
-        "birth_date": clean_text(result.get("birthday") or result.get("birthDate")),
-        "death_date": clean_text(result.get("deathday") or result.get("deathDate")),
-        "place_of_birth": clean_text(result.get("placeOfBirth") or result.get("place_of_birth")),
-        "known_for": clean_text(result.get("knownFor") or result.get("known_for")),
-        "biography": clean_text(result.get("biography")),
-        "profile_url": first_usable_image(result.get("profileUrl"), result.get("profile_url"), result.get("photoUrl"), result.get("photo_url")),
-        "language": clean_text(result.get("language")) or "en-US",
-        "source": clean_text(result.get("provider")) or plugin.get("id"),
-        "source_ref": clean_text(result.get("sourceRef")) or f"tmdb:person:{tmdb_id}",
+        "name": merged.get("name") or "",
+        "birth_date": merged.get("birth_date") or "",
+        "death_date": merged.get("death_date") or "",
+        "place_of_birth": merged.get("place_of_birth") or "",
+        "known_for": merged.get("known_for") or "",
+        "biography": merged.get("biography") or "",
+        "profile_url": merged.get("profile_url") or "",
+        "language": language,
+        "source": clean_text(primary_result.get("provider")) or primary_plugin.get("id"),
+        "source_ref": clean_text(primary_result.get("sourceRef")) or f"tmdb:person:{tmdb_id}",
     }
-    aliases = [clean_text(a) for a in (result.get("alsoKnownAs") or result.get("also_known_as") or []) if clean_text(a)][:50]
-    imdb_id = clean_text(result.get("imdbId") or result.get("imdb_id"))
-    profile_candidates = list(result.get("profiles") or [])
+    if updates["biography"]:
+        localizations_by_lang.setdefault(language.lower(), {"lang": language, "biography": updates["biography"]})
+    localizations = list(localizations_by_lang.values())
+
+    aliases = merged_aliases[:50]
+    imdb_id = merged_imdb
+    profile_candidates = list(merged_profiles)
     if updates["profile_url"]:
         profile_candidates.insert(0, updates["profile_url"])
     profile_urls = sanitize_profile_urls(profile_candidates)
 
-    # Awards run as an independent best-effort sub-step: a slow/flaky Wikidata
-    # provider must never fail the TMDb mapping, and a transient empty/miss must
-    # not wipe awards that were previously stored.
+    # Awards run as an independent best-effort sub-step on the primary provider: a
+    # slow/flaky Wikidata provider must never fail the metadata mapping, and a
+    # transient empty/miss must not wipe awards that were previously stored.
     awards_status = "skipped"
     awards_state = None
     awards_hit = False
@@ -41328,10 +41574,10 @@ def refresh_person_metadata(
     awards_result: dict[str, Any] = {}
     try:
         awards_execution = run_plugin_entrypoint(
-            str(plugin["id"]),
+            str(primary_plugin["id"]),
             "person_awards",
             {"tmdbId": tmdb_id, "imdbId": imdb_id},
-            context,
+            primary_context,
         )
         awards_status = awards_execution.get("status")
         awards_state = awards_execution.get("state")
@@ -41345,6 +41591,16 @@ def refresh_person_metadata(
             "Person awards lookup failed for %s; keeping existing awards", person_id, exc_info=True
         )
         awards_status = "error"
+
+    # Fold awards that arrived inline from metadata-source providers (e.g. MovieVault
+    # person_details) into the Wikidata substep output, de-duplicated with the shared
+    # won>nominated rules. Only engage the merge when a provider actually supplied
+    # awards so the single-source Wikidata behaviour stays byte-identical otherwise.
+    if provider_source_awards:
+        merged_awards = merge_person_awards(awards, provider_source_awards)
+        awards = merged_awards
+        award_groups = group_person_awards(merged_awards)
+        awards_hit = bool(merged_awards)
 
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
@@ -41368,15 +41624,23 @@ def refresh_person_metadata(
     if awards_hit:
         preview_metadata["awards"] = awards
         preview_metadata["awardGroups"] = award_groups
-        preview_metadata["awards_source"] = clean_text(awards_result.get("provider")) or "wikidata"
+        preview_metadata["awards_source"] = (
+            clean_text(awards_result.get("provider"))
+            or clean_text((awards[0] if awards else {}).get("source"))
+            or "wikidata"
+        )
         preview_metadata["awards_source_ref"] = clean_text(awards_result.get("sourceRef"))
         preview_metadata["awards_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     preview_metadata["person_metadata_source"] = updates["source"]
     preview_metadata["person_metadata_source_ref"] = updates["source_ref"]
+    preview_metadata["person_metadata_sources"] = sorted({str(item) for item in source_providers if item})
     preview_metadata["person_metadata_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     preview_person["metadata"] = preview_metadata
     preview_detail["person"] = preview_person
+    if localizations:
+        preview_detail["localizations"] = [dict(item) for item in localizations]
 
+    receiver_summary: dict[str, Any] | None = None
     if not dry_run:
         with conn.cursor() as cur:
             cur.execute(
@@ -41402,16 +41666,21 @@ def refresh_person_metadata(
                     person_id,
                 ),
             )
-            if updates["biography"] and table_exists(conn, "person_localizations"):
-                cur.execute(
-                    """
-                    INSERT INTO person_localizations (person_id, lang, biography, updated_at)
-                    VALUES (%s, %s, %s, now())
-                    ON CONFLICT (person_id, lang) DO UPDATE
-                    SET biography=EXCLUDED.biography, updated_at=now()
-                    """,
-                    (person_id, updates["language"], updates["biography"]),
-                )
+            if localizations and table_exists(conn, "person_localizations"):
+                for localization in localizations:
+                    lang = clean_text(localization.get("lang"))
+                    biography = clean_text(localization.get("biography"))
+                    if not lang or not biography:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO person_localizations (person_id, lang, biography, updated_at)
+                        VALUES (%s, %s, %s, now())
+                        ON CONFLICT (person_id, lang) DO UPDATE
+                        SET biography=EXCLUDED.biography, updated_at=now()
+                        """,
+                        (person_id, lang, biography),
+                    )
         try:
             sync_person_profile_media(conn, person_id, profile_urls, provider_id=updates["source"])
         except Exception:
@@ -41419,6 +41688,39 @@ def refresh_person_metadata(
                 "Person profile media sync failed for %s", person_id, exc_info=True
             )
         detail = person_detail_entity(conn, person_id) or preview_detail
+        if source_providers:
+            receiver_payload = person_receiver_contribution_payload(
+                person_id=person_id,
+                person=detail.get("person") if isinstance(detail.get("person"), dict) else {},
+                tmdb_id=tmdb_id,
+                updates=updates,
+                localizations=localizations,
+                source_providers=source_providers,
+            )
+            if receiver_payload.get("payload"):
+                try:
+                    receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
+                except Exception as exc:  # noqa: BLE001 - contribution must never break the refresh
+                    current_app.logger.warning(
+                        "Person receiver contribution failed for %s", person_id, exc_info=True
+                    )
+                    receiver_summary = {"status": "error", "error": str(exc)}
+                audit_event(
+                    conn,
+                    event_type="metadata.receiver_pushed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_id,
+                    summary=f"Pushed person metadata to receiver plugins for {updates.get('name') or tmdb_id}",
+                    metadata={
+                        "personId": str(person_id),
+                        "tmdbId": str(tmdb_id),
+                        "sourceProviders": sorted({str(item) for item in source_providers if item}),
+                        "fields": sorted((receiver_payload.get("payload") or {}).keys()),
+                        "receiverSummary": receiver_summary,
+                    },
+                )
     else:
         if profile_urls:
             existing_media = preview_detail.get("personMedia") if isinstance(preview_detail.get("personMedia"), list) else []
@@ -41440,14 +41742,15 @@ def refresh_person_metadata(
     return {
         "dryRun": dry_run,
         "plugin": {
-            "id": plugin.get("id"),
-            "name": plugin.get("name"),
+            "id": primary_plugin.get("id"),
+            "name": primary_plugin.get("name"),
         },
+        "sourceProviders": sorted({str(item) for item in source_providers if item}),
         "execution": {
-            "status": execution.get("status"),
-            "state": execution.get("state"),
-            "elapsedMs": execution.get("elapsedMs"),
-            "entrypoint": execution.get("entrypoint"),
+            "status": primary_execution.get("status"),
+            "state": primary_execution.get("state"),
+            "elapsedMs": primary_execution.get("elapsedMs"),
+            "entrypoint": primary_execution.get("entrypoint"),
         },
         "awards": {
             "status": awards_status,
@@ -41456,7 +41759,8 @@ def refresh_person_metadata(
             "count": len(awards),
             "groups": len(award_groups),
         },
-        "result": result,
+        "result": primary_result,
+        "receivers": receiver_summary,
         "detail": detail,
     }
 
@@ -41474,14 +41778,15 @@ def refresh_person_filmography(
     tmdb_id = detail.get("tmdbId") or ""
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
-    plugin = person_filmography_plugin(conn)
-    if not plugin:
+    candidates = person_filmography_source_plugins(conn, include_disabled=True)
+    if not candidates:
         raise NextApiError("No enabled filmography plugin is available", 503)
-    if not plugin.get("enabled"):
-        raise NextApiError("TMDb plugin must be enabled before refreshing filmography", 409)
+    plugin = next((candidate for candidate in candidates if candidate.get("enabled")), None)
+    if plugin is None:
+        raise NextApiError("Filmography plugin must be enabled before refreshing filmography", 409)
     config = plugin_config_from_db(conn, str(plugin["id"]))
     if plugin_requires_config_for_entrypoint(plugin, config, "person_filmography"):
-        raise NextApiError("TMDb plugin configuration is incomplete", 409)
+        raise NextApiError("Filmography plugin configuration is incomplete", 409)
 
     context = plugin_execution_context(conn, plugin, config, actor)
     execution = run_plugin_entrypoint(str(plugin["id"]), "person_filmography", {"tmdbId": tmdb_id}, context)
