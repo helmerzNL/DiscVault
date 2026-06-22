@@ -2,6 +2,7 @@ import os
 import sys
 import types
 import unittest
+import unittest.mock
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -16,6 +17,7 @@ try:
     from app.backend.next_app import person_biography_value
     from app.backend.next_app import person_filmography_entries_from_metadata
     from app.backend.next_app import person_local_filmography_entries
+    from app.backend.next_app import person_receiver_contribution_payload
     from app.backend.next_app import sanitize_profile_urls
     from app.backend.next_app import select_movie_metadata_person_refresh_credits
     from app.backend.next_plugins.tmdb import plugin as tmdb_plugin
@@ -29,6 +31,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit w
     person_biography_value = None
     person_filmography_entries_from_metadata = None
     person_local_filmography_entries = None
+    person_receiver_contribution_payload = None
     sanitize_profile_urls = None
     select_movie_metadata_person_refresh_credits = None
     tmdb_plugin = None
@@ -163,7 +166,7 @@ class NextPeoplePolicyTests(unittest.TestCase):
 
         def fake_request(context, path, **params):
             self.assertEqual(path, "/person/585")
-            self.assertEqual(params["append_to_response"], "images,external_ids")
+            self.assertEqual(params["append_to_response"], "images,external_ids,translations")
             return {
                 "name": "Rutger Hauer",
                 "biography": "Dutch actor",
@@ -198,6 +201,41 @@ class NextPeoplePolicyTests(unittest.TestCase):
             result["profiles"].index("https://image.tmdb.org/t/p/original/tertiary.jpg"),
             result["profiles"].index("https://image.tmdb.org/t/p/original/secondary.jpg"),
         )
+
+    def test_tmdb_person_details_collects_multilanguage_biography(self):
+        original_request = tmdb_plugin._request
+
+        def fake_request(context, path, **params):
+            self.assertEqual(path, "/person/585")
+            self.assertEqual(params.get("append_to_response"), "images,external_ids,translations")
+            return {
+                "name": "Rutger Hauer",
+                "biography": "",
+                "birthday": "1944-01-23",
+                "place_of_birth": "Breukelen",
+                "known_for_department": "Acting",
+                "profile_path": "/profile.jpg",
+                "translations": {
+                    "translations": [
+                        {"iso_639_1": "nl", "iso_3166_1": "NL", "data": {"biography": "Nederlandse biografie"}},
+                        {"iso_639_1": "en", "iso_3166_1": "US", "data": {"biography": "English biography"}},
+                        {"iso_639_1": "fr", "iso_3166_1": "FR", "data": {"biography": ""}},
+                    ]
+                },
+            }
+
+        try:
+            tmdb_plugin._request = fake_request
+            result = tmdb_plugin.person_details({"tmdbId": "585"}, {"settings": {"language": "nl-NL"}})
+        finally:
+            tmdb_plugin._request = original_request
+
+        self.assertEqual(result["status"], "hit")
+        langs = {row["lang"]: row["biography"] for row in result["localizations"]}
+        self.assertEqual(langs["nl-NL"], "Nederlandse biografie")
+        self.assertEqual(langs["en-US"], "English biography")
+        self.assertNotIn("fr-FR", langs)
+        self.assertEqual(result["biography"], "Nederlandse biografie")
 
     def test_tmdb_person_awards_entrypoint_groups_wikidata_results(self):
         original_import = tmdb_plugin._import_wikidata_awards
@@ -526,6 +564,144 @@ class NextPeoplePolicyTests(unittest.TestCase):
         self.assertTrue(payload["cast"][0]["inDigital"])
         self.assertEqual(payload["cast"][0]["digitalPlatformUrls"][0]["platform"], "Plex")
         self.assertEqual(payload["crew"][0]["job"], "Director")
+
+    def test_person_receiver_contribution_payload_includes_localized_biographies(self):
+        payload = person_receiver_contribution_payload(
+            person_id="00000000-0000-0000-0000-000000000001",
+            person={"public_id": "person-public", "name": "Rutger Hauer"},
+            tmdb_id="585",
+            updates={
+                "name": "Rutger Hauer",
+                "biography": "Nederlandse biografie",
+                "birth_date": "1944-01-23",
+                "death_date": "2019-07-19",
+                "place_of_birth": "Breukelen",
+                "known_for": "Acting",
+                "profile_url": "https://example.test/profile.jpg",
+            },
+            localizations=[
+                {"lang": "nl-NL", "biography": "Nederlandse biografie"},
+                {"lang": "en-US", "biography": "English biography"},
+            ],
+            source_providers=["tmdb", "tmdb"],
+        )
+
+        self.assertEqual(payload["entityType"], "person")
+        self.assertEqual(payload["identity"], "person-public")
+        self.assertEqual(payload["sourceRef"], "person-public")
+        self.assertEqual(payload["sourceReference"]["type"], "discvault_person")
+        self.assertEqual(payload["sourceReference"]["tmdbId"], "585")
+        self.assertEqual(payload["payload"]["name"], "Rutger Hauer")
+        self.assertEqual(payload["payload"]["tmdbId"], "585")
+        self.assertEqual(payload["payload"]["biography"], "Nederlandse biografie")
+        self.assertEqual(payload["payload"]["photoUrl"], "https://example.test/profile.jpg")
+        self.assertEqual(payload["payload"]["biography_nl-nl"], "Nederlandse biografie")
+        self.assertEqual(payload["payload"]["biography_nl"], "Nederlandse biografie")
+        self.assertEqual(payload["payload"]["biography_en-us"], "English biography")
+        self.assertEqual(payload["payload"]["biography_en"], "English biography")
+        self.assertEqual(payload["metadata"]["sourceProviders"], ["tmdb"])
+        self.assertEqual(payload["metadata"]["personId"], "00000000-0000-0000-0000-000000000001")
+
+    def test_person_receiver_contribution_payload_drops_empty_fields(self):
+        payload = person_receiver_contribution_payload(
+            person_id="person-uuid",
+            person={"name": "Example Person"},
+            tmdb_id="",
+            updates={"name": "Example Person", "biography": "", "profile_url": ""},
+            localizations=[],
+            source_providers=[],
+        )
+
+        self.assertEqual(payload["identity"], "person-uuid")
+        self.assertNotIn("biography", payload["payload"])
+        self.assertNotIn("tmdbId", payload["payload"])
+        self.assertNotIn("photoUrl", payload["payload"])
+        self.assertEqual(payload["payload"]["name"], "Example Person")
+        self.assertEqual(payload["metadata"]["sourceProviders"], [])
+
+    def test_refresh_person_metadata_dry_run_preview_includes_localizations_profiles_awards(self):
+        from app.backend import next_app
+
+        detail = {
+            "tmdbId": "585",
+            "person": {"id": "person-uuid", "name": "Rutger Hauer", "metadata": {}},
+            "localizations": [],
+            "personMedia": [],
+            "counts": {},
+        }
+        person_result = {
+            "status": "hit",
+            "provider": "tmdb",
+            "sourceRef": "tmdb:person:585",
+            "name": "Rutger Hauer",
+            "biography": "Nederlandse biografie",
+            "birthday": "1944-01-23",
+            "language": "nl-NL",
+            "alsoKnownAs": ["Rutger Oelsen Hauer"],
+            "imdbId": "nm0000442",
+            "profileUrl": "https://image.tmdb.org/t/p/original/primary.jpg",
+            "profiles": [
+                "https://image.tmdb.org/t/p/original/primary.jpg",
+                "https://image.tmdb.org/t/p/original/secondary.jpg",
+            ],
+            "localizations": [
+                {"lang": "nl-NL", "biography": "Nederlandse biografie"},
+                {"lang": "en-US", "biography": "English biography"},
+            ],
+        }
+        awards = [{"award": "Saturn Award", "result": "won", "year": 1983}]
+        award_groups = [{"award": "Saturn Award", "wins": 1, "nominations": 0, "items": awards}]
+        awards_result = {
+            "status": "hit",
+            "provider": "wikidata",
+            "sourceRef": "wikidata:Q44519",
+            "awards": awards,
+            "awardGroups": award_groups,
+        }
+
+        def fake_run(plugin_id, entrypoint, payload, context):
+            if entrypoint == "person_details":
+                return {"status": "ok", "state": "ok", "result": person_result}
+            if entrypoint == "person_awards":
+                return {"status": "ok", "state": "ok", "result": awards_result}
+            return {"status": "error"}
+
+        plugin = {"id": "tmdb", "name": "TMDb", "enabled": True}
+        with unittest.mock.patch.multiple(
+            next_app,
+            person_detail_entity=unittest.mock.DEFAULT,
+            person_metadata_source_plugins=unittest.mock.DEFAULT,
+            plugin_config_from_db=unittest.mock.DEFAULT,
+            plugin_requires_config_for_entrypoint=unittest.mock.DEFAULT,
+            plugin_execution_context=unittest.mock.DEFAULT,
+            run_plugin_entrypoint=unittest.mock.DEFAULT,
+        ) as mocks:
+            mocks["person_detail_entity"].return_value = detail
+            mocks["person_metadata_source_plugins"].return_value = [plugin]
+            mocks["plugin_config_from_db"].return_value = {}
+            mocks["plugin_requires_config_for_entrypoint"].return_value = False
+            mocks["plugin_execution_context"].return_value = {}
+            mocks["run_plugin_entrypoint"].side_effect = fake_run
+            result = next_app.refresh_person_metadata(object(), "person-uuid", dry_run=True)
+
+        self.assertTrue(result["dryRun"])
+        self.assertEqual(result["sourceProviders"], ["tmdb"])
+        self.assertTrue(result["awards"]["applied"])
+        preview = result["detail"]
+        # Multi-language localizations land in the preview, alongside profiles/awards.
+        langs = {row["lang"] for row in preview["localizations"]}
+        self.assertEqual(langs, {"nl-NL", "en-US"})
+        media_urls = [item["url"] for item in preview["personMedia"]]
+        self.assertIn("https://image.tmdb.org/t/p/original/primary.jpg", media_urls)
+        self.assertTrue(preview["personMedia"][0]["is_primary"])
+        self.assertTrue(all(item["preview"] for item in preview["personMedia"]))
+        meta = preview["person"]["metadata"]
+        self.assertEqual(meta["alsoKnownAs"], ["Rutger Oelsen Hauer"])
+        self.assertEqual(meta["imdbId"], "nm0000442")
+        self.assertEqual(meta["profiles"][0], "https://image.tmdb.org/t/p/original/primary.jpg")
+        self.assertEqual(meta["awards"], awards)
+        self.assertEqual(meta["awardGroups"], award_groups)
+        self.assertEqual(meta["person_metadata_sources"], ["tmdb"])
 
 
 if __name__ == "__main__":
