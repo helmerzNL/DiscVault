@@ -1257,6 +1257,53 @@ class ContributionFieldDiagnosticsTest(unittest.TestCase):
         self.assertEqual(dropped, [])
 
 
+class ContributionReleaseTitleTest(unittest.TestCase):
+    def test_release_entity_carries_physical_title_and_canonical_movie_title(self):
+        payload = {
+            "entityType": "release",
+            "payload": {
+                "title": "John Wick",
+                "release_title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+                "barcode": "5051888255889",
+                "format": "4K UHD",
+                "country": "United Kingdom",
+                "regions": ["Region B"],
+            },
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        # The release entity carries the full physical/packaging title...
+        self.assertEqual(
+            contribution_payload["title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+        # ...while the canonical film title travels as movieTitle/tmdbTitle.
+        self.assertEqual(contribution_payload["movieTitle"], "John Wick")
+        self.assertEqual(contribution_payload["tmdbTitle"], "John Wick")
+        self.assertEqual(contribution_payload["country"], "United Kingdom")
+        self.assertEqual(contribution_payload["regions"], ["Region B"])
+        # The raw DiscVault-only key is not forwarded as its own field.
+        self.assertNotIn("release_title", contribution_payload)
+
+    def test_release_title_falls_back_to_clean_title(self):
+        payload = {"entityType": "release", "payload": {"title": "Heat", "format": "Blu-ray"}}
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        self.assertEqual(contribution_payload["title"], "Heat")
+        self.assertEqual(contribution_payload["movieTitle"], "Heat")
+        self.assertEqual(contribution_payload["tmdbTitle"], "Heat")
+
+    def test_movie_entity_keeps_only_clean_title(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "John Wick",
+                "release_title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+            },
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        self.assertEqual(contribution_payload["title"], "John Wick")
+        self.assertNotIn("movieTitle", contribution_payload)
+
+
 class ContributionLocalizedFieldsTest(unittest.TestCase):
     def test_expands_localizations_into_localized_field_keys(self):
         payload = {

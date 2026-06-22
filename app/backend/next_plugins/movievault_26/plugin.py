@@ -2267,6 +2267,29 @@ def _expand_localized_fields(entity_type, safe_payload, localizations, allowed, 
     return enriched
 
 
+def _with_release_title_mapping(entity_type, safe_payload):
+    """Map DiscVault's clean/raw titles onto the MovieVault release contract.
+
+    The MovieVault *release* entity carries the PHYSICAL/packaging title in
+    ``title`` while the canonical film title travels as ``movieTitle`` /
+    ``tmdbTitle``. DiscVault keeps the clean title in ``title`` and the raw
+    scanned title in ``release_title``, so swap them for release contributions."""
+    if entity_type != "release" or not isinstance(safe_payload, dict):
+        return safe_payload
+    enriched = dict(safe_payload)
+    clean_title = _text(enriched.get("title"))
+    raw_release_title = enriched.pop("release_title", None)
+    raw_release_title_camel = enriched.pop("releaseTitle", None)
+    scanned_title = _text(raw_release_title or raw_release_title_camel)
+    physical_title = scanned_title or clean_title
+    if physical_title:
+        enriched["title"] = physical_title
+    if clean_title:
+        enriched.setdefault("movieTitle", clean_title)
+        enriched.setdefault("tmdbTitle", clean_title)
+    return enriched
+
+
 def _contribution_payload(payload, template):
     entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
     if entity_type not in {"movie", "release", "box_set", "person"}:
@@ -2277,6 +2300,7 @@ def _contribution_payload(payload, template):
     safe_payload = _safe_contribution_value(raw_payload)
     allowed = _allowed_fields(template, entity_type)
     safe_payload = _with_box_set_member_aliases(entity_type, safe_payload, allowed)
+    safe_payload = _with_release_title_mapping(entity_type, safe_payload)
     localizations = safe_payload.pop("localizations", None) if isinstance(safe_payload, dict) else None
     if allowed:
         safe_payload = {key: value for key, value in safe_payload.items() if key in allowed}
