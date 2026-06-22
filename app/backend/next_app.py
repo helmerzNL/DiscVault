@@ -58,6 +58,10 @@ try:
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
+    from .next_metadata import _clean_scanned_title
+    from .next_metadata import _parse_import_country
+    from .next_metadata import _SCANNED_TITLE_NOISE_RE
+    from .next_metadata import normalize_list_field
     from .next_metadata import ensure_remote_media_asset
     from .next_metadata import metadata_result_summary
     from .next_metadata import apply_metadata_proposal
@@ -234,6 +238,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
+    from next_metadata import _clean_scanned_title
+    from next_metadata import _parse_import_country
+    from next_metadata import _SCANNED_TITLE_NOISE_RE
+    from next_metadata import normalize_list_field
     from next_metadata import ensure_remote_media_asset
     from next_metadata import metadata_result_summary
     from next_metadata import apply_metadata_proposal
@@ -1782,6 +1790,11 @@ def selected_import_movie_candidate_from_body(body: dict[str, Any]) -> dict[str,
             candidate.get("detail_url"),
         ),
         "title": title,
+        "releaseTitle": first_value(
+            candidate.get("releaseTitle"),
+            candidate.get("release_title"),
+            movie_updates.get("release_title"),
+        ),
         "year": first_value(
             candidate.get("year"),
             candidate.get("releaseYear"),
@@ -1841,7 +1854,27 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
     provider = clean_text(candidate.get("provider")) or "selected_import_candidate"
     source_label = clean_text(candidate.get("sourceLabel")) or provider
     source_ref = clean_text(candidate.get("sourceRef"))
-    movie_updates: dict[str, Any] = {"title": clean_text(candidate.get("title"))}
+
+    # Split the clean film title from the raw scanned/packaging title so the saved
+    # Title field holds only the movie title while the full packaging string
+    # (e.g. "John Wick (4K Ultra HD + Blu-ray) (UK Import)") is preserved as the
+    # release title. This mirrors canonicalize_plugin_result, so a candidate
+    # selected during a barcode scan honours the same contract no matter which
+    # metadata source (or plugin order) produced it.
+    raw_candidate_title = clean_text(candidate.get("title"))
+    raw_release_title = clean_text(candidate.get("releaseTitle") or candidate.get("release_title"))
+    if not raw_release_title and raw_candidate_title and _SCANNED_TITLE_NOISE_RE.search(raw_candidate_title):
+        raw_release_title = raw_candidate_title
+    clean_title = _clean_scanned_title(raw_release_title) if raw_release_title else raw_candidate_title
+    movie_updates: dict[str, Any] = {"title": clean_title or raw_candidate_title}
+    technical_updates: dict[str, Any] = {}
+    if raw_release_title:
+        movie_updates["release_title"] = raw_release_title
+        import_country, import_region = _parse_import_country(raw_release_title)
+        if import_country:
+            movie_updates.setdefault("country", import_country)
+        if import_region:
+            technical_updates["regions"] = normalize_list_field("regions", import_region)
     if clean_text(candidate.get("year")):
         movie_updates["year"] = clean_text(candidate.get("year"))
     if clean_text(candidate.get("format")):
@@ -1901,6 +1934,18 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
                 "sourceRef": source_ref,
             }
         )
+    for field in technical_updates:
+        provenance.append(
+            {
+                "field": field,
+                "target": "technical",
+                "pluginId": provider,
+                "entrypoint": "selected_import_candidate",
+                "reason": "selected import match",
+                "sourceLabel": source_label,
+                "sourceRef": source_ref,
+            }
+        )
     for field in media_updates:
         provenance.append(
             {
@@ -1917,7 +1962,7 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
     return {
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
-        "technicalUpdates": {},
+        "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
         "identifiers": candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {},
         "provenance": provenance,
@@ -25904,6 +25949,28 @@ def ui_preview_html(
           ];
       return values.map((value) => usableImage(value)).find(Boolean) || "";
     }
+    const SCAN_TITLE_NOISE_RE = /blu[- ]?ray|ultra\\s*hd|\\buhd\\b|\\b4k\\b|\\bdvd\\b|\\b3d\\b|\\bvhs\\b|\\bhddvd\\b|hd[- ]?dvd|steel\\s*book|steelbook|limited\\s+edition|collector|special\\s+edition|digibook|mediabook|slipcover|slipcase|box\\s*set|boxset|gift\\s*set|\\bimport\\b|region[\\s-]*(?:free|locked|[abc]|[0-9])|\\bpal\\b|\\bntsc\\b|remaster|anniversary\\s+edition|uncut|extended\\s+edition|\\bocard\\b|o[- ]card|amaray|digipack|digipak/i;
+    function cleanScannedTitle(rawTitle) {
+      let title = String(rawTitle || "").trim();
+      if (!title) return "";
+      const stripGroups = (text, groupRe) => {
+        let prev = null;
+        while (prev !== text) {
+          prev = text;
+          text = text.replace(groupRe, (m) => (SCAN_TITLE_NOISE_RE.test(m) ? " " : m));
+        }
+        return text;
+      };
+      let cleaned = stripGroups(title, /\\(([^()]*)\\)/g);
+      cleaned = stripGroups(cleaned, /\\[([^\\[\\]]*)\\]/g);
+      cleaned = stripGroups(cleaned, /\\{([^{}]*)\\}/g);
+      const tail = new RegExp(" ?[-|/] *[^-|/]*(?:" + SCAN_TITLE_NOISE_RE.source + ")[^-|/]*$", "i");
+      cleaned = cleaned.replace(tail, " ");
+      const bare = new RegExp("[ ,;:/+&-]+(?:" + SCAN_TITLE_NOISE_RE.source + ") *$", "i");
+      cleaned = cleaned.replace(bare, " ");
+      cleaned = cleaned.replace(/\\s{2,}/g, " ").replace(/^[\\s\\-_/|,;:+&]+|[\\s\\-_/|,;:+&]+$/g, "");
+      return cleaned || title;
+    }
     function normalizeLookupMovieCandidate(result, resultIndex, candidate, candidateIndex) {
       if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result))) return null;
       const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
@@ -25913,7 +25980,7 @@ def ui_preview_html(
       const rawIdentifiers = candidate.identifiers && typeof candidate.identifiers === "object"
         ? candidate.identifiers
         : (result?.identifiers && typeof result.identifiers === "object" ? result.identifiers : {});
-      const title = String(
+      const rawTitle = String(
         candidate.title
         || candidate.originalTitle
         || candidate.original_title
@@ -25924,7 +25991,16 @@ def ui_preview_html(
         || movieUpdates.original_title
         || ""
       ).trim();
-      if (!title) return null;
+      if (!rawTitle) return null;
+      const explicitReleaseTitle = String(
+        candidate.releaseTitle
+        || candidate.release_title
+        || movieUpdates.release_title
+        || ""
+      ).trim();
+      const rawReleaseTitle = explicitReleaseTitle || (SCAN_TITLE_NOISE_RE.test(rawTitle) ? rawTitle : "");
+      const title = (rawReleaseTitle ? cleanScannedTitle(rawReleaseTitle) : rawTitle) || rawTitle;
+      const releaseTitle = rawReleaseTitle;
       const provider = String(candidate.provider || candidate.pluginId || candidate.providerId || result?.pluginId || result?.provider || result?.providerId || "").trim();
       const sourceLabel = pluginDisplayName(provider, String(candidate.sourceLabel || candidate.providerLabel || result?.sourceLabel || result?.providerLabel || provider || "").trim());
       const sourceRef = String(candidate.sourceRef || candidate.sourceUrl || candidate.source_url || candidate.detailUrl || candidate.detail_url || result?.sourceRef || result?.sourceUrl || result?.source_url || "").trim();
@@ -25956,6 +26032,7 @@ def ui_preview_html(
         sourceLabel,
         sourceRef,
         title,
+        releaseTitle,
         year,
         format,
         barcode,
