@@ -1289,20 +1289,46 @@ def _clean_scanned_title(raw_title: str) -> str:
             )
         return text
 
-    cleaned = _strip_groups(title, '(', ')')
-    cleaned = _strip_groups(cleaned, '[', ']')
-    cleaned = _strip_groups(cleaned, '{', '}')
+    def _strip_trailing_meta_groups(text: str) -> str:
+        # Remove trailing bracketed groups that are pure region/import metadata
+        # (e.g. "(France)", "[UK Import]", "(Region B)"). The noise stripper above
+        # leaves these behind because a bare country name carries no format
+        # keyword, yet they strand a preceding bare format token (e.g. the
+        # "4K Blu-ray" in "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)")
+        # so it can no longer be recognised as a trailing token.
+        pattern = re.compile(r'\s*[\(\[\{]([^\(\)\[\]\{\}]*)[\)\]\}]\s*$')
+        prev_inner = None
+        while prev_inner != text:
+            prev_inner = text
+            match = pattern.search(text)
+            if not match:
+                break
+            inner = match.group(1)
+            if _SCANNED_TITLE_NOISE_RE.search(inner) or _group_is_region_meta(inner):
+                text = text[: match.start()].rstrip()
+        return text
 
     # Drop trailing " - <noise...>" / " | <noise...>" segments (distributor/format tails).
-    cleaned = re.sub(r'\s[-|/]\s*[^-|/]*(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')[^-|/]*$', ' ', cleaned, flags=re.I)
+    tail_re = re.compile(r'\s[-|/]\s*[^-|/]*(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')[^-|/]*$', re.I)
     # Drop bare trailing format/region tokens, iteratively so space-separated
     # multi-token tails like "4K Blu-ray" or "Ultra HD Blu-ray 3D" collapse to
     # the film title instead of leaving a dangling "4K".
     bare_tail_re = re.compile(r'[\s,;:/+&-]+(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')\s*$', re.I)
-    prev = None
-    while prev != cleaned:
-        prev = cleaned
-        cleaned = bare_tail_re.sub('', cleaned).rstrip()
+
+    cleaned = title
+    prev_outer = None
+    while prev_outer != cleaned:
+        prev_outer = cleaned
+        cleaned = _strip_groups(cleaned, '(', ')')
+        cleaned = _strip_groups(cleaned, '[', ']')
+        cleaned = _strip_groups(cleaned, '{', '}')
+        cleaned = _strip_trailing_meta_groups(cleaned)
+        cleaned = tail_re.sub(' ', cleaned)
+        prev_bare = None
+        while prev_bare != cleaned:
+            prev_bare = cleaned
+            cleaned = bare_tail_re.sub('', cleaned).rstrip()
+        cleaned = cleaned.strip()
 
     cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip(' -_/|,;:+&')
     return cleaned or title
@@ -1327,7 +1353,30 @@ _IMPORT_COUNTRY_MAP = {
     "polish": "Poland", "poland": "Poland", "portuguese": "Portugal",
     "portugal": "Portugal", "russian": "Russia", "russia": "Russia",
     "chinese": "China", "china": "China",
+    "united states": "United States", "united kingdom": "United Kingdom",
+    "great britain": "United Kingdom",
 }
+
+
+# Region words that, together with the country names/adjectives above, mark a
+# bracketed group as pure region/import metadata (e.g. "(France)", "(UK Import)",
+# "(Region B)") rather than part of the film title.
+_REGION_META_WORDS = frozenset(
+    {word for key in _IMPORT_COUNTRY_MAP for word in key.split()}
+    | {"import", "region", "free", "locked", "a", "b", "c"}
+)
+
+
+def _group_is_region_meta(inner: str) -> bool:
+    """Return True when every word in a bracketed group is region/import metadata.
+
+    Used to strip trailing region tags such as "(France)", "[UK Import]" or
+    "(United States)" that carry no format keyword and therefore slip past the
+    format-noise stripper."""
+    tokens = re.findall(r"[a-z.]+", (inner or "").lower())
+    if not tokens:
+        return False
+    return all(token in _REGION_META_WORDS for token in tokens)
 
 
 def _parse_import_country(raw_title: str) -> tuple[str, str]:
@@ -1350,6 +1399,12 @@ def _parse_import_country(raw_title: str) -> tuple[str, str]:
                 return mapped, ""
         if phrase:
             return "", f"{match.group(1).strip().title()} Import"
+
+    # Bare country tag in brackets, e.g. Blu-ray.com's "... (France)" / "[Italy]".
+    for match in re.finditer(r'[\(\[]\s*([A-Za-z.][A-Za-z. ]*?)\s*[\)\]]', text):
+        mapped = _IMPORT_COUNTRY_MAP.get(match.group(1).strip().lower())
+        if mapped:
+            return mapped, ""
 
     region_match = re.search(r'region[\s-]*(free|locked|[ABC]|[0-9])\b', text, flags=re.I)
     if region_match:
