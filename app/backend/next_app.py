@@ -25950,6 +25950,12 @@ def ui_preview_html(
       return values.map((value) => usableImage(value)).find(Boolean) || "";
     }
     const SCAN_TITLE_NOISE_RE = /blu[- ]?ray|ultra\\s*hd|\\buhd\\b|\\b4k\\b|\\bdvd\\b|\\b3d\\b|\\bvhs\\b|\\bhddvd\\b|hd[- ]?dvd|steel\\s*book|steelbook|limited\\s+edition|collector|special\\s+edition|digibook|mediabook|slipcover|slipcase|box\\s*set|boxset|gift\\s*set|\\bimport\\b|region[\\s-]*(?:free|locked|[abc]|[0-9])|\\bpal\\b|\\bntsc\\b|remaster|anniversary\\s+edition|uncut|extended\\s+edition|\\bocard\\b|o[- ]card|amaray|digipack|digipak/i;
+    const SCAN_REGION_META_WORDS = new Set(["uk","u.k.","british","england","us","u.s.","usa","american","italian","italy","german","germany","french","france","japanese","japan","spanish","spain","dutch","netherlands","belgian","belgium","korean","korea","swedish","sweden","danish","denmark","norwegian","norway","finnish","finland","australian","australia","canadian","canada","nordic","scandinavian","european","austrian","austria","polish","poland","portuguese","portugal","russian","russia","chinese","china","united","states","kingdom","great","britain","import","region","free","locked","a","b","c"]);
+    function scanGroupIsRegionMeta(inner) {
+      const tokens = String(inner || "").toLowerCase().match(/[a-z.]+/g);
+      if (!tokens || !tokens.length) return false;
+      return tokens.every((t) => SCAN_REGION_META_WORDS.has(t));
+    }
     function cleanScannedTitle(rawTitle) {
       let title = String(rawTitle || "").trim();
       if (!title) return "";
@@ -25961,16 +25967,38 @@ def ui_preview_html(
         }
         return text;
       };
-      let cleaned = stripGroups(title, /\\(([^()]*)\\)/g);
-      cleaned = stripGroups(cleaned, /\\[([^\\[\\]]*)\\]/g);
-      cleaned = stripGroups(cleaned, /\\{([^{}]*)\\}/g);
+      const stripTrailingMetaGroups = (text) => {
+        const groupRe = /\\s*[([{]([^()[\\]{}]*)[)\\]}]\\s*$/;
+        let prev = null;
+        while (prev !== text) {
+          prev = text;
+          const m = text.match(groupRe);
+          if (!m) break;
+          if (SCAN_TITLE_NOISE_RE.test(m[1]) || scanGroupIsRegionMeta(m[1])) {
+            text = text.slice(0, m.index).replace(/\\s+$/, "");
+          } else {
+            break;
+          }
+        }
+        return text;
+      };
       const tail = new RegExp(" [-|/] *[^-|/]*(?:" + SCAN_TITLE_NOISE_RE.source + ")[^-|/]*$", "i");
-      cleaned = cleaned.replace(tail, " ");
       const bare = new RegExp("[ ,;:/+&-]+(?:" + SCAN_TITLE_NOISE_RE.source + ") *$", "i");
-      let barePrev = null;
-      while (barePrev !== cleaned) {
-        barePrev = cleaned;
-        cleaned = cleaned.replace(bare, "").replace(/\\s+$/, "");
+      let cleaned = title;
+      let prevOuter = null;
+      while (prevOuter !== cleaned) {
+        prevOuter = cleaned;
+        cleaned = stripGroups(cleaned, /\\(([^()]*)\\)/g);
+        cleaned = stripGroups(cleaned, /\\[([^\\[\\]]*)\\]/g);
+        cleaned = stripGroups(cleaned, /\\{([^{}]*)\\}/g);
+        cleaned = stripTrailingMetaGroups(cleaned);
+        cleaned = cleaned.replace(tail, " ");
+        let barePrev = null;
+        while (barePrev !== cleaned) {
+          barePrev = cleaned;
+          cleaned = cleaned.replace(bare, "").replace(/\\s+$/, "");
+        }
+        cleaned = cleaned.trim();
       }
       cleaned = cleaned.replace(/\\s{2,}/g, " ").replace(/^[\\s\\-_/|,;:+&]+|[\\s\\-_/|,;:+&]+$/g, "");
       return cleaned || title;
