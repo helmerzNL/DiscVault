@@ -49,6 +49,9 @@ class NextScannedTitleTests(unittest.TestCase):
             _clean_scanned_title("Blade Runner 2049 - Limited Edition"),
             "Blade Runner 2049",
         )
+        # Space-separated multi-token format tails collapse to the film title.
+        self.assertEqual(_clean_scanned_title("Inception 4K Blu-ray"), "Inception")
+        self.assertEqual(_clean_scanned_title("Dune Ultra HD Blu-ray 3D"), "Dune")
         # A subtitle after a colon must be preserved.
         self.assertEqual(_clean_scanned_title("Mad Max: Fury Road (Blu-ray)"), "Mad Max: Fury Road")
         # Titles without noise are returned unchanged.
@@ -377,6 +380,77 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["technicalUpdates"]["subtitles"], ["French"])
         self.assertTrue(
             any(item["field"] == "title" and "release source" in item["reason"] for item in merged["skipped"])
+        )
+
+    def test_release_source_seeds_canonical_title_when_movie_has_none(self):
+        # Mirrors a real barcode scan where MovieVault 500s and TMDb misses, so
+        # the only hit is Blu-ray.com (a release source). Its plugin already
+        # derives a clean movie.title with the raw packaging string in
+        # release.title; the clean title must seed the empty canonical title
+        # instead of leaving it blank.
+        current = {"title": "", "format": "4K UHD", "metadata": {}}
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "movie": {
+                    "title": "Inception",
+                    "format": "4K UHD",
+                },
+                "release": {
+                    "title": "Inception 4K Blu-ray (UK Import)",
+                    "format": "4K UHD",
+                },
+                "technicalSpecs": {"format": "4K UHD", "subtitles": ["English"]},
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[result],
+            overwrite_enabled=False,
+            target_format="4K UHD",
+        )
+
+        self.assertEqual(merged["movieUpdates"]["title"], "Inception")
+        self.assertEqual(
+            merged["movieUpdates"]["release_title"],
+            "Inception 4K Blu-ray (UK Import)",
+        )
+        self.assertEqual(merged["movieUpdates"]["country"], "United Kingdom")
+        self.assertFalse(
+            any(item["field"] == "title" and "release source" in item["reason"] for item in merged["skipped"])
+        )
+
+    def test_release_source_still_cannot_overwrite_existing_canonical_title(self):
+        current = {"title": "Inception", "format": "4K UHD", "metadata": {}}
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "movie": {"title": "Inception 4K Blu-ray (UK Import)", "format": "4K UHD"},
+                "release": {"title": "Inception 4K Blu-ray (UK Import)", "format": "4K UHD"},
+                "technicalSpecs": {"format": "4K UHD"},
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[result],
+            overwrite_enabled=True,
+            target_format="4K UHD",
+        )
+
+        self.assertNotIn("title", merged["movieUpdates"])
+        self.assertTrue(
+            any(
+                item["field"] == "title" and "release source cannot overwrite" in item["reason"]
+                for item in merged["skipped"]
+            )
         )
 
     def test_manual_fields_are_protected_without_preferred_overwrite(self):
