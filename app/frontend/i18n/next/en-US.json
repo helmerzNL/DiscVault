@@ -422,6 +422,7 @@
   "movieDetail.noOverview": "No overview imported yet.",
   "movieDetail.rating": "Rating",
   "movieDetail.originalTitle": "Original title",
+  "movieDetail.releaseTitle": "Release title",
   "movieDetail.barcode": "Barcode",
   "movieDetail.format": "Format",
   "movieDetail.edition": "Edition",

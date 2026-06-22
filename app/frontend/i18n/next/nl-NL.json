@@ -422,6 +422,7 @@
   "movieDetail.noOverview": "Nog geen omschrijving geimporteerd.",
   "movieDetail.rating": "Beoordeling",
   "movieDetail.originalTitle": "Originele titel",
+  "movieDetail.releaseTitle": "Releasetitel",
   "movieDetail.barcode": "Barcode",
   "movieDetail.format": "Formaat",
   "movieDetail.edition": "Editie",

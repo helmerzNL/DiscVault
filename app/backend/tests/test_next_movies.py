@@ -179,6 +179,27 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertIsNone(payload["release_date"])
         self.assertEqual(payload["purchase_date"].isoformat(), "2026-06-02")
 
+    def test_movie_payload_fields_maps_release_title(self):
+        camel = movie_payload_fields(
+            {"title": "John Wick", "releaseTitle": "John Wick (4K Ultra HD + Blu-ray) (UK Import)"}
+        )
+        self.assertEqual(camel["release_title"], "John Wick (4K Ultra HD + Blu-ray) (UK Import)")
+        snake = movie_payload_fields(
+            {"title": "John Wick", "release_title": "John Wick (Blu-ray)"}
+        )
+        self.assertEqual(snake["release_title"], "John Wick (Blu-ray)")
+        self.assertIsNone(movie_payload_fields({"title": "John Wick"})["release_title"])
+
+    def test_movie_update_payload_round_trips_release_title(self):
+        payload = movie_update_payload(
+            {"title": "John Wick", "releaseTitle": "John Wick (4K Ultra HD + Blu-ray) (UK Import)"},
+            existing={"title": "John Wick"},
+        )
+        self.assertEqual(
+            payload["release_title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+
     def test_import_source_review_summary_flags_review_risks(self):
         summary = import_source_review_summary(
             [

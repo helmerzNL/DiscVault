@@ -43,6 +43,7 @@ METADATA_MAIN_FIELDS = {
     "title",
     "sort_title",
     "original_title",
+    "release_title",
     "year",
     "release_date",
     "format",
@@ -223,6 +224,8 @@ METADATA_NAMESPACE = uuid.UUID("7c76309b-063d-4c63-b925-2f49fdad332c")
 MOVIE_FIELD_ALIASES = {
     "sortTitle": "sort_title",
     "originalTitle": "original_title",
+    "releaseTitle": "release_title",
+    "release_title": "release_title",
     "releaseDate": "release_date",
     "runtime": "runtime_minutes",
     "runtimeMinutes": "runtime_minutes",
@@ -1251,6 +1254,104 @@ def normalize_localization_entries(
     return rows[:80]
 
 
+# Keywords that mark a bracketed/parenthetical group (or trailing segment) as
+# packaging/format/edition/region noise rather than part of the film title.
+_SCANNED_TITLE_NOISE_RE = re.compile(
+    r'blu[- ]?ray|ultra\s*hd|\buhd\b|\b4k\b|\bdvd\b|\b3d\b|\bvhs\b|\bhddvd\b|hd[- ]?dvd'
+    r'|steel\s*book|steelbook|limited\s+edition|collector|special\s+edition'
+    r'|digibook|mediabook|slipcover|slipcase|box\s*set|boxset|gift\s*set'
+    r'|\bimport\b|region[\s-]*(?:free|locked|[abc]|[0-9])'
+    r'|\bpal\b|\bntsc\b|remaster|anniversary\s+edition|uncut|extended\s+edition'
+    r'|\bocard\b|o[- ]card|amaray|digipack|digipak',
+    re.I,
+)
+
+
+def _clean_scanned_title(raw_title: str) -> str:
+    """Return the bare film title from a UPC/EAN packaging title.
+
+    Strips bracket/parenthetical groups and trailing segments that contain
+    format/edition/region noise (e.g. "(4K Ultra HD + Blu-ray)", "[UK Import]",
+    "- Steelbook"). Keeps a subtitle after a colon. Returns the original title
+    when nothing recognisable remains."""
+    title = (raw_title or "").strip()
+    if not title:
+        return ""
+
+    def _strip_groups(text: str, open_ch: str, close_ch: str) -> str:
+        pattern = re.compile(re.escape(open_ch) + r'[^' + re.escape(open_ch + close_ch) + r']*' + re.escape(close_ch))
+        prev = None
+        while prev != text:
+            prev = text
+            text = pattern.sub(
+                lambda m: ' ' if _SCANNED_TITLE_NOISE_RE.search(m.group(0)) else m.group(0),
+                text,
+            )
+        return text
+
+    cleaned = _strip_groups(title, '(', ')')
+    cleaned = _strip_groups(cleaned, '[', ']')
+    cleaned = _strip_groups(cleaned, '{', '}')
+
+    # Drop trailing " - <noise...>" / " | <noise...>" segments (distributor/format tails).
+    cleaned = re.sub(r'\s[-|/]\s*[^-|/]*(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')[^-|/]*$', ' ', cleaned, flags=re.I)
+    # Drop bare trailing format/region tokens left dangling.
+    cleaned = re.sub(r'[\s,;:/+&-]+(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')\s*$', ' ', cleaned, flags=re.I)
+
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip(' -_/|,;:+&')
+    return cleaned or title
+
+
+# Map nationality/country adjectives or codes from "<X> Import" packaging hints to
+# a canonical country name. Unknown values fall back to a free-text region note.
+_IMPORT_COUNTRY_MAP = {
+    "uk": "United Kingdom", "u.k.": "United Kingdom", "british": "United Kingdom",
+    "england": "United Kingdom", "us": "United States", "u.s.": "United States",
+    "usa": "United States", "american": "United States", "italian": "Italy",
+    "italy": "Italy", "german": "Germany", "germany": "Germany", "french": "France",
+    "france": "France", "japanese": "Japan", "japan": "Japan", "spanish": "Spain",
+    "spain": "Spain", "dutch": "Netherlands", "netherlands": "Netherlands",
+    "belgian": "Belgium", "belgium": "Belgium", "korean": "South Korea",
+    "korea": "South Korea", "swedish": "Sweden", "sweden": "Sweden",
+    "danish": "Denmark", "denmark": "Denmark", "norwegian": "Norway",
+    "norway": "Norway", "finnish": "Finland", "finland": "Finland",
+    "australian": "Australia", "australia": "Australia", "canadian": "Canada",
+    "canada": "Canada", "nordic": "Nordic", "scandinavian": "Scandinavia",
+    "european": "Europe", "austrian": "Austria", "austria": "Austria",
+    "polish": "Poland", "poland": "Poland", "portuguese": "Portugal",
+    "portugal": "Portugal", "russian": "Russia", "russia": "Russia",
+    "chinese": "China", "china": "China",
+}
+
+
+def _parse_import_country(raw_title: str) -> tuple[str, str]:
+    """Detect a country/region hint from a packaging title.
+
+    Returns a (country, region_note) tuple. ``country`` is a canonical country
+    name when the import hint is recognised; otherwise ``region_note`` carries
+    the raw hint (e.g. "Region B") so it can land in the ``regions`` field.
+    Either value may be empty."""
+    text = raw_title or ""
+    if not text:
+        return "", ""
+
+    for match in re.finditer(r'([A-Za-z.][A-Za-z. ]*?)\s+import\b', text, flags=re.I):
+        phrase = match.group(1).strip().lower()
+        token = phrase.split()[-1] if phrase.split() else phrase
+        for key in (phrase, token):
+            mapped = _IMPORT_COUNTRY_MAP.get(key)
+            if mapped:
+                return mapped, ""
+        if phrase:
+            return "", f"{match.group(1).strip().title()} Import"
+
+    region_match = re.search(r'region[\s-]*(free|locked|[ABC]|[0-9])\b', text, flags=re.I)
+    if region_match:
+        return "", f"Region {region_match.group(1).upper()}"
+
+    return "", ""
+
+
 def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(result, dict):
         result = {"value": result}
@@ -1307,6 +1408,37 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
     technical = result.get("technicalSpecs") or result.get("technical_specs") or {}
     if isinstance(technical, dict):
         collect(technical, release=True)
+
+    # Split the clean film title from the raw packaging/scanned title. A
+    # candidate that carries a `releaseTitle` (e.g. Blu-ray.com) or a `title`
+    # full of format/edition/region noise is a packaging title: keep the raw
+    # value in `release_title`, derive a clean film title, and parse import
+    # hints into country/regions without overwriting richer resolved values.
+    raw_release_title = (
+        clean_text(result.get("releaseTitle") or result.get("release_title"))
+        or clean_text(movie_updates.get("release_title"))
+        or clean_text(release_source.get("title"))
+    )
+    candidate_title = clean_text(movie_updates.get("title"))
+    if not raw_release_title and candidate_title and _SCANNED_TITLE_NOISE_RE.search(candidate_title):
+        raw_release_title = candidate_title
+    if raw_release_title:
+        movie_updates.setdefault("release_title", raw_release_title)
+        cleaned_title = _clean_scanned_title(raw_release_title)
+        current_title = clean_text(movie_updates.get("title"))
+        if cleaned_title and (
+            not current_title
+            or current_title == raw_release_title
+            or _SCANNED_TITLE_NOISE_RE.search(current_title)
+        ):
+            movie_updates["title"] = cleaned_title
+        import_country, import_region = _parse_import_country(raw_release_title)
+        if import_country and not value_present(movie_updates.get("country")):
+            movie_updates["country"] = import_country
+        if import_region and not value_present(technical_updates.get("regions")):
+            # `regions` is stored as a JSONB array in v26, so coerce the
+            # free-text hint (e.g. "Region B") into a normalized list.
+            technical_updates["regions"] = normalize_list_field("regions", import_region)
 
     images = result.get("images") or {}
     if isinstance(images, dict):
@@ -1427,6 +1559,8 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
         "technicalUpdates": technical_updates,
+        "releaseTitle": clean_text(movie_updates.get("release_title")) or raw_release_title,
+        "cleanTitle": clean_text(movie_updates.get("title")),
         "mediaUpdates": media_updates,
         "identifiers": identifiers,
         "credits": credit_updates,

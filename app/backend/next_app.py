@@ -14379,6 +14379,10 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.originalTitle">Original title</span>
                       <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
                     </label>
+                    <label for="movieEditReleaseTitle">
+                      <span data-next-i18n="movieDetail.releaseTitle">Release title</span>
+                      <input id="movieEditReleaseTitle" name="release_title" maxlength="300" autocomplete="off">
+                    </label>
                     <label for="movieEditSortTitle">
                       <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
                       <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
@@ -22050,6 +22054,7 @@ def ui_preview_html(
       const rows = [
         [tNext("movieDetail.title", "Title"), movie.title || metadata.title, metadata.title_source || metadata.source || "collection"],
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title || metadata.original_title || metadata.originalTitle, metadata.original_title_source || metadata.source || "collection"],
+        [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title || metadata.release_title || metadata.releaseTitle, metadata.release_title_source || metadata.source || "collection"],
         [tNext("movieDetail.fieldOverview", "Overview"), movie.overview || metadata.overview, metadata.overview_source || metadata.source || "collection"],
         [tNext("movieDetail.rating", "Rating"), movie.rating || metadata.rating, metadata.rating_source || metadata.source || "collection"],
         [tNext("movieDetail.technical", "Technical"), [technical.hdr, (technical.audio_tracks || []).slice(0, 2).join(", "), (technical.subtitles || []).slice(0, 2).join(", ")].filter(Boolean).join(" / "), technical.provider || metadata.technical_source || "metadata"]
@@ -22523,6 +22528,7 @@ def ui_preview_html(
       const fields = {
         movieEditTitle: movie.title || "",
         movieEditOriginalTitle: movie.original_title || "",
+        movieEditReleaseTitle: movie.release_title || "",
         movieEditSortTitle: movie.sort_title || "",
         movieEditYear: movie.year || "",
         movieEditBarcode: movie.barcode || "",
@@ -22729,6 +22735,7 @@ def ui_preview_html(
       const releasePackaging = specs.packaging || metadata.packaging || movie.edition_type || movie.edition;
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
+        [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title],
         [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
         [tNext("movieDetail.format", "Format"), movie.format],
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
@@ -27993,6 +28000,7 @@ def ui_preview_html(
       const body = {
         title,
         originalTitle: formTextValue("movieEditOriginalTitle"),
+        releaseTitle: formTextValue("movieEditReleaseTitle"),
         sortTitle: formTextValue("movieEditSortTitle"),
         year: formTextValue("movieEditYear"),
         barcode: formTextValue("movieEditBarcode"),
@@ -39074,6 +39082,7 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "title": payload.get("title"),
         "sort_title": payload.get("sortTitle") or payload.get("sort_title"),
         "original_title": payload.get("originalTitle") or payload.get("original_title"),
+        "release_title": payload.get("releaseTitle") or payload.get("release_title"),
         "year": payload.get("year"),
         "release_date": release_date,
         "format": payload.get("format"),
@@ -39096,6 +39105,7 @@ MOVIE_EDIT_FIELD_LIMITS = {
     "title": 300,
     "sort_title": 300,
     "original_title": 300,
+    "release_title": 300,
     "year": 40,
     "barcode": 160,
     "format": 80,
@@ -39247,6 +39257,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
         SET title=%s,
             sort_title=%s,
             original_title=%s,
+            release_title=%s,
             year=%s,
             barcode=%s,
             release_date=%s,
@@ -39266,6 +39277,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             payload["title"],
             payload["sort_title"],
             payload["original_title"],
+            payload["release_title"],
             payload["year"],
             payload["barcode"],
             payload["release_date"],
@@ -39330,6 +39342,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "title": title,
         "sort_title": pick_text("sort_title", "sortTitle"),
         "original_title": pick_text("original_title", "originalTitle"),
+        "release_title": pick_text("release_title", "releaseTitle"),
         "year": pick_text("year"),
         "barcode": pick_text("barcode"),
         "release_date": release_date,
@@ -39477,6 +39490,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 title,
                 sort_title,
                 original_title,
+                release_title,
                 year,
                 release_date,
                 format,
@@ -39964,6 +39978,8 @@ def personal_list_movie_snapshot(conn, movie_id: UUID) -> dict[str, Any]:
             "movie_title": movie.get("title"),
             "sort_title": movie.get("sort_title"),
             "original_title": movie.get("original_title"),
+            "release_title": movie.get("release_title"),
+            "releaseTitle": movie.get("release_title"),
             "year": movie.get("year"),
             "movie_year": movie.get("year"),
             "format": movie.get("format"),
@@ -44092,6 +44108,7 @@ def apply_movie_upsert(
                 title,
                 sort_title,
                 original_title,
+                release_title,
                 year,
                 release_date,
                 format,
@@ -44112,7 +44129,7 @@ def apply_movie_upsert(
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -44120,6 +44137,7 @@ def apply_movie_upsert(
                 title=COALESCE(EXCLUDED.title, movies.title),
                 sort_title=COALESCE(EXCLUDED.sort_title, movies.sort_title),
                 original_title=COALESCE(EXCLUDED.original_title, movies.original_title),
+                release_title=COALESCE(EXCLUDED.release_title, movies.release_title),
                 year=COALESCE(EXCLUDED.year, movies.year),
                 release_date=COALESCE(EXCLUDED.release_date, movies.release_date),
                 format=COALESCE(EXCLUDED.format, movies.format),
@@ -44144,6 +44162,7 @@ def apply_movie_upsert(
                 title,
                 fields["sort_title"],
                 fields["original_title"],
+                fields["release_title"],
                 fields["year"],
                 fields["release_date"],
                 fields["format"],
@@ -47426,6 +47445,7 @@ def register_routes(flask_app: Flask) -> None:
                             title,
                             sort_title,
                             original_title,
+                            release_title,
                             year,
                             barcode,
                             release_date,
@@ -47441,7 +47461,7 @@ def register_routes(flask_app: Flask) -> None:
                             created_at,
                             updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             movie_id,
@@ -47449,6 +47469,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["title"],
                             payload["sort_title"],
                             payload["original_title"],
+                            payload["release_title"],
                             payload["year"],
                             payload["barcode"],
                             payload["release_date"],
