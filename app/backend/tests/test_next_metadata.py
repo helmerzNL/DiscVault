@@ -39,6 +39,22 @@ except Exception:  # pragma: no cover
 
 
 class NextScannedTitleTests(unittest.TestCase):
+    def test_bluray_movie_title_from_release_title_strips_format_and_country(self):
+        cleaner = bluray_com_plugin._movie_title_from_release_title
+        self.assertEqual(
+            cleaner("Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)"),
+            "Inception",
+        )
+        self.assertEqual(
+            cleaner("A Star Is Born 4K Blu-ray (4K Ultra HD + Blu-ray + Digital) (France)"),
+            "A Star Is Born",
+        )
+        self.assertEqual(cleaner("Skyfall 4K Blu-ray"), "Skyfall")
+        self.assertEqual(cleaner("The Matrix DVD"), "The Matrix")
+        self.assertEqual(cleaner("The Dark Knight Blu-ray (United States)"), "The Dark Knight")
+        # A plain film title is returned untouched.
+        self.assertEqual(cleaner("Heat"), "Heat")
+
     def test_clean_scanned_title_strips_packaging_noise(self):
         self.assertEqual(
             _clean_scanned_title("John Wick (4K Ultra HD + Blu-ray) (UK Import)"),
@@ -52,6 +68,26 @@ class NextScannedTitleTests(unittest.TestCase):
         # Space-separated multi-token format tails collapse to the film title.
         self.assertEqual(_clean_scanned_title("Inception 4K Blu-ray"), "Inception")
         self.assertEqual(_clean_scanned_title("Dune Ultra HD Blu-ray 3D"), "Dune")
+        # A trailing region tag after a format group strands a bare format token
+        # ("4K Blu-ray") that the format-noise stripper alone cannot reach. The
+        # exact shape Blu-ray.com returns for an Inception 4K disc.
+        self.assertEqual(
+            _clean_scanned_title("Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)"),
+            "Inception",
+        )
+        self.assertEqual(
+            _clean_scanned_title(
+                "A Star Is Born 4K Blu-ray (4K Ultra HD + Blu-ray + Digital) (France)"
+            ),
+            "A Star Is Born",
+        )
+        # Multi-word country tags strip too, without eating a leading title word.
+        self.assertEqual(
+            _clean_scanned_title("Skyfall Blu-ray (United Kingdom)"), "Skyfall"
+        )
+        self.assertEqual(
+            _clean_scanned_title("United 93 Blu-ray (United States)"), "United 93"
+        )
         # A subtitle after a colon must be preserved.
         self.assertEqual(_clean_scanned_title("Mad Max: Fury Road (Blu-ray)"), "Mad Max: Fury Road")
         # Titles without noise are returned unchanged.
@@ -63,6 +99,12 @@ class NextScannedTitleTests(unittest.TestCase):
         self.assertEqual(_parse_import_country("John Wick (UK Import)"), ("United Kingdom", ""))
         self.assertEqual(_parse_import_country("Suspiria (Italian Import)"), ("Italy", ""))
         self.assertEqual(_parse_import_country("The Matrix (US Import)"), ("United States", ""))
+        # Bare country tag in brackets (no "Import" keyword), e.g. Blu-ray.com.
+        self.assertEqual(
+            _parse_import_country("Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)"),
+            ("France", ""),
+        )
+        self.assertEqual(_parse_import_country("Skyfall Blu-ray (United Kingdom)"), ("United Kingdom", ""))
         # Unknown nationality falls back to a free-text region note.
         self.assertEqual(_parse_import_country("Some Film (Xyz Import)"), ("", "Xyz Import"))
         # Region codes land in the region note.
@@ -98,6 +140,31 @@ class NextScannedTitleTests(unittest.TestCase):
         )
         self.assertEqual(normalized["movieUpdates"]["title"], "Inception")
         self.assertNotIn("release_title", normalized["movieUpdates"])
+
+    def test_canonicalize_bluray_release_with_trailing_country(self):
+        # Reproduces the real Blu-ray.com payload for the Inception 4K disc when
+        # MovieVault is disabled: the plugin's movie.title still carries format
+        # noise and the raw release title ends in a "(France)" region tag. The
+        # canonical title must still resolve to the bare film title.
+        normalized = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "releaseTitle": "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)",
+                "movie": {"title": "Inception 4K Blu-ray (4K Ultra HD + Blu-ray)"},
+                "release": {
+                    "title": "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)"
+                },
+            },
+        )
+        movie_updates = normalized["movieUpdates"]
+        self.assertEqual(movie_updates["title"], "Inception")
+        self.assertEqual(
+            movie_updates["release_title"],
+            "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)",
+        )
+        self.assertEqual(movie_updates["country"], "France")
 
     def test_canonicalize_region_hint_lands_as_regions_array(self):
         normalized = canonicalize_plugin_result(
