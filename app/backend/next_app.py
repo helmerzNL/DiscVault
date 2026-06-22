@@ -41299,6 +41299,76 @@ def sync_person_profile_media(
     }
 
 
+def merge_person_awards(*award_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge award lists from multiple providers with the shared dedupe rules.
+
+    De-duplicates on ``(awardWikidataId or award, year, workWikidataId or work)``
+    and collapses a nomination into a win when both share that key. Earlier lists
+    take precedence on otherwise-identical (same-result) duplicates.
+    """
+    deduped: dict[tuple, dict[str, Any]] = {}
+    order: list[tuple] = []
+    for awards in award_lists:
+        for entry in awards or []:
+            if not isinstance(entry, dict):
+                continue
+            award = clean_text(entry.get("award"))
+            award_qid = clean_text(entry.get("awardWikidataId"))
+            if not award and not award_qid:
+                continue
+            work = clean_text(entry.get("work"))
+            work_qid = clean_text(entry.get("workWikidataId"))
+            year = entry.get("year")
+            result = clean_text(entry.get("result")).lower()
+            result = "won" if result == "won" else "nominated"
+            normalized = {
+                "award": award or award_qid,
+                "awardWikidataId": award_qid,
+                "category": clean_text(entry.get("category")),
+                "year": year,
+                "work": work,
+                "workWikidataId": work_qid,
+                "workTmdbId": entry.get("workTmdbId"),
+                "result": result,
+                "source": clean_text(entry.get("source")),
+                "sourceRef": clean_text(entry.get("sourceRef")),
+            }
+            key = (award_qid or award, year, work_qid or work)
+            existing = deduped.get(key)
+            if existing is None:
+                deduped[key] = normalized
+                order.append(key)
+            elif existing.get("result") == "nominated" and result == "won":
+                deduped[key] = normalized
+    return [deduped[key] for key in order]
+
+
+def group_person_awards(awards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group a flat award list by award name for display (mirrors wikidata_awards)."""
+    groups: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for award in awards or []:
+        key = clean_text(award.get("awardWikidataId")) or clean_text(award.get("award"))
+        if not key:
+            continue
+        if key not in groups:
+            groups[key] = {
+                "award": award.get("award") or "",
+                "awardWikidataId": award.get("awardWikidataId") or "",
+                "items": [],
+            }
+            order.append(key)
+        groups[key]["items"].append(award)
+    result = []
+    for key in order:
+        group = groups[key]
+        group["items"].sort(key=lambda item: -(item.get("year") or 0))
+        group["wins"] = sum(1 for item in group["items"] if item.get("result") == "won")
+        group["nominations"] = sum(1 for item in group["items"] if item.get("result") == "nominated")
+        result.append(group)
+    return result
+
+
 def person_receiver_contribution_payload(
     *,
     person_id: UUID | str,
@@ -41381,6 +41451,7 @@ def refresh_person_metadata(
     merged_aliases: list[str] = []
     merged_imdb = ""
     merged_profiles: list[Any] = []
+    provider_source_awards: list[dict[str, Any]] = []
     primary_plugin: dict[str, Any] | None = None
     primary_execution: dict[str, Any] = {}
     primary_result: dict[str, Any] = {}
@@ -41424,12 +41495,14 @@ def refresh_person_metadata(
         provider_imdb = clean_text(result.get("imdbId") or result.get("imdb_id"))
         provider_profiles = list(result.get("profiles") or [])
         provider_localizations = result.get("localizations") or []
+        provider_awards = [item for item in (result.get("awards") or []) if isinstance(item, dict)]
         if not (
             any(normalized.values())
             or provider_aliases
             or provider_imdb
             or provider_profiles
             or provider_localizations
+            or provider_awards
         ):
             continue
         if primary_plugin is None:
@@ -41448,6 +41521,8 @@ def refresh_person_metadata(
             merged_imdb = provider_imdb
         if not merged_profiles and provider_profiles:
             merged_profiles = provider_profiles
+        if provider_awards:
+            provider_source_awards.extend(provider_awards)
         provider_language = clean_text(result.get("language")) or primary_language or "en-US"
         for localization in provider_localizations:
             lang = clean_text(localization.get("lang"))
@@ -41517,6 +41592,16 @@ def refresh_person_metadata(
         )
         awards_status = "error"
 
+    # Fold awards that arrived inline from metadata-source providers (e.g. MovieVault
+    # person_details) into the Wikidata substep output, de-duplicated with the shared
+    # won>nominated rules. Only engage the merge when a provider actually supplied
+    # awards so the single-source Wikidata behaviour stays byte-identical otherwise.
+    if provider_source_awards:
+        merged_awards = merge_person_awards(awards, provider_source_awards)
+        awards = merged_awards
+        award_groups = group_person_awards(merged_awards)
+        awards_hit = bool(merged_awards)
+
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
     preview_metadata = preview_person.get("metadata") if isinstance(preview_person.get("metadata"), dict) else {}
@@ -41539,7 +41624,11 @@ def refresh_person_metadata(
     if awards_hit:
         preview_metadata["awards"] = awards
         preview_metadata["awardGroups"] = award_groups
-        preview_metadata["awards_source"] = clean_text(awards_result.get("provider")) or "wikidata"
+        preview_metadata["awards_source"] = (
+            clean_text(awards_result.get("provider"))
+            or clean_text((awards[0] if awards else {}).get("source"))
+            or "wikidata"
+        )
         preview_metadata["awards_source_ref"] = clean_text(awards_result.get("sourceRef"))
         preview_metadata["awards_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     preview_metadata["person_metadata_source"] = updates["source"]
