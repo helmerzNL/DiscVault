@@ -1614,6 +1614,196 @@ def box_set_candidates(payload, context=None):
     }
 
 
+def _person_results(payload):
+    """Normalize the people read-API response into a list of person objects.
+
+    ``/api/v1/people`` returns ``{"results": [...]}`` while ``/api/v1/people/{id}``
+    returns a single object (or a ``{"error": ...}`` envelope on 404).
+    """
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        results = payload.get("results")
+        if isinstance(results, list):
+            return [item for item in results if isinstance(item, dict)]
+        if payload.get("error"):
+            return []
+        if payload.get("id") or payload.get("movieVaultId") or payload.get("movievault_id") or payload.get("name"):
+            return [payload]
+    return []
+
+
+def _person_localizations(item):
+    """Lift ``biography_<iso639-1>`` keys into localization rows."""
+    rows = []
+    seen = set()
+    for key, value in (item or {}).items():
+        if not isinstance(key, str):
+            continue
+        lowered = key.lower()
+        if not lowered.startswith("biography_"):
+            continue
+        lang = key[len("biography_"):].strip()
+        biography = _text(value)
+        if not lang or not biography:
+            continue
+        norm = lang.lower()
+        if norm in seen:
+            continue
+        seen.add(norm)
+        rows.append({"lang": lang, "biography": biography, "source": PROVIDER_ID})
+    return rows
+
+
+def _person_profiles(item):
+    """Public https-only, de-duplicated profile image URLs (cap 12)."""
+    urls = []
+    seen = set()
+    for value in (item.get("profiles") or []):
+        text = _text(value)
+        if not text.lower().startswith("https://"):
+            continue
+        if text in seen:
+            continue
+        seen.add(text)
+        urls.append(text)
+    return urls[:12]
+
+
+def _person_award_year(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    text = _text(value)
+    return int(text) if text.isdigit() else None
+
+
+def _person_award_tmdb_id(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    text = _text(value)
+    return int(text) if text.isdigit() else None
+
+
+def _person_awards(item):
+    """Normalize MovieVault person awards to the shared award schema."""
+    awards = []
+    for entry in (item.get("awards") or []):
+        if not isinstance(entry, dict):
+            continue
+        award = _text(entry.get("award"))
+        award_qid = _text(entry.get("awardWikidataId") or entry.get("award_wikidata_id"))
+        if not award and not award_qid:
+            continue
+        result = _text(entry.get("result")).lower()
+        awards.append(
+            {
+                "award": award or award_qid,
+                "awardWikidataId": award_qid,
+                "category": _text(entry.get("category")),
+                "year": _person_award_year(entry.get("year")),
+                "work": _text(entry.get("work")),
+                "workWikidataId": _text(entry.get("workWikidataId") or entry.get("work_wikidata_id")),
+                "workTmdbId": _person_award_tmdb_id(entry.get("workTmdbId") or entry.get("work_tmdb_id")),
+                "result": "won" if result == "won" else "nominated",
+                "source": _text(entry.get("source")) or PROVIDER_ID,
+                "sourceRef": _text(entry.get("sourceRef") or entry.get("source_ref")),
+            }
+        )
+    return awards
+
+
+def _person_payload(item, *, language="", source_ref=""):
+    name = _text(item.get("name"))
+    if not name:
+        return {"status": "miss", "provider": PROVIDER_ID, "reason": "not_found"}
+    localizations = _person_localizations(item)
+    configured = str(language or "").strip().lower()
+    bios_by_lang = {row["lang"].lower(): row["biography"] for row in localizations}
+    biography = _text(item.get("biography"))
+    preferred = bios_by_lang.get(configured) or next(
+        (bio for lang_key, bio in bios_by_lang.items() if lang_key.split("-")[0] == configured.split("-")[0]),
+        "",
+    )
+    if preferred:
+        biography = preferred
+    elif not biography and localizations:
+        biography = localizations[0]["biography"]
+    profile_url = _image_url(item.get("profileUrl") or item.get("profile_url"))
+    profiles = _person_profiles(item)
+    if profile_url and profile_url.lower().startswith("https://") and profile_url not in profiles:
+        profiles.insert(0, profile_url)
+    aliases = [_text(alias) for alias in (item.get("alsoKnownAs") or item.get("also_known_as") or []) if _text(alias)]
+    movievault_id = _text(item.get("id") or item.get("movieVaultId") or item.get("movievault_id"))
+    return {
+        "status": "hit",
+        "provider": PROVIDER_ID,
+        "sourceLabel": PROVIDER_LABEL,
+        "sourceRef": source_ref or (f"movievault:person:{movievault_id}" if movievault_id else ""),
+        "movieVaultId": movievault_id,
+        "tmdbId": _text(item.get("tmdbId") or item.get("tmdb_id")),
+        "imdbId": _text(item.get("imdbId") or item.get("imdb_id")),
+        "name": name,
+        "biography": biography,
+        "birthday": _text(item.get("birthday") or item.get("birthDate") or item.get("birth_date")),
+        "deathday": _text(item.get("deathday") or item.get("deathDate") or item.get("death_date")),
+        "placeOfBirth": _text(item.get("placeOfBirth") or item.get("place_of_birth")),
+        "knownFor": _text(item.get("knownFor") or item.get("known_for")),
+        "alsoKnownAs": aliases,
+        "profileUrl": profile_url,
+        "profiles": profiles,
+        "awards": _person_awards(item),
+        "localizations": localizations,
+        "language": _text(language),
+    }
+
+
+def person_details(payload, context=None):
+    payload = payload or {}
+    if not _movievault_enabled(context):
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "disabled"}
+    tmdb_id = _text(payload.get("tmdbId") or payload.get("tmdb_id"))
+    imdb_id = _text(payload.get("imdbId") or payload.get("imdb_id"))
+    movievault_id = _text(
+        payload.get("movieVaultId")
+        or payload.get("movievaultId")
+        or payload.get("movievault_id")
+        or payload.get("personId")
+        or payload.get("id")
+    )
+    name = _text(payload.get("name") or payload.get("q"))
+    language = _text(_settings(context).get("language")) or "en-US"
+    item = {}
+    source_ref = ""
+    if movievault_id.startswith("mv_person_"):
+        data = _get(context or {}, f"/api/v1/people/{quote(movievault_id)}")
+        results = _person_results(data)
+        if results:
+            item = results[0]
+            source_ref = f"movievault:person:{movievault_id}"
+    if not item and (tmdb_id or imdb_id or name):
+        data = _get(
+            context or {},
+            "/api/v1/people",
+            tmdbId=tmdb_id,
+            imdbId=imdb_id,
+            q="" if (tmdb_id or imdb_id) else name,
+        )
+        results = _person_results(data)
+        if results:
+            item = results[0]
+            if tmdb_id:
+                source_ref = f"movievault:person:tmdb:{tmdb_id}"
+            elif imdb_id:
+                source_ref = f"movievault:person:imdb:{imdb_id}"
+    if not item:
+        return {"status": "miss", "provider": PROVIDER_ID, "reason": "not_found"}
+    return _person_payload(item, language=language, source_ref=source_ref)
+
+
 def _safe_contribution_value(value):
     if isinstance(value, dict):
         clean = {}

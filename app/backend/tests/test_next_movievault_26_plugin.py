@@ -50,7 +50,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.4.0")
+        self.assertEqual(manifest["version"], "1.5.0")
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
@@ -58,6 +58,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertIn("prepare_container_update", manifest["capabilities"])
         self.assertIn("prepare_barcode_update", manifest["capabilities"])
         self.assertIn("member_intelligence", manifest["capabilities"])
+        self.assertIn("person_details", manifest["capabilities"])
 
     def test_movievault_26_runtime_exposes_receiver_observability_hooks(self):
         discovery = discover_plugins()
