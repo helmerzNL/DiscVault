@@ -350,6 +350,7 @@ SCHEMA_COLUMNS = [
     ("title",                "TEXT NOT NULL"),
     ("sort_title",           "TEXT"),
     ("original_title",       "TEXT"),
+    ("release_title",        "TEXT"),
     # Release info
     ("year",                 "TEXT"),
     ("release_date",         "TEXT"),
@@ -2547,6 +2548,104 @@ def _detect_format_from_upc(raw_title: str) -> str:
     return ""
 
 
+# Keywords that mark a bracketed/parenthetical group (or trailing segment) as
+# packaging/format/edition/region noise rather than part of the film title.
+_SCANNED_TITLE_NOISE_RE = re.compile(
+    r'blu[- ]?ray|ultra\s*hd|\buhd\b|\b4k\b|\bdvd\b|\b3d\b|\bvhs\b|\bhddvd\b|hd[- ]?dvd'
+    r'|steel\s*book|steelbook|limited\s+edition|collector|special\s+edition'
+    r'|digibook|mediabook|slipcover|slipcase|box\s*set|boxset|gift\s*set'
+    r'|\bimport\b|region[\s-]*(?:free|locked|[abc]|[0-9])'
+    r'|\bpal\b|\bntsc\b|remaster|anniversary\s+edition|uncut|extended\s+edition'
+    r'|\bocard\b|o[- ]card|amaray|digipack|digipak',
+    re.I,
+)
+
+
+def _clean_scanned_title(raw_title: str) -> str:
+    """Return the bare film title from a UPC/EAN packaging title.
+
+    Strips bracket/parenthetical groups and trailing segments that contain
+    format/edition/region noise (e.g. "(4K Ultra HD + Blu-ray)", "[UK Import]",
+    "- Steelbook"). Keeps a subtitle after a colon. Returns the original title
+    when nothing recognisable remains."""
+    title = (raw_title or "").strip()
+    if not title:
+        return ""
+
+    def _strip_groups(text: str, open_ch: str, close_ch: str) -> str:
+        pattern = re.compile(re.escape(open_ch) + r'[^' + re.escape(open_ch + close_ch) + r']*' + re.escape(close_ch))
+        prev = None
+        while prev != text:
+            prev = text
+            text = pattern.sub(
+                lambda m: ' ' if _SCANNED_TITLE_NOISE_RE.search(m.group(0)) else m.group(0),
+                text,
+            )
+        return text
+
+    cleaned = _strip_groups(title, '(', ')')
+    cleaned = _strip_groups(cleaned, '[', ']')
+    cleaned = _strip_groups(cleaned, '{', '}')
+
+    # Drop trailing " - <noise...>" / " | <noise...>" segments (distributor/format tails).
+    cleaned = re.sub(r'\s[-|/]\s*[^-|/]*(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')[^-|/]*$', ' ', cleaned, flags=re.I)
+    # Drop bare trailing format/region tokens left dangling.
+    cleaned = re.sub(r'[\s,;:/+&-]+(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')\s*$', ' ', cleaned, flags=re.I)
+
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip(' -_/|,;:+&')
+    return cleaned or title
+
+
+# Map nationality/country adjectives or codes from "<X> Import" packaging hints to
+# a canonical country name. Unknown values fall back to a free-text region note.
+_IMPORT_COUNTRY_MAP = {
+    "uk": "United Kingdom", "u.k.": "United Kingdom", "british": "United Kingdom",
+    "england": "United Kingdom", "us": "United States", "u.s.": "United States",
+    "usa": "United States", "american": "United States", "italian": "Italy",
+    "italy": "Italy", "german": "Germany", "germany": "Germany", "french": "France",
+    "france": "France", "japanese": "Japan", "japan": "Japan", "spanish": "Spain",
+    "spain": "Spain", "dutch": "Netherlands", "netherlands": "Netherlands",
+    "belgian": "Belgium", "belgium": "Belgium", "korean": "South Korea",
+    "korea": "South Korea", "swedish": "Sweden", "sweden": "Sweden",
+    "danish": "Denmark", "denmark": "Denmark", "norwegian": "Norway",
+    "norway": "Norway", "finnish": "Finland", "finland": "Finland",
+    "australian": "Australia", "australia": "Australia", "canadian": "Canada",
+    "canada": "Canada", "nordic": "Nordic", "scandinavian": "Scandinavia",
+    "european": "Europe", "austrian": "Austria", "austria": "Austria",
+    "polish": "Poland", "poland": "Poland", "portuguese": "Portugal",
+    "portugal": "Portugal", "russian": "Russia", "russia": "Russia",
+    "chinese": "China", "china": "China",
+}
+
+
+def _parse_import_country(raw_title: str) -> tuple[str, str]:
+    """Detect a country/region hint from a packaging title.
+
+    Returns a (country, region_note) tuple. ``country`` is a canonical country
+    name when the import hint is recognised; otherwise ``region_note`` carries
+    the raw hint (e.g. "Region B") so it can land in the ``regions`` field.
+    Either value may be empty."""
+    text = raw_title or ""
+    if not text:
+        return "", ""
+
+    for match in re.finditer(r'([A-Za-z.][A-Za-z. ]*?)\s+import\b', text, flags=re.I):
+        phrase = match.group(1).strip().lower()
+        token = phrase.split()[-1] if phrase.split() else phrase
+        for key in (phrase, token):
+            mapped = _IMPORT_COUNTRY_MAP.get(key)
+            if mapped:
+                return mapped, ""
+        if phrase:
+            return "", f"{match.group(1).strip().title()} Import"
+
+    region_match = re.search(r'region[\s-]*(free|locked|[ABC]|[0-9])\b', text, flags=re.I)
+    if region_match:
+        return "", f"Region {region_match.group(1).upper()}"
+
+    return "", ""
+
+
 def _titles_overlap(candidate: str, tmdb_title: str, min_ratio: float = 0.30) -> bool:
     """Return True if the TMDb title shares enough significant words with the search candidate.
     Prevents a distributor name like 'Studio Canal' from matching an unrelated TMDb film.
@@ -2941,6 +3040,8 @@ def _movievault_fallback_contribution_template() -> dict:
                 "fields": {
                     "barcode": {"type": "string"},
                     "title": localized,
+                    "movieTitle": {"type": "string"},
+                    "tmdbTitle": {"type": "string"},
                     "country": {"type": "string"},
                     "language": {"type": "string"},
                     "format": {"type": "string"},
@@ -3674,6 +3775,18 @@ def _movievault_raw_payload(source: dict, entity_type: str) -> dict:
             value = _movievault_public_image_sources(value)
         if value not in (None, "", [], {}):
             raw[dst_key] = value
+    if entity_type == "release":
+        # The MovieVault release entity carries the PHYSICAL/packaging title; the
+        # canonical film title travels as movieTitle/tmdbTitle. DiscVault keeps the
+        # clean title in `title` and the raw scanned title in `release_title`.
+        clean_title = str(source.get("title") or "").strip()
+        scanned_title = str(source.get("release_title") or "").strip()
+        physical_title = scanned_title or clean_title
+        if physical_title:
+            raw["title"] = physical_title
+        if clean_title:
+            raw.setdefault("movieTitle", clean_title)
+            raw.setdefault("tmdbTitle", clean_title)
     return raw
 
 
@@ -8112,7 +8225,7 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
 
     if not info and raw_title:
         info = {f: "" for f in ALL_FIELDS}
-        info["title"] = raw_title
+        info["title"] = _clean_scanned_title(raw_title)
         source = "UPCItemDB title fallback"
         _trace_add(attempts, "UPCItemDB", "partial", "title-only fallback")
 
@@ -8121,6 +8234,17 @@ def _lookup_metadata_for_barcode(barcode: str, attempts: list[str]) -> tuple[dic
         return None, source, None, metadata_candidates, raw_title
 
     info = _finalize_metadata_info(info)
+    if raw_title:
+        # Preserve the full scanned/packaging title (maps to the MovieVault
+        # release entity) and derive country/region from import hints without
+        # overwriting richer metadata already resolved above.
+        if not str(info.get("release_title") or "").strip():
+            info["release_title"] = raw_title
+        import_country, import_region = _parse_import_country(raw_title)
+        if import_country and not str(info.get("country") or "").strip():
+            info["country"] = import_country
+        if import_region and not str(info.get("regions") or "").strip():
+            info["regions"] = import_region
     _metadata_debug_fields("Barcode metadata lookup result", info, source=source or "Barcode lookup")
     box_set_proposal = (info or {}).get("box_set_proposal")
     _log_box_set_proposal(barcode, box_set_proposal)
@@ -9695,6 +9819,7 @@ def lookup(barcode):
                 yield emit(2, "Metadata Sources", "miss", _metadata_source_order_log())
                 add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
                 yield json.dumps({"type": "done", "status": "not_found", "barcode": barcode, "raw_title": raw_title,
+                                  "clean_title": _clean_scanned_title(raw_title or ""),
                                   "detected_format": _detect_format_from_upc(raw_title or "")}) + "\n"
         except Exception as e:
             if conn is not None:
@@ -9768,6 +9893,7 @@ def _lookup_sync(barcode):
                             "detected_format": _detect_format_from_upc(raw_title or "")})
         add_log("lookup", f"Barcode {barcode} niet gevonden", f"Backends: {_trace_summary(attempts)}", "warn")
         return jsonify({"status": "not_found", "barcode": barcode, "raw_title": raw_title,
+                        "clean_title": _clean_scanned_title(raw_title or ""),
                         "detected_format": _detect_format_from_upc(raw_title or "")})
     except Exception as e:
         add_log("lookup", f"Fout bij opzoeken barcode {barcode}", str(e), "error")
