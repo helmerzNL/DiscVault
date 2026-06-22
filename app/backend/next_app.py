@@ -25964,10 +25964,14 @@ def ui_preview_html(
       let cleaned = stripGroups(title, /\\(([^()]*)\\)/g);
       cleaned = stripGroups(cleaned, /\\[([^\\[\\]]*)\\]/g);
       cleaned = stripGroups(cleaned, /\\{([^{}]*)\\}/g);
-      const tail = new RegExp(" ?[-|/] *[^-|/]*(?:" + SCAN_TITLE_NOISE_RE.source + ")[^-|/]*$", "i");
+      const tail = new RegExp(" [-|/] *[^-|/]*(?:" + SCAN_TITLE_NOISE_RE.source + ")[^-|/]*$", "i");
       cleaned = cleaned.replace(tail, " ");
       const bare = new RegExp("[ ,;:/+&-]+(?:" + SCAN_TITLE_NOISE_RE.source + ") *$", "i");
-      cleaned = cleaned.replace(bare, " ");
+      let barePrev = null;
+      while (barePrev !== cleaned) {
+        barePrev = cleaned;
+        cleaned = cleaned.replace(bare, "").replace(/\\s+$/, "");
+      }
       cleaned = cleaned.replace(/\\s{2,}/g, " ").replace(/^[\\s\\-_/|,;:+&]+|[\\s\\-_/|,;:+&]+$/g, "");
       return cleaned || title;
     }

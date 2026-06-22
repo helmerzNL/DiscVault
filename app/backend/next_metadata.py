@@ -1295,8 +1295,14 @@ def _clean_scanned_title(raw_title: str) -> str:
 
     # Drop trailing " - <noise...>" / " | <noise...>" segments (distributor/format tails).
     cleaned = re.sub(r'\s[-|/]\s*[^-|/]*(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')[^-|/]*$', ' ', cleaned, flags=re.I)
-    # Drop bare trailing format/region tokens left dangling.
-    cleaned = re.sub(r'[\s,;:/+&-]+(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')\s*$', ' ', cleaned, flags=re.I)
+    # Drop bare trailing format/region tokens, iteratively so space-separated
+    # multi-token tails like "4K Blu-ray" or "Ultra HD Blu-ray 3D" collapse to
+    # the film title instead of leaving a dangling "4K".
+    bare_tail_re = re.compile(r'[\s,;:/+&-]+(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')\s*$', re.I)
+    prev = None
+    while prev != cleaned:
+        prev = cleaned
+        cleaned = bare_tail_re.sub('', cleaned).rstrip()
 
     cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip(' -_/|,;:+&')
     return cleaned or title
@@ -1403,6 +1409,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
                 metadata_updates[key] = value
 
     collect(movie_source)
+    movie_source_title = clean_text(movie_updates.get("title"))
     collect(release_source, release=True)
 
     technical = result.get("technicalSpecs") or result.get("technical_specs") or {}
@@ -1424,14 +1431,24 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         raw_release_title = candidate_title
     if raw_release_title:
         movie_updates.setdefault("release_title", raw_release_title)
-        cleaned_title = _clean_scanned_title(raw_release_title)
         current_title = clean_text(movie_updates.get("title"))
-        if cleaned_title and (
-            not current_title
-            or current_title == raw_release_title
-            or _SCANNED_TITLE_NOISE_RE.search(current_title)
+        if (
+            movie_source_title
+            and movie_source_title != raw_release_title
+            and not _SCANNED_TITLE_NOISE_RE.search(movie_source_title)
         ):
-            movie_updates["title"] = cleaned_title
+            # The plugin already supplied a clean canonical movie title (e.g.
+            # Blu-ray.com derives one alongside the raw release title). Keep it
+            # and don't let the raw release title collected afterwards clobber it.
+            movie_updates["title"] = movie_source_title
+        else:
+            cleaned_title = _clean_scanned_title(raw_release_title)
+            if cleaned_title and (
+                not current_title
+                or current_title == raw_release_title
+                or _SCANNED_TITLE_NOISE_RE.search(current_title)
+            ):
+                movie_updates["title"] = cleaned_title
         import_country, import_region = _parse_import_country(raw_release_title)
         if import_country and not value_present(movie_updates.get("country")):
             movie_updates["country"] = import_country
@@ -1619,8 +1636,12 @@ def should_apply_field(
         return False, "incoming value is empty"
     if field in METADATA_LOCAL_ONLY_FIELDS:
         return False, "field is local-only"
-    if release_priority and field in METADATA_DISPLAY_TITLE_FIELDS:
-        return False, "release source cannot update canonical display title"
+    if (
+        release_priority
+        and field in METADATA_DISPLAY_TITLE_FIELDS
+        and value_present(current_value)
+    ):
+        return False, "release source cannot overwrite canonical display title"
     format_ok, format_reason = field_format_safe(field, target_format, source_format, source_context=source_context)
     if not format_ok:
         return False, format_reason
