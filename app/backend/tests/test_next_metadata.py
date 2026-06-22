@@ -18,6 +18,8 @@ sys.modules.setdefault(
 )
 
 from app.backend.next_metadata import canonicalize_plugin_result
+from app.backend.next_metadata import _clean_scanned_title
+from app.backend.next_metadata import _parse_import_country
 from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import metadata_field_decisions_with_write_state
 from app.backend.next_metadata import metadata_fetch_audit_payload
@@ -34,6 +36,79 @@ try:
     from bs4 import BeautifulSoup
 except Exception:  # pragma: no cover
     BeautifulSoup = None
+
+
+class NextScannedTitleTests(unittest.TestCase):
+    def test_clean_scanned_title_strips_packaging_noise(self):
+        self.assertEqual(
+            _clean_scanned_title("John Wick (4K Ultra HD + Blu-ray) (UK Import)"),
+            "John Wick",
+        )
+        self.assertEqual(_clean_scanned_title("Heat [Steelbook]"), "Heat")
+        self.assertEqual(
+            _clean_scanned_title("Blade Runner 2049 - Limited Edition"),
+            "Blade Runner 2049",
+        )
+        # A subtitle after a colon must be preserved.
+        self.assertEqual(_clean_scanned_title("Mad Max: Fury Road (Blu-ray)"), "Mad Max: Fury Road")
+        # Titles without noise are returned unchanged.
+        self.assertEqual(_clean_scanned_title("Inception"), "Inception")
+        # Never return an empty string when only noise is present.
+        self.assertTrue(_clean_scanned_title("(Blu-ray)"))
+
+    def test_parse_import_country_maps_known_hints(self):
+        self.assertEqual(_parse_import_country("John Wick (UK Import)"), ("United Kingdom", ""))
+        self.assertEqual(_parse_import_country("Suspiria (Italian Import)"), ("Italy", ""))
+        self.assertEqual(_parse_import_country("The Matrix (US Import)"), ("United States", ""))
+        # Unknown nationality falls back to a free-text region note.
+        self.assertEqual(_parse_import_country("Some Film (Xyz Import)"), ("", "Xyz Import"))
+        # Region codes land in the region note.
+        self.assertEqual(_parse_import_country("Some Film (Region B)"), ("", "Region B"))
+        # No hint at all.
+        self.assertEqual(_parse_import_country("Plain Title"), ("", ""))
+
+    def test_canonicalize_splits_release_title_from_clean_title(self):
+        normalized = canonicalize_plugin_result(
+            "bluray_com",
+            "movie_details",
+            {
+                "status": "hit",
+                "releaseTitle": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+                "movie": {"title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)"},
+            },
+        )
+        movie_updates = normalized["movieUpdates"]
+        self.assertEqual(movie_updates["title"], "John Wick")
+        self.assertEqual(
+            movie_updates["release_title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+        self.assertEqual(movie_updates["country"], "United Kingdom")
+        self.assertEqual(normalized["releaseTitle"], "John Wick (4K Ultra HD + Blu-ray) (UK Import)")
+        self.assertEqual(normalized["cleanTitle"], "John Wick")
+
+    def test_canonicalize_keeps_clean_title_untouched_without_noise(self):
+        normalized = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {"status": "hit", "movie": {"title": "Inception"}},
+        )
+        self.assertEqual(normalized["movieUpdates"]["title"], "Inception")
+        self.assertNotIn("release_title", normalized["movieUpdates"])
+
+    def test_canonicalize_region_hint_lands_as_regions_array(self):
+        normalized = canonicalize_plugin_result(
+            "bluray_com",
+            "movie_details",
+            {
+                "status": "hit",
+                "releaseTitle": "Some Film (Region B)",
+                "movie": {"title": "Some Film (Region B)"},
+            },
+        )
+        # `regions` must be a JSONB-friendly list, not a bare string.
+        self.assertEqual(normalized["technicalUpdates"]["regions"], ["Region B"])
+        self.assertEqual(normalized["movieUpdates"]["title"], "Some Film")
 
 
 class NextMetadataPolicyTests(unittest.TestCase):
