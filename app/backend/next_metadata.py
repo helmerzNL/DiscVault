@@ -43,6 +43,7 @@ METADATA_MAIN_FIELDS = {
     "title",
     "sort_title",
     "original_title",
+    "release_title",
     "year",
     "release_date",
     "format",
@@ -223,6 +224,8 @@ METADATA_NAMESPACE = uuid.UUID("7c76309b-063d-4c63-b925-2f49fdad332c")
 MOVIE_FIELD_ALIASES = {
     "sortTitle": "sort_title",
     "originalTitle": "original_title",
+    "releaseTitle": "release_title",
+    "release_title": "release_title",
     "releaseDate": "release_date",
     "runtime": "runtime_minutes",
     "runtimeMinutes": "runtime_minutes",
@@ -1251,6 +1254,165 @@ def normalize_localization_entries(
     return rows[:80]
 
 
+# Keywords that mark a bracketed/parenthetical group (or trailing segment) as
+# packaging/format/edition/region noise rather than part of the film title.
+_SCANNED_TITLE_NOISE_RE = re.compile(
+    r'blu[- ]?ray|ultra\s*hd|\buhd\b|\b4k\b|\bdvd\b|\b3d\b|\bvhs\b|\bhddvd\b|hd[- ]?dvd'
+    r'|steel\s*book|steelbook|limited\s+edition|collector|special\s+edition'
+    r'|digibook|mediabook|slipcover|slipcase|box\s*set|boxset|gift\s*set'
+    r'|\bimport\b|region[\s-]*(?:free|locked|[abc]|[0-9])'
+    r'|\bpal\b|\bntsc\b|remaster|anniversary\s+edition|uncut|extended\s+edition'
+    r'|\bocard\b|o[- ]card|amaray|digipack|digipak',
+    re.I,
+)
+
+
+def _clean_scanned_title(raw_title: str) -> str:
+    """Return the bare film title from a UPC/EAN packaging title.
+
+    Strips bracket/parenthetical groups and trailing segments that contain
+    format/edition/region noise (e.g. "(4K Ultra HD + Blu-ray)", "[UK Import]",
+    "- Steelbook"). Keeps a subtitle after a colon. Returns the original title
+    when nothing recognisable remains."""
+    title = (raw_title or "").strip()
+    if not title:
+        return ""
+
+    def _strip_groups(text: str, open_ch: str, close_ch: str) -> str:
+        pattern = re.compile(re.escape(open_ch) + r'[^' + re.escape(open_ch + close_ch) + r']*' + re.escape(close_ch))
+        prev = None
+        while prev != text:
+            prev = text
+            text = pattern.sub(
+                lambda m: ' ' if _SCANNED_TITLE_NOISE_RE.search(m.group(0)) else m.group(0),
+                text,
+            )
+        return text
+
+    def _strip_trailing_meta_groups(text: str) -> str:
+        # Remove trailing bracketed groups that are pure region/import metadata
+        # (e.g. "(France)", "[UK Import]", "(Region B)"). The noise stripper above
+        # leaves these behind because a bare country name carries no format
+        # keyword, yet they strand a preceding bare format token (e.g. the
+        # "4K Blu-ray" in "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)")
+        # so it can no longer be recognised as a trailing token.
+        pattern = re.compile(r'\s*[\(\[\{]([^\(\)\[\]\{\}]*)[\)\]\}]\s*$')
+        prev_inner = None
+        while prev_inner != text:
+            prev_inner = text
+            match = pattern.search(text)
+            if not match:
+                break
+            inner = match.group(1)
+            if _SCANNED_TITLE_NOISE_RE.search(inner) or _group_is_region_meta(inner):
+                text = text[: match.start()].rstrip()
+        return text
+
+    # Drop trailing " - <noise...>" / " | <noise...>" segments (distributor/format tails).
+    tail_re = re.compile(r'\s[-|/]\s*[^-|/]*(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')[^-|/]*$', re.I)
+    # Drop bare trailing format/region tokens, iteratively so space-separated
+    # multi-token tails like "4K Blu-ray" or "Ultra HD Blu-ray 3D" collapse to
+    # the film title instead of leaving a dangling "4K".
+    bare_tail_re = re.compile(r'[\s,;:/+&-]+(?:' + _SCANNED_TITLE_NOISE_RE.pattern + r')\s*$', re.I)
+
+    cleaned = title
+    prev_outer = None
+    while prev_outer != cleaned:
+        prev_outer = cleaned
+        cleaned = _strip_groups(cleaned, '(', ')')
+        cleaned = _strip_groups(cleaned, '[', ']')
+        cleaned = _strip_groups(cleaned, '{', '}')
+        cleaned = _strip_trailing_meta_groups(cleaned)
+        cleaned = tail_re.sub(' ', cleaned)
+        prev_bare = None
+        while prev_bare != cleaned:
+            prev_bare = cleaned
+            cleaned = bare_tail_re.sub('', cleaned).rstrip()
+        cleaned = cleaned.strip()
+
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip(' -_/|,;:+&')
+    return cleaned or title
+
+
+# Map nationality/country adjectives or codes from "<X> Import" packaging hints to
+# a canonical country name. Unknown values fall back to a free-text region note.
+_IMPORT_COUNTRY_MAP = {
+    "uk": "United Kingdom", "u.k.": "United Kingdom", "british": "United Kingdom",
+    "england": "United Kingdom", "us": "United States", "u.s.": "United States",
+    "usa": "United States", "american": "United States", "italian": "Italy",
+    "italy": "Italy", "german": "Germany", "germany": "Germany", "french": "France",
+    "france": "France", "japanese": "Japan", "japan": "Japan", "spanish": "Spain",
+    "spain": "Spain", "dutch": "Netherlands", "netherlands": "Netherlands",
+    "belgian": "Belgium", "belgium": "Belgium", "korean": "South Korea",
+    "korea": "South Korea", "swedish": "Sweden", "sweden": "Sweden",
+    "danish": "Denmark", "denmark": "Denmark", "norwegian": "Norway",
+    "norway": "Norway", "finnish": "Finland", "finland": "Finland",
+    "australian": "Australia", "australia": "Australia", "canadian": "Canada",
+    "canada": "Canada", "nordic": "Nordic", "scandinavian": "Scandinavia",
+    "european": "Europe", "austrian": "Austria", "austria": "Austria",
+    "polish": "Poland", "poland": "Poland", "portuguese": "Portugal",
+    "portugal": "Portugal", "russian": "Russia", "russia": "Russia",
+    "chinese": "China", "china": "China",
+    "united states": "United States", "united kingdom": "United Kingdom",
+    "great britain": "United Kingdom",
+}
+
+
+# Region words that, together with the country names/adjectives above, mark a
+# bracketed group as pure region/import metadata (e.g. "(France)", "(UK Import)",
+# "(Region B)") rather than part of the film title.
+_REGION_META_WORDS = frozenset(
+    {word for key in _IMPORT_COUNTRY_MAP for word in key.split()}
+    | {"import", "region", "free", "locked", "a", "b", "c"}
+)
+
+
+def _group_is_region_meta(inner: str) -> bool:
+    """Return True when every word in a bracketed group is region/import metadata.
+
+    Used to strip trailing region tags such as "(France)", "[UK Import]" or
+    "(United States)" that carry no format keyword and therefore slip past the
+    format-noise stripper."""
+    tokens = re.findall(r"[a-z.]+", (inner or "").lower())
+    if not tokens:
+        return False
+    return all(token in _REGION_META_WORDS for token in tokens)
+
+
+def _parse_import_country(raw_title: str) -> tuple[str, str]:
+    """Detect a country/region hint from a packaging title.
+
+    Returns a (country, region_note) tuple. ``country`` is a canonical country
+    name when the import hint is recognised; otherwise ``region_note`` carries
+    the raw hint (e.g. "Region B") so it can land in the ``regions`` field.
+    Either value may be empty."""
+    text = raw_title or ""
+    if not text:
+        return "", ""
+
+    for match in re.finditer(r'([A-Za-z.][A-Za-z. ]*?)\s+import\b', text, flags=re.I):
+        phrase = match.group(1).strip().lower()
+        token = phrase.split()[-1] if phrase.split() else phrase
+        for key in (phrase, token):
+            mapped = _IMPORT_COUNTRY_MAP.get(key)
+            if mapped:
+                return mapped, ""
+        if phrase:
+            return "", f"{match.group(1).strip().title()} Import"
+
+    # Bare country tag in brackets, e.g. Blu-ray.com's "... (France)" / "[Italy]".
+    for match in re.finditer(r'[\(\[]\s*([A-Za-z.][A-Za-z. ]*?)\s*[\)\]]', text):
+        mapped = _IMPORT_COUNTRY_MAP.get(match.group(1).strip().lower())
+        if mapped:
+            return mapped, ""
+
+    region_match = re.search(r'region[\s-]*(free|locked|[ABC]|[0-9])\b', text, flags=re.I)
+    if region_match:
+        return "", f"Region {region_match.group(1).upper()}"
+
+    return "", ""
+
+
 def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(result, dict):
         result = {"value": result}
@@ -1302,11 +1464,53 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
                 metadata_updates[key] = value
 
     collect(movie_source)
+    movie_source_title = clean_text(movie_updates.get("title"))
     collect(release_source, release=True)
 
     technical = result.get("technicalSpecs") or result.get("technical_specs") or {}
     if isinstance(technical, dict):
         collect(technical, release=True)
+
+    # Split the clean film title from the raw packaging/scanned title. A
+    # candidate that carries a `releaseTitle` (e.g. Blu-ray.com) or a `title`
+    # full of format/edition/region noise is a packaging title: keep the raw
+    # value in `release_title`, derive a clean film title, and parse import
+    # hints into country/regions without overwriting richer resolved values.
+    raw_release_title = (
+        clean_text(result.get("releaseTitle") or result.get("release_title"))
+        or clean_text(movie_updates.get("release_title"))
+        or clean_text(release_source.get("title"))
+    )
+    candidate_title = clean_text(movie_updates.get("title"))
+    if not raw_release_title and candidate_title and _SCANNED_TITLE_NOISE_RE.search(candidate_title):
+        raw_release_title = candidate_title
+    if raw_release_title:
+        movie_updates.setdefault("release_title", raw_release_title)
+        current_title = clean_text(movie_updates.get("title"))
+        if (
+            movie_source_title
+            and movie_source_title != raw_release_title
+            and not _SCANNED_TITLE_NOISE_RE.search(movie_source_title)
+        ):
+            # The plugin already supplied a clean canonical movie title (e.g.
+            # Blu-ray.com derives one alongside the raw release title). Keep it
+            # and don't let the raw release title collected afterwards clobber it.
+            movie_updates["title"] = movie_source_title
+        else:
+            cleaned_title = _clean_scanned_title(raw_release_title)
+            if cleaned_title and (
+                not current_title
+                or current_title == raw_release_title
+                or _SCANNED_TITLE_NOISE_RE.search(current_title)
+            ):
+                movie_updates["title"] = cleaned_title
+        import_country, import_region = _parse_import_country(raw_release_title)
+        if import_country and not value_present(movie_updates.get("country")):
+            movie_updates["country"] = import_country
+        if import_region and not value_present(technical_updates.get("regions")):
+            # `regions` is stored as a JSONB array in v26, so coerce the
+            # free-text hint (e.g. "Region B") into a normalized list.
+            technical_updates["regions"] = normalize_list_field("regions", import_region)
 
     images = result.get("images") or {}
     if isinstance(images, dict):
@@ -1416,6 +1620,70 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         plugin_id=plugin_id,
         source_ref=source_ref,
     )
+
+    explicit_candidates = result.get("items") or result.get("candidates") or []
+    candidates = explicit_candidates
+    looks_like_box_set = bool(
+        box_set_proposal
+        or box_set_proposals
+        or result.get("isBoxSetCandidate")
+        or result.get("is_box_set_candidate")
+        or result.get("isBoxSet")
+        or result.get("is_box_set")
+    )
+    synthesized_title = clean_text(movie_updates.get("title")) or clean_text(
+        movie_updates.get("original_title")
+    )
+    result_status = str(result.get("status") or "ok").strip().lower()
+    non_hit_statuses = {
+        "miss",
+        "not_found",
+        "no_match",
+        "needs_configuration",
+        "skipped",
+        "error",
+        "failed",
+        "empty",
+    }
+    if (
+        not explicit_candidates
+        and not looks_like_box_set
+        and synthesized_title
+        and result_status not in non_hit_statuses
+    ):
+        synthesized_candidate: dict[str, Any] = {
+            "title": synthesized_title,
+            "provider": plugin_id,
+            "providerLabel": source_label,
+            "synthesized": True,
+        }
+        candidate_year = clean_text(movie_updates.get("year"))
+        if candidate_year:
+            synthesized_candidate["year"] = candidate_year
+        candidate_format = clean_text(source_format)
+        if candidate_format:
+            synthesized_candidate["format"] = candidate_format
+        candidate_release_title = clean_text(movie_updates.get("release_title")) or raw_release_title
+        if candidate_release_title:
+            synthesized_candidate["releaseTitle"] = candidate_release_title
+        candidate_overview = clean_text(
+            movie_updates.get("overview")
+            or metadata_updates.get("overview")
+            or metadata_updates.get("plot")
+        )
+        if candidate_overview:
+            synthesized_candidate["overview"] = candidate_overview
+        poster_media = media_updates.get("poster") if isinstance(media_updates.get("poster"), dict) else {}
+        candidate_poster = poster_media.get("sourceUrl") if poster_media else ""
+        if candidate_poster:
+            synthesized_candidate["posterUrl"] = candidate_poster
+        if source_ref:
+            synthesized_candidate["sourceUrl"] = source_ref
+            synthesized_candidate["sourceRef"] = source_ref
+        if identifiers:
+            synthesized_candidate["identifiers"] = dict(identifiers)
+        candidates = [synthesized_candidate]
+
     return {
         "pluginId": plugin_id,
         "entrypoint": entrypoint,
@@ -1427,11 +1695,13 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
         "technicalUpdates": technical_updates,
+        "releaseTitle": clean_text(movie_updates.get("release_title")) or raw_release_title,
+        "cleanTitle": clean_text(movie_updates.get("title")),
         "mediaUpdates": media_updates,
         "identifiers": identifiers,
         "credits": credit_updates,
         "localizations": localization_updates,
-        "candidates": result.get("items") or result.get("candidates") or [],
+        "candidates": candidates,
         "boxSetEvidence": box_set_evidence,
         "boxSetProposal": box_set_proposal,
         "boxSetProposals": box_set_proposals,
@@ -1485,8 +1755,12 @@ def should_apply_field(
         return False, "incoming value is empty"
     if field in METADATA_LOCAL_ONLY_FIELDS:
         return False, "field is local-only"
-    if release_priority and field in METADATA_DISPLAY_TITLE_FIELDS:
-        return False, "release source cannot update canonical display title"
+    if (
+        release_priority
+        and field in METADATA_DISPLAY_TITLE_FIELDS
+        and value_present(current_value)
+    ):
+        return False, "release source cannot overwrite canonical display title"
     format_ok, format_reason = field_format_safe(field, target_format, source_format, source_context=source_context)
     if not format_ok:
         return False, format_reason
@@ -2760,7 +3034,7 @@ def media_asset_uuid(storage_key: str) -> uuid.UUID:
 
 
 def ensure_remote_media_asset(conn, *, kind: str, source_url: str, provider_id: str) -> UUID | None:
-    if kind not in {"poster", "backdrop"}:
+    if kind not in {"poster", "backdrop", "profile"}:
         return None
     source_url = clean_text(source_url) or ""
     if not source_url.startswith(("http://", "https://")):

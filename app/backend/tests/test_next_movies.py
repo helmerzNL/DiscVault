@@ -179,6 +179,27 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertIsNone(payload["release_date"])
         self.assertEqual(payload["purchase_date"].isoformat(), "2026-06-02")
 
+    def test_movie_payload_fields_maps_release_title(self):
+        camel = movie_payload_fields(
+            {"title": "John Wick", "releaseTitle": "John Wick (4K Ultra HD + Blu-ray) (UK Import)"}
+        )
+        self.assertEqual(camel["release_title"], "John Wick (4K Ultra HD + Blu-ray) (UK Import)")
+        snake = movie_payload_fields(
+            {"title": "John Wick", "release_title": "John Wick (Blu-ray)"}
+        )
+        self.assertEqual(snake["release_title"], "John Wick (Blu-ray)")
+        self.assertIsNone(movie_payload_fields({"title": "John Wick"})["release_title"])
+
+    def test_movie_update_payload_round_trips_release_title(self):
+        payload = movie_update_payload(
+            {"title": "John Wick", "releaseTitle": "John Wick (4K Ultra HD + Blu-ray) (UK Import)"},
+            existing={"title": "John Wick"},
+        )
+        self.assertEqual(
+            payload["release_title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+
     def test_import_source_review_summary_flags_review_risks(self):
         summary = import_source_review_summary(
             [
@@ -574,6 +595,88 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertFalse(summary["candidateOnly"])
         self.assertFalse(summary["autoImportable"])
         self.assertEqual(summary["members"][0]["title"], "Back to the Future")
+
+    def test_selected_import_candidate_proposal_splits_scanned_title_and_release(self):
+        proposal = selected_import_movie_candidate_proposal(
+            {
+                "provider": "upcitemdb",
+                "sourceLabel": "UPCItemDB",
+                "sourceRef": "upc:5051892239714",
+                "title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+                "year": "2014",
+                "identifiers": {"tmdb": "245891"},
+            }
+        )
+
+        self.assertEqual(proposal["movieUpdates"]["title"], "John Wick")
+        self.assertEqual(
+            proposal["movieUpdates"]["release_title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+        self.assertEqual(proposal["movieUpdates"]["country"], "United Kingdom")
+        self.assertEqual(proposal["movieUpdates"]["year"], "2014")
+        self.assertEqual(proposal["technicalUpdates"], {})
+
+    def test_selected_import_candidate_proposal_parses_region_hint_to_array(self):
+        proposal = selected_import_movie_candidate_proposal(
+            {
+                "provider": "bluray_com",
+                "title": "The Matrix [Steelbook] [Region B]",
+            }
+        )
+
+        self.assertEqual(proposal["movieUpdates"]["title"], "The Matrix")
+        self.assertEqual(
+            proposal["movieUpdates"]["release_title"],
+            "The Matrix [Steelbook] [Region B]",
+        )
+        self.assertNotIn("country", proposal["movieUpdates"])
+        self.assertEqual(proposal["technicalUpdates"]["regions"], ["Region B"])
+
+    def test_selected_import_candidate_proposal_keeps_clean_title_untouched(self):
+        proposal = selected_import_movie_candidate_proposal(
+            {
+                "provider": "movievault_26",
+                "title": "Inception",
+                "year": "2010",
+            }
+        )
+
+        self.assertEqual(proposal["movieUpdates"]["title"], "Inception")
+        self.assertNotIn("release_title", proposal["movieUpdates"])
+        self.assertEqual(proposal["technicalUpdates"], {})
+
+    def test_selected_import_candidate_proposal_prefers_explicit_release_title(self):
+        proposal = selected_import_movie_candidate_proposal(
+            {
+                "provider": "bluray_com",
+                "title": "John Wick",
+                "releaseTitle": "John Wick (4K Ultra HD + Blu-ray) (Italian Import)",
+            }
+        )
+
+        self.assertEqual(proposal["movieUpdates"]["title"], "John Wick")
+        self.assertEqual(
+            proposal["movieUpdates"]["release_title"],
+            "John Wick (4K Ultra HD + Blu-ray) (Italian Import)",
+        )
+        self.assertEqual(proposal["movieUpdates"]["country"], "Italy")
+
+    def test_selected_import_candidate_from_body_carries_release_title(self):
+        candidate = selected_import_movie_candidate_from_body(
+            {
+                "selectedMovieCandidate": {
+                    "provider": "upcitemdb",
+                    "title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+                    "releaseTitle": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+                }
+            }
+        )
+
+        self.assertEqual(
+            candidate["releaseTitle"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
 
 
 if __name__ == "__main__":
