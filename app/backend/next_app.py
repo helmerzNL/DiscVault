@@ -6622,6 +6622,10 @@ def ui_preview_html(
     .startup-message.good {
       color: var(--green);
     }
+    .login-message.warn,
+    .startup-message.warn {
+      color: var(--amber, #ff9f0a);
+    }
     .recovery-login-panel {
       display: grid;
       gap: 10px;
@@ -8689,6 +8693,11 @@ def ui_preview_html(
       color: var(--danger);
       background: color-mix(in srgb, var(--danger) 10%, var(--bg-solid));
     }
+    .import-result-action-status.warn {
+      border-color: color-mix(in srgb, var(--amber, #ff9f0a) 46%, var(--line));
+      color: var(--amber, #ff9f0a);
+      background: color-mix(in srgb, var(--amber, #ff9f0a) 12%, var(--bg-solid));
+    }
     .import-card-head,
     .import-source-head,
     .import-job-head {
@@ -9654,6 +9663,17 @@ def ui_preview_html(
       font-weight: 760;
     }
     .import-barcode-form input {
+      min-height: 40px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+      font-weight: 620;
+    }
+    .import-barcode-form select {
       min-height: 40px;
       min-width: 0;
       border: 1px solid var(--line);
@@ -14247,7 +14267,7 @@ def ui_preview_html(
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualFormat">Format</span>
-                    <input id="importFormatInput" autocomplete="off" maxlength="80" data-next-i18n-placeholder="importCenter.formatPlaceholder" placeholder="4K UHD">
+                    <select id="importFormatInput" autocomplete="off"></select>
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
                 </form>
@@ -16102,7 +16122,8 @@ def ui_preview_html(
         needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
         not_configured: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
         no_match: tNext("movieDetail.debugSourcesReasonNoMatch", "No match"),
-        not_found: tNext("movieDetail.debugSourcesReasonNoMatch", "No match")
+        not_found: tNext("movieDetail.debugSourcesReasonNoMatch", "No match"),
+        rate_limited: tNext("movieDetail.debugSourcesReasonRateLimited", "Rate limited \u2013 retry later")
       };
       if (reason && reasonMap[reason]) return reasonMap[reason];
       if (state && reasonMap[state]) return reasonMap[state];
@@ -22509,6 +22530,24 @@ def ui_preview_html(
       }).join("");
       select.value = normalized;
     }
+    function renderImportFormatOptions() {
+      const select = document.getElementById("importFormatInput");
+      if (!select || select.tagName !== "SELECT") return;
+      const current = normalizedMovieFormatValue(select.value || "");
+      const collectorMode = collectorsModeEnabled();
+      const allowed = MOVIE_FORMAT_OPTIONS.filter((item) => collectorMode || !item.collectorOnly);
+      const allowedValues = new Set(allowed.map((item) => item.value));
+      const knownValues = new Set(MOVIE_FORMAT_OPTIONS.map((item) => item.value));
+      const customOption = current && !allowedValues.has(current) && !knownValues.has(current)
+        ? [{value: current}]
+        : [];
+      select.innerHTML = [
+        `<option value="">${escapeHtml(tNext("common.any", "Any"))}</option>`,
+        ...allowed.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.value)}</option>`),
+        ...customOption.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.value)}</option>`)
+      ].join("");
+      select.value = current;
+    }
     const MOVIE_EDIT_LOCK_FIELDS = {
       movieEditTitle: "title",
       movieEditOriginalTitle: "original_title",
@@ -26777,7 +26816,7 @@ def ui_preview_html(
           <div class="import-result-body">
             <div class="import-result-kicker">
               <span class="tag good">${escapeHtml(tNext("importCenter.previewReady", "Preview ready."))}</span>
-              <span class="tag">${escapeHtml(tNext("importCenter.sourcesUsed", "Sources"))}: ${escapeHtml(String((metadata.summary || []).filter((item) => item.state === "applied").length || (metadata.executions || []).length || 0))}</span>
+              <span class="tag" title="${escapeHtml(tNext("importCenter.sourcesUsedHelp", "Number of metadata sources that returned a matching title."))}">${escapeHtml(tNext("importCenter.sourcesUsed", "Sources"))}: ${escapeHtml(String(movieResultCards.length || (proposedTitle ? 1 : 0)))}</span>
             </div>
             <h3 class="import-result-title">${escapeHtml(proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}</h3>
             <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.previewReadyHelp", "Review the detected movie details before adding it to your library."))}</div>
@@ -26838,6 +26877,7 @@ def ui_preview_html(
       renderImportMapping();
       renderImportReview();
       renderImportJobs();
+      renderImportFormatOptions();
       renderBarcodeLookup();
       renderImportBatchList();
       applyAppPermissionVisibility();
@@ -26965,6 +27005,16 @@ def ui_preview_html(
         setImportCenterMessage(error.message || String(error), "bad");
       }
     }
+    function barcodeLookupHasMatch() {
+      if (!importCenter.barcodeLookup) return false;
+      const metadata = importCenter.barcodeLookup.metadata || importCenter.barcodeLookup;
+      const proposal = metadata.proposal || {};
+      const movieUpdates = proposal.movieUpdates || {};
+      if (movieUpdates.title || movieUpdates.original_title) return true;
+      if (lookupMovieCandidates().length) return true;
+      if (barcodeBoxSetProposals().length) return true;
+      return false;
+    }
     async function previewBarcodeImport(event) {
       event?.preventDefault();
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
@@ -27004,7 +27054,13 @@ def ui_preview_html(
         importCenter.lookupPreviewTone = "";
         setImportLookupActionMessage("", "");
         renderBarcodeLookup();
-        setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
+        if (barcode && !title && !barcodeLookupHasMatch()) {
+          const notRecognized = tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this movie manually.");
+          setImportLookupActionMessage(notRecognized, "warn");
+          setImportCenterMessage(notRecognized, "warn");
+        } else {
+          setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
+        }
         console.log("movie import preview", payload);
         return payload;
       } catch (error) {
