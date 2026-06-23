@@ -1,5 +1,6 @@
 import os
 import importlib
+import shutil
 import sys
 import tempfile
 import types
@@ -32,9 +33,13 @@ sys.modules.setdefault("psycopg.rows", psycopg_rows_module)
 sys.modules.setdefault("psycopg.types", psycopg_types_module)
 sys.modules.setdefault("psycopg.types.json", psycopg_types_json_module)
 
+from app.backend.next_plugin_runtime import DEFAULT_PLUGIN_DIR
+from app.backend.next_plugin_runtime import PLUGIN_INITIALIZED_MARKER
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import plugin_install_dir
+from app.backend.next_plugin_runtime import plugin_paths
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
+from app.backend.next_plugin_runtime import seed_default_plugins_if_needed
 from app.backend import next_worker
 from app.backend.next_worker import apply_collection_import_review
 from app.backend.next_worker import import_release_date
@@ -435,6 +440,97 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(plugins["tmdb"].manifest["name"], "TMDb Data Override")
         self.assertEqual(plugins["tmdb"].manifest["version"], "9.9.9")
         self.assertEqual(plugins["tmdb"].path, plugin_dir.resolve())
+
+    def test_seed_default_plugins_copies_bundled_into_install_dir(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": data_dir,
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                    "DISCVAULT_BUNDLED_PLUGIN_DIR": "",
+                },
+            ):
+                result = seed_default_plugins_if_needed()
+                install_dir = Path(data_dir) / "plugins"
+
+                self.assertTrue(result["initialized"])
+                self.assertTrue((install_dir / PLUGIN_INITIALIZED_MARKER).exists())
+                # A known bundled default now lives in the writable install dir.
+                self.assertTrue((install_dir / "tmdb" / "manifest.json").exists())
+                self.assertIn("tmdb", result["seeded"])
+
+    def test_plugin_paths_uses_install_dir_only_after_seeding(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": data_dir,
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                    "DISCVAULT_BUNDLED_PLUGIN_DIR": "",
+                },
+            ):
+                paths = plugin_paths()
+
+                install_dir = (Path(data_dir) / "plugins").resolve()
+                self.assertIn(install_dir, paths)
+                # Bundled dir is no longer a read path once seeding succeeded, so
+                # a deleted default cannot reappear from the read-only image.
+                self.assertNotIn(DEFAULT_PLUGIN_DIR.resolve(), paths)
+
+    def test_deleted_default_plugin_is_not_reseeded(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": data_dir,
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                    "DISCVAULT_BUNDLED_PLUGIN_DIR": "",
+                },
+            ):
+                seed_default_plugins_if_needed()
+                install_dir = Path(data_dir) / "plugins"
+                tmdb_dir = install_dir / "tmdb"
+                self.assertTrue(tmdb_dir.exists())
+
+                # Simulate deleting a bundled default plugin.
+                shutil.rmtree(tmdb_dir)
+
+                # A second discovery must not bring it back (marker gates reseed).
+                second = seed_default_plugins_if_needed()
+                self.assertTrue(second["initialized"])
+                self.assertFalse(tmdb_dir.exists())
+
+                plugins = {plugin.plugin_id for plugin in discover_plugins()["plugins"]}
+                self.assertNotIn("tmdb", plugins)
+                # Other defaults remain available.
+                self.assertIn("movievault_26", plugins)
+
+    def test_plugin_paths_falls_back_to_bundled_when_data_dir_unavailable(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            # Point the install dir under a non-existent data root so seeding is
+            # skipped (mimics a read-only/absent data directory).
+            missing_root = Path(data_dir) / "does" / "not" / "exist"
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": str(missing_root),
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                    "DISCVAULT_BUNDLED_PLUGIN_DIR": "",
+                },
+            ):
+                seed = seed_default_plugins_if_needed()
+                self.assertFalse(seed["initialized"])
+
+                paths = plugin_paths()
+                self.assertIn(DEFAULT_PLUGIN_DIR.resolve(), paths)
+                # Bundled defaults stay discoverable in fallback mode.
+                plugins = {plugin.plugin_id for plugin in discover_plugins()["plugins"]}
+                self.assertIn("tmdb", plugins)
 
     def test_known_collection_import_plugins_are_discoverable(self):
         discovery = discover_plugins()
