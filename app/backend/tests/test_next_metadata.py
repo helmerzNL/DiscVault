@@ -354,6 +354,77 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertTrue(evidence["membersAreExplicit"])
         self.assertEqual(evidence["format"], "DVD")
 
+    def test_canonicalize_synthesizes_candidate_for_single_movie_hit(self):
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "sourceRef": "https://www.blu-ray.com/movies/Lethal-Weapon",
+                "movie": {"title": "Lethal Weapon", "year": "1987", "posterUrl": "https://images.example/lethal.jpg"},
+                "release": {"title": "Lethal Weapon 4K UHD"},
+                "format": "4K UHD",
+            },
+        )
+
+        candidates = result["candidates"]
+        self.assertEqual(len(candidates), 1)
+        synthesized = candidates[0]
+        self.assertTrue(synthesized.get("synthesized"))
+        self.assertEqual(synthesized["title"], "Lethal Weapon")
+        self.assertEqual(synthesized["provider"], "bluray_com")
+        self.assertEqual(synthesized["format"], "4K UHD")
+        self.assertEqual(synthesized["sourceRef"], "https://www.blu-ray.com/movies/Lethal-Weapon")
+        self.assertEqual(synthesized["posterUrl"], "https://images.example/lethal.jpg")
+
+    def test_canonicalize_does_not_synthesize_candidate_on_miss(self):
+        result = canonicalize_plugin_result(
+            "dvd_fr",
+            "search_barcode",
+            {"status": "miss", "sourceLabel": "DVDFr"},
+        )
+
+        self.assertEqual(result["candidates"], [])
+
+    def test_canonicalize_does_not_synthesize_candidate_for_box_set(self):
+        result = canonicalize_plugin_result(
+            "movievault_26",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "MovieVault 26",
+                "sourceRef": "barcode:5050582369601",
+                "movie": {"title": "Back to the Future Trilogy"},
+                "boxSetProposal": {
+                    "title": "Back to the Future Trilogy DVD",
+                    "barcode": "5050582369601",
+                    "format": "DVD",
+                    "members": [
+                        {"title": "Back to the Future", "year": "1985"},
+                        {"title": "Back to the Future Part II", "year": "1989"},
+                    ],
+                },
+            },
+        )
+
+        self.assertEqual(result["candidates"], [])
+
+    def test_canonicalize_preserves_explicit_candidates(self):
+        explicit = [{"title": "Heat", "year": "1995", "provider": "tmdb"}]
+        result = canonicalize_plugin_result(
+            "tmdb",
+            "search_title",
+            {
+                "status": "hit",
+                "sourceLabel": "TMDB",
+                "items": explicit,
+                "movie": {"title": "Heat"},
+            },
+        )
+
+        self.assertEqual(result["candidates"], explicit)
+
     def test_release_specs_do_not_upgrade_across_formats(self):
         current = {
             "title": "Example",

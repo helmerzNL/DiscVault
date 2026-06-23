@@ -1620,6 +1620,70 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         plugin_id=plugin_id,
         source_ref=source_ref,
     )
+
+    explicit_candidates = result.get("items") or result.get("candidates") or []
+    candidates = explicit_candidates
+    looks_like_box_set = bool(
+        box_set_proposal
+        or box_set_proposals
+        or result.get("isBoxSetCandidate")
+        or result.get("is_box_set_candidate")
+        or result.get("isBoxSet")
+        or result.get("is_box_set")
+    )
+    synthesized_title = clean_text(movie_updates.get("title")) or clean_text(
+        movie_updates.get("original_title")
+    )
+    result_status = str(result.get("status") or "ok").strip().lower()
+    non_hit_statuses = {
+        "miss",
+        "not_found",
+        "no_match",
+        "needs_configuration",
+        "skipped",
+        "error",
+        "failed",
+        "empty",
+    }
+    if (
+        not explicit_candidates
+        and not looks_like_box_set
+        and synthesized_title
+        and result_status not in non_hit_statuses
+    ):
+        synthesized_candidate: dict[str, Any] = {
+            "title": synthesized_title,
+            "provider": plugin_id,
+            "providerLabel": source_label,
+            "synthesized": True,
+        }
+        candidate_year = clean_text(movie_updates.get("year"))
+        if candidate_year:
+            synthesized_candidate["year"] = candidate_year
+        candidate_format = clean_text(source_format)
+        if candidate_format:
+            synthesized_candidate["format"] = candidate_format
+        candidate_release_title = clean_text(movie_updates.get("release_title")) or raw_release_title
+        if candidate_release_title:
+            synthesized_candidate["releaseTitle"] = candidate_release_title
+        candidate_overview = clean_text(
+            movie_updates.get("overview")
+            or metadata_updates.get("overview")
+            or metadata_updates.get("plot")
+        )
+        if candidate_overview:
+            synthesized_candidate["overview"] = candidate_overview
+        poster_media = media_updates.get("poster") if isinstance(media_updates.get("poster"), dict) else {}
+        candidate_poster = poster_media.get("sourceUrl") if poster_media else ""
+        if candidate_poster:
+            synthesized_candidate["posterUrl"] = candidate_poster
+        if source_ref:
+            synthesized_candidate["sourceUrl"] = source_ref
+            synthesized_candidate["sourceRef"] = source_ref
+        if identifiers:
+            synthesized_candidate["identifiers"] = dict(identifiers)
+        candidates = [synthesized_candidate]
+
     return {
         "pluginId": plugin_id,
         "entrypoint": entrypoint,
@@ -1637,7 +1701,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "identifiers": identifiers,
         "credits": credit_updates,
         "localizations": localization_updates,
-        "candidates": result.get("items") or result.get("candidates") or [],
+        "candidates": candidates,
         "boxSetEvidence": box_set_evidence,
         "boxSetProposal": box_set_proposal,
         "boxSetProposals": box_set_proposals,
